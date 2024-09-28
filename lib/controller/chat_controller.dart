@@ -80,7 +80,7 @@ class ChatController extends GetxController {
       NotificationModel notification = NotificationModel(
         id: FirebaseFirestore.instance.collection('notifications').doc().id,
         destinataire: otherUser, // L'utilisateur qui reçoit la notification
-        message: '${currentUser.name} vous a envoyé un message.',
+        message: '${currentUser.nom} vous a envoyé un message.',
         type: 'message',
         dateCreation: DateTime.now(),
       );

@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:show_talent/models/user.dart';
 
-
 class Event {
   final String id;
   final String titre;

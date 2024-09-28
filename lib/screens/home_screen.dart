@@ -23,7 +23,7 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Bienvenue ${userController.user!.name}'),
+        title: Text('Bienvenue ${userController.user!.nom}'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
