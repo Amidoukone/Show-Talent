@@ -32,7 +32,7 @@ class SearchScreen extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final user = searchController.searchedUsers[index];
                   return ListTile(
-                    title: Text(user.name),
+                    title: Text(user.nom),
                     subtitle: Text(user.email),
                   );
                 },

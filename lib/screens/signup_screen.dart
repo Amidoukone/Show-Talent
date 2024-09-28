@@ -21,6 +21,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   _signUp() async {
     try {
+      // Création de l'utilisateur Firebase
       UserCredential userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(
             email: _emailController.text,
@@ -29,22 +30,27 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
       String uid = userCredential.user!.uid;
 
-      // Sauvegarder les informations utilisateur dans Firestore
+      // Création d'un nouvel utilisateur avec tous les champs requis
       AppUser newUser = AppUser(
         uid: uid,
-        name: _nameController.text,
+        nom: _nameController.text,
         email: _emailController.text,
         role: _selectedRole,
-        profilePhoto: '',
-        followers: [],
-        following: [],
+        photoProfil: '',  // Le chemin de la photo de profil peut être mis à jour plus tard
+        estActif: true,  // Utilisateur actif par défaut
+        followers: 0,  // Pas de followers au début
+        followings: 0,  // Pas de followings au début
+        dateInscription: DateTime.now(),  // Date d'inscription
+        dernierLogin: DateTime.now(),  // Dernier login lors de l'inscription
       );
 
+      // Sauvegarder les informations utilisateur dans Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .set(newUser.toMap());
 
+      // Rediriger vers l'écran principal après inscription
       Get.offAll(() => const HomeScreen());
     } catch (e) {
       Get.snackbar('Échec de l\'inscription', e.toString());
@@ -105,9 +111,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   ),
                   prefixIcon: const Icon(Icons.lock),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword
-                        ? Icons.visibility_off
-                        : Icons.visibility),
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
                     onPressed: () {
                       setState(() {
                         _obscurePassword = !_obscurePassword;

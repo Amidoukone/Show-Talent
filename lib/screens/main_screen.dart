@@ -41,8 +41,8 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: Container(
         color: const Color(0xFF004d00), // Vert foncé appliqué via le Container
         child: BottomNavigationBar(
-          backgroundColor: Colors.transparent, // Important: on laisse transparent ici
-          selectedItemColor: Colors.white, // Couleur des icônes sélectionnées
+          backgroundColor: Colors.green, // Important: on laisse transparent ici
+          selectedItemColor: const Color.fromARGB(255, 239, 95, 95), // Couleur des icônes sélectionnées
           unselectedItemColor: const Color(0xFF8AB98A), // Couleur des icônes non sélectionnées
           currentIndex: _selectedIndex, // Index de la page actuelle
           onTap: _onItemTapped, // Gérer le changement d'onglet

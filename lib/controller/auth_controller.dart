@@ -1,6 +1,5 @@
 import 'dart:io';
 
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:get/get.dart';
@@ -9,8 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:show_talent/models/user.dart';
 import 'package:show_talent/screens/home_screen.dart';
 import 'package:show_talent/screens/login_screen.dart'; 
-
-
 
 class AuthController extends GetxController {
   static AuthController instance = Get.find();
@@ -29,6 +26,7 @@ class AuthController extends GetxController {
     ever(_user, _setInitialScreen);
   }
 
+  // Définir l'écran initial
   _setInitialScreen(User? user) {
     if (user == null) {
       Get.offAll(() => const LoginScreen());
@@ -39,10 +37,9 @@ class AuthController extends GetxController {
 
   // Méthode pour choisir une image de profil
   void pickImage() async {
-    final pickedImage =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
+    final pickedImage = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedImage != null) {
-      Get.snackbar('Profile Picture', 'Image Added Successfully');
+      Get.snackbar('Photo de profil', 'Image ajoutée avec succès');
     }
     _pickedImage = Rx<File?>(File(pickedImage!.path));
   }
@@ -74,12 +71,15 @@ class AuthController extends GetxController {
         // Création de l'objet AppUser
         AppUser newUser = AppUser(
           uid: userCred.user!.uid,
-          name: name,
+          nom: name,
           email: email,
-          role: role,  // Ajout du rôle ici
-          profilePhoto: downloadUrl,
-          followers: [],
-          following: [],
+          role: role,
+          photoProfil: downloadUrl,  // Image de profil
+          estActif: true,  // Par défaut actif lors de l'inscription
+          followers: 0,  // Commence avec 0 followers
+          followings: 0,  // Commence avec 0 following
+          dateInscription: DateTime.now(),  // Date actuelle comme date d'inscription
+          dernierLogin: DateTime.now(),  // Dernier login = date d'inscription
         );
 
         // Enregistrement de l'utilisateur dans Firestore
@@ -102,8 +102,7 @@ class AuthController extends GetxController {
   void loginUser(String email, String password) async {
     try {
       if (email.isNotEmpty && password.isNotEmpty) {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-            email: email, password: password);
+        await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
         Get.to(() => const HomeScreen());
       } else {
         Get.snackbar('Erreur', 'Veuillez remplir toutes les informations');
@@ -116,5 +115,6 @@ class AuthController extends GetxController {
   // Méthode pour se déconnecter
   void signOut() async {
     await FirebaseAuth.instance.signOut();
+    Get.offAll(() => const LoginScreen());
   }
 }

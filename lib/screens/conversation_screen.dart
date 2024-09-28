@@ -33,7 +33,7 @@ ConversationsScreen({super.key});
 
               return ListTile(
                 title: Text(
-                    '${conversation.utilisateur1.name} - ${conversation.utilisateur2.name}'),
+                    '${conversation.utilisateur1.nom} - ${conversation.utilisateur2.nom}'),
                 onTap: () {
                   // Ouvrir la conversation pour afficher les messages et passer les utilisateurs
                   Get.to(() => ChatScreen(

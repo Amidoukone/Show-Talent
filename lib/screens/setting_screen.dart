@@ -14,7 +14,7 @@ SettingsScreen({super.key});
     return Scaffold(
       appBar: AppBar(
         title: const Text("Paramètres"),
-        backgroundColor: Colors.red,
+        backgroundColor: const Color.fromARGB(255, 2, 69, 68),
       ),
       body: ListView(
         children: [
