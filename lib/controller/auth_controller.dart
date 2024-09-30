@@ -1,10 +1,10 @@
 import 'dart:io';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:show_talent/controller/notification_controller.dart';
 import 'package:show_talent/models/user.dart';
 import 'package:show_talent/screens/home_screen.dart';
 import 'package:show_talent/screens/login_screen.dart'; 
@@ -12,36 +12,59 @@ import 'package:show_talent/screens/login_screen.dart';
 class AuthController extends GetxController {
   static AuthController instance = Get.find();
 
-  late Rx<User?> _user;
-  late Rx<File?> _pickedImage;
+  late Rx<User?> _firebaseUser;  // Firebase User
+  late Rx<File?> _pickedImage;   // Image sélectionnée
+  final Rx<AppUser?> _user = Rx<AppUser?>(null);  // Utilisation de Rx<AppUser?> ici pour suivre les changements utilisateur
+
+  AppUser? get user => _user.value;  // Getter sécurisé pour accéder à l'utilisateur
 
   File? get profilePhoto => _pickedImage.value;
-  User get user => _user.value!;
 
   @override
   void onReady() {
     super.onReady();
-    _user = Rx<User?>(FirebaseAuth.instance.currentUser);  // Instance Firebase Auth
-    _user.bindStream(FirebaseAuth.instance.authStateChanges());
-    ever(_user, _setInitialScreen);
+    _firebaseUser = Rx<User?>(FirebaseAuth.instance.currentUser);
+    _firebaseUser.bindStream(FirebaseAuth.instance.authStateChanges());
+    ever(_firebaseUser, _setInitialScreen);
   }
 
-  // Définir l'écran initial
-  _setInitialScreen(User? user) {
-    if (user == null) {
+  // Définir l'écran initial en fonction de l'état de connexion
+  _setInitialScreen(User? firebaseUser) async {
+    if (firebaseUser == null) {
+      _user.value = null;  // Réinitialiser l'utilisateur local
       Get.offAll(() => const LoginScreen());
     } else {
-      Get.offAll(() => const HomeScreen());
+      AppUser? appUser = await getAppUserFromFirestore(firebaseUser.uid);
+      if (appUser != null) {
+        _user.value = appUser;  // Stocker l'utilisateur récupéré
+        Get.offAll(() => const HomeScreen());
+        Get.find<NotificationController>().initCurrentUser();
+      } else {
+        Get.snackbar('Erreur', 'Utilisateur introuvable dans Firestore');
+      }
     }
   }
 
-  // Méthode pour choisir une image de profil
+  // Récupérer les informations de l'utilisateur depuis Firestore
+  Future<AppUser?> getAppUserFromFirestore(String uid) async {
+    try {
+      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (doc.exists) {
+        return AppUser.fromMap(doc.data() as Map<String, dynamic>);
+      }
+    } catch (e) {
+      Get.snackbar('Erreur', 'Impossible de récupérer les informations utilisateur : $e');
+    }
+    return null;
+  }
+
+  // Méthode pour choisir une image depuis la galerie
   void pickImage() async {
     final pickedImage = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedImage != null) {
       Get.snackbar('Photo de profil', 'Image ajoutée avec succès');
+      _pickedImage = Rx<File?>(File(pickedImage.path));
     }
-    _pickedImage = Rx<File?>(File(pickedImage!.path));
   }
 
   // Méthode pour uploader l'image dans Firebase Storage
@@ -57,48 +80,46 @@ class AuthController extends GetxController {
     return downloadUrl;
   }
 
-  // Méthode pour enregistrer un utilisateur avec un rôle
+  // Méthode pour enregistrer un utilisateur avec un rôle spécifique
   void registerUser(String name, String email, String password, String role, File? image) async {
     try {
       if (name.isNotEmpty && email.isNotEmpty && password.isNotEmpty && image != null && role.isNotEmpty) {
-        // Création d'un utilisateur Firebase
+        // Création de l'utilisateur avec Firebase Authentication
         UserCredential userCred = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(email: email, password: password);
 
-        // Upload de l'image de profil
+        // Upload de l'image de profil dans Firebase Storage
         String downloadUrl = await _uploadToStorage(image);
 
-        // Création de l'objet AppUser
+        // Création d'un nouvel utilisateur dans Firestore
         AppUser newUser = AppUser(
           uid: userCred.user!.uid,
           nom: name,
           email: email,
           role: role,
-          photoProfil: downloadUrl,  // Image de profil
-          estActif: true,  // Par défaut actif lors de l'inscription
-          followers: 0,  // Commence avec 0 followers
-          followings: 0,  // Commence avec 0 following
-          dateInscription: DateTime.now(),  // Date actuelle comme date d'inscription
-          dernierLogin: DateTime.now(),  // Dernier login = date d'inscription
+          photoProfil: downloadUrl,
+          estActif: true,
+          followers: 0,
+          followings: 0,
+          dateInscription: DateTime.now(),
+          dernierLogin: DateTime.now(),
         );
 
         // Enregistrement de l'utilisateur dans Firestore
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCred.user!.uid)
-            .set(newUser.toMap());
+        await FirebaseFirestore.instance.collection('users').doc(userCred.user!.uid).set(newUser.toMap());
 
+        _user.value = newUser;  // Stocker l'utilisateur dans GetX
         Get.snackbar('Bienvenue', 'Votre compte a été créé avec succès');
         Get.to(() => const HomeScreen());
       } else {
         Get.snackbar('Erreur', 'Veuillez remplir tous les champs et ajouter une photo');
       }
     } catch (e) {
-      Get.snackbar('Erreur', e.toString());
+      Get.snackbar('Erreur', 'Erreur lors de la création du compte : $e');
     }
   }
 
-  // Méthode pour se connecter
+  // Connexion utilisateur avec email et mot de passe
   void loginUser(String email, String password) async {
     try {
       if (email.isNotEmpty && password.isNotEmpty) {
@@ -108,13 +129,14 @@ class AuthController extends GetxController {
         Get.snackbar('Erreur', 'Veuillez remplir toutes les informations');
       }
     } catch (e) {
-      Get.snackbar('Erreur de connexion', e.toString());
+      Get.snackbar('Erreur de connexion', 'Erreur : $e');
     }
   }
 
-  // Méthode pour se déconnecter
+  // Déconnexion de l'utilisateur
   void signOut() async {
     await FirebaseAuth.instance.signOut();
+    _user.value = null;  // Réinitialiser l'utilisateur lors de la déconnexion
     Get.offAll(() => const LoginScreen());
   }
 }

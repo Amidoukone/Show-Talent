@@ -38,7 +38,7 @@ class EditProfileScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Modifier le profil'),
-        backgroundColor: Colors.blue,
+        backgroundColor: const Color.fromARGB(255, 6, 107, 107),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),

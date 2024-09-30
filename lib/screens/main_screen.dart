@@ -1,12 +1,11 @@
-
 import 'package:flutter/material.dart';
 import 'package:show_talent/screens/event_list_screen.dart';
 import 'package:show_talent/screens/setting_screen.dart';
 
-// Importation des différents screens corrects
+// Importation des nouveaux écrans pour la gestion des offres
 import 'home_screen.dart';
-import 'publier_offre_screen.dart';
 import 'search_screen.dart';
+import 'gestion_offres_screen.dart'; // Nouvel écran pour gérer toutes les offres
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -21,7 +20,7 @@ class _MainScreenState extends State<MainScreen> {
   // Liste des pages (écrans) correspondant aux onglets de la navigation
   final List<Widget> _screens = [
     const HomeScreen(),
-    PublierOffreScreen(), // Utilisation des bons fichiers ici
+    const GestionOffresScreen(), // Remplace "Publier Offre" par l'écran de gestion des offres
     EventListScreen(),
     SearchScreen(),
     SettingsScreen(),
@@ -42,8 +41,10 @@ class _MainScreenState extends State<MainScreen> {
         color: const Color(0xFF004d00), // Vert foncé appliqué via le Container
         child: BottomNavigationBar(
           backgroundColor: Colors.green, // Important: on laisse transparent ici
-          selectedItemColor: const Color.fromARGB(255, 239, 95, 95), // Couleur des icônes sélectionnées
-          unselectedItemColor: const Color(0xFF8AB98A), // Couleur des icônes non sélectionnées
+          selectedItemColor: const Color.fromARGB(
+              255, 2, 41, 32), // Couleur des icônes sélectionnées
+          unselectedItemColor:
+              const Color(0xFF8AB98A), // Couleur des icônes non sélectionnées
           currentIndex: _selectedIndex, // Index de la page actuelle
           onTap: _onItemTapped, // Gérer le changement d'onglet
           items: const [
@@ -53,7 +54,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.local_offer),
-              label: 'Publier Offre',
+              label: 'Offres', // Libellé mis à jour
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.event),

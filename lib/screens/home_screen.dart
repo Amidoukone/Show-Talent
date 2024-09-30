@@ -1,13 +1,10 @@
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:show_talent/controller/user_controller.dart';
 import 'package:show_talent/controller/video_controller.dart';
-
-
+import 'package:show_talent/screens/login_screen.dart';
 import '../models/user.dart';
 import '../models/video.dart';
-import 'login_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -15,21 +12,21 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final VideoController videoController = Get.put(VideoController());
-    final UserController userController = Get.find<UserController>();
+    final UserController userController = Get.find<UserController>(); // S'assurer que le UserController est trouvé
 
     if (userController.user == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator()); // Afficher un loader si l'utilisateur est encore en chargement
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Bienvenue ${userController.user!.nom}'),
+        title: Text('Bienvenue ${userController.user!.nom}'), // Accès au nom de l'utilisateur
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
-              userController.signOut();
-              Get.offAll(() => const LoginScreen());
+              userController.signOut(); // Déconnexion de l'utilisateur
+              Get.offAll(() => const LoginScreen()); // Redirection vers la page de connexion
             },
           ),
         ],
@@ -38,8 +35,7 @@ class HomeScreen extends StatelessWidget {
         children: [
           Expanded(
             child: Center(
-              // Contenu adapté selon le rôle de l'utilisateur
-              child: _buildHomeContent(userController.user!),
+              child: _buildHomeContent(userController.user!), // Afficher le contenu en fonction du rôle
             ),
           ),
           Expanded(
@@ -144,4 +140,3 @@ class VideoCard extends StatelessWidget {
     );
   }
 }
-

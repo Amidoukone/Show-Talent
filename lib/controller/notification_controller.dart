@@ -1,29 +1,37 @@
-
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Ajout pour l'authentification
 import 'package:show_talent/models/notification.dart';
-import 'package:show_talent/models/user.dart';
-
-
 
 class NotificationController extends GetxController {
   final Rx<List<NotificationModel>> _notifications = Rx<List<NotificationModel>>([]);
   List<NotificationModel> get notifications => _notifications.value;
 
-  // Utilisateur courant (à initialiser après la connexion)
-  late AppUser currentUser;
+  // Utilisateur courant (récupéré à partir de Firebase)
+  late User currentUser;
 
   @override
   void onInit() {
     super.onInit();
-    fetchNotifications();
+    initCurrentUser(); // Initialiser l'utilisateur
+    fetchNotifications(); // Charger les notifications après l'initialisation
+  }
+
+  // Méthode pour initialiser l'utilisateur à partir de Firebase
+  void initCurrentUser() {
+    var user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      currentUser = user;
+    } else {
+      Get.snackbar('Erreur', 'Aucun utilisateur connecté');
+    }
   }
 
   // Méthode pour récupérer les notifications de l'utilisateur courant depuis Firestore
   void fetchNotifications() {
     FirebaseFirestore.instance
         .collection('notifications')
-        .where('destinataire.id', isEqualTo: currentUser.uid)
+        .where('destinataire.id', isEqualTo: currentUser.uid) // Utiliser l'ID Firebase
         .orderBy('dateCreation', descending: true)
         .snapshots()
         .listen((snapshot) {
