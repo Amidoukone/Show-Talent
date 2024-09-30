@@ -38,11 +38,17 @@ class ProfileController extends GetxController {
   // Méthode pour suivre/désuivre un utilisateur
   Future<void> followUser() async {
     try {
+      // Assurer que l'utilisateur est défini avant d'accéder à uid
+      if (AuthController.instance.user == null) {
+        Get.snackbar('Erreur', 'Vous devez être connecté pour suivre un utilisateur.');
+        return;
+      }
+
       var doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(_uid.value)
           .collection('followers')
-          .doc(AuthController.instance.user.uid)
+          .doc(AuthController.instance.user!.uid)  // Utilisation du `!` après la vérification null-safe
           .get();
 
       if (!doc.exists) {
@@ -55,7 +61,7 @@ class ProfileController extends GetxController {
         // Ajouter dans following (incrémenter)
         await FirebaseFirestore.instance
             .collection('users')
-            .doc(AuthController.instance.user.uid)
+            .doc(AuthController.instance.user!.uid)
             .update({'followings': FieldValue.increment(1)});
 
         // Ajouter l'ID dans la liste de followers (optionnel si besoin)
@@ -63,7 +69,7 @@ class ProfileController extends GetxController {
             .collection('users')
             .doc(_uid.value)
             .collection('followers')
-            .doc(AuthController.instance.user.uid)
+            .doc(AuthController.instance.user!.uid)
             .set({});
       } else {
         // Supprimer un follower (décrémenter)
@@ -75,7 +81,7 @@ class ProfileController extends GetxController {
         // Supprimer dans following (décrémenter)
         await FirebaseFirestore.instance
             .collection('users')
-            .doc(AuthController.instance.user.uid)
+            .doc(AuthController.instance.user!.uid)
             .update({'followings': FieldValue.increment(-1)});
 
         // Supprimer l'ID de la liste de followers (optionnel si besoin)
@@ -83,7 +89,7 @@ class ProfileController extends GetxController {
             .collection('users')
             .doc(_uid.value)
             .collection('followers')
-            .doc(AuthController.instance.user.uid)
+            .doc(AuthController.instance.user!.uid)
             .delete();
       }
 
@@ -136,7 +142,7 @@ class ProfileController extends GetxController {
     try {
       QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('users')
-          .doc(AuthController.instance.user.uid)
+          .doc(AuthController.instance.user!.uid)  // Vérifier ici que `user` n'est pas null
           .collection('following')
           .get();
 
