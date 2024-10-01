@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:show_talent/controller/profile_controller.dart';
 import '../models/user.dart';
+import 'profile_screen.dart';
 
 class EditProfileScreen extends StatelessWidget {
   final AppUser user;
@@ -15,7 +16,8 @@ class EditProfileScreen extends StatelessWidget {
   final TextEditingController _nombreMatchsController = TextEditingController();
   final TextEditingController _butsController = TextEditingController();
   final TextEditingController _assistancesController = TextEditingController();
-  final TextEditingController _nombreRecrutementsController = TextEditingController();
+  final TextEditingController _nombreRecrutementsController =
+      TextEditingController();
 
   EditProfileScreen({super.key, required this.user}) {
     _nomController.text = user.nom;
@@ -25,7 +27,8 @@ class EditProfileScreen extends StatelessWidget {
     _positionController.text = user.position ?? '';
     _entrepriseController.text = user.entreprise ?? '';
     _ligueController.text = user.ligue ?? '';
-    _nombreRecrutementsController.text = user.nombreDeRecrutements?.toString() ?? '0';
+    _nombreRecrutementsController.text =
+        user.nombreDeRecrutements?.toString() ?? '0';
     _nombreMatchsController.text = user.nombreDeMatchs?.toString() ?? '0';
     _butsController.text = user.buts?.toString() ?? '0';
     _assistancesController.text = user.assistances?.toString() ?? '0';
@@ -51,7 +54,7 @@ class EditProfileScreen extends StatelessWidget {
                 decoration: const InputDecoration(labelText: 'Nom'),
               ),
               const SizedBox(height: 20),
-              
+
               // Champ Biographie pour les joueurs, clubs, recruteurs
               if (user.role != 'fan') ...[
                 TextField(
@@ -73,7 +76,8 @@ class EditProfileScreen extends StatelessWidget {
                 ),
                 TextField(
                   controller: _nombreMatchsController,
-                  decoration: const InputDecoration(labelText: 'Nombre de matchs'),
+                  decoration:
+                      const InputDecoration(labelText: 'Nombre de matchs'),
                   keyboardType: TextInputType.number,
                 ),
                 TextField(
@@ -89,7 +93,8 @@ class EditProfileScreen extends StatelessWidget {
               ] else if (user.role == 'club') ...[
                 TextField(
                   controller: _clubNameController,
-                  decoration: const InputDecoration(labelText: 'Localisation'),  // Remplacé par localisation
+                  decoration: const InputDecoration(
+                      labelText: 'Localisation'), // Remplacé par localisation
                 ),
                 TextField(
                   controller: _ligueController,
@@ -102,7 +107,8 @@ class EditProfileScreen extends StatelessWidget {
                 ),
                 TextField(
                   controller: _nombreRecrutementsController,
-                  decoration: const InputDecoration(labelText: 'Nombre de recrutements'),
+                  decoration: const InputDecoration(
+                      labelText: 'Nombre de recrutements'),
                   keyboardType: TextInputType.number,
                 ),
               ],
@@ -123,19 +129,33 @@ class EditProfileScreen extends StatelessWidget {
                     dateInscription: user.dateInscription,
                     dernierLogin: user.dernierLogin,
                     bio: _bioController.text,
-                    team: _teamController.text.isEmpty ? null : _teamController.text,
-                    nomClub: _clubNameController.text.isEmpty ? null : _clubNameController.text,
-                    position: _positionController.text.isEmpty ? null : _positionController.text,
-                    entreprise: _entrepriseController.text.isEmpty ? null : _entrepriseController.text,
-                    ligue: _ligueController.text.isEmpty ? null : _ligueController.text,
-                    nombreDeMatchs: int.tryParse(_nombreMatchsController.text) ?? 0,
+                    team: _teamController.text.isEmpty
+                        ? null
+                        : _teamController.text,
+                    nomClub: _clubNameController.text.isEmpty
+                        ? null
+                        : _clubNameController.text,
+                    position: _positionController.text.isEmpty
+                        ? null
+                        : _positionController.text,
+                    entreprise: _entrepriseController.text.isEmpty
+                        ? null
+                        : _entrepriseController.text,
+                    ligue: _ligueController.text.isEmpty
+                        ? null
+                        : _ligueController.text,
+                    nombreDeMatchs:
+                        int.tryParse(_nombreMatchsController.text) ?? 0,
                     buts: int.tryParse(_butsController.text) ?? 0,
                     assistances: int.tryParse(_assistancesController.text) ?? 0,
-                    nombreDeRecrutements: int.tryParse(_nombreRecrutementsController.text) ?? 0,
+                    nombreDeRecrutements:
+                        int.tryParse(_nombreRecrutementsController.text) ?? 0,
                     videosPubliees: user.videosPubliees,
                   );
                   await _profileController.updateUserProfile(updatedUser);
-                  Get.back();  // Redirection vers la page précédente après la sauvegarde
+
+                  // Redirection vers la page de profil après la sauvegarde
+                  Get.off(() => ProfileScreen(uid: user.uid));
                   Get.snackbar('Succès', 'Profil mis à jour avec succès');
                 },
                 child: const Text('Sauvegarder'),
