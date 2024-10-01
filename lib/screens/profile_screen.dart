@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:get/get.dart';
+import 'package:show_talent/controller/auth_controller.dart';
 import 'package:show_talent/controller/profile_controller.dart';
 import 'package:show_talent/screens/edit_profil_screen.dart';
 import '../models/user.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String uid;
-  ProfileScreen({super.key, required this.uid});
+  final bool isReadOnly;  // Nouveau paramètre pour lecture seule
+  ProfileScreen({super.key, required this.uid, this.isReadOnly = false}); // Par défaut modifiable
 
   final ProfileController _profileController = Get.put(ProfileController());
 
@@ -29,12 +31,14 @@ class ProfileScreen extends StatelessWidget {
           title: Text(user.nom),
           centerTitle: true,
           actions: [
-            IconButton(
-              icon: const Icon(Icons.more_vert),
-              onPressed: () {
-                _showProfileOptions(context, user);
-              },
-            ),
+            // Si le profil n'est pas en lecture seule et c'est le propriétaire du profil, afficher l'option de modification
+            if (!isReadOnly && AuthController.instance.user?.uid == user.uid)
+              IconButton(
+                icon: const Icon(Icons.more_vert),
+                onPressed: () {
+                  _showProfileOptions(context, user);
+                },
+              ),
           ],
         ),
         body: SafeArea(
@@ -91,15 +95,16 @@ class ProfileScreen extends StatelessWidget {
                 ],
 
                 const Gap(20),
-                // Bouton de suivi/désuivi
-                if (user.role != 'fan') ElevatedButton(
-                  onPressed: () {
-                    _profileController.followUser();
-                  },
-                  child: Text(
-                    controller.user!.followers > 0 ? 'Se désabonner' : 'Suivre',
+                // Affichage du bouton de suivi uniquement si c'est le profil d'un autre utilisateur
+                if (!isReadOnly && AuthController.instance.user?.uid != user.uid && user.role != 'fan')
+                  ElevatedButton(
+                    onPressed: () {
+                      _profileController.followUser();
+                    },
+                    child: Text(
+                      controller.user!.followers > 0 ? 'Se désabonner' : 'Suivre',
+                    ),
                   ),
-                ),
 
                 const Gap(20),
                 // Liste des vidéos publiées (uniquement pour les joueurs)
@@ -126,7 +131,7 @@ class ProfileScreen extends StatelessWidget {
     });
   }
 
-  // Affiche les options de modification du profil
+  // Affiche les options de modification du profil uniquement si c'est son propre profil
   void _showProfileOptions(BuildContext context, AppUser user) {
     showModalBottomSheet(
       context: context,

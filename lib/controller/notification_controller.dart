@@ -14,14 +14,14 @@ class NotificationController extends GetxController {
   void onInit() {
     super.onInit();
     initCurrentUser(); // Initialiser l'utilisateur
-    fetchNotifications(); // Charger les notifications après l'initialisation
   }
 
-  // Méthode pour initialiser l'utilisateur à partir de Firebase
+  // Méthode pour initialiser l'utilisateur à partir de Firebase et ensuite charger les notifications
   void initCurrentUser() {
     var user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       currentUser = user;
+      fetchNotifications();  // Ne charger les notifications qu'après avoir récupéré l'utilisateur
     } else {
       Get.snackbar('Erreur', 'Aucun utilisateur connecté');
     }
