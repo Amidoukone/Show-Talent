@@ -16,8 +16,7 @@ class EditProfileScreen extends StatelessWidget {
   final TextEditingController _nombreMatchsController = TextEditingController();
   final TextEditingController _butsController = TextEditingController();
   final TextEditingController _assistancesController = TextEditingController();
-  final TextEditingController _nombreRecrutementsController =
-      TextEditingController();
+  final TextEditingController _nombreRecrutementsController = TextEditingController();
 
   EditProfileScreen({super.key, required this.user}) {
     _nomController.text = user.nom;
@@ -27,8 +26,7 @@ class EditProfileScreen extends StatelessWidget {
     _positionController.text = user.position ?? '';
     _entrepriseController.text = user.entreprise ?? '';
     _ligueController.text = user.ligue ?? '';
-    _nombreRecrutementsController.text =
-        user.nombreDeRecrutements?.toString() ?? '0';
+    _nombreRecrutementsController.text = user.nombreDeRecrutements?.toString() ?? '0';
     _nombreMatchsController.text = user.nombreDeMatchs?.toString() ?? '0';
     _butsController.text = user.buts?.toString() ?? '0';
     _assistancesController.text = user.assistances?.toString() ?? '0';
@@ -41,21 +39,19 @@ class EditProfileScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Modifier le profil'),
-        backgroundColor: const Color.fromARGB(255, 6, 107, 107),
+        backgroundColor: const Color(0xFF214D4F),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: SingleChildScrollView(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Champ Nom
               TextField(
                 controller: _nomController,
                 decoration: const InputDecoration(labelText: 'Nom'),
               ),
               const SizedBox(height: 20),
-
-              // Champ Biographie pour les joueurs, clubs, recruteurs
               if (user.role != 'fan') ...[
                 TextField(
                   controller: _bioController,
@@ -63,28 +59,29 @@ class EditProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
               ],
-
-              // Champs spécifiques aux rôles
               if (user.role == 'joueur' || user.role == 'coach') ...[
                 TextField(
                   controller: _positionController,
                   decoration: const InputDecoration(labelText: 'Position'),
                 ),
+                const SizedBox(height: 20),
                 TextField(
                   controller: _teamController,
                   decoration: const InputDecoration(labelText: 'Club Actuel'),
                 ),
+                const SizedBox(height: 20),
                 TextField(
                   controller: _nombreMatchsController,
-                  decoration:
-                      const InputDecoration(labelText: 'Nombre de matchs'),
+                  decoration: const InputDecoration(labelText: 'Nombre de matchs'),
                   keyboardType: TextInputType.number,
                 ),
+                const SizedBox(height: 20),
                 TextField(
                   controller: _butsController,
                   decoration: const InputDecoration(labelText: 'Buts'),
                   keyboardType: TextInputType.number,
                 ),
+                const SizedBox(height: 20),
                 TextField(
                   controller: _assistancesController,
                   decoration: const InputDecoration(labelText: 'Assistances'),
@@ -93,9 +90,9 @@ class EditProfileScreen extends StatelessWidget {
               ] else if (user.role == 'club') ...[
                 TextField(
                   controller: _clubNameController,
-                  decoration: const InputDecoration(
-                      labelText: 'Localisation'), // Remplacé par localisation
+                  decoration: const InputDecoration(labelText: 'Localisation'),
                 ),
+                const SizedBox(height: 20),
                 TextField(
                   controller: _ligueController,
                   decoration: const InputDecoration(labelText: 'Ligue'),
@@ -105,14 +102,14 @@ class EditProfileScreen extends StatelessWidget {
                   controller: _entrepriseController,
                   decoration: const InputDecoration(labelText: 'Entreprise'),
                 ),
+                const SizedBox(height: 20),
                 TextField(
                   controller: _nombreRecrutementsController,
-                  decoration: const InputDecoration(
-                      labelText: 'Nombre de recrutements'),
+                  decoration: const InputDecoration(labelText: 'Nombre de recrutements'),
                   keyboardType: TextInputType.number,
                 ),
+                const SizedBox(height: 20),
               ],
-
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () async {
@@ -129,27 +126,15 @@ class EditProfileScreen extends StatelessWidget {
                     dateInscription: user.dateInscription,
                     dernierLogin: user.dernierLogin,
                     bio: _bioController.text,
-                    team: _teamController.text.isEmpty
-                        ? null
-                        : _teamController.text,
-                    nomClub: _clubNameController.text.isEmpty
-                        ? null
-                        : _clubNameController.text,
-                    position: _positionController.text.isEmpty
-                        ? null
-                        : _positionController.text,
-                    entreprise: _entrepriseController.text.isEmpty
-                        ? null
-                        : _entrepriseController.text,
-                    ligue: _ligueController.text.isEmpty
-                        ? null
-                        : _ligueController.text,
-                    nombreDeMatchs:
-                        int.tryParse(_nombreMatchsController.text) ?? 0,
+                    team: _teamController.text.isEmpty ? null : _teamController.text,
+                    nomClub: _clubNameController.text.isEmpty ? null : _clubNameController.text,
+                    position: _positionController.text.isEmpty ? null : _positionController.text,
+                    entreprise: _entrepriseController.text.isEmpty ? null : _entrepriseController.text,
+                    ligue: _ligueController.text.isEmpty ? null : _ligueController.text,
+                    nombreDeMatchs: int.tryParse(_nombreMatchsController.text) ?? 0,
                     buts: int.tryParse(_butsController.text) ?? 0,
                     assistances: int.tryParse(_assistancesController.text) ?? 0,
-                    nombreDeRecrutements:
-                        int.tryParse(_nombreRecrutementsController.text) ?? 0,
+                    nombreDeRecrutements: int.tryParse(_nombreRecrutementsController.text) ?? 0,
                     videosPubliees: user.videosPubliees,
                   );
                   await _profileController.updateUserProfile(updatedUser);
@@ -158,7 +143,20 @@ class EditProfileScreen extends StatelessWidget {
                   Get.off(() => ProfileScreen(uid: user.uid));
                   Get.snackbar('Succès', 'Profil mis à jour avec succès');
                 },
-                child: const Text('Sauvegarder'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF214D4F),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12.0,
+                    horizontal: 24.0,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                ),
+                child: const Text(
+                  'Sauvegarder',
+                  style: TextStyle(fontSize: 16, color: Colors.white),
+                ),
               ),
             ],
           ),

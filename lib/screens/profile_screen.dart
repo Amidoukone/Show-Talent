@@ -1,17 +1,20 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:gap/gap.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:show_talent/controller/auth_controller.dart';
 import 'package:show_talent/controller/profile_controller.dart';
 import 'package:show_talent/screens/edit_profil_screen.dart';
 import '../models/user.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String uid;
-  final bool isReadOnly;  // Nouveau paramètre pour lecture seule
-  ProfileScreen({super.key, required this.uid, this.isReadOnly = false}); // Par défaut modifiable
+  final bool isReadOnly;
+  ProfileScreen({super.key, required this.uid, this.isReadOnly = false});
 
   final ProfileController _profileController = Get.put(ProfileController());
+  final ImagePicker _picker = ImagePicker();
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +33,8 @@ class ProfileScreen extends StatelessWidget {
         appBar: AppBar(
           title: Text(user.nom),
           centerTitle: true,
+          backgroundColor: const Color(0xFF214D4F),
           actions: [
-            // Si le profil n'est pas en lecture seule et c'est le propriétaire du profil, afficher l'option de modification
             if (!isReadOnly && AuthController.instance.user?.uid == user.uid)
               IconButton(
                 icon: const Icon(Icons.more_vert),
@@ -42,88 +45,76 @@ class ProfileScreen extends StatelessWidget {
           ],
         ),
         body: SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Photo de profil
-                CircleAvatar(
-                  backgroundImage: NetworkImage(user.photoProfil),
-                  radius: 50,
-                ),
-                const Gap(10),
-                Text(
-                  user.nom,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-                const Gap(10),
-
-                // Affichage des followers et followings pour tous les rôles sauf fan
-                if (user.role != 'fan') ...[
-                  Text('Followers: ${user.followers}'),
-                  Text('Followings: ${user.followings}'),
-                  const Gap(10),
-                ],
-
-                // Affichage des informations spécifiques au rôle
-                if (user.role == 'joueur') ...[
-                  Text('Position: ${user.position ?? "Non spécifiée"}'),
-                  Text('Club Actuel: ${user.clubActuel ?? "Non spécifié"}'),
-                  Text('Nombre de Matchs: ${user.nombreDeMatchs ?? 0}'),
-                  Text('Buts: ${user.buts ?? 0}'),
-                  Text('Assistances: ${user.assistances ?? 0}'),
-                  if (user.performances != null) ...[
-                    const Text('Performances:'),
-                    ...user.performances!.entries.map((entry) => Text('${entry.key}: ${entry.value}')),
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: isReadOnly
+                        ? null
+                        : () {
+                            _changeProfilePhoto(user.uid);
+                          },
+                    child: CircleAvatar(
+                      backgroundImage: NetworkImage(user.photoProfil),
+                      radius: 50,
+                      child: isReadOnly
+                          ? null
+                          : const Icon(Icons.camera_alt, size: 30, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    user.nom,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  if (user.role != 'fan') ...[
+                    Text('Followers: ${user.followers}'),
+                    Text('Followings: ${user.followings}'),
+                    const SizedBox(height: 10),
                   ],
-                  Text('Biographie: ${user.bio ?? "Non spécifiée"}'),
-                ] else if (user.role == 'club') ...[
-                  Text('Localisation: ${user.nomClub ?? "Non spécifiée"}'),  // Remplacer par localisation
-                  Text('Ligue: ${user.ligue ?? "Non spécifiée"}'),
-                  Text('Biographie: ${user.bio ?? "Non spécifiée"}'),
-                ] else if (user.role == 'recruteur') ...[
-                  Text('Entreprise: ${user.entreprise ?? "Non spécifiée"}'),
-                  Text('Nombre de Recrutements: ${user.nombreDeRecrutements ?? 0}'),
-                  Text('Biographie: ${user.bio ?? "Non spécifiée"}'),
-                ] else if (user.role == 'fan') ...[
-                  const Text('Joueurs Suivis:'),
-                  if (user.joueursSuivis != null)
-                    for (var joueur in user.joueursSuivis!) Text(joueur.nom),
-                  const Text('Clubs Suivis:'),
-                  if (user.clubsSuivis != null)
-                    for (var club in user.clubsSuivis!) Text(club.nomClub ?? 'Nom non spécifié'),
-                ],
-
-                const Gap(20),
-                // Affichage du bouton de suivi uniquement si c'est le profil d'un autre utilisateur
-                if (!isReadOnly && AuthController.instance.user?.uid != user.uid && user.role != 'fan')
-                  ElevatedButton(
-                    onPressed: () {
-                      _profileController.followUser();
-                    },
-                    child: Text(
-                      controller.user!.followers > 0 ? 'Se désabonner' : 'Suivre',
+                  _buildUserRoleInfo(user),
+                  const SizedBox(height: 20),
+                  if (!isReadOnly &&
+                      AuthController.instance.user?.uid != user.uid &&
+                      user.role != 'fan')
+                    ElevatedButton(
+                      onPressed: () {
+                        _profileController.followUser();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF214D4F),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12.0,
+                          horizontal: 24.0,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        ),
+                      ),
+                      child: Text(
+                        controller.user!.followers > 0 ? 'Se désabonner' : 'Suivre',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
-                  ),
-
-                const Gap(20),
-                // Liste des vidéos publiées (uniquement pour les joueurs)
-                if (user.role == 'joueur' && user.videosPubliees != null && user.videosPubliees!.isNotEmpty) ...[
-                  const Text('Vidéos publiées'),
-                  GridView.builder(
-                    shrinkWrap: true,
-                    itemCount: user.videosPubliees!.length,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                    ),
-                    itemBuilder: (context, index) {
-                      return Image.network(user.videosPubliees![index].thumbnail);
-                    },
-                  ),
-                ] else if (user.role == 'joueur') ...[
-                  const Text('Pas de vidéos publiées.'),
+                  const SizedBox(height: 20),
+                  if (user.role == 'joueur' && user.videosPubliees != null && user.videosPubliees!.isNotEmpty)
+                    _buildVideosGrid(user.videosPubliees!)
+                  else if (user.role == 'joueur')
+                    const Text('Pas de vidéos publiées.'),
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -131,7 +122,99 @@ class ProfileScreen extends StatelessWidget {
     });
   }
 
-  // Affiche les options de modification du profil uniquement si c'est son propre profil
+  Future<void> _changeProfilePhoto(String uid) async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      File imageFile = File(pickedFile.path);
+      String fileName = 'profile_pics/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      UploadTask uploadTask = FirebaseStorage.instance.ref().child(fileName).putFile(imageFile);
+
+      try {
+        TaskSnapshot snapshot = await uploadTask;
+        String downloadUrl = await snapshot.ref.getDownloadURL();
+        await _profileController.updateProfilePhoto(uid, downloadUrl);
+        Get.snackbar('Succès', 'Photo de profil mise à jour avec succès');
+      } catch (e) {
+        Get.snackbar('Erreur', 'Échec du téléchargement de la photo de profil');
+      }
+    } else {
+      Get.snackbar('Erreur', 'Aucune image sélectionnée');
+    }
+  }
+
+  Widget _buildUserRoleInfo(AppUser user) {
+    if (user.role == 'joueur') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Position: ${user.position ?? "Non spécifiée"}'),
+          Text('Club Actuel: ${user.clubActuel ?? "Non spécifié"}'),
+          Text('Nombre de Matchs: ${user.nombreDeMatchs ?? 0}'),
+          Text('Buts: ${user.buts ?? 0}'),
+          Text('Assistances: ${user.assistances ?? 0}'),
+          if (user.performances != null) ...[
+            const Text('Performances:'),
+            ...user.performances!.entries.map((entry) => Text('${entry.key}: ${entry.value}')),
+          ],
+          Text('Biographie: ${user.bio ?? "Non spécifiée"}'),
+        ],
+      );
+    } else if (user.role == 'club') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Localisation: ${user.nomClub ?? "Non spécifiée"}'),
+          Text('Ligue: ${user.ligue ?? "Non spécifiée"}'),
+          Text('Biographie: ${user.bio ?? "Non spécifiée"}'),
+        ],
+      );
+    } else if (user.role == 'recruteur') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Entreprise: ${user.entreprise ?? "Non spécifiée"}'),
+          Text('Nombre de Recrutements: ${user.nombreDeRecrutements ?? 0}'),
+          Text('Biographie: ${user.bio ?? "Non spécifiée"}'),
+        ],
+      );
+    } else if (user.role == 'fan') {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Joueurs Suivis:'),
+          if (user.joueursSuivis != null)
+            ...user.joueursSuivis!.map((joueur) => Text(joueur.nom)),
+          const Text('Clubs Suivis:'),
+          if (user.clubsSuivis != null)
+            ...user.clubsSuivis!.map((club) => Text(club.nomClub ?? 'Nom non spécifié')),
+        ],
+      );
+    }
+    return Container();
+  }
+
+  Widget _buildVideosGrid(List<dynamic> videosPubliees) {
+    return GridView.builder(
+      shrinkWrap: true,
+      itemCount: videosPubliees.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+      ),
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8.0),
+            child: Image.network(
+              videosPubliees[index].thumbnail,
+              fit: BoxFit.cover,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   void _showProfileOptions(BuildContext context, AppUser user) {
     showModalBottomSheet(
       context: context,

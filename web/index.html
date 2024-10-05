@@ -1,24 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
+  <!-- Base href (remplacé par le build Flutter) -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Une nouvelle application Flutter.">
 
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -29,10 +17,44 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
+  <!-- Title -->
   <title>show_talent</title>
+  
+  <!-- Flutter Manifest -->
   <link rel="manifest" href="manifest.json">
+  
+  <!-- Firebase SDKs -->
+  <!-- Firebase App (required) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js"></script>
+
+  <!-- Firebase Auth (si utilisé) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js"></script>
+
+  <!-- Firebase Firestore (si utilisé) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js"></script>
+
+  <!-- Firebase Storage (si utilisé) -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-storage.js"></script>
+
+  <!-- Configuration Firebase -->
+  <script type="module">
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyAo6Jr2eYrOTekjTHlJQXImr5q1UsI2jcA",
+      authDomain: "show-talent-5987d.firebaseapp.com",
+      projectId: "show-talent-5987d",
+      storageBucket: "show-talent-5987d.appspot.com",
+      messagingSenderId: "43422248234",
+      appId: "1:43422248234:web:90e6e10558e53ab4f8c253"
+    };
+
+    // Initialize Firebase
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
+    initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
+  <!-- Flutter application launch -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

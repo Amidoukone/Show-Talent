@@ -1,133 +1,113 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/notification_controller.dart';
-import 'package:show_talent/models/conversation.dart';
-import 'package:show_talent/models/message.dart';
-import 'package:show_talent/models/notification.dart';
+import 'package:show_talent/controller/user_controller.dart';
+import 'package:show_talent/models/message_converstion.dart';
 import 'package:show_talent/models/user.dart';
 
 class ChatController extends GetxController {
   final Rx<List<Conversation>> _conversations = Rx<List<Conversation>>([]);
   List<Conversation> get conversations => _conversations.value;
 
-  final Rx<List<Message>> _messages = Rx<List<Message>>([]);
-  List<Message> get messages => _messages.value;
+  final Rx<List<Message>> _messages = Rx<List<Message>>([]); // Liste des messages observable
+  List<Message> get messages => _messages.value; // Getter pour accéder aux messages dans l'UI
 
-  // Ajout des utilisateurs courant et cible
-  late AppUser currentUser;
-  late AppUser otherUser;
+  late AppUser currentUser; // Utilisateur courant
 
-  // Controller des notifications
-  final NotificationController notificationController = Get.put(NotificationController());
+  // Cache pour éviter de recharger les mêmes utilisateurs plusieurs fois
+  final Map<String, AppUser> _userCache = {};
 
   @override
   void onInit() {
     super.onInit();
+    _initializeCurrentUser();
     _fetchConversations();
   }
 
-  void initUsers(AppUser current, AppUser other) {
-    currentUser = current;
-    otherUser = other;
+  // Initialiser l'utilisateur actuel
+  void _initializeCurrentUser() {
+    currentUser = Get.find<UserController>().user!;
   }
 
+  // Méthode pour récupérer les conversations depuis Firestore
   void _fetchConversations() {
     FirebaseFirestore.instance
         .collection('conversations')
+        .where('utilisateurIds', arrayContains: currentUser.uid)
         .snapshots()
         .listen((snapshot) {
-      _conversations.value = snapshot.docs
-          .map((doc) => Conversation.fromMap(doc.data()))
-          .toList();
-      update();
+      _conversations.value = snapshot.docs.map((doc) {
+        return Conversation.fromMap(doc.data());
+      }).toList();
     });
   }
 
+  // Créer une nouvelle conversation
+  Future<String> createConversation(AppUser currentUser, AppUser otherUser) async {
+    String conversationId = FirebaseFirestore.instance.collection('conversations').doc().id;
+
+    // Créer la conversation avec les deux utilisateurs
+    Conversation newConversation = Conversation(
+      id: conversationId,
+      utilisateur1Id: currentUser.uid,
+      utilisateur2Id: otherUser.uid,
+      messages: [],
+    );
+
+    await FirebaseFirestore.instance
+        .collection('conversations')
+        .doc(conversationId)
+        .set(newConversation.toMap());
+
+    return conversationId;
+  }
+
+  // Méthode pour envoyer un message dans une conversation
+  Future<void> sendMessage(String conversationId, Message message) async {
+    await FirebaseFirestore.instance
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .add(message.toMap());
+
+    // Ajouter le message localement pour l'UI en temps réel
+    _messages.value.add(message);
+    _messages.refresh();
+  }
+
+  // Méthode pour récupérer les messages d'une conversation
   void fetchMessages(String conversationId) {
     FirebaseFirestore.instance
         .collection('conversations')
         .doc(conversationId)
         .collection('messages')
-        .orderBy('dateEnvoi')
+        .orderBy('dateEnvoi', descending: true) // Messages triés par date
         .snapshots()
         .listen((snapshot) {
-      _messages.value = snapshot.docs
-          .map((doc) => Message.fromMap(doc.data()))
-          .toList();
-      update();
+      _messages.value = snapshot.docs.map((doc) {
+        return Message.fromMap(doc.data());
+      }).toList();
     });
   }
 
-  Future<void> sendMessage(String conversationId, Message message) async {
-    try {
-      // Envoyer le message dans la conversation
-      await FirebaseFirestore.instance
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .add(message.toMap());
-
-      // Mettre à jour la conversation principale avec le nouveau message
-      await FirebaseFirestore.instance
-          .collection('conversations')
-          .doc(conversationId)
-          .update({
-        'messages': FieldValue.arrayUnion([message.toMap()])
-      });
-
-      // Envoi d'une notification au destinataire (otherUser)
-      NotificationModel notification = NotificationModel(
-        id: FirebaseFirestore.instance.collection('notifications').doc().id,
-        destinataire: otherUser, // L'utilisateur qui reçoit la notification
-        message: '${currentUser.nom} vous a envoyé un message.',
-        type: 'message',
-        dateCreation: DateTime.now(),
-      );
-      await notificationController.sendNotification(notification);
-
-      Get.snackbar('Succès', 'Message envoyé');
-    } catch (e) {
-      Get.snackbar('Erreur', 'Échec de l\'envoi du message');
+  // Méthode pour récupérer un utilisateur à partir de son ID
+  Future<AppUser?> getUserById(String userId) async {
+    // Si l'utilisateur est déjà en cache, on le renvoie
+    if (_userCache.containsKey(userId)) {
+      return _userCache[userId];
     }
-  }
 
-  Future<void> markAsRead(String conversationId, String messageId) async {
+    // Si l'utilisateur n'est pas en cache, on le récupère depuis Firestore
     try {
-      await FirebaseFirestore.instance
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .doc(messageId)
-          .update({'estLu': true});
-      Get.snackbar('Message lu', 'Le message a été marqué comme lu');
+      DocumentSnapshot userSnapshot =
+          await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      AppUser user = AppUser.fromMap(userSnapshot.data() as Map<String, dynamic>);
+
+      // Mettre l'utilisateur dans le cache
+      _userCache[userId] = user;
+      return user;
     } catch (e) {
-      Get.snackbar('Erreur', 'Échec de la mise à jour du statut du message');
-    }
-  }
-
-  Future<void> createConversation(AppUser utilisateur1, AppUser utilisateur2) async {
-    try {
-      String conversationId = FirebaseFirestore.instance
-          .collection('conversations')
-          .doc()
-          .id;
-
-      Conversation newConversation = Conversation(
-        id: conversationId,
-        utilisateur1: utilisateur1,
-        utilisateur2: utilisateur2,
-        messages: [],
-      );
-
-      await FirebaseFirestore.instance
-          .collection('conversations')
-          .doc(conversationId)
-          .set(newConversation.toMap());
-
-      Get.snackbar('Succès', 'Nouvelle conversation créée');
-    } catch (e) {
-      Get.snackbar('Erreur', 'Échec de la création de la conversation');
+      Get.snackbar('Erreur', 'Impossible de récupérer les informations utilisateur.');
+      return null;
     }
   }
 }

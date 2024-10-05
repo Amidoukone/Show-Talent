@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:show_talent/screens/event_list_screen.dart';
 import 'package:show_talent/screens/setting_screen.dart';
-
-// Importation des nouveaux écrans pour la gestion des offres
-import 'home_screen.dart';
-import 'search_screen.dart';
-import 'gestion_offres_screen.dart'; // Nouvel écran pour gérer toutes les offres
+import 'package:show_talent/screens/home_screen.dart';
+import 'package:show_talent/screens/gestion_offres_screen.dart';
+import 'package:show_talent/screens/search_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -15,18 +13,16 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0; // Indice de l'onglet sélectionné
+  int _selectedIndex = 0;
 
-  // Liste des pages (écrans) correspondant aux onglets de la navigation
   final List<Widget> _screens = [
     const HomeScreen(),
-    const GestionOffresScreen(), // Remplace "Publier Offre" par l'écran de gestion des offres
+    const GestionOffresScreen(),
     EventListScreen(),
     SearchScreen(),
     SettingsScreen(),
   ];
 
-  // Méthode pour changer l'index en fonction de l'onglet cliqué
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
@@ -36,41 +32,39 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex], // Affichage de la page actuelle
-      bottomNavigationBar: Container(
-        color: const Color(0xFF004d00), // Vert foncé appliqué via le Container
-        child: BottomNavigationBar(
-          backgroundColor: Colors.green, // Important: on laisse transparent ici
-          selectedItemColor: const Color.fromARGB(
-              255, 2, 41, 32), // Couleur des icônes sélectionnées
-          unselectedItemColor:
-              const Color(0xFF8AB98A), // Couleur des icônes non sélectionnées
-          currentIndex: _selectedIndex, // Index de la page actuelle
-          onTap: _onItemTapped, // Gérer le changement d'onglet
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.local_offer),
-              label: 'Offres', // Libellé mis à jour
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.event),
-              label: 'Événements',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.search),
-              label: 'Search',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.settings),
-              label: 'Settings',
-            ),
-          ],
-        ),
+      body: _screens[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        backgroundColor: const Color(0xFF214D4F),
+        selectedItemColor: const Color(0xFFE6EEFA),
+        unselectedItemColor: const Color(0xFF8AB98A),
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        type: BottomNavigationBarType.fixed,
+        showUnselectedLabels: true,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.local_offer),
+            label: 'Offres',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.event),
+            label: 'Événements',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.search),
+            label: 'Search',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
       ),
+      // Suppression des FloatingActionButtons inutiles ici
     );
   }
 }

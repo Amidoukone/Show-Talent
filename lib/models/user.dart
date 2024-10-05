@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:show_talent/models/video.dart';
-import 'package:show_talent/models/offre.dart';  // Import pour Offre
-import 'package:show_talent/models/event.dart';  // Import pour Event
+import 'package:show_talent/models/offre.dart'; 
+import 'package:show_talent/models/event.dart';
 
 class AppUser {
   String uid;
@@ -22,7 +22,7 @@ class AppUser {
   int? nombreDeMatchs;  // Pour les joueurs
   int? buts;  // Pour les joueurs
   int? assistances;  // Pour les joueurs
-  List<Video>? videosPubliees;  // Pour les joueurs (et fans qui likent les vidéos)
+  List<Video>? videosPubliees;  // Pour les joueurs
   Map<String, double>? performances;  // Pour les joueurs
 
   String? nomClub;  // Pour les clubs
@@ -49,7 +49,7 @@ class AppUser {
     required this.followings,
     required this.dateInscription,
     required this.dernierLogin,
-    this.bio,  // Ajout du champ bio
+    this.bio,
     this.position,
     this.clubActuel,
     this.nombreDeMatchs,
@@ -63,26 +63,26 @@ class AppUser {
     this.eventPublies,
     this.entreprise,
     this.nombreDeRecrutements,
-    this.team,  // Ajout du champ team
+    this.team,
     this.joueursSuivis,
     this.clubsSuivis,
     this.videosLikees,
   });
 
-  // Méthode pour convertir les données Firestore en AppUser
+  // Convertir les données Firestore en AppUser
   factory AppUser.fromMap(Map<String, dynamic> map) {
     return AppUser(
-      uid: map['uid'],
-      nom: map['nom'],
-      email: map['email'],
-      role: map['role'],
-      photoProfil: map['photoProfil'],
-      estActif: map['estActif'],
-      followers: map['followers'],
-      followings: map['followings'],
-      dateInscription: (map['dateInscription'] as Timestamp).toDate(),
-      dernierLogin: (map['dernierLogin'] as Timestamp).toDate(),
-      bio: map['bio'],  // Récupération du champ bio
+      uid: map['uid'] ?? '', // Utiliser une valeur par défaut si null
+      nom: map['nom'] ?? 'Nom inconnu', // Valeur par défaut
+      email: map['email'] ?? 'Email inconnu', // Valeur par défaut
+      role: map['role'] ?? 'Utilisateur', // Valeur par défaut
+      photoProfil: map['photoProfil'] ?? '', // Valeur par défaut
+      estActif: map['estActif'] ?? true,
+      followers: map['followers'] ?? 0,
+      followings: map['followings'] ?? 0,
+      dateInscription: (map['dateInscription'] as Timestamp?)?.toDate() ?? DateTime.now(), // Valeur par défaut
+      dernierLogin: (map['dernierLogin'] as Timestamp?)?.toDate() ?? DateTime.now(), // Valeur par défaut
+      bio: map['bio'],
       position: map['position'],
       clubActuel: map['clubActuel'],
       nombreDeMatchs: map['nombreDeMatchs'],
@@ -104,7 +104,7 @@ class AppUser {
           : [],
       entreprise: map['entreprise'],
       nombreDeRecrutements: map['nombreDeRecrutements'],
-      team: map['team'],  // Récupération du champ team
+      team: map['team'],
       joueursSuivis: map['joueursSuivis'] != null
           ? List<AppUser>.from(map['joueursSuivis'].map((joueur) => AppUser.fromMap(joueur)))
           : [],
@@ -117,7 +117,7 @@ class AppUser {
     );
   }
 
-  // Méthode pour convertir AppUser en données Firestore
+  // Convertir AppUser en Map pour Firestore
   Map<String, dynamic> toMap() {
     return {
       'uid': uid,
@@ -130,7 +130,7 @@ class AppUser {
       'followings': followings,
       'dateInscription': dateInscription,
       'dernierLogin': dernierLogin,
-      'bio': bio,  // Sauvegarde du champ bio
+      'bio': bio,
       'position': position,
       'clubActuel': clubActuel,
       'nombreDeMatchs': nombreDeMatchs,
@@ -150,7 +150,7 @@ class AppUser {
           : [],
       'entreprise': entreprise,
       'nombreDeRecrutements': nombreDeRecrutements,
-      'team': team,  // Sauvegarde du champ team
+      'team': team,
       'joueursSuivis': joueursSuivis != null
           ? joueursSuivis!.map((joueur) => joueur.toMap()).toList()
           : [],

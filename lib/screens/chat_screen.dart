@@ -1,32 +1,56 @@
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:show_talent/controller/chat_controller.dart';
-import 'package:show_talent/models/message.dart';
+import 'package:show_talent/models/message_converstion.dart';
 import 'package:show_talent/models/user.dart';
 
-
-class ChatScreen extends StatelessWidget {
+class ChatScreen extends StatefulWidget {
   final String conversationId;
   final AppUser currentUser;
-  final AppUser otherUser;
-  final ChatController chatController = Get.put(ChatController());
+  final String otherUserId;
 
-  ChatScreen({super.key, 
+  const ChatScreen({
+    super.key,
     required this.conversationId,
     required this.currentUser,
-    required this.otherUser,
-  }) {
-    // Initialisation des utilisateurs dans le contrôleur
-    chatController.initUsers(currentUser, otherUser);
+    required this.otherUserId,
+  });
+
+  @override
+  _ChatScreenState createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final ChatController chatController = Get.put(ChatController());
+
+  late Future<AppUser?> otherUser;
+  final TextEditingController messageController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Charger les informations de l'autre utilisateur
+    otherUser = chatController.getUserById(widget.otherUserId);
+    chatController.fetchMessages(widget.conversationId); // Charger les messages de la conversation
   }
 
   @override
   Widget build(BuildContext context) {
-    chatController.fetchMessages(conversationId);
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Chat')),
+      appBar: AppBar(
+        title: FutureBuilder<AppUser?>(
+          future: otherUser,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Text('Chargement...');
+            }
+            if (snapshot.hasError || snapshot.data == null) {
+              return const Text('Erreur');
+            }
+            return Text('Chat avec ${snapshot.data!.nom}');
+          },
+        ),
+      ),
       body: Column(
         children: [
           Expanded(
@@ -52,34 +76,34 @@ class ChatScreen extends StatelessWidget {
               }
             }),
           ),
-          // Ajout d'un champ pour envoyer un message
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
+                    controller: messageController,
                     decoration: const InputDecoration(hintText: 'Écrivez un message...'),
-                    onSubmitted: (text) {
-                      // Envoi du message
-                      Message newMessage = Message(
-                        id: '', // L'ID est généré par Firestore
-                        expediteur: chatController.currentUser, // Utilisateur actuel
-                        destinataire: chatController.otherUser, // Utilisateur ciblé
-                        contenu: text,
-                        dateEnvoi: DateTime.now(),
-                        estLu: false,
-                      );
-                      chatController.sendMessage(conversationId, newMessage);
-                    },
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.send),
                   onPressed: () {
-                    // Logique de l'envoi manuelle si besoin
+                    // Envoyer le message si le champ de texte n'est pas vide
+                    if (messageController.text.trim().isNotEmpty) {
+                      Message newMessage = Message(
+                        id: '', // Firestore générera automatiquement l'ID
+                        expediteurId: widget.currentUser.uid,
+                        destinataireId: widget.otherUserId,
+                        contenu: messageController.text.trim(),
+                        dateEnvoi: DateTime.now(),
+                        estLu: false,
+                      );
+                      chatController.sendMessage(widget.conversationId, newMessage);
+                      messageController.clear(); // Vider le champ après l'envoi
+                    }
                   },
-                )
+                ),
               ],
             ),
           ),
