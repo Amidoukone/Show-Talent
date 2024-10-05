@@ -15,7 +15,7 @@ class _PublierOffreScreenState extends State<PublierOffreScreen> {
   final DateTime dateDebut = DateTime.now();
   final DateTime dateFin = DateTime.now().add(const Duration(days: 30));
 
-  bool isLoading = false; // Indicateur de chargement
+  bool isLoading = false;
 
   @override
   void dispose() {
@@ -27,18 +27,30 @@ class _PublierOffreScreenState extends State<PublierOffreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Publier une Offre')),
+      appBar: AppBar(
+        title: const Text('Publier une Offre'),
+        backgroundColor: const Color(0xFF214D4F),  // Couleur principale
+      ),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: Column(
           children: [
             TextField(
               controller: titreController,
-              decoration: const InputDecoration(labelText: 'Titre de l\'offre'),
+              decoration: const InputDecoration(
+                labelText: 'Titre de l\'offre',
+                filled: true,
+                fillColor: Color(0xFFE6EEFA),  // Couleur secondaire
+              ),
             ),
+            const SizedBox(height: 10),
             TextField(
               controller: descriptionController,
-              decoration: const InputDecoration(labelText: 'Description'),
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                filled: true,
+                fillColor: Color(0xFFE6EEFA),  // Couleur secondaire
+              ),
             ),
             const SizedBox(height: 20),
             ElevatedButton(
@@ -49,7 +61,7 @@ class _PublierOffreScreenState extends State<PublierOffreScreen> {
                 }
 
                 setState(() {
-                  isLoading = true; // Début du chargement
+                  isLoading = true;
                 });
 
                 try {
@@ -60,21 +72,21 @@ class _PublierOffreScreenState extends State<PublierOffreScreen> {
                     dateFin,
                   );
 
-                  // Message de succès
                   Get.snackbar('Succès', 'Offre publiée avec succès');
-
-                  // Effacer les champs après la publication
                   titreController.clear();
                   descriptionController.clear();
                 } catch (e) {
-                  // Gérer les erreurs
-                  Get.snackbar('Erreur', 'Erreur lors de la publication de l\'offre');
+                  Get.snackbar('Erreur', 'Erreur lors de la publication');
                 } finally {
                   setState(() {
-                    isLoading = false; // Fin du chargement
+                    isLoading = false;
                   });
                 }
               },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF214D4F),
+                minimumSize: const Size(double.infinity, 50),
+              ),
               child: isLoading
                   ? const CircularProgressIndicator(color: Colors.white)
                   : const Text('Publier'),

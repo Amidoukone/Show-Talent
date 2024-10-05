@@ -1,35 +1,30 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
-import '../controller/upload_video_controller.dart';
+import 'package:show_talent/controller/upload_video_controller.dart';
 
-class AddVideo extends StatefulWidget {
-  const AddVideo({super.key});
+class UploadForm extends StatefulWidget {
+  final File videoFile;
+  final String videoPath;
+
+  const UploadForm({super.key, required this.videoFile, required this.videoPath});
 
   @override
-  _AddVideoState createState() => _AddVideoState();
+  State<UploadForm> createState() => _UploadFormState();
 }
 
-class _AddVideoState extends State<AddVideo> {
+class _UploadFormState extends State<UploadForm> {
   final UploadVideoController uploadVideoController = Get.put(UploadVideoController());
   final TextEditingController songController = TextEditingController();
   final TextEditingController captionController = TextEditingController();
-  File? _videoFile;
-
-  Future<void> _pickVideo() async {
-    final pickedFile = await ImagePicker().pickVideo(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _videoFile = File(pickedFile.path);
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Ajouter une vidéo')),
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('Téléverser une vidéo'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -44,30 +39,24 @@ class _AddVideoState extends State<AddVideo> {
               decoration: const InputDecoration(labelText: 'Légende'),
             ),
             const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _pickVideo,
-              child: const Text('Sélectionner une vidéo'),
-            ),
-            const SizedBox(height: 20),
-            if (_videoFile != null) Text('Vidéo sélectionnée : ${_videoFile!.path}'),
-            const SizedBox(height: 20),
             Obx(() {
               if (uploadVideoController.isUploading.value) {
                 return const CircularProgressIndicator();
               }
               return ElevatedButton(
                 onPressed: () {
-                  if (_videoFile != null) {
+                  if (songController.text.isNotEmpty && captionController.text.isNotEmpty) {
                     uploadVideoController.uploadVideo(
                       songController.text,
                       captionController.text,
-                      _videoFile!.path,
+                      widget.videoPath,
                     );
+                    Get.back(); // Retour après téléversement
                   } else {
-                    Get.snackbar('Erreur', 'Veuillez sélectionner une vidéo');
+                    Get.snackbar('Erreur', 'Veuillez remplir tous les champs');
                   }
                 },
-                child: const Text('Télécharger la vidéo'),
+                child: const Text('Téléverser la vidéo'),
               );
             }),
           ],

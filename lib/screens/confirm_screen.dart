@@ -1,10 +1,8 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/upload_video_controller.dart';
 import 'package:video_player/video_player.dart';
- // Assurez-vous d'importer correctement le contrôleur
+import '../controller/upload_video_controller.dart';
 
 class ConfirmScreen extends StatefulWidget {
   final File videoFile;
@@ -24,8 +22,6 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
   late VideoPlayerController _controller;
   final TextEditingController _songController = TextEditingController();
   final TextEditingController _captionController = TextEditingController();
-
-  // Instanciation du contrôleur via GetX
   final UploadVideoController uploadVideoController = Get.put(UploadVideoController());
 
   @override
@@ -67,31 +63,24 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
                 children: [
                   TextField(
                     controller: _songController,
-                    style: const TextStyle(color: Colors.black),
                     decoration: InputDecoration(
-                      labelText: 'Song Name',
-                      labelStyle: const TextStyle(color: Colors.black),
+                      labelText: 'Nom de la chanson',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(5),
-                        borderSide: const BorderSide(color: Colors.grey),
                       ),
                     ),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: _captionController,
-                    style: const TextStyle(color: Colors.black),
                     decoration: InputDecoration(
-                      labelText: 'Caption',
-                      labelStyle: const TextStyle(color: Colors.black),
+                      labelText: 'Légende',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(5),
-                        borderSide: const BorderSide(color: Colors.grey),
                       ),
                     ),
                   ),
                   const SizedBox(height: 10),
-                  // Utilisation de Obx pour réagir aux changements d'état
                   Obx(() {
                     return ElevatedButton(
                       onPressed: uploadVideoController.isUploading.value
@@ -104,10 +93,8 @@ class _ConfirmScreenState extends State<ConfirmScreen> {
                               );
                             },
                       child: uploadVideoController.isUploading.value
-                          ? const CircularProgressIndicator(
-                              color: Colors.white,
-                            )
-                          : const Text('Share'),
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text('Partager'),
                     );
                   }),
                 ],

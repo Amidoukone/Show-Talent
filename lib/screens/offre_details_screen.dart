@@ -5,7 +5,7 @@ import 'package:show_talent/screens/profile_screen.dart';
 import '../controller/offre_controller.dart';
 import '../models/offre.dart';
 import '../controller/auth_controller.dart';
-import 'modifier_offre_screen.dart';  // Import pour l'écran de modification
+import 'modifier_offre_screen.dart';
 
 class OffreDetailsScreen extends StatelessWidget {
   final Offre offre;
@@ -18,16 +18,14 @@ class OffreDetailsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(offre.titre),
+        backgroundColor: const Color(0xFF214D4F),  // Couleur principale
         actions: [
-          // Si l'utilisateur est le recruteur, il peut modifier ou supprimer l'offre
           if (user?.uid == offre.recruteur.uid) 
             PopupMenuButton<String>(
               onSelected: (value) {
                 if (value == 'modifier') {
-                  // Rediriger vers l'écran de modification
                   Get.to(() => ModifierOffreScreen(offre: offre));
                 } else if (value == 'supprimer') {
-                  // Demander confirmation avant de supprimer
                   _confirmDelete(context, offre);
                 }
               },
@@ -54,8 +52,6 @@ class OffreDetailsScreen extends StatelessWidget {
             Text('Date début : ${offre.dateDebut.toLocal()}'),
             Text('Date fin : ${offre.dateFin.toLocal()}'),
             const SizedBox(height: 20),
-
-            // Si l'utilisateur est le recruteur, afficher la liste des candidats
             if (user?.uid == offre.recruteur.uid) ...[
               const Text('Liste des candidats :', style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
@@ -65,14 +61,17 @@ class OffreDetailsScreen extends StatelessWidget {
                   itemBuilder: (context, index) {
                     AppUser candidat = offre.candidats[index];
                     return Card(
+                      color: const Color(0xFFE6EEFA),  // Couleur secondaire
                       elevation: 2,
                       margin: const EdgeInsets.symmetric(vertical: 5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       child: ListTile(
                         leading: const CircleAvatar(child: Icon(Icons.person)),
                         title: Text(candidat.nom),
                         subtitle: Text(candidat.email),
                         onTap: () {
-                          // Rediriger vers le profil du candidat en mode lecture seule
                           Get.to(() => ProfileScreen(uid: candidat.uid, isReadOnly: true));
                         },
                       ),
@@ -87,7 +86,6 @@ class OffreDetailsScreen extends StatelessWidget {
     );
   }
 
-  // Méthode pour demander confirmation avant suppression
   void _confirmDelete(BuildContext context, Offre offre) {
     Get.defaultDialog(
       title: 'Confirmation',
@@ -97,10 +95,10 @@ class OffreDetailsScreen extends StatelessWidget {
       confirmTextColor: Colors.white,
       onConfirm: () {
         OffreController.instance.supprimerOffre(offre.id);
-        Get.back(); // Fermer la boîte de dialogue
-        Get.back(); // Revenir à l'écran précédent
+        Get.back();
+        Get.back();
       },
-      onCancel: () => Get.back(), // Fermer la boîte de dialogue
+      onCancel: () => Get.back(),
     );
   }
 }

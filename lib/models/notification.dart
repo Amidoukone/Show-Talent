@@ -1,6 +1,5 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/models/user.dart'; 
+import 'package:show_talent/models/user.dart';
 
 class NotificationModel {
   final String id;
@@ -19,7 +18,7 @@ class NotificationModel {
     this.estLue = false, // Par défaut non lue
   });
 
-  // Convertir la notification en Map (pour Firestore)
+  // Convertir la notification en Map pour Firestore
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -31,16 +30,15 @@ class NotificationModel {
     };
   }
 
-  // Créer une notification à partir d'un Map (depuis Firestore)
+  // Créer une notification à partir d'un Map depuis Firestore
   factory NotificationModel.fromMap(Map<String, dynamic> map) {
     return NotificationModel(
-      id: map['id'],
-      destinataire: AppUser.fromMap(map['destinataire']),
-      message: map['message'],
-      type: map['type'],
-      // Correction ici, utilisez Timestamp pour convertir en DateTime
-      dateCreation: (map['dateCreation'] as Timestamp).toDate(),
-      estLue: map['estLue'] ?? false,
+      id: map['id'] ?? '', // Utiliser une valeur par défaut si null
+      destinataire: AppUser.fromMap(map['destinataire'] ?? {}), // Si le destinataire est null, on passe une Map vide
+      message: map['message'] ?? 'Message inconnu', // Valeur par défaut si le message est null
+      type: map['type'] ?? 'général', // Valeur par défaut
+      dateCreation: (map['dateCreation'] as Timestamp?)?.toDate() ?? DateTime.now(), // Valeur par défaut si null
+      estLue: map['estLue'] ?? false, // Valeur par défaut si null
     );
   }
 }
