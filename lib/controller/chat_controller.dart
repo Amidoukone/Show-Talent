@@ -12,9 +12,7 @@ class ChatController extends GetxController {
   List<Message> get messages => _messages.value; // Getter pour accéder aux messages dans l'UI
 
   late AppUser currentUser; // Utilisateur courant
-
-  // Cache pour éviter de recharger les mêmes utilisateurs plusieurs fois
-  final Map<String, AppUser> _userCache = {};
+  final Map<String, AppUser> _userCache = {}; // Cache pour éviter de recharger les mêmes utilisateurs plusieurs fois
 
   @override
   void onInit() {
@@ -41,16 +39,29 @@ class ChatController extends GetxController {
     });
   }
 
-  // Créer une nouvelle conversation
-  Future<String> createConversation(AppUser currentUser, AppUser otherUser) async {
+  // Créer une nouvelle conversation ou retourner l'ID d'une conversation existante
+  Future<String> createConversation(AppUser otherUser) async {
+    // Chercher si une conversation existe déjà entre les deux utilisateurs
+    QuerySnapshot existingConversations = await FirebaseFirestore.instance
+        .collection('conversations')
+        .where('utilisateurIds', arrayContains: currentUser.uid)
+        .get();
+
+    for (var doc in existingConversations.docs) {
+      Conversation conversation = Conversation.fromMap(doc.data() as Map<String, dynamic>);
+      if (conversation.utilisateurIds.contains(otherUser.uid)) {
+        return conversation.id; // Retourner l'ID de la conversation existante
+      }
+    }
+
+    // Si aucune conversation n'existe, en créer une nouvelle
     String conversationId = FirebaseFirestore.instance.collection('conversations').doc().id;
 
-    // Créer la conversation avec les deux utilisateurs
     Conversation newConversation = Conversation(
       id: conversationId,
       utilisateur1Id: currentUser.uid,
       utilisateur2Id: otherUser.uid,
-      messages: [],
+      utilisateurIds: [currentUser.uid, otherUser.uid], // Liste des deux utilisateurs
     );
 
     await FirebaseFirestore.instance
@@ -69,40 +80,81 @@ class ChatController extends GetxController {
         .collection('messages')
         .add(message.toMap());
 
-    // Ajouter le message localement pour l'UI en temps réel
+    // Mettre à jour la conversation avec le dernier message
+    await FirebaseFirestore.instance.collection('conversations').doc(conversationId).update({
+      'lastMessage': message.contenu,
+      'lastMessageDate': Timestamp.fromDate(message.dateEnvoi),
+    });
+
     _messages.value.add(message);
     _messages.refresh();
   }
 
-  // Méthode pour récupérer les messages d'une conversation
+  // Récupérer les messages pour une conversation spécifique
   void fetchMessages(String conversationId) {
     FirebaseFirestore.instance
         .collection('conversations')
         .doc(conversationId)
         .collection('messages')
-        .orderBy('dateEnvoi', descending: true) // Messages triés par date
+        .orderBy('dateEnvoi', descending: false) // Les messages doivent être triés par ordre d'envoi
         .snapshots()
         .listen((snapshot) {
       _messages.value = snapshot.docs.map((doc) {
         return Message.fromMap(doc.data());
       }).toList();
+      _messages.refresh();
     });
+  }
+
+  // Méthode pour supprimer un message spécifique dans une conversation
+  Future<void> deleteMessage(String conversationId, String messageId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .doc(messageId)
+          .delete();
+      Get.snackbar('Succès', 'Message supprimé.');
+    } catch (e) {
+      Get.snackbar('Erreur', 'Impossible de supprimer le message.');
+    }
+  }
+
+  // Méthode pour supprimer une conversation entière
+  Future<void> deleteConversation(String conversationId) async {
+    try {
+      // Supprimer tous les messages dans la conversation
+      var messagesSnapshot = await FirebaseFirestore.instance
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .get();
+
+      for (var doc in messagesSnapshot.docs) {
+        await doc.reference.delete();
+      }
+
+      // Supprimer la conversation elle-même
+      await FirebaseFirestore.instance.collection('conversations').doc(conversationId).delete();
+
+      Get.snackbar('Succès', 'Conversation supprimée avec succès.');
+    } catch (e) {
+      Get.snackbar('Erreur', 'Impossible de supprimer la conversation.');
+    }
   }
 
   // Méthode pour récupérer un utilisateur à partir de son ID
   Future<AppUser?> getUserById(String userId) async {
-    // Si l'utilisateur est déjà en cache, on le renvoie
     if (_userCache.containsKey(userId)) {
       return _userCache[userId];
     }
 
-    // Si l'utilisateur n'est pas en cache, on le récupère depuis Firestore
     try {
       DocumentSnapshot userSnapshot =
           await FirebaseFirestore.instance.collection('users').doc(userId).get();
       AppUser user = AppUser.fromMap(userSnapshot.data() as Map<String, dynamic>);
 
-      // Mettre l'utilisateur dans le cache
       _userCache[userId] = user;
       return user;
     } catch (e) {

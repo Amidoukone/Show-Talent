@@ -41,9 +41,13 @@ class VideoCard extends StatelessWidget {
             child: Container(
               width: screenWidth, // Utiliser toute la largeur de l'écran
               color: Colors.black, // Fond noir pendant le chargement
-              child: AspectRatio(
-                aspectRatio: 16 / 9, // Standard video aspect ratio
-                child: VideoPlayerItem(videoUrl: video.videoUrl),
+              child: FittedBox(
+                fit: BoxFit.cover, // Permet à la vidéo de couvrir tout l'espace sans étirer
+                child: SizedBox(
+                  width: screenWidth, // S'assure que la vidéo occupe bien la largeur disponible
+                  height: screenWidth * (9 / 16), // Ratio 16:9 pour les vidéos
+                  child: VideoPlayerItem(videoUrl: video.videoUrl),
+                ),
               ),
             ),
           ),
@@ -96,7 +100,9 @@ class VideoCard extends StatelessWidget {
                       children: [
                         IconButton(
                           icon: Icon(
-                            video.likes.contains(user.uid) ? Icons.favorite : Icons.favorite_border,
+                            video.likes.contains(user.uid)
+                                ? Icons.favorite
+                                : Icons.favorite_border,
                             color: Colors.red,
                           ),
                           onPressed: () {

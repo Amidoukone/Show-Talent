@@ -89,7 +89,10 @@ class _PublierOffreScreenState extends State<PublierOffreScreen> {
               ),
               child: isLoading
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text('Publier'),
+                  : const Text(
+                      'Publier',
+                      style: TextStyle(color: Colors.white), 
+                    ),
             ),
           ],
         ),

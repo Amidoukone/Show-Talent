@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:show_talent/controller/chat_controller.dart';
-import 'package:show_talent/models/message_converstion.dart';
 import 'package:show_talent/models/user.dart';
-import 'package:show_talent/screens/select_user_screen.dart'; // L'écran pour sélectionner un utilisateur
-import 'chat_screen.dart';
+import 'package:show_talent/screens/chat_screen.dart';
+import 'package:show_talent/screens/select_user_screen.dart';
 
 class ConversationsScreen extends StatelessWidget {
   final ChatController chatController = Get.put(ChatController());
@@ -16,19 +15,16 @@ class ConversationsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Conversations')),
       body: Obx(() {
-        // Vérifier si l'utilisateur a des conversations disponibles
         if (chatController.conversations.isEmpty) {
           return const Center(child: Text('Aucune conversation disponible.'));
         }
 
-        // Afficher la liste des conversations
         return ListView.builder(
           itemCount: chatController.conversations.length,
           itemBuilder: (context, index) {
-            Conversation conversation = chatController.conversations[index];
-            AppUser currentUser = chatController.currentUser;
+            var conversation = chatController.conversations[index];
+            var currentUser = chatController.currentUser;
 
-            // Identifier l'autre utilisateur de la conversation
             String otherUserId = conversation.utilisateur1Id == currentUser.uid
                 ? conversation.utilisateur2Id
                 : conversation.utilisateur1Id;
@@ -43,13 +39,11 @@ class ConversationsScreen extends StatelessWidget {
                   );
                 }
 
-                // Afficher les informations de l'autre utilisateur dans la conversation
-                AppUser otherUser = snapshot.data!;
+                var otherUser = snapshot.data!;
                 return ListTile(
                   title: Text(otherUser.nom),
                   subtitle: Text('Dernier message: ${conversation.lastMessage ?? ''}'),
                   onTap: () {
-                    // Rediriger vers l'écran de chat (ChatScreen) lorsqu'une conversation est sélectionnée
                     Get.to(() => ChatScreen(
                       conversationId: conversation.id,
                       currentUser: currentUser,
@@ -64,8 +58,7 @@ class ConversationsScreen extends StatelessWidget {
       }),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Naviguer vers l'écran de sélection des utilisateurs
-          Get.to(() => SelectUserScreen());  // Écran où l'on peut choisir un utilisateur pour démarrer une conversation
+          Get.to(() => const SelectUserScreen());
         },
         tooltip: 'Nouvelle conversation',
         child: const Icon(Icons.chat),
