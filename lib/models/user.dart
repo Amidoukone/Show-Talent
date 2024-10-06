@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:show_talent/models/video.dart';
-import 'package:show_talent/models/offre.dart'; 
+import 'package:show_talent/models/offre.dart';
 import 'package:show_talent/models/event.dart';
 
 class AppUser {
@@ -16,27 +16,27 @@ class AppUser {
   DateTime dernierLogin;
 
   // Informations spécifiques à chaque rôle
-  String? bio;  // Ajout pour tous les utilisateurs
-  String? position;  // Pour les joueurs
-  String? clubActuel;  // Pour les joueurs
-  int? nombreDeMatchs;  // Pour les joueurs
-  int? buts;  // Pour les joueurs
-  int? assistances;  // Pour les joueurs
-  List<Video>? videosPubliees;  // Pour les joueurs
-  Map<String, double>? performances;  // Pour les joueurs
+  String? bio;
+  String? position;
+  String? clubActuel;
+  int? nombreDeMatchs;
+  int? buts;
+  int? assistances;
+  List<Video>? videosPubliees;
+  Map<String, double>? performances;
 
-  String? nomClub;  // Pour les clubs
-  String? ligue;  // Pour les clubs
-  List<Offre>? offrePubliees;  // Pour les clubs/recruteurs
-  List<Event>? eventPublies;  // Pour les clubs/recruteurs
+  String? nomClub;
+  String? ligue;
+  List<Offre>? offrePubliees;
+  List<Event>? eventPublies;
 
-  String? entreprise;  // Pour les recruteurs
-  int? nombreDeRecrutements;  // Pour les recruteurs
+  String? entreprise;
+  int? nombreDeRecrutements;
 
-  String? team;  // Ajout pour joueurs et coachs (nom de l'équipe actuelle)
-  List<AppUser>? joueursSuivis;  // Pour les fans
-  List<AppUser>? clubsSuivis;  // Pour les fans
-  List<Video>? videosLikees;  // Pour les fans
+  String? team;
+  List<AppUser>? joueursSuivis;
+  List<AppUser>? clubsSuivis;
+  List<Video>? videosLikees;
 
   AppUser({
     required this.uid,
@@ -78,10 +78,10 @@ class AppUser {
       role: map['role'] ?? 'Utilisateur', // Valeur par défaut
       photoProfil: map['photoProfil'] ?? '', // Valeur par défaut
       estActif: map['estActif'] ?? true,
-      followers: map['followers'] ?? 0,
-      followings: map['followings'] ?? 0,
-      dateInscription: (map['dateInscription'] as Timestamp?)?.toDate() ?? DateTime.now(), // Valeur par défaut
-      dernierLogin: (map['dernierLogin'] as Timestamp?)?.toDate() ?? DateTime.now(), // Valeur par défaut
+      followers: map['followers'] is int ? map['followers'] : 0, // Correction ici pour s'assurer que followers est un int
+      followings: map['followings'] is int ? map['followings'] : 0, // Correction ici pour s'assurer que followings est un int
+      dateInscription: (map['dateInscription'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      dernierLogin: (map['dernierLogin'] as Timestamp?)?.toDate() ?? DateTime.now(),
       bio: map['bio'],
       position: map['position'],
       clubActuel: map['clubActuel'],

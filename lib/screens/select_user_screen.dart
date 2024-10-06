@@ -67,10 +67,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     subtitle: Text(user.email),
                     onTap: () async {
                       // Créer une nouvelle conversation avec l'utilisateur sélectionné
-                      String conversationId = await chatController.createConversation(
-                        chatController.currentUser, // L'utilisateur actuel
-                        user, // L'utilisateur sélectionné
-                      );
+                      String conversationId = await chatController.createConversation(user);
 
                       // Redirection vers ChatScreen après la création de la conversation
                       Get.to(() => ChatScreen(

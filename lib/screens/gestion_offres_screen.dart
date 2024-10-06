@@ -15,9 +15,21 @@ class GestionOffresScreen extends StatelessWidget {
           backgroundColor: const Color(0xFF214D4F),  // Couleur principale
           bottom: const TabBar(
             indicatorColor: Colors.white,  // Couleur de l'indicateur d'onglet
+            labelColor: Colors.white,  // Couleur du texte sélectionné
+            unselectedLabelColor: Colors.white70,  // Couleur du texte non sélectionné
             tabs: [
-              Tab(text: 'Afficher Offres'),
-              Tab(text: 'Publier Offre'),
+              Tab(
+                child: Text(
+                  'Afficher Offres',
+                  style: TextStyle(color: Colors.white),  // Appliquer la couleur blanche
+                ),
+              ),
+              Tab(
+                child: Text(
+                  'Publier Offre',
+                  style: TextStyle(color: Colors.white),  // Appliquer la couleur blanche
+                ),
+              ),
             ],
           ),
         ),
