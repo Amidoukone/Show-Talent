@@ -111,4 +111,27 @@ class VideoController extends GetxController {
       Get.snackbar('Erreur', 'Échec de la suppression de la vidéo : $e');
     }
   }
+
+  // Méthode pour mettre à jour la vidéo avec une nouvelle URL (si nécessaire)
+  Future<void> updateVideo(String videoId, Map<String, dynamic> newVideoData) async {
+    try {
+      await FirebaseFirestore.instance.collection('videos').doc(videoId).update(newVideoData);
+      Get.snackbar('Succès', 'Vidéo mise à jour avec succès.');
+    } catch (e) {
+      Get.snackbar('Erreur', 'Erreur lors de la mise à jour de la vidéo.');
+    }
+  }
+
+  // Méthode pour récupérer une vidéo spécifique à partir de son ID
+  Future<Video?> getVideoById(String videoId) async {
+    try {
+      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
+      if (doc.exists) {
+        return Video.fromMap(doc.data() as Map<String, dynamic>);
+      }
+    } catch (e) {
+      Get.snackbar('Erreur', 'Impossible de récupérer la vidéo.');
+    }
+    return null;
+  }
 }

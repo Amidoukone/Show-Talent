@@ -5,7 +5,8 @@ import 'package:show_talent/controller/video_controller.dart';
 import 'package:show_talent/screens/conversation_screen.dart';
 import 'package:show_talent/screens/profile_screen.dart'; // Pour afficher le profil de l'utilisateur
 import 'package:show_talent/screens/upload_video_screen.dart'; // Écran pour téléverser une vidéo
-import 'package:show_talent/screens/video_card.dart';
+import 'package:show_talent/screens/full_screen_video.dart'; // Pour afficher les vidéos en plein écran
+import 'package:show_talent/widgets/tiktok_video_player.dart';
 import '../models/video.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -20,7 +21,6 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('AD.FOOT'),
         actions: [
-          // Assurez-vous que userController.user est initialisé avant d'accéder à ses valeurs
           Obx(() {
             if (userController.user == null) {
               return const CircularProgressIndicator(); // Attendre que l'utilisateur soit chargé
@@ -40,19 +40,26 @@ class HomeScreen extends StatelessWidget {
         if (videoController.videoList.isEmpty) {
           return const Center(child: Text('Aucune vidéo disponible'));
         }
-        return ListView.builder(
+        return PageView.builder(
+          scrollDirection: Axis.vertical, // Défilement vertical comme TikTok
           itemCount: videoController.videoList.length,
           itemBuilder: (context, index) {
             Video video = videoController.videoList[index];
-            return VideoCard(
-              video: video,
-              user: userController.user!, // Utilisateur connecté
-              videoController: videoController, // Passez le contrôleur ici
+            return GestureDetector(
+              onTap: () {
+                // Lorsqu'une vidéo est sélectionnée, elle est affichée en plein écran
+                Get.to(() => FullScreenVideo(
+                  video: video,
+                  user: userController.user!,  // Utilisateur connecté
+                  videoController: videoController,
+                ));
+              },
+              child: TikTokVideoPlayer(videoUrl: video.videoUrl),  // Utiliser le lecteur vidéo
             );
           },
         );
       }),
-      
+
       // Deux FloatingActionButtons: un à gauche (conversation) et un à droite (ajouter vidéo)
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,  // Place le bouton central
       floatingActionButton: Row(
@@ -66,7 +73,7 @@ class HomeScreen extends StatelessWidget {
               heroTag: 'conversation',
               onPressed: () {
                 // Ouvrir l'écran des conversations
-                Get.to(() =>  ConversationsScreen());
+                Get.to(() => ConversationsScreen());
               },
               child: const Icon(Icons.chat), // Icône pour les conversations
             ),
