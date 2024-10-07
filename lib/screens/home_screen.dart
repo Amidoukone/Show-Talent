@@ -5,7 +5,7 @@ import 'package:show_talent/controller/video_controller.dart';
 import 'package:show_talent/screens/conversation_screen.dart';
 import 'package:show_talent/screens/profile_screen.dart'; // Pour afficher le profil de l'utilisateur
 import 'package:show_talent/screens/upload_video_screen.dart'; // Écran pour téléverser une vidéo
-import 'package:show_talent/screens/full_screen_video.dart'; // Pour afficher les vidéos en plein écran
+import 'package:show_talent/screens/full_screen_video.dart'; // Utilisé pour afficher les vidéos en plein écran
 import 'package:show_talent/widgets/tiktok_video_player.dart';
 import '../models/video.dart';
 
@@ -47,14 +47,19 @@ class HomeScreen extends StatelessWidget {
             Video video = videoController.videoList[index];
             return GestureDetector(
               onTap: () {
-                // Lorsqu'une vidéo est sélectionnée, elle est affichée en plein écran
+                // Afficher la vidéo en plein écran avec les interactions
                 Get.to(() => FullScreenVideo(
-                  video: video,
+                  video: video,  // Passez l'objet vidéo
                   user: userController.user!,  // Utilisateur connecté
-                  videoController: videoController,
+                  videoController: videoController,  // Contrôleur pour les interactions
                 ));
               },
-              child: TikTokVideoPlayer(videoUrl: video.videoUrl),  // Utiliser le lecteur vidéo
+              child: TikTokVideoPlayer(
+                videoUrl: video.videoUrl,
+                video: video, // Passez l'objet vidéo
+                videoController: videoController, // Passez le contrôleur vidéo
+                userId: userController.user!.uid,  // ID de l'utilisateur connecté
+              ),
             );
           },
         );
