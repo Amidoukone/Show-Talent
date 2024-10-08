@@ -3,7 +3,9 @@ import 'package:show_talent/screens/event_list_screen.dart';
 import 'package:show_talent/screens/setting_screen.dart';
 import 'package:show_talent/screens/home_screen.dart';
 import 'package:show_talent/screens/gestion_offres_screen.dart';
-import 'package:show_talent/screens/search_screen.dart';
+import 'package:show_talent/screens/conversation_screen.dart'; // Ajout de l'écran des conversations
+import 'package:get/get.dart';
+import 'package:show_talent/controller/chat_controller.dart'; // Ajout du ChatController
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -15,11 +17,13 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
+  final ChatController chatController = Get.put(ChatController()); // Instance du ChatController
+
   final List<Widget> _screens = [
     const HomeScreen(),
     const GestionOffresScreen(),
     EventListScreen(),
-    SearchScreen(),
+    ConversationsScreen(),  // L'écran des conversations
     SettingsScreen(),
   ];
 
@@ -55,8 +59,8 @@ class _MainScreenState extends State<MainScreen> {
             label: 'Événements',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Search',
+            icon: Icon(Icons.chat),  // Icône de Messages
+            label: 'Messages',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
@@ -64,7 +68,6 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ],
       ),
-      // Suppression des FloatingActionButtons inutiles ici
     );
   }
 }

@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:show_talent/controller/auth_controller.dart';
 import 'package:show_talent/controller/profile_controller.dart';
+import 'package:show_talent/controller/chat_controller.dart'; // Importer le ChatController
+import 'package:show_talent/screens/chat_screen.dart'; // Importer l'écran de chat
 import 'package:show_talent/screens/edit_profil_screen.dart';
 import '../models/user.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -14,6 +16,7 @@ class ProfileScreen extends StatelessWidget {
   ProfileScreen({super.key, required this.uid, this.isReadOnly = false});
 
   final ProfileController _profileController = Get.put(ProfileController());
+  final ChatController _chatController = Get.put(ChatController()); // Ajouter le ChatController
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -35,11 +38,25 @@ class ProfileScreen extends StatelessWidget {
           centerTitle: true,
           backgroundColor: const Color(0xFF214D4F),
           actions: [
+            // Si c'est le profil de l'utilisateur connecté et qu'il peut le modifier
             if (!isReadOnly && AuthController.instance.user?.uid == user.uid)
               IconButton(
                 icon: const Icon(Icons.more_vert),
                 onPressed: () {
                   _showProfileOptions(context, user);
+                },
+              )
+            // Si c'est un autre utilisateur, montrer l'icône de message pour l'envoyer un message
+            else if (isReadOnly && AuthController.instance.user?.uid != user.uid)
+              IconButton(
+                icon: const Icon(Icons.message),
+                onPressed: () async {
+                  String conversationId = await _chatController.createConversation(user);
+                  Get.to(() => ChatScreen(
+                        conversationId: conversationId,
+                        currentUser: AuthController.instance.user!,
+                        otherUserId: user.uid,
+                      ));
                 },
               ),
           ],
@@ -51,6 +68,7 @@ class ProfileScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  // Photo de profil
                   GestureDetector(
                     onTap: isReadOnly
                         ? null
@@ -66,6 +84,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  // Nom de l'utilisateur
                   Text(
                     user.nom,
                     style: const TextStyle(
@@ -76,6 +95,7 @@ class ProfileScreen extends StatelessWidget {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 10),
+                  
                   if (user.role != 'fan') ...[
                     Text('Followers: ${user.followers}'),
                     Text('Followings: ${user.followings}'),
@@ -83,32 +103,8 @@ class ProfileScreen extends StatelessWidget {
                   ],
                   _buildUserRoleInfo(user),
                   const SizedBox(height: 20),
-                  if (!isReadOnly &&
-                      AuthController.instance.user?.uid != user.uid &&
-                      user.role != 'fan')
-                    ElevatedButton(
-                      onPressed: () {
-                        _profileController.followUser();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF214D4F),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12.0,
-                          horizontal: 24.0,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                      ),
-                      child: Text(
-                        controller.user!.followers > 0 ? 'Se désabonner' : 'Suivre',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  const SizedBox(height: 20),
+
+                  // Si l'utilisateur est un joueur avec des vidéos publiées, les afficher
                   if (user.role == 'joueur' && user.videosPubliees != null && user.videosPubliees!.isNotEmpty)
                     _buildVideosGrid(user.videosPubliees!)
                   else if (user.role == 'joueur')
