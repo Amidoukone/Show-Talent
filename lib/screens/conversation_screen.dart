@@ -25,6 +25,7 @@ class ConversationsScreen extends StatelessWidget {
             var conversation = chatController.conversations[index];
             var currentUser = chatController.currentUser;
 
+            // Identifie l'autre utilisateur dans la conversation
             String otherUserId = conversation.utilisateur1Id == currentUser.uid
                 ? conversation.utilisateur2Id
                 : conversation.utilisateur1Id;
@@ -44,6 +45,7 @@ class ConversationsScreen extends StatelessWidget {
                   title: Text(otherUser.nom),
                   subtitle: Text('Dernier message: ${conversation.lastMessage ?? ''}'),
                   onTap: () {
+                    // Ouvrir l'écran de chat pour discuter
                     Get.to(() => ChatScreen(
                       conversationId: conversation.id,
                       currentUser: currentUser,
@@ -58,7 +60,7 @@ class ConversationsScreen extends StatelessWidget {
       }),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          Get.to(() => const SelectUserScreen());
+          Get.to(() => const SelectUserScreen()); // Permettre de démarrer une nouvelle conversation
         },
         tooltip: 'Nouvelle conversation',
         child: const Icon(Icons.chat),
