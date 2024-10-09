@@ -11,6 +11,7 @@ class Event {
   final List<AppUser> participants; // Liste des participants inscrits
   String statut; // "à venir", "en cours", "terminé"
   final String lieu;
+  bool estPublic; // Événement public ou privé
 
   Event({
     required this.id,
@@ -22,6 +23,7 @@ class Event {
     required this.participants,
     required this.statut,
     required this.lieu,
+    required this.estPublic,
   });
 
   // Méthode pour convertir un événement en Map (pour Firestore)
@@ -36,6 +38,7 @@ class Event {
       'participants': participants.map((participant) => participant.toMap()).toList(),
       'statut': statut,
       'lieu': lieu,
+      'estPublic': estPublic,
     };
   }
 
@@ -52,6 +55,7 @@ class Event {
           map['participants']?.map((x) => AppUser.fromMap(x)) ?? []),
       statut: map['statut'],
       lieu: map['lieu'],
+      estPublic: map['estPublic'] ?? true,
     );
   }
 }

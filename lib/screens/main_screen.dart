@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:show_talent/controller/user_controller.dart';
+import 'package:show_talent/models/user.dart';
 import 'package:show_talent/screens/event_list_screen.dart';
 import 'package:show_talent/screens/setting_screen.dart';
 import 'package:show_talent/screens/home_screen.dart';
@@ -6,6 +8,7 @@ import 'package:show_talent/screens/gestion_offres_screen.dart';
 import 'package:show_talent/screens/conversation_screen.dart'; // Ajout de l'écran des conversations
 import 'package:get/get.dart';
 import 'package:show_talent/controller/chat_controller.dart'; // Ajout du ChatController
+import 'package:show_talent/screens/event_form_screen.dart'; // Ajout de l'écran de création/modification d'événements
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -22,7 +25,7 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = [
     const HomeScreen(),
     const GestionOffresScreen(),
-    EventListScreen(),
+    EventListScreen(),  // Liste des événements
     ConversationsScreen(),  // L'écran des conversations
     SettingsScreen(),
   ];
@@ -37,6 +40,18 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _screens[_selectedIndex],
+      floatingActionButton: _selectedIndex == 2 ? FloatingActionButton(
+        onPressed: () {
+          // Ouvrir l'écran de création d'événement uniquement pour les clubs/recruteurs
+          AppUser currentUser = Get.find<UserController>().user!;
+          if (currentUser.role == 'recruteur' || currentUser.role == 'club') {
+            Get.to(() => EventFormScreen()); // Rediriger vers l'écran de création
+          } else {
+            Get.snackbar('Accès refusé', 'Seuls les recruteurs et les clubs peuvent créer des événements.');
+          }
+        },
+        child: const Icon(Icons.add),
+      ) : null, // Ajouter l'action pour créer un événement uniquement sur l'onglet des événements
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: const Color(0xFF214D4F),
         selectedItemColor: const Color(0xFFE6EEFA),
