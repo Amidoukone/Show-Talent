@@ -18,7 +18,7 @@ class ChatController extends GetxController {
   void onInit() {
     super.onInit();
     _initializeCurrentUser();
-    _fetchConversations();
+    fetchConversations();  // Appel de la méthode sans le préfixe privé
   }
 
   // Initialiser l'utilisateur actuel
@@ -27,7 +27,7 @@ class ChatController extends GetxController {
   }
 
   // Méthode pour récupérer les conversations depuis Firestore
-  void _fetchConversations() {
+  void fetchConversations() {  // La méthode est désormais publique
     FirebaseFirestore.instance
         .collection('conversations')
         .where('utilisateurIds', arrayContains: currentUser.uid)
@@ -37,6 +37,51 @@ class ChatController extends GetxController {
         return Conversation.fromMap(doc.data());
       }).toList();
     });
+  }
+
+  // Marquer tous les messages comme "Lu" pour une conversation
+  Future<void> markMessagesAsRead(String conversationId) async {
+    QuerySnapshot messagesSnapshot = await FirebaseFirestore.instance
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .where('destinataireId', isEqualTo: currentUser.uid)  // Messages envoyés à l'utilisateur actuel
+        .where('estLu', isEqualTo: false)  // Filtrer uniquement les messages non lus
+        .get();
+
+    // Mettre à jour tous les messages non lus
+    for (var doc in messagesSnapshot.docs) {
+      await doc.reference.update({'estLu': true});
+    }
+  }
+
+  // Récupérer les messages pour une conversation spécifique
+  void fetchMessages(String conversationId) {
+    FirebaseFirestore.instance
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .orderBy('dateEnvoi', descending: false) // Les messages doivent être triés par ordre d'envoi
+        .snapshots()
+        .listen((snapshot) {
+      _messages.value = snapshot.docs.map((doc) {
+        return Message.fromMap(doc.data());
+      }).toList();
+      _messages.refresh();
+    });
+  }
+
+  // Obtenir le nombre de messages non lus pour une conversation
+  Future<int> getUnreadMessagesCount(String conversationId) async {
+    QuerySnapshot messagesSnapshot = await FirebaseFirestore.instance
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .where('destinataireId', isEqualTo: currentUser.uid)  // Filtrer les messages non lus destinés à l'utilisateur actuel
+        .where('estLu', isEqualTo: false)
+        .get();
+
+    return messagesSnapshot.docs.length;  // Retourner le nombre de messages non lus
   }
 
   // Créer une nouvelle conversation ou retourner l'ID d'une conversation existante
@@ -88,22 +133,6 @@ class ChatController extends GetxController {
 
     _messages.value.add(message);
     _messages.refresh();
-  }
-
-  // Récupérer les messages pour une conversation spécifique
-  void fetchMessages(String conversationId) {
-    FirebaseFirestore.instance
-        .collection('conversations')
-        .doc(conversationId)
-        .collection('messages')
-        .orderBy('dateEnvoi', descending: false) // Les messages doivent être triés par ordre d'envoi
-        .snapshots()
-        .listen((snapshot) {
-      _messages.value = snapshot.docs.map((doc) {
-        return Message.fromMap(doc.data());
-      }).toList();
-      _messages.refresh();
-    });
   }
 
   // Méthode pour supprimer un message spécifique dans une conversation
