@@ -123,7 +123,6 @@ class EventDetailsScreen extends StatelessWidget {
                     onPressed: () {
                       _updateEventStatus(context);
                     },
-                    child: const Text('Marquer comme Terminé'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF214D4F), // Fond bleu foncé
                       foregroundColor: Colors.white, // Texte en blanc
@@ -131,6 +130,7 @@ class EventDetailsScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                     ),
+                    child: const Text('Marquer comme Terminé'),
                   ),
                 ],
               ),

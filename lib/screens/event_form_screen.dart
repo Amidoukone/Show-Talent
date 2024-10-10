@@ -109,7 +109,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 }
                 Get.back();
               },
-              child: Text(widget.event != null ? 'Modifier' : 'Créer'),
               style: ElevatedButton.styleFrom(
                 foregroundColor: Colors.white, backgroundColor: const Color(0xFF214D4F), // Texte en blanc
                 padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 12.0),
@@ -117,6 +116,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
+              child: Text(widget.event != null ? 'Modifier' : 'Créer'),
             ),
           ],
         ),
