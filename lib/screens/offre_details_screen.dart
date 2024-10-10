@@ -27,6 +27,8 @@ class OffreDetailsScreen extends StatelessWidget {
                   Get.to(() => ModifierOffreScreen(offre: offre));
                 } else if (value == 'supprimer') {
                   _confirmDelete(context, offre);
+                } else if (value == 'fermer') {
+                  _updateOffreStatus();
                 }
               },
               itemBuilder: (context) => [
@@ -37,6 +39,10 @@ class OffreDetailsScreen extends StatelessWidget {
                 const PopupMenuItem<String>(
                   value: 'supprimer',
                   child: Text('Supprimer'),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'fermer',
+                  child: Text('Fermer l\'offre'),
                 ),
               ],
             ),
@@ -86,6 +92,7 @@ class OffreDetailsScreen extends StatelessWidget {
     );
   }
 
+  // Confirmer la suppression d'une offre
   void _confirmDelete(BuildContext context, Offre offre) {
     Get.defaultDialog(
       title: 'Confirmation',
@@ -96,9 +103,25 @@ class OffreDetailsScreen extends StatelessWidget {
       onConfirm: () {
         OffreController.instance.supprimerOffre(offre.id);
         Get.back();
-        Get.back();
+        Get.back(); // Retour après suppression
       },
       onCancel: () => Get.back(),
+    );
+  }
+
+  // Changer le statut de l'offre en "Fermée"
+  void _updateOffreStatus() {
+    Get.defaultDialog(
+      title: 'Confirmer',
+      middleText: 'Voulez-vous fermer cette offre ?',
+      textConfirm: 'Oui',
+      textCancel: 'Annuler',
+      confirmTextColor: Colors.white,
+      onConfirm: () {
+        offre.statut = 'Fermée';  // Changer le statut
+        OffreController.instance.modifierOffre(offre.id, offre.titre, offre.description, offre.dateDebut, offre.dateFin);
+        Get.back();  // Fermer le dialog
+      },
     );
   }
 }

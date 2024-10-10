@@ -40,6 +40,8 @@ class _OffresScreenState extends State<OffresScreen> {
           itemCount: offresList.length,
           itemBuilder: (context, index) {
             var offre = offresList[index];
+            bool isExpired = offre.dateFin.isBefore(DateTime.now()) || offre.statut == 'Fermée';  // Masquer postuler si l'offre est fermée ou expirée
+
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               child: Card(
@@ -80,7 +82,7 @@ class _OffresScreenState extends State<OffresScreen> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      if (AuthController.instance.user?.role == 'joueur')
+                      if (AuthController.instance.user?.role == 'joueur' && !isExpired)
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton.icon(
