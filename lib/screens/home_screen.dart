@@ -17,6 +17,7 @@ class HomeScreen extends StatelessWidget {
     final UserController userController = Get.find<UserController>();
 
     return Scaffold(
+      backgroundColor: Colors.black,  // Ajout du fond noir pour l'ensemble de l'écran
       appBar: AppBar(
         title: const Text('AD.FOOT'),
         actions: [
@@ -37,7 +38,7 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Obx(() {
         if (videoController.videoList.isEmpty) {
-          return const Center(child: Text('Aucune vidéo disponible'));
+          return const Center(child: Text('Aucune vidéo disponible', style: TextStyle(color: Colors.white)));
         }
         return PageView.builder(
           scrollDirection: Axis.vertical, // Défilement vertical comme TikTok
@@ -71,6 +72,7 @@ class HomeScreen extends StatelessWidget {
         if (userController.user?.role == 'joueur') {
           return FloatingActionButton(
             backgroundColor: const Color(0xFF214D4F),
+            foregroundColor: Colors.white,
             heroTag: 'addVideo',
             onPressed: () {
               // Ouvrir l'écran pour téléverser une vidéo

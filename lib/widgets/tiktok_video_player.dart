@@ -6,9 +6,9 @@ import 'package:show_talent/models/video.dart';
 
 class TikTokVideoPlayer extends StatefulWidget {
   final String videoUrl;
-  final Video video; // Ajout de la vidéo pour la suppression
-  final VideoController videoController; // Contrôleur pour les actions sur la vidéo
-  final String userId; // ID de l'utilisateur connecté
+  final Video video;
+  final VideoController videoController;
+  final String userId;
 
   const TikTokVideoPlayer({
     super.key,
@@ -28,12 +28,12 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
   @override
   void initState() {
     super.initState();
-    // Utilisation de `VideoPlayerController.networkUrl`
+    // Initialisation du contrôleur vidéo avec l'URL de la vidéo
     _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
       ..initialize().then((_) {
         setState(() {}); // Rebuild pour initialiser la vidéo
         _controller.play(); // Lecture automatique
-        _controller.setLooping(true); // Boucler la vidéo
+        _controller.setLooping(true); // Boucle infinie
       });
   }
 
@@ -47,32 +47,35 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Lecture de la vidéo en plein écran
-        _controller.value.isInitialized
-            ? AspectRatio(
-                aspectRatio: _controller.value.aspectRatio,
-                child: VideoPlayer(_controller),
-              )
-            : const Center(
-                child: CircularProgressIndicator(),
-              ),
-        // Interactions sur la vidéo (supprimer, liker, partager, signaler)
+        // Fond noir pour s'assurer que les espaces vides sont noirs
+        Container(
+          color: Colors.black,  // Fond noir pour les bandes noires
+          child: _controller.value.isInitialized
+              ? Center(
+                  child: AspectRatio(
+                    aspectRatio: _controller.value.aspectRatio,  // Respecter le ratio d'origine de la vidéo
+                    child: VideoPlayer(_controller),
+                  ),
+                )
+              : const Center(
+                  child: CircularProgressIndicator(),  // Indicateur de chargement
+                ),
+        ),
+        // Interactions sur la vidéo (likes, partage, etc.)
         Positioned(
           right: 10,
           bottom: 50,
           child: Column(
             children: [
-              // Bouton supprimer (visible uniquement pour le propriétaire)
               if (widget.userId == widget.video.uid)
                 _buildActionButton(
                   icon: Icons.delete,
                   color: Colors.red,
                   label: 'Supprimer',
                   onPressed: () {
-                    _showDeleteConfirmation(); // Afficher la confirmation de suppression
+                    _showDeleteConfirmation();
                   },
                 ),
-              // Autres interactions (liker, partager, signaler)
               _buildActionButton(
                 icon: Icons.favorite,
                 color: widget.video.likes.contains(widget.userId) ? Colors.red : Colors.white,
@@ -106,7 +109,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
     );
   }
 
-  // Méthode pour construire les boutons d'action (icône + label)
+  // Méthode pour construire les boutons d'action (J'aime, Partager, etc.)
   Widget _buildActionButton({
     required IconData icon,
     required Color color,
@@ -127,7 +130,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
     );
   }
 
-  // Méthode pour afficher la boîte de dialogue de confirmation avant suppression
+  // Confirmation de suppression de la vidéo
   void _showDeleteConfirmation() {
     showDialog(
       context: context,
@@ -144,8 +147,8 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
             ),
             TextButton(
               onPressed: () {
-                widget.videoController.deleteVideo(widget.video.id); // Supprimer la vidéo
-                Navigator.of(context).pop(); // Fermer après suppression
+                widget.videoController.deleteVideo(widget.video.id);
+                Navigator.of(context).pop();
                 Get.snackbar('Succès', 'Vidéo supprimée avec succès.');
               },
               child: const Text('Supprimer', style: TextStyle(color: Colors.red)),

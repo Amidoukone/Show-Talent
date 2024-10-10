@@ -21,14 +21,14 @@ class FullScreenVideo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,  // Fond noir pour un effet immersif
+      backgroundColor: Colors.black, // Fond noir pour l'expérience immersive
       body: Stack(
         children: [
-          // Vidéo en plein écran
+          // Vidéo en plein écran avec gestion des ratios et bandes noires
           Positioned.fill(
             child: VideoPlayerItem(videoUrl: video.videoUrl),
           ),
-          // Interactions sur la vidéo
+          // Interactions sur la vidéo (like, partage, etc.)
           Positioned(
             bottom: 30,
             right: 10,
@@ -55,7 +55,7 @@ class FullScreenVideo extends StatelessWidget {
               ],
             ),
           ),
-          // Nom et description
+          // Nom de la vidéo et informations de l'utilisateur
           Positioned(
             bottom: 30,
             left: 10,
@@ -93,7 +93,7 @@ class FullScreenVideo extends StatelessWidget {
     );
   }
 
-  // Méthode pour afficher les boutons d'action (J'aime, Partager, etc.)
+  // Boutons d'action (like, partager, signaler)
   Widget _buildActionButton(IconData icon, Color color, VoidCallback onPressed) {
     return IconButton(
       icon: Icon(icon, color: color, size: 30),

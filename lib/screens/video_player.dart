@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:show_talent/controller/video_controller.dart';
 import 'package:show_talent/screens/video_player_item.dart';
 
-class VideoPlayerScreen extends StatelessWidget {  // Notez que j'ai renommé pour éviter les conflits avec VideoPlayer
+class VideoPlayerScreen extends StatelessWidget {
   final VideoController _videoController = Get.put(VideoController());
 
   VideoPlayerScreen({super.key});
@@ -27,7 +27,10 @@ class VideoPlayerScreen extends StatelessWidget {  // Notez que j'ai renommé po
 
             return Stack(
               children: [
-                VideoPlayerItem(videoUrl: video.videoUrl),  // Jouer la vidéo
+                // Utilisation de FittedBox pour garantir que la vidéo est bien ajustée à l'écran
+                Positioned.fill(
+                  child: VideoPlayerItem(videoUrl: video.videoUrl),  // Vidéo en plein écran avec ratio respecté
+                ),
                 Positioned(
                   bottom: 40,
                   left: 20,

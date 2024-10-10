@@ -20,13 +20,9 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
   void initState() {
     super.initState();
 
-    // Log de l'URL de la vidéo
-    print("Tentative de lecture de la vidéo : ${widget.videoUrl}");
-
     // Initialiser le VideoPlayerController avec l'URL de la vidéo
     _videoPlayerController = VideoPlayerController.network(widget.videoUrl)
       ..initialize().then((_) {
-        print("La vidéo a été initialisée correctement.");
         setState(() {
           _chewieController = ChewieController(
             videoPlayerController: _videoPlayerController,
@@ -44,7 +40,6 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
           );
         });
       }).catchError((error) {
-        print("Erreur lors de l'initialisation de la vidéo : $error");
         setState(() {
           _isError = true;
         });
@@ -70,10 +65,18 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
       return const Center(child: CircularProgressIndicator()); // Affiche un indicateur de chargement
     }
 
-    return AspectRatio(
-      aspectRatio: _videoPlayerController.value.aspectRatio,  // Assurez-vous que l'AspectRatio est bien défini
-      child: Chewie(
-        controller: _chewieController!,
+    return Container(
+      color: Colors.black, // Fond noir pour les espaces libres
+      child: FittedBox(
+        fit: BoxFit.contain, // La vidéo s'adapte à l'espace, en conservant le ratio
+        alignment: Alignment.center,
+        child: SizedBox(
+          width: _videoPlayerController.value.size.width,
+          height: _videoPlayerController.value.size.height,
+          child: Chewie(
+            controller: _chewieController!,
+          ),
+        ),
       ),
     );
   }
