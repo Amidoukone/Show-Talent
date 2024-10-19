@@ -20,6 +20,7 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
     if (pickedFile != null) {
       // Redirection vers un formulaire de téléversement avec la vidéo sélectionnée
       Get.to(() => UploadForm(videoFile: File(pickedFile.path), videoPath: pickedFile.path));
+      
     } else {
       Get.snackbar('Erreur', 'Aucune vidéo sélectionnée');
     }
