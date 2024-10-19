@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:show_talent/controller/auth_controller.dart';
 import 'package:show_talent/controller/user_controller.dart';
 import 'package:show_talent/controller/chat_controller.dart';
 import 'package:show_talent/models/user.dart';
@@ -67,7 +68,12 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     subtitle: Text(user.email),
                     onTap: () async {
                       // Créer une nouvelle conversation avec l'utilisateur sélectionné
-                      String conversationId = await chatController.createConversation(user);
+                      String conversationId =
+                          await chatController.createOrGetConversation(
+                        currentUserId: AuthController.instance.user!.uid,
+                        otherUserId: user.uid,
+                      );
+
 
                       // Redirection vers ChatScreen après la création de la conversation
                       Get.to(() => ChatScreen(

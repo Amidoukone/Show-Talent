@@ -1,23 +1,22 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:show_talent/controller/auth_controller.dart';
 import 'package:show_talent/controller/profile_controller.dart';
-import 'package:show_talent/controller/chat_controller.dart'; // Importer le ChatController
-import 'package:show_talent/screens/chat_screen.dart'; // Importer l'écran de chat
+import 'package:show_talent/controller/follow_controller.dart';
+import 'package:show_talent/models/user.dart';
 import 'package:show_talent/screens/edit_profil_screen.dart';
-import '../models/user.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:show_talent/screens/chat_screen.dart';
+import 'package:show_talent/controller/chat_controller.dart'; // Importer le chat controller
 
 class ProfileScreen extends StatelessWidget {
   final String uid;
   final bool isReadOnly;
+
   ProfileScreen({super.key, required this.uid, this.isReadOnly = false});
 
   final ProfileController _profileController = Get.put(ProfileController());
-  final ChatController _chatController = Get.put(ChatController()); // Ajouter le ChatController
-  final ImagePicker _picker = ImagePicker();
+  final FollowController _followController = Get.put(FollowController());
+  final ChatController _chatController = Get.put(ChatController()); // Chat Controller pour gérer les conversations
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +30,8 @@ class ProfileScreen extends StatelessWidget {
       }
 
       AppUser user = controller.user!;
+      bool isFollowing = user.followingsList.contains(AuthController.instance.user?.uid);
+      bool isOwnProfile = AuthController.instance.user?.uid == uid;
 
       return Scaffold(
         appBar: AppBar(
@@ -38,20 +39,24 @@ class ProfileScreen extends StatelessWidget {
           centerTitle: true,
           backgroundColor: const Color(0xFF214D4F),
           actions: [
-            // Si c'est le profil de l'utilisateur connecté et qu'il peut le modifier
-            if (!isReadOnly && AuthController.instance.user?.uid == user.uid)
+            if (!isReadOnly && isOwnProfile)
               IconButton(
-                icon: const Icon(Icons.more_vert),
+                icon: const Icon(Icons.edit),
                 onPressed: () {
-                  _showProfileOptions(context, user);
+                  Get.to(() => EditProfileScreen(user: user));
                 },
-              )
-            // Si c'est un autre utilisateur, montrer l'icône de message pour l'envoyer un message
-            else if (isReadOnly && AuthController.instance.user?.uid != user.uid)
+              ),
+            if (!isOwnProfile)
               IconButton(
                 icon: const Icon(Icons.message),
                 onPressed: () async {
-                  String conversationId = await _chatController.createConversation(user);
+                  // Récupérer ou créer une conversation entre les deux utilisateurs
+                  String conversationId = await _chatController.createOrGetConversation(
+                    currentUserId: AuthController.instance.user!.uid,
+                    otherUserId: user.uid,
+                  );
+                  
+                  // Rediriger vers l'écran de chat avec l'ID de la conversation
                   Get.to(() => ChatScreen(
                         conversationId: conversationId,
                         currentUser: AuthController.instance.user!,
@@ -68,13 +73,10 @@ class ProfileScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Photo de profil
                   GestureDetector(
-                    onTap: isReadOnly
-                        ? null
-                        : () {
-                            _changeProfilePhoto(user.uid);
-                          },
+                    onTap: isReadOnly ? null : () {
+                      // Logique pour changer la photo de profil (peut-être ouvrir un sélecteur d'image)
+                    },
                     child: CircleAvatar(
                       backgroundImage: NetworkImage(user.photoProfil),
                       radius: 50,
@@ -84,31 +86,31 @@ class ProfileScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // Nom de l'utilisateur
-                  Text(
-                    user.nom,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+                  Text(user.nom, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Text('Followers: ${user.followersList.length}'),
+                  Text('Followings: ${user.followingsList.length}'),
                   const SizedBox(height: 10),
                   
-                  if (user.role != 'fan') ...[
-                    Text('Followers: ${user.followers}'),
-                    Text('Followings: ${user.followings}'),
-                    const SizedBox(height: 10),
-                  ],
+                  ElevatedButton(
+                    onPressed: () async {
+                      if (isFollowing) {
+                        await _followController.unfollowUser(AuthController.instance.user!.uid, user.uid);
+                        controller.user!.unfollow(user.uid);
+                      } else {
+                        await _followController.followUser(AuthController.instance.user!.uid, user.uid);
+                        controller.user!.follow(user.uid);
+                      }
+                      // Mettre à jour l'état
+                      isFollowing = !isFollowing;
+                      controller.update(); // Met à jour l'interface
+                    },
+                    child: Text(isFollowing ? 'Se désabonner' : 'Suivre'),
+                  ),
+                  const SizedBox(height: 20),
+                  // Affichage des informations spécifiques au rôle
                   _buildUserRoleInfo(user),
                   const SizedBox(height: 20),
-
-                  // Si l'utilisateur est un joueur avec des vidéos publiées, les afficher
-                  if (user.role == 'joueur' && user.videosPubliees != null && user.videosPubliees!.isNotEmpty)
-                    _buildVideosGrid(user.videosPubliees!)
-                  else if (user.role == 'joueur')
-                    const Text('Pas de vidéos publiées.'),
                 ],
               ),
             ),
@@ -118,115 +120,37 @@ class ProfileScreen extends StatelessWidget {
     });
   }
 
-  Future<void> _changeProfilePhoto(String uid) async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      File imageFile = File(pickedFile.path);
-      String fileName = 'profile_pics/$uid/${DateTime.now().millisecondsSinceEpoch}.jpg';
-      UploadTask uploadTask = FirebaseStorage.instance.ref().child(fileName).putFile(imageFile);
-
-      try {
-        TaskSnapshot snapshot = await uploadTask;
-        String downloadUrl = await snapshot.ref.getDownloadURL();
-        await _profileController.updateProfilePhoto(uid, downloadUrl);
-        Get.snackbar('Succès', 'Photo de profil mise à jour avec succès');
-      } catch (e) {
-        Get.snackbar('Erreur', 'Échec du téléchargement de la photo de profil');
-      }
-    } else {
-      Get.snackbar('Erreur', 'Aucune image sélectionnée');
-    }
-  }
-
   Widget _buildUserRoleInfo(AppUser user) {
-    if (user.role == 'joueur') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Position: ${user.position ?? "Non spécifiée"}'),
-          Text('Club Actuel: ${user.clubActuel ?? "Non spécifié"}'),
-          Text('Nombre de Matchs: ${user.nombreDeMatchs ?? 0}'),
-          Text('Buts: ${user.buts ?? 0}'),
-          Text('Assistances: ${user.assistances ?? 0}'),
-          if (user.performances != null) ...[
-            const Text('Performances:'),
-            ...user.performances!.entries.map((entry) => Text('${entry.key}: ${entry.value}')),
+    // Affichage des informations en fonction du rôle
+    switch (user.role) {
+      case 'joueur':
+        return Column(
+          children: [
+            Text('Position: ${user.position ?? "Non précisée"}'),
+            Text('Club actuel: ${user.clubActuel ?? "Non précisé"}'),
+            Text('Nombre de matchs: ${user.nombreDeMatchs ?? 0}'),
+            Text('Buts: ${user.buts ?? 0}'),
+            Text('Assistances: ${user.assistances ?? 0}'),
           ],
-          Text('Biographie: ${user.bio ?? "Non spécifiée"}'),
-        ],
-      );
-    } else if (user.role == 'club') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Localisation: ${user.nomClub ?? "Non spécifiée"}'),
-          Text('Ligue: ${user.ligue ?? "Non spécifiée"}'),
-          Text('Biographie: ${user.bio ?? "Non spécifiée"}'),
-        ],
-      );
-    } else if (user.role == 'recruteur') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Entreprise: ${user.entreprise ?? "Non spécifiée"}'),
-          Text('Nombre de Recrutements: ${user.nombreDeRecrutements ?? 0}'),
-          Text('Biographie: ${user.bio ?? "Non spécifiée"}'),
-        ],
-      );
-    } else if (user.role == 'fan') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Joueurs Suivis:'),
-          if (user.joueursSuivis != null)
-            ...user.joueursSuivis!.map((joueur) => Text(joueur.nom)),
-          const Text('Clubs Suivis:'),
-          if (user.clubsSuivis != null)
-            ...user.clubsSuivis!.map((club) => Text(club.nomClub ?? 'Nom non spécifié')),
-        ],
-      );
-    }
-    return Container();
-  }
-
-  Widget _buildVideosGrid(List<dynamic> videosPubliees) {
-    return GridView.builder(
-      shrinkWrap: true,
-      itemCount: videosPubliees.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-      ),
-      itemBuilder: (context, index) {
-        return Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8.0),
-            child: Image.network(
-              videosPubliees[index].thumbnail,
-              fit: BoxFit.cover,
-            ),
-          ),
         );
-      },
-    );
-  }
-
-  void _showProfileOptions(BuildContext context, AppUser user) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => ListView(
-        shrinkWrap: true,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.edit),
-            title: const Text('Modifier le profil'),
-            onTap: () {
-              Navigator.pop(context);
-              Get.to(() => EditProfileScreen(user: user));
-            },
-          ),
-        ],
-      ),
-    );
+      case 'club':
+        return Column(
+          children: [
+            Text('Nom du club: ${user.nomClub ?? "Non précisé"}'),
+            Text('Ligue: ${user.ligue ?? "Non précisée"}'),
+          ],
+        );
+      case 'recruteur':
+        return Column(
+          children: [
+            Text('Entreprise: ${user.entreprise ?? "Non précisée"}'),
+            Text('Nombre de recrutements: ${user.nombreDeRecrutements ?? 0}'),
+          ],
+        );
+      case 'fan':
+        return const Text('Aucune information supplémentaire pour les fans.');
+      default:
+        return const Text('Rôle inconnu');
+    }
   }
 }

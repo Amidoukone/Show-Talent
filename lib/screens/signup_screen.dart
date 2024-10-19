@@ -41,7 +41,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         followers: 0,  // Pas de followers au début
         followings: 0,  // Pas de followings au début
         dateInscription: DateTime.now(),  // Date d'inscription
-        dernierLogin: DateTime.now(),  // Dernier login lors de l'inscription
+        dernierLogin: DateTime.now(), followersList: [], followingsList: [],  // Dernier login lors de l'inscription
       );
 
       // Sauvegarder les informations utilisateur dans Firestore

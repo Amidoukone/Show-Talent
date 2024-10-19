@@ -102,7 +102,7 @@ class AuthController extends GetxController {
           followers: 0,
           followings: 0,
           dateInscription: DateTime.now(),
-          dernierLogin: DateTime.now(),
+          dernierLogin: DateTime.now(), followersList: [], followingsList: [],
         );
 
         // Enregistrement de l'utilisateur dans Firestore
