@@ -136,6 +136,8 @@ class EditProfileScreen extends StatelessWidget {
                     assistances: int.tryParse(_assistancesController.text) ?? 0,
                     nombreDeRecrutements: int.tryParse(_nombreRecrutementsController.text) ?? 0,
                     videosPubliees: user.videosPubliees,
+                    followersList: user.followersList,
+                    followingsList: user.followingsList,
                   );
                   await _profileController.updateUserProfile(updatedUser);
 

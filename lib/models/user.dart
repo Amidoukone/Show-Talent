@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/models/video.dart';
-import 'package:show_talent/models/offre.dart';
 import 'package:show_talent/models/event.dart';
+import 'package:show_talent/models/offre.dart';
+import 'package:show_talent/models/video.dart';
 
 class AppUser {
   String uid;
@@ -38,6 +38,9 @@ class AppUser {
   List<AppUser>? clubsSuivis;
   List<Video>? videosLikees;
 
+  List<String> followersList; // Liste des UID des followers
+  List<String> followingsList; // Liste des UID des followings
+
   AppUser({
     required this.uid,
     required this.nom,
@@ -67,19 +70,36 @@ class AppUser {
     this.joueursSuivis,
     this.clubsSuivis,
     this.videosLikees,
+    required this.followersList,
+    required this.followingsList,
   });
+
+  // Méthodes pour suivre et se désabonner
+  void follow(String uid) {
+    if (!followingsList.contains(uid)) {
+      followingsList.add(uid);
+      followings++;
+    }
+  }
+
+  void unfollow(String uid) {
+    if (followingsList.contains(uid)) {
+      followingsList.remove(uid);
+      followings--;
+    }
+  }
 
   // Convertir les données Firestore en AppUser
   factory AppUser.fromMap(Map<String, dynamic> map) {
     return AppUser(
-      uid: map['uid'] ?? '', // Utiliser une valeur par défaut si null
-      nom: map['nom'] ?? 'Nom inconnu', // Valeur par défaut
-      email: map['email'] ?? 'Email inconnu', // Valeur par défaut
-      role: map['role'] ?? 'Utilisateur', // Valeur par défaut
-      photoProfil: map['photoProfil'] ?? '', // Valeur par défaut
+      uid: map['uid'] ?? '',
+      nom: map['nom'] ?? 'Nom inconnu',
+      email: map['email'] ?? 'Email inconnu',
+      role: map['role'] ?? 'Utilisateur',
+      photoProfil: map['photoProfil'] ?? '',
       estActif: map['estActif'] ?? true,
-      followers: map['followers'] is int ? map['followers'] : 0, // Correction ici pour s'assurer que followers est un int
-      followings: map['followings'] is int ? map['followings'] : 0, // Correction ici pour s'assurer que followings est un int
+      followers: map['followers'] is int ? map['followers'] : 0,
+      followings: map['followings'] is int ? map['followings'] : 0,
       dateInscription: (map['dateInscription'] as Timestamp?)?.toDate() ?? DateTime.now(),
       dernierLogin: (map['dernierLogin'] as Timestamp?)?.toDate() ?? DateTime.now(),
       bio: map['bio'],
@@ -114,6 +134,8 @@ class AppUser {
       videosLikees: map['videosLikees'] != null
           ? List<Video>.from(map['videosLikees'].map((video) => Video.fromMap(video)))
           : [],
+      followersList: List<String>.from(map['followersList'] ?? []),
+      followingsList: List<String>.from(map['followingsList'] ?? []),
     );
   }
 
@@ -160,6 +182,8 @@ class AppUser {
       'videosLikees': videosLikees != null
           ? videosLikees!.map((video) => video.toMap()).toList()
           : [],
+      'followersList': followersList,
+      'followingsList': followingsList,
     };
   }
 }
