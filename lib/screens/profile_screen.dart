@@ -91,6 +91,17 @@ class ProfileScreen extends StatelessWidget {
                   Text('Followers: ${user.followersList.length}'),
                   Text('Followings: ${user.followingsList.length}'),
                   const SizedBox(height: 10),
+
+                  // Affichage de la biographie si applicable
+                  if (user.bio != null && user.bio!.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Biographie:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                    Text(user.bio!),
+                  ],
+                  const SizedBox(height: 20),
                   
                   ElevatedButton(
                     onPressed: () async {
@@ -105,7 +116,8 @@ class ProfileScreen extends StatelessWidget {
                       isFollowing = !isFollowing;
                       controller.update(); // Met à jour l'interface
                     },
-                    child: Text(isFollowing ? 'Se désabonner' : 'Suivre'),
+                    child: Text(isFollowing ? 'Se désabonner' : 'Suivre',
+                    style: TextStyle(fontSize: 14, color: Colors.white),),
                   ),
                   const SizedBox(height: 20),
                   // Affichage des informations spécifiques au rôle
@@ -127,7 +139,7 @@ class ProfileScreen extends StatelessWidget {
         return Column(
           children: [
             Text('Position: ${user.position ?? "Non précisée"}'),
-            Text('Club actuel: ${user.clubActuel ?? "Non précisé"}'),
+            Text('Club actuel: ${user.team ?? "Non précisé"}'), // Utiliser user.team pour le club actuel
             Text('Nombre de matchs: ${user.nombreDeMatchs ?? 0}'),
             Text('Buts: ${user.buts ?? 0}'),
             Text('Assistances: ${user.assistances ?? 0}'),

@@ -21,7 +21,7 @@ class ConversationsScreen extends StatelessWidget {
 
         return ListView.builder(
           itemCount: chatController.conversations.length,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16), // Espacement pour toute la liste
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
           itemBuilder: (context, index) {
             var conversation = chatController.conversations[index];
             var currentUser = chatController.currentUser;
@@ -35,10 +35,13 @@ class ConversationsScreen extends StatelessWidget {
               future: chatController.getUserById(otherUserId),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
+                  return const SizedBox.shrink(); // Supprime le message de chargement une fois les données reçues
+                }
+
+                if (snapshot.data == null) {
                   return const ListTile(
-                    title: Text('Chargement...'),
-                    subtitle: Text('En attente des informations utilisateur'),
-                  );
+                    title: Text('Utilisateur introuvable'),
+                  ); // Afficher si l'utilisateur n'existe pas
                 }
 
                 var otherUser = snapshot.data!;
@@ -49,18 +52,18 @@ class ConversationsScreen extends StatelessWidget {
                     int unreadCount = unreadSnapshot.data ?? 0;
 
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 10), // Espacement entre les conversations
+                      padding: const EdgeInsets.only(bottom: 10),
                       child: Card(
-                        elevation: 4, // Légère ombre pour donner un effet de surélévation
+                        elevation: 4,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15), // Coins arrondis pour un design moderne
+                          borderRadius: BorderRadius.circular(15),
                         ),
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Plus d'espace interne
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           title: Text(
                             otherUser.nom,
                             style: const TextStyle(
-                              fontWeight: FontWeight.bold, 
+                              fontWeight: FontWeight.bold,
                               fontSize: 18,
                               color: Colors.black87,
                             ),
@@ -86,8 +89,7 @@ class ConversationsScreen extends StatelessWidget {
                             // Marquer les messages comme "Lu" lorsque la conversation est ouverte
                             await chatController.markMessagesAsRead(conversation.id);
 
-                            // Ouvrir l'écran de chat pour discuter
-                            // et attendre le retour à la page des conversations pour rafraîchir l'état
+                            // Ouvrir l'écran de chat et forcer la mise à jour du badge des messages non lus
                             final result = await Get.to(() => ChatScreen(
                                   conversationId: conversation.id,
                                   currentUser: currentUser,
@@ -95,8 +97,8 @@ class ConversationsScreen extends StatelessWidget {
                                 ));
 
                             if (result == true) {
-                              // Rafraîchir les conversations et mettre à jour les badges après retour
-                              chatController.fetchConversations();  // Forcer la mise à jour
+                              // Si l'utilisateur revient à la liste des conversations, forcer la mise à jour des badges
+                              chatController.fetchConversations(); // Rafraîchir l'état après avoir ouvert la conversation
                             }
                           },
                         ),
@@ -114,7 +116,11 @@ class ConversationsScreen extends StatelessWidget {
           Get.to(() => const SelectUserScreen()); // Permettre de démarrer une nouvelle conversation
         },
         tooltip: 'Nouvelle conversation',
-        child: const Icon(Icons.chat),
+        backgroundColor: Colors.green[800], 
+        child: const Icon(
+          Icons.chat,
+          color: Colors.white, 
+        ),
       ),
     );
   }
