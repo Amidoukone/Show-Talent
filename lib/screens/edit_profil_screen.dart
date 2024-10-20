@@ -22,7 +22,7 @@ class EditProfileScreen extends StatelessWidget {
     _nomController.text = user.nom;
     _bioController.text = user.bio ?? '';
     _teamController.text = user.team ?? '';
-    _clubNameController.text = user.nomClub ?? '';
+    _clubNameController.text = user.nomClub ?? ''; // Pour les clubs
     _positionController.text = user.position ?? '';
     _entrepriseController.text = user.entreprise ?? '';
     _ligueController.text = user.ligue ?? '';
@@ -52,6 +52,8 @@ class EditProfileScreen extends StatelessWidget {
                 decoration: const InputDecoration(labelText: 'Nom'),
               ),
               const SizedBox(height: 20),
+
+              // Affichage du champ bio si le rôle n'est pas 'fan'
               if (user.role != 'fan') ...[
                 TextField(
                   controller: _bioController,
@@ -59,6 +61,7 @@ class EditProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
               ],
+
               if (user.role == 'joueur' || user.role == 'coach') ...[
                 TextField(
                   controller: _positionController,
@@ -90,7 +93,7 @@ class EditProfileScreen extends StatelessWidget {
               ] else if (user.role == 'club') ...[
                 TextField(
                   controller: _clubNameController,
-                  decoration: const InputDecoration(labelText: 'Localisation'),
+                  decoration: const InputDecoration(labelText: 'Nom du Club'),
                 ),
                 const SizedBox(height: 20),
                 TextField(
@@ -126,7 +129,7 @@ class EditProfileScreen extends StatelessWidget {
                     dateInscription: user.dateInscription,
                     dernierLogin: user.dernierLogin,
                     bio: _bioController.text,
-                    team: _teamController.text.isEmpty ? null : _teamController.text,
+                    team: _teamController.text.isEmpty ? null : _teamController.text, // Correction ici
                     nomClub: _clubNameController.text.isEmpty ? null : _clubNameController.text,
                     position: _positionController.text.isEmpty ? null : _positionController.text,
                     entreprise: _entrepriseController.text.isEmpty ? null : _entrepriseController.text,

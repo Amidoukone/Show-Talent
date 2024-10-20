@@ -46,7 +46,7 @@ class _ChatScreenState extends State<ChatScreen> {
           padding: const EdgeInsets.all(10),
           margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
           decoration: BoxDecoration(
-            color: isSentByCurrentUser ? Colors.blueAccent : Colors.grey.shade300,
+            color: isSentByCurrentUser ? Colors.green[800] : Colors.grey.shade300,
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(12),
               topRight: const Radius.circular(12),
