@@ -7,17 +7,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:show_talent/controller/notification_controller.dart';
 import 'package:show_talent/models/user.dart';
 import 'package:show_talent/screens/home_screen.dart';
-import 'package:show_talent/screens/login_screen.dart'; 
+import 'package:show_talent/screens/login_screen.dart';
 
 class AuthController extends GetxController {
   static AuthController instance = Get.find();
 
-  late Rx<User?> _firebaseUser;  // Firebase User
-  late Rx<File?> _pickedImage;   // Image sélectionnée
-  final Rx<AppUser?> _user = Rx<AppUser?>(null);  // Utilisation de Rx<AppUser?> ici pour suivre les changements utilisateur
+  late Rx<User?> _firebaseUser;  // Firebase User pour suivre l'état de connexion
+  late Rx<File?> _pickedImage;   // Image sélectionnée pour le profil
+  final Rx<AppUser?> _user = Rx<AppUser?>(null);  // AppUser pour suivre l'état utilisateur
 
-  AppUser? get user => _user.value;  // Getter sécurisé pour accéder à l'utilisateur
-
+  AppUser? get user => _user.value;  // Getter pour l'utilisateur actuel
   File? get profilePhoto => _pickedImage.value;
 
   @override
@@ -28,17 +27,20 @@ class AuthController extends GetxController {
     ever(_firebaseUser, _setInitialScreen);
   }
 
-  // Définir l'écran initial en fonction de l'état de connexion
+  // Définir l'écran initial en fonction de l'état de connexion et de l'état actif de l'utilisateur
   _setInitialScreen(User? firebaseUser) async {
     if (firebaseUser == null) {
       _user.value = null;  // Réinitialiser l'utilisateur local
       Get.offAll(() => const LoginScreen());
     } else {
       AppUser? appUser = await getAppUserFromFirestore(firebaseUser.uid);
-      if (appUser != null) {
+      if (appUser != null && appUser.estActif) {  // Vérifier si l'utilisateur est actif
         _user.value = appUser;  // Stocker l'utilisateur récupéré
         Get.offAll(() => const HomeScreen());
         Get.find<NotificationController>().initCurrentUser();
+      } else if (appUser != null && !appUser.estActif) {
+        await signOut();
+        Get.snackbar('Accès refusé', 'Votre compte est bloqué.');
       } else {
         Get.snackbar('Erreur', 'Utilisateur introuvable dans Firestore');
       }
@@ -98,11 +100,14 @@ class AuthController extends GetxController {
           email: email,
           role: role,
           photoProfil: downloadUrl,
-          estActif: true,
+          estActif: true,  // Par défaut, l'utilisateur est actif
+          estBloque: false,  // Par défaut, l'utilisateur n'est pas bloqué
           followers: 0,
           followings: 0,
           dateInscription: DateTime.now(),
-          dernierLogin: DateTime.now(), followersList: [], followingsList: [],
+          dernierLogin: DateTime.now(),
+          followersList: [],
+          followingsList: [],
         );
 
         // Enregistrement de l'utilisateur dans Firestore
@@ -110,7 +115,7 @@ class AuthController extends GetxController {
 
         _user.value = newUser;  // Stocker l'utilisateur dans GetX
         Get.snackbar('Bienvenue', 'Votre compte a été créé avec succès');
-        Get.to(() => const HomeScreen());
+        Get.offAll(() => const HomeScreen());
       } else {
         Get.snackbar('Erreur', 'Veuillez remplir tous les champs et ajouter une photo');
       }
@@ -123,8 +128,17 @@ class AuthController extends GetxController {
   void loginUser(String email, String password) async {
     try {
       if (email.isNotEmpty && password.isNotEmpty) {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
-        Get.to(() => const HomeScreen());
+        UserCredential userCred = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+        
+        // Récupérer l'utilisateur pour vérifier son statut
+        AppUser? appUser = await getAppUserFromFirestore(userCred.user!.uid);
+        if (appUser != null && appUser.estActif) {  // Vérifier si l'utilisateur est actif
+          _user.value = appUser;
+          Get.offAll(() => const HomeScreen());
+        } else if (appUser != null && !appUser.estActif) {
+          await signOut();
+          Get.snackbar('Accès refusé', 'Votre compte est bloqué.');
+        }
       } else {
         Get.snackbar('Erreur', 'Veuillez remplir toutes les informations');
       }
@@ -134,9 +148,23 @@ class AuthController extends GetxController {
   }
 
   // Déconnexion de l'utilisateur
-  void signOut() async {
+  Future<void> signOut() async {
     await FirebaseAuth.instance.signOut();
     _user.value = null;  // Réinitialiser l'utilisateur lors de la déconnexion
     Get.offAll(() => const LoginScreen());
+  }
+
+  // Méthode pour récupérer un mot de passe oublié
+  Future<void> forgotPassword(String email) async {
+    if (email.isEmpty) {
+      Get.snackbar('Erreur', 'Veuillez entrer votre email pour réinitialiser le mot de passe.');
+      return;
+    }
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      Get.snackbar('Réinitialisation du mot de passe', 'Un email de réinitialisation vous a été envoyé.');
+    } catch (e) {
+      Get.snackbar('Erreur', e.toString());
+    }
   }
 }

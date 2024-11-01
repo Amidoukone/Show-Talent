@@ -59,15 +59,21 @@ class OffreController extends GetxController {
     }
   }
 
-  // Modifier une offre existante
-  Future<void> modifierOffre(String id, String titre, String description, DateTime dateDebut, DateTime dateFin) async {
+  // Modifier une offre existante, y compris la fermeture
+  Future<void> modifierOffre(String id, String titre, String description, DateTime dateDebut, DateTime dateFin, {String? statut}) async {
     try {
-      await FirebaseFirestore.instance.collection('offres').doc(id).update({
+      Map<String, dynamic> updateData = {
         'titre': titre,
         'description': description,
         'dateDebut': dateDebut,
         'dateFin': dateFin,
-      });
+      };
+
+      if (statut != null) {
+        updateData['statut'] = statut;  // Mettre à jour le statut si fourni
+      }
+
+      await FirebaseFirestore.instance.collection('offres').doc(id).update(updateData);
       await getAllOffres();  // Rafraîchir la liste des offres après modification
       Get.snackbar('Succès', 'Offre modifiée avec succès');
     } catch (e) {
@@ -95,6 +101,12 @@ class OffreController extends GetxController {
       return;
     }
 
+    // Vérifier si l'offre est fermée
+    if (offre.statut == 'Fermée') {
+      Get.snackbar('Erreur', 'Cette offre est fermée.');
+      return;
+    }
+
     try {
       if (!offre.candidats.any((c) => c.uid == joueur.uid)) {
         offre.candidats.add(joueur);
@@ -113,6 +125,19 @@ class OffreController extends GetxController {
       }
     } catch (e) {
       Get.snackbar('Erreur', 'Erreur lors de la soumission de candidature : $e');
+    }
+  }
+
+  // Fermer une offre manuellement
+  Future<void> fermerOffre(String id) async {
+    try {
+      await FirebaseFirestore.instance.collection('offres').doc(id).update({
+        'statut': 'Fermée',
+      });
+      await getAllOffres();
+      Get.snackbar('Succès', 'L\'offre a été fermée avec succès');
+    } catch (e) {
+      Get.snackbar('Erreur', 'Erreur lors de la fermeture de l\'offre : $e');
     }
   }
 }

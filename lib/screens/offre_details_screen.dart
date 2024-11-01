@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:show_talent/models/user.dart';
+import 'package:show_talent/screens/gestion_offres_screen.dart';
 import 'package:show_talent/screens/profile_screen.dart';
 import '../controller/offre_controller.dart';
 import '../models/offre.dart';
@@ -18,9 +19,9 @@ class OffreDetailsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(offre.titre),
-        backgroundColor: const Color(0xFF214D4F),  // Couleur principale
+        backgroundColor: const Color(0xFF214D4F),
         actions: [
-          if (user?.uid == offre.recruteur.uid) 
+          if (user?.uid == offre.recruteur.uid)
             PopupMenuButton<String>(
               onSelected: (value) {
                 if (value == 'modifier') {
@@ -28,7 +29,7 @@ class OffreDetailsScreen extends StatelessWidget {
                 } else if (value == 'supprimer') {
                   _confirmDelete(context, offre);
                 } else if (value == 'fermer') {
-                  _updateOffreStatus();
+                  _updateOffreStatus(context, offre);
                 }
               },
               itemBuilder: (context) => [
@@ -67,7 +68,7 @@ class OffreDetailsScreen extends StatelessWidget {
                   itemBuilder: (context, index) {
                     AppUser candidat = offre.candidats[index];
                     return Card(
-                      color: const Color(0xFFE6EEFA),  // Couleur secondaire
+                      color: const Color(0xFFE6EEFA),
                       elevation: 2,
                       margin: const EdgeInsets.symmetric(vertical: 5),
                       shape: RoundedRectangleBorder(
@@ -101,16 +102,20 @@ class OffreDetailsScreen extends StatelessWidget {
       textCancel: 'Annuler',
       confirmTextColor: Colors.white,
       onConfirm: () {
-        OffreController.instance.supprimerOffre(offre.id);
-        Get.back();
-        Get.back(); // Retour après suppression
+        OffreController.instance.supprimerOffre(offre.id).then((_) {
+          Get.back(); // Ferme le pop-up de confirmation
+          Get.offAll(() => const GestionOffresScreen()); // Retour à la liste des offres
+          Get.snackbar('Succès', 'L\'offre a été supprimée.');
+        });
       },
-      onCancel: () => Get.back(),
+      onCancel: () {
+        Get.back();
+      },
     );
   }
 
   // Changer le statut de l'offre en "Fermée"
-  void _updateOffreStatus() {
+  void _updateOffreStatus(BuildContext context, Offre offre) {
     Get.defaultDialog(
       title: 'Confirmer',
       middleText: 'Voulez-vous fermer cette offre ?',
@@ -118,9 +123,14 @@ class OffreDetailsScreen extends StatelessWidget {
       textCancel: 'Annuler',
       confirmTextColor: Colors.white,
       onConfirm: () {
-        offre.statut = 'Fermée';  // Changer le statut
-        OffreController.instance.modifierOffre(offre.id, offre.titre, offre.description, offre.dateDebut, offre.dateFin);
-        Get.back();  // Fermer le dialog
+        OffreController.instance.fermerOffre(offre.id).then((_) {
+          Get.back(); // Ferme le pop-up de confirmation
+          Get.offAll(() => const GestionOffresScreen()); // Retour à la liste des offres
+          Get.snackbar('Succès', 'L\'offre a été fermée.');
+        });
+      },
+      onCancel: () {
+        Get.back();
       },
     );
   }

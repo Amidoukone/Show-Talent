@@ -1,27 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
-// Importation des écrans
-import 'package:show_talent/screens/main_screen.dart';
-import 'package:show_talent/screens/splash_screen.dart';
-
-// Importation des contrôleurs
+import 'firebase_options.dart'; // Configuration Firebase
 import 'controller/auth_controller.dart';
 import 'controller/offre_controller.dart';
 import 'controller/notification_controller.dart';
 import 'controller/user_controller.dart';
+import 'package:show_talent/screens/main_screen.dart';
+import 'package:show_talent/screens/splash_screen.dart';
 
+// Handler pour les messages reçus en arrière-plan
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Gérer les messages reçus lorsque l'application est en arrière-plan
+  print('Message reçu en arrière-plan: ${message.messageId}');
 }
 
-FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-FlutterLocalNotificationsPlugin();
+// Plugin pour les notifications locales
+FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
+// Canal de notification pour Android
 const AndroidNotificationChannel channel = AndroidNotificationChannel(
   'high_importance_channel', // ID unique
   'High Importance Notifications', // Nom visible
@@ -29,61 +27,62 @@ const AndroidNotificationChannel channel = AndroidNotificationChannel(
   importance: Importance.max,
 );
 
-
 void initializeNotifications() async {
+  // Initialisation des paramètres pour Android
   const AndroidInitializationSettings initializationSettingsAndroid =
-  AndroidInitializationSettings('@mipmap/ic_launcher');
+      AndroidInitializationSettings('@mipmap/ic_launcher');
 
   final InitializationSettings initializationSettings =
-  InitializationSettings(android: initializationSettingsAndroid);
+      InitializationSettings(android: initializationSettingsAndroid);
 
+  // Initialiser Flutter Local Notifications
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   // Créer le canal pour Android
   await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-      AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 }
 
 void requestPermission() async {
   FirebaseMessaging messaging = FirebaseMessaging.instance;
 
+  // Demander la permission de recevoir des notifications
   NotificationSettings settings = await messaging.requestPermission(
     alert: true,
-    announcement: true,
     badge: true,
     sound: true,
   );
 
   if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-    print('Autorisation accordée');
+    print('Permission de notification accordée');
   } else {
-    print('Autorisation refusée');
+    print('Permission de notification refusée');
   }
 }
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialisation de Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Injection des contrôleurs avant le démarrage de l'application
+  // Initialisation des notifications et des permissions
+  initializeNotifications();
+  requestPermission();
+
+  // Injection des contrôleurs dans GetX
   Get.put(AuthController());
   Get.put(OffreController());
   Get.put(NotificationController());
   Get.put(UserController());
 
-  initializeNotifications();
-  requestPermission();
-
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+  // Écoute des messages reçus lorsque l'application est au premier plan
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     RemoteNotification? notification = message.notification;
     AndroidNotification? android = message.notification?.android;
 
+    // Afficher une notification locale si elle est reçue
     if (notification != null && android != null) {
       flutterLocalNotificationsPlugin.show(
         notification.hashCode,
@@ -101,8 +100,7 @@ void main() async {
     }
   });
 
-
-
+  // Écouter les messages reçus lorsque l'application est en arrière-plan ou complètement fermée
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   runApp(const MyApp());
@@ -117,10 +115,10 @@ class MyApp extends StatelessWidget {
       title: 'AD.FOOT',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: const Color(0xFF214D4F), // Couleur principale de l'application
-        scaffoldBackgroundColor: const Color(0xFFE6EEFA), // Couleur de fond
+        primaryColor: const Color(0xFF214D4F),
+        scaffoldBackgroundColor: const Color(0xFFE6EEFA),
 
-        // Thème pour AppBar
+        // Thème de l'AppBar
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF214D4F),
           elevation: 0,
@@ -130,14 +128,14 @@ class MyApp extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
           iconTheme: IconThemeData(
-            color: Colors.white, // Couleur des icônes
+            color: Colors.white,
           ),
         ),
 
-        // Thème pour les boutons "ElevatedButton"
+        // Thème pour les boutons (ElevatedButton)
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF214D4F), // Couleur des boutons
+            backgroundColor: const Color(0xFF214D4F),
             padding: const EdgeInsets.symmetric(vertical: 14),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -149,7 +147,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
 
-        // Thème des champs de texte (TextField)
+        // Thème pour les champs de texte
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -171,7 +169,7 @@ class MyApp extends StatelessWidget {
           unselectedItemColor: Colors.white70,
         ),
 
-        // Thème global pour le texte
+        // Thème global du texte
         textTheme: const TextTheme(
           bodyLarge: TextStyle(fontSize: 16, color: Color(0xFF214D4F)),
           bodyMedium: TextStyle(fontSize: 14, color: Color(0xFF214D4F)),
@@ -179,10 +177,10 @@ class MyApp extends StatelessWidget {
           titleSmall: TextStyle(fontSize: 16, color: Color(0xFF214D4F)),
         ),
       ),
-      home: const SplashScreen(),  // Écran de démarrage
+      home: const SplashScreen(),
       getPages: [
         GetPage(name: '/', page: () => const SplashScreen()),
-        GetPage(name: '/main', page: () => const MainScreen()),  // Page principale après le splash screen
+        GetPage(name: '/main', page: () => const MainScreen()),
       ],
     );
   }

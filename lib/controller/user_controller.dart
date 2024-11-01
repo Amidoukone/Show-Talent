@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:get/get.dart';
 import '../models/user.dart';
 
 class UserController extends GetxController {
@@ -28,9 +29,13 @@ class UserController extends GetxController {
               .collection('users')
               .doc(firebaseUser.uid)
               .get();
+
           if (userDoc.exists && userDoc.data() != null) {
             _user.value = AppUser.fromMap(userDoc.data() as Map<String, dynamic>);
             print("Utilisateur actuel récupéré: ${_user.value?.nom}");
+
+            // Générer et stocker le token FCM
+            await _updateFCMToken(firebaseUser.uid);
           } else {
             print("Erreur: Le document utilisateur n'existe pas ou est vide.");
             _user.value = null; // Si les données sont invalides, on réinitialise l'utilisateur
@@ -44,6 +49,21 @@ class UserController extends GetxController {
         _user.value = null;
       }
     });
+  }
+
+  // Méthode pour générer et mettre à jour le token FCM dans Firestore
+  Future<void> _updateFCMToken(String uid) async {
+    try {
+      String? fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).update({
+          'fcmToken': fcmToken,
+        });
+        print("Token FCM mis à jour pour l'utilisateur $uid");
+      }
+    } catch (e) {
+      print("Erreur lors de la mise à jour du token FCM: $e");
+    }
   }
 
   // Méthode pour récupérer tous les utilisateurs depuis Firestore en temps réel

@@ -71,7 +71,7 @@ class AppUser {
     this.clubsSuivis,
     this.videosLikees,
     required this.followersList,
-    required this.followingsList,
+    required this.followingsList, required bool estBloque,
   });
 
   // Méthodes pour suivre et se désabonner
@@ -135,7 +135,7 @@ class AppUser {
           ? List<Video>.from(map['videosLikees'].map((video) => Video.fromMap(video)))
           : [],
       followersList: List<String>.from(map['followersList'] ?? []),
-      followingsList: List<String>.from(map['followingsList'] ?? []),
+      followingsList: List<String>.from(map['followingsList'] ?? []), estBloque: false,
     );
   }
 
