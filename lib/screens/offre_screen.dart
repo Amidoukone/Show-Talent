@@ -28,9 +28,10 @@ class _OffresScreenState extends State<OffresScreen> {
         backgroundColor: const Color(0xFF214D4F),  // Couleur principale
       ),
       body: Obx(() {
+        // Trier les offres du plus récent au plus ancien
         var offresList = _offreController.offresFiltrees.isNotEmpty
             ? _offreController.offresFiltrees
-            : _offreController.offres;
+            : _offreController.offres..sort((a, b) => b.dateFin.compareTo(a.dateFin)); // Tri ici
 
         if (offresList.isEmpty) {
           return const Center(child: Text('Aucune offre disponible'));
@@ -40,7 +41,7 @@ class _OffresScreenState extends State<OffresScreen> {
           itemCount: offresList.length,
           itemBuilder: (context, index) {
             var offre = offresList[index];
-            bool isExpired = offre.dateFin.isBefore(DateTime.now()) || offre.statut == 'Fermée';  // Masquer postuler si l'offre est fermée ou expirée
+            bool isExpired = offre.dateFin.isBefore(DateTime.now()) || offre.statut == 'Fermée';
 
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -92,7 +93,7 @@ class _OffresScreenState extends State<OffresScreen> {
                             icon: const Icon(Icons.check_circle_outline, size: 18),
                             label: const Text('Postuler'),
                             style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFF214D4F),  // Couleur principale
+                              foregroundColor: const Color(0xFF214D4F),
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                             ),
                           ),

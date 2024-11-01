@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart'; // Pour formater les dates
+import 'package:intl/intl.dart';
 import 'package:show_talent/controller/offre_controller.dart';
 import 'package:show_talent/models/offre.dart';
+import 'gestion_offres_screen.dart';
 
 class PublierOffreScreen extends StatefulWidget {
   final bool isEditing;
@@ -21,7 +22,7 @@ class _PublierOffreScreenState extends State<PublierOffreScreen> {
   final TextEditingController descriptionController = TextEditingController();
   DateTime? dateDebut;
   DateTime? dateFin;
-  
+
   @override
   void initState() {
     super.initState();
@@ -40,7 +41,7 @@ class _PublierOffreScreenState extends State<PublierOffreScreen> {
         title: Text(widget.isEditing ? 'Modifier l\'offre' : 'Publier une offre'),
         backgroundColor: const Color(0xFF214D4F),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
@@ -69,27 +70,35 @@ class _PublierOffreScreenState extends State<PublierOffreScreen> {
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
+                if (titreController.text.isEmpty || descriptionController.text.isEmpty || dateDebut == null || dateFin == null) {
+                  Get.snackbar('Erreur', 'Veuillez remplir tous les champs'); // Affiche une alerte si les champs ne sont pas remplis
+                  return;
+                }
+
                 if (widget.isEditing && widget.offre != null) {
                   _offreController.modifierOffre(
                     widget.offre!.id,
                     titreController.text,
                     descriptionController.text,
-                    dateDebut ?? DateTime.now(),
-                    dateFin ?? DateTime.now(),
-                  );
+                    dateDebut!,
+                    dateFin!,
+                  ).then((_) {
+                    Get.offAll(() => const GestionOffresScreen());
+                  });
                 } else {
                   _offreController.publierOffre(
                     titreController.text,
                     descriptionController.text,
-                    dateDebut ?? DateTime.now(),
-                    dateFin ?? DateTime.now(),
-                  );
+                    dateDebut!,
+                    dateFin!,
+                  ).then((_) {
+                    Get.offAll(() => const GestionOffresScreen());
+                  });
                 }
-                Get.back();
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF214D4F), // Fond vert
-                foregroundColor: Colors.white, // Texte blanc
+                backgroundColor: const Color(0xFF214D4F),
+                foregroundColor: Colors.white,
               ),
               child: Text(widget.isEditing ? 'Modifier' : 'Publier'),
             ),
@@ -99,7 +108,6 @@ class _PublierOffreScreenState extends State<PublierOffreScreen> {
     );
   }
 
-  // Widget pour afficher le DatePicker
   Widget _buildDatePicker(String label, DateTime? date, Function(DateTime) onDateSelected) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
