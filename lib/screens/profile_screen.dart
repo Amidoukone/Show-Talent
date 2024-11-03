@@ -6,7 +6,7 @@ import 'package:show_talent/controller/follow_controller.dart';
 import 'package:show_talent/models/user.dart';
 import 'package:show_talent/screens/edit_profil_screen.dart';
 import 'package:show_talent/screens/chat_screen.dart';
-import 'package:show_talent/controller/chat_controller.dart'; // Importer le chat controller
+import 'package:show_talent/controller/chat_controller.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String uid;
@@ -16,7 +16,7 @@ class ProfileScreen extends StatelessWidget {
 
   final ProfileController _profileController = Get.put(ProfileController());
   final FollowController _followController = Get.put(FollowController());
-  final ChatController _chatController = Get.put(ChatController()); // Chat Controller pour gérer les conversations
+  final ChatController _chatController = Get.put(ChatController());
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +30,7 @@ class ProfileScreen extends StatelessWidget {
       }
 
       AppUser user = controller.user!;
-      bool isFollowing = user.followingsList.contains(AuthController.instance.user?.uid);
+      bool isFollowing = user.followersList.contains(AuthController.instance.user?.uid);
       bool isOwnProfile = AuthController.instance.user?.uid == uid;
 
       return Scaffold(
@@ -50,13 +50,11 @@ class ProfileScreen extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.message),
                 onPressed: () async {
-                  // Récupérer ou créer une conversation entre les deux utilisateurs
                   String conversationId = await _chatController.createOrGetConversation(
                     currentUserId: AuthController.instance.user!.uid,
                     otherUserId: user.uid,
                   );
-                  
-                  // Rediriger vers l'écran de chat avec l'ID de la conversation
+
                   Get.to(() => ChatScreen(
                         conversationId: conversationId,
                         currentUser: AuthController.instance.user!,
@@ -75,7 +73,7 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   GestureDetector(
                     onTap: isReadOnly ? null : () {
-                      // Logique pour changer la photo de profil (peut-être ouvrir un sélecteur d'image)
+                      // Logique pour changer la photo de profil
                     },
                     child: CircleAvatar(
                       backgroundImage: NetworkImage(user.photoProfil),
@@ -91,18 +89,13 @@ class ProfileScreen extends StatelessWidget {
                   Text('Followers: ${user.followersList.length}'),
                   Text('Followings: ${user.followingsList.length}'),
                   const SizedBox(height: 10),
-
-                  // Affichage de la biographie si applicable
                   if (user.bio != null && user.bio!.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    Text(
-                      'Biographie:',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
+                    const Text('Biographie:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     Text(user.bio!),
                   ],
                   const SizedBox(height: 20),
-                  
+
                   ElevatedButton(
                     onPressed: () async {
                       if (isFollowing) {
@@ -112,15 +105,15 @@ class ProfileScreen extends StatelessWidget {
                         await _followController.followUser(AuthController.instance.user!.uid, user.uid);
                         controller.user!.follow(user.uid);
                       }
-                      // Mettre à jour l'état
                       isFollowing = !isFollowing;
-                      controller.update(); // Met à jour l'interface
+                      controller.update();
                     },
-                    child: Text(isFollowing ? 'Se désabonner' : 'Suivre',
-                    style: TextStyle(fontSize: 14, color: Colors.white),),
+                    child: Text(
+                      isFollowing ? 'Se désabonner' : 'Suivre',
+                      style: const TextStyle(fontSize: 14, color: Colors.white),
+                    ),
                   ),
                   const SizedBox(height: 20),
-                  // Affichage des informations spécifiques au rôle
                   _buildUserRoleInfo(user),
                   const SizedBox(height: 20),
                 ],
@@ -133,13 +126,12 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildUserRoleInfo(AppUser user) {
-    // Affichage des informations en fonction du rôle
     switch (user.role) {
       case 'joueur':
         return Column(
           children: [
             Text('Position: ${user.position ?? "Non précisée"}'),
-            Text('Club actuel: ${user.team ?? "Non précisé"}'), // Utiliser user.team pour le club actuel
+            Text('Club actuel: ${user.team ?? "Non précisé"}'),
             Text('Nombre de matchs: ${user.nombreDeMatchs ?? 0}'),
             Text('Buts: ${user.buts ?? 0}'),
             Text('Assistances: ${user.assistances ?? 0}'),

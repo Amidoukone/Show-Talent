@@ -67,11 +67,11 @@ class _MainScreenState extends State<MainScreen> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.local_offer),
-            label: 'Offres',
+            label: 'Offers',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.event),
-            label: 'Événements',
+            label: 'Event',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.chat),  // Icône de Messages
