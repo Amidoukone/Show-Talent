@@ -10,12 +10,12 @@ class AppUser {
   String role;
   String photoProfil;
   bool estActif;
+  bool estBloque;
   int followers;
   int followings;
   DateTime dateInscription;
   DateTime dernierLogin;
 
-  // Informations spécifiques à chaque rôle
   String? bio;
   String? position;
   String? clubActuel;
@@ -38,8 +38,8 @@ class AppUser {
   List<AppUser>? clubsSuivis;
   List<Video>? videosLikees;
 
-  List<String> followersList; // Liste des UID des followers
-  List<String> followingsList; // Liste des UID des followings
+  List<String> followersList;
+  List<String> followingsList;
 
   AppUser({
     required this.uid,
@@ -48,6 +48,7 @@ class AppUser {
     required this.role,
     required this.photoProfil,
     required this.estActif,
+    required this.estBloque,
     required this.followers,
     required this.followings,
     required this.dateInscription,
@@ -71,10 +72,10 @@ class AppUser {
     this.clubsSuivis,
     this.videosLikees,
     required this.followersList,
-    required this.followingsList, required bool estBloque,
+    required this.followingsList,
   });
 
-  // Méthodes pour suivre et se désabonner
+  // Méthode pour suivre un utilisateur
   void follow(String uid) {
     if (!followingsList.contains(uid)) {
       followingsList.add(uid);
@@ -82,6 +83,7 @@ class AppUser {
     }
   }
 
+  // Méthode pour se désabonner d'un utilisateur
   void unfollow(String uid) {
     if (followingsList.contains(uid)) {
       followingsList.remove(uid);
@@ -89,7 +91,6 @@ class AppUser {
     }
   }
 
-  // Convertir les données Firestore en AppUser
   factory AppUser.fromMap(Map<String, dynamic> map) {
     return AppUser(
       uid: map['uid'] ?? '',
@@ -98,6 +99,7 @@ class AppUser {
       role: map['role'] ?? 'Utilisateur',
       photoProfil: map['photoProfil'] ?? '',
       estActif: map['estActif'] ?? true,
+      estBloque: map['estBloque'] ?? false,
       followers: map['followers'] is int ? map['followers'] : 0,
       followings: map['followings'] is int ? map['followings'] : 0,
       dateInscription: (map['dateInscription'] as Timestamp?)?.toDate() ?? DateTime.now(),
@@ -111,9 +113,7 @@ class AppUser {
       videosPubliees: map['videosPubliees'] != null
           ? List<Video>.from(map['videosPubliees'].map((video) => Video.fromMap(video)))
           : [],
-      performances: map['performances'] != null
-          ? Map<String, double>.from(map['performances'])
-          : {},
+      performances: map['performances'] != null ? Map<String, double>.from(map['performances']) : {},
       nomClub: map['nomClub'],
       ligue: map['ligue'],
       offrePubliees: map['offrePubliees'] != null
@@ -135,11 +135,10 @@ class AppUser {
           ? List<Video>.from(map['videosLikees'].map((video) => Video.fromMap(video)))
           : [],
       followersList: List<String>.from(map['followersList'] ?? []),
-      followingsList: List<String>.from(map['followingsList'] ?? []), estBloque: false,
+      followingsList: List<String>.from(map['followingsList'] ?? []),
     );
   }
 
-  // Convertir AppUser en Map pour Firestore
   Map<String, dynamic> toMap() {
     return {
       'uid': uid,
@@ -148,6 +147,7 @@ class AppUser {
       'role': role,
       'photoProfil': photoProfil,
       'estActif': estActif,
+      'estBloque': estBloque,
       'followers': followers,
       'followings': followings,
       'dateInscription': dateInscription,
@@ -158,30 +158,18 @@ class AppUser {
       'nombreDeMatchs': nombreDeMatchs,
       'buts': buts,
       'assistances': assistances,
-      'videosPubliees': videosPubliees != null
-          ? videosPubliees!.map((video) => video.toMap()).toList()
-          : [],
+      'videosPubliees': videosPubliees != null ? videosPubliees!.map((video) => video.toMap()).toList() : [],
       'performances': performances ?? {},
       'nomClub': nomClub,
       'ligue': ligue,
-      'offrePubliees': offrePubliees != null
-          ? offrePubliees!.map((offre) => offre.toMap()).toList()
-          : [],
-      'eventPublies': eventPublies != null
-          ? eventPublies!.map((event) => event.toMap()).toList()
-          : [],
+      'offrePubliees': offrePubliees != null ? offrePubliees!.map((offre) => offre.toMap()).toList() : [],
+      'eventPublies': eventPublies != null ? eventPublies!.map((event) => event.toMap()).toList() : [],
       'entreprise': entreprise,
       'nombreDeRecrutements': nombreDeRecrutements,
       'team': team,
-      'joueursSuivis': joueursSuivis != null
-          ? joueursSuivis!.map((joueur) => joueur.toMap()).toList()
-          : [],
-      'clubsSuivis': clubsSuivis != null
-          ? clubsSuivis!.map((club) => club.toMap()).toList()
-          : [],
-      'videosLikees': videosLikees != null
-          ? videosLikees!.map((video) => video.toMap()).toList()
-          : [],
+      'joueursSuivis': joueursSuivis != null ? joueursSuivis!.map((joueur) => joueur.toMap()).toList() : [],
+      'clubsSuivis': clubsSuivis != null ? clubsSuivis!.map((club) => club.toMap()).toList() : [],
+      'videosLikees': videosLikees != null ? videosLikees!.map((video) => video.toMap()).toList() : [],
       'followersList': followersList,
       'followingsList': followingsList,
     };

@@ -3,70 +3,64 @@ import 'package:get/get.dart';
 import '../models/video.dart';
 
 class VideoController extends GetxController {
-  // Liste observable des vidéos
   var videoList = <Video>[].obs;
 
   @override
   void onInit() {
     super.onInit();
-    fetchVideos();  // Charger les vidéos dès l'initialisation du contrôleur
+    fetchVideos();
   }
 
-  // Méthode pour récupérer les vidéos depuis Firestore en temps réel
+  // Méthode pour récupérer les vidéos depuis Firestore
   void fetchVideos() {
     FirebaseFirestore.instance.collection('videos').snapshots().listen((snapshot) {
       videoList.assignAll(
         snapshot.docs.map((doc) {
           try {
-            return Video.fromMap(doc.data());  // Conversion des données Firestore en Video
+            return Video.fromMap(doc.data());
           } catch (e) {
             print('Erreur lors de la récupération de la vidéo: $e');
-            return null; // Si la vidéo est invalide, ignorer
+            return null;
           }
-        }).whereType<Video>().toList(),  // Filtrer les objets non-valides
+        }).whereType<Video>().toList(),
       );
     });
   }
 
-  // Méthode pour aimer/retirer le like d'une vidéo
+  // Méthode pour aimer ou retirer le like d'une vidéo
   void likeVideo(String videoId, String userId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
-      var videoData = doc.data() as Map<String, dynamic>;
-
-      List<String> likes = List<String>.from(videoData['likes'] ?? []);
-      if (likes.contains(userId)) {
-        likes.remove(userId); // Retirer le like si déjà liké
-      } else {
-        likes.add(userId); // Ajouter un like
+      if (doc.exists) {
+        var videoData = doc.data() as Map<String, dynamic>;
+        List<String> likes = List<String>.from(videoData['likes'] ?? []);
+        if (likes.contains(userId)) {
+          likes.remove(userId);
+        } else {
+          likes.add(userId);
+        }
+        await FirebaseFirestore.instance.collection('videos').doc(videoId).update({'likes': likes});
       }
-
-      await FirebaseFirestore.instance.collection('videos').doc(videoId).update({
-        'likes': likes,
-      });
-
-      Get.snackbar('Succès', 'Action effectuée avec succès.');
     } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de liker la vidéo.');
+      print("Erreur lors de la mise à jour des likes : $e");
     }
   }
 
-  // Méthode pour partager une vidéo
+  // Méthode pour partager une vidéo en incrémentant le compteur de partages
   void partagerVideo(String videoId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
-      var videoData = doc.data() as Map<String, dynamic>;
+      if (doc.exists) {
+        var videoData = doc.data() as Map<String, dynamic>;
+        int shareCount = videoData['shareCount'] ?? 0;
+        shareCount++;
 
-      int shareCount = videoData['shareCount'] ?? 0;
-      shareCount++;  // Incrémenter le nombre de partages
-
-      await FirebaseFirestore.instance.collection('videos').doc(videoId).update({
-        'shareCount': shareCount,
-      });
-
-      Get.snackbar('Succès', 'Vidéo partagée avec succès !');
+        await FirebaseFirestore.instance.collection('videos').doc(videoId).update({'shareCount': shareCount});
+        Get.snackbar('Succès', 'Vidéo partagée avec succès !');
+      }
     } catch (e) {
       Get.snackbar('Erreur', 'Erreur lors du partage de la vidéo.');
+      print("Erreur lors du partage de la vidéo : $e");
     }
   }
 
@@ -74,64 +68,40 @@ class VideoController extends GetxController {
   void signalerVideo(String videoId, String userId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
-      var videoData = doc.data() as Map<String, dynamic>;
+      if (doc.exists) {
+        var videoData = doc.data() as Map<String, dynamic>;
+        List<String> reports = List<String>.from(videoData['reports'] ?? []);
+        int reportCount = videoData['reportCount'] ?? 0;
 
-      List<String> reports = List<String>.from(videoData['reports'] ?? []);
-      int reportCount = videoData['reportCount'] ?? 0;
+        if (!reports.contains(userId)) {
+          reports.add(userId);
+          reportCount++;
 
-      if (!reports.contains(userId)) {
-        reports.add(userId);  // Ajouter un signalement
-        reportCount++;  // Incrémenter le nombre de signalements
+          await FirebaseFirestore.instance.collection('videos').doc(videoId).update({
+            'reports': reports,
+            'reportCount': reportCount,
+          });
 
-        await FirebaseFirestore.instance.collection('videos').doc(videoId).update({
-          'reports': reports,
-          'reportCount': reportCount,
-        });
-
-        Get.snackbar('Succès', 'Vidéo signalée avec succès.');
-      } else {
-        Get.snackbar('Erreur', 'Vous avez déjà signalé cette vidéo.');
+          Get.snackbar('Succès', 'Vidéo signalée avec succès.');
+        } else {
+          Get.snackbar('Erreur', 'Vous avez déjà signalé cette vidéo.');
+        }
       }
     } catch (e) {
       Get.snackbar('Erreur', 'Erreur lors du signalement de la vidéo.');
+      print("Erreur lors du signalement de la vidéo : $e");
     }
   }
 
-  // Méthode pour supprimer une vidéo
+  // Méthode pour supprimer une vidéo de Firestore et de la liste locale
   Future<void> deleteVideo(String videoId) async {
     try {
-      // Supprimer la vidéo de Firestore
       await FirebaseFirestore.instance.collection('videos').doc(videoId).delete();
-
-      // Supprimer la vidéo de la liste locale
       videoList.removeWhere((video) => video.id == videoId);
-
       Get.snackbar('Succès', 'Vidéo supprimée avec succès.');
     } catch (e) {
-      Get.snackbar('Erreur', 'Échec de la suppression de la vidéo : $e');
+      Get.snackbar('Erreur', 'Erreur lors de la suppression de la vidéo.');
+      print("Erreur lors de la suppression de la vidéo : $e");
     }
-  }
-
-  // Méthode pour mettre à jour la vidéo avec une nouvelle URL (si nécessaire)
-  Future<void> updateVideo(String videoId, Map<String, dynamic> newVideoData) async {
-    try {
-      await FirebaseFirestore.instance.collection('videos').doc(videoId).update(newVideoData);
-      Get.snackbar('Succès', 'Vidéo mise à jour avec succès.');
-    } catch (e) {
-      Get.snackbar('Erreur', 'Erreur lors de la mise à jour de la vidéo.');
-    }
-  }
-
-  // Méthode pour récupérer une vidéo spécifique à partir de son ID
-  Future<Video?> getVideoById(String videoId) async {
-    try {
-      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
-      if (doc.exists) {
-        return Video.fromMap(doc.data() as Map<String, dynamic>);
-      }
-    } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de récupérer la vidéo.');
-    }
-    return null;
   }
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart'; // Pour des contrôles vidéo améliorés
+import 'package:chewie/chewie.dart';
 
 class VideoPlayerItem extends StatefulWidget {
   final String videoUrl;
@@ -28,7 +28,17 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
             videoPlayerController: _videoPlayerController,
             autoPlay: true,
             looping: true,
-            aspectRatio: _videoPlayerController.value.aspectRatio,
+            showControls: true,
+            allowPlaybackSpeedChanging: true,
+            allowMuting: true,
+            // Modifier les contrôles avec des tailles personnalisées
+            materialProgressColors: ChewieProgressColors(
+              playedColor: Colors.red,
+              handleColor: Colors.red,
+              bufferedColor: Colors.white.withOpacity(0.6),
+              backgroundColor: Colors.grey,
+            ),
+            placeholder: Container(color: Colors.black),
             errorBuilder: (context, errorMessage) {
               return Center(
                 child: Text(
@@ -62,20 +72,18 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
     }
 
     if (_chewieController == null || !_videoPlayerController.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator()); // Affiche un indicateur de chargement
+      return const Center(child: CircularProgressIndicator());
     }
 
     return Container(
-      color: Colors.black, // Fond noir pour les espaces libres
+      color: Colors.black,
       child: FittedBox(
-        fit: BoxFit.contain, // La vidéo s'adapte à l'espace, en conservant le ratio
+        fit: BoxFit.contain,
         alignment: Alignment.center,
         child: SizedBox(
           width: _videoPlayerController.value.size.width,
           height: _videoPlayerController.value.size.height,
-          child: Chewie(
-            controller: _chewieController!,
-          ),
+          child: Chewie(controller: _chewieController!),
         ),
       ),
     );

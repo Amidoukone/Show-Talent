@@ -28,18 +28,17 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
   @override
   void initState() {
     super.initState();
-    // Initialisation du contrôleur vidéo avec l'URL de la vidéo
-    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl))
+    _controller = VideoPlayerController.network(widget.videoUrl)
       ..initialize().then((_) {
-        setState(() {}); // Rebuild pour initialiser la vidéo
-        _controller.play(); // Lecture automatique
-        _controller.setLooping(true); // Boucle infinie
+        setState(() {});
+        _controller.play();
+        _controller.setLooping(true);
       });
   }
 
   @override
   void dispose() {
-    _controller.dispose(); // Libérer les ressources
+    _controller.dispose();
     super.dispose();
   }
 
@@ -47,21 +46,19 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Fond noir pour s'assurer que les espaces vides sont noirs
         Container(
-          color: Colors.black,  // Fond noir pour les bandes noires
+          color: Colors.black,
           child: _controller.value.isInitialized
               ? Center(
                   child: AspectRatio(
-                    aspectRatio: _controller.value.aspectRatio,  // Respecter le ratio d'origine de la vidéo
+                    aspectRatio: _controller.value.aspectRatio,
                     child: VideoPlayer(_controller),
                   ),
                 )
               : const Center(
-                  child: CircularProgressIndicator(),  // Indicateur de chargement
+                  child: CircularProgressIndicator(),
                 ),
         ),
-        // Interactions sur la vidéo (likes, partage, etc.)
         Positioned(
           right: 10,
           bottom: 50,
@@ -81,6 +78,14 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
                 color: widget.video.likes.contains(widget.userId) ? Colors.red : Colors.white,
                 label: '${widget.video.likes.length}',
                 onPressed: () {
+                  setState(() {
+                    // Actualiser localement pour effet immédiat
+                    if (widget.video.likes.contains(widget.userId)) {
+                      widget.video.likes.remove(widget.userId);
+                    } else {
+                      widget.video.likes.add(widget.userId);
+                    }
+                  });
                   widget.videoController.likeVideo(widget.video.id, widget.userId);
                 },
               ),
@@ -90,6 +95,9 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
                 color: Colors.white,
                 label: '${widget.video.shareCount}',
                 onPressed: () {
+                  setState(() {
+                    widget.video.shareCount++;
+                  });
                   widget.videoController.partagerVideo(widget.video.id);
                 },
               ),
@@ -109,7 +117,6 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
     );
   }
 
-  // Méthode pour construire les boutons d'action (J'aime, Partager, etc.)
   Widget _buildActionButton({
     required IconData icon,
     required Color color,
@@ -119,18 +126,17 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
     return Column(
       children: [
         IconButton(
-          icon: Icon(icon, color: color, size: 30),
+          icon: Icon(icon, color: color, size: 36),  // Augmentation de la taille de l'icône
           onPressed: onPressed,
         ),
         Text(
           label,
-          style: const TextStyle(color: Colors.white, fontSize: 12),
+          style: const TextStyle(color: Colors.white, fontSize: 14),
         ),
       ],
     );
   }
 
-  // Confirmation de suppression de la vidéo
   void _showDeleteConfirmation() {
     showDialog(
       context: context,
@@ -141,7 +147,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(); // Fermer la boîte de dialogue
+                Navigator.of(context).pop();
               },
               child: const Text('Annuler'),
             ),
