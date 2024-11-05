@@ -1,31 +1,66 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/push_notification.dart';
 import 'package:show_talent/controller/upload_video_controller.dart';
-import 'package:show_talent/screens/home_screen.dart'; // Importer l'écran d'accueil
+import 'package:video_player/video_player.dart';
 
 class UploadForm extends StatefulWidget {
   final File videoFile;
   final String videoPath;
 
-  const UploadForm(
-      {super.key, required this.videoFile, required this.videoPath});
+  const UploadForm({super.key, required this.videoFile, required this.videoPath});
 
   @override
   State<UploadForm> createState() => _UploadFormState();
 }
 
 class _UploadFormState extends State<UploadForm> {
-  final UploadVideoController uploadVideoController =
-      Get.put(UploadVideoController());
+  final UploadVideoController uploadVideoController = Get.put(UploadVideoController());
   final TextEditingController songController = TextEditingController();
   final TextEditingController captionController = TextEditingController();
+  late VideoPlayerController _videoPlayerController;
+  bool _isPlaying = false;
+  bool _needsRotation = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _videoPlayerController = VideoPlayerController.file(widget.videoFile)
+      ..initialize().then((_) {
+        setState(() {
+          _needsRotation = _videoPlayerController.value.size.width < _videoPlayerController.value.size.height;
+          _isPlaying = false;
+        });
+      });
+  }
+
+  @override
+  void dispose() {
+    _videoPlayerController.dispose();
+    super.dispose();
+  }
+
+  void toggleVideoPlayback() {
+    setState(() {
+      if (_isPlaying) {
+        _videoPlayerController.pause();
+      } else {
+        _videoPlayerController.play();
+      }
+      _isPlaying = !_isPlaying;
+    });
+  }
 
   void showProgressDialog() {
     Get.dialog(
       Obx(() {
         double progressValue = uploadVideoController.uploadProgress.value;
+        if (progressValue >= 1.0) {
+          Future.delayed(Duration.zero, () {
+            Get.back();
+            Get.offAllNamed('/main');  // Utiliser une route nommée pour rediriger vers le MainScreen
+          });
+        }
         return AlertDialog(
           title: const Text(
             "Téléversement en cours...",
@@ -46,118 +81,123 @@ class _UploadFormState extends State<UploadForm> {
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                if (!uploadVideoController.isUploading.value) {
-                  Get.back(); // Fermer la boîte de dialogue
-                  Get.offAll(
-                      () => const HomeScreen()); // Rediriger vers la page Home
-                }
-              },
-              child: const Text(
-                "Fermer",
-                style: TextStyle(color: Colors.black),
-              ),
-            ),
-          ],
         );
       }),
-      barrierDismissible:
-          false, // Empêcher la fermeture pendant le téléversement
+      barrierDismissible: false,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: const Color.fromARGB(255, 253, 253, 253),
       appBar: AppBar(
         title: const Text('Téléverser une vidéo'),
         backgroundColor: const Color(0xFF214D4F),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: songController,
-              decoration: const InputDecoration(
-                labelText: 'Description de la vidéo',
-                labelStyle: TextStyle(color: Colors.white),
-                filled: true,
-                fillColor: Color(0xFF2E2E2E),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(10)),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Cadre de l'aperçu de la vidéo avec rotation conditionnelle
+              Container(
+                height: 200,
+                color: Colors.black,
+                child: _videoPlayerController.value.isInitialized
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Transform.rotate(
+                            angle: _needsRotation ? 90 * 3.14159 / 180 : 0,  // Appliquer la rotation si nécessaire
+                            child: AspectRatio(
+                              aspectRatio: _videoPlayerController.value.aspectRatio,
+                              child: VideoPlayer(_videoPlayerController),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              _isPlaying ? Icons.pause_circle_outline : Icons.play_circle_outline,
+                              color: Colors.white,
+                              size: 50,
+                            ),
+                            onPressed: toggleVideoPlayback,
+                          ),
+                        ],
+                      )
+                    : const Center(child: CircularProgressIndicator()),
+              ),
+              const SizedBox(height: 20),
+
+              // Champ pour la description de la vidéo
+              TextField(
+                controller: songController,
+                decoration: const InputDecoration(
+                  labelText: 'Description de la vidéo',
+                  labelStyle: TextStyle(color: Colors.black),
+                  filled: true,
+                  fillColor: Color(0xFFE0E0E0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(10)),
+                  ),
                 ),
               ),
-              style: const TextStyle(color: Colors.white),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: captionController,
-              decoration: const InputDecoration(
-                labelText: 'Légende',
-                labelStyle: TextStyle(color: Colors.white),
-                filled: true,
-                fillColor: Color(0xFF2E2E2E),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(10)),
+              const SizedBox(height: 10),
+
+              // Champ pour la légende de la vidéo
+              TextField(
+                controller: captionController,
+                decoration: const InputDecoration(
+                  labelText: 'Légende',
+                  labelStyle: TextStyle(color: Colors.black),
+                  filled: true,
+                  fillColor: Color(0xFFE0E0E0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(10)),
+                  ),
                 ),
               ),
-              style: const TextStyle(color: Colors.white),
-            ),
-            const SizedBox(height: 20),
-            Obx(() {
-              if (uploadVideoController.isUploading.value) {
-                return const CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF214D4F)),
-                ); // Afficher un indicateur si en train de téléverser
-              }
-              return ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF214D4F),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                ),
-                onPressed: () {
-                  if (songController.text.isNotEmpty &&
-                      captionController.text.isNotEmpty) {
-                    showProgressDialog(); // Affiche le dialogue de progression
+              const SizedBox(height: 20),
 
-                    uploadVideoController.uploadVideo(
-                      songController.text,
-                      captionController.text,
-                      widget.videoPath,
-                    );
-
-                    String token =
-                        "eYdOU1VrQ-2EGLg8MlgKTs:APA91bGB2ZdJ3lSo3t5ynpJZY44HrAaEAVLipvKhEzS3NyaVynTRSc_Wi2YNvmIDc7URlOmL8o8V6iz8vNTYw9XyUhakhE3CAT-dAvjRjenWH_SEemERxZfXc0AVUm0MbIU8ShwL_gMb";
-
-                    PushNotificationService.sendNotification(
-                      title: "Nouvelle vidéo uploader",
-                      body: "jfnjidifjnf",
-                      token: token,
-                      contextType: "fhjdf",
-                      contextData: widget.videoPath,
-                    );
-                  } else {
-                    Get.snackbar(
-                      'Erreur',
-                      'Veuillez remplir tous les champs',
-                      snackPosition: SnackPosition.BOTTOM,
-                      backgroundColor: Colors.redAccent,
-                      colorText: Colors.white,
-                    );
-                  }
-                },
-                child: const Text(
-                  'Téléverser la vidéo',
-                  style: TextStyle(fontSize: 16, color: Colors.white),
-                ),
-              );
-            }),
-          ],
+              // Bouton de téléversement
+              Obx(() {
+                if (uploadVideoController.isUploading.value) {
+                  return const CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF214D4F)),
+                  );
+                }
+                return ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF214D4F),
+                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                  ),
+                  onPressed: () {
+                    if (songController.text.isNotEmpty && captionController.text.isNotEmpty) {
+                      showProgressDialog();
+                      uploadVideoController.uploadVideo(
+                        songController.text,
+                        captionController.text,
+                        widget.videoPath,
+                      );
+                    } else {
+                      Get.snackbar(
+                        'Erreur',
+                        'Veuillez remplir tous les champs',
+                        snackPosition: SnackPosition.BOTTOM,
+                        backgroundColor: Colors.redAccent,
+                        colorText: Colors.white,
+                      );
+                    }
+                  },
+                  child: const Text(
+                    'Téléverser la vidéo',
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  ),
+                );
+              }),
+            ],
+          ),
         ),
       ),
     );

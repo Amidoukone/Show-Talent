@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:show_talent/controller/user_controller.dart';
 import 'package:show_talent/models/user.dart';
 import 'package:show_talent/screens/event_list_screen.dart';
 import 'package:show_talent/screens/setting_screen.dart';
 import 'package:show_talent/screens/home_screen.dart';
 import 'package:show_talent/screens/gestion_offres_screen.dart';
-import 'package:show_talent/screens/conversation_screen.dart'; // Ajout de l'écran des conversations
-import 'package:get/get.dart';
-import 'package:show_talent/controller/chat_controller.dart'; // Ajout du ChatController
-import 'package:show_talent/screens/event_form_screen.dart'; // Ajout de l'écran de création/modification d'événements
+import 'package:show_talent/screens/conversation_screen.dart';
+import 'package:show_talent/controller/chat_controller.dart';
+import 'package:show_talent/screens/event_form_screen.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -19,14 +19,14 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-
-  final ChatController chatController = Get.put(ChatController()); // Instance du ChatController
+  final ChatController chatController = Get.put(ChatController());
+  final UserController userController = Get.find<UserController>();
 
   final List<Widget> _screens = [
     const HomeScreen(),
     const GestionOffresScreen(),
-    EventListScreen(),  // Liste des événements
-    ConversationsScreen(),  // L'écran des conversations
+    EventListScreen(),
+    ConversationsScreen(),
     SettingsScreen(),
   ];
 
@@ -40,18 +40,7 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _screens[_selectedIndex],
-      floatingActionButton: _selectedIndex == 2 ? FloatingActionButton(
-        onPressed: () {
-          // Ouvrir l'écran de création d'événement uniquement pour les clubs/recruteurs
-          AppUser currentUser = Get.find<UserController>().user!;
-          if (currentUser.role == 'recruteur' || currentUser.role == 'club') {
-            Get.to(() => EventFormScreen()); // Rediriger vers l'écran de création
-          } else {
-            Get.snackbar('Accès refusé', 'Seuls les recruteurs et les clubs peuvent créer des événements.');
-          }
-        },
-        child: const Icon(Icons.add),
-      ) : null, // Ajouter l'action pour créer un événement uniquement sur l'onglet des événements
+      floatingActionButton: _buildFloatingActionButton(),
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: const Color(0xFF214D4F),
         selectedItemColor: const Color(0xFFE6EEFA),
@@ -74,7 +63,7 @@ class _MainScreenState extends State<MainScreen> {
             label: 'Event',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat),  // Icône de Messages
+            icon: Icon(Icons.chat),
             label: 'Messages',
           ),
           BottomNavigationBarItem(
@@ -84,5 +73,22 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
     );
+  }
+
+  Widget? _buildFloatingActionButton() {
+    // Montrer le bouton d'ajout d'événement uniquement pour les recruteurs et clubs dans la page des événements
+    if (_selectedIndex == 2) {
+      AppUser? currentUser = userController.user;
+      if (currentUser != null && (currentUser.role == 'recruteur' || currentUser.role == 'club')) {
+        return FloatingActionButton(
+          onPressed: () {
+            Get.to(() => const EventFormScreen()); // Rediriger vers l'écran de création d'événement
+          },
+          backgroundColor: const Color(0xFF214D4F),
+          child: const Icon(Icons.add),
+        );
+      }
+    }
+    return null;
   }
 }
