@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 class VideoPlayerItem extends StatefulWidget {
   final String videoUrl;
@@ -19,41 +21,48 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
   @override
   void initState() {
     super.initState();
+    _initializeVideo();
+  }
 
-    // Initialiser le VideoPlayerController avec l'URL de la vidéo
-    _videoPlayerController = VideoPlayerController.network(widget.videoUrl)
-      ..initialize().then((_) {
-        setState(() {
-          _chewieController = ChewieController(
-            videoPlayerController: _videoPlayerController,
-            autoPlay: true,
-            looping: true,
-            showControls: true,
-            allowPlaybackSpeedChanging: true,
-            allowMuting: true,
-            // Modifier les contrôles avec des tailles personnalisées
-            materialProgressColors: ChewieProgressColors(
-              playedColor: Colors.red,
-              handleColor: Colors.red,
-              bufferedColor: Colors.white.withOpacity(0.6),
-              backgroundColor: Colors.grey,
-            ),
-            placeholder: Container(color: Colors.black),
-            errorBuilder: (context, errorMessage) {
-              return Center(
-                child: Text(
-                  'Erreur lors de la lecture de la vidéo: $errorMessage',
-                  style: const TextStyle(color: Colors.red),
-                ),
-              );
-            },
-          );
+  Future<void> _initializeVideo() async {
+    try {
+      final File videoFile = await DefaultCacheManager().getSingleFile(widget.videoUrl);
+      _videoPlayerController = VideoPlayerController.file(videoFile)
+        ..initialize().then((_) {
+          setState(() {
+            _chewieController = ChewieController(
+              videoPlayerController: _videoPlayerController,
+              autoPlay: true,
+              looping: true,
+              showControls: true,
+              allowFullScreen: true,
+              materialProgressColors: ChewieProgressColors(
+                playedColor: Colors.red,
+                handleColor: Colors.red,
+                bufferedColor: Colors.white.withOpacity(0.6),
+                backgroundColor: Colors.grey,
+              ),
+              placeholder: Container(color: Colors.black),
+              errorBuilder: (context, errorMessage) {
+                return Center(
+                  child: Text(
+                    'Erreur lors de la lecture de la vidéo: $errorMessage',
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                );
+              },
+            );
+          });
+        }).catchError((error) {
+          setState(() {
+            _isError = true;
+          });
         });
-      }).catchError((error) {
-        setState(() {
-          _isError = true;
-        });
+    } catch (error) {
+      setState(() {
+        _isError = true;
       });
+    }
   }
 
   @override
@@ -67,7 +76,10 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
   Widget build(BuildContext context) {
     if (_isError) {
       return const Center(
-        child: Text('Erreur lors de la lecture de la vidéo', style: TextStyle(color: Colors.red)),
+        child: Text(
+          'Erreur lors de la lecture de la vidéo',
+          style: TextStyle(color: Colors.red, fontSize: 16),
+        ),
       );
     }
 
@@ -75,17 +87,6 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Container(
-      color: Colors.black,
-      child: FittedBox(
-        fit: BoxFit.contain,
-        alignment: Alignment.center,
-        child: SizedBox(
-          width: _videoPlayerController.value.size.width,
-          height: _videoPlayerController.value.size.height,
-          child: Chewie(controller: _chewieController!),
-        ),
-      ),
-    );
+    return Chewie(controller: _chewieController!);
   }
 }

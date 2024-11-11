@@ -58,7 +58,7 @@ class _UploadFormState extends State<UploadForm> {
         if (progressValue >= 1.0) {
           Future.delayed(Duration.zero, () {
             Get.back();
-            Get.offAllNamed('/main');  // Utiliser une route nommée pour rediriger vers le MainScreen
+            Get.offAllNamed('/main');
           });
         }
         return AlertDialog(
@@ -90,7 +90,7 @@ class _UploadFormState extends State<UploadForm> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 253, 253, 253),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Téléverser une vidéo'),
         backgroundColor: const Color(0xFF214D4F),
@@ -101,7 +101,6 @@ class _UploadFormState extends State<UploadForm> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Cadre de l'aperçu de la vidéo avec rotation conditionnelle
               Container(
                 height: 200,
                 color: Colors.black,
@@ -110,7 +109,7 @@ class _UploadFormState extends State<UploadForm> {
                         alignment: Alignment.center,
                         children: [
                           Transform.rotate(
-                            angle: _needsRotation ? 90 * 3.14159 / 180 : 0,  // Appliquer la rotation si nécessaire
+                            angle: _needsRotation ? 90 * 3.14159 / 180 : 0,
                             child: AspectRatio(
                               aspectRatio: _videoPlayerController.value.aspectRatio,
                               child: VideoPlayer(_videoPlayerController),
@@ -130,7 +129,6 @@ class _UploadFormState extends State<UploadForm> {
               ),
               const SizedBox(height: 20),
 
-              // Champ pour la description de la vidéo
               TextField(
                 controller: songController,
                 decoration: const InputDecoration(
@@ -145,7 +143,6 @@ class _UploadFormState extends State<UploadForm> {
               ),
               const SizedBox(height: 10),
 
-              // Champ pour la légende de la vidéo
               TextField(
                 controller: captionController,
                 decoration: const InputDecoration(
@@ -160,7 +157,6 @@ class _UploadFormState extends State<UploadForm> {
               ),
               const SizedBox(height: 20),
 
-              // Bouton de téléversement
               Obx(() {
                 if (uploadVideoController.isUploading.value) {
                   return const CircularProgressIndicator(

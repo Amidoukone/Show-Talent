@@ -3,6 +3,7 @@ import 'package:video_player/video_player.dart';
 import 'package:get/get.dart';
 import 'package:show_talent/controller/video_controller.dart';
 import 'package:show_talent/models/video.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 class TikTokVideoPlayer extends StatefulWidget {
   final String videoUrl;
@@ -24,16 +25,39 @@ class TikTokVideoPlayer extends StatefulWidget {
 
 class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
   late VideoPlayerController _controller;
+  bool _isLoading = true;
+  bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.network(widget.videoUrl)
-      ..initialize().then((_) {
-        setState(() {});
-        _controller.play();
-        _controller.setLooping(true);
+    _initializeVideoPlayer();
+  }
+
+  Future<void> _initializeVideoPlayer() async {
+    try {
+      final file = await DefaultCacheManager().getSingleFile(widget.videoUrl);
+      _controller = VideoPlayerController.file(file)
+        ..initialize().then((_) {
+          setState(() {
+            _isLoading = false;
+            _controller.play();
+            _controller.setLooping(true);
+          });
+        }).catchError((error) {
+          setState(() {
+            _isLoading = false;
+            _hasError = true;
+          });
+          print('Erreur de lecture vidéo: $error');
+        });
+    } catch (error) {
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
       });
+      print('Erreur de cache vidéo: $error');
+    }
   }
 
   @override
@@ -48,16 +72,21 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
       children: [
         Container(
           color: Colors.black,
-          child: _controller.value.isInitialized
-              ? Center(
-                  child: AspectRatio(
-                    aspectRatio: _controller.value.aspectRatio,
-                    child: VideoPlayer(_controller),
-                  ),
-                )
-              : const Center(
-                  child: CircularProgressIndicator(),
-                ),
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _hasError
+                  ? const Center(
+                      child: Text(
+                        'Erreur de lecture de la vidéo',
+                        style: TextStyle(color: Colors.red, fontSize: 16),
+                      ),
+                    )
+                  : Center(
+                      child: AspectRatio(
+                        aspectRatio: _controller.value.aspectRatio,
+                        child: VideoPlayer(_controller),
+                      ),
+                    ),
         ),
         Positioned(
           right: 10,
@@ -69,52 +98,55 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
                   icon: Icons.delete,
                   color: Colors.red,
                   label: 'Supprimer',
-                  onPressed: () {
-                    _showDeleteConfirmation();
-                  },
+                  onPressed: _showDeleteConfirmation,
                 ),
               _buildActionButton(
                 icon: Icons.favorite,
                 color: widget.video.likes.contains(widget.userId) ? Colors.red : Colors.white,
                 label: '${widget.video.likes.length}',
-                onPressed: () {
-                  setState(() {
-                    // Actualiser localement pour effet immédiat
-                    if (widget.video.likes.contains(widget.userId)) {
-                      widget.video.likes.remove(widget.userId);
-                    } else {
-                      widget.video.likes.add(widget.userId);
-                    }
-                  });
-                  widget.videoController.likeVideo(widget.video.id, widget.userId);
-                },
+                onPressed: _toggleLike,
               ),
               const SizedBox(height: 20),
               _buildActionButton(
                 icon: Icons.share,
                 color: Colors.white,
                 label: '${widget.video.shareCount}',
-                onPressed: () {
-                  setState(() {
-                    widget.video.shareCount++;
-                  });
-                  widget.videoController.partagerVideo(widget.video.id);
-                },
+                onPressed: _shareVideo,
               ),
               const SizedBox(height: 20),
               _buildActionButton(
                 icon: Icons.flag,
                 color: Colors.white,
                 label: '${widget.video.reportCount}',
-                onPressed: () {
-                  widget.videoController.signalerVideo(widget.video.id, widget.userId);
-                },
+                onPressed: _reportVideo,
               ),
             ],
           ),
         ),
       ],
     );
+  }
+
+  void _toggleLike() {
+    setState(() {
+      if (widget.video.likes.contains(widget.userId)) {
+        widget.video.likes.remove(widget.userId);
+      } else {
+        widget.video.likes.add(widget.userId);
+      }
+    });
+    widget.videoController.likeVideo(widget.video.id, widget.userId);
+  }
+
+  void _shareVideo() {
+    setState(() {
+      widget.video.shareCount++;
+    });
+    widget.videoController.partagerVideo(widget.video.id);
+  }
+
+  void _reportVideo() {
+    widget.videoController.signalerVideo(widget.video.id, widget.userId);
   }
 
   Widget _buildActionButton({
@@ -126,7 +158,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
     return Column(
       children: [
         IconButton(
-          icon: Icon(icon, color: color, size: 36),  // Augmentation de la taille de l'icône
+          icon: Icon(icon, color: color, size: 36),
           onPressed: onPressed,
         ),
         Text(
@@ -155,7 +187,12 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
               onPressed: () {
                 widget.videoController.deleteVideo(widget.video.id);
                 Navigator.of(context).pop();
-                Get.snackbar('Succès', 'Vidéo supprimée avec succès.');
+                Get.snackbar(
+                  'Succès',
+                  'Vidéo supprimée avec succès.',
+                  backgroundColor: Colors.black.withOpacity(0.8),
+                  colorText: Colors.white,
+                );
               },
               child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
             ),
