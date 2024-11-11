@@ -19,11 +19,17 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('AD.FOOT'),
+        title: const Text(
+          'AD.FOOT',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
         actions: [
           Obx(() {
             if (userController.user == null) {
-              return const CircularProgressIndicator();
+              return const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: CircularProgressIndicator(),
+              );
             }
             return IconButton(
               icon: CircleAvatar(
@@ -38,7 +44,12 @@ class HomeScreen extends StatelessWidget {
       ),
       body: Obx(() {
         if (videoController.videoList.isEmpty) {
-          return const Center(child: Text('Aucune vidéo disponible', style: TextStyle(color: Colors.white)));
+          return const Center(
+            child: Text(
+              'Aucune vidéo disponible',
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
+          );
         }
         return PageView.builder(
           scrollDirection: Axis.vertical,
@@ -63,8 +74,6 @@ class HomeScreen extends StatelessWidget {
           },
         );
       }),
-
-      // Condition pour afficher le FloatingActionButton pour les joueurs seulement
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: Obx(() {
         if (userController.user?.role == 'joueur') {

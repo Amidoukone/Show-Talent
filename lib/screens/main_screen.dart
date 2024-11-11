@@ -76,13 +76,17 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget? _buildFloatingActionButton() {
-    // Montrer le bouton d'ajout d'événement uniquement pour les recruteurs et clubs dans la page des événements
+    // Afficher le bouton d'ajout d'événement uniquement pour les recruteurs et clubs dans l'onglet "Event"
     if (_selectedIndex == 2) {
       AppUser? currentUser = userController.user;
       if (currentUser != null && (currentUser.role == 'recruteur' || currentUser.role == 'club')) {
         return FloatingActionButton(
           onPressed: () {
-            Get.to(() => const EventFormScreen()); // Rediriger vers l'écran de création d'événement
+            Get.bottomSheet(
+              const EventFormScreen(),
+              isScrollControlled: true,
+              backgroundColor: Colors.white,
+            );
           },
           backgroundColor: const Color(0xFF214D4F),
           child: const Icon(Icons.add),
