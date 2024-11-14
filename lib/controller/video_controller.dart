@@ -28,7 +28,7 @@ class VideoController extends GetxController {
   }
 
   // Méthode pour aimer ou retirer le like d'une vidéo
-  void likeVideo(String videoId, String userId) async {
+  Future<void> likeVideo(String videoId, String userId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
       if (doc.exists) {
@@ -43,11 +43,12 @@ class VideoController extends GetxController {
       }
     } catch (e) {
       print("Erreur lors de la mise à jour des likes : $e");
+      Get.snackbar('Erreur', 'Impossible de mettre à jour les likes.');
     }
   }
 
   // Méthode pour partager une vidéo en incrémentant le compteur de partages
-  void partagerVideo(String videoId) async {
+  Future<void> partagerVideo(String videoId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
       if (doc.exists) {
@@ -65,7 +66,7 @@ class VideoController extends GetxController {
   }
 
   // Méthode pour signaler une vidéo inappropriée
-  void signalerVideo(String videoId, String userId) async {
+  Future<void> signalerVideo(String videoId, String userId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
       if (doc.exists) {

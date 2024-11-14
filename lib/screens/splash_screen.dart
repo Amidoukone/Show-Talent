@@ -28,14 +28,13 @@ class _SplashScreenState extends State<SplashScreen> {
     ever(_user, _setInitialScreen);
   }
 
-  _setInitialScreen(User? user) {
-    Timer(const Duration(seconds: 2), () {
-      if (user == null) {
-        Get.offAll(() => const LoginScreen());
-      } else {
-        Get.offAll(() => const MainScreen());  // Redirige vers MainScreen
-      }
-    });
+  _setInitialScreen(User? user) async {
+    await Future.delayed(const Duration(seconds: 2));
+    if (user == null) {
+      Get.offAll(() => const LoginScreen());
+    } else {
+      Get.offAll(() => const MainScreen());
+    }
   }
 
   @override
@@ -44,7 +43,7 @@ class _SplashScreenState extends State<SplashScreen> {
       backgroundColor: const Color(0xFF214D4F),
       body: Center(
         child: Image.asset(
-          'assets/logo.png',  // Logo de l'application
+          'assets/logo.png',
           width: 150,
           height: 150,
         ),
