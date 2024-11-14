@@ -21,25 +21,30 @@ class UserController extends GetxController {
   void _bindUserStream() {
     FirebaseAuth.instance.authStateChanges().listen((User? firebaseUser) async {
       if (firebaseUser != null) {
-        try {
-          DocumentSnapshot userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(firebaseUser.uid)
-              .get();
-
-          if (userDoc.exists && userDoc.data() != null) {
-            _user.value = AppUser.fromMap(userDoc.data() as Map<String, dynamic>);
-            await _updateFCMToken(firebaseUser.uid);
-          } else {
-            _user.value = null;
-          }
-        } catch (e) {
-          print("Erreur lors de la récupération de l'utilisateur actuel: $e");
-        }
+        await _loadCurrentUser(firebaseUser.uid);
       } else {
         _user.value = null;
       }
     });
+  }
+
+  Future<void> _loadCurrentUser(String uid) async {
+    try {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
+      if (userDoc.exists && userDoc.data() != null) {
+        _user.value = AppUser.fromMap(userDoc.data() as Map<String, dynamic>);
+        await _updateFCMToken(uid);
+      } else {
+        _user.value = null;
+      }
+    } catch (e) {
+      print("Erreur lors de la récupération de l'utilisateur actuel: $e");
+      Get.snackbar("Erreur", "Impossible de charger les informations de l'utilisateur.");
+    }
   }
 
   Future<void> _updateFCMToken(String uid) async {
@@ -62,9 +67,8 @@ class UserController extends GetxController {
           final data = doc.data() as Map<String, dynamic>?;
           if (data != null && data['uid'] != null) {
             return AppUser.fromMap(data);
-          } else {
-            return null;
           }
+          return null;
         }).whereType<AppUser>().toList();
       } catch (e) {
         print("Erreur lors de la récupération de la liste des utilisateurs: $e");

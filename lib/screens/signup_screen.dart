@@ -16,7 +16,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
-  String _selectedRole = 'joueur';  // Le rôle sélectionné par l'utilisateur
+  String _selectedRole = 'joueur';  // Le rôle sélectionné par défaut
   bool _obscurePassword = true; // Contrôle pour masquer/afficher le mot de passe
 
   _signUp() async {
@@ -125,10 +125,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              // Sélection du rôle
+              // Sélection du rôle sans l'option "coach"
               DropdownButton<String>(
                 value: _selectedRole,
-                items: ['joueur', 'club', 'recruteur', 'fan', 'coach']
+                items: ['joueur', 'club', 'recruteur', 'fan']
                     .map((String role) {
                   return DropdownMenuItem<String>(
                     value: role,

@@ -101,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 40),
               // Titre de la page
               const Text(
-                'Connectez-vous à votre compte',
+                'Connectez-vous!',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
