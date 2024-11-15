@@ -36,20 +36,20 @@ class ProfileScreen extends StatelessWidget {
 
       return Scaffold(
         appBar: AppBar(
-          title: Text(user.nom, style: const TextStyle(fontSize: 22)),
+          title: Text(user.nom, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
           centerTitle: true,
           backgroundColor: const Color(0xFF214D4F),
           actions: [
             if (!isReadOnly && isOwnProfile)
               IconButton(
-                icon: const Icon(Icons.edit),
+                icon: const Icon(Icons.edit, color: Colors.white),
                 onPressed: () {
                   Get.to(() => EditProfileScreen(user: user));
                 },
               ),
             if (!isOwnProfile)
               IconButton(
-                icon: const Icon(Icons.message),
+                icon: const Icon(Icons.message, color: Colors.white),
                 onPressed: () async {
                   String conversationId = await _chatController.createOrGetConversation(
                     currentUserId: AuthController.instance.user!.uid,
@@ -71,20 +71,44 @@ class ProfileScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  GestureDetector(
-                    onTap: isReadOnly ? null : () async {
-                      await _showProfilePhotoOptions(context, user);
-                    },
-                    child: CircleAvatar(
-                      backgroundImage: NetworkImage(user.photoProfil),
-                      radius: 60,
-                      child: isReadOnly
-                          ? null
-                          : const Icon(Icons.camera_alt, size: 30, color: Colors.white),
-                    ),
+                  // Photo de profil stylisée
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      ShaderMask(
+                        shaderCallback: (Rect bounds) {
+                          return const LinearGradient(
+                            colors: [Colors.blueAccent, Colors.greenAccent],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ).createShader(bounds);
+                        },
+                        child: CircleAvatar(
+                          radius: 68,
+                          backgroundColor: Colors.white,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: isReadOnly ? null : () async {
+                          await _showProfilePhotoOptions(context, user);
+                        },
+                        child: Obx(() => CircleAvatar(
+                          radius: 60,
+                          backgroundImage: controller.isLoadingPhoto.value
+                              ? null
+                              : NetworkImage(user.photoProfil),
+                          child: controller.isLoadingPhoto.value
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : isReadOnly
+                                  ? null
+                                  : const Icon(Icons.camera_alt, size: 30, color: Colors.white),
+                        )),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
-                  // Texte 'Voir photo de profil'
+
+                  // Texte pour voir la photo de profil en grand
                   GestureDetector(
                     onTap: () {
                       _showFullProfilePhoto(context, user.photoProfil);
@@ -94,21 +118,56 @@ class ProfileScreen extends StatelessWidget {
                       style: TextStyle(
                         color: Colors.blue,
                         fontSize: 16,
+                        fontWeight: FontWeight.w500,
                         decoration: TextDecoration.underline,
                       ),
                     ),
                   ),
+
                   const SizedBox(height: 20),
-                  Text(user.nom, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+
+                  // Nom de l'utilisateur
+                  Text(user.nom, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+
                   const SizedBox(height: 10),
-                  Text('Followers: ${user.followersList.length}', style: const TextStyle(fontSize: 16)),
-                  Text('Followings: ${user.followingsList.length}', style: const TextStyle(fontSize: 16)),
+
+                  // Section des followers et followings
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildStatItem('Followers', user.followersList.length),
+                      const SizedBox(width: 20),
+                      _buildStatItem('Followings', user.followingsList.length),
+                    ],
+                  ),
+
                   const SizedBox(height: 20),
+
+                  // Biographie de l'utilisateur
                   if (user.bio != null && user.bio!.isNotEmpty) ...[
-                    const Text('Biographie:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                    Text(user.bio!, style: const TextStyle(fontSize: 16)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 6,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        user.bio!,
+                        style: const TextStyle(fontSize: 16, color: Colors.black87),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                     const SizedBox(height: 10),
                   ],
+
+                  // Bouton Suivre/Se désabonner
                   if (!isOwnProfile)
                     ElevatedButton(
                       onPressed: () async {
@@ -123,15 +182,19 @@ class ProfileScreen extends StatelessWidget {
                         controller.update();
                       },
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
                         backgroundColor: isFollowing ? Colors.red : const Color(0xFF214D4F),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                       ),
                       child: Text(
                         isFollowing ? 'Se désabonner' : 'Suivre',
-                        style: const TextStyle(fontSize: 16, color: Colors.white),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                       ),
                     ),
+
                   const SizedBox(height: 20),
+
+                  // Informations selon le rôle de l'utilisateur
                   _buildUserRoleInfo(user),
                 ],
               ),
@@ -142,28 +205,24 @@ class ProfileScreen extends StatelessWidget {
     });
   }
 
-  // Affiche la photo de profil en grand
-  void _showFullProfilePhoto(BuildContext context, String photoUrl) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: GestureDetector(
-          onTap: () => Navigator.of(context).pop(),
-          child: Center(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10.0),
-              child: Image.network(
-                photoUrl,
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
+  // Méthode pour afficher une statistique
+  Widget _buildStatItem(String label, int value) {
+    return Column(
+      children: [
+        Text(
+          '$value',
+          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey),
+        ),
+      ],
     );
   }
 
+  // Méthode pour afficher les options de changement de photo de profil
   Future<void> _showProfilePhotoOptions(BuildContext context, AppUser user) async {
     final ImagePicker picker = ImagePicker();
     showModalBottomSheet(
@@ -205,6 +264,29 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  // Méthode pour afficher la photo de profil en grand
+  void _showFullProfilePhoto(BuildContext context, String photoUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: GestureDetector(
+          onTap: () => Navigator.of(context).pop(),
+          child: Center(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10.0),
+              child: Image.network(
+                photoUrl,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Méthode pour afficher les informations en fonction du rôle de l'utilisateur
   Widget _buildUserRoleInfo(AppUser user) {
     switch (user.role) {
       case 'joueur':

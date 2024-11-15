@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import 'package:show_talent/models/user.dart';
@@ -10,6 +9,8 @@ class ProfileController extends GetxController {
   AppUser? user;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
+
+  var isLoadingPhoto = false.obs;
 
   void updateUserId(String uid) {
     _firestore.collection('users').doc(uid).get().then((snapshot) {
@@ -24,13 +25,15 @@ class ProfileController extends GetxController {
 
   Future<void> updateProfilePhoto(String uid, String photoPath) async {
     try {
-      // Téléversement de l'image dans Firebase Storage
+      isLoadingPhoto.value = true;  // Démarre le chargement
       String photoUrl = await _uploadPhotoToStorage(uid, photoPath);
       await _firestore.collection('users').doc(uid).update({'photoProfil': photoUrl});
       user?.photoProfil = photoUrl;
-      update();
+      update();  // Met à jour le profil après la mise à jour de la photo
     } catch (e) {
       Get.snackbar('Erreur', 'Échec de la mise à jour de la photo de profil.');
+    } finally {
+      isLoadingPhoto.value = false;  // Arrête le chargement
     }
   }
 
@@ -51,6 +54,7 @@ class ProfileController extends GetxController {
     }
   }
 
+  // Méthode pour gérer l'abonnement d'un utilisateur
   Future<void> followUser() async {
     final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
     if (user == null || currentUserId == null || currentUserId == user!.uid) return;
