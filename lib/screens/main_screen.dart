@@ -7,8 +7,9 @@ import 'package:show_talent/screens/event_form_screen.dart';
 import 'package:show_talent/screens/event_list_screen.dart';
 import 'package:show_talent/screens/setting_screen.dart';
 import 'package:show_talent/screens/home_screen.dart';
-import 'package:show_talent/screens/gestion_offres_screen.dart';
 import 'package:show_talent/screens/conversation_screen.dart';
+import 'package:show_talent/screens/offre_screen.dart';
+import 'package:show_talent/screens/offres_form.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -24,7 +25,7 @@ class _MainScreenState extends State<MainScreen> {
 
   final List<Widget> _screens = [
     const HomeScreen(),
-    const GestionOffresScreen(),
+    OffreScreen(), // Ajouter l'écran des offres ici
     EventListScreen(),
     ConversationsScreen(),
     SettingsScreen(),
@@ -69,7 +70,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.event),
-              label: 'Event',
+              label: 'Events',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.chat),
@@ -86,9 +87,11 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget? _buildFloatingActionButton() {
-    if (_selectedIndex == 2) {
-      AppUser? currentUser = userController.user;
-      if (currentUser != null && (currentUser.role == 'recruteur' || currentUser.role == 'club')) {
+    AppUser? currentUser = userController.user;
+
+    // Afficher le bouton pour publier un événement ou une offre
+    if (_selectedIndex == 2 && currentUser != null) {
+      if (currentUser.role == 'recruteur' || currentUser.role == 'club') {
         return FloatingActionButton(
           onPressed: () {
             Get.bottomSheet(
@@ -102,6 +105,19 @@ class _MainScreenState extends State<MainScreen> {
         );
       }
     }
+
+    if (_selectedIndex == 1 && currentUser != null) {
+      if (currentUser.role == 'recruteur' || currentUser.role == 'club') {
+        return FloatingActionButton(
+          onPressed: () {
+            Get.to(() => OffreFormScreen());
+          },
+          backgroundColor: const Color(0xFF214D4F),
+          child: const Icon(Icons.add),
+        );
+      }
+    }
+
     return null;
   }
 }

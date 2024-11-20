@@ -2,13 +2,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:show_talent/models/user.dart';
 
 class Offre {
-  final String id;
-  final String titre;
-  final String description;
-  final DateTime dateDebut;
-  final DateTime dateFin;
-  final AppUser recruteur; // Utilisateur (recruteur ou club)
-  final List<AppUser> candidats; // Liste des joueurs postulants
+  String id; // Retirer final
+  String titre;
+  String description;
+  DateTime dateDebut;
+  DateTime dateFin;
+  AppUser recruteur; // Retirer final
+  List<AppUser> candidats; // Liste des joueurs postulants
   String statut; // "ouverte", "fermée", "en cours"
 
   Offre({
