@@ -1,143 +1,153 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/auth_controller.dart';
 import 'package:show_talent/models/offre.dart';
 import 'package:show_talent/models/user.dart';
 
 class OffreController extends GetxController {
   static OffreController instance = Get.find();
 
-  RxList<Offre> offres = <Offre>[].obs;
-  RxList<Offre> offresFiltrees = <Offre>[].obs;
+  final Rx<List<Offre>> _offres = Rx<List<Offre>>([]);
+  List<Offre> get offres => _offres.value;
 
-  // Récupérer toutes les offres depuis Firestore
-  Future<void> getAllOffres() async {
-    try {
-      QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('offres')
-          .orderBy('dateDebut', descending: true)
-          .get();
-
-      offres.value = snapshot.docs
-          .map((doc) => Offre.fromMap(doc.data() as Map<String, dynamic>))
-          .toList();
-
-      offresFiltrees.value = List<Offre>.from(offres);
-    } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de récupérer les offres : $e');
-    }
+  @override
+  void onInit() {
+    super.onInit();
+    _fetchOffres();
   }
 
-  // Publier une nouvelle offre
-  Future<void> publierOffre(String titre, String description, DateTime dateDebut, DateTime dateFin) async {
-    AppUser? recruteur = AuthController.instance.user;
+  // Récupérer les offres depuis Firestore
+  void _fetchOffres() {
+    FirebaseFirestore.instance.collection('offres').snapshots().listen((snapshot) {
+      _offres.value = snapshot.docs.map((doc) {
+        return Offre.fromMap(doc.data() as Map<String, dynamic>);
+      }).toList();
+    });
+  }
 
-    if (recruteur == null || (recruteur.role != 'recruteur' && recruteur.role != 'club')) {
-      Get.snackbar('Erreur', 'Seuls les recruteurs ou clubs peuvent publier des offres');
+  // Publier une offre
+  Future<void> publierOffre(Offre offre, AppUser utilisateur) async {
+    if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
+      Get.snackbar('Accès refusé', 'Seuls les clubs ou recruteurs peuvent publier des offres.');
       return;
     }
 
     try {
-      String id = FirebaseFirestore.instance.collection('offres').doc().id;
-
-      Offre newOffre = Offre(
-        id: id,
-        titre: titre,
-        description: description,
-        dateDebut: dateDebut,
-        dateFin: dateFin,
-        recruteur: recruteur,
-        candidats: [],
-        statut: 'ouverte',
-      );
-
-      await FirebaseFirestore.instance.collection('offres').doc(id).set(newOffre.toMap());
-      await getAllOffres();  // Rafraîchir la liste des offres
-      Get.snackbar('Succès', 'Offre publiée avec succès');
+      await FirebaseFirestore.instance.collection('offres').doc(offre.id).set(offre.toMap());
+      Get.snackbar('Succès', 'Offre publiée avec succès.');
     } catch (e) {
       Get.snackbar('Erreur', 'Impossible de publier l\'offre : $e');
     }
   }
 
-  // Modifier une offre existante, y compris la fermeture
-  Future<void> modifierOffre(String id, String titre, String description, DateTime dateDebut, DateTime dateFin, {String? statut}) async {
-    try {
-      Map<String, dynamic> updateData = {
-        'titre': titre,
-        'description': description,
-        'dateDebut': dateDebut,
-        'dateFin': dateFin,
-      };
-
-      if (statut != null) {
-        updateData['statut'] = statut;  // Mettre à jour le statut si fourni
-      }
-
-      await FirebaseFirestore.instance.collection('offres').doc(id).update(updateData);
-      await getAllOffres();  // Rafraîchir la liste des offres après modification
-      Get.snackbar('Succès', 'Offre modifiée avec succès');
-    } catch (e) {
-      Get.snackbar('Erreur', 'Erreur lors de la modification de l\'offre : $e');
-    }
-  }
-
-  // Supprimer une offre existante avec confirmation
-  Future<void> supprimerOffre(String id) async {
-    try {
-      await FirebaseFirestore.instance.collection('offres').doc(id).delete();
-      await getAllOffres();  // Rafraîchir la liste des offres après suppression
-      Get.snackbar('Succès', 'Offre supprimée avec succès');
-    } catch (e) {
-      Get.snackbar('Erreur', 'Erreur lors de la suppression de l\'offre : $e');
-    }
-  }
-
-  // Méthode pour permettre à un joueur de postuler à une offre
-  Future<void> postulerOffre(Offre offre) async {
-    AppUser? joueur = AuthController.instance.user;
-
-    if (joueur == null || joueur.role != 'joueur') {
-      Get.snackbar('Erreur', 'Seuls les joueurs peuvent postuler à cette offre');
-      return;
-    }
-
-    // Vérifier si l'offre est fermée
-    if (offre.statut == 'Fermée') {
-      Get.snackbar('Erreur', 'Cette offre est fermée.');
+  // Modifier une offre existante
+  Future<void> modifierOffre(Offre offre, AppUser utilisateur) async {
+    if (utilisateur.uid != offre.recruteur.uid) {
+      Get.snackbar('Accès refusé', 'Vous ne pouvez modifier que vos propres offres.');
       return;
     }
 
     try {
-      if (!offre.candidats.any((c) => c.uid == joueur.uid)) {
-        offre.candidats.add(joueur);
-
-        // Mettre à jour les candidats de l'offre dans Firestore
-        await FirebaseFirestore.instance
-            .collection('offres')
-            .doc(offre.id)
-            .update({
-          'candidats': offre.candidats.map((c) => c.toMap()).toList(),
-        });
-
-        Get.snackbar('Succès', 'Vous avez postulé à l\'offre');
-      } else {
-        Get.snackbar('Erreur', 'Vous avez déjà postulé à cette offre');
-      }
+      await FirebaseFirestore.instance.collection('offres').doc(offre.id).update(offre.toMap());
+      Get.snackbar('Succès', 'Offre modifiée avec succès.');
     } catch (e) {
-      Get.snackbar('Erreur', 'Erreur lors de la soumission de candidature : $e');
+      Get.snackbar('Erreur', 'Impossible de modifier l\'offre : $e');
     }
   }
 
-  // Fermer une offre manuellement
-  Future<void> fermerOffre(String id) async {
+  // Supprimer une offre avec confirmation
+  Future<void> supprimerOffre(String offreId, AppUser utilisateur, Offre offre) async {
+    if (utilisateur.uid != offre.recruteur.uid) {
+      Get.snackbar('Accès refusé', 'Vous ne pouvez supprimer que vos propres offres.');
+      return;
+    }
+
     try {
-      await FirebaseFirestore.instance.collection('offres').doc(id).update({
-        'statut': 'Fermée',
+      await FirebaseFirestore.instance.collection('offres').doc(offreId).delete();
+      Get.snackbar('Succès', 'Offre supprimée avec succès.');
+    } catch (e) {
+      Get.snackbar('Erreur', 'Impossible de supprimer l\'offre : $e');
+    }
+  }
+
+  // Permettre aux joueurs de postuler à une offre
+  Future<void> postulerOffre(AppUser joueur, Offre offre) async {
+    if (joueur.role != 'joueur') {
+      Get.snackbar('Accès refusé', 'Seuls les joueurs peuvent postuler à une offre.');
+      return;
+    }
+    if (offre.statut == 'fermée') {
+      Get.snackbar('Offre fermée', 'Vous ne pouvez pas postuler à une offre fermée.');
+      return;
+    }
+
+    // Vérifier si le joueur a déjà postulé
+    bool dejaPostule = offre.candidats.any((c) => c.uid == joueur.uid);
+    if (dejaPostule) {
+      Get.snackbar('Postulation existante', 'Vous avez déjà postulé à cette offre.');
+      return;
+    }
+
+    try {
+      final candidats = [...offre.candidats, joueur];
+      await FirebaseFirestore.instance.collection('offres').doc(offre.id).update({
+        'candidats': candidats.map((c) => c.toMap()).toList(),
       });
-      await getAllOffres();
-      Get.snackbar('Succès', 'L\'offre a été fermée avec succès');
+      Get.snackbar('Succès', 'Vous avez postulé à l\'offre.');
     } catch (e) {
-      Get.snackbar('Erreur', 'Erreur lors de la fermeture de l\'offre : $e');
+      Get.snackbar('Erreur', 'Impossible de postuler : $e');
+    }
+  }
+
+  // Permettre aux joueurs d'annuler leur postulation
+  Future<void> annulerPostulation(AppUser joueur, Offre offre) async {
+    if (joueur.role != 'joueur') {
+      Get.snackbar('Accès refusé', 'Seuls les joueurs peuvent annuler leur postulation.');
+      return;
+    }
+
+    try {
+      final candidats = offre.candidats.where((c) => c.uid != joueur.uid).toList();
+      await FirebaseFirestore.instance.collection('offres').doc(offre.id).update({
+        'candidats': candidats.map((c) => c.toMap()).toList(),
+      });
+      Get.snackbar('Succès', 'Postulation annulée avec succès.');
+    } catch (e) {
+      Get.snackbar('Erreur', 'Impossible d\'annuler la postulation : $e');
+    }
+  }
+
+  // Changer le statut d'une offre (ouverte/fermée)
+  Future<void> changerStatutOffre(Offre offre, AppUser utilisateur, String statut) async {
+    if (utilisateur.uid != offre.recruteur.uid) {
+      Get.snackbar('Accès refusé', 'Vous ne pouvez changer le statut que de vos propres offres.');
+      return;
+    }
+
+    try {
+      offre.statut = statut;
+      await FirebaseFirestore.instance.collection('offres').doc(offre.id).update({
+        'statut': statut,
+      });
+      Get.snackbar('Succès', 'Le statut de l\'offre a été mis à jour : $statut.');
+      update();
+    } catch (e) {
+      Get.snackbar('Erreur', 'Impossible de changer le statut : $e');
+    }
+  }
+
+  // Récupérer la liste des candidats pour une offre
+  Future<List<AppUser>> fetchCandidats(Offre offre) async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('offres').doc(offre.id).get();
+      final data = doc.data();
+      if (data == null) return [];
+      final candidats = List<AppUser>.from(
+        (data['candidats'] as List<dynamic>?)?.map((c) => AppUser.fromMap(c)) ?? [],
+      );
+      return candidats;
+    } catch (e) {
+      Get.snackbar('Erreur', 'Impossible de récupérer les candidats : $e');
+      return [];
     }
   }
 }
