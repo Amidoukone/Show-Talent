@@ -101,6 +101,7 @@ class _MainScreenState extends State<MainScreen> {
             );
           },
           backgroundColor: const Color(0xFF214D4F),
+          foregroundColor: Colors.white,
           child: const Icon(Icons.add),
         );
       }
