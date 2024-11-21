@@ -4,6 +4,7 @@ import 'package:show_talent/controller/offre_controller.dart';
 import 'package:show_talent/controller/user_controller.dart';
 import 'package:show_talent/models/offre.dart';
 import 'package:show_talent/screens/offres_form.dart';
+import 'package:show_talent/screens/profile_screen.dart';
 
 class OffreScreen extends StatelessWidget {
   final OffreController offreController = Get.put(OffreController());
@@ -18,7 +19,7 @@ class OffreScreen extends StatelessWidget {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: Colors.teal,
+        backgroundColor: const Color(0xFF214D4F),
       ),
       body: Obx(() {
         final offres = offreController.offres;
@@ -60,8 +61,6 @@ class OffreScreen extends StatelessWidget {
                           Text(
                             offre.description,
                             style: const TextStyle(fontSize: 14, color: Colors.black87),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 2, // Limite la description pour éviter le débordement
                           ),
                           const SizedBox(height: 8),
                           Row(
@@ -82,7 +81,7 @@ class OffreScreen extends StatelessWidget {
                                   label: const Text('Voir les candidats'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.teal.shade700,
-                                    foregroundColor: Colors.white, // Texte blanc
+                                    foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                   ),
                                 ),
@@ -90,7 +89,7 @@ class OffreScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           if (isOwner)
-                            Wrap( // Utilisation de Wrap pour éviter le débordement horizontal
+                            Wrap(
                               spacing: 8.0,
                               runSpacing: 4.0,
                               children: [
@@ -129,7 +128,10 @@ class OffreScreen extends StatelessWidget {
                                 backgroundColor: Colors.teal,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
-                              child: const Text('Postuler'),
+                              child: const Text(
+                                'Postuler',
+                                style: TextStyle(color: Colors.white), // Texte en blanc
+                              ),
                             ),
                         ],
                       ),
@@ -146,6 +148,7 @@ class OffreScreen extends StatelessWidget {
               Get.to(() => OffreFormScreen());
             },
             backgroundColor: Colors.teal,
+            foregroundColor: Colors.white,
             child: const Icon(Icons.add),
           );
         }
@@ -198,23 +201,32 @@ class OffreScreen extends StatelessWidget {
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.teal),
             ),
             const SizedBox(height: 10),
-            ...offre.candidats.map((candidat) => Card(
-                  margin: const EdgeInsets.symmetric(vertical: 4.0),
-                  elevation: 2.0,
-                  child: ListTile(
-                    title: Text(candidat.nom),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: offre.candidats.map((candidat) {
+                  return GestureDetector(
+                    onTap: () {
+                      Get.to(() => ProfileScreen(uid: candidat.uid, isReadOnly: true));
+                    },
+                    child: Column(
                       children: [
-                        Text('Email : ${candidat.email}'),
+                        CircleAvatar(
+                          radius: 30,
+                          backgroundImage: NetworkImage(candidat.photoProfil),
+                        ),
+                        const SizedBox(height: 5),
                         Text(
-                          'Position : ${candidat.position ?? 'Position inconnue'}',
-                          style: const TextStyle(color: Colors.grey),
+                          candidat.nom,
+                          style: const TextStyle(fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                  ),
-                )),
+                  );
+                }).toList(),
+              ),
+            ),
           ],
         ),
       ),

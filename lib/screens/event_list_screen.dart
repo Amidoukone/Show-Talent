@@ -17,8 +17,9 @@ class EventListScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Événements'),
+        title: const Text('Liste des événements'),
         backgroundColor: const Color(0xFF214D4F),
+        centerTitle: true,
       ),
       body: Obx(() {
         if (eventController.events.isEmpty) {
