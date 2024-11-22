@@ -114,6 +114,7 @@ class _MainScreenState extends State<MainScreen> {
             Get.to(() => OffreFormScreen());
           },
           backgroundColor: const Color(0xFF214D4F),
+          foregroundColor: Colors.white,
           child: const Icon(Icons.add),
         );
       }
