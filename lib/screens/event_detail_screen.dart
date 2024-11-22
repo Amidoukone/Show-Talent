@@ -64,7 +64,7 @@ class EventDetailsScreen extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
-                color: Colors.teal,
+                color: Color.fromARGB(255, 5, 12, 3),
               ),
             ),
             const SizedBox(height: 16),

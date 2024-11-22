@@ -54,7 +54,7 @@ class OffreScreen extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.teal,
+                              color: Color.fromARGB(255, 12, 40, 37),
                             ),
                           ),
                           const SizedBox(height: 8),
