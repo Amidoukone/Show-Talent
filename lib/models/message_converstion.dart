@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// Modèle représentant un message entre deux utilisateurs
 class Message {
   final String id;
   final String expediteurId; // ID de l'expéditeur
@@ -17,7 +18,7 @@ class Message {
     required this.estLu,
   });
 
-  // Convertir un objet Message en Map pour Firestore
+  /// Convertir un objet Message en Map pour Firestore
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -29,7 +30,7 @@ class Message {
     };
   }
 
-  // Créer un objet Message à partir des données Firestore
+  /// Créer un objet Message à partir des données Firestore
   factory Message.fromMap(Map<String, dynamic> map) {
     return Message(
       id: map['id'] ?? '',
@@ -42,13 +43,14 @@ class Message {
   }
 }
 
+/// Modèle représentant une conversation entre deux utilisateurs
 class Conversation {
   final String id;
-  final String utilisateur1Id;
-  final String utilisateur2Id;
-  final List<String> utilisateurIds;
-  String? lastMessage;
-  DateTime? lastMessageDate;
+  final String utilisateur1Id; // ID du premier utilisateur
+  final String utilisateur2Id; // ID du second utilisateur
+  final List<String> utilisateurIds; // IDs des participants
+  String? lastMessage; // Dernier message de la conversation
+  DateTime? lastMessageDate; // Date du dernier message
 
   Conversation({
     required this.id,
@@ -59,7 +61,7 @@ class Conversation {
     this.lastMessageDate,
   });
 
-  // Convertir un objet Conversation en Map pour Firestore
+  /// Convertir un objet Conversation en Map pour Firestore
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -71,7 +73,7 @@ class Conversation {
     };
   }
 
-  // Créer un objet Conversation à partir des données Firestore
+  /// Créer un objet Conversation à partir des données Firestore
   factory Conversation.fromMap(Map<String, dynamic> map) {
     return Conversation(
       id: map['id'] ?? '',
@@ -83,5 +85,11 @@ class Conversation {
           ? (map['lastMessageDate'] as Timestamp).toDate()
           : null,
     );
+  }
+
+  /// Met à jour le dernier message et sa date
+  void updateLastMessage(String message, DateTime date) {
+    lastMessage = message;
+    lastMessageDate = date;
   }
 }
