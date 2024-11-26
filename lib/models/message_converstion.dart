@@ -51,6 +51,7 @@ class Conversation {
   final List<String> utilisateurIds; // IDs des participants
   String? lastMessage; // Dernier message de la conversation
   DateTime? lastMessageDate; // Date du dernier message
+  int unreadMessagesCount; // Nombre de messages non lus dans la conversation
 
   Conversation({
     required this.id,
@@ -59,6 +60,7 @@ class Conversation {
     required this.utilisateurIds,
     this.lastMessage,
     this.lastMessageDate,
+    this.unreadMessagesCount = 0,
   });
 
   /// Convertir un objet Conversation en Map pour Firestore

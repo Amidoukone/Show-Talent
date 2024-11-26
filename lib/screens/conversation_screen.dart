@@ -1,124 +1,165 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/chat_controller.dart';
-import 'package:show_talent/models/user.dart';
-import 'package:show_talent/screens/chat_screen.dart';
-import 'package:show_talent/screens/select_user_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:show_talent/models/message_converstion.dart';
+import '../controller/auth_controller.dart';
+import '../controller/chat_controller.dart';
+import '../models/user.dart';
+import 'chat_screen.dart';
+import 'select_user_screen.dart';
 
-class ConversationsScreen extends StatelessWidget {
+class ConversationsScreen extends StatefulWidget {
+  @override
+  _ConversationsScreenState createState() => _ConversationsScreenState();
+}
+
+class _ConversationsScreenState extends State<ConversationsScreen> {
   final ChatController chatController = Get.put(ChatController());
-
-  ConversationsScreen({super.key});
+  final TextEditingController searchController = TextEditingController();
+  RxString searchTerm = ''.obs;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Conversations')),
+      appBar: AppBar(
+        title: const Text("Conversations"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              _showSearchBar();
+            },
+          ),
+        ],
+      ),
       body: Obx(() {
         if (chatController.conversations.isEmpty) {
-          return const Center(child: Text('Aucune conversation disponible.'));
+          return const Center(child: Text("Aucune conversation."));
         }
 
-        // Trier les conversations par ordre décroissant de date
-        final sortedConversations = chatController.conversations
-          ..sort((a, b) => b.lastMessageDate?.compareTo(a.lastMessageDate ?? DateTime(0)) ?? 0);
+        // Filtrer les conversations selon le terme de recherche
+        final filteredConversations = chatController.conversations.where((conversation) {
+          String otherUserId = conversation.utilisateurIds.firstWhere(
+            (id) => id != AuthController.instance.user?.uid,
+            orElse: () => '',
+          );
+
+          final otherUser = _getOtherUser(otherUserId);
+          if (otherUser != null) {
+            return otherUser.nom.toLowerCase().contains(searchTerm.value.toLowerCase());
+          }
+          return false;
+        }).toList();
+
+        if (filteredConversations.isEmpty) {
+          return const Center(child: Text("Aucune conversation trouvée."));
+        }
+
+        // Trier les conversations par `lastMessageDate`
+        filteredConversations.sort((a, b) =>
+            b.lastMessageDate?.compareTo(a.lastMessageDate ?? DateTime(0)) ?? 0);
 
         return ListView.builder(
-          itemCount: sortedConversations.length,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+          itemCount: filteredConversations.length,
           itemBuilder: (context, index) {
-            var conversation = sortedConversations[index];
-            var currentUser = chatController.currentUser;
+            Conversation conversation = filteredConversations[index];
+            String otherUserId = conversation.utilisateurIds.firstWhere(
+              (id) => id != AuthController.instance.user?.uid,
+              orElse: () => '',
+            );
 
-            // Identifie l'autre utilisateur dans la conversation
-            String otherUserId = conversation.utilisateur1Id == currentUser.uid
-                ? conversation.utilisateur2Id
-                : conversation.utilisateur1Id;
+            if (otherUserId.isEmpty) {
+              return const ListTile(
+                title: Text("Utilisateur inconnu"),
+              );
+            }
 
-            return FutureBuilder<AppUser?>(
-              future: chatController.getUserById(otherUserId),
+            return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(otherUserId)
+                  .get(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const SizedBox.shrink();
-                }
-
-                if (snapshot.data == null) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const ListTile(
-                    title: Text('Utilisateur introuvable'),
+                    title: Text("Chargement..."),
                   );
                 }
 
-                var otherUser = snapshot.data!;
+                if (!snapshot.hasData || snapshot.data == null) {
+                  return const ListTile(
+                    title: Text("Utilisateur inconnu"),
+                  );
+                }
 
-                return FutureBuilder<int>(
-                  future: chatController.getUnreadMessagesCount(conversation.id), 
-                  builder: (context, unreadSnapshot) {
-                    int unreadCount = unreadSnapshot.data ?? 0;
+                // Convertir les données Firestore en AppUser
+                final Map<String, dynamic>? userData =
+                    snapshot.data?.data() as Map<String, dynamic>?;
+                if (userData == null) {
+                  return const ListTile(
+                    title: Text("Erreur utilisateur"),
+                  );
+                }
 
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Card(
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            radius: 25,
-                            backgroundImage: NetworkImage(otherUser.photoProfil),
-                            onBackgroundImageError: (_, __) =>
-                                const Icon(Icons.person, size: 30),
-                          ),
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          title: Text(
-                            otherUser.nom,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          subtitle: Text(
-                            'Dernier message: ${conversation.lastMessage ?? ''}',
-                            style: const TextStyle(
-                              color: Colors.grey,
-                              fontSize: 14,
-                            ),
-                          ),
-                          trailing: unreadCount > 0
-                              ? CircleAvatar(
-                                  backgroundColor: Colors.red,
-                                  radius: 12,
-                                  child: Text(
-                                    unreadCount.toString(),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                )
-                              : null,
-                          onTap: () async {
-                            // Marquer les messages comme "Lu"
-                            await chatController.markMessagesAsRead(conversation.id);
+                final AppUser otherUser = AppUser.fromMap(userData);
 
-                            // Ouvrir l'écran de chat et mettre à jour les badges
-                            final result = await Get.to(() => ChatScreen(
-                                  conversationId: conversation.id,
-                                  currentUser: currentUser,
-                                  otherUserId: otherUserId,
-                                ));
+                // Calcul du nombre de messages non lus
+                final int unreadCount = conversation.unreadMessagesCount;
 
-                            if (result == true) {
-                              // Mettre à jour les conversations
-                              chatController.fetchConversations();
-                            }
-                          },
-                        ),
-                      ),
-                    );
+                return GestureDetector(
+                  onLongPress: () {
+                    _confirmDelete(conversation.id);
                   },
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      radius: 25,
+                      backgroundImage: otherUser.photoProfil.isNotEmpty
+                          ? NetworkImage(otherUser.photoProfil)
+                          : null,
+                      child: otherUser.photoProfil.isEmpty
+                          ? Text(
+                              otherUser.nom.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(color: Colors.black, fontSize: 18),
+                            )
+                          : null,
+                    ),
+                    title: Text(
+                      otherUser.nom,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: Text(
+                      conversation.lastMessage ?? "Aucun message",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                    trailing: unreadCount > 0
+                        ? Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color.fromARGB(255, 13, 69, 55),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              "$unreadCount",
+                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                            ),
+                          )
+                        : null,
+                    onTap: () async {
+                      // Marquer les messages comme lus
+                      if (unreadCount > 0) {
+                        await chatController.markMessagesAsRead(conversation.id, AuthController.instance.user!.uid);
+                      }
+
+                      // Redirection vers l'écran de chat
+                      Get.to(() => ChatScreen(
+                            conversationId: conversation.id,
+                            otherUser: otherUser,
+                          ));
+                    },
+                  ),
                 );
               },
             );
@@ -127,12 +168,86 @@ class ConversationsScreen extends StatelessWidget {
       }),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
+          // Redirige vers l'écran de sélection d'utilisateur
           Get.to(() => const SelectUserScreen());
         },
-        tooltip: 'Nouvelle conversation',
-        backgroundColor: Colors.green[800],
-        child: const Icon(Icons.chat, color: Colors.white),
+        backgroundColor: const Color.fromARGB(255, 20, 147, 4), // Couleur verte claire
+        child: const Icon(Icons.message, color: Colors.white),
       ),
     );
+  }
+
+  /// Formater la date pour un affichage simplifié
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    if (now.difference(date).inDays == 0) {
+      return "${date.hour}:${date.minute.toString().padLeft(2, '0')}";
+    } else {
+      return "${date.day}/${date.month}/${date.year}";
+    }
+  }
+
+  /// Afficher la barre de recherche
+  void _showSearchBar() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Recherche"),
+        content: TextField(
+          controller: searchController,
+          decoration: const InputDecoration(hintText: "Rechercher une conversation"),
+          onChanged: (value) {
+            searchTerm.value = value;
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              searchController.clear();
+              searchTerm.value = '';
+              Navigator.of(context).pop();
+            },
+            child: const Text("Annuler"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Confirmer la suppression d'une conversation
+  void _confirmDelete(String conversationId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Supprimer la conversation"),
+        content: const Text("Voulez-vous vraiment supprimer cette conversation ?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          TextButton(
+            onPressed: () {
+              chatController.deleteConversation(conversationId);
+              Navigator.pop(context);
+            },
+            child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Récupérer les données de l'autre utilisateur
+  AppUser? _getOtherUser(String userId) {
+    try {
+      return AppUser.fromMap({
+        "nom": "Exemple",
+        "photoProfil": "",
+      });
+    } catch (e) {
+      print("Erreur lors de la récupération de l'utilisateur : $e");
+      return null;
+    }
   }
 }
