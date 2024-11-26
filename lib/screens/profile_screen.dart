@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:show_talent/controller/auth_controller.dart';
+import 'package:show_talent/controller/chat_controller.dart';
 import 'package:show_talent/controller/profile_controller.dart';
 import 'package:show_talent/controller/video_controller.dart';
 import 'package:show_talent/models/user.dart';
 import 'package:show_talent/models/video.dart';
-import 'package:show_talent/screens/edit_profil_screen.dart';
 import 'package:show_talent/screens/chat_screen.dart';
+import 'package:show_talent/screens/edit_profil_screen.dart';
 import 'package:show_talent/screens/video_player_screen.dart';
-import 'package:show_talent/controller/chat_controller.dart';
-import 'package:image_picker/image_picker.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String uid;
@@ -24,7 +24,7 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     _profileController.updateUserId(uid);
-    _videoController.fetchVideos(); // Charger les vidéos.
+    _videoController.fetchVideos(); // Charger les vidéos de l'utilisateur.
 
     return GetBuilder<ProfileController>(builder: (controller) {
       if (controller.user == null) {
@@ -38,10 +38,14 @@ class ProfileScreen extends StatelessWidget {
 
       return Scaffold(
         appBar: AppBar(
-          title: Text(user.nom, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
+          title: Text(
+            user.nom,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          ),
           centerTitle: true,
           backgroundColor: const Color(0xFF214D4F),
           actions: [
+            // Bouton pour modifier le profil (propriétaire uniquement)
             if (!isReadOnly && isOwnProfile)
               IconButton(
                 icon: const Icon(Icons.edit, color: Colors.white),
@@ -49,70 +53,71 @@ class ProfileScreen extends StatelessWidget {
                   Get.to(() => EditProfileScreen(user: user));
                 },
               ),
+            // Bouton pour envoyer un message (profil d'un autre utilisateur uniquement)
             if (!isOwnProfile)
               IconButton(
                 icon: const Icon(Icons.message, color: Colors.white),
                 onPressed: () async {
+                  // Récupérer ou créer une conversation
                   String conversationId = await _chatController.createOrGetConversation(
                     currentUserId: AuthController.instance.user!.uid,
                     otherUserId: user.uid,
                   );
+
+                  // Naviguer vers l'écran de discussion
                   Get.to(() => ChatScreen(
                         conversationId: conversationId,
-                        currentUser: AuthController.instance.user!,
-                        otherUserId: user.uid,
+                        otherUser: user, // Passe l'utilisateur complet
                       ));
                 },
               ),
           ],
         ),
         body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Section Photo de Profil
-                  _buildProfilePhotoSection(user, isReadOnly),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Section Photo de Profil
+                _buildProfilePhotoSection(user, isReadOnly),
 
-                  const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-                  // Section des stats Followers / Followings
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildStatItem('Followers', user.followersList.length),
-                      const SizedBox(width: 20),
-                      _buildStatItem('Followings', user.followingsList.length),
-                    ],
+                // Section des statistiques (Followers/Followings)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildStatItem('Followers', user.followersList.length),
+                    const SizedBox(width: 20),
+                    _buildStatItem('Followings', user.followingsList.length),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Biographie de l'utilisateur
+                if (user.bio != null && user.bio!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      user.bio!,
+                      style: const TextStyle(fontSize: 16, color: Colors.black87),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
 
+                const SizedBox(height: 20),
+
+                // Informations spécifiques au rôle
+                _buildUserRoleInfo(user),
+
+                // Section Vidéos (affichée uniquement pour les joueurs)
+                if (user.role == 'joueur') ...[
                   const SizedBox(height: 20),
-
-                  // Biographie de l'utilisateur
-                  if (user.bio != null && user.bio!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: Text(
-                        user.bio!,
-                        style: const TextStyle(fontSize: 16, color: Colors.black87),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-
-                  const SizedBox(height: 20),
-
-                  // Informations spécifiques au rôle
-                  _buildUserRoleInfo(user),
-
-                  // Section Vidéos affichée uniquement pour les joueurs
-                  if (user.role == 'joueur') ...[
-                    const SizedBox(height: 20),
-                    _buildVideosSection(user),
-                  ],
+                  _buildVideosSection(user),
                 ],
-              ),
+              ],
             ),
           ),
         ),
@@ -120,7 +125,7 @@ class ProfileScreen extends StatelessWidget {
     });
   }
 
-  // Méthode pour afficher la photo de profil stylisée
+  /// Section Photo de Profil
   Widget _buildProfilePhotoSection(AppUser user, bool isReadOnly) {
     return Stack(
       alignment: Alignment.center,
@@ -139,9 +144,11 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
         GestureDetector(
-          onTap: isReadOnly ? null : () async {
-            await _showProfilePhotoOptions(Get.context!, user);
-          },
+          onTap: isReadOnly
+              ? null
+              : () async {
+                  await _showProfilePhotoOptions(Get.context!, user);
+                },
           child: Obx(() => CircleAvatar(
                 radius: 60,
                 backgroundImage: _profileController.isLoadingPhoto.value
@@ -158,7 +165,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Méthode pour afficher une statistique
+  /// Section d'une statistique (Followers / Followings)
   Widget _buildStatItem(String label, int value) {
     return Column(
       children: [
@@ -175,7 +182,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Méthode pour afficher les vidéos du joueur
+  /// Section des vidéos publiées par le joueur
   Widget _buildVideosSection(AppUser user) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,7 +193,6 @@ class ProfileScreen extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Obx(() {
-          // Filtrer les vidéos par UID
           List<Video> userVideos = _videoController.videoList
               .where((video) => video.uid == user.uid)
               .toList();
@@ -195,7 +201,6 @@ class ProfileScreen extends StatelessWidget {
             return const Text('Aucune vidéo publiée.', style: TextStyle(fontSize: 16));
           }
 
-          // Affichage des miniatures des vidéos
           return GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -209,7 +214,6 @@ class ProfileScreen extends StatelessWidget {
               Video video = userVideos[index];
               return GestureDetector(
                 onTap: () {
-                  // Naviguer vers un lecteur vidéo
                   Get.to(() => VideoPlayerScreen(videoUrl: video.videoUrl, video: video));
                 },
                 child: ClipRRect(
@@ -228,7 +232,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  // Méthode pour afficher les informations spécifiques à l'utilisateur
+  /// Informations spécifiques au rôle de l'utilisateur
   Widget _buildUserRoleInfo(AppUser user) {
     switch (user.role) {
       case 'joueur':
@@ -262,7 +266,7 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
-  // Méthode pour afficher les options de changement de photo de profil
+  /// Options pour changer la photo de profil
   Future<void> _showProfilePhotoOptions(BuildContext context, AppUser user) async {
     final ImagePicker picker = ImagePicker();
     showModalBottomSheet(

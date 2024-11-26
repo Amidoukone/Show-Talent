@@ -74,13 +74,11 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                         otherUserId: user.uid,
                       );
 
-
                       // Redirection vers ChatScreen après la création de la conversation
                       Get.to(() => ChatScreen(
-                        conversationId: conversationId,
-                        currentUser: chatController.currentUser,
-                        otherUserId: user.uid,
-                      ));
+                            conversationId: conversationId,
+                            otherUser: user, // Passer l'objet utilisateur sélectionné
+                          ));
                     },
                   );
                 },

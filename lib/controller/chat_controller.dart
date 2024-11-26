@@ -1,256 +1,213 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/push_notification.dart';
-import 'package:show_talent/controller/user_controller.dart';
 import 'package:show_talent/models/message_converstion.dart';
-import 'package:show_talent/models/user.dart';
+import 'package:show_talent/controller/auth_controller.dart';
 
 class ChatController extends GetxController {
-  final RxList<Conversation> _conversations = <Conversation>[].obs;
-  List<Conversation> get conversations => _conversations;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final RxList<Message> _messages = <Message>[].obs;
-  List<Message> get messages => _messages;
-
-  late AppUser currentUser;
-  final Map<String, AppUser> _userCache = {};
+  final Rx<List<Conversation>> _conversations = Rx<List<Conversation>>([]);
+  List<Conversation> get conversations => _conversations.value;
 
   @override
   void onInit() {
     super.onInit();
-    _initializeCurrentUser();
-    fetchConversations();
+    _fetchUserConversations();
   }
 
-  // Initialiser l'utilisateur courant à partir du UserController
-  void _initializeCurrentUser() {
-    try {
-      currentUser = Get.find<UserController>().user!;
-    } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de charger les informations utilisateur.');
-    }
-  }
+  /// Récupérer les conversations pour l'utilisateur actuel
+  void _fetchUserConversations() {
+    final currentUserId = AuthController.instance.user?.uid;
+    if (currentUserId == null) return;
 
-  // Récupérer toutes les conversations associées à l'utilisateur actuel
-  void fetchConversations() {
-    FirebaseFirestore.instance
+    _firestore
         .collection('conversations')
-        .where('utilisateurIds', arrayContains: currentUser.uid)
-        .snapshots()
-        .listen((snapshot) {
-      _conversations.value = snapshot.docs.map((doc) {
-        return Conversation.fromMap(doc.data());
-      }).toList();
-    }, onError: (e) {
-      Get.snackbar('Erreur', 'Impossible de récupérer les conversations.');
-    });
-  }
-
-  // Récupérer les messages d'une conversation spécifique
-  void fetchMessages(String conversationId) {
-    FirebaseFirestore.instance
-        .collection('conversations')
-        .doc(conversationId)
-        .collection('messages')
-        .orderBy('dateEnvoi', descending: false)
+        .where('utilisateurIds', arrayContains: currentUserId)
         .snapshots()
         .listen((snapshot) async {
-      List<Message> loadedMessages = snapshot.docs.map((doc) {
-        return Message.fromMap(doc.data());
-      }).toList();
+      // Met à jour les conversations avec le calcul des messages non lus
+      _conversations.value = await Future.wait(snapshot.docs.map((doc) async {
+        final conversationData = doc.data() as Map<String, dynamic>;
+        final conversation = Conversation.fromMap(conversationData);
 
-      _messages.value = loadedMessages;
+        // Calculer les messages non lus pour cette conversation
+        final unreadCount = await _getUnreadMessageCount(doc.id, currentUserId);
+        conversation.unreadMessagesCount = unreadCount;
 
-      // Marquer les messages reçus comme lus
-      await _markUnreadMessagesAsRead(conversationId, loadedMessages);
-    }, onError: (e) {
-      Get.snackbar('Erreur', 'Impossible de récupérer les messages.');
+        return conversation;
+      }).toList());
     });
   }
 
-  // Marquer les messages non lus comme lus
-  Future<void> _markUnreadMessagesAsRead(String conversationId, List<Message> messages) async {
+  /// Compter les messages non lus pour un utilisateur dans une conversation
+  Future<int> _getUnreadMessageCount(String conversationId, String userId) async {
     try {
-      for (Message message in messages) {
-        if (message.destinataireId == currentUser.uid && !message.estLu) {
-          await FirebaseFirestore.instance
-              .collection('conversations')
-              .doc(conversationId)
-              .collection('messages')
-              .doc(message.id)
-              .update({'estLu': true});
-        }
-      }
+      final snapshot = await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .where('destinataireId', isEqualTo: userId)
+          .where('estLu', isEqualTo: false)
+          .get();
+      return snapshot.docs.length;
     } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de marquer les messages comme lus.');
+      print("Erreur lors du comptage des messages non lus : $e");
+      return 0;
     }
   }
 
-  // Créer une nouvelle conversation ou obtenir une existante
+  /// Créer ou récupérer une conversation existante
   Future<String> createOrGetConversation({
     required String currentUserId,
     required String otherUserId,
   }) async {
     try {
-      // Vérifier si une conversation existe déjà
-      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+      // Vérifier les conversations existantes
+      final query = await _firestore
           .collection('conversations')
           .where('utilisateurIds', arrayContains: currentUserId)
           .get();
 
-      for (var doc in querySnapshot.docs) {
-        List<dynamic> utilisateurIds = doc['utilisateurIds'];
+      for (var doc in query.docs) {
+        final utilisateurIds = List<String>.from(doc['utilisateurIds'] ?? []);
         if (utilisateurIds.contains(otherUserId)) {
-          return doc.id; // Retourner l'identifiant de la conversation existante
+          return doc.id;
         }
       }
 
-      // Si aucune conversation n'existe, en créer une nouvelle
-      DocumentReference conversationRef = FirebaseFirestore.instance.collection('conversations').doc();
-
-      await conversationRef.set({
-        'id': conversationRef.id,
-        'utilisateurIds': [currentUserId, otherUserId],
-        'lastMessage': '',
-        'lastMessageDate': Timestamp.now(),
-      });
-
-      return conversationRef.id; // Retourner l'identifiant de la nouvelle conversation
+      // Créer une nouvelle conversation si aucune n'existe
+      final conversationRef = await _firestore.collection('conversations').add(
+            Conversation(
+              id: '',
+              utilisateur1Id: currentUserId,
+              utilisateur2Id: otherUserId,
+              utilisateurIds: [currentUserId, otherUserId],
+            ).toMap(),
+          );
+      return conversationRef.id;
     } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de créer ou récupérer la conversation.');
+      print("Erreur lors de la création/récupération de la conversation : $e");
       rethrow;
     }
   }
 
-  // Obtenir le nombre de messages non lus
-  Future<int> getUnreadMessagesCount(String conversationId) async {
+  /// Récupérer les messages d'une conversation spécifique
+  Stream<List<Message>> getMessages(String conversationId) {
+    return _firestore
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .orderBy('dateEnvoi', descending: true)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        return Message.fromMap(doc.data() as Map<String, dynamic>);
+      }).toList();
+    });
+  }
+
+  /// Envoyer un message dans une conversation
+  Future<void> sendMessage({
+    required String conversationId,
+    required String senderId,
+    required String recipientId,
+    required String content,
+  }) async {
     try {
-      QuerySnapshot unreadMessagesSnapshot = await FirebaseFirestore.instance
+      final message = Message(
+        id: '',
+        expediteurId: senderId,
+        destinataireId: recipientId,
+        contenu: content,
+        dateEnvoi: DateTime.now(),
+        estLu: false,
+      );
+
+      // Ajouter le message dans Firestore
+      await _firestore
           .collection('conversations')
           .doc(conversationId)
           .collection('messages')
-          .where('destinataireId', isEqualTo: currentUser.uid)
+          .add(message.toMap());
+
+      // Mettre à jour les informations de la conversation
+      await _firestore.collection('conversations').doc(conversationId).update({
+        'lastMessage': content,
+        'lastMessageDate': Timestamp.now(),
+      });
+    } catch (e) {
+      print("Erreur lors de l'envoi du message : $e");
+    }
+  }
+
+  /// Marquer un message comme lu
+  Future<void> markMessageAsRead({
+    required String conversationId,
+    required String messageId,
+  }) async {
+    try {
+      await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .doc(messageId)
+          .update({'estLu': true});
+    } catch (e) {
+      print("Erreur lors de la mise à jour du message : $e");
+    }
+  }
+
+  /// Marquer tous les messages non lus comme lus
+  Future<void> markMessagesAsRead(String conversationId, String userId) async {
+    try {
+      final unreadMessages = await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .where('destinataireId', isEqualTo: userId)
           .where('estLu', isEqualTo: false)
           .get();
 
-      return unreadMessagesSnapshot.docs.length;
-    } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de récupérer les messages non lus.');
-      return 0;
-    }
-  }
-
-  // Envoyer un message
-  Future<void> sendMessage(String conversationId, Message message) async {
-    try {
-      DocumentReference messageRef = FirebaseFirestore.instance
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .doc();
-
-      await messageRef.set({
-        ...message.toMap(),
-        'id': messageRef.id, // Ajouter l'ID généré automatiquement
-      });
-
-      await FirebaseFirestore.instance.collection('conversations').doc(conversationId).update({
-        'lastMessage': message.contenu,
-        'lastMessageDate': Timestamp.fromDate(message.dateEnvoi),
-      });
-
-      // Notification push si nécessaire
-      await _sendNotificationToReceiver(message);
-    } catch (e) {
-      Get.snackbar('Erreur', 'Impossible d\'envoyer le message.');
-    }
-  }
-
-  // Envoyer une notification push au destinataire
-  Future<void> _sendNotificationToReceiver(Message message) async {
-    try {
-      DocumentSnapshot userSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(message.destinataireId)
-          .get();
-
-      if (userSnapshot.exists) {
-        String? fcmToken = userSnapshot.get('fcmToken');
-        if (fcmToken != null && fcmToken.isNotEmpty) {
-          await PushNotificationService.sendNotification(
-            title: 'Nouveau message de ${currentUser.nom}',
-            body: message.contenu,
-            token: fcmToken,
-            contextType: 'message',
-            contextData: message.expediteurId,
-          );
-        }
-      }
-    } catch (e) {
-      Get.snackbar('Erreur', 'Impossible d\'envoyer la notification push.');
-    }
-  }
-
-  // Marquer tous les messages non lus d'une conversation comme lus
-  Future<void> markMessagesAsRead(String conversationId) async {
-    try {
-      QuerySnapshot messagesSnapshot = await FirebaseFirestore.instance
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .where('destinataireId', isEqualTo: currentUser.uid)
-          .where('estLu', isEqualTo: false)
-          .get();
-
-      for (var doc in messagesSnapshot.docs) {
+      for (var doc in unreadMessages.docs) {
         await doc.reference.update({'estLu': true});
       }
     } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de marquer les messages comme lus.');
+      print("Erreur lors de la mise à jour des messages lus : $e");
     }
   }
 
-  // Récupérer un utilisateur par son ID avec mise en cache
-  Future<AppUser?> getUserById(String userId) async {
-    if (_userCache.containsKey(userId)) {
-      return _userCache[userId];
-    }
-
+  /// Supprimer un message dans une conversation
+  Future<void> deleteMessage(String conversationId, String messageId) async {
     try {
-      DocumentSnapshot userSnapshot =
-          await FirebaseFirestore.instance.collection('users').doc(userId).get();
-
-      if (userSnapshot.exists) {
-        AppUser user = AppUser.fromMap(userSnapshot.data() as Map<String, dynamic>);
-        _userCache[userId] = user;
-        return user;
-      } else {
-        return null;
-      }
+      await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .doc(messageId)
+          .delete();
     } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de récupérer les informations utilisateur.');
-      return null;
+      print("Erreur lors de la suppression du message : $e");
     }
   }
 
-  // Supprimer une conversation et tous ses messages
+  /// Supprimer une conversation entière (et ses messages)
   Future<void> deleteConversation(String conversationId) async {
     try {
-      var messagesSnapshot = await FirebaseFirestore.instance
+      // Supprimer tous les messages de la conversation
+      final snapshot = await _firestore
           .collection('conversations')
           .doc(conversationId)
           .collection('messages')
           .get();
 
-      for (var doc in messagesSnapshot.docs) {
+      for (var doc in snapshot.docs) {
         await doc.reference.delete();
       }
 
-      await FirebaseFirestore.instance.collection('conversations').doc(conversationId).delete();
-
-      Get.snackbar('Succès', 'Conversation supprimée avec succès.');
+      // Supprimer la conversation elle-même
+      await _firestore.collection('conversations').doc(conversationId).delete();
     } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de supprimer la conversation.');
+      print("Erreur lors de la suppression de la conversation : $e");
     }
   }
 }

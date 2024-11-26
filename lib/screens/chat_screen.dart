@@ -1,130 +1,134 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/chat_controller.dart';
+import 'package:show_talent/controller/auth_controller.dart';
 import 'package:show_talent/models/message_converstion.dart';
-import 'package:show_talent/models/user.dart';
+import '../controller/chat_controller.dart';
+import '../models/user.dart';
 
-class ChatScreen extends StatefulWidget {
+class ChatScreen extends StatelessWidget {
   final String conversationId;
-  final AppUser currentUser;
-  final String otherUserId;
+  final AppUser otherUser; // Utilisateur complet pour la conversation
+  final ChatController chatController = Get.find();
 
-  const ChatScreen({
-    super.key,
+  ChatScreen({
     required this.conversationId,
-    required this.currentUser,
-    required this.otherUserId,
+    required this.otherUser,
   });
 
-  @override
-  _ChatScreenState createState() => _ChatScreenState();
-}
-
-class _ChatScreenState extends State<ChatScreen> {
-  final ChatController chatController = Get.put(ChatController());
-  late Future<AppUser?> otherUser;
   final TextEditingController messageController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    otherUser = chatController.getUserById(widget.otherUserId);
-    chatController.fetchMessages(widget.conversationId);
-
-    // Écoute les modifications de la liste des messages et défile automatiquement
-    ever(chatController.messages as RxInterface<Object?>, (_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      }
-    });
-  }
-
-  // Widget pour afficher une bulle de message
-  Widget buildMessageBubble(Message message, bool isSentByCurrentUser) {
-    return Align(
-      alignment: isSentByCurrentUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-        decoration: BoxDecoration(
-          color: isSentByCurrentUser ? Colors.green[800] : Colors.grey.shade300,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(12),
-            topRight: const Radius.circular(12),
-            bottomLeft: isSentByCurrentUser ? const Radius.circular(12) : Radius.zero,
-            bottomRight: isSentByCurrentUser ? Radius.zero : const Radius.circular(12),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: isSentByCurrentUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Text(
-              message.contenu,
-              style: TextStyle(
-                color: isSentByCurrentUser ? Colors.white : Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 5),
-            if (isSentByCurrentUser)
-              Text(
-                message.estLu ? 'Lu' : 'Non lu',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isSentByCurrentUser ? Colors.white70 : Colors.black54,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: FutureBuilder<AppUser?>(
-          future: otherUser,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Text('Chargement...');
-            }
-            if (snapshot.hasError || snapshot.data == null) {
-              return const Text('Erreur');
-            }
-            return Text('Chat avec ${snapshot.data!.nom}');
-          },
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundImage: otherUser.photoProfil.isNotEmpty
+                  ? NetworkImage(otherUser.photoProfil)
+                  : null,
+              child: otherUser.photoProfil.isEmpty
+                  ? Text(
+                      otherUser.nom.substring(0, 1).toUpperCase(),
+                      style: const TextStyle(color: Colors.black),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Text(otherUser.nom), // Nom de l'autre utilisateur
+          ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: () {
-              chatController.deleteConversation(widget.conversationId);
-              Get.back();
-            },
-          ),
-        ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: Obx(() {
-              if (chatController.messages.isEmpty) {
-                return const Center(child: Text('Aucun message.'));
-              } else {
-                return ListView.builder(
-                  controller: _scrollController,
-                  itemCount: chatController.messages.length,
-                  itemBuilder: (context, index) {
-                    Message message = chatController.messages[index];
-                    bool isSentByCurrentUser = message.expediteurId == widget.currentUser.uid;
+            child: StreamBuilder<List<Message>>(
+              stream: chatController.getMessages(conversationId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-                    return buildMessageBubble(message, isSentByCurrentUser);
+                if (!snapshot.hasData || snapshot.data == null) {
+                  return const Center(child: Text("Aucun message."));
+                }
+
+                final messages = snapshot.data!;
+
+                // Marquer les messages comme lus
+                _markMessagesAsRead(messages);
+
+                return ListView.builder(
+                  reverse: true,
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final message = messages[index];
+                    final isSentByUser = message.expediteurId ==
+                        AuthController.instance.user!.uid;
+
+                    return Align(
+                      alignment: isSentByUser
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(
+                          vertical: 5,
+                          horizontal: 10,
+                        ),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: isSentByUser
+                              ? Colors.blueAccent.withOpacity(0.2)
+                              : Colors.grey.withOpacity(0.3),
+                          borderRadius: BorderRadius.only(
+                            topLeft: const Radius.circular(12),
+                            topRight: const Radius.circular(12),
+                            bottomLeft: isSentByUser
+                                ? const Radius.circular(12)
+                                : const Radius.circular(0),
+                            bottomRight: isSentByUser
+                                ? const Radius.circular(0)
+                                : const Radius.circular(12),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              message.contenu,
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                            const SizedBox(height: 5),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _formatTime(message.dateEnvoi),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                if (isSentByUser)
+                                  Icon(
+                                    _getMessageIcon(message),
+                                    size: 16,
+                                    color: message.estLu
+                                        ? Colors.blue
+                                        : Colors.grey,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                   },
                 );
-              }
-            }),
+              },
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(8.0),
@@ -133,25 +137,35 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: messageController,
-                    decoration: const InputDecoration(hintText: 'Écrivez un message...'),
+                    decoration: InputDecoration(
+                      hintText: "Tapez un message...",
+                      filled: true,
+                      fillColor: Colors.grey[200],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: () {
-                    if (messageController.text.trim().isNotEmpty) {
-                      Message newMessage = Message(
-                        id: '',
-                        expediteurId: widget.currentUser.uid,
-                        destinataireId: widget.otherUserId,
-                        contenu: messageController.text.trim(),
-                        dateEnvoi: DateTime.now(),
-                        estLu: false,
-                      );
-                      chatController.sendMessage(widget.conversationId, newMessage);
-                      messageController.clear();
-                    }
-                  },
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  backgroundColor: Colors.blueAccent,
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white),
+                    onPressed: () {
+                      final content = messageController.text.trim();
+                      if (content.isNotEmpty) {
+                        chatController.sendMessage(
+                          conversationId: conversationId,
+                          senderId: AuthController.instance.user!.uid,
+                          recipientId: otherUser.uid,
+                          content: content,
+                        );
+                        messageController.clear();
+                      }
+                    },
+                  ),
                 ),
               ],
             ),
@@ -159,5 +173,37 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
+  }
+
+  /// Marquer les messages comme lus
+  void _markMessagesAsRead(List<Message> messages) {
+    for (var message in messages) {
+      if (!message.estLu &&
+          message.destinataireId == AuthController.instance.user!.uid) {
+        chatController.markMessageAsRead(
+          conversationId: conversationId,
+          messageId: message.id,
+        );
+      }
+    }
+  }
+
+  /// Obtenir l'icône appropriée pour le message
+  IconData _getMessageIcon(Message message) {
+    if (message.estLu) {
+      return Icons.done_all; // Double tick bleu
+    } else {
+      return Icons.done; // Simple tick gris
+    }
+  }
+
+  /// Formater l'heure pour l'affichage
+  String _formatTime(DateTime dateTime) {
+    final now = DateTime.now();
+    if (now.difference(dateTime).inDays == 0) {
+      return "${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
+    } else {
+      return "${dateTime.day}/${dateTime.month}/${dateTime.year}";
+    }
   }
 }
