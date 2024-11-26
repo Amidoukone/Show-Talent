@@ -79,8 +79,8 @@ class ChatScreen extends StatelessWidget {
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: isSentByUser
-                              ? Colors.blueAccent.withOpacity(0.2)
-                              : Colors.grey.withOpacity(0.3),
+                              ? const Color.fromARGB(255, 38, 230, 12).withOpacity(0.2)
+                              : const Color.fromARGB(255, 99, 222, 211).withOpacity(0.3),
                           borderRadius: BorderRadius.only(
                             topLeft: const Radius.circular(12),
                             topRight: const Radius.circular(12),
@@ -116,8 +116,8 @@ class ChatScreen extends StatelessWidget {
                                     _getMessageIcon(message),
                                     size: 16,
                                     color: message.estLu
-                                        ? Colors.blue
-                                        : Colors.grey,
+                                        ? const Color.fromARGB(255, 12, 62, 48)
+                                        : const Color.fromARGB(255, 73, 252, 19),
                                   ),
                               ],
                             ),
@@ -150,7 +150,7 @@ class ChatScreen extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 CircleAvatar(
-                  backgroundColor: Colors.blueAccent,
+                  backgroundColor: const Color.fromARGB(255, 3, 121, 9),
                   child: IconButton(
                     icon: const Icon(Icons.send, color: Colors.white),
                     onPressed: () {
