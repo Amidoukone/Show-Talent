@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:show_talent/controller/follow_controller.dart';
 import 'package:show_talent/controller/profile_controller.dart';
 import 'package:show_talent/controller/chat_controller.dart';
+import 'package:show_talent/controller/auth_controller.dart';
 import 'package:show_talent/models/user.dart';
 import 'package:show_talent/models/video.dart';
 import 'package:show_talent/screens/chat_screen.dart';
@@ -44,7 +45,6 @@ class ProfileScreen extends StatelessWidget {
           ),
           centerTitle: true,
           actions: [
-            // Option de modification si ce n'est pas lecture seule et si c'est le profil propre de l'utilisateur
             if (!isReadOnly && isOwnProfile)
               IconButton(
                 icon: const Icon(Icons.edit),
@@ -52,29 +52,11 @@ class ProfileScreen extends StatelessWidget {
                   Get.to(() => EditProfileScreen(user: user));
                 },
               ),
-            // Bouton d'envoi de message si ce n'est pas le profil propre
             if (!isOwnProfile)
               IconButton(
                 icon: const Icon(Icons.message),
                 onPressed: () async {
-                  String? currentUserId = _profileController.getLoggedInUser()?.uid;
-                  if (currentUserId != null) {
-                    String conversationId = await _chatController.createOrGetConversation(
-                      currentUserId: currentUserId,
-                      otherUserId: user.uid,
-                    );
-                    Get.to(() => ChatScreen(
-                          conversationId: conversationId,
-                          otherUser: user,
-                        ));
-                  } else {
-                    Get.snackbar(
-                      'Erreur',
-                      'Vous devez être connecté pour envoyer un message.',
-                      backgroundColor: Colors.red,
-                      colorText: Colors.white,
-                    );
-                  }
+                  await _handleSendMessage(user);
                 },
               ),
           ],
@@ -84,21 +66,15 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Section de la photo de profil
                 _buildProfilePhotoSection(user, isOwnProfile),
                 const SizedBox(height: 20),
-                // Statistiques de l'utilisateur (Followers et Followings)
                 _buildStatSection(user),
-                // Bouton Suivre/Dessuivre si ce n'est pas le profil propre
                 if (!isOwnProfile) _buildFollowUnfollowButton(user),
                 const SizedBox(height: 20),
-                // Biographie de l'utilisateur
                 _buildBioSection(user),
                 const SizedBox(height: 20),
-                // Informations spécifiques selon le rôle de l'utilisateur
                 _buildSpecificInfoSection(user),
                 const SizedBox(height: 20),
-                // Section des vidéos uniquement si l'utilisateur est un joueur
                 if (user.role == 'joueur') _buildVideosSection(user),
               ],
             ),
@@ -108,7 +84,45 @@ class ProfileScreen extends StatelessWidget {
     });
   }
 
-  /// Section de la photo de profil avec options pour changer et afficher en grand
+  /// Gestion de l'envoi de message
+  Future<void> _handleSendMessage(AppUser user) async {
+    final currentUser = AuthController.instance.user;
+
+    if (currentUser == null || currentUser.uid.isEmpty) {
+      Get.snackbar(
+        'Erreur',
+        'Vous devez être connecté pour envoyer un message.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    try {
+      String conversationId = await _chatController.createOrGetConversation(
+        currentUserId: currentUser.uid,
+        otherUserId: user.uid,
+      );
+
+      if (conversationId.isNotEmpty) {
+        Get.to(() => ChatScreen(
+              conversationId: conversationId,
+              otherUser: user,
+            ));
+      } else {
+        throw Exception('Conversation ID invalide.');
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Erreur',
+        'Une erreur s\'est produite lors de l\'envoi du message : $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  /// Section de la photo de profil
   Widget _buildProfilePhotoSection(AppUser user, bool isOwnProfile) {
     return Stack(
       alignment: Alignment.center,
@@ -124,7 +138,6 @@ class ProfileScreen extends StatelessWidget {
                   ? const CircularProgressIndicator()
                   : null,
             )),
-        // Bouton pour changer la photo (uniquement pour son propre profil en mode non lecture seule)
         if (isOwnProfile && !isReadOnly)
           Positioned(
             bottom: 0,
@@ -148,6 +161,14 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  /// Changer la photo de profil
+  Future<void> _changeProfilePhoto(String userId) async {
+    final XFile? pickedImage = await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (pickedImage != null) {
+      await _profileController.updateProfilePhoto(userId, pickedImage.path);
+    }
+  }
+
   /// Ouvre un modal pour afficher la photo en plein écran
   void _showFullScreenPhoto(String photoUrl) {
     if (photoUrl.isEmpty) return;
@@ -159,14 +180,6 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  /// Change la photo de profil
-  Future<void> _changeProfilePhoto(String userId) async {
-    final XFile? pickedImage = await _imagePicker.pickImage(source: ImageSource.gallery);
-    if (pickedImage != null) {
-      await _profileController.updateProfilePhoto(userId, pickedImage.path);
-    }
   }
 
   /// Section des statistiques
@@ -181,7 +194,7 @@ class ProfileScreen extends StatelessWidget {
         const SizedBox(width: 20),
         GestureDetector(
           onTap: () => Get.to(() => FollowListScreen(uid: user.uid, listType: 'followings')),
-          child: _buildStatItem('Followings', user.followingsList.length),
+          child: _buildStatItem('Followings', user.followersList.length),
         ),
       ],
     );
@@ -201,14 +214,14 @@ class ProfileScreen extends StatelessWidget {
 
   /// Bouton Suivre/Dessuivre
   Widget _buildFollowUnfollowButton(AppUser user) {
-    String currentUserId = _profileController.getLoggedInUser()?.uid ?? '';
+    String? currentUserId = _profileController.getLoggedInUser()?.uid;
     bool isFollowing = user.followersList.contains(currentUserId);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: ElevatedButton(
         onPressed: () async {
-          if (currentUserId.isEmpty) {
+          if (currentUserId == null || currentUserId.isEmpty) {
             Get.snackbar(
               'Erreur',
               'Vous devez être connecté pour suivre ou dessuivre.',
