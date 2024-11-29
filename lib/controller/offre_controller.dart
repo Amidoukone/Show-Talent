@@ -19,7 +19,7 @@ class OffreController extends GetxController {
   void _fetchOffres() {
     FirebaseFirestore.instance.collection('offres').snapshots().listen((snapshot) {
       _offres.value = snapshot.docs.map((doc) {
-        return Offre.fromMap(doc.data() as Map<String, dynamic>);
+        return Offre.fromMap(doc.data());
       }).toList();
     });
   }

@@ -21,7 +21,11 @@ class FullScreenVideo extends StatelessWidget {
   });
 
   Future<File> _cacheVideo(String videoUrl) async {
-    return await DefaultCacheManager().getSingleFile(videoUrl);
+    try {
+      return await DefaultCacheManager().getSingleFile(videoUrl);
+    } catch (e) {
+      throw Exception('Erreur lors du cache de la vidéo : $e');
+    }
   }
 
   @override
@@ -44,9 +48,12 @@ class FullScreenVideo extends StatelessWidget {
 
           return Stack(
             children: [
+              // Lecteur vidéo en plein écran
               Positioned.fill(
                 child: VideoPlayerItem(videoUrl: video.videoUrl),
               ),
+
+              // Actions de la vidéo
               Positioned(
                 right: 10,
                 bottom: 80,
@@ -82,36 +89,49 @@ class FullScreenVideo extends StatelessWidget {
                   ],
                 ),
               ),
+
+              // Informations sur l'utilisateur
               Positioned(
                 bottom: 80,
                 left: 10,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        Get.to(() => ProfileScreen(uid: video.uid, isReadOnly: true));
-                      },
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            backgroundImage: NetworkImage(video.profilePhoto),
-                            radius: 22,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            video.songName,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                child: GestureDetector(
+                  onTap: () {
+                    if (video.uid.isNotEmpty) {
+                      Get.to(() => ProfileScreen(uid: video.uid, isReadOnly: true));
+                    } else {
+                      Get.snackbar(
+                        'Erreur',
+                        'Utilisateur introuvable.',
+                        backgroundColor: Colors.redAccent,
+                        colorText: Colors.white,
+                      );
+                    }
+                  },
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundImage: NetworkImage(video.profilePhoto.isNotEmpty
+                            ? video.profilePhoto
+                            : 'https://via.placeholder.com/150'),
+                        radius: 22,
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      video.caption,
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Text(
+                        video.songName.isNotEmpty ? video.songName : 'Musique inconnue',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Légende de la vidéo
+              Positioned(
+                bottom: 40,
+                left: 10,
+                child: Text(
+                  video.caption.isNotEmpty ? video.caption : 'Pas de légende',
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
                 ),
               ),
             ],
@@ -121,6 +141,7 @@ class FullScreenVideo extends StatelessWidget {
     );
   }
 
+  /// Widget générique pour les boutons d'action
   Widget _buildActionButton({
     required IconData icon,
     required Color color,

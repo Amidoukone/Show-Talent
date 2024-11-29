@@ -57,7 +57,7 @@ class EditProfileScreen extends StatelessWidget {
               if (user.role != 'fan') ...[
                 TextField(
                   controller: _bioController,
-                  decoration: const InputDecoration(labelText: 'Biographie'),
+                  decoration: const InputDecoration(labelText: 'Infos Professionnelles'),
                 ),
                 const SizedBox(height: 20),
               ],

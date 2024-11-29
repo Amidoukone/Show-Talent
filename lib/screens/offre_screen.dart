@@ -10,6 +10,8 @@ class OffreScreen extends StatelessWidget {
   final OffreController offreController = Get.put(OffreController());
   final UserController userController = Get.find<UserController>();
 
+   OffreScreen({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
