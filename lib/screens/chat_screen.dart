@@ -10,7 +10,7 @@ class ChatScreen extends StatelessWidget {
   final AppUser otherUser; // Utilisateur complet pour la conversation
   final ChatController chatController = Get.find();
 
-  ChatScreen({
+  ChatScreen({super.key, 
     required this.conversationId,
     required this.otherUser,
   });
@@ -117,7 +117,7 @@ class ChatScreen extends StatelessWidget {
                                     size: 16,
                                     color: message.estLu
                                         ? const Color.fromARGB(255, 12, 62, 48)
-                                        : const Color.fromARGB(255, 73, 252, 19),
+                                        : const Color.fromARGB(255, 12, 62, 48),
                                   ),
                               ],
                             ),

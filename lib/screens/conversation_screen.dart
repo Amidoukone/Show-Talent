@@ -9,6 +9,8 @@ import 'chat_screen.dart';
 import 'select_user_screen.dart';
 
 class ConversationsScreen extends StatefulWidget {
+  const ConversationsScreen({super.key});
+
   @override
   _ConversationsScreenState createState() => _ConversationsScreenState();
 }

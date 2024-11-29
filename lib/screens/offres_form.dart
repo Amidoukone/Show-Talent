@@ -6,7 +6,7 @@ import 'package:show_talent/models/offre.dart';
 import 'package:intl/intl.dart';
 
 class OffreFormScreen extends StatefulWidget {
-  const OffreFormScreen({Key? key}) : super(key: key);
+  const OffreFormScreen({super.key});
 
   @override
   _OffreFormScreenState createState() => _OffreFormScreenState();

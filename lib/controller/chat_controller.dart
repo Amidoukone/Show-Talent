@@ -27,7 +27,7 @@ class ChatController extends GetxController {
         .listen((snapshot) async {
       // Met à jour les conversations avec le calcul des messages non lus
       _conversations.value = await Future.wait(snapshot.docs.map((doc) async {
-        final conversationData = doc.data() as Map<String, dynamic>;
+        final conversationData = doc.data();
         final conversation = Conversation.fromMap(conversationData);
 
         // Calculer les messages non lus pour cette conversation
@@ -101,7 +101,7 @@ class ChatController extends GetxController {
         .snapshots()
         .map((snapshot) {
       return snapshot.docs.map((doc) {
-        return Message.fromMap(doc.data() as Map<String, dynamic>);
+        return Message.fromMap(doc.data());
       }).toList();
     });
   }

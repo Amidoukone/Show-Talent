@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -10,10 +11,8 @@ class UploadVideoController extends GetxController {
   var isUploading = false.obs;
   var uploadProgress = 0.0.obs;
 
-  // Fonction pour compresser la vidéo et gérer les erreurs de compression
   Future<File?> _compressVideo(String videoPath) async {
     try {
-      // Compression de la vidéo avec qualité moyenne pour un équilibre entre qualité et vitesse
       final info = await VideoCompress.compressVideo(
         videoPath,
         quality: VideoQuality.MediumQuality,
@@ -21,10 +20,9 @@ class UploadVideoController extends GetxController {
       );
 
       if (info != null && info.file != null) {
-        print("Compression réussie : fichier compressé à ${info.file!.path}");
         return info.file;
       } else {
-        throw Exception("Échec de la compression vidéo : fichier compressé introuvable.");
+        throw Exception("Échec de la compression vidéo");
       }
     } catch (e) {
       Get.snackbar('Erreur', 'Échec de la compression : $e');
@@ -32,59 +30,79 @@ class UploadVideoController extends GetxController {
     }
   }
 
-  // Fonction pour téléverser la vidéo compressée
-  Future<void> uploadVideo(String songName, String caption, String videoPath) async {
-    if (songName.isEmpty || caption.isEmpty) {
-      Get.snackbar('Erreur', 'Le nom de la chanson et la légende ne peuvent pas être vides');
-      return;
-    }
+  Future<File?> _generateThumbnail(String videoPath) async {
+    try {
+      final thumbnailFile = await VideoCompress.getFileThumbnail(
+        videoPath,
+        quality: 50,
+      );
 
+      return thumbnailFile;
+    } catch (e) {
+      Get.snackbar('Erreur', 'Échec de la génération de la miniature : $e');
+      return null;
+    }
+  }
+
+  Future<void> uploadVideo(String songName, String caption, String videoPath) async {
     File? compressedFile;
+    File? thumbnailFile;
 
     try {
       isUploading(true);
-      
-      // Compresser la vidéo
+
       compressedFile = await _compressVideo(videoPath);
-      if (compressedFile == null) {
-        throw Exception("Compression échouée, vidéo non disponible pour le téléversement.");
-      }
+      if (compressedFile == null) throw Exception("Échec de la compression vidéo");
 
-      // Préparez le fichier et le chemin pour le téléversement sur Firebase
-      String fileName = basename(compressedFile.path);
-      Reference storageRef = FirebaseStorage.instance.ref().child('videos/$fileName');
+      thumbnailFile = await _generateThumbnail(videoPath);
+      if (thumbnailFile == null) throw Exception("Échec de la génération de la miniature");
 
-      // Téléverser le fichier compressé et suivre la progression
-      UploadTask uploadTask = storageRef.putFile(compressedFile);
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        uploadProgress.value = (snapshot.bytesTransferred / snapshot.totalBytes);
+      String videoFileName = basename(compressedFile.path);
+      String thumbnailFileName = 'thumbnail_$videoFileName';
+
+      Reference videoRef = FirebaseStorage.instance.ref().child('videos/$videoFileName');
+      Reference thumbnailRef = FirebaseStorage.instance.ref().child('thumbnails/$thumbnailFileName');
+
+      // Écouter le téléversement de la vidéo
+      UploadTask videoUploadTask = videoRef.putFile(compressedFile);
+      videoUploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
+        uploadProgress.value = snapshot.bytesTransferred / snapshot.totalBytes;
       });
 
-      TaskSnapshot snapshot = await uploadTask;
-      String videoUrl = await snapshot.ref.getDownloadURL();
+      String videoUrl = await (await videoUploadTask).ref.getDownloadURL();
+      String thumbnailUrl = await (await thumbnailRef.putFile(thumbnailFile)).ref.getDownloadURL();
 
-      // Créer un ID unique pour la vidéo dans Firestore
+      // Sauvegarde des métadonnées dans Firestore
       String videoId = FirebaseFirestore.instance.collection('videos').doc().id;
-
-      // Enregistrer les métadonnées dans Firestore
       await FirebaseFirestore.instance.collection('videos').doc(videoId).set({
         'id': videoId,
         'videoUrl': videoUrl,
+        'thumbnail': thumbnailUrl,
         'songName': songName,
         'caption': caption,
         'likes': [],
         'shareCount': 0,
         'uid': Get.find<UserController>().user?.uid,
-        'thumbnail': '',
+        'profilePhoto': Get.find<UserController>().user?.photoProfil,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      Get.snackbar('Succès', 'Vidéo téléchargée avec succès !');
+      // Afficher un message de succès avec personnalisation
+      Get.snackbar(
+        'Succès',
+        'Votre vidéo a été téléchargée avec succès !',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: const Color(0xFF214D4F), // Couleur de fond personnalisée
+        colorText: Colors.white, // Texte en blanc pour la lisibilité
+        margin: const EdgeInsets.all(10),
+        borderRadius: 8,
+      );
+
+      // Redirection vers HomeScreen après le succès
+      Get.offAllNamed('/home');
     } catch (e) {
-      Get.snackbar('Erreur', 'Une erreur est survenue : $e');
-      print("Erreur pendant le téléversement : $e");
+      Get.snackbar('Erreur', 'Échec du téléchargement : $e');
     } finally {
-      // Réinitialiser l'état d'upload
       isUploading(false);
       uploadProgress.value = 0.0;
     }
