@@ -76,14 +76,16 @@ class ChatController extends GetxController {
       }
 
       // Créer une nouvelle conversation si aucune n'existe
-      final conversationRef = await _firestore.collection('conversations').add(
-            Conversation(
-              id: '',
-              utilisateur1Id: currentUserId,
-              utilisateur2Id: otherUserId,
-              utilisateurIds: [currentUserId, otherUserId],
-            ).toMap(),
-          );
+      final conversationRef = _firestore.collection('conversations').doc();
+
+      final newConversation = Conversation(
+        id: conversationRef.id,
+        utilisateur1Id: currentUserId,
+        utilisateur2Id: otherUserId,
+        utilisateurIds: [currentUserId, otherUserId],
+      );
+
+      await conversationRef.set(newConversation.toMap());
       return conversationRef.id;
     } catch (e) {
       print("Erreur lors de la création/récupération de la conversation : $e");
@@ -93,6 +95,11 @@ class ChatController extends GetxController {
 
   /// Récupérer les messages d'une conversation spécifique
   Stream<List<Message>> getMessages(String conversationId) {
+    if (conversationId.isEmpty) {
+      print("Erreur : conversationId est vide.");
+      return const Stream.empty();
+    }
+
     return _firestore
         .collection('conversations')
         .doc(conversationId)
@@ -124,11 +131,12 @@ class ChatController extends GetxController {
       );
 
       // Ajouter le message dans Firestore
-      await _firestore
+      final messageRef = _firestore
           .collection('conversations')
           .doc(conversationId)
           .collection('messages')
-          .add(message.toMap());
+          .doc();
+      await messageRef.set(message.toMap());
 
       // Mettre à jour les informations de la conversation
       await _firestore.collection('conversations').doc(conversationId).update({

@@ -25,6 +25,7 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Mise à jour de l'utilisateur actuel dans le ProfileController
     _profileController.updateUserId(uid);
 
     return GetBuilder<ProfileController>(builder: (controller) {
@@ -69,7 +70,7 @@ class ProfileScreen extends StatelessWidget {
                 _buildProfilePhotoSection(user, isOwnProfile),
                 const SizedBox(height: 20),
                 _buildStatSection(user),
-                if (!isOwnProfile) _buildFollowUnfollowButton(user),
+                if (!isOwnProfile) _buildFollowUnfollowButton(user), // Bouton Suivre/Dessuivre
                 const SizedBox(height: 20),
                 _buildBioSection(user),
                 const SizedBox(height: 20),
@@ -153,7 +154,7 @@ class ProfileScreen extends StatelessWidget {
             onPressed: () => _showFullScreenPhoto(user.photoProfil),
             child: const Text(
               "Voir la photo",
-              style: TextStyle(color: Colors.blue),
+              style: TextStyle(color: Color.fromARGB(255, 11, 40, 37)),
             ),
           ),
         ),
@@ -194,7 +195,7 @@ class ProfileScreen extends StatelessWidget {
         const SizedBox(width: 20),
         GestureDetector(
           onTap: () => Get.to(() => FollowListScreen(uid: user.uid, listType: 'followings')),
-          child: _buildStatItem('Followings', user.followersList.length),
+          child: _buildStatItem('Followings', user.followingsList.length),
         ),
       ],
     );
@@ -231,12 +232,21 @@ class ProfileScreen extends StatelessWidget {
             return;
           }
 
-          if (isFollowing) {
-            await _followController.unfollowUser(currentUserId, user.uid);
-          } else {
-            await _followController.followUser(currentUserId, user.uid);
+          try {
+            if (isFollowing) {
+              await _followController.unfollowUser(currentUserId, user.uid);
+            } else {
+              await _followController.followUser(currentUserId, user.uid);
+            }
+            _profileController.updateUserId(user.uid); // Met à jour les données utilisateur
+          } catch (e) {
+            Get.snackbar(
+              'Erreur',
+              'Une erreur s\'est produite : $e',
+              backgroundColor: Colors.red,
+              colorText: Colors.white,
+            );
           }
-          _profileController.updateUserId(user.uid);
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: isFollowing ? Colors.redAccent : Colors.green,
