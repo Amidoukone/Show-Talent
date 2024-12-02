@@ -3,8 +3,8 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:show_talent/controller/follow_controller.dart';
 import 'package:show_talent/controller/profile_controller.dart';
-import 'package:show_talent/controller/chat_controller.dart';
 import 'package:show_talent/controller/auth_controller.dart';
+import 'package:show_talent/controller/chat_controller.dart';
 import 'package:show_talent/models/user.dart';
 import 'package:show_talent/models/video.dart';
 import 'package:show_talent/screens/chat_screen.dart';
@@ -19,13 +19,14 @@ class ProfileScreen extends StatelessWidget {
   ProfileScreen({super.key, required this.uid, this.isReadOnly = false});
 
   final ProfileController _profileController = Get.put(ProfileController());
-  final ChatController _chatController = Get.put(ChatController());
+  final AuthController _authController = Get.put(AuthController());
   final FollowController _followController = Get.put(FollowController());
+  final ChatController _chatController = Get.put(ChatController());
   final ImagePicker _imagePicker = ImagePicker();
 
   @override
   Widget build(BuildContext context) {
-    // Mise à jour de l'utilisateur actuel dans le ProfileController
+    // Mise à jour des informations utilisateur dans le ProfileController
     _profileController.updateUserId(uid);
 
     return GetBuilder<ProfileController>(builder: (controller) {
@@ -36,12 +37,12 @@ class ProfileScreen extends StatelessWidget {
       }
 
       AppUser user = controller.user!;
-      bool isOwnProfile = _profileController.getLoggedInUser()?.uid == uid;
+      bool isOwnProfile = _authController.user?.uid == uid;
 
       return Scaffold(
         appBar: AppBar(
           title: Text(
-            user.nom.isNotEmpty == true ? user.nom : 'Nom inconnu',
+            user.nom.isNotEmpty ? user.nom : 'Nom inconnu',
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
           ),
           centerTitle: true,
@@ -70,7 +71,7 @@ class ProfileScreen extends StatelessWidget {
                 _buildProfilePhotoSection(user, isOwnProfile),
                 const SizedBox(height: 20),
                 _buildStatSection(user),
-                if (!isOwnProfile) _buildFollowUnfollowButton(user), // Bouton Suivre/Dessuivre
+                if (!isOwnProfile) _buildFollowUnfollowButton(user),
                 const SizedBox(height: 20),
                 _buildBioSection(user),
                 const SizedBox(height: 20),
@@ -87,7 +88,7 @@ class ProfileScreen extends StatelessWidget {
 
   /// Gestion de l'envoi de message
   Future<void> _handleSendMessage(AppUser user) async {
-    final currentUser = AuthController.instance.user;
+    final currentUser = _authController.user;
 
     if (currentUser == null || currentUser.uid.isEmpty) {
       Get.snackbar(
@@ -132,7 +133,7 @@ class ProfileScreen extends StatelessWidget {
               radius: 60,
               backgroundImage: _profileController.isLoadingPhoto.value
                   ? null
-                  : NetworkImage(user.photoProfil.isNotEmpty == true
+                  : NetworkImage(user.photoProfil.isNotEmpty
                       ? user.photoProfil
                       : 'https://via.placeholder.com/150'),
               child: _profileController.isLoadingPhoto.value
@@ -148,38 +149,7 @@ class ProfileScreen extends StatelessWidget {
               onPressed: () => _changeProfilePhoto(user.uid),
             ),
           ),
-        Positioned(
-          bottom: -20,
-          child: TextButton(
-            onPressed: () => _showFullScreenPhoto(user.photoProfil),
-            child: const Text(
-              "Voir la photo",
-              style: TextStyle(color: Color.fromARGB(255, 11, 40, 37)),
-            ),
-          ),
-        ),
       ],
-    );
-  }
-
-  /// Changer la photo de profil
-  Future<void> _changeProfilePhoto(String userId) async {
-    final XFile? pickedImage = await _imagePicker.pickImage(source: ImageSource.gallery);
-    if (pickedImage != null) {
-      await _profileController.updateProfilePhoto(userId, pickedImage.path);
-    }
-  }
-
-  /// Ouvre un modal pour afficher la photo en plein écran
-  void _showFullScreenPhoto(String photoUrl) {
-    if (photoUrl.isEmpty) return;
-    Get.dialog(
-      Dialog(
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          child: Image.network(photoUrl, fit: BoxFit.contain),
-        ),
-      ),
     );
   }
 
@@ -215,34 +185,31 @@ class ProfileScreen extends StatelessWidget {
 
   /// Bouton Suivre/Dessuivre
   Widget _buildFollowUnfollowButton(AppUser user) {
-    String? currentUserId = _profileController.getLoggedInUser()?.uid;
+    final String? currentUserId = _authController.user?.uid;
+
+    if (currentUserId == null) {
+      return const SizedBox.shrink();
+    }
+
     bool isFollowing = user.followersList.contains(currentUserId);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: ElevatedButton(
         onPressed: () async {
-          if (currentUserId == null || currentUserId.isEmpty) {
-            Get.snackbar(
-              'Erreur',
-              'Vous devez être connecté pour suivre ou dessuivre.',
-              backgroundColor: Colors.red,
-              colorText: Colors.white,
-            );
-            return;
-          }
-
           try {
             if (isFollowing) {
               await _followController.unfollowUser(currentUserId, user.uid);
+              user.followersList.remove(currentUserId);
             } else {
               await _followController.followUser(currentUserId, user.uid);
+              user.followersList.add(currentUserId);
             }
-            _profileController.updateUserId(user.uid); // Met à jour les données utilisateur
+            _profileController.update(); // Met à jour les informations utilisateur localement
           } catch (e) {
             Get.snackbar(
               'Erreur',
-              'Une erreur s\'est produite : $e',
+              'Une erreur s\'est produite lors de l\'opération : $e',
               backgroundColor: Colors.red,
               colorText: Colors.white,
             );
@@ -261,6 +228,14 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Changer la photo de profil
+  Future<void> _changeProfilePhoto(String userId) async {
+    final XFile? pickedImage = await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (pickedImage != null) {
+      await _profileController.updateProfilePhoto(userId, pickedImage.path);
+    }
   }
 
   /// Section de la biographie
