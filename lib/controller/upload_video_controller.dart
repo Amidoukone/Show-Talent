@@ -11,6 +11,22 @@ class UploadVideoController extends GetxController {
   var isUploading = false.obs;
   var uploadProgress = 0.0.obs;
 
+  /// Vérifie la durée maximale de la vidéo (3 minutes).
+  Future<bool> isVideoDurationValid(String videoPath) async {
+    final info = await VideoCompress.getMediaInfo(videoPath);
+    return (info.duration ?? 0) / 1000 <= 180; // Convertir en secondes
+  }
+
+  /// Vérifie la qualité de la vidéo.
+  Future<bool> isVideoQualityAcceptable(String videoPath) async {
+    final info = await VideoCompress.getMediaInfo(videoPath);
+
+    // Vérification basée sur les dimensions minimales (par exemple, 720p)
+    final width = info.width ?? 0;
+    final height = info.height ?? 0;
+    return width >= 1280 && height >= 720; // Minimum requis : HD (1280x720)
+  }
+
   Future<File?> _compressVideo(String videoPath) async {
     try {
       final info = await VideoCompress.compressVideo(
@@ -51,6 +67,28 @@ class UploadVideoController extends GetxController {
     try {
       isUploading(true);
 
+      // Vérification de la durée de la vidéo
+      if (!await isVideoDurationValid(videoPath)) {
+        Get.snackbar(
+          'Durée excessive',
+          'La durée de la vidéo dépasse la limite de 3 minutes. Veuillez choisir une vidéo plus courte.',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
+      // Vérification de la qualité de la vidéo
+      if (!await isVideoQualityAcceptable(videoPath)) {
+        Get.snackbar(
+          'Qualité insuffisante',
+          'La qualité de la vidéo est insuffisante. Veuillez choisir une vidéo de meilleure qualité.',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
       compressedFile = await _compressVideo(videoPath);
       if (compressedFile == null) throw Exception("Échec de la compression vidéo");
 
@@ -87,18 +125,16 @@ class UploadVideoController extends GetxController {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Afficher un message de succès avec personnalisation
       Get.snackbar(
         'Succès',
         'Votre vidéo a été téléchargée avec succès !',
         snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: const Color(0xFF214D4F), // Couleur de fond personnalisée
-        colorText: Colors.white, // Texte en blanc pour la lisibilité
+        backgroundColor: const Color(0xFF214D4F),
+        colorText: Colors.white,
         margin: const EdgeInsets.all(10),
         borderRadius: 8,
       );
 
-      // Redirection vers HomeScreen après le succès
       Get.offAllNamed('/home');
     } catch (e) {
       Get.snackbar('Erreur', 'Échec du téléchargement : $e');

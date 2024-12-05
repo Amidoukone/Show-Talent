@@ -25,6 +25,18 @@ class _UploadFormState extends State<UploadForm> {
   @override
   void initState() {
     super.initState();
+    _initializeVideoPlayer();
+  }
+
+  @override
+  void dispose() {
+    _videoPlayerController.dispose();
+    songController.dispose();
+    captionController.dispose();
+    super.dispose();
+  }
+
+  void _initializeVideoPlayer() {
     _videoPlayerController = VideoPlayerController.file(widget.videoFile)
       ..initialize().then((_) {
         setState(() {
@@ -32,12 +44,6 @@ class _UploadFormState extends State<UploadForm> {
           _isPlaying = false;
         });
       });
-  }
-
-  @override
-  void dispose() {
-    _videoPlayerController.dispose();
-    super.dispose();
   }
 
   void toggleVideoPlayback() {
@@ -84,6 +90,53 @@ class _UploadFormState extends State<UploadForm> {
         );
       }),
       barrierDismissible: false,
+    );
+  }
+
+  void _handleUpload() async {
+    if (songController.text.isEmpty || captionController.text.isEmpty) {
+      Get.snackbar(
+        'Erreur',
+        'Veuillez remplir tous les champs.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    // Vérification de la durée et de la qualité avant le téléversement
+    bool isDurationValid = await uploadVideoController.isVideoDurationValid(widget.videoPath);
+    bool isQualityAcceptable = await uploadVideoController.isVideoQualityAcceptable(widget.videoPath);
+
+    if (!isDurationValid) {
+      Get.snackbar(
+        'Durée excessive',
+        'La vidéo dépasse la durée maximale de 3 minutes. Veuillez choisir une vidéo plus courte.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orangeAccent,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    if (!isQualityAcceptable) {
+      Get.snackbar(
+        'Qualité insuffisante',
+        'La qualité de la vidéo est insuffisante. Veuillez choisir une vidéo de meilleure qualité.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orangeAccent,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    // Affiche le dialogue de progression
+    showProgressDialog();
+    uploadVideoController.uploadVideo(
+      songController.text,
+      captionController.text,
+      widget.videoPath,
     );
   }
 
@@ -168,24 +221,7 @@ class _UploadFormState extends State<UploadForm> {
                     backgroundColor: const Color(0xFF214D4F),
                     padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
                   ),
-                  onPressed: () {
-                    if (songController.text.isNotEmpty && captionController.text.isNotEmpty) {
-                      showProgressDialog();
-                      uploadVideoController.uploadVideo(
-                        songController.text,
-                        captionController.text,
-                        widget.videoPath,
-                      );
-                    } else {
-                      Get.snackbar(
-                        'Erreur',
-                        'Veuillez remplir tous les champs',
-                        snackPosition: SnackPosition.BOTTOM,
-                        backgroundColor: Colors.redAccent,
-                        colorText: Colors.white,
-                      );
-                    }
-                  },
+                  onPressed: _handleUpload,
                   child: const Text(
                     'Téléverser la vidéo',
                     style: TextStyle(fontSize: 16, color: Colors.white),

@@ -24,6 +24,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sélectionner un utilisateur'),
+        backgroundColor: const Color(0xFF214D4F),
       ),
       body: Column(
         children: [
@@ -45,7 +46,6 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
           ),
           Expanded(
             child: Obx(() {
-              // Vérifier si la liste des utilisateurs est vide
               if (userController.userList.isEmpty) {
                 return const Center(child: Text('Aucun utilisateur disponible.'));
               }
@@ -63,13 +63,28 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                 itemCount: filteredUsers.length,
                 itemBuilder: (context, index) {
                   AppUser user = filteredUsers[index];
+
                   return ListTile(
-                    title: Text(user.nom),
-                    subtitle: Text(user.email),
+                    leading: CircleAvatar(
+                      backgroundImage: NetworkImage(
+                        user.photoProfil.isNotEmpty
+                            ? user.photoProfil
+                            : 'https://via.placeholder.com/150',
+                      ),
+                      radius: 25,
+                      backgroundColor: Colors.grey[200],
+                    ),
+                    title: Text(
+                      user.nom.isNotEmpty ? user.nom : 'Nom inconnu',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    subtitle: Text(
+                      user.role.isNotEmpty ? user.role : 'Rôle inconnu',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
                     onTap: () async {
                       // Créer une nouvelle conversation avec l'utilisateur sélectionné
-                      String conversationId =
-                          await chatController.createOrGetConversation(
+                      String conversationId = await chatController.createOrGetConversation(
                         currentUserId: AuthController.instance.user!.uid,
                         otherUserId: user.uid,
                       );
