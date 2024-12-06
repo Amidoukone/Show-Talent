@@ -7,11 +7,11 @@ class Event {
   final String description;
   final DateTime dateDebut;
   final DateTime dateFin;
-  final AppUser organisateur; // Recruteur ou club organisateur de l'événement
+  final AppUser organisateur; // Propriétaire de l'événement
   final List<AppUser> participants; // Liste des participants inscrits
   String statut; // "à venir", "en cours", "terminé"
   final String lieu;
-  bool estPublic; // Événement public ou privé
+  final bool estPublic; // Événement public ou privé
 
   Event({
     required this.id,
@@ -26,14 +26,14 @@ class Event {
     required this.estPublic,
   });
 
-  // Méthode pour convertir un événement en Map (pour Firestore)
+  // Convertir un événement en Map (pour Firestore)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'titre': titre,
       'description': description,
-      'dateDebut': dateDebut,
-      'dateFin': dateFin,
+      'dateDebut': Timestamp.fromDate(dateDebut),
+      'dateFin': Timestamp.fromDate(dateFin),
       'organisateur': organisateur.toMap(),
       'participants': participants.map((participant) => participant.toMap()).toList(),
       'statut': statut,
@@ -42,19 +42,19 @@ class Event {
     };
   }
 
-  // Méthode pour créer un événement à partir d'un Map (pour lire depuis Firestore)
+  // Créer un événement à partir d'un Map (pour lire depuis Firestore)
   factory Event.fromMap(Map<String, dynamic> map) {
     return Event(
-      id: map['id'],
-      titre: map['titre'],
-      description: map['description'],
+      id: map['id'] ?? '',
+      titre: map['titre'] ?? 'Titre non spécifié',
+      description: map['description'] ?? '',
       dateDebut: (map['dateDebut'] as Timestamp).toDate(),
       dateFin: (map['dateFin'] as Timestamp).toDate(),
-      organisateur: AppUser.fromMap(map['organisateur']),
+      organisateur: AppUser.fromMap(map['organisateur'] ?? {}),
       participants: List<AppUser>.from(
-          map['participants']?.map((x) => AppUser.fromMap(x)) ?? []),
-      statut: map['statut'],
-      lieu: map['lieu'],
+          (map['participants'] ?? []).map((x) => AppUser.fromMap(x))),
+      statut: map['statut'] ?? 'à venir',
+      lieu: map['lieu'] ?? 'Lieu non spécifié',
       estPublic: map['estPublic'] ?? true,
     );
   }

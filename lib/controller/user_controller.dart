@@ -65,7 +65,7 @@ class UserController extends GetxController {
       try {
         _userList.value = snapshot.docs.map((doc) {
           final data = doc.data() as Map<String, dynamic>?;
-          if (data != null && data['uid'] != null) {
+          if (data != null) {
             return AppUser.fromMap(data);
           }
           return null;

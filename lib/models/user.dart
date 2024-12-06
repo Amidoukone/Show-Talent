@@ -75,7 +75,7 @@ class AppUser {
     required this.followingsList,
   });
 
-  // Méthode pour suivre un utilisateur
+  // Suivre un utilisateur
   void follow(String uid) {
     if (!followingsList.contains(uid)) {
       followingsList.add(uid);
@@ -83,7 +83,7 @@ class AppUser {
     }
   }
 
-  // Méthode pour se désabonner d'un utilisateur
+  // Se désabonner
   void unfollow(String uid) {
     if (followingsList.contains(uid)) {
       followingsList.remove(uid);
@@ -91,17 +91,18 @@ class AppUser {
     }
   }
 
+  // Créer un utilisateur depuis une Map
   factory AppUser.fromMap(Map<String, dynamic> map) {
     return AppUser(
       uid: map['uid'] ?? '',
       nom: map['nom'] ?? 'Nom inconnu',
-      email: map['email'] ?? 'Email inconnu',
+      email: map['email'] ?? '',
       role: map['role'] ?? 'Utilisateur',
       photoProfil: map['photoProfil'] ?? '',
       estActif: map['estActif'] ?? true,
       estBloque: map['estBloque'] ?? false,
-      followers: map['followers'] is int ? map['followers'] : 0,
-      followings: map['followings'] is int ? map['followings'] : 0,
+      followers: map['followers'] ?? 0,
+      followings: map['followings'] ?? 0,
       dateInscription: (map['dateInscription'] as Timestamp?)?.toDate() ?? DateTime.now(),
       dernierLogin: (map['dernierLogin'] as Timestamp?)?.toDate() ?? DateTime.now(),
       bio: map['bio'],
@@ -139,6 +140,7 @@ class AppUser {
     );
   }
 
+  // Convertir un utilisateur en Map
   Map<String, dynamic> toMap() {
     return {
       'uid': uid,
@@ -150,26 +152,26 @@ class AppUser {
       'estBloque': estBloque,
       'followers': followers,
       'followings': followings,
-      'dateInscription': dateInscription,
-      'dernierLogin': dernierLogin,
+      'dateInscription': Timestamp.fromDate(dateInscription),
+      'dernierLogin': Timestamp.fromDate(dernierLogin),
       'bio': bio,
       'position': position,
       'clubActuel': clubActuel,
       'nombreDeMatchs': nombreDeMatchs,
       'buts': buts,
       'assistances': assistances,
-      'videosPubliees': videosPubliees != null ? videosPubliees!.map((video) => video.toMap()).toList() : [],
+      'videosPubliees': videosPubliees?.map((video) => video.toMap()).toList() ?? [],
       'performances': performances ?? {},
       'nomClub': nomClub,
       'ligue': ligue,
-      'offrePubliees': offrePubliees != null ? offrePubliees!.map((offre) => offre.toMap()).toList() : [],
-      'eventPublies': eventPublies != null ? eventPublies!.map((event) => event.toMap()).toList() : [],
+      'offrePubliees': offrePubliees?.map((offre) => offre.toMap()).toList() ?? [],
+      'eventPublies': eventPublies?.map((event) => event.toMap()).toList() ?? [],
       'entreprise': entreprise,
       'nombreDeRecrutements': nombreDeRecrutements,
       'team': team,
-      'joueursSuivis': joueursSuivis != null ? joueursSuivis!.map((joueur) => joueur.toMap()).toList() : [],
-      'clubsSuivis': clubsSuivis != null ? clubsSuivis!.map((club) => club.toMap()).toList() : [],
-      'videosLikees': videosLikees != null ? videosLikees!.map((video) => video.toMap()).toList() : [],
+      'joueursSuivis': joueursSuivis?.map((joueur) => joueur.toMap()).toList() ?? [],
+      'clubsSuivis': clubsSuivis?.map((club) => club.toMap()).toList() ?? [],
+      'videosLikees': videosLikees?.map((video) => video.toMap()).toList() ?? [],
       'followersList': followersList,
       'followingsList': followingsList,
     };
