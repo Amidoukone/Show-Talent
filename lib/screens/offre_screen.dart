@@ -10,7 +10,7 @@ class OffreScreen extends StatelessWidget {
   final OffreController offreController = Get.put(OffreController());
   final UserController userController = Get.find<UserController>();
 
-   OffreScreen({super.key});
+  OffreScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +51,54 @@ class OffreScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  Get.to(() => ProfileScreen(
+                                        uid: offre.recruteur.uid,
+                                        isReadOnly: true,
+                                      ));
+                                },
+                                child: CircleAvatar(
+                                  radius: 25,
+                                  backgroundImage: NetworkImage(
+                                    offre.recruteur.photoProfil.isNotEmpty
+                                        ? offre.recruteur.photoProfil
+                                        : 'https://via.placeholder.com/150',
+                                  ),
+                                  backgroundColor: Colors.grey.shade200,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      offre.recruteur.nom.isNotEmpty
+                                          ? offre.recruteur.nom
+                                          : 'Nom inconnu',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      offre.recruteur.role.isNotEmpty
+                                          ? offre.recruteur.role
+                                          : 'Rôle inconnu',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
                           Text(
                             offre.titre,
                             style: const TextStyle(
@@ -132,7 +180,7 @@ class OffreScreen extends StatelessWidget {
                               ),
                               child: const Text(
                                 'Postuler',
-                                style: TextStyle(color: Colors.white), // Texte en blanc
+                                style: TextStyle(color: Colors.white),
                               ),
                             ),
                         ],
