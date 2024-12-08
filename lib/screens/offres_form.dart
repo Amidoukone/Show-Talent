@@ -4,6 +4,7 @@ import 'package:show_talent/controller/offre_controller.dart';
 import 'package:show_talent/controller/user_controller.dart';
 import 'package:show_talent/models/offre.dart';
 import 'package:intl/intl.dart';
+import 'package:show_talent/screens/offre_screen.dart';
 
 class OffreFormScreen extends StatefulWidget {
   const OffreFormScreen({super.key});
@@ -21,11 +22,17 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   DateTime? _dateDebut;
   DateTime? _dateFin;
+  late bool isEditing;
 
   @override
   void initState() {
     super.initState();
-    if (Get.arguments != null) {
+
+    // Définir si c'est une modification ou une création
+    isEditing = Get.arguments != null;
+
+    // Charger les données si modification
+    if (isEditing) {
       final offre = Get.arguments as Offre;
       _titreController.text = offre.titre;
       _descriptionController.text = offre.description;
@@ -36,35 +43,33 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = Get.arguments != null;
-
     return Scaffold(
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.white,
         title: Text(
           isEditing ? 'Modifier l\'offre' : 'Nouvelle offre',
-          style: TextStyle(
+          style: const TextStyle(
             color: Colors.black87,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black87),
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Get.back(),
         ),
       ),
       body: SingleChildScrollView(
-        child: Container(
-          padding: EdgeInsets.all(20),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildSectionTitle('Informations générales'),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: _titreController,
                   decoration: _buildInputDecoration(
@@ -72,9 +77,10 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
                     'Entrez le titre de l\'offre',
                     Icons.work_outline,
                   ),
-                  validator: (value) => value!.isEmpty ? 'Le titre est requis' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'Le titre est requis' : null,
                 ),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 TextFormField(
                   controller: _descriptionController,
                   decoration: _buildInputDecoration(
@@ -83,11 +89,12 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
                     Icons.description_outlined,
                   ),
                   maxLines: 5,
-                  validator: (value) => value!.isEmpty ? 'La description est requise' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'La description est requise' : null,
                 ),
-                SizedBox(height: 24),
+                const SizedBox(height: 24),
                 _buildSectionTitle('Période'),
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
                 Row(
                   children: [
                     Expanded(
@@ -97,7 +104,7 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
                         () => _selectDate(context, true),
                       ),
                     ),
-                    SizedBox(width: 16),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: _buildDateButton(
                         'Date de fin',
@@ -107,7 +114,7 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
                     ),
                   ],
                 ),
-                SizedBox(height: 32),
+                const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -121,8 +128,9 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
                     ),
                     child: Text(
                       isEditing ? 'Mettre à jour' : 'Publier l\'offre',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 16,
+                        color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -139,7 +147,7 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: TextStyle(
+      style: const TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: Colors.black87,
@@ -154,15 +162,15 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
       prefixIcon: Icon(icon, color: Colors.grey),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
+        borderSide: const BorderSide(color: Colors.grey),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
+        borderSide: const BorderSide(color: Colors.grey),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.teal),
+        borderSide: const BorderSide(color: Colors.teal),
       ),
       filled: true,
       fillColor: Colors.grey[50],
@@ -173,7 +181,7 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
     return InkWell(
       onTap: onPress,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey[300]!),
           borderRadius: BorderRadius.circular(12),
@@ -184,12 +192,12 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
           children: [
             Text(
               label,
-              style: TextStyle(
-                color: Colors.grey[600],
+              style: const TextStyle(
+                color: Colors.grey,
                 fontSize: 12,
               ),
             ),
-            SizedBox(height: 4),
+            const SizedBox(height: 4),
             Text(
               date == null
                   ? 'Sélectionner'
@@ -211,19 +219,6 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
       initialDate: DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime(2100),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Colors.teal,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black87,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null) {
       setState(() {
@@ -241,43 +236,46 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
         _dateDebut != null &&
         _dateFin != null) {
       if (_dateDebut!.isAfter(_dateFin!)) {
-        Get.snackbar(
-          'Erreur',
-          'La date de début doit être avant la date de fin',
-          backgroundColor: Colors.red[100],
-          colorText: Colors.red[900],
-          snackPosition: SnackPosition.TOP,
-        );
+        _showSnackbar('Erreur', 'La date de début doit précéder la date de fin',
+            Colors.red);
         return;
       }
 
       final currentUser = userController.user!;
       final offre = Offre(
-        id: Get.arguments?.id ?? DateTime.now().toIso8601String(),
+        id: isEditing ? (Get.arguments as Offre).id : DateTime.now().toIso8601String(),
         titre: _titreController.text,
         description: _descriptionController.text,
         dateDebut: _dateDebut!,
         dateFin: _dateFin!,
         recruteur: currentUser,
-        candidats: Get.arguments?.candidats ?? [],
+        candidats: isEditing ? (Get.arguments as Offre).candidats : [],
         statut: 'ouverte',
       );
 
-      if (Get.arguments != null) {
+      if (isEditing) {
         offreController.modifierOffre(offre, currentUser);
       } else {
         offreController.publierOffre(offre, currentUser);
       }
 
-      Get.back();
-      Get.snackbar(
+      _showSnackbar(
         'Succès',
-        Get.arguments != null ? 'Offre mise à jour' : 'Offre publiée',
-        backgroundColor: Colors.green[100],
-        colorText: Colors.green[900],
-        snackPosition: SnackPosition.TOP,
+        isEditing ? 'Offre mise à jour avec succès.' : 'Offre publiée avec succès.',
+        Colors.green,
       );
+      Get.off(() => OffreScreen());
     }
+  }
+
+  void _showSnackbar(String title, String message, Color color) {
+    Get.snackbar(
+      title,
+      message,
+      backgroundColor: color.withOpacity(0.2),
+      colorText: Colors.black87,
+      snackPosition: SnackPosition.TOP,
+    );
   }
 
   @override
