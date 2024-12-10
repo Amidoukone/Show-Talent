@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/models/message_converstion.dart';
+import 'package:intl/intl.dart';
 import '../controller/auth_controller.dart';
 import '../controller/chat_controller.dart';
 import '../models/user.dart';
@@ -28,9 +28,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () {
-              _showSearchBar();
-            },
+            onPressed: _showSearchBar,
           ),
         ],
       ),
@@ -39,16 +37,18 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           return const Center(child: Text("Aucune conversation."));
         }
 
-        // Filtrer les conversations selon le terme de recherche
+        // Filtrer les conversations par terme de recherche
         final filteredConversations = chatController.conversations.where((conversation) {
-          String otherUserId = conversation.utilisateurIds.firstWhere(
+          final otherUserId = conversation.utilisateurIds.firstWhere(
             (id) => id != AuthController.instance.user?.uid,
             orElse: () => '',
           );
 
           final otherUser = _getOtherUser(otherUserId);
           if (otherUser != null) {
-            return otherUser.nom.toLowerCase().contains(searchTerm.value.toLowerCase());
+            return otherUser.nom
+                .toLowerCase()
+                .contains(searchTerm.value.toLowerCase());
           }
           return false;
         }).toList();
@@ -59,22 +59,16 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
         // Trier les conversations par `lastMessageDate`
         filteredConversations.sort((a, b) =>
-            b.lastMessageDate?.compareTo(a.lastMessageDate ?? DateTime(0)) ?? 0);
+            (b.lastMessageDate ?? DateTime(0)).compareTo(a.lastMessageDate ?? DateTime(0)));
 
         return ListView.builder(
           itemCount: filteredConversations.length,
           itemBuilder: (context, index) {
-            Conversation conversation = filteredConversations[index];
-            String otherUserId = conversation.utilisateurIds.firstWhere(
+            final conversation = filteredConversations[index];
+            final otherUserId = conversation.utilisateurIds.firstWhere(
               (id) => id != AuthController.instance.user?.uid,
               orElse: () => '',
             );
-
-            if (otherUserId.isEmpty) {
-              return const ListTile(
-                title: Text("Utilisateur inconnu"),
-              );
-            }
 
             return FutureBuilder<DocumentSnapshot>(
               future: FirebaseFirestore.instance
@@ -83,35 +77,24 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   .get(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const ListTile(
-                    title: Text("Chargement..."),
-                  );
+                  return const ListTile(title: Text("Chargement..."));
                 }
 
                 if (!snapshot.hasData || snapshot.data == null) {
-                  return const ListTile(
-                    title: Text("Utilisateur inconnu"),
-                  );
+                  return const ListTile(title: Text("Utilisateur inconnu"));
                 }
 
-                // Convertir les données Firestore en AppUser
                 final Map<String, dynamic>? userData =
                     snapshot.data?.data() as Map<String, dynamic>?;
                 if (userData == null) {
-                  return const ListTile(
-                    title: Text("Erreur utilisateur"),
-                  );
+                  return const ListTile(title: Text("Erreur utilisateur"));
                 }
 
-                final AppUser otherUser = AppUser.fromMap(userData);
-
-                // Calcul du nombre de messages non lus
+                final otherUser = AppUser.fromMap(userData);
                 final int unreadCount = conversation.unreadMessagesCount;
 
                 return GestureDetector(
-                  onLongPress: () {
-                    _confirmDelete(conversation.id);
-                  },
+                  onLongPress: () => _confirmDelete(conversation.id),
                   child: ListTile(
                     leading: CircleAvatar(
                       radius: 25,
@@ -135,27 +118,33 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.grey),
                     ),
-                    trailing: unreadCount > 0
-                        ? Container(
-                            margin: const EdgeInsets.only(right: 8),
+                    trailing: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _formatDateOrTime(conversation.lastMessageDate),
+                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        if (unreadCount > 0)
+                          Container(
+                            margin: const EdgeInsets.only(top: 4),
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color.fromARGB(255, 13, 69, 55),
+                              color: Colors.teal,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               "$unreadCount",
                               style: const TextStyle(color: Colors.white, fontSize: 12),
                             ),
-                          )
-                        : null,
+                          ),
+                      ],
+                    ),
                     onTap: () async {
-                      // Marquer les messages comme lus
                       if (unreadCount > 0) {
                         await chatController.markMessagesAsRead(conversation.id, AuthController.instance.user!.uid);
                       }
 
-                      // Redirection vers l'écran de chat
                       Get.to(() => ChatScreen(
                             conversationId: conversation.id,
                             otherUser: otherUser,
@@ -170,23 +159,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       }),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // Redirige vers l'écran de sélection d'utilisateur
           Get.to(() => const SelectUserScreen());
         },
-        backgroundColor: const Color.fromARGB(255, 20, 147, 4), // Couleur verte claire
+        backgroundColor: const Color.fromARGB(255, 20, 147, 4),
         child: const Icon(Icons.message, color: Colors.white),
       ),
     );
-  }
-
-  /// Formater la date pour un affichage simplifié
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    if (now.difference(date).inDays == 0) {
-      return "${date.hour}:${date.minute.toString().padLeft(2, '0')}";
-    } else {
-      return "${date.day}/${date.month}/${date.year}";
-    }
   }
 
   /// Afficher la barre de recherche
@@ -240,16 +218,27 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
   }
 
-  /// Récupérer les données de l'autre utilisateur
+  /// Obtenir l'autre utilisateur dans la conversation
   AppUser? _getOtherUser(String userId) {
     try {
-      return AppUser.fromMap({
-        "nom": "Exemple",
-        "photoProfil": "",
-      });
+      return AppUser.fromMap({"nom": "Exemple", "photoProfil": ""});
     } catch (e) {
       print("Erreur lors de la récupération de l'utilisateur : $e");
       return null;
+    }
+  }
+
+  /// Formater l'heure ou la date du dernier message
+  String _formatDateOrTime(DateTime? dateTime) {
+    if (dateTime == null) return "Inconnue";
+
+    final now = DateTime.now();
+    final isToday = now.difference(dateTime).inDays == 0;
+
+    if (isToday) {
+      return DateFormat('HH:mm').format(dateTime);
+    } else {
+      return DateFormat('dd/MM/yyyy').format(dateTime);
     }
   }
 }
