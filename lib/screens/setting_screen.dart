@@ -13,24 +13,17 @@ class SettingsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Paramètres"),
-        backgroundColor: const Color(0xFF214D4F),  // Couleur principale
+        backgroundColor: const Color(0xFF214D4F),
       ),
       body: ListView(
         children: [
           ListTile(
-            leading: const Icon(Icons.person, color: Color(0xFF214D4F)),  // Icônes stylisées
+            leading: const Icon(Icons.person, color: Color(0xFF214D4F)),
             title: const Text('Voir le profil'),
             onTap: () {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (context) => ProfileScreen(uid: _auth.currentUser!.uid),
               ));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.notifications, color: Color(0xFF214D4F)),
-            title: const Text('Notifications'),
-            onTap: () {
-              Get.snackbar('Notifications', 'Gestion des notifications en cours...');
             },
           ),
           ListTile(
@@ -45,7 +38,7 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Se déconnecter'),
             onTap: () async {
               await _auth.signOut();
-              Get.offAllNamed('/login'); 
+              Get.offAllNamed('/login');
             },
           ),
         ],
