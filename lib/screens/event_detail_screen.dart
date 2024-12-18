@@ -44,7 +44,7 @@ class EventDetailsScreen extends StatelessWidget {
                       textConfirm: 'Oui',
                       textCancel: 'Non',
                       onConfirm: () {
-                        Get.find<EventController>().deleteEvent(event.id);
+                        Get.find<EventController>().deleteEvent(event.id, currentUser);
                         Get.back(); // Fermer la boîte de dialogue
                       },
                     );
@@ -68,7 +68,7 @@ class EventDetailsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Dates
             _buildDetailRow(
               icon: Icons.calendar_today,
@@ -138,7 +138,7 @@ class EventDetailsScreen extends StatelessWidget {
                   const SizedBox(height: 10),
                   ElevatedButton(
                     onPressed: () {
-                      _updateEventStatus(context);
+                      _updateEventStatus(context, currentUser);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF214D4F),
@@ -243,7 +243,7 @@ class EventDetailsScreen extends StatelessWidget {
   }
 
   // Modifier le statut de l'événement
-  void _updateEventStatus(BuildContext context) {
+  void _updateEventStatus(BuildContext context, AppUser currentUser) {
     Get.defaultDialog(
       title: 'Confirmer',
       middleText: 'Voulez-vous marquer cet événement comme "Terminé" ?',
@@ -251,7 +251,7 @@ class EventDetailsScreen extends StatelessWidget {
       textCancel: 'Non',
       onConfirm: () {
         event.statut = 'Terminé';
-        Get.find<EventController>().updateEvent(event);
+        Get.find<EventController>().updateEvent(event, currentUser);
         Get.back(); // Fermer la boîte de dialogue
       },
     );

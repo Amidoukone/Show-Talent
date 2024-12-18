@@ -93,12 +93,21 @@ class _EventFormScreenState extends State<EventFormScreen> {
             Center(
               child: ElevatedButton(
                 onPressed: () {
-                  if (titleController.text.isEmpty || descriptionController.text.isEmpty || locationController.text.isEmpty || startDate == null || endDate == null) {
-                    Get.snackbar('Erreur', 'Veuillez remplir tous les champs', backgroundColor: Colors.red.shade100, colorText: Colors.red);
+                  if (titleController.text.isEmpty ||
+                      descriptionController.text.isEmpty ||
+                      locationController.text.isEmpty ||
+                      startDate == null ||
+                      endDate == null) {
+                    Get.snackbar('Erreur', 'Veuillez remplir tous les champs',
+                        backgroundColor: Colors.red.shade100, colorText: Colors.red);
                     return;
                   }
 
+                  // Récupération de l'utilisateur actuel
+                  AppUser currentUser = Get.find<UserController>().user!;
+
                   if (widget.event != null) {
+                    // Mettre à jour un événement existant
                     Event updatedEvent = Event(
                       id: widget.event!.id,
                       titre: titleController.text,
@@ -111,9 +120,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       lieu: locationController.text,
                       estPublic: widget.event!.estPublic,
                     );
-                    eventController.updateEvent(updatedEvent);
+                    eventController.updateEvent(updatedEvent, currentUser);
                   } else {
-                    AppUser currentUser = Get.find<UserController>().user!;
+                    // Créer un nouvel événement
                     Event newEvent = Event(
                       id: FirebaseFirestore.instance.collection('events').doc().id,
                       titre: titleController.text,
@@ -126,8 +135,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       lieu: locationController.text,
                       estPublic: true,
                     );
-                    eventController.createEvent(newEvent);
+                    eventController.createEvent(newEvent, currentUser);
                   }
+
+                  // Retour à l'écran précédent après la soumission
                   Get.back();
                 },
                 style: ElevatedButton.styleFrom(
@@ -193,10 +204,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
             );
           },
         );
-        if (pickedDate != null) {
-          onDateSelected(pickedDate);
-        }
-      },
+        onDateSelected(pickedDate!);
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(
@@ -212,7 +221,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
               style: const TextStyle(fontSize: 16, color: Colors.black54),
             ),
             Text(
-              date != null ? DateFormat('dd MMM yyyy').format(date) : 'Choisir une date',
+              date != null
+                  ? DateFormat('dd MMM yyyy').format(date)
+                  : 'Choisir une date',
               style: const TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold),
             ),
           ],

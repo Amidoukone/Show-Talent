@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
+import 'package:show_talent/controller/push_notification.dart';
 import 'package:show_talent/models/message_converstion.dart';
 import 'package:show_talent/controller/auth_controller.dart';
 
@@ -113,7 +114,7 @@ class ChatController extends GetxController {
     });
   }
 
-  /// Envoyer un message dans une conversation
+  /// Envoyer un message dans une conversation avec notification
   Future<void> sendMessage({
     required String conversationId,
     required String senderId,
@@ -143,6 +144,21 @@ class ChatController extends GetxController {
         'lastMessage': content,
         'lastMessageDate': Timestamp.now(),
       });
+
+      // Envoyer une notification push
+      final recipientDoc = await _firestore.collection('users').doc(recipientId).get();
+      final recipientData = recipientDoc.data();
+
+      if (recipientData != null && recipientData['fcmToken'] != null) {
+        final fcmToken = recipientData['fcmToken'];
+        await PushNotificationService.sendNotification(
+          title: 'Nouveau message',
+          body: content,
+          token: fcmToken,
+          contextType: 'message',
+          contextData: conversationId,
+        );
+      }
     } catch (e) {
       print("Erreur lors de l'envoi du message : $e");
     }

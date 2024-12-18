@@ -29,36 +29,32 @@ class _LoginScreenState extends State<LoginScreen> {
       try {
         FirebaseMessaging messaging = FirebaseMessaging.instance;
         String? token = await messaging.getToken();
-        if (token != null) {
-          print("Token FCM: $token");
+        print("Token FCM: $token");
 
-          // Assurez-vous que le token n'est pas nul avant de l'utiliser
-          // Obtenir l'utilisateur actuellement connecté
-          User? user = FirebaseAuth.instance.currentUser;
+        // Assurez-vous que le token n'est pas nul avant de l'utiliser
+        // Obtenir l'utilisateur actuellement connecté
+        User? user = FirebaseAuth.instance.currentUser;
 
-          if (user != null) {
-            // ID de l'utilisateur
-            String userId = user.uid;
+        if (user != null) {
+          // ID de l'utilisateur
+          String userId = user.uid;
 
-            // Mettre à jour ou ajouter le token dans la collection Firestore
-            await FirebaseFirestore.instance
-                .collection(
-                    'users') // Remplacez 'users' par votre collection Firestore
-                .doc(userId) // Utiliser l'ID utilisateur comme clé du document
-                .set(
-                    {
-                  'fcmToken': token, // Ajouter ou mettre à jour le token
-                },
-                    SetOptions(
-                        merge:
-                            true)); // Merge permet de ne pas écraser d'autres champs existants
-          } else {
-            print('Erreur : Utilisateur non connecté ou token FCM introuvable');
-          }
+          // Mettre à jour ou ajouter le token dans la collection Firestore
+          await FirebaseFirestore.instance
+              .collection(
+                  'users') // Remplacez 'users' par votre collection Firestore
+              .doc(userId) // Utiliser l'ID utilisateur comme clé du document
+              .set(
+                  {
+                'fcmToken': token, // Ajouter ou mettre à jour le token
+              },
+                  SetOptions(
+                      merge:
+                          true)); // Merge permet de ne pas écraser d'autres champs existants
         } else {
-          print("Token non généré");
+          print('Erreur : Utilisateur non connecté ou token FCM introuvable');
         }
-      } catch (e) {
+            } catch (e) {
         print("Erreur lors de la génération du token : $e");
       }
 

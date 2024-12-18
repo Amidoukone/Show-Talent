@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:show_talent/controller/notification_controller.dart';
@@ -6,7 +5,7 @@ import 'package:show_talent/controller/notification_controller.dart';
 class NotificationsScreen extends StatelessWidget {
   final NotificationController notificationController = Get.put(NotificationController());
 
- NotificationsScreen({super.key});
+  NotificationsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +27,6 @@ class NotificationsScreen extends StatelessWidget {
                     ? const Icon(Icons.done, color: Colors.green)
                     : const Icon(Icons.new_releases, color: Colors.red),
                 onTap: () {
-                  // Action quand une notification est cliquée
                   notificationController.markAsRead(notification.id);
                 },
               );
