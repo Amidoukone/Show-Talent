@@ -20,7 +20,6 @@ class _UploadFormState extends State<UploadForm> {
   final TextEditingController captionController = TextEditingController();
   late VideoPlayerController _videoPlayerController;
   bool _isPlaying = false;
-  bool _needsRotation = false;
 
   @override
   void initState() {
@@ -36,37 +35,40 @@ class _UploadFormState extends State<UploadForm> {
     super.dispose();
   }
 
+  /// Initialisation du lecteur vidéo.
   void _initializeVideoPlayer() {
     _videoPlayerController = VideoPlayerController.file(widget.videoFile)
       ..initialize().then((_) {
-        setState(() {
-          _needsRotation = _videoPlayerController.value.size.width < _videoPlayerController.value.size.height;
-          _isPlaying = false;
-        });
+        setState(() {});
+      }).catchError((e) {
+        Get.snackbar(
+          'Erreur',
+          'Échec de l\'initialisation du lecteur vidéo : $e',
+          backgroundColor: Colors.redAccent,
+          colorText: Colors.white,
+        );
       });
   }
 
+  /// Lecture/Pause vidéo.
   void toggleVideoPlayback() {
-    setState(() {
-      if (_isPlaying) {
-        _videoPlayerController.pause();
-      } else {
-        _videoPlayerController.play();
-      }
-      _isPlaying = !_isPlaying;
-    });
+    if (_videoPlayerController.value.isInitialized) {
+      setState(() {
+        if (_isPlaying) {
+          _videoPlayerController.pause();
+        } else {
+          _videoPlayerController.play();
+        }
+        _isPlaying = !_isPlaying;
+      });
+    }
   }
 
+  /// Affiche un dialogue de progression pendant le téléversement.
   void showProgressDialog() {
     Get.dialog(
       Obx(() {
         double progressValue = uploadVideoController.uploadProgress.value;
-        if (progressValue >= 1.0) {
-          Future.delayed(Duration.zero, () {
-            Get.back();
-            Get.offAllNamed('/main');
-          });
-        }
         return AlertDialog(
           title: const Text(
             "Téléversement en cours...",
@@ -93,8 +95,9 @@ class _UploadFormState extends State<UploadForm> {
     );
   }
 
-  void _handleUpload() async {
-    if (songController.text.isEmpty || captionController.text.isEmpty) {
+  /// Gestion de l'upload avec validation.
+  Future<void> _handleUpload() async {
+    if (songController.text.trim().isEmpty || captionController.text.trim().isEmpty) {
       Get.snackbar(
         'Erreur',
         'Veuillez remplir tous les champs.',
@@ -105,7 +108,7 @@ class _UploadFormState extends State<UploadForm> {
       return;
     }
 
-    // Vérification de la durée et de la qualité avant le téléversement
+    // Vérifie la durée et la qualité de la vidéo avant le téléversement.
     bool isDurationValid = await uploadVideoController.isVideoDurationValid(widget.videoPath);
     bool isQualityAcceptable = await uploadVideoController.isVideoQualityAcceptable(widget.videoPath);
 
@@ -123,7 +126,7 @@ class _UploadFormState extends State<UploadForm> {
     if (!isQualityAcceptable) {
       Get.snackbar(
         'Qualité insuffisante',
-        'La qualité de la vidéo est insuffisante. Veuillez choisir une vidéo de meilleure qualité.',
+        'La qualité de la vidéo est insuffisante. Une résolution minimale de 480x360 (360p) est requise.',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.orangeAccent,
         colorText: Colors.white,
@@ -131,13 +134,19 @@ class _UploadFormState extends State<UploadForm> {
       return;
     }
 
-    // Affiche le dialogue de progression
+    // Affiche le dialogue de progression et lance l'upload.
     showProgressDialog();
-    uploadVideoController.uploadVideo(
-      songController.text,
-      captionController.text,
+    await uploadVideoController.uploadVideo(
+      songController.text.trim(),
+      captionController.text.trim(),
       widget.videoPath,
     );
+
+    // Redirection vers l'écran d'accueil après le téléversement réussi.
+    if (uploadVideoController.uploadProgress.value >= 1.0) {
+      Get.back(); // Ferme le dialogue de progression
+      Get.offAllNamed('/home'); // Redirection vers la page Home
+    }
   }
 
   @override
@@ -158,35 +167,33 @@ class _UploadFormState extends State<UploadForm> {
                 height: 200,
                 color: Colors.black,
                 child: _videoPlayerController.value.isInitialized
-                    ? Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Transform.rotate(
-                            angle: _needsRotation ? 90 * 3.14159 / 180 : 0,
-                            child: AspectRatio(
+                    ? GestureDetector(
+                        onTap: toggleVideoPlayback,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            AspectRatio(
                               aspectRatio: _videoPlayerController.value.aspectRatio,
                               child: VideoPlayer(_videoPlayerController),
                             ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              _isPlaying ? Icons.pause_circle_outline : Icons.play_circle_outline,
-                              color: Colors.white,
-                              size: 50,
-                            ),
-                            onPressed: toggleVideoPlayback,
-                          ),
-                        ],
+                            if (!_isPlaying)
+                              const Icon(
+                                Icons.play_circle_outline,
+                                color: Colors.white,
+                                size: 50,
+                              ),
+                          ],
+                        ),
                       )
-                    : const Center(child: CircularProgressIndicator()),
+                    : const Center(
+                        child: CircularProgressIndicator(),
+                      ),
               ),
               const SizedBox(height: 20),
-
               TextField(
                 controller: songController,
                 decoration: const InputDecoration(
                   labelText: 'Description de la vidéo',
-                  labelStyle: TextStyle(color: Colors.black),
                   filled: true,
                   fillColor: Color(0xFFE0E0E0),
                   border: OutlineInputBorder(
@@ -195,12 +202,10 @@ class _UploadFormState extends State<UploadForm> {
                 ),
               ),
               const SizedBox(height: 10),
-
               TextField(
                 controller: captionController,
                 decoration: const InputDecoration(
                   labelText: 'Légende',
-                  labelStyle: TextStyle(color: Colors.black),
                   filled: true,
                   fillColor: Color(0xFFE0E0E0),
                   border: OutlineInputBorder(
@@ -209,7 +214,6 @@ class _UploadFormState extends State<UploadForm> {
                 ),
               ),
               const SizedBox(height: 20),
-
               Obx(() {
                 if (uploadVideoController.isUploading.value) {
                   return const CircularProgressIndicator(
