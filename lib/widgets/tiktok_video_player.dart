@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:show_talent/controller/user_controller.dart';
 import 'package:video_player/video_player.dart';
 import 'package:get/get.dart';
 import 'package:show_talent/controller/video_controller.dart';
 import 'package:show_talent/models/video.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:show_talent/screens/full_screen_video.dart';
 
 class TikTokVideoPlayer extends StatefulWidget {
   final String videoUrl;
@@ -16,7 +18,7 @@ class TikTokVideoPlayer extends StatefulWidget {
     required this.videoUrl,
     required this.video,
     required this.videoController,
-    required this.userId,
+    required this.userId, required bool enableTapToPlayPause,
   });
 
   @override
@@ -36,27 +38,36 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
 
   Future<void> _initializeVideoPlayer() async {
     try {
+      // Préchargement avec DefaultCacheManager pour lecture rapide
       final file = await DefaultCacheManager().getSingleFile(widget.videoUrl);
+
       _controller = VideoPlayerController.file(file)
+        ..addListener(() {
+          if (_controller.value.hasError) {
+            setState(() {
+              _hasError = true;
+            });
+          }
+        })
         ..initialize().then((_) {
           setState(() {
             _isLoading = false;
-            _controller.play();
             _controller.setLooping(true);
+            _controller.play(); // Lecture automatique
           });
         }).catchError((error) {
           setState(() {
             _isLoading = false;
             _hasError = true;
           });
-          print('Erreur de lecture vidéo: $error');
+          print('Erreur lors de l\'initialisation de la vidéo : $error');
         });
     } catch (error) {
       setState(() {
         _isLoading = false;
         _hasError = true;
       });
-      print('Erreur de cache vidéo: $error');
+      print('Erreur de mise en cache de la vidéo : $error');
     }
   }
 
@@ -81,49 +92,63 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
                         style: TextStyle(color: Colors.red, fontSize: 16),
                       ),
                     )
-                  : Center(
-                      child: AspectRatio(
-                        aspectRatio: _controller.value.aspectRatio,
-                        child: VideoPlayer(_controller),
+                  : GestureDetector(
+                      onTap: () {
+                        // Redirection vers FullScreenVideo lors d'un clic sur la vidéo
+                        Get.to(() => FullScreenVideo(
+                              video: widget.video,
+                              user: Get.find<UserController>().user!,
+                              videoController: widget.videoController,
+                            ));
+                      },
+                      child: Center(
+                        child: AspectRatio(
+                          aspectRatio: _controller.value.aspectRatio,
+                          child: VideoPlayer(_controller),
+                        ),
                       ),
                     ),
         ),
-        Positioned(
-          right: 10,
-          bottom: 50,
-          child: Column(
-            children: [
-              if (widget.userId == widget.video.uid)
-                _buildActionButton(
-                  icon: Icons.delete,
-                  color: Colors.red,
-                  label: 'Supprimer',
-                  onPressed: _showDeleteConfirmation,
-                ),
-              _buildActionButton(
-                icon: Icons.favorite,
-                color: widget.video.likes.contains(widget.userId) ? Colors.red : Colors.white,
-                label: '${widget.video.likes.length}',
-                onPressed: _toggleLike,
-              ),
-              const SizedBox(height: 20),
-              _buildActionButton(
-                icon: Icons.share,
-                color: Colors.white,
-                label: '${widget.video.shareCount}',
-                onPressed: _shareVideo,
-              ),
-              const SizedBox(height: 20),
-              _buildActionButton(
-                icon: Icons.flag,
-                color: Colors.white,
-                label: '${widget.video.reportCount}',
-                onPressed: _reportVideo,
-              ),
-            ],
-          ),
-        ),
+        _buildActionButtons(),
       ],
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Positioned(
+      right: 10,
+      bottom: 50,
+      child: Column(
+        children: [
+          if (widget.userId == widget.video.uid)
+            _buildActionButton(
+              icon: Icons.delete,
+              color: Colors.red,
+              label: 'Supprimer',
+              onPressed: _showDeleteConfirmation,
+            ),
+          _buildActionButton(
+            icon: Icons.favorite,
+            color: widget.video.likes.contains(widget.userId) ? Colors.red : Colors.white,
+            label: '${widget.video.likes.length}',
+            onPressed: _toggleLike,
+          ),
+          const SizedBox(height: 20),
+          _buildActionButton(
+            icon: Icons.share,
+            color: Colors.white,
+            label: '${widget.video.shareCount}',
+            onPressed: _shareVideo,
+          ),
+          const SizedBox(height: 20),
+          _buildActionButton(
+            icon: Icons.flag,
+            color: Colors.white,
+            label: '${widget.video.reportCount}',
+            onPressed: _reportVideo,
+          ),
+        ],
+      ),
     );
   }
 

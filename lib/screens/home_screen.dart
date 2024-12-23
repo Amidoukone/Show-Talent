@@ -51,24 +51,29 @@ class HomeScreen extends StatelessWidget {
             ),
           );
         }
+
+        // PageView pour afficher les vidéos
         return PageView.builder(
           scrollDirection: Axis.vertical,
           itemCount: videoController.videoList.length,
           itemBuilder: (context, index) {
             Video video = videoController.videoList[index];
-            return GestureDetector(
+
+            // Vidéo avec redirection vers FullScreenVideo
+            return InkWell(
               onTap: () {
                 Get.to(() => FullScreenVideo(
-                  video: video,
-                  user: userController.user!,
-                  videoController: videoController,
-                ));
+                      video: video,
+                      user: userController.user!,
+                      videoController: videoController,
+                    ));
               },
               child: TikTokVideoPlayer(
                 videoUrl: video.videoUrl,
                 video: video,
                 videoController: videoController,
                 userId: userController.user!.uid,
+                enableTapToPlayPause: false, // Désactiver la lecture/pause sur clic
               ),
             );
           },
@@ -76,6 +81,7 @@ class HomeScreen extends StatelessWidget {
       }),
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       floatingActionButton: Obx(() {
+        // Bouton flottant visible uniquement pour les joueurs
         if (userController.user?.role == 'joueur') {
           return FloatingActionButton(
             backgroundColor: const Color(0xFF214D4F),

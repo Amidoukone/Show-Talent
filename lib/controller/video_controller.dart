@@ -11,9 +11,13 @@ class VideoController extends GetxController {
     fetchVideos();
   }
 
-  // Méthode pour récupérer les vidéos depuis Firestore
+  /// Récupérer et trier les vidéos par date de création
   void fetchVideos() {
-    FirebaseFirestore.instance.collection('videos').snapshots().listen((snapshot) {
+    FirebaseFirestore.instance
+        .collection('videos')
+        .orderBy('createdAt', descending: true) // Trier par date de création (plus récentes d'abord)
+        .snapshots()
+        .listen((snapshot) {
       videoList.assignAll(
         snapshot.docs.map((doc) {
           try {
@@ -27,7 +31,7 @@ class VideoController extends GetxController {
     });
   }
 
-  // Méthode pour aimer ou retirer le like d'une vidéo
+  /// Méthode pour aimer ou retirer le like d'une vidéo
   Future<void> likeVideo(String videoId, String userId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
@@ -47,7 +51,7 @@ class VideoController extends GetxController {
     }
   }
 
-  // Méthode pour partager une vidéo en incrémentant le compteur de partages
+  /// Méthode pour partager une vidéo
   Future<void> partagerVideo(String videoId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
@@ -65,7 +69,7 @@ class VideoController extends GetxController {
     }
   }
 
-  // Méthode pour signaler une vidéo inappropriée
+  /// Méthode pour signaler une vidéo
   Future<void> signalerVideo(String videoId, String userId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
@@ -94,7 +98,7 @@ class VideoController extends GetxController {
     }
   }
 
-  // Méthode pour supprimer une vidéo de Firestore et de la liste locale
+  /// Méthode pour supprimer une vidéo
   Future<void> deleteVideo(String videoId) async {
     try {
       await FirebaseFirestore.instance.collection('videos').doc(videoId).delete();
