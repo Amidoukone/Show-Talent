@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path/path.dart';
-import 'package:show_talent/controller/user_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:video_compress/video_compress.dart';
 
 class UploadVideoController extends GetxController {
@@ -30,7 +30,8 @@ class UploadVideoController extends GetxController {
     try {
       final info = await VideoCompress.compressVideo(
         videoPath,
-        quality: VideoQuality.MediumQuality, // Meilleur équilibre entre qualité et rapidité
+        quality: VideoQuality
+            .MediumQuality, // Meilleur équilibre entre qualité et rapidité
         deleteOrigin: false,
       );
       return info?.file;
@@ -48,7 +49,8 @@ class UploadVideoController extends GetxController {
   /// Génération miniature optimisée.
   Future<File?> _generateThumbnail(String videoPath) async {
     try {
-      return await VideoCompress.getFileThumbnail(videoPath, quality: 75); // Qualité optimisée
+      return await VideoCompress.getFileThumbnail(videoPath,
+          quality: 75); // Qualité optimisée
     } catch (e) {
       Get.snackbar(
         'Erreur',
@@ -79,7 +81,8 @@ class UploadVideoController extends GetxController {
   }
 
   /// Téléversement vidéo avec optimisation.
-  Future<void> uploadVideo(String songName, String caption, String videoPath) async {
+  Future<void> uploadVideo(
+      String songName, String caption, String videoPath) async {
     File? compressedFile;
     File? thumbnailFile;
 
@@ -115,13 +118,16 @@ class UploadVideoController extends GetxController {
       thumbnailFile = futures[1];
 
       if (compressedFile == null) throw Exception("Compression échouée");
-      if (thumbnailFile == null) throw Exception("Génération de miniature échouée");
+      if (thumbnailFile == null)
+        throw Exception("Génération de miniature échouée");
 
       String videoFileName = basename(compressedFile.path);
       String thumbnailFileName = 'thumbnail_$videoFileName';
 
-      Reference videoRef = FirebaseStorage.instance.ref().child('videos/$videoFileName');
-      Reference thumbnailRef = FirebaseStorage.instance.ref().child('thumbnails/$thumbnailFileName');
+      Reference videoRef =
+          FirebaseStorage.instance.ref().child('videos/$videoFileName');
+      Reference thumbnailRef =
+          FirebaseStorage.instance.ref().child('thumbnails/$thumbnailFileName');
 
       // Téléversement avec progression
       await Future.wait([
@@ -136,7 +142,8 @@ class UploadVideoController extends GetxController {
           file: thumbnailFile,
           storageRef: thumbnailRef,
           onProgress: (progress) {
-            uploadProgress.value = 0.5 + (progress / 2); // 50-100% pour la miniature
+            uploadProgress.value =
+                0.5 + (progress / 2); // 50-100% pour la miniature
           },
         ),
       ]);

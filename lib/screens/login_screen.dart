@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:show_talent/screens/home_screen.dart';
-import 'package:show_talent/screens/signup_screen.dart';
+import 'package:adfoot/screens/home_screen.dart';
+import 'package:adfoot/screens/signup_screen.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -54,7 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
         } else {
           print('Erreur : Utilisateur non connecté ou token FCM introuvable');
         }
-            } catch (e) {
+      } catch (e) {
         print("Erreur lors de la génération du token : $e");
       }
 

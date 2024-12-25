@@ -8,8 +8,8 @@ import 'controller/auth_controller.dart';
 import 'controller/offre_controller.dart';
 import 'controller/notification_controller.dart';
 import 'controller/user_controller.dart';
-import 'package:show_talent/screens/main_screen.dart';
-import 'package:show_talent/screens/splash_screen.dart';
+import 'package:adfoot/screens/main_screen.dart';
+import 'package:adfoot/screens/splash_screen.dart';
 
 // Handler pour les messages reçus en arrière-plan
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -17,7 +17,8 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 // Plugin pour les notifications locales
-FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
 
 // Canal de notification pour Android
 const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -40,7 +41,8 @@ void initializeNotifications() async {
 
   // Créer le canal pour Android
   await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 }
 
@@ -173,7 +175,10 @@ class MyApp extends StatelessWidget {
         textTheme: const TextTheme(
           bodyLarge: TextStyle(fontSize: 16, color: Color(0xFF214D4F)),
           bodyMedium: TextStyle(fontSize: 14, color: Color(0xFF214D4F)),
-          titleMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Color(0xFF214D4F)),
+          titleMedium: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF214D4F)),
           titleSmall: TextStyle(fontSize: 16, color: Color(0xFF214D4F)),
         ),
       ),

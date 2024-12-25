@@ -1,21 +1,23 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/upload_video_controller.dart';
+import 'package:adfoot/controller/upload_video_controller.dart';
 import 'package:video_player/video_player.dart';
 
 class UploadForm extends StatefulWidget {
   final File videoFile;
   final String videoPath;
 
-  const UploadForm({super.key, required this.videoFile, required this.videoPath});
+  const UploadForm(
+      {super.key, required this.videoFile, required this.videoPath});
 
   @override
   State<UploadForm> createState() => _UploadFormState();
 }
 
 class _UploadFormState extends State<UploadForm> {
-  final UploadVideoController uploadVideoController = Get.put(UploadVideoController());
+  final UploadVideoController uploadVideoController =
+      Get.put(UploadVideoController());
   final TextEditingController songController = TextEditingController();
   final TextEditingController captionController = TextEditingController();
   late VideoPlayerController _videoPlayerController;
@@ -97,7 +99,8 @@ class _UploadFormState extends State<UploadForm> {
 
   /// Gestion de l'upload avec validation.
   Future<void> _handleUpload() async {
-    if (songController.text.trim().isEmpty || captionController.text.trim().isEmpty) {
+    if (songController.text.trim().isEmpty ||
+        captionController.text.trim().isEmpty) {
       Get.snackbar(
         'Erreur',
         'Veuillez remplir tous les champs.',
@@ -109,8 +112,10 @@ class _UploadFormState extends State<UploadForm> {
     }
 
     // Vérifie la durée et la qualité de la vidéo avant le téléversement.
-    bool isDurationValid = await uploadVideoController.isVideoDurationValid(widget.videoPath);
-    bool isQualityAcceptable = await uploadVideoController.isVideoQualityAcceptable(widget.videoPath);
+    bool isDurationValid =
+        await uploadVideoController.isVideoDurationValid(widget.videoPath);
+    bool isQualityAcceptable =
+        await uploadVideoController.isVideoQualityAcceptable(widget.videoPath);
 
     if (!isDurationValid) {
       Get.snackbar(
@@ -173,7 +178,8 @@ class _UploadFormState extends State<UploadForm> {
                           alignment: Alignment.center,
                           children: [
                             AspectRatio(
-                              aspectRatio: _videoPlayerController.value.aspectRatio,
+                              aspectRatio:
+                                  _videoPlayerController.value.aspectRatio,
                               child: VideoPlayer(_videoPlayerController),
                             ),
                             if (!_isPlaying)
@@ -217,13 +223,15 @@ class _UploadFormState extends State<UploadForm> {
               Obx(() {
                 if (uploadVideoController.isUploading.value) {
                   return const CircularProgressIndicator(
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF214D4F)),
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Color(0xFF214D4F)),
                   );
                 }
                 return ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF214D4F),
-                    padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 30, vertical: 12),
                   ),
                   onPressed: _handleUpload,
                   child: const Text(

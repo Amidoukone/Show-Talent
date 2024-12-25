@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/screens/profile_screen.dart';
+import 'package:adfoot/screens/profile_screen.dart';
 import '../models/video.dart';
 import '../models/user.dart';
 import 'video_player_item.dart';
-import 'package:show_talent/controller/video_controller.dart';
+import 'package:adfoot/controller/video_controller.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 class FullScreenVideo extends StatelessWidget {
@@ -62,7 +62,9 @@ class FullScreenVideo extends StatelessWidget {
                   children: [
                     _buildActionButton(
                       icon: Icons.favorite,
-                      color: video.likes.contains(user.uid) ? Colors.red : Colors.white,
+                      color: video.likes.contains(user.uid)
+                          ? Colors.red
+                          : Colors.white,
                       label: '${video.likes.length}',
                       onPressed: () {
                         videoController.likeVideo(video.id, user.uid);
@@ -97,7 +99,8 @@ class FullScreenVideo extends StatelessWidget {
                 child: GestureDetector(
                   onTap: () {
                     if (video.uid.isNotEmpty) {
-                      Get.to(() => ProfileScreen(uid: video.uid, isReadOnly: true));
+                      Get.to(() =>
+                          ProfileScreen(uid: video.uid, isReadOnly: true));
                     } else {
                       Get.snackbar(
                         'Erreur',
@@ -110,15 +113,19 @@ class FullScreenVideo extends StatelessWidget {
                   child: Row(
                     children: [
                       CircleAvatar(
-                        backgroundImage: NetworkImage(video.profilePhoto.isNotEmpty
-                            ? video.profilePhoto
-                            : 'https://via.placeholder.com/150'),
+                        backgroundImage: NetworkImage(
+                            video.profilePhoto.isNotEmpty
+                                ? video.profilePhoto
+                                : 'https://via.placeholder.com/150'),
                         radius: 22,
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        video.songName.isNotEmpty ? video.songName : 'Musique inconnue',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        video.songName.isNotEmpty
+                            ? video.songName
+                            : 'Musique inconnue',
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),

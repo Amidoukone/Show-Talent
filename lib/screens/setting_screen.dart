@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/screens/profile_screen.dart';
+import 'package:adfoot/screens/profile_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -22,7 +22,8 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Voir le profil'),
             onTap: () {
               Navigator.of(context).push(MaterialPageRoute(
-                builder: (context) => ProfileScreen(uid: _auth.currentUser!.uid),
+                builder: (context) =>
+                    ProfileScreen(uid: _auth.currentUser!.uid),
               ));
             },
           ),
@@ -30,7 +31,8 @@ class SettingsScreen extends StatelessWidget {
             leading: const Icon(Icons.lock, color: Color(0xFF214D4F)),
             title: const Text('Confidentialité'),
             onTap: () {
-              Get.snackbar('Confidentialité', 'Paramètres de confidentialité en cours...');
+              Get.snackbar('Confidentialité',
+                  'Paramètres de confidentialité en cours...');
             },
           ),
           ListTile(

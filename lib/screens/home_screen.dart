@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/user_controller.dart';
-import 'package:show_talent/controller/video_controller.dart';
-import 'package:show_talent/screens/profile_screen.dart';
-import 'package:show_talent/screens/upload_video_screen.dart';
-import 'package:show_talent/screens/full_screen_video.dart';
-import 'package:show_talent/widgets/tiktok_video_player.dart';
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/controller/video_controller.dart';
+import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/screens/upload_video_screen.dart';
+import 'package:adfoot/screens/full_screen_video.dart';
+import 'package:adfoot/widgets/tiktok_video_player.dart';
 import '../models/video.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -73,7 +73,8 @@ class HomeScreen extends StatelessWidget {
                 video: video,
                 videoController: videoController,
                 userId: userController.user!.uid,
-                enableTapToPlayPause: false, // Désactiver la lecture/pause sur clic
+                enableTapToPlayPause:
+                    false, // Désactiver la lecture/pause sur clic
               ),
             );
           },

@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/models/user.dart';
+import 'package:adfoot/models/user.dart';
 
 class Event {
   final String id;
@@ -35,7 +35,8 @@ class Event {
       'dateDebut': Timestamp.fromDate(dateDebut),
       'dateFin': Timestamp.fromDate(dateFin),
       'organisateur': organisateur.toMap(),
-      'participants': participants.map((participant) => participant.toMap()).toList(),
+      'participants':
+          participants.map((participant) => participant.toMap()).toList(),
       'statut': statut,
       'lieu': lieu,
       'estPublic': estPublic,

@@ -1,8 +1,8 @@
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/controller/push_notification.dart';
-import 'package:show_talent/models/event.dart';
-import 'package:show_talent/models/user.dart';
+import 'package:adfoot/controller/push_notification.dart';
+import 'package:adfoot/models/event.dart';
+import 'package:adfoot/models/user.dart';
 
 class EventController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -19,7 +19,8 @@ class EventController extends GetxController {
   /// Récupérer les événements depuis Firestore
   void _fetchEvents() {
     _firestore.collection('events').snapshots().listen((snapshot) {
-      _events.value = snapshot.docs.map((doc) => Event.fromMap(doc.data())).toList();
+      _events.value =
+          snapshot.docs.map((doc) => Event.fromMap(doc.data())).toList();
       update(); // Mise à jour de l'interface utilisateur
     });
   }
@@ -27,7 +28,8 @@ class EventController extends GetxController {
   /// Créer un nouvel événement et notifier les joueurs
   Future<void> createEvent(Event event, AppUser utilisateur) async {
     if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
-      Get.snackbar('Accès refusé', 'Seuls les clubs ou recruteurs peuvent créer des événements.');
+      Get.snackbar('Accès refusé',
+          'Seuls les clubs ou recruteurs peuvent créer des événements.');
       return;
     }
 
@@ -50,7 +52,8 @@ class EventController extends GetxController {
           // Envoyer une notification push à chaque joueur
           await PushNotificationService.sendNotification(
             title: 'Nouvel Événement',
-            body: '${utilisateur.nom} a créé un nouvel événement : ${event.titre}',
+            body:
+                '${utilisateur.nom} a créé un nouvel événement : ${event.titre}',
             token: fcmToken,
             contextType: 'event',
             contextData: event.id,
@@ -69,7 +72,8 @@ class EventController extends GetxController {
   /// Mettre à jour un événement
   Future<void> updateEvent(Event event, AppUser utilisateur) async {
     if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
-      Get.snackbar('Accès refusé', 'Seuls les clubs ou recruteurs peuvent modifier des événements.');
+      Get.snackbar('Accès refusé',
+          'Seuls les clubs ou recruteurs peuvent modifier des événements.');
       return;
     }
 
@@ -85,7 +89,8 @@ class EventController extends GetxController {
   /// Supprimer un événement
   Future<void> deleteEvent(String eventId, AppUser utilisateur) async {
     if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
-      Get.snackbar('Accès refusé', 'Seuls les clubs ou recruteurs peuvent supprimer des événements.');
+      Get.snackbar('Accès refusé',
+          'Seuls les clubs ou recruteurs peuvent supprimer des événements.');
       return;
     }
 
@@ -101,28 +106,31 @@ class EventController extends GetxController {
   /// Inscrire un joueur à un événement
   Future<void> registerToEvent(String eventId, AppUser participant) async {
     if (participant.role != 'joueur') {
-      Get.snackbar('Accès refusé', 'Seuls les joueurs peuvent s\'inscrire à un événement.');
+      Get.snackbar('Accès refusé',
+          'Seuls les joueurs peuvent s\'inscrire à un événement.');
       return;
     }
 
     try {
       // Récupérer l'événement depuis Firestore
-      DocumentSnapshot eventDoc = await _firestore.collection('events').doc(eventId).get();
+      DocumentSnapshot eventDoc =
+          await _firestore.collection('events').doc(eventId).get();
 
       if (eventDoc.exists) {
-        Map<String, dynamic> eventData = eventDoc.data() as Map<String, dynamic>;
+        Map<String, dynamic> eventData =
+            eventDoc.data() as Map<String, dynamic>;
         Event event = Event.fromMap(eventData);
 
         // Vérifier si le joueur est déjà inscrit
-        bool alreadyRegistered = event.participants.any((p) => p.uid == participant.uid);
+        bool alreadyRegistered =
+            event.participants.any((p) => p.uid == participant.uid);
 
         if (!alreadyRegistered) {
           // Ajouter le joueur et mettre à jour Firestore
           event.participants.add(participant);
-          await _firestore
-              .collection('events')
-              .doc(eventId)
-              .update({'participants': event.participants.map((p) => p.toMap()).toList()});
+          await _firestore.collection('events').doc(eventId).update({
+            'participants': event.participants.map((p) => p.toMap()).toList()
+          });
 
           Get.snackbar('Succès', 'Inscription réussie.');
         } else {
@@ -140,28 +148,31 @@ class EventController extends GetxController {
   /// Désinscrire un joueur d'un événement
   Future<void> unregisterFromEvent(String eventId, AppUser participant) async {
     if (participant.role != 'joueur') {
-      Get.snackbar('Accès refusé', 'Seuls les joueurs peuvent se désinscrire d\'un événement.');
+      Get.snackbar('Accès refusé',
+          'Seuls les joueurs peuvent se désinscrire d\'un événement.');
       return;
     }
 
     try {
       // Récupérer l'événement depuis Firestore
-      DocumentSnapshot eventDoc = await _firestore.collection('events').doc(eventId).get();
+      DocumentSnapshot eventDoc =
+          await _firestore.collection('events').doc(eventId).get();
 
       if (eventDoc.exists) {
-        Map<String, dynamic> eventData = eventDoc.data() as Map<String, dynamic>;
+        Map<String, dynamic> eventData =
+            eventDoc.data() as Map<String, dynamic>;
         Event event = Event.fromMap(eventData);
 
         // Vérifier si le joueur est inscrit
-        bool isRegistered = event.participants.any((p) => p.uid == participant.uid);
+        bool isRegistered =
+            event.participants.any((p) => p.uid == participant.uid);
 
         if (isRegistered) {
           // Retirer le joueur et mettre à jour Firestore
           event.participants.removeWhere((p) => p.uid == participant.uid);
-          await _firestore
-              .collection('events')
-              .doc(eventId)
-              .update({'participants': event.participants.map((p) => p.toMap()).toList()});
+          await _firestore.collection('events').doc(eventId).update({
+            'participants': event.participants.map((p) => p.toMap()).toList()
+          });
 
           Get.snackbar('Succès', 'Désinscription réussie.');
         } else {

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/offre_controller.dart';
-import 'package:show_talent/controller/user_controller.dart';
-import 'package:show_talent/models/offre.dart';
+import 'package:adfoot/controller/offre_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/offre.dart';
 import 'package:intl/intl.dart';
-import 'package:show_talent/screens/offre_screen.dart';
+import 'package:adfoot/screens/offre_screen.dart';
 
 class OffreFormScreen extends StatefulWidget {
   const OffreFormScreen({super.key});
@@ -155,7 +155,8 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
     );
   }
 
-  InputDecoration _buildInputDecoration(String label, String hint, IconData icon) {
+  InputDecoration _buildInputDecoration(
+      String label, String hint, IconData icon) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
@@ -243,7 +244,9 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
 
       final currentUser = userController.user!;
       final offre = Offre(
-        id: isEditing ? (Get.arguments as Offre).id : DateTime.now().toIso8601String(),
+        id: isEditing
+            ? (Get.arguments as Offre).id
+            : DateTime.now().toIso8601String(),
         titre: _titreController.text,
         description: _descriptionController.text,
         dateDebut: _dateDebut!,
@@ -261,7 +264,9 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
 
       _showSnackbar(
         'Succès',
-        isEditing ? 'Offre mise à jour avec succès.' : 'Offre publiée avec succès.',
+        isEditing
+            ? 'Offre mise à jour avec succès.'
+            : 'Offre publiée avec succès.',
         Colors.green,
       );
       Get.off(() => OffreScreen());

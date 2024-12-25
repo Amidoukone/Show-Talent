@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/user_controller.dart';
-import 'package:show_talent/controller/chat_controller.dart';
-import 'package:show_talent/models/user.dart';
-import 'package:show_talent/screens/event_form_screen.dart';
-import 'package:show_talent/screens/event_list_screen.dart';
-import 'package:show_talent/screens/setting_screen.dart';
-import 'package:show_talent/screens/home_screen.dart';
-import 'package:show_talent/screens/conversation_screen.dart';
-import 'package:show_talent/screens/offre_screen.dart';
-import 'package:show_talent/screens/offres_form.dart';
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/controller/chat_controller.dart';
+import 'package:adfoot/models/user.dart';
+import 'package:adfoot/screens/event_form_screen.dart';
+import 'package:adfoot/screens/event_list_screen.dart';
+import 'package:adfoot/screens/setting_screen.dart';
+import 'package:adfoot/screens/home_screen.dart';
+import 'package:adfoot/screens/conversation_screen.dart';
+import 'package:adfoot/screens/offre_screen.dart';
+import 'package:adfoot/screens/offres_form.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});

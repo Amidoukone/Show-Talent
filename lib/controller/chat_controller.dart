@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/push_notification.dart';
-import 'package:show_talent/models/message_converstion.dart';
-import 'package:show_talent/controller/auth_controller.dart';
+import 'package:adfoot/controller/push_notification.dart';
+import 'package:adfoot/models/message_converstion.dart';
+import 'package:adfoot/controller/auth_controller.dart';
 
 class ChatController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -41,7 +41,8 @@ class ChatController extends GetxController {
   }
 
   /// Compter les messages non lus pour un utilisateur dans une conversation
-  Future<int> _getUnreadMessageCount(String conversationId, String userId) async {
+  Future<int> _getUnreadMessageCount(
+      String conversationId, String userId) async {
     try {
       final snapshot = await _firestore
           .collection('conversations')
@@ -146,7 +147,8 @@ class ChatController extends GetxController {
       });
 
       // Envoyer une notification push
-      final recipientDoc = await _firestore.collection('users').doc(recipientId).get();
+      final recipientDoc =
+          await _firestore.collection('users').doc(recipientId).get();
       final recipientData = recipientDoc.data();
 
       if (recipientData != null && recipientData['fcmToken'] != null) {

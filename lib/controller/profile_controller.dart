@@ -3,15 +3,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/models/user.dart';
-import 'package:show_talent/models/video.dart';
+import 'package:adfoot/models/user.dart';
+import 'package:adfoot/models/video.dart';
 
 class ProfileController extends GetxController {
   AppUser? user; // Modèle utilisateur
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  var isLoadingPhoto = false.obs; // Indique si la photo de profil est en cours de chargement
+  var isLoadingPhoto =
+      false.obs; // Indique si la photo de profil est en cours de chargement
   var videoList = <Video>[].obs; // Liste des vidéos de l'utilisateur
 
   /// Chargement des informations utilisateur depuis Firestore
@@ -32,7 +33,10 @@ class ProfileController extends GetxController {
     try {
       isLoadingPhoto.value = true;
       String photoUrl = await _uploadPhotoToStorage(uid, photoPath);
-      await _firestore.collection('users').doc(uid).update({'photoProfil': photoUrl});
+      await _firestore
+          .collection('users')
+          .doc(uid)
+          .update({'photoProfil': photoUrl});
       user?.photoProfil = photoUrl;
       update();
     } catch (e) {
@@ -69,7 +73,10 @@ class ProfileController extends GetxController {
   Future<void> updateUserProfile(AppUser updatedUser) async {
     try {
       // Mettre à jour dans Firestore
-      await _firestore.collection('users').doc(updatedUser.uid).update(updatedUser.toMap());
+      await _firestore
+          .collection('users')
+          .doc(updatedUser.uid)
+          .update(updatedUser.toMap());
       // Mettre à jour localement
       user = updatedUser;
       update();
@@ -82,7 +89,8 @@ class ProfileController extends GetxController {
   /// Gestion des abonnements (Follow/Unfollow)
   Future<void> followUser() async {
     final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (user == null || currentUserId == null || currentUserId == user!.uid) return;
+    if (user == null || currentUserId == null || currentUserId == user!.uid)
+      return;
 
     String profileUserId = user!.uid;
 
@@ -93,7 +101,8 @@ class ProfileController extends GetxController {
       if (!currentUserSnapshot.exists) return;
 
       Map<String, dynamic> currentUserData = currentUserSnapshot.data()!;
-      List<String> followings = List<String>.from(currentUserData['followings'] ?? []);
+      List<String> followings =
+          List<String>.from(currentUserData['followings'] ?? []);
 
       if (followings.contains(profileUserId)) {
         followings.remove(profileUserId);
@@ -103,7 +112,10 @@ class ProfileController extends GetxController {
         user!.followers++;
       }
 
-      await _firestore.collection('users').doc(currentUserId).update({'followings': followings});
+      await _firestore
+          .collection('users')
+          .doc(currentUserId)
+          .update({'followings': followings});
       await _firestore.collection('users').doc(profileUserId).update({
         'followers': user!.followers,
       });

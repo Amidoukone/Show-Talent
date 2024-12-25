@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:show_talent/controller/upload_video_controller.dart';
+import 'package:adfoot/controller/upload_video_controller.dart';
 import 'upload_form.dart';
 
 class UploadVideoScreen extends StatefulWidget {
@@ -14,8 +14,10 @@ class UploadVideoScreen extends StatefulWidget {
 
 class _UploadVideoScreenState extends State<UploadVideoScreen> {
   final ImagePicker _picker = ImagePicker();
-  RxBool isLoading = false.obs; // Gestion de l'état pour l'animation de chargement
-  final UploadVideoController _uploadController = Get.put(UploadVideoController());
+  RxBool isLoading =
+      false.obs; // Gestion de l'état pour l'animation de chargement
+  final UploadVideoController _uploadController =
+      Get.put(UploadVideoController());
 
   Future<void> _pickVideo(ImageSource source) async {
     try {
@@ -24,7 +26,8 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
       isLoading(false);
 
       if (pickedFile != null) {
-        Get.to(() => UploadForm(videoFile: File(pickedFile.path), videoPath: pickedFile.path));
+        Get.to(() => UploadForm(
+            videoFile: File(pickedFile.path), videoPath: pickedFile.path));
       } else {
         Get.snackbar('Erreur', 'Aucune vidéo sélectionnée');
       }
@@ -69,11 +72,15 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
             return Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.video_collection, size: 80, color: Color(0xFF214D4F)),
+                const Icon(Icons.video_collection,
+                    size: 80, color: Color(0xFF214D4F)),
                 const SizedBox(height: 30),
                 const Text(
                   'Sélectionnez la source de votre vidéo',
-                  style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 20),
@@ -86,7 +93,8 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF214D4F),
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 14, horizontal: 30),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
@@ -102,7 +110,8 @@ class _UploadVideoScreenState extends State<UploadVideoScreen> {
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF214D4F),
-                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 14, horizontal: 30),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
                     ),
