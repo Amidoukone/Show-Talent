@@ -1,11 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/models/user.dart';
+import 'package:adfoot/models/user.dart';
 
 class NotificationModel {
   final String id;
   final AppUser destinataire; // Utilisateur recevant la notification
   final String message; // Contenu de la notification
-  final String type; // Type de notification : "message", "offre", "événement", etc.
+  final String
+      type; // Type de notification : "message", "offre", "événement", etc.
   final DateTime dateCreation; // Date de création
   bool estLue; // Indique si la notification est lue
 
@@ -25,7 +26,8 @@ class NotificationModel {
       'destinataire': destinataire.toMap(), // AppUser converti en Map
       'message': message,
       'type': type,
-      'dateCreation': Timestamp.fromDate(dateCreation), // Conversion en Timestamp
+      'dateCreation':
+          Timestamp.fromDate(dateCreation), // Conversion en Timestamp
       'estLue': estLue,
     };
   }
@@ -37,7 +39,8 @@ class NotificationModel {
       destinataire: AppUser.fromMap(map['destinataire'] ?? {}),
       message: map['message'] ?? 'Message inconnu',
       type: map['type'] ?? 'général',
-      dateCreation: (map['dateCreation'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      dateCreation:
+          (map['dateCreation'] as Timestamp?)?.toDate() ?? DateTime.now(),
       estLue: map['estLue'] ?? false,
     );
   }

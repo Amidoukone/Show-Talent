@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/controller/follow_controller.dart';
+import 'package:adfoot/controller/follow_controller.dart';
 
 class FollowListScreen extends StatelessWidget {
   final String uid;
@@ -56,17 +56,20 @@ class FollowListScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               Map<String, dynamic> user = users[index];
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 5.0, horizontal: 10.0),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 5.0, horizontal: 10.0),
                 child: ListTile(
                   leading: CircleAvatar(
                     backgroundImage: user['photoProfil'] != ''
                         ? NetworkImage(user['photoProfil'])
-                        : const AssetImage('assets/images/default_avatar.png') as ImageProvider,
+                        : const AssetImage('assets/images/default_avatar.png')
+                            as ImageProvider,
                     backgroundColor: Colors.grey.shade200,
                   ),
                   title: Text(
                     user['nom'] ?? 'Utilisateur',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
                     user['role'] ?? 'Non spécifié',
@@ -111,26 +114,32 @@ class FollowListScreen extends StatelessWidget {
   Future<List<Map<String, dynamic>>> _fetchFollowList() async {
     try {
       // Récupérer la liste des IDs des utilisateurs
-      DocumentSnapshot userSnapshot = await _followController.firestore.collection('users').doc(uid).get();
+      DocumentSnapshot userSnapshot =
+          await _followController.firestore.collection('users').doc(uid).get();
 
       if (!userSnapshot.exists) return [];
 
-      List<String> userIds = List<String>.from(
-          listType == 'followers' ? userSnapshot['followersList'] : userSnapshot['followingsList']);
+      List<String> userIds = List<String>.from(listType == 'followers'
+          ? userSnapshot['followersList']
+          : userSnapshot['followingsList']);
 
       if (userIds.isEmpty) return [];
 
       // Récupérer les informations des utilisateurs correspondants
-      QuerySnapshot<Map<String, dynamic>> usersSnapshot = await _followController.firestore
-          .collection('users')
-          .where(FieldPath.documentId, whereIn: userIds)
-          .get();
+      QuerySnapshot<Map<String, dynamic>> usersSnapshot =
+          await _followController.firestore
+              .collection('users')
+              .where(FieldPath.documentId, whereIn: userIds)
+              .get();
 
       // Identifier si l'utilisateur actuel suit déjà chaque utilisateur
       String currentUserId = uid;
-      DocumentSnapshot currentUserSnapshot =
-          await _followController.firestore.collection('users').doc(currentUserId).get();
-      List<String> currentFollowings = List<String>.from(currentUserSnapshot['followingsList'] ?? []);
+      DocumentSnapshot currentUserSnapshot = await _followController.firestore
+          .collection('users')
+          .doc(currentUserId)
+          .get();
+      List<String> currentFollowings =
+          List<String>.from(currentUserSnapshot['followingsList'] ?? []);
 
       return usersSnapshot.docs.map((doc) {
         Map<String, dynamic> data = doc.data();

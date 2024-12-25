@@ -1,4 +1,4 @@
-package com.example.show_talent
+package com.example.adfoot
 
 import io.flutter.embedding.android.FlutterActivity
 

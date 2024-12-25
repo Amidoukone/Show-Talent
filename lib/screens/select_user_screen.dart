@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/auth_controller.dart';
-import 'package:show_talent/controller/user_controller.dart';
-import 'package:show_talent/controller/chat_controller.dart';
-import 'package:show_talent/models/user.dart';
+import 'package:adfoot/controller/auth_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/controller/chat_controller.dart';
+import 'package:adfoot/models/user.dart';
 import 'chat_screen.dart';
 
 class SelectUserScreen extends StatefulWidget {
@@ -16,7 +16,8 @@ class SelectUserScreen extends StatefulWidget {
 class _SelectUserScreenState extends State<SelectUserScreen> {
   final UserController userController = Get.put(UserController());
   final ChatController chatController = Get.put(ChatController());
-  final TextEditingController searchController = TextEditingController(); // Contrôleur pour la recherche
+  final TextEditingController searchController =
+      TextEditingController(); // Contrôleur pour la recherche
   RxString searchTerm = ''.obs; // Observable pour stocker le terme de recherche
 
   @override
@@ -40,14 +41,16 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                 ),
               ),
               onChanged: (value) {
-                searchTerm.value = value.toLowerCase(); // Met à jour le terme de recherche
+                searchTerm.value =
+                    value.toLowerCase(); // Met à jour le terme de recherche
               },
             ),
           ),
           Expanded(
             child: Obx(() {
               if (userController.userList.isEmpty) {
-                return const Center(child: Text('Aucun utilisateur disponible.'));
+                return const Center(
+                    child: Text('Aucun utilisateur disponible.'));
               }
 
               // Filtrer la liste des utilisateurs selon le terme de recherche
@@ -76,7 +79,8 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     ),
                     title: Text(
                       user.nom.isNotEmpty ? user.nom : 'Nom inconnu',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     subtitle: Text(
                       user.role.isNotEmpty ? user.role : 'Rôle inconnu',
@@ -84,7 +88,8 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     ),
                     onTap: () async {
                       // Créer une nouvelle conversation avec l'utilisateur sélectionné
-                      String conversationId = await chatController.createOrGetConversation(
+                      String conversationId =
+                          await chatController.createOrGetConversation(
                         currentUserId: AuthController.instance.user!.uid,
                         otherUserId: user.uid,
                       );
@@ -92,7 +97,8 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                       // Redirection vers ChatScreen après la création de la conversation
                       Get.to(() => ChatScreen(
                             conversationId: conversationId,
-                            otherUser: user, // Passer l'objet utilisateur sélectionné
+                            otherUser:
+                                user, // Passer l'objet utilisateur sélectionné
                           ));
                     },
                   );

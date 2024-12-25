@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/event_controller.dart';
-import 'package:show_talent/controller/user_controller.dart';
-import 'package:show_talent/models/event.dart';
-import 'package:show_talent/models/user.dart';
-import 'package:show_talent/screens/profile_screen.dart';
+import 'package:adfoot/controller/event_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/event.dart';
+import 'package:adfoot/models/user.dart';
+import 'package:adfoot/screens/profile_screen.dart';
 import 'event_form_screen.dart';
 
 class EventDetailsScreen extends StatelessWidget {
@@ -40,11 +40,13 @@ class EventDetailsScreen extends StatelessWidget {
                   onPressed: () {
                     Get.defaultDialog(
                       title: 'Confirmation',
-                      middleText: 'Êtes-vous sûr de vouloir supprimer cet événement ?',
+                      middleText:
+                          'Êtes-vous sûr de vouloir supprimer cet événement ?',
                       textConfirm: 'Oui',
                       textCancel: 'Non',
                       onConfirm: () {
-                        Get.find<EventController>().deleteEvent(event.id, currentUser);
+                        Get.find<EventController>()
+                            .deleteEvent(event.id, currentUser);
                         Get.back(); // Fermer la boîte de dialogue
                       },
                     );
@@ -73,7 +75,8 @@ class EventDetailsScreen extends StatelessWidget {
             _buildDetailRow(
               icon: Icons.calendar_today,
               label: 'Dates',
-              value: 'Du ${_formatDate(event.dateDebut)} au ${_formatDate(event.dateFin)}',
+              value:
+                  'Du ${_formatDate(event.dateDebut)} au ${_formatDate(event.dateFin)}',
             ),
             const SizedBox(height: 16),
 
@@ -93,7 +96,8 @@ class EventDetailsScreen extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               event.description,
-              style: const TextStyle(fontSize: 16, height: 1.5, color: Colors.black87),
+              style: const TextStyle(
+                  fontSize: 16, height: 1.5, color: Colors.black87),
             ),
             const SizedBox(height: 20),
 
@@ -157,7 +161,8 @@ class EventDetailsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailRow({required IconData icon, required String label, required String value}) {
+  Widget _buildDetailRow(
+      {required IconData icon, required String label, required String value}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -169,7 +174,8 @@ class EventDetailsScreen extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Text(
@@ -230,7 +236,8 @@ class EventDetailsScreen extends StatelessWidget {
                       title: Text(participant.nom),
                       subtitle: Text(participant.email),
                       onTap: () {
-                        Get.to(() => ProfileScreen(uid: participant.uid, isReadOnly: true));
+                        Get.to(() => ProfileScreen(
+                            uid: participant.uid, isReadOnly: true));
                       },
                     );
                   },

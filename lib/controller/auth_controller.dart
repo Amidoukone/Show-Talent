@@ -4,10 +4,10 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/controller/notification_controller.dart';
-import 'package:show_talent/models/user.dart';
-import 'package:show_talent/screens/home_screen.dart';
-import 'package:show_talent/screens/login_screen.dart';
+import 'package:adfoot/controller/notification_controller.dart';
+import 'package:adfoot/models/user.dart';
+import 'package:adfoot/screens/home_screen.dart';
+import 'package:adfoot/screens/login_screen.dart';
 
 class AuthController extends GetxController {
   static AuthController instance = Get.find();
@@ -51,18 +51,21 @@ class AuthController extends GetxController {
 
   Future<AppUser?> getAppUserFromFirestore(String uid) async {
     try {
-      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      DocumentSnapshot doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
       if (doc.exists) {
         return AppUser.fromMap(doc.data() as Map<String, dynamic>);
       }
     } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de récupérer les informations utilisateur : $e');
+      Get.snackbar('Erreur',
+          'Impossible de récupérer les informations utilisateur : $e');
     }
     return null;
   }
 
   void pickImage() async {
-    final pickedImage = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final pickedImage =
+        await ImagePicker().pickImage(source: ImageSource.gallery);
     if (pickedImage != null) {
       _pickedImage = Rx<File?>(File(pickedImage.path));
       Get.snackbar('Photo de profil', 'Image ajoutée avec succès');
@@ -80,9 +83,14 @@ class AuthController extends GetxController {
     return await snap.ref.getDownloadURL();
   }
 
-  void registerUser(String name, String email, String password, String role, File? image) async {
+  void registerUser(String name, String email, String password, String role,
+      File? image) async {
     try {
-      if (name.isNotEmpty && email.isNotEmpty && password.isNotEmpty && image != null && role.isNotEmpty) {
+      if (name.isNotEmpty &&
+          email.isNotEmpty &&
+          password.isNotEmpty &&
+          image != null &&
+          role.isNotEmpty) {
         UserCredential userCred = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(email: email, password: password);
 
@@ -104,11 +112,15 @@ class AuthController extends GetxController {
           followingsList: [],
         );
 
-        await FirebaseFirestore.instance.collection('users').doc(userCred.user!.uid).set(newUser.toMap());
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCred.user!.uid)
+            .set(newUser.toMap());
         _user.value = newUser;
         Get.offAll(() => const HomeScreen());
       } else {
-        Get.snackbar('Erreur', 'Veuillez remplir tous les champs et ajouter une photo');
+        Get.snackbar(
+            'Erreur', 'Veuillez remplir tous les champs et ajouter une photo');
       }
     } catch (e) {
       Get.snackbar('Erreur', 'Erreur lors de la création du compte : $e');
@@ -118,7 +130,8 @@ class AuthController extends GetxController {
   void loginUser(String email, String password) async {
     try {
       if (email.isNotEmpty && password.isNotEmpty) {
-        UserCredential userCred = await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+        UserCredential userCred = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(email: email, password: password);
 
         AppUser? appUser = await getAppUserFromFirestore(userCred.user!.uid);
         if (appUser != null && appUser.estActif) {
@@ -126,7 +139,11 @@ class AuthController extends GetxController {
           Get.offAll(() => const HomeScreen());
         } else {
           await signOut();
-          Get.snackbar('Accès refusé', appUser == null ? 'Utilisateur introuvable' : 'Votre compte est bloqué.');
+          Get.snackbar(
+              'Accès refusé',
+              appUser == null
+                  ? 'Utilisateur introuvable'
+                  : 'Votre compte est bloqué.');
         }
       } else {
         Get.snackbar('Erreur', 'Veuillez remplir toutes les informations');
@@ -144,12 +161,14 @@ class AuthController extends GetxController {
 
   Future<void> forgotPassword(String email) async {
     if (email.isEmpty) {
-      Get.snackbar('Erreur', 'Veuillez entrer votre email pour réinitialiser le mot de passe.');
+      Get.snackbar('Erreur',
+          'Veuillez entrer votre email pour réinitialiser le mot de passe.');
       return;
     }
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      Get.snackbar('Réinitialisation du mot de passe', 'Un email de réinitialisation vous a été envoyé.');
+      Get.snackbar('Réinitialisation du mot de passe',
+          'Un email de réinitialisation vous a été envoyé.');
     } catch (e) {
       Get.snackbar('Erreur', e.toString());
     }

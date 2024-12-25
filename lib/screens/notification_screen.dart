@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/notification_controller.dart';
+import 'package:adfoot/controller/notification_controller.dart';
 
 class NotificationsScreen extends StatelessWidget {
-  final NotificationController notificationController = Get.put(NotificationController());
+  final NotificationController notificationController =
+      Get.put(NotificationController());
 
   NotificationsScreen({super.key});
 

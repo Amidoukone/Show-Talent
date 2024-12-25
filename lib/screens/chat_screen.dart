@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/auth_controller.dart';
-import 'package:show_talent/models/message_converstion.dart';
+import 'package:adfoot/controller/auth_controller.dart';
+import 'package:adfoot/models/message_converstion.dart';
 import '../controller/chat_controller.dart';
 import '../models/user.dart';
 
@@ -10,7 +10,8 @@ class ChatScreen extends StatelessWidget {
   final AppUser otherUser; // Utilisateur complet pour la conversation
   final ChatController chatController = Get.find();
 
-  ChatScreen({super.key, 
+  ChatScreen({
+    super.key,
     required this.conversationId,
     required this.otherUser,
   });
@@ -79,8 +80,10 @@ class ChatScreen extends StatelessWidget {
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: isSentByUser
-                              ? const Color.fromARGB(255, 38, 230, 12).withOpacity(0.2)
-                              : const Color.fromARGB(255, 99, 222, 211).withOpacity(0.3),
+                              ? const Color.fromARGB(255, 38, 230, 12)
+                                  .withOpacity(0.2)
+                              : const Color.fromARGB(255, 99, 222, 211)
+                                  .withOpacity(0.3),
                           borderRadius: BorderRadius.only(
                             topLeft: const Radius.circular(12),
                             topRight: const Radius.circular(12),

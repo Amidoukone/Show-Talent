@@ -1,9 +1,10 @@
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/models/offre.dart';
-import 'package:show_talent/models/user.dart';
+import 'package:adfoot/models/offre.dart';
+import 'package:adfoot/models/user.dart';
 
-class CustomSearchController extends GetxController {  // Renommage ici
+class CustomSearchController extends GetxController {
+  // Renommage ici
   final Rx<List<AppUser>> _searchedUsers = Rx<List<AppUser>>([]);
   List<AppUser> get searchedUsers => _searchedUsers.value;
 
@@ -38,7 +39,8 @@ class CustomSearchController extends GetxController {  // Renommage ici
   }
 
   // Méthode pour rechercher des offres avec des filtres (catégorie, dates)
-  void searchOffres(String query, {String? category, DateTime? startDate, DateTime? endDate}) async {
+  void searchOffres(String query,
+      {String? category, DateTime? startDate, DateTime? endDate}) async {
     Query offreQuery = FirebaseFirestore.instance.collection('offres');
 
     if (category != null && category.isNotEmpty) {

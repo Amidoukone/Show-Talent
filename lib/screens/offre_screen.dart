@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/offre_controller.dart';
-import 'package:show_talent/controller/user_controller.dart';
-import 'package:show_talent/models/offre.dart';
-import 'package:show_talent/screens/offres_form.dart';
-import 'package:show_talent/screens/profile_screen.dart';
+import 'package:adfoot/controller/offre_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/offre.dart';
+import 'package:adfoot/screens/offres_form.dart';
+import 'package:adfoot/screens/profile_screen.dart';
 
 class OffreScreen extends StatelessWidget {
   final OffreController offreController = Get.put(OffreController());
@@ -40,12 +40,14 @@ class OffreScreen extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final offre = offres[index];
                   final isOwner = currentUser?.uid == offre.recruteur.uid;
-                  final isPostulable =
-                      currentUser?.role == 'joueur' && offre.statut == 'ouverte';
+                  final isPostulable = currentUser?.role == 'joueur' &&
+                      offre.statut == 'ouverte';
 
                   return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    margin: const EdgeInsets.symmetric(
+                        vertical: 8.0, horizontal: 8.0),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     elevation: 5,
                     child: Padding(
                       padding: const EdgeInsets.all(12.0),
@@ -65,7 +67,8 @@ class OffreScreen extends StatelessWidget {
                           const SizedBox(height: 8),
                           Text(
                             offre.description,
-                            style: const TextStyle(fontSize: 14, color: Colors.black87),
+                            style: const TextStyle(
+                                fontSize: 14, color: Colors.black87),
                           ),
                           const SizedBox(height: 8),
                           Row(
@@ -83,7 +86,8 @@ class OffreScreen extends StatelessWidget {
                               ),
                               if (isOwner)
                                 ElevatedButton.icon(
-                                  onPressed: () => _showCandidats(context, offre),
+                                  onPressed: () =>
+                                      _showCandidats(context, offre),
                                   icon: const Icon(Icons.group, size: 16),
                                   label: const Text('Voir les candidats'),
                                   style: ElevatedButton.styleFrom(
@@ -96,7 +100,8 @@ class OffreScreen extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          _buildActionButtons(context, offre, isOwner, isPostulable, currentUser),
+                          _buildActionButtons(context, offre, isOwner,
+                              isPostulable, currentUser),
                         ],
                       ),
                     ),
@@ -134,7 +139,9 @@ class OffreScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                offre.recruteur.nom.isNotEmpty ? offre.recruteur.nom : 'Nom inconnu',
+                offre.recruteur.nom.isNotEmpty
+                    ? offre.recruteur.nom
+                    : 'Nom inconnu',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -235,7 +242,8 @@ class OffreScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () {
-              offreController.supprimerOffre(offre.id, userController.user!, offre);
+              offreController.supprimerOffre(
+                  offre.id, userController.user!, offre);
               Get.back();
             },
             child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
@@ -265,7 +273,9 @@ class OffreScreen extends StatelessWidget {
             const Text(
               'Liste des candidats',
               style: TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 18, color: Colors.teal),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: Colors.teal),
             ),
             const SizedBox(height: 10),
             SingleChildScrollView(
@@ -301,4 +311,3 @@ class OffreScreen extends StatelessWidget {
     );
   }
 }
-

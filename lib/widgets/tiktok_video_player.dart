@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:show_talent/controller/user_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:video_player/video_player.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/controller/video_controller.dart';
-import 'package:show_talent/models/video.dart';
+import 'package:adfoot/controller/video_controller.dart';
+import 'package:adfoot/models/video.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-import 'package:show_talent/screens/full_screen_video.dart';
+import 'package:adfoot/screens/full_screen_video.dart';
 
 class TikTokVideoPlayer extends StatefulWidget {
   final String videoUrl;
@@ -18,7 +18,8 @@ class TikTokVideoPlayer extends StatefulWidget {
     required this.videoUrl,
     required this.video,
     required this.videoController,
-    required this.userId, required bool enableTapToPlayPause,
+    required this.userId,
+    required bool enableTapToPlayPause,
   });
 
   @override
@@ -129,7 +130,9 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
             ),
           _buildActionButton(
             icon: Icons.favorite,
-            color: widget.video.likes.contains(widget.userId) ? Colors.red : Colors.white,
+            color: widget.video.likes.contains(widget.userId)
+                ? Colors.red
+                : Colors.white,
             label: '${widget.video.likes.length}',
             onPressed: _toggleLike,
           ),
@@ -200,7 +203,8 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Confirmer la suppression'),
-          content: const Text('Êtes-vous sûr de vouloir supprimer cette vidéo ?'),
+          content:
+              const Text('Êtes-vous sûr de vouloir supprimer cette vidéo ?'),
           actions: [
             TextButton(
               onPressed: () {
@@ -219,7 +223,8 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
                   colorText: Colors.white,
                 );
               },
-              child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+              child:
+                  const Text('Supprimer', style: TextStyle(color: Colors.red)),
             ),
           ],
         );

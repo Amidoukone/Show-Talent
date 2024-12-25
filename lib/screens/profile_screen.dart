@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:show_talent/controller/follow_controller.dart';
-import 'package:show_talent/controller/profile_controller.dart';
-import 'package:show_talent/controller/auth_controller.dart';
-import 'package:show_talent/controller/chat_controller.dart';
-import 'package:show_talent/models/user.dart';
-import 'package:show_talent/models/video.dart';
-import 'package:show_talent/screens/chat_screen.dart';
-import 'package:show_talent/screens/edit_profil_screen.dart';
-import 'package:show_talent/screens/follow_list_screen.dart';
-import 'package:show_talent/screens/video_player_screen.dart';
+import 'package:adfoot/controller/follow_controller.dart';
+import 'package:adfoot/controller/profile_controller.dart';
+import 'package:adfoot/controller/auth_controller.dart';
+import 'package:adfoot/controller/chat_controller.dart';
+import 'package:adfoot/models/user.dart';
+import 'package:adfoot/models/video.dart';
+import 'package:adfoot/screens/chat_screen.dart';
+import 'package:adfoot/screens/edit_profil_screen.dart';
+import 'package:adfoot/screens/follow_list_screen.dart';
+import 'package:adfoot/screens/video_player_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String uid;
@@ -159,12 +159,14 @@ class ProfileScreen extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         GestureDetector(
-          onTap: () => Get.to(() => FollowListScreen(uid: user.uid, listType: 'followers')),
+          onTap: () => Get.to(
+              () => FollowListScreen(uid: user.uid, listType: 'followers')),
           child: _buildStatItem('Followers', user.followersList.length),
         ),
         const SizedBox(width: 20),
         GestureDetector(
-          onTap: () => Get.to(() => FollowListScreen(uid: user.uid, listType: 'followings')),
+          onTap: () => Get.to(
+              () => FollowListScreen(uid: user.uid, listType: 'followings')),
           child: _buildStatItem('Followings', user.followingsList.length),
         ),
       ],
@@ -205,7 +207,8 @@ class ProfileScreen extends StatelessWidget {
               await _followController.followUser(currentUserId, user.uid);
               user.followersList.add(currentUserId);
             }
-            _profileController.update(); // Met à jour les informations utilisateur localement
+            _profileController
+                .update(); // Met à jour les informations utilisateur localement
           } catch (e) {
             Get.snackbar(
               'Erreur',
@@ -232,7 +235,8 @@ class ProfileScreen extends StatelessWidget {
 
   /// Changer la photo de profil
   Future<void> _changeProfilePhoto(String userId) async {
-    final XFile? pickedImage = await _imagePicker.pickImage(source: ImageSource.gallery);
+    final XFile? pickedImage =
+        await _imagePicker.pickImage(source: ImageSource.gallery);
     if (pickedImage != null) {
       await _profileController.updateProfilePhoto(userId, pickedImage.path);
     }
@@ -251,7 +255,9 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            user.bio?.isNotEmpty == true ? user.bio! : 'Aucune biographie disponible.',
+            user.bio?.isNotEmpty == true
+                ? user.bio!
+                : 'Aucune biographie disponible.',
             style: const TextStyle(fontSize: 16, color: Colors.black87),
             textAlign: TextAlign.left,
           ),
@@ -284,7 +290,8 @@ class ProfileScreen extends StatelessWidget {
         return Column(
           children: [
             _infoTile('Entreprise', user.entreprise),
-            _infoTile('Nombre de recrutements', user.nombreDeRecrutements?.toString()),
+            _infoTile('Nombre de recrutements',
+                user.nombreDeRecrutements?.toString()),
           ],
         );
       case 'fan':
@@ -322,14 +329,16 @@ class ProfileScreen extends StatelessWidget {
           Video video = userVideos[index];
           return GestureDetector(
             onTap: () {
-              Get.to(() => VideoPlayerScreen(videoUrl: video.videoUrl, video: video));
+              Get.to(() =>
+                  VideoPlayerScreen(videoUrl: video.videoUrl, video: video));
             },
             child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: Image.network(
                 video.thumbnail,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.error),
+                errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.error),
               ),
             ),
           );

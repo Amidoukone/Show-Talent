@@ -1,11 +1,12 @@
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:show_talent/models/notification.dart';
-import 'package:show_talent/models/user.dart';
+import 'package:adfoot/models/notification.dart';
+import 'package:adfoot/models/user.dart';
 
 class NotificationController extends GetxController {
-  final Rx<List<NotificationModel>> _notifications = Rx<List<NotificationModel>>([]);
+  final Rx<List<NotificationModel>> _notifications =
+      Rx<List<NotificationModel>>([]);
   List<NotificationModel> get notifications => _notifications.value;
 
   // Utilisateur courant (Firebase)
@@ -30,7 +31,8 @@ class NotificationController extends GetxController {
         currentUser = AppUser.fromMap(userSnapshot.data()!);
         fetchNotifications();
       } else {
-        Get.snackbar('Erreur', 'Impossible de récupérer les informations utilisateur.');
+        Get.snackbar(
+            'Erreur', 'Impossible de récupérer les informations utilisateur.');
       }
     } else {
       Get.snackbar('Erreur', 'Aucun utilisateur connecté.');
@@ -41,7 +43,8 @@ class NotificationController extends GetxController {
   void fetchNotifications() {
     FirebaseFirestore.instance
         .collection('notifications')
-        .where('destinataire.uid', isEqualTo: currentUser.uid) // Utilisation du champ UID correct
+        .where('destinataire.uid',
+            isEqualTo: currentUser.uid) // Utilisation du champ UID correct
         .orderBy('dateCreation', descending: true)
         .snapshots()
         .listen((snapshot) {
@@ -72,7 +75,8 @@ class NotificationController extends GetxController {
     required Map<String, dynamic> data,
   }) async {
     try {
-      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+      final usersSnapshot =
+          await FirebaseFirestore.instance.collection('users').get();
 
       for (var userDoc in usersSnapshot.docs) {
         final user = AppUser.fromMap(userDoc.data());
@@ -105,4 +109,3 @@ class NotificationController extends GetxController {
     }
   }
 }
- 

@@ -1,8 +1,8 @@
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/controller/push_notification.dart';
-import 'package:show_talent/models/offre.dart';
-import 'package:show_talent/models/user.dart';
+import 'package:adfoot/controller/push_notification.dart';
+import 'package:adfoot/models/offre.dart';
+import 'package:adfoot/models/user.dart';
 
 class OffreController extends GetxController {
   static OffreController instance = Get.find();
@@ -21,7 +21,8 @@ class OffreController extends GetxController {
   /// Récupérer les offres depuis Firestore
   void _fetchOffres() {
     _firestore.collection('offres').snapshots().listen((snapshot) {
-      _offres.value = snapshot.docs.map((doc) => Offre.fromMap(doc.data())).toList();
+      _offres.value =
+          snapshot.docs.map((doc) => Offre.fromMap(doc.data())).toList();
       update();
     });
   }
@@ -29,7 +30,8 @@ class OffreController extends GetxController {
   /// Publier une offre et notifier les joueurs
   Future<void> publierOffre(Offre offre, AppUser utilisateur) async {
     if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
-      Get.snackbar('Accès refusé', 'Seuls les clubs ou recruteurs peuvent publier des offres.');
+      Get.snackbar('Accès refusé',
+          'Seuls les clubs ou recruteurs peuvent publier des offres.');
       return;
     }
 
@@ -63,7 +65,8 @@ class OffreController extends GetxController {
           // Envoyer une notification push
           await PushNotificationService.sendNotification(
             title: 'Nouvelle Offre Disponible',
-            body: 'Une nouvelle offre a été publiée par ${recruteur.nom}. Découvrez-la maintenant.',
+            body:
+                'Une nouvelle offre a été publiée par ${recruteur.nom}. Découvrez-la maintenant.',
             token: fcmToken,
             contextType: 'offre',
             contextData: offre.id,
@@ -82,7 +85,8 @@ class OffreController extends GetxController {
   /// Modifier une offre existante
   Future<void> modifierOffre(Offre offre, AppUser utilisateur) async {
     if (utilisateur.uid != offre.recruteur.uid) {
-      Get.snackbar('Accès refusé', 'Vous ne pouvez modifier que vos propres offres.');
+      Get.snackbar(
+          'Accès refusé', 'Vous ne pouvez modifier que vos propres offres.');
       return;
     }
 
@@ -96,9 +100,11 @@ class OffreController extends GetxController {
   }
 
   /// Supprimer une offre
-  Future<void> supprimerOffre(String offreId, AppUser utilisateur, Offre offre) async {
+  Future<void> supprimerOffre(
+      String offreId, AppUser utilisateur, Offre offre) async {
     if (utilisateur.uid != offre.recruteur.uid) {
-      Get.snackbar('Accès refusé', 'Vous ne pouvez supprimer que vos propres offres.');
+      Get.snackbar(
+          'Accès refusé', 'Vous ne pouvez supprimer que vos propres offres.');
       return;
     }
 
@@ -114,17 +120,20 @@ class OffreController extends GetxController {
   /// Permettre aux joueurs de postuler à une offre
   Future<void> postulerOffre(AppUser joueur, Offre offre) async {
     if (joueur.role != 'joueur') {
-      Get.snackbar('Accès refusé', 'Seuls les joueurs peuvent postuler à une offre.');
+      Get.snackbar(
+          'Accès refusé', 'Seuls les joueurs peuvent postuler à une offre.');
       return;
     }
     if (offre.statut == 'fermée') {
-      Get.snackbar('Offre fermée', 'Vous ne pouvez pas postuler à une offre fermée.');
+      Get.snackbar(
+          'Offre fermée', 'Vous ne pouvez pas postuler à une offre fermée.');
       return;
     }
 
     bool dejaPostule = offre.candidats.any((c) => c.uid == joueur.uid);
     if (dejaPostule) {
-      Get.snackbar('Postulation existante', 'Vous avez déjà postulé à cette offre.');
+      Get.snackbar(
+          'Postulation existante', 'Vous avez déjà postulé à cette offre.');
       return;
     }
 

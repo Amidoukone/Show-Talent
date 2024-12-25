@@ -1,6 +1,6 @@
 {
-    "name": "show_talent",
-    "short_name": "show_talent",
+    "name": "adfoot",
+    "short_name": "adfoot",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

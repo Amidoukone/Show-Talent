@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/models/user.dart';
+import 'package:adfoot/models/user.dart';
 
 class Offre {
   String id; // Retirer final

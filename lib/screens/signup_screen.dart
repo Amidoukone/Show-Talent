@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/screens/home_screen.dart';
+import 'package:adfoot/screens/home_screen.dart';
 import '../models/user.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -16,17 +16,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
-  String _selectedRole = 'joueur';  // Le rôle sélectionné par défaut
-  bool _obscurePassword = true; // Contrôle pour masquer/afficher le mot de passe
+  String _selectedRole = 'joueur'; // Le rôle sélectionné par défaut
+  bool _obscurePassword =
+      true; // Contrôle pour masquer/afficher le mot de passe
 
   _signUp() async {
     try {
       // Création de l'utilisateur Firebase
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-            email: _emailController.text,
-            password: _passwordController.text,
-          );
+      UserCredential userCredential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
 
       String uid = userCredential.user!.uid;
 
@@ -36,12 +37,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
         nom: _nameController.text,
         email: _emailController.text,
         role: _selectedRole,
-        photoProfil: '',  // Le chemin de la photo de profil peut être mis à jour plus tard
-        estActif: true,  // Utilisateur actif par défaut
-        followers: 0,  // Pas de followers au début
-        followings: 0,  // Pas de followings au début
-        dateInscription: DateTime.now(),  // Date d'inscription
-        dernierLogin: DateTime.now(), followersList: [], followingsList: [], estBloque: false,  // Dernier login lors de l'inscription
+        photoProfil:
+            '', // Le chemin de la photo de profil peut être mis à jour plus tard
+        estActif: true, // Utilisateur actif par défaut
+        followers: 0, // Pas de followers au début
+        followings: 0, // Pas de followings au début
+        dateInscription: DateTime.now(), // Date d'inscription
+        dernierLogin: DateTime.now(), followersList: [], followingsList: [],
+        estBloque: false, // Dernier login lors de l'inscription
       );
 
       // Sauvegarder les informations utilisateur dans Firestore
@@ -128,8 +131,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
               // Sélection du rôle sans l'option "coach"
               DropdownButton<String>(
                 value: _selectedRole,
-                items: ['joueur', 'club', 'recruteur', 'fan']
-                    .map((String role) {
+                items:
+                    ['joueur', 'club', 'recruteur', 'fan'].map((String role) {
                   return DropdownMenuItem<String>(
                     value: role,
                     child: Text(role),
