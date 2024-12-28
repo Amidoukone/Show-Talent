@@ -241,9 +241,11 @@ class OffreScreen extends StatelessWidget {
             child: const Text('Annuler'),
           ),
           TextButton(
-            onPressed: () {
-              offreController.supprimerOffre(
+            onPressed: () async {
+              await offreController.supprimerOffre(
                   offre.id, userController.user!, offre);
+
+              // Fermer le dialogue après suppression
               Get.back();
             },
             child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
