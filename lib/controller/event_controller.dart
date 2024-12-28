@@ -7,17 +7,18 @@ import 'package:adfoot/models/user.dart';
 class EventController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  /// Liste observable des événements
   final Rx<List<Event>> _events = Rx<List<Event>>([]);
   List<Event> get events => _events.value;
 
   @override
   void onInit() {
     super.onInit();
-    _fetchEvents();
+    fetchEvents(); // Charger les événements au démarrage
   }
 
-  /// Récupérer les événements depuis Firestore
-  void _fetchEvents() {
+  /// Charger les événements depuis Firestore
+  void fetchEvents() {
     _firestore.collection('events').snapshots().listen((snapshot) {
       _events.value =
           snapshot.docs.map((doc) => Event.fromMap(doc.data())).toList();
@@ -27,79 +28,47 @@ class EventController extends GetxController {
 
   /// Créer un nouvel événement et notifier les joueurs
   Future<void> createEvent(Event event, AppUser utilisateur) async {
-    if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
-      Get.snackbar('Accès refusé',
-          'Seuls les clubs ou recruteurs peuvent créer des événements.');
-      return;
-    }
+    if (!_isAuthorized(utilisateur)) return;
 
     try {
-      // Ajouter l'événement dans Firestore
       await _firestore.collection('events').doc(event.id).set(event.toMap());
       Get.snackbar('Succès', 'Événement créé avec succès.');
 
-      // Récupérer les joueurs pour leur envoyer une notification
-      final joueursSnapshot = await _firestore
-          .collection('users')
-          .where('role', isEqualTo: 'joueur')
-          .get();
+      // Notifier les joueurs
+      await _notifyPlayersOfNewEvent(event, utilisateur);
 
-      for (var joueurDoc in joueursSnapshot.docs) {
-        final joueurData = joueurDoc.data();
-        final fcmToken = joueurData['fcmToken'];
-
-        if (fcmToken != null && fcmToken.isNotEmpty) {
-          // Envoyer une notification push à chaque joueur
-          await PushNotificationService.sendNotification(
-            title: 'Nouvel Événement',
-            body:
-                '${utilisateur.nom} a créé un nouvel événement : ${event.titre}',
-            token: fcmToken,
-            contextType: 'event',
-            contextData: event.id,
-          );
-          print('Notification envoyée au joueur : ${joueurData['nom']}');
-        } else {
-          print('Token FCM manquant pour le joueur : ${joueurData['nom']}');
-        }
-      }
+      Get.back(result: true); // Retourner à l'écran précédent
     } catch (e) {
       print('Erreur lors de la création de l\'événement : $e');
-      Get.snackbar('Erreur', 'Échec de la création de l\'événement : $e');
+      Get.snackbar('Erreur', 'Échec de la création de l\'événement.');
     }
   }
 
-  /// Mettre à jour un événement
+  /// Mettre à jour un événement existant
   Future<void> updateEvent(Event event, AppUser utilisateur) async {
-    if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
-      Get.snackbar('Accès refusé',
-          'Seuls les clubs ou recruteurs peuvent modifier des événements.');
-      return;
-    }
+    if (!_isAuthorized(utilisateur)) return;
 
     try {
       await _firestore.collection('events').doc(event.id).update(event.toMap());
       Get.snackbar('Succès', 'Événement mis à jour avec succès.');
+      Get.back(result: true); // Retourner à l'écran précédent
     } catch (e) {
       print('Erreur lors de la mise à jour de l\'événement : $e');
-      Get.snackbar('Erreur', 'Échec de la mise à jour de l\'événement : $e');
+      Get.snackbar('Erreur', 'Échec de la mise à jour de l\'événement.');
     }
   }
 
   /// Supprimer un événement
   Future<void> deleteEvent(String eventId, AppUser utilisateur) async {
-    if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
-      Get.snackbar('Accès refusé',
-          'Seuls les clubs ou recruteurs peuvent supprimer des événements.');
-      return;
-    }
+    if (!_isAuthorized(utilisateur)) return;
 
     try {
       await _firestore.collection('events').doc(eventId).delete();
       Get.snackbar('Succès', 'Événement supprimé avec succès.');
+      Get.back(result: true); // Retourner à l'écran précédent
     } catch (e) {
       print('Erreur lors de la suppression de l\'événement : $e');
-      Get.snackbar('Erreur', 'Échec de la suppression de l\'événement : $e');
+      Get.snackbar('Erreur', 'Échec de la suppression de l\'événement.');
     }
   }
 
@@ -112,7 +81,6 @@ class EventController extends GetxController {
     }
 
     try {
-      // Récupérer l'événement depuis Firestore
       DocumentSnapshot eventDoc =
           await _firestore.collection('events').doc(eventId).get();
 
@@ -121,12 +89,7 @@ class EventController extends GetxController {
             eventDoc.data() as Map<String, dynamic>;
         Event event = Event.fromMap(eventData);
 
-        // Vérifier si le joueur est déjà inscrit
-        bool alreadyRegistered =
-            event.participants.any((p) => p.uid == participant.uid);
-
-        if (!alreadyRegistered) {
-          // Ajouter le joueur et mettre à jour Firestore
+        if (!_isAlreadyRegistered(event, participant)) {
           event.participants.add(participant);
           await _firestore.collection('events').doc(eventId).update({
             'participants': event.participants.map((p) => p.toMap()).toList()
@@ -141,7 +104,7 @@ class EventController extends GetxController {
       }
     } catch (e) {
       print('Erreur lors de l\'inscription : $e');
-      Get.snackbar('Erreur', 'Échec de l\'inscription : $e');
+      Get.snackbar('Erreur', 'Échec de l\'inscription.');
     }
   }
 
@@ -154,7 +117,6 @@ class EventController extends GetxController {
     }
 
     try {
-      // Récupérer l'événement depuis Firestore
       DocumentSnapshot eventDoc =
           await _firestore.collection('events').doc(eventId).get();
 
@@ -163,13 +125,9 @@ class EventController extends GetxController {
             eventDoc.data() as Map<String, dynamic>;
         Event event = Event.fromMap(eventData);
 
-        // Vérifier si le joueur est inscrit
-        bool isRegistered =
-            event.participants.any((p) => p.uid == participant.uid);
-
-        if (isRegistered) {
-          // Retirer le joueur et mettre à jour Firestore
-          event.participants.removeWhere((p) => p.uid == participant.uid);
+        if (_isAlreadyRegistered(event, participant)) {
+          event.participants
+              .removeWhere((participantItem) => participantItem.uid == participant.uid);
           await _firestore.collection('events').doc(eventId).update({
             'participants': event.participants.map((p) => p.toMap()).toList()
           });
@@ -183,7 +141,46 @@ class EventController extends GetxController {
       }
     } catch (e) {
       print('Erreur lors de la désinscription : $e');
-      Get.snackbar('Erreur', 'Échec de la désinscription : $e');
+      Get.snackbar('Erreur', 'Échec de la désinscription.');
+    }
+  }
+
+  /// Vérifier si un utilisateur est autorisé
+  bool _isAuthorized(AppUser utilisateur) {
+    if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
+      Get.snackbar('Accès refusé',
+          'Seuls les clubs ou recruteurs peuvent effectuer cette action.');
+      return false;
+    }
+    return true;
+  }
+
+  /// Vérifier si un joueur est déjà inscrit
+  bool _isAlreadyRegistered(Event event, AppUser participant) {
+    return event.participants.any((p) => p.uid == participant.uid);
+  }
+
+  /// Notifier les joueurs d'un nouvel événement
+  Future<void> _notifyPlayersOfNewEvent(Event event, AppUser utilisateur) async {
+    final joueursSnapshot = await _firestore
+        .collection('users')
+        .where('role', isEqualTo: 'joueur')
+        .get();
+
+    for (var joueurDoc in joueursSnapshot.docs) {
+      final joueurData = joueurDoc.data();
+      final fcmToken = joueurData['fcmToken'];
+
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        await PushNotificationService.sendNotification(
+          title: 'Nouvel Événement',
+          body:
+              '${utilisateur.nom} a créé un nouvel événement : ${event.titre}',
+          token: fcmToken,
+          contextType: 'event',
+          contextData: event.id,
+        );
+      }
     }
   }
 }

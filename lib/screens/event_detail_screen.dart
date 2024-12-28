@@ -30,26 +30,20 @@ class EventDetailsScreen extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.white),
                   tooltip: 'Modifier',
-                  onPressed: () {
-                    Get.to(() => EventFormScreen(event: event));
+                  onPressed: () async {
+                    // Naviguer vers l'écran de modification et actualiser après retour
+                    final updated = await Get.to(() => EventFormScreen(event: event));
+                    if (updated == true) {
+                      Get.find<EventController>().fetchEvents();
+                      Get.back(result: true); // Retourner pour actualiser la liste
+                    }
                   },
                 ),
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.white),
                   tooltip: 'Supprimer',
                   onPressed: () {
-                    Get.defaultDialog(
-                      title: 'Confirmation',
-                      middleText:
-                          'Êtes-vous sûr de vouloir supprimer cet événement ?',
-                      textConfirm: 'Oui',
-                      textCancel: 'Non',
-                      onConfirm: () {
-                        Get.find<EventController>()
-                            .deleteEvent(event.id, currentUser);
-                        Get.back(); // Fermer la boîte de dialogue
-                      },
-                    );
+                    _confirmDeleteEvent(context, currentUser);
                   },
                 ),
               ]
@@ -60,141 +54,142 @@ class EventDetailsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Titre de l'événement
-            Text(
-              event.titre,
-              style: const TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Color.fromARGB(255, 5, 12, 3),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Dates
-            _buildDetailRow(
-              icon: Icons.calendar_today,
-              label: 'Dates',
-              value:
-                  'Du ${_formatDate(event.dateDebut)} au ${_formatDate(event.dateFin)}',
-            ),
-            const SizedBox(height: 16),
-
-            // Lieu
-            _buildDetailRow(
-              icon: Icons.location_on,
-              label: 'Lieu',
-              value: event.lieu,
-            ),
-            const SizedBox(height: 16),
-
-            // Description
-            const Text(
-              'Description',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              event.description,
-              style: const TextStyle(
-                  fontSize: 16, height: 1.5, color: Colors.black87),
-            ),
+            _buildEventDetails(),
             const SizedBox(height: 20),
-
-            // Statut
-            Row(
-              children: [
-                const Text(
-                  'Statut: ',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  event.statut,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Actions spécifiques pour l'organisateur
-            if (isOrganisateur)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      _showParticipants(context, event.participants);
-                    },
-                    icon: const Icon(Icons.people),
-                    label: const Text('Voir les participants'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF214D4F),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      _updateEventStatus(context, currentUser);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF214D4F),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    child: const Text('Marquer comme Terminé'),
-                  ),
-                ],
-              ),
+            if (isOrganisateur) _buildOrganisateurActions(context, currentUser),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDetailRow(
-      {required IconData icon, required String label, required String value}) {
-    return Row(
+  /// Construire les détails principaux de l'événement
+  Widget _buildEventDetails() {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: Colors.grey.shade600),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(fontSize: 16, color: Colors.black87),
-              ),
-            ],
+        Text(
+          event.titre,
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: Color.fromARGB(255, 5, 12, 3),
           ),
+        ),
+        const SizedBox(height: 16),
+        _buildDetailRow(
+          icon: Icons.calendar_today,
+          label: 'Dates',
+          value:
+              'Du ${_formatDate(event.dateDebut)} au ${_formatDate(event.dateFin)}',
+        ),
+        const SizedBox(height: 16),
+        _buildDetailRow(
+          icon: Icons.location_on,
+          label: 'Lieu',
+          value: event.lieu,
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Description',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          event.description,
+          style: const TextStyle(fontSize: 16, height: 1.5, color: Colors.black87),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            const Text(
+              'Statut: ',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              event.statut,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: _getStatusColor(event.statut),
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 
-  // Formater la date pour l'affichage
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
+  /// Actions spécifiques pour l'organisateur
+  Widget _buildOrganisateurActions(BuildContext context, AppUser currentUser) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ElevatedButton.icon(
+          onPressed: () {
+            _showParticipants(context, event.participants);
+          },
+          icon: const Icon(Icons.people),
+          label: const Text('Voir les participants'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF214D4F),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        ElevatedButton(
+          onPressed: () {
+            _updateEventStatus(context, currentUser);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF214D4F),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+          child: const Text('Marquer comme Terminé'),
+        ),
+      ],
+    );
   }
 
-  // Afficher la liste des participants
+  /// Confirmer la suppression de l'événement
+  void _confirmDeleteEvent(BuildContext context, AppUser currentUser) {
+    Get.defaultDialog(
+      title: 'Confirmation',
+      middleText: 'Êtes-vous sûr de vouloir supprimer cet événement ?',
+      textConfirm: 'Oui',
+      textCancel: 'Non',
+      confirmTextColor: Colors.white,
+      onConfirm: () {
+        Get.find<EventController>().deleteEvent(event.id, currentUser);
+        Get.back(); // Fermer la boîte de dialogue
+        Get.back(result: true); // Retourner à la liste des événements
+      },
+    );
+  }
+
+  /// Modifier le statut de l'événement
+  void _updateEventStatus(BuildContext context, AppUser currentUser) {
+    Get.defaultDialog(
+      title: 'Confirmer',
+      middleText: 'Voulez-vous marquer cet événement comme "Terminé" ?',
+      textConfirm: 'Oui',
+      textCancel: 'Non',
+      confirmTextColor: Colors.white,
+      onConfirm: () {
+        event.statut = 'Terminé';
+        Get.find<EventController>().updateEvent(event, currentUser);
+        Get.back(); // Fermer la boîte de dialogue
+      },
+    );
+  }
+
+  /// Afficher la liste des participants
   void _showParticipants(BuildContext context, List<AppUser> participants) {
     showModalBottomSheet(
       context: context,
@@ -249,18 +244,52 @@ class EventDetailsScreen extends StatelessWidget {
     );
   }
 
-  // Modifier le statut de l'événement
-  void _updateEventStatus(BuildContext context, AppUser currentUser) {
-    Get.defaultDialog(
-      title: 'Confirmer',
-      middleText: 'Voulez-vous marquer cet événement comme "Terminé" ?',
-      textConfirm: 'Oui',
-      textCancel: 'Non',
-      onConfirm: () {
-        event.statut = 'Terminé';
-        Get.find<EventController>().updateEvent(event, currentUser);
-        Get.back(); // Fermer la boîte de dialogue
-      },
+  /// Construction d'une ligne de détail
+  Widget _buildDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: Colors.grey.shade600),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(fontSize: 16, color: Colors.black87),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
+  }
+
+  /// Obtenir la couleur du statut
+  Color _getStatusColor(String statut) {
+    switch (statut) {
+      case 'Terminé':
+        return Colors.red;
+      case 'En cours':
+        return Colors.orange;
+      default:
+        return Colors.green;
+    }
+  }
+
+  /// Formater la date pour l'affichage
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 }

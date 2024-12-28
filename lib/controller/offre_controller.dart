@@ -51,7 +51,6 @@ class OffreController extends GetxController {
   /// Notifier les joueurs d'une nouvelle offre
   Future<void> _notifierJoueurs(Offre offre, AppUser recruteur) async {
     try {
-      // Récupérer les joueurs depuis Firestore
       final joueursSnapshot = await _firestore
           .collection('users')
           .where('role', isEqualTo: 'joueur')
@@ -62,7 +61,6 @@ class OffreController extends GetxController {
         final fcmToken = joueurData['fcmToken'];
 
         if (fcmToken != null && fcmToken.isNotEmpty) {
-          // Envoyer une notification push
           await PushNotificationService.sendNotification(
             title: 'Nouvelle Offre Disponible',
             body:
@@ -110,6 +108,10 @@ class OffreController extends GetxController {
 
     try {
       await _firestore.collection('offres').doc(offreId).delete();
+
+      // Fermer le dialogue après suppression
+      Get.back();
+
       Get.snackbar('Succès', 'Offre supprimée avec succès.');
     } catch (e) {
       print('Erreur lors de la suppression de l\'offre : $e');
