@@ -1,7 +1,7 @@
 class Video {
   String id;
   String videoUrl;
-  String thumbnail;
+  String thumbnailUrl; // Renommé pour correspondre à son utilisation
   String songName;
   String caption;
   String profilePhoto;
@@ -14,7 +14,7 @@ class Video {
   Video({
     required this.id,
     required this.videoUrl,
-    required this.thumbnail,
+    required this.thumbnailUrl, // Renommé ici
     required this.songName,
     required this.caption,
     required this.profilePhoto,
@@ -29,7 +29,7 @@ class Video {
     return Video(
       id: map['id'] ?? '',
       videoUrl: map['videoUrl'] ?? '',
-      thumbnail: map['thumbnail'] ?? '',
+      thumbnailUrl: map['thumbnail'] ?? '', // Mapping pour correspondre à 'thumbnailUrl'
       songName: map['songName'] ?? '',
       caption: map['caption'] ?? '',
       profilePhoto: map['profilePhoto'] ?? '',
@@ -45,7 +45,7 @@ class Video {
     return {
       'id': id,
       'videoUrl': videoUrl,
-      'thumbnail': thumbnail,
+      'thumbnail': thumbnailUrl, // Assurez-vous de correspondre au champ Firebase
       'songName': songName,
       'caption': caption,
       'profilePhoto': profilePhoto,

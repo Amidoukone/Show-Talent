@@ -173,12 +173,14 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Recherche"),
-        content: TextField(
-          controller: searchController,
-          decoration: const InputDecoration(hintText: "Rechercher une conversation"),
-          onChanged: (value) {
-            searchTerm.value = value;
-          },
+        content: SingleChildScrollView(
+          child: TextField(
+            controller: searchController,
+            decoration: const InputDecoration(hintText: "Rechercher une conversation"),
+            onChanged: (value) {
+              searchTerm.value = value;
+            },
+          ),
         ),
         actions: [
           TextButton(

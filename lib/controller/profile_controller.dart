@@ -89,8 +89,9 @@ class ProfileController extends GetxController {
   /// Gestion des abonnements (Follow/Unfollow)
   Future<void> followUser() async {
     final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (user == null || currentUserId == null || currentUserId == user!.uid)
+    if (user == null || currentUserId == null || currentUserId == user!.uid) {
       return;
+    }
 
     String profileUserId = user!.uid;
 
