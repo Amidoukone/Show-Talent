@@ -25,7 +25,10 @@ class EventListScreen extends StatelessWidget {
       body: Obx(() {
         if (eventController.events.isEmpty) {
           return const Center(
-              child: Text('Aucun événement disponible pour l\'instant.'));
+              child: Text(
+            'Aucun événement disponible pour l\'instant.',
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ));
         } else {
           return ListView.builder(
             itemCount: eventController.events.length,
@@ -68,25 +71,29 @@ class EventListScreen extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  organiser.nom.isNotEmpty
-                                      ? organiser.nom
-                                      : 'Utilisateur inconnu',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    organiser.nom.isNotEmpty
+                                        ? organiser.nom
+                                        : 'Utilisateur inconnu',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                                Text(
-                                  organiser.role == 'club'
-                                      ? 'Club'
-                                      : 'Recruteur',
-                                  style: const TextStyle(color: Colors.grey),
-                                ),
-                              ],
+                                  Text(
+                                    organiser.role == 'club'
+                                        ? 'Club'
+                                        : 'Recruteur',
+                                    style: const TextStyle(color: Colors.grey),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -99,18 +106,24 @@ class EventListScreen extends StatelessWidget {
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 10),
                         Text(
                           'Lieu: ${event.lieu}',
-                          style:
-                              const TextStyle(color: Colors.grey, fontSize: 14),
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 14),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 10),
                         Text(
                           'Statut: ${event.statut}',
-                          style:
-                              const TextStyle(color: Colors.grey, fontSize: 14),
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 14),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 20),
 
@@ -118,45 +131,50 @@ class EventListScreen extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            ElevatedButton.icon(
-                              onPressed:
-                                  (isParticipant || event.statut == 'Terminé')
-                                      ? null
-                                      : () {
-                                          // Inscription à l'événement
-                                          eventController.registerToEvent(
-                                              event.id, currentUser);
-                                        },
-                              icon: const Icon(Icons.check_circle,
-                                  color: Colors.white),
-                              label: const Text(
-                                'S\'inscrire',
-                                style: TextStyle(color: Colors.white),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor:
-                                    (isParticipant || event.statut == 'Terminé')
-                                        ? Colors.grey
-                                        : const Color(0xFF66BB6A),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: (isParticipant ||
+                                        event.statut == 'Terminé')
+                                    ? null
+                                    : () {
+                                        // Inscription à l'événement
+                                        eventController.registerToEvent(
+                                            event.id, currentUser);
+                                      },
+                                icon: const Icon(Icons.check_circle,
+                                    color: Colors.white),
+                                label: const Text(
+                                  'S\'inscrire',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: (isParticipant ||
+                                          event.statut == 'Terminé')
+                                      ? Colors.grey
+                                      : const Color(0xFF66BB6A),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
                                 ),
                               ),
                             ),
-                            OutlinedButton.icon(
-                              onPressed: () {
-                                // Voir les détails de l'événement
-                                Get.to(() => EventDetailsScreen(event: event));
-                              },
-                              icon: const Icon(Icons.info_outline,
-                                  color: Color(0xFF2E7D32)),
-                              label: const Text(
-                                'Voir les détails',
-                                style: TextStyle(color: Color(0xFF2E7D32)),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  // Voir les détails de l'événement
+                                  Get.to(() => EventDetailsScreen(event: event));
+                                },
+                                icon: const Icon(Icons.info_outline,
+                                    color: Color(0xFF2E7D32)),
+                                label: const Text(
+                                  'Voir les détails',
+                                  style: TextStyle(color: Color(0xFF2E7D32)),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
                                 ),
                               ),
                             ),

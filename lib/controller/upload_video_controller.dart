@@ -118,8 +118,9 @@ class UploadVideoController extends GetxController {
       thumbnailFile = futures[1];
 
       if (compressedFile == null) throw Exception("Compression échouée");
-      if (thumbnailFile == null)
+      if (thumbnailFile == null) {
         throw Exception("Génération de miniature échouée");
+      }
 
       String videoFileName = basename(compressedFile.path);
       String thumbnailFileName = 'thumbnail_$videoFileName';

@@ -39,7 +39,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
 
   Future<void> _initializeVideoPlayer() async {
     try {
-      // Préchargement avec DefaultCacheManager pour lecture rapide
+      // Chargement depuis le cache pour lecture rapide
       final file = await DefaultCacheManager().getSingleFile(widget.videoUrl);
 
       _controller = VideoPlayerController.file(file)
@@ -82,34 +82,46 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        Container(
-          color: Colors.black,
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _hasError
-                  ? const Center(
-                      child: Text(
-                        'Erreur de lecture de la vidéo',
-                        style: TextStyle(color: Colors.red, fontSize: 16),
-                      ),
-                    )
-                  : GestureDetector(
-                      onTap: () {
-                        // Redirection vers FullScreenVideo lors d'un clic sur la vidéo
-                        Get.to(() => FullScreenVideo(
-                              video: widget.video,
-                              user: Get.find<UserController>().user!,
-                              videoController: widget.videoController,
-                            ));
-                      },
-                      child: Center(
-                        child: AspectRatio(
-                          aspectRatio: _controller.value.aspectRatio,
-                          child: VideoPlayer(_controller),
-                        ),
-                      ),
-                    ),
+        // Affichage de la miniature avant la lecture de la vidéo
+        Image.network(
+          widget.video.thumbnailUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          loadingBuilder: (context, child, progress) {
+            return progress == null
+                ? child
+                : const Center(child: CircularProgressIndicator());
+          },
         ),
+        // Contenu vidéo
+        if (!_isLoading && !_hasError)
+          GestureDetector(
+            onTap: () {
+              Get.to(() => FullScreenVideo(
+                    video: widget.video,
+                    user: Get.find<UserController>().user!,
+                    videoController: widget.videoController,
+                  ));
+            },
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: _controller.value.aspectRatio,
+                child: VideoPlayer(_controller),
+              ),
+            ),
+          ),
+        if (_isLoading)
+          const Center(
+            child: CircularProgressIndicator(),
+          ),
+        if (_hasError)
+          const Center(
+            child: Text(
+              'Erreur de lecture de la vidéo',
+              style: TextStyle(color: Colors.red, fontSize: 16),
+            ),
+          ),
         _buildActionButtons(),
       ],
     );
