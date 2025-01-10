@@ -16,70 +16,127 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  bool _obscurePassword =
-      true; // Contrôle pour masquer/afficher le mot de passe
+  bool _obscurePassword = true;
+  bool _isLoading = false; // Indicateur de chargement
 
-  _login() async {
+  /// Connexion de l'utilisateur
+  Future<void> _login() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      _showErrorSnackbar('Tous les champs doivent être remplis.');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text,
-        password: _passwordController.text,
+      UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
-      try {
-        FirebaseMessaging messaging = FirebaseMessaging.instance;
-        String? token = await messaging.getToken();
-        print("Token FCM: $token");
+      User? user = userCredential.user;
 
-        // Assurez-vous que le token n'est pas nul avant de l'utiliser
-        // Obtenir l'utilisateur actuellement connecté
-        User? user = FirebaseAuth.instance.currentUser;
-
-        if (user != null) {
-          // ID de l'utilisateur
-          String userId = user.uid;
-
-          // Mettre à jour ou ajouter le token dans la collection Firestore
-          await FirebaseFirestore.instance
-              .collection(
-                  'users') // Remplacez 'users' par votre collection Firestore
-              .doc(userId) // Utiliser l'ID utilisateur comme clé du document
-              .set(
-                  {
-                'fcmToken': token, // Ajouter ou mettre à jour le token
-              },
-                  SetOptions(
-                      merge:
-                          true)); // Merge permet de ne pas écraser d'autres champs existants
-        } else {
-          print('Erreur : Utilisateur non connecté ou token FCM introuvable');
-        }
-      } catch (e) {
-        print("Erreur lors de la génération du token : $e");
+      // Vérifier si l'utilisateur a validé son email
+      if (user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+        _showErrorSnackbar(
+          'Veuillez vérifier votre email en cliquant sur le lien reçu.',
+        );
+        await FirebaseAuth.instance.signOut();
+        setState(() {
+          _isLoading = false;
+        });
+        return;
       }
 
-      Get.offAll(() =>
-          const HomeScreen()); // Redirection vers la page d'accueil après connexion
+      // Mettre à jour le token FCM
+      await _updateFcmToken(user);
+
+      // Redirection vers la page d'accueil
+      _showSuccessSnackbar('Connexion réussie.');
+      Get.offAll(() => const HomeScreen());
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = 'Impossible de se connecter.';
+      if (e.code == 'user-not-found') {
+        errorMessage = 'Utilisateur introuvable. Vérifiez vos informations.';
+      } else if (e.code == 'wrong-password') {
+        errorMessage = 'Mot de passe incorrect.';
+      } else if (e.code == 'invalid-email') {
+        errorMessage = 'Adresse e-mail invalide.';
+      }
+
+      _showErrorSnackbar(errorMessage);
     } catch (e) {
-      Get.snackbar('Échec de la connexion', e.toString());
+      _showErrorSnackbar('Une erreur inattendue est survenue. Veuillez réessayer.');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
-  // Méthode pour récupérer un mot de passe oublié
+  /// Mise à jour du token FCM
+  Future<void> _updateFcmToken(User? user) async {
+    if (user == null) return;
+
+    try {
+      FirebaseMessaging messaging = FirebaseMessaging.instance;
+      String? token = await messaging.getToken();
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(
+        {
+          'fcmToken': token,
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      print("Erreur lors de la mise à jour du token FCM : $e");
+    }
+  }
+
+  /// Réinitialisation du mot de passe
   Future<void> _forgotPassword() async {
     if (_emailController.text.isEmpty) {
-      Get.snackbar('Erreur',
-          'Veuillez entrer votre email pour réinitialiser le mot de passe.');
+      _showErrorSnackbar('Veuillez entrer votre email pour réinitialiser le mot de passe.');
       return;
     }
+
     try {
       await FirebaseAuth.instance
-          .sendPasswordResetEmail(email: _emailController.text);
-      Get.snackbar('Réinitialisation du mot de passe',
-          'Un email de réinitialisation vous a été envoyé.');
+          .sendPasswordResetEmail(email: _emailController.text.trim());
+      _showSuccessSnackbar(
+          'Un email de réinitialisation vous a été envoyé. Vérifiez votre boîte mail.');
     } catch (e) {
-      Get.snackbar('Erreur', e.toString());
+      _showErrorSnackbar(
+          'Impossible d\'envoyer l\'email de réinitialisation. Veuillez réessayer.');
     }
+  }
+
+  /// Helpers pour afficher les messages
+  void _showSuccessSnackbar(String message) {
+    Get.snackbar(
+      'Succès',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.green,
+      colorText: Colors.white,
+    );
+  }
+
+  void _showErrorSnackbar(String message) {
+    Get.snackbar(
+      'Erreur',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+    );
   }
 
   @override
@@ -95,6 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
               // Logo
               Image.asset('assets/logo.png', height: 100),
               const SizedBox(height: 40),
+
               // Titre de la page
               const Text(
                 'Connectez-vous!',
@@ -105,6 +163,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 20),
+
               // Champ email
               TextField(
                 controller: _emailController,
@@ -114,7 +173,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              // Champ mot de passe avec option afficher/masquer
+
+              // Champ mot de passe
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
@@ -122,9 +182,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   labelText: 'Mot de passe',
                   prefixIcon: const Icon(Icons.lock),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword
-                        ? Icons.visibility_off
-                        : Icons.visibility),
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
                     onPressed: () {
                       setState(() {
                         _obscurePassword = !_obscurePassword;
@@ -134,6 +196,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 10),
+
               // Lien pour mot de passe oublié
               Align(
                 alignment: Alignment.centerRight,
@@ -146,15 +209,25 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 20),
+
               // Bouton de connexion
-              ElevatedButton(
-                onPressed: _login,
-                child: const Text(
-                  'Se connecter',
-                  style: TextStyle(fontSize: 16, color: Colors.white),
-                ),
-              ),
+              _isLoading
+                  ? const CircularProgressIndicator()
+                  : ElevatedButton(
+                      onPressed: _login,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      child: const Text(
+                        'Se connecter',
+                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      ),
+                    ),
               const SizedBox(height: 20),
+
               // Lien pour inscription
               TextButton(
                 onPressed: () {

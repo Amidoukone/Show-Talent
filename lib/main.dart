@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -104,7 +105,7 @@ Future<void> main() async {
 
   // Écouter les messages reçus lorsque l'application est en arrière-plan ou complètement fermée
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-
+  FirebaseAuth.instance.setLanguageCode('fr');
   runApp(const MyApp());
 }
 
