@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/user.dart';
 
@@ -18,6 +19,7 @@ class UserController extends GetxController {
     _fetchAllUsers();
   }
 
+  /// Liaison au flux des modifications d'état Firebase Auth
   void _bindUserStream() {
     FirebaseAuth.instance.authStateChanges().listen((User? firebaseUser) async {
       if (firebaseUser != null) {
@@ -28,25 +30,37 @@ class UserController extends GetxController {
     });
   }
 
+  /// Charger l'utilisateur actuel depuis Firestore
   Future<void> _loadCurrentUser(String uid) async {
     try {
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .get();
+      DocumentSnapshot userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
       if (userDoc.exists && userDoc.data() != null) {
         _user.value = AppUser.fromMap(userDoc.data() as Map<String, dynamic>);
         await _updateFCMToken(uid);
       } else {
         _user.value = null;
+        Get.snackbar(
+          "Erreur",
+          "Utilisateur introuvable dans Firestore.",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
       }
     } catch (e) {
-      print("Erreur lors de la récupération de l'utilisateur actuel: $e");
-      Get.snackbar("Erreur", "Impossible de charger les informations de l'utilisateur.");
+      Get.snackbar(
+        "Erreur",
+        "Impossible de charger les informations utilisateur : $e",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     }
   }
 
+  /// Mettre à jour le token FCM de l'utilisateur
   Future<void> _updateFCMToken(String uid) async {
     try {
       String? fcmToken = await FirebaseMessaging.instance.getToken();
@@ -56,10 +70,11 @@ class UserController extends GetxController {
         });
       }
     } catch (e) {
-      print("Erreur lors de la mise à jour du token FCM: $e");
+      print("Erreur lors de la mise à jour du token FCM : $e");
     }
   }
 
+  /// Récupérer tous les utilisateurs depuis Firestore
   void _fetchAllUsers() {
     FirebaseFirestore.instance.collection('users').snapshots().listen((snapshot) {
       try {
@@ -71,17 +86,31 @@ class UserController extends GetxController {
           return null;
         }).whereType<AppUser>().toList();
       } catch (e) {
-        print("Erreur lors de la récupération de la liste des utilisateurs: $e");
+        print("Erreur lors de la récupération de la liste des utilisateurs : $e");
       }
     });
   }
 
+  /// Déconnexion de l'utilisateur
   Future<void> signOut() async {
     try {
       await FirebaseAuth.instance.signOut();
       _user.value = null;
+      Get.snackbar(
+        "Déconnexion réussie",
+        "Vous avez été déconnecté avec succès.",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
     } catch (e) {
-      print("Erreur lors de la déconnexion: $e");
+      Get.snackbar(
+        "Erreur",
+        "Une erreur est survenue lors de la déconnexion : $e",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     }
   }
 }
