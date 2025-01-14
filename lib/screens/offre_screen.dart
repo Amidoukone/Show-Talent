@@ -246,7 +246,9 @@ class OffreScreen extends StatelessWidget {
                   offre.id, userController.user!, offre);
 
               // Fermer le dialogue après suppression
-              Get.back();
+              if (Get.isDialogOpen == true) {
+                Get.back();
+              }
             },
             child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
           ),
