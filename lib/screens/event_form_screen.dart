@@ -44,8 +44,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
           widget.event != null ? 'Modifier l\'événement' : 'Créer un événement',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor:
-            const Color(0xFF214D4F), // Couleur de la barre supérieure
+        backgroundColor: const Color(0xFF214D4F),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -93,66 +92,12 @@ class _EventFormScreenState extends State<EventFormScreen> {
             const SizedBox(height: 40),
             Center(
               child: ElevatedButton(
-                onPressed: () {
-                  if (titleController.text.isEmpty ||
-                      descriptionController.text.isEmpty ||
-                      locationController.text.isEmpty ||
-                      startDate == null ||
-                      endDate == null) {
-                    Get.snackbar('Erreur', 'Veuillez remplir tous les champs',
-                        backgroundColor: Colors.red.shade100,
-                        colorText: Colors.red);
-                    return;
-                  }
-
-                  // Récupération de l'utilisateur actuel
-                  AppUser currentUser = Get.find<UserController>().user!;
-
-                  if (widget.event != null) {
-                    // Mettre à jour un événement existant
-                    Event updatedEvent = Event(
-                      id: widget.event!.id,
-                      titre: titleController.text,
-                      description: descriptionController.text,
-                      dateDebut: startDate!,
-                      dateFin: endDate!,
-                      organisateur: widget.event!.organisateur,
-                      participants: widget.event!.participants,
-                      statut: 'à venir',
-                      lieu: locationController.text,
-                      estPublic: widget.event!.estPublic,
-                    );
-                    eventController.updateEvent(updatedEvent, currentUser);
-                  } else {
-                    // Créer un nouvel événement
-                    Event newEvent = Event(
-                      id: FirebaseFirestore.instance
-                          .collection('events')
-                          .doc()
-                          .id,
-                      titre: titleController.text,
-                      description: descriptionController.text,
-                      dateDebut: startDate!,
-                      dateFin: endDate!,
-                      organisateur: currentUser,
-                      participants: [],
-                      statut: 'à venir',
-                      lieu: locationController.text,
-                      estPublic: true,
-                    );
-                    eventController.createEvent(newEvent, currentUser);
-                  }
-
-                  // Retour à l'écran précédent après la soumission
-                  Get.back();
-                },
+                onPressed: _handleSubmit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF214D4F),
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30)),
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                 ),
                 child: Text(widget.event != null ? 'Modifier' : 'Créer'),
               ),
@@ -161,6 +106,52 @@ class _EventFormScreenState extends State<EventFormScreen> {
         ),
       ),
     );
+  }
+
+  void _handleSubmit() {
+    if (titleController.text.isEmpty ||
+        descriptionController.text.isEmpty ||
+        locationController.text.isEmpty ||
+        startDate == null ||
+        endDate == null) {
+      Get.snackbar('Erreur', 'Veuillez remplir tous les champs',
+          backgroundColor: Colors.red.shade100, colorText: Colors.red);
+      return;
+    }
+
+    AppUser currentUser = Get.find<UserController>().user!;
+
+    if (widget.event != null) {
+      Event updatedEvent = Event(
+        id: widget.event!.id,
+        titre: titleController.text,
+        description: descriptionController.text,
+        dateDebut: startDate!,
+        dateFin: endDate!,
+        organisateur: widget.event!.organisateur,
+        participants: widget.event!.participants,
+        statut: 'à venir',
+        lieu: locationController.text,
+        estPublic: widget.event!.estPublic,
+      );
+      eventController.updateEvent(updatedEvent, currentUser);
+    } else {
+      Event newEvent = Event(
+        id: FirebaseFirestore.instance.collection('events').doc().id,
+        titre: titleController.text,
+        description: descriptionController.text,
+        dateDebut: startDate!,
+        dateFin: endDate!,
+        organisateur: currentUser,
+        participants: [],
+        statut: 'à venir',
+        lieu: locationController.text,
+        estPublic: true,
+      );
+      eventController.createEvent(newEvent, currentUser);
+    }
+
+    Get.back();
   }
 
   Widget _buildSectionTitle(String title) {
@@ -194,8 +185,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     );
   }
 
-  Widget _buildDatePicker(
-      String label, DateTime? date, Function(DateTime) onDateSelected) {
+  Widget _buildDatePicker(String label, DateTime? date, Function(DateTime) onDateSelected) {
     return InkWell(
       onTap: () async {
         DateTime? pickedDate = await showDatePicker(
@@ -206,14 +196,15 @@ class _EventFormScreenState extends State<EventFormScreen> {
           builder: (context, child) {
             return Theme(
               data: Theme.of(context).copyWith(
-                colorScheme:
-                    ColorScheme.light(primary: const Color(0xFF214D4F)),
+                colorScheme: ColorScheme.light(primary: const Color(0xFF214D4F)),
               ),
               child: child!,
             );
           },
         );
-        onDateSelected(pickedDate!);
+        if (pickedDate != null) {
+          onDateSelected(pickedDate);
+        }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
@@ -230,13 +221,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
               style: const TextStyle(fontSize: 16, color: Colors.black54),
             ),
             Text(
-              date != null
-                  ? DateFormat('dd MMM yyyy').format(date)
-                  : 'Choisir une date',
-              style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.black87,
-                  fontWeight: FontWeight.bold),
+              date != null ? DateFormat('dd MMM yyyy').format(date) : 'Choisir une date',
+              style: const TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold),
             ),
           ],
         ),

@@ -31,19 +31,13 @@ class EventDetailsScreen extends StatelessWidget {
                   icon: const Icon(Icons.edit, color: Colors.white),
                   tooltip: 'Modifier',
                   onPressed: () async {
-                    // Naviguer vers l'écran de modification et actualiser après retour
-                    final updated = await Get.to(() => EventFormScreen(event: event));
+                    // Ouvrir l'écran de modification et actualiser après retour
+                    final updated =
+                        await Get.to(() => EventFormScreen(event: event));
                     if (updated == true) {
-                      Get.find<EventController>().fetchEvents();
-                      Get.back(result: true); // Retourner pour actualiser la liste
+                      Get.find<EventController>().fetchEvents(); // Mise à jour des événements
+                      Get.back(result: true); // Retour automatique à l'écran précédent
                     }
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.white),
-                  tooltip: 'Supprimer',
-                  onPressed: () {
-                    _confirmDeleteEvent(context, currentUser);
                   },
                 ),
               ]
@@ -56,14 +50,14 @@ class EventDetailsScreen extends StatelessWidget {
           children: [
             _buildEventDetails(),
             const SizedBox(height: 20),
-            if (isOrganisateur) _buildOrganisateurActions(context, currentUser),
+            if (isOrganisateur) _buildOrganisateurActions(),
           ],
         ),
       ),
     );
   }
 
-  /// Construire les détails principaux de l'événement
+  /// Construction des détails principaux de l'événement
   Widget _buildEventDetails() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,7 +67,7 @@ class EventDetailsScreen extends StatelessWidget {
           style: const TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
-            color: Color.fromARGB(255, 5, 12, 3),
+            color: Colors.black,
           ),
         ),
         const SizedBox(height: 16),
@@ -121,78 +115,27 @@ class EventDetailsScreen extends StatelessWidget {
   }
 
   /// Actions spécifiques pour l'organisateur
-  Widget _buildOrganisateurActions(BuildContext context, AppUser currentUser) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ElevatedButton.icon(
-          onPressed: () {
-            _showParticipants(context, event.participants);
-          },
-          icon: const Icon(Icons.people),
-          label: const Text('Voir les participants'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF214D4F),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        ElevatedButton(
-          onPressed: () {
-            _updateEventStatus(context, currentUser);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF214D4F),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-          ),
-          child: const Text('Marquer comme Terminé'),
-        ),
-      ],
-    );
-  }
-
-  /// Confirmer la suppression de l'événement
-  void _confirmDeleteEvent(BuildContext context, AppUser currentUser) {
-    Get.defaultDialog(
-      title: 'Confirmation',
-      middleText: 'Êtes-vous sûr de vouloir supprimer cet événement ?',
-      textConfirm: 'Oui',
-      textCancel: 'Non',
-      confirmTextColor: Colors.white,
-      onConfirm: () {
-        Get.find<EventController>().deleteEvent(event.id, currentUser);
-        Get.back(); // Fermer la boîte de dialogue
-        Get.back(result: true); // Retourner à la liste des événements
+  Widget _buildOrganisateurActions() {
+    return ElevatedButton.icon(
+      onPressed: () {
+        _showParticipants(event.participants);
       },
-    );
-  }
-
-  /// Modifier le statut de l'événement
-  void _updateEventStatus(BuildContext context, AppUser currentUser) {
-    Get.defaultDialog(
-      title: 'Confirmer',
-      middleText: 'Voulez-vous marquer cet événement comme "Terminé" ?',
-      textConfirm: 'Oui',
-      textCancel: 'Non',
-      confirmTextColor: Colors.white,
-      onConfirm: () {
-        event.statut = 'Terminé';
-        Get.find<EventController>().updateEvent(event, currentUser);
-        Get.back(); // Fermer la boîte de dialogue
-      },
+      icon: const Icon(Icons.people),
+      label: const Text('Voir les participants'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF214D4F),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+      ),
     );
   }
 
   /// Afficher la liste des participants
-  void _showParticipants(BuildContext context, List<AppUser> participants) {
+  void _showParticipants(List<AppUser> participants) {
     showModalBottomSheet(
-      context: context,
+      context: Get.context!,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
