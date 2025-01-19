@@ -6,6 +6,7 @@ import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:adfoot/screens/full_screen_video.dart';
+import 'package:share_plus/share_plus.dart';
 
 class TikTokVideoPlayer extends StatefulWidget {
   final String videoUrl;
@@ -18,8 +19,7 @@ class TikTokVideoPlayer extends StatefulWidget {
     required this.videoUrl,
     required this.video,
     required this.videoController,
-    required this.userId,
-    required bool enableTapToPlayPause,
+    required this.userId, required bool enableTapToPlayPause,
   });
 
   @override
@@ -39,9 +39,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
 
   Future<void> _initializeVideoPlayer() async {
     try {
-      // Chargement depuis le cache pour lecture rapide
       final file = await DefaultCacheManager().getSingleFile(widget.videoUrl);
-
       _controller = VideoPlayerController.file(file)
         ..addListener(() {
           if (_controller.value.hasError) {
@@ -54,7 +52,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
           setState(() {
             _isLoading = false;
             _controller.setLooping(true);
-            _controller.play(); // Lecture automatique
+            _controller.play();
           });
         }).catchError((error) {
           setState(() {
@@ -82,7 +80,6 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Affichage de la miniature avant la lecture de la vidéo
         Image.network(
           widget.video.thumbnailUrl,
           fit: BoxFit.cover,
@@ -94,7 +91,6 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
                 : const Center(child: CircularProgressIndicator());
           },
         ),
-        // Contenu vidéo
         if (!_isLoading && !_hasError)
           GestureDetector(
             onTap: () {
@@ -153,7 +149,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
             icon: Icons.share,
             color: Colors.white,
             label: '${widget.video.shareCount}',
-            onPressed: _shareVideo,
+            onPressed: () => _shareVideo(widget.video.videoUrl),
           ),
           const SizedBox(height: 20),
           _buildActionButton(
@@ -178,11 +174,25 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
     widget.videoController.likeVideo(widget.video.id, widget.userId);
   }
 
-  void _shareVideo() {
-    setState(() {
-      widget.video.shareCount++;
-    });
-    widget.videoController.partagerVideo(widget.video.id);
+  Future<void> _shareVideo(String videoUrl) async {
+    try {
+      // Partager via Share Plus
+      await Share.share(
+        'Découvrez cette vidéo incroyable sur notre application AD.FOOT : $videoUrl',
+        subject: 'Vidéo partagée depuis AD.FOOT',
+      );
+
+      // Incrémenter le compteur de partage uniquement après un partage réussi
+      await widget.videoController.partagerVideo(widget.video.id, videoUrl);
+    } catch (e) {
+      print('Erreur lors du partage : $e');
+      Get.snackbar(
+        'Erreur',
+        'Impossible de partager la vidéo.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 
   void _reportVideo() {
@@ -215,8 +225,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Confirmer la suppression'),
-          content:
-              const Text('Êtes-vous sûr de vouloir supprimer cette vidéo ?'),
+          content: const Text('Êtes-vous sûr de vouloir supprimer cette vidéo ?'),
           actions: [
             TextButton(
               onPressed: () {
@@ -235,8 +244,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
                   colorText: Colors.white,
                 );
               },
-              child:
-                  const Text('Supprimer', style: TextStyle(color: Colors.red)),
+              child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
             ),
           ],
         );

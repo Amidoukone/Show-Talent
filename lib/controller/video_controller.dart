@@ -11,11 +11,10 @@ class VideoController extends GetxController {
     fetchVideos();
   }
 
-  /// Récupérer et trier les vidéos par date de création
   void fetchVideos() {
     FirebaseFirestore.instance
         .collection('videos')
-        .orderBy('createdAt', descending: true) // Trier par date de création (plus récentes d'abord)
+        .orderBy('createdAt', descending: true)
         .snapshots()
         .listen((snapshot) {
       videoList.assignAll(
@@ -31,7 +30,6 @@ class VideoController extends GetxController {
     });
   }
 
-  /// Méthode pour aimer ou retirer le like d'une vidéo
   Future<void> likeVideo(String videoId, String userId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
@@ -51,25 +49,22 @@ class VideoController extends GetxController {
     }
   }
 
-  /// Méthode pour partager une vidéo
-  Future<void> partagerVideo(String videoId) async {
+  Future<void> partagerVideo(String videoId, String videoUrl) async {
     try {
+      // Incrémentation du compteur de partages uniquement après un partage réussi
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
       if (doc.exists) {
         var videoData = doc.data() as Map<String, dynamic>;
         int shareCount = videoData['shareCount'] ?? 0;
         shareCount++;
-
         await FirebaseFirestore.instance.collection('videos').doc(videoId).update({'shareCount': shareCount});
-        Get.snackbar('Succès', 'Vidéo partagée avec succès !');
       }
     } catch (e) {
-      Get.snackbar('Erreur', 'Erreur lors du partage de la vidéo.');
-      print("Erreur lors du partage de la vidéo : $e");
+      Get.snackbar('Erreur', 'Erreur lors de la mise à jour du compteur de partages.');
+      print("Erreur lors de la mise à jour du compteur de partages : $e");
     }
   }
 
-  /// Méthode pour signaler une vidéo
   Future<void> signalerVideo(String videoId, String userId) async {
     try {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
@@ -81,12 +76,10 @@ class VideoController extends GetxController {
         if (!reports.contains(userId)) {
           reports.add(userId);
           reportCount++;
-
           await FirebaseFirestore.instance.collection('videos').doc(videoId).update({
             'reports': reports,
             'reportCount': reportCount,
           });
-
           Get.snackbar('Succès', 'Vidéo signalée avec succès.');
         } else {
           Get.snackbar('Erreur', 'Vous avez déjà signalé cette vidéo.');
@@ -98,7 +91,6 @@ class VideoController extends GetxController {
     }
   }
 
-  /// Méthode pour supprimer une vidéo
   Future<void> deleteVideo(String videoId) async {
     try {
       await FirebaseFirestore.instance.collection('videos').doc(videoId).delete();
