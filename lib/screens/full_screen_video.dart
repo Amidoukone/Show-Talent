@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/video.dart';
 import '../models/user.dart';
 import 'video_player_item.dart';
@@ -48,12 +49,9 @@ class FullScreenVideo extends StatelessWidget {
 
           return Stack(
             children: [
-              // Lecteur vidéo en plein écran
               Positioned.fill(
                 child: VideoPlayerItem(videoUrl: video.videoUrl),
               ),
-
-              // Actions de la vidéo
               Positioned(
                 right: 10,
                 bottom: 80,
@@ -76,7 +74,7 @@ class FullScreenVideo extends StatelessWidget {
                       color: Colors.white,
                       label: '${video.shareCount}',
                       onPressed: () {
-                        videoController.partagerVideo(video.id);
+                        _shareVideo(video.videoUrl);
                       },
                     ),
                     const SizedBox(height: 16),
@@ -91,8 +89,6 @@ class FullScreenVideo extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // Informations sur l'utilisateur
               Positioned(
                 bottom: 80,
                 left: 10,
@@ -131,8 +127,6 @@ class FullScreenVideo extends StatelessWidget {
                   ),
                 ),
               ),
-
-              // Légende de la vidéo
               Positioned(
                 bottom: 40,
                 left: 10,
@@ -148,7 +142,6 @@ class FullScreenVideo extends StatelessWidget {
     );
   }
 
-  /// Widget générique pour les boutons d'action
   Widget _buildActionButton({
     required IconData icon,
     required Color color,
@@ -167,5 +160,31 @@ class FullScreenVideo extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  void _shareVideo(String videoUrl) async {
+    try {
+      await videoController.partagerVideo(video.id, videoUrl);
+
+      await Share.share(
+        'Découvrez cette vidéo incroyable sur notre application AD.FOOT : $videoUrl',
+        subject: 'Vidéo partagée depuis AD.FOOT',
+      );
+
+      Get.snackbar(
+        'Succès',
+        'Vidéo partagée avec succès.',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    } catch (e) {
+      print('Erreur lors du partage : $e');
+      Get.snackbar(
+        'Erreur',
+        'Impossible de partager la vidéo.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 }
