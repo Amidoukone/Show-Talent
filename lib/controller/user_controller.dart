@@ -6,11 +6,18 @@ import 'package:get/get.dart';
 import '../models/user.dart';
 
 class UserController extends GetxController {
+  static UserController instance = Get.find();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+
   final Rx<AppUser?> _user = Rx<AppUser?>(null);
   AppUser? get user => _user.value;
 
   final Rx<List<AppUser>> _userList = Rx<List<AppUser>>([]);
   List<AppUser> get userList => _userList.value;
+
+  bool _isNewlyRegistered = false;
 
   @override
   void onInit() {
@@ -19,98 +26,83 @@ class UserController extends GetxController {
     _fetchAllUsers();
   }
 
-  /// Liaison au flux des modifications d'état Firebase Auth
+  void setNewlyRegistered(bool value) {
+    _isNewlyRegistered = value;
+  }
+
   void _bindUserStream() {
-    FirebaseAuth.instance.authStateChanges().listen((User? firebaseUser) async {
+    _auth.authStateChanges().listen((User? firebaseUser) async {
       if (firebaseUser != null) {
         await _loadCurrentUser(firebaseUser.uid);
       } else {
         _user.value = null;
       }
+    }, onError: (error) {
+      debugPrint("Erreur de flux d'authentification : $error");
     });
   }
 
-  /// Charger l'utilisateur actuel depuis Firestore
   Future<void> _loadCurrentUser(String uid) async {
+    if (_isNewlyRegistered) {
+      _isNewlyRegistered = false;
+      return;
+    }
     try {
-      DocumentSnapshot userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
-
+      DocumentSnapshot userDoc = await _firestore.collection('users').doc(uid).get();
       if (userDoc.exists && userDoc.data() != null) {
         _user.value = AppUser.fromMap(userDoc.data() as Map<String, dynamic>);
         await _updateFCMToken(uid);
       } else {
         _user.value = null;
-        Get.snackbar(
-          "Erreur",
-          "Utilisateur introuvable dans Firestore.",
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
-        );
+        _showSnackbar("Inscription en cours", "Un email de validation vous sera envoyé", const Color.fromARGB(255, 5, 71, 29));
       }
     } catch (e) {
-      Get.snackbar(
-        "Erreur",
-        "Impossible de charger les informations utilisateur : $e",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _showSnackbar("Erreur", "Impossible de charger les informations utilisateur : $e", Colors.red);
     }
   }
 
-  /// Mettre à jour le token FCM de l'utilisateur
   Future<void> _updateFCMToken(String uid) async {
     try {
-      String? fcmToken = await FirebaseMessaging.instance.getToken();
+      String? fcmToken = await _messaging.getToken();
       if (fcmToken != null) {
-        await FirebaseFirestore.instance.collection('users').doc(uid).update({
-          'fcmToken': fcmToken,
-        });
+        await _firestore.collection('users').doc(uid).update({'fcmToken': fcmToken});
       }
     } catch (e) {
-      print("Erreur lors de la mise à jour du token FCM : $e");
+      debugPrint("Erreur lors de la mise à jour du token FCM : $e");
     }
   }
 
-  /// Récupérer tous les utilisateurs depuis Firestore
   void _fetchAllUsers() {
-    FirebaseFirestore.instance.collection('users').snapshots().listen((snapshot) {
+    _firestore.collection('users').snapshots().listen((snapshot) {
       try {
-        _userList.value = snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>?;
-          if (data != null) {
-            return AppUser.fromMap(data);
-          }
-          return null;
-        }).whereType<AppUser>().toList();
+        _userList.value = snapshot.docs
+            .map((doc) => AppUser.fromMap(doc.data()))
+            .toList();
       } catch (e) {
-        print("Erreur lors de la récupération de la liste des utilisateurs : $e");
+        debugPrint("Erreur lors de la récupération des utilisateurs : $e");
       }
+    }, onError: (error) {
+      debugPrint("Erreur de flux Firestore : $error");
     });
   }
 
-  /// Déconnexion de l'utilisateur
   Future<void> signOut() async {
     try {
-      await FirebaseAuth.instance.signOut();
+      await _auth.signOut();
       _user.value = null;
-      Get.snackbar(
-        "Déconnexion réussie",
-        "Vous avez été déconnecté avec succès.",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
+      _showSnackbar("Déconnexion réussie", "Vous avez été déconnecté.", Colors.green);
     } catch (e) {
-      Get.snackbar(
-        "Erreur",
-        "Une erreur est survenue lors de la déconnexion : $e",
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      _showSnackbar("Erreur", "Une erreur est survenue lors de la déconnexion : $e", Colors.red);
     }
+  }
+
+  void _showSnackbar(String title, String message, Color color) {
+    Get.snackbar(
+      title,
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: color,
+      colorText: Colors.white,
+    );
   }
 }

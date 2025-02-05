@@ -41,6 +41,9 @@ class AppUser {
   List<String> followersList;
   List<String> followingsList;
 
+  // Nouvelle propriété : URL du CV
+  String? cvUrl;
+
   AppUser({
     required this.uid,
     required this.nom,
@@ -71,6 +74,7 @@ class AppUser {
     this.joueursSuivis,
     this.clubsSuivis,
     this.videosLikees,
+    this.cvUrl, // Ajout de la propriété ici
     required this.followersList,
     required this.followingsList,
   });
@@ -147,6 +151,7 @@ class AppUser {
           : [],
       followersList: List<String>.from(map['followersList'] ?? []),
       followingsList: List<String>.from(map['followingsList'] ?? []),
+      cvUrl: map['cvUrl'], // Initialisation de la propriété à partir de la Map
     );
   }
 
@@ -189,6 +194,7 @@ class AppUser {
           videosLikees?.map((video) => video.toMap()).toList() ?? [],
       'followersList': followersList,
       'followingsList': followingsList,
+      'cvUrl': cvUrl, // Ajout de la propriété dans la Map
     };
   }
 }
