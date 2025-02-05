@@ -45,5 +45,16 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- AUTORISATIONS POUR LES FICHIERS ET LE STOCKAGE -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cette application a besoin d'accéder à votre bibliothèque pour télécharger ou visualiser des fichiers.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Cette application a besoin d'accéder à votre bibliothèque pour ajouter des fichiers.</string>
+	<key>NSDocumentsUsageDescription</key>
+	<string>Cette application a besoin d'accéder à vos documents pour gérer les téléchargements et les fichiers PDF.</string>
+	<key>NSFileProviderDomainUsageDescription</key>
+	<string>Cette application a besoin d'accéder à vos fichiers pour gérer le téléchargement et l'ajout de documents PDF.</string>
+
 </dict>
 </plist>

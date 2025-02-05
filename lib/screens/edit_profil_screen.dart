@@ -97,7 +97,7 @@ class EditProfileScreen extends StatelessWidget {
               ] else if (user.role == 'club') ...[
                 TextField(
                   controller: _clubNameController,
-                  decoration: const InputDecoration(labelText: 'Nom du Club'),
+                  decoration: const InputDecoration(labelText: 'Situation géographique'),
                 ),
                 const SizedBox(height: 20),
                 TextField(

@@ -22,11 +22,10 @@ class ProfileScreen extends StatelessWidget {
   final AuthController _authController = Get.put(AuthController());
   final FollowController _followController = Get.put(FollowController());
   final ChatController _chatController = Get.put(ChatController());
-  final ImagePicker _imagePicker = ImagePicker();
+  final ImagePicker _imagePicker = ImagePicker(); // Instance de ImagePicker
 
   @override
   Widget build(BuildContext context) {
-    // Mise à jour des informations utilisateur dans le ProfileController
     _profileController.updateUserId(uid);
 
     return GetBuilder<ProfileController>(builder: (controller) {
@@ -86,7 +85,6 @@ class ProfileScreen extends StatelessWidget {
     });
   }
 
-  /// Gestion de l'envoi de message
   Future<void> _handleSendMessage(AppUser user) async {
     final currentUser = _authController.user;
 
@@ -124,36 +122,73 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
-  /// Section de la photo de profil
   Widget _buildProfilePhotoSection(AppUser user, bool isOwnProfile) {
-    return Stack(
-      alignment: Alignment.center,
+    return Column(
       children: [
-        Obx(() => CircleAvatar(
-              radius: 60,
-              backgroundImage: _profileController.isLoadingPhoto.value
-                  ? null
-                  : NetworkImage(user.photoProfil.isNotEmpty
-                      ? user.photoProfil
-                      : 'https://via.placeholder.com/150'),
-              child: _profileController.isLoadingPhoto.value
-                  ? const CircularProgressIndicator()
-                  : null,
-            )),
-        if (isOwnProfile && !isReadOnly)
-          Positioned(
-            bottom: 0,
-            right: 0,
-            child: IconButton(
-              icon: const Icon(Icons.camera_alt, color: Colors.white),
-              onPressed: () => _changeProfilePhoto(user.uid),
-            ),
-          ),
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            Obx(() => CircleAvatar(
+                  radius: 60,
+                  backgroundImage: _profileController.isLoadingPhoto.value
+                      ? null
+                      : NetworkImage(user.photoProfil.isNotEmpty
+                          ? user.photoProfil
+                          : 'https://via.placeholder.com/150'),
+                  child: _profileController.isLoadingPhoto.value
+                      ? const CircularProgressIndicator()
+                      : null,
+                )),
+            if (isOwnProfile && !isReadOnly)
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: IconButton(
+                  icon: const Icon(Icons.camera_alt, color: Colors.white),
+                  onPressed: () => _changeProfilePhoto(user.uid),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        TextButton(
+          onPressed: () {
+            if (user.photoProfil.isNotEmpty) {
+              _showProfilePhoto(user.photoProfil);
+            } else {
+              Get.snackbar(
+                'Info',
+                'Cet utilisateur n\'a pas de photo de profil.',
+                backgroundColor: Colors.blue,
+                colorText: Colors.white,
+              );
+            }
+          },
+          child: const Text('Voir la photo de profil'),
+        ),
       ],
     );
   }
 
-  /// Section des statistiques
+  void _showProfilePhoto(String photoUrl) {
+    Get.dialog(
+      Dialog(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.network(photoUrl, fit: BoxFit.contain),
+            TextButton(
+              onPressed: () {
+                Get.back();
+              },
+              child: const Text('Fermer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStatSection(AppUser user) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -185,7 +220,6 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  /// Bouton Suivre/Dessuivre
   Widget _buildFollowUnfollowButton(AppUser user) {
     final String? currentUserId = _authController.user?.uid;
 
@@ -207,8 +241,7 @@ class ProfileScreen extends StatelessWidget {
               await _followController.followUser(currentUserId, user.uid);
               user.followersList.add(currentUserId);
             }
-            _profileController
-                .update(); // Met à jour les informations utilisateur localement
+            _profileController.update();
           } catch (e) {
             Get.snackbar(
               'Erreur',
@@ -233,7 +266,6 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  /// Changer la photo de profil
   Future<void> _changeProfilePhoto(String userId) async {
     final XFile? pickedImage =
         await _imagePicker.pickImage(source: ImageSource.gallery);
@@ -242,7 +274,6 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
-  /// Section de la biographie
   Widget _buildBioSection(AppUser user) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -266,7 +297,6 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  /// Informations spécifiques selon le rôle
   Widget _buildSpecificInfoSection(AppUser user) {
     switch (user.role) {
       case 'joueur':
@@ -277,13 +307,14 @@ class ProfileScreen extends StatelessWidget {
             _infoTile('Nombre de matchs', user.nombreDeMatchs?.toString()),
             _infoTile('Buts', user.buts?.toString()),
             _infoTile('Assistances', user.assistances?.toString()),
+            const SizedBox(height: 20),
           ],
         );
       case 'club':
         return Column(
           children: [
-            _infoTile('Nom du club', user.nomClub),
-            _infoTile('Ligue', user.ligue),
+            _infoTile('Localisation du Club', user.nomClub),
+            _infoTile('Niveau de Ligue', user.ligue),
           ],
         );
       case 'recruteur':
@@ -307,7 +338,8 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  /// Section des vidéos
+
+
   Widget _buildVideosSection(AppUser user) {
     return Obx(() {
       List<Video> userVideos = _profileController.videoList;
