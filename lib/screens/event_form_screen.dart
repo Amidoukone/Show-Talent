@@ -5,7 +5,7 @@ import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
-import 'package:intl/intl.dart'; // Pour formater les dates
+import 'package:intl/intl.dart';
 
 class EventFormScreen extends StatefulWidget {
   final Event? event;
@@ -39,6 +39,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true, // ✅ Empêche le clavier de masquer les champs
       appBar: AppBar(
         title: Text(
           widget.event != null ? 'Modifier l\'événement' : 'Créer un événement',
@@ -47,62 +48,68 @@ class _EventFormScreenState extends State<EventFormScreen> {
         backgroundColor: const Color(0xFF214D4F),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSectionTitle('Informations générales'),
-            const SizedBox(height: 20),
-            _buildTextField(
-              controller: titleController,
-              labelText: 'Titre',
-              hintText: 'Saisissez le titre de l\'événement',
-              icon: Icons.title,
-            ),
-            const SizedBox(height: 20),
-            _buildTextField(
-              controller: descriptionController,
-              labelText: 'Description',
-              hintText: 'Décrivez l\'événement',
-              icon: Icons.description,
-              maxLines: 3,
-            ),
-            const SizedBox(height: 20),
-            _buildTextField(
-              controller: locationController,
-              labelText: 'Lieu',
-              hintText: 'Entrez l\'emplacement',
-              icon: Icons.location_on,
-            ),
-            const SizedBox(height: 20),
-            _buildSectionTitle('Dates'),
-            const SizedBox(height: 10),
-            _buildDatePicker('Date de début', startDate, (newDate) {
-              setState(() {
-                startDate = newDate;
-              });
-            }),
-            const SizedBox(height: 10),
-            _buildDatePicker('Date de fin', endDate, (newDate) {
-              setState(() {
-                endDate = newDate;
-              });
-            }),
-            const SizedBox(height: 40),
-            Center(
-              child: ElevatedButton(
-                onPressed: _handleSubmit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF214D4F),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                ),
-                child: Text(widget.event != null ? 'Modifier' : 'Créer'),
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(), // ✅ Clic en dehors pour cacher le clavier
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag, // ✅ Glisser pour fermer le clavier
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSectionTitle('Informations générales'),
+              const SizedBox(height: 20),
+              _buildTextField(
+                controller: titleController,
+                labelText: 'Titre',
+                hintText: 'Saisissez le titre de l\'événement',
+                icon: Icons.title,
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              _buildTextField(
+                controller: descriptionController,
+                labelText: 'Description',
+                hintText: 'Décrivez l\'événement',
+                icon: Icons.description,
+                maxLines: 3,
+              ),
+              const SizedBox(height: 20),
+              _buildTextField(
+                controller: locationController,
+                labelText: 'Lieu',
+                hintText: 'Entrez l\'emplacement',
+                icon: Icons.location_on,
+              ),
+              const SizedBox(height: 20),
+              _buildSectionTitle('Dates'),
+              const SizedBox(height: 10),
+              _buildDatePicker('Date de début', startDate, (newDate) {
+                setState(() {
+                  startDate = newDate;
+                });
+              }),
+              const SizedBox(height: 10),
+              _buildDatePicker('Date de fin', endDate, (newDate) {
+                setState(() {
+                  endDate = newDate;
+                });
+              }),
+              const SizedBox(height: 40),
+              Center(
+                child: ElevatedButton(
+                  onPressed: _handleSubmit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF214D4F),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                  child: Text(widget.event != null ? 'Modifier' : 'Créer'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -171,6 +178,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     return TextField(
       controller: controller,
       maxLines: maxLines,
+      textInputAction: TextInputAction.next, // ✅ Passage automatique au champ suivant
       decoration: InputDecoration(
         labelText: labelText,
         hintText: hintText,
@@ -193,14 +201,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
           initialDate: date ?? DateTime.now(),
           firstDate: DateTime(2000),
           lastDate: DateTime(2100),
-          builder: (context, child) {
-            return Theme(
-              data: Theme.of(context).copyWith(
-                colorScheme: ColorScheme.light(primary: const Color(0xFF214D4F)),
-              ),
-              child: child!,
-            );
-          },
         );
         if (pickedDate != null) {
           onDateSelected(pickedDate);
@@ -216,10 +216,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label,
-              style: const TextStyle(fontSize: 16, color: Colors.black54),
-            ),
+            Text(label, style: const TextStyle(fontSize: 16, color: Colors.black54)),
             Text(
               date != null ? DateFormat('dd MMM yyyy').format(date) : 'Choisir une date',
               style: const TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold),

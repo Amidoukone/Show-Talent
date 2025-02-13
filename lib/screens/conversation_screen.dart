@@ -17,58 +17,42 @@ class ConversationsScreen extends StatefulWidget {
 
 class _ConversationsScreenState extends State<ConversationsScreen> {
   final ChatController chatController = Get.put(ChatController());
-  final TextEditingController searchController = TextEditingController();
-  RxString searchTerm = ''.obs;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Conversations"),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: _showSearchBar,
-          ),
-        ],
       ),
       body: Obx(() {
         if (chatController.conversations.isEmpty) {
           return const Center(child: Text("Aucune conversation."));
         }
 
-        // Filtrer les conversations par terme de recherche
-        final filteredConversations = chatController.conversations.where((conversation) {
-          final otherUserId = conversation.utilisateurIds.firstWhere(
-            (id) => id != AuthController.instance.user?.uid,
-            orElse: () => '',
-          );
-
-          final otherUser = _getOtherUser(otherUserId);
-          if (otherUser != null) {
-            return otherUser.nom
-                .toLowerCase()
-                .contains(searchTerm.value.toLowerCase());
-          }
-          return false;
-        }).toList();
-
-        if (filteredConversations.isEmpty) {
-          return const Center(child: Text("Aucune conversation trouvée."));
-        }
+        // Utiliser directement toutes les conversations sans filtrage
+        final conversations = chatController.conversations;
 
         // Trier les conversations par `lastMessageDate`
-        filteredConversations.sort((a, b) =>
-            (b.lastMessageDate ?? DateTime(0)).compareTo(a.lastMessageDate ?? DateTime(0)));
+        conversations.sort((a, b) =>
+            (b.lastMessageDate ?? DateTime(0))
+                .compareTo(a.lastMessageDate ?? DateTime(0)));
 
         return ListView.builder(
-          itemCount: filteredConversations.length,
+          itemCount: conversations.length,
           itemBuilder: (context, index) {
-            final conversation = filteredConversations[index];
+            final conversation = conversations[index];
+
+            // Récupérer l'identifiant de l'autre utilisateur
+            final currentUserId = AuthController.instance.user?.uid;
             final otherUserId = conversation.utilisateurIds.firstWhere(
-              (id) => id != AuthController.instance.user?.uid,
+              (id) => id != currentUserId,
               orElse: () => '',
             );
+
+            // Vérifier que l'ID n'est pas vide afin d'éviter un appel à Firestore avec un chemin vide
+            if (otherUserId.isEmpty) {
+              return const ListTile(title: Text("Utilisateur inconnu"));
+            }
 
             return FutureBuilder<DocumentSnapshot>(
               future: FirebaseFirestore.instance
@@ -104,7 +88,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       child: otherUser.photoProfil.isEmpty
                           ? Text(
                               otherUser.nom.substring(0, 1).toUpperCase(),
-                              style: const TextStyle(color: Colors.black, fontSize: 18),
+                              style: const TextStyle(
+                                  color: Colors.black, fontSize: 18),
                             )
                           : null,
                     ),
@@ -128,23 +113,25 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                         if (unreadCount > 0)
                           Container(
                             margin: const EdgeInsets.only(top: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: Colors.teal,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
                               "$unreadCount",
-                              style: const TextStyle(color: Colors.white, fontSize: 12),
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 12),
                             ),
                           ),
                       ],
                     ),
                     onTap: () async {
                       if (unreadCount > 0) {
-                        await chatController.markMessagesAsRead(conversation.id, AuthController.instance.user!.uid);
+                        await chatController.markMessagesAsRead(
+                            conversation.id, currentUserId!);
                       }
-
                       Get.to(() => ChatScreen(
                             conversationId: conversation.id,
                             otherUser: otherUser,
@@ -167,42 +154,14 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
   }
 
-  /// Afficher la barre de recherche
-  void _showSearchBar() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Recherche"),
-        content: SingleChildScrollView(
-          child: TextField(
-            controller: searchController,
-            decoration: const InputDecoration(hintText: "Rechercher une conversation"),
-            onChanged: (value) {
-              searchTerm.value = value;
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              searchController.clear();
-              searchTerm.value = '';
-              Navigator.of(context).pop();
-            },
-            child: const Text("Annuler"),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// Confirmer la suppression d'une conversation
   void _confirmDelete(String conversationId) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Supprimer la conversation"),
-        content: const Text("Voulez-vous vraiment supprimer cette conversation ?"),
+        content:
+            const Text("Voulez-vous vraiment supprimer cette conversation ?"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -213,21 +172,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               chatController.deleteConversation(conversationId);
               Navigator.pop(context);
             },
-            child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
+            child:
+                const Text("Supprimer", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
-  }
-
-  /// Obtenir l'autre utilisateur dans la conversation
-  AppUser? _getOtherUser(String userId) {
-    try {
-      return AppUser.fromMap({"nom": "Exemple", "photoProfil": ""});
-    } catch (e) {
-      print("Erreur lors de la récupération de l'utilisateur : $e");
-      return null;
-    }
   }
 
   /// Formater l'heure ou la date du dernier message

@@ -29,6 +29,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
       ),
       body: Column(
         children: [
+          // Barre de recherche
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
@@ -41,25 +42,36 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                 ),
               ),
               onChanged: (value) {
-                searchTerm.value =
-                    value.toLowerCase(); // Met à jour le terme de recherche
+                // Met à jour le terme de recherche en le passant en minuscules
+                searchTerm.value = value.toLowerCase();
               },
             ),
           ),
+          // Liste des utilisateurs
           Expanded(
             child: Obx(() {
-              if (userController.userList.isEmpty) {
+              // Filtrer pour exclure l'utilisateur courant et les utilisateurs sans nom renseigné
+              var users = userController.userList.where((user) {
+                return user.uid != AuthController.instance.user!.uid &&
+                    user.nom.isNotEmpty;
+              }).toList();
+
+              // S'il n'y a aucun utilisateur valide, afficher un message approprié
+              if (users.isEmpty) {
                 return const Center(
-                    child: Text('Aucun utilisateur disponible.'));
+                  child: Text('Aucun utilisateur disponible.'),
+                );
               }
 
-              // Filtrer la liste des utilisateurs selon le terme de recherche
-              var filteredUsers = userController.userList.where((user) {
+              // Filtrer la liste selon le terme de recherche saisi
+              var filteredUsers = users.where((user) {
                 return user.nom.toLowerCase().contains(searchTerm.value);
               }).toList();
 
               if (filteredUsers.isEmpty) {
-                return const Center(child: Text('Aucun utilisateur trouvé.'));
+                return const Center(
+                  child: Text('Aucun utilisateur trouvé.'),
+                );
               }
 
               return ListView.builder(
@@ -69,16 +81,24 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
 
                   return ListTile(
                     leading: CircleAvatar(
-                      backgroundImage: NetworkImage(
-                        user.photoProfil.isNotEmpty
-                            ? user.photoProfil
-                            : 'https://via.placeholder.com/150',
-                      ),
                       radius: 25,
                       backgroundColor: Colors.grey[200],
+                      // Si photoProfil est renseignée, on affiche l'image, sinon on affiche la première lettre du nom
+                      backgroundImage: user.photoProfil.isNotEmpty
+                          ? NetworkImage(user.photoProfil)
+                          : null,
+                      child: user.photoProfil.isEmpty
+                          ? Text(
+                              user.nom[0].toUpperCase(),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 20,
+                                  color: Colors.black),
+                            )
+                          : null,
                     ),
                     title: Text(
-                      user.nom.isNotEmpty ? user.nom : 'Nom inconnu',
+                      user.nom,
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 16),
                     ),
@@ -87,7 +107,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                       style: const TextStyle(color: Colors.grey),
                     ),
                     onTap: () async {
-                      // Créer une nouvelle conversation avec l'utilisateur sélectionné
+                      // Créer ou récupérer une conversation avec l'utilisateur sélectionné
                       String conversationId =
                           await chatController.createOrGetConversation(
                         currentUserId: AuthController.instance.user!.uid,
@@ -97,8 +117,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                       // Redirection vers ChatScreen après la création de la conversation
                       Get.to(() => ChatScreen(
                             conversationId: conversationId,
-                            otherUser:
-                                user, // Passer l'objet utilisateur sélectionné
+                            otherUser: user,
                           ));
                     },
                   );

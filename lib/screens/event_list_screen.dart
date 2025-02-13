@@ -1,3 +1,4 @@
+import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/event_controller.dart';
@@ -9,12 +10,13 @@ import 'package:adfoot/screens/profile_screen.dart';
 
 class EventListScreen extends StatelessWidget {
   final EventController eventController = Get.put(EventController());
+  final UserController userController = Get.find<UserController>();
 
   EventListScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    AppUser currentUser = Get.find<UserController>().user!;
+    final AppUser currentUser = userController.user!;
 
     return Scaffold(
       appBar: AppBar(
@@ -45,6 +47,7 @@ class EventListScreen extends StatelessWidget {
           );
         }
       }),
+      floatingActionButton: _buildFloatingActionButton(currentUser),
     );
   }
 
@@ -166,27 +169,39 @@ class EventListScreen extends StatelessWidget {
             Get.to(() => EventDetailsScreen(event: event));
           },
           icon: const Icon(Icons.info_outline, color: Color(0xFF2E7D32)),
-          label: const Text('Voir les détails', style: TextStyle(color: Color(0xFF2E7D32))),
-        ),
+          label: const Text('Voir les détails', style: TextStyle(color: Color(0xFF2E7D32)))),
       ],
     );
   }
 
+  FloatingActionButton? _buildFloatingActionButton(AppUser currentUser) {
+    if (currentUser.role == 'club' || currentUser.role == 'recruteur') {
+      return FloatingActionButton(
+        onPressed: () {
+          Get.to(() => EventFormScreen());
+        },
+        backgroundColor: const Color(0xFF214D4F),
+        foregroundColor: Colors.white,
+        child: const Icon(Icons.add),
+      );
+    }
+    return null;
+  }
+
   void _confirmDeleteEvent(BuildContext context, Event event) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+    Get.dialog(
+      AlertDialog(
         title: const Text('Supprimer'),
         content: const Text('Voulez-vous vraiment supprimer cet événement ?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Get.back(),
             child: const Text('Annuler'),
           ),
           TextButton(
             onPressed: () async {
-              await Get.find<EventController>().deleteEvent(event.id, Get.find<UserController>().user!);
-              Navigator.pop(context); // Fermer le dialogue
+              await eventController.deleteEvent(event.id, userController.user!);
+              Get.back();
               Get.snackbar('Succès', 'Événement supprimé avec succès.', backgroundColor: Colors.green.shade100, colorText: Colors.black87);
             },
             child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
@@ -197,27 +212,8 @@ class EventListScreen extends StatelessWidget {
   }
 
   void _markAsCompleted(BuildContext context, Event event) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Marquer comme Terminé'),
-        content: const Text('Voulez-vous marquer cet événement comme terminé ?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () async {
-              event.statut = 'Terminé';
-              await Get.find<EventController>().updateEvent(event, Get.find<UserController>().user!);
-              Navigator.pop(context); // Fermer le dialogue
-              Get.snackbar('Succès', 'Événement marqué comme terminé.', backgroundColor: Colors.orange.shade100, colorText: Colors.black87);
-            },
-            child: const Text('Terminer', style: TextStyle(color: Colors.orange)),
-          ),
-        ],
-      ),
-    );
+    event.statut = 'Terminé';
+    eventController.updateEvent(event, userController.user!);
+    Get.snackbar('Succès', 'Événement marqué comme terminé.', backgroundColor: Colors.orange.shade100, colorText: Colors.black87);
   }
 }
