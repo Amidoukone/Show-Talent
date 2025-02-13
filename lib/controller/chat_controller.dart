@@ -32,7 +32,8 @@ class ChatController extends GetxController {
         final conversation = Conversation.fromMap(conversationData);
 
         // Calculer les messages non lus pour cette conversation
-        final unreadCount = await _getUnreadMessageCount(doc.id, currentUserId);
+        final unreadCount =
+            await _getUnreadMessageCount(doc.id, currentUserId);
         conversation.unreadMessagesCount = unreadCount;
 
         return conversation;

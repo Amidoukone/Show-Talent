@@ -61,13 +61,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       String? token = await FirebaseMessaging.instance.getToken();
-      if (token != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-          {'fcmToken': token},
-          SetOptions(merge: true),
-        );
-      }
-    } catch (e) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+        {'fcmToken': token},
+        SetOptions(merge: true),
+      );
+        } catch (e) {
       print("Erreur lors de la mise à jour du token FCM : $e");
     }
   }

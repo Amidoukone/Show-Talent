@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:video_player/video_player.dart';
 import 'package:get/get.dart';
@@ -30,13 +31,27 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
   late VideoPlayerController _controller;
   bool _isLoading = true;
   bool _hasError = false;
+  bool _isConnected = true; // Gestion de la connexion Internet
 
   @override
   void initState() {
     super.initState();
-    _initializeVideoPlayer();
+    _checkInternetConnection();
   }
 
+  // Vérifie si l'utilisateur est connecté à Internet
+  Future<void> _checkInternetConnection() async {
+    var connectivityResult = await Connectivity().checkConnectivity();
+    setState(() {
+      _isConnected = connectivityResult != ConnectivityResult.none;
+    });
+
+    if (_isConnected) {
+      _initializeVideoPlayer();
+    }
+  }
+
+  // Initialise le lecteur vidéo
   Future<void> _initializeVideoPlayer() async {
     try {
       final file = await DefaultCacheManager().getSingleFile(widget.videoUrl);
@@ -72,12 +87,18 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    if (_isConnected) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_isConnected) {
+      return _buildNoInternetMessage();
+    }
+
     return Stack(
       children: [
         Image.network(
@@ -89,6 +110,9 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
             return progress == null
                 ? child
                 : const Center(child: CircularProgressIndicator());
+          },
+          errorBuilder: (context, error, stackTrace) {
+            return _buildNoInternetMessage();
           },
         ),
         if (!_isLoading && !_hasError)
@@ -112,14 +136,39 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
             child: CircularProgressIndicator(),
           ),
         if (_hasError)
-          const Center(
-            child: Text(
-              'Erreur de lecture de la vidéo',
-              style: TextStyle(color: Colors.red, fontSize: 16),
-            ),
-          ),
+          _buildErrorMessage(),
         _buildActionButtons(),
       ],
+    );
+  }
+
+  // Widget pour afficher un message si l'utilisateur n'est pas connecté
+  Widget _buildNoInternetMessage() {
+    return Container(
+      color: Colors.black,
+      child: const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off, color: Colors.white, size: 50),
+            SizedBox(height: 10),
+            Text(
+              'Pas de connexion Internet',
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Widget pour afficher une erreur de lecture vidéo
+  Widget _buildErrorMessage() {
+    return const Center(
+      child: Text(
+        'Erreur de lecture de la vidéo',
+        style: TextStyle(color: Colors.red, fontSize: 16),
+      ),
     );
   }
 
@@ -163,42 +212,7 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
     );
   }
 
-  void _toggleLike() {
-    setState(() {
-      if (widget.video.likes.contains(widget.userId)) {
-        widget.video.likes.remove(widget.userId);
-      } else {
-        widget.video.likes.add(widget.userId);
-      }
-    });
-    widget.videoController.likeVideo(widget.video.id, widget.userId);
-  }
-
-  Future<void> _shareVideo(String videoUrl) async {
-    try {
-      // Partager via Share Plus
-      await Share.share(
-        'Découvrez cette vidéo incroyable sur notre application AD.FOOT : $videoUrl',
-        subject: 'Vidéo partagée depuis AD.FOOT',
-      );
-
-      // Incrémenter le compteur de partage uniquement après un partage réussi
-      await widget.videoController.partagerVideo(widget.video.id, videoUrl);
-    } catch (e) {
-      print('Erreur lors du partage : $e');
-      Get.snackbar(
-        'Erreur',
-        'Impossible de partager la vidéo.',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
-    }
-  }
-
-  void _reportVideo() {
-    widget.videoController.signalerVideo(widget.video.id, widget.userId);
-  }
-
+  // Méthode manquante `_buildActionButton`
   Widget _buildActionButton({
     required IconData icon,
     required Color color,
@@ -219,36 +233,54 @@ class _TikTokVideoPlayerState extends State<TikTokVideoPlayer> {
     );
   }
 
+  void _toggleLike() {
+    setState(() {
+      if (widget.video.likes.contains(widget.userId)) {
+        widget.video.likes.remove(widget.userId);
+      } else {
+        widget.video.likes.add(widget.userId);
+      }
+    });
+    widget.videoController.likeVideo(widget.video.id, widget.userId);
+  }
+
+  Future<void> _shareVideo(String videoUrl) async {
+    try {
+      await Share.share(
+        'Découvrez cette vidéo incroyable sur AD.FOOT : $videoUrl',
+        subject: 'Vidéo partagée depuis AD.FOOT',
+      );
+      await widget.videoController.partagerVideo(widget.video.id, videoUrl);
+    } catch (e) {
+      Get.snackbar(
+        'Erreur',
+        'Impossible de partager la vidéo.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  void _reportVideo() {
+    widget.videoController.signalerVideo(widget.video.id, widget.userId);
+  }
+
   void _showDeleteConfirmation() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Confirmer la suppression'),
-          content: const Text('Êtes-vous sûr de vouloir supprimer cette vidéo ?'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Annuler'),
-            ),
-            TextButton(
-              onPressed: () {
-                widget.videoController.deleteVideo(widget.video.id);
-                Navigator.of(context).pop();
-                Get.snackbar(
-                  'Succès',
-                  'Vidéo supprimée avec succès.',
-                  backgroundColor: Colors.black.withOpacity(0.8),
-                  colorText: Colors.white,
-                );
-              },
-              child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        );
-      },
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Confirmer la suppression'),
+        content: const Text('Êtes-vous sûr de vouloir supprimer cette vidéo ?'),
+        actions: [
+          TextButton(onPressed: Get.back, child: const Text('Annuler')),
+          TextButton(
+            onPressed: () {
+              widget.videoController.deleteVideo(widget.video.id);
+              Get.back();
+            },
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 }

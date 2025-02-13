@@ -64,27 +64,26 @@ class UserController extends GetxController {
   Future<void> _updateFCMToken(String uid) async {
     try {
       String? fcmToken = await _messaging.getToken();
-      if (fcmToken != null) {
-        await _firestore.collection('users').doc(uid).update({'fcmToken': fcmToken});
-      }
-    } catch (e) {
+      await _firestore.collection('users').doc(uid).update({'fcmToken': fcmToken});
+        } catch (e) {
       debugPrint("Erreur lors de la mise à jour du token FCM : $e");
     }
   }
 
-  void _fetchAllUsers() {
-    _firestore.collection('users').snapshots().listen((snapshot) {
-      try {
-        _userList.value = snapshot.docs
-            .map((doc) => AppUser.fromMap(doc.data()))
-            .toList();
-      } catch (e) {
-        debugPrint("Erreur lors de la récupération des utilisateurs : $e");
-      }
-    }, onError: (error) {
-      debugPrint("Erreur de flux Firestore : $error");
-    });
-  }
+void _fetchAllUsers() {
+  _firestore.collection('users').snapshots().listen((snapshot) {
+    try {
+      _userList.value = snapshot.docs
+          .map((doc) => AppUser.fromMap(doc.data()))
+          .where((user) => user.nom.trim().isNotEmpty) // Filtre strict
+          .toList();
+    } catch (e) {
+      debugPrint("Erreur lors de la récupération des utilisateurs : $e");
+    }
+  }, onError: (error) {
+    debugPrint("Erreur de flux Firestore : $error");
+  });
+}
 
   Future<void> signOut() async {
     try {
