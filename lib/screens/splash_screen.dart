@@ -1,10 +1,11 @@
 import 'dart:async';
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/screens/main_screen.dart';
-import 'login_screen.dart';
+import 'package:adfoot/screens/login_screen.dart';
+import 'package:adfoot/screens/verify_email_screen.dart';
+import '../controller/auth_controller.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,39 +15,48 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  late Rx<User?> _user;
+  final AuthController _authController = Get.find<AuthController>();
 
   @override
   void initState() {
     super.initState();
-    onReady();
+    _checkAuthState();
   }
 
-  void onReady() {
-    _user = Rx<User?>(FirebaseAuth.instance.currentUser);
-    _user.bindStream(FirebaseAuth.instance.authStateChanges());
-    ever(_user, _setInitialScreen);
-  }
+  /// Vérifie l'état de l'authentification avant de naviguer
+Future<void> _checkAuthState() async {
+  await Future.delayed(const Duration(seconds: 2)); // Pause pour chargement
 
-  _setInitialScreen(User? user) async {
-    await Future.delayed(const Duration(seconds: 2));
+  FirebaseAuth.instance.authStateChanges().listen((User? user) async {
     if (user == null) {
       Get.offAll(() => const LoginScreen());
-    } else {
-      Get.offAll(() => const MainScreen());
+      return;
     }
-  }
+
+    await user.reload();
+    user = FirebaseAuth.instance.currentUser;
+
+    if (!user!.emailVerified) {
+      Get.offAll(() => const VerifyEmailScreen());
+      return;
+    }
+
+    final exists = await _authController.userExistsInDatabase(user.uid);
+    if (exists) {
+      Get.offAll(() => const MainScreen());
+    } else {
+      await _authController.signOut();
+    }
+  });
+}
+
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF214D4F),
+    return const Scaffold(
+      backgroundColor: Color(0xFF214D4F),
       body: Center(
-        child: Image.asset(
-          'assets/logo.png',
-          width: 150,
-          height: 150,
-        ),
+        child: CircularProgressIndicator(color: Colors.white),
       ),
     );
   }
