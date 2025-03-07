@@ -1,3 +1,6 @@
+import 'package:adfoot/screens/login_screen.dart';
+import 'package:adfoot/screens/main_screen.dart';
+import 'package:adfoot/screens/verify_email_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -7,6 +10,7 @@ import '../models/user.dart';
 
 class UserController extends GetxController {
   static UserController instance = Get.find();
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
@@ -17,8 +21,6 @@ class UserController extends GetxController {
   final Rx<List<AppUser>> _userList = Rx<List<AppUser>>([]);
   List<AppUser> get userList => _userList.value;
 
-  bool _isNewlyRegistered = false;
-
   @override
   void onInit() {
     super.onInit();
@@ -26,75 +28,128 @@ class UserController extends GetxController {
     _fetchAllUsers();
   }
 
-  void setNewlyRegistered(bool value) {
-    _isNewlyRegistered = value;
-  }
-
+  /// 🔄 Écoute les changements d'état de l'utilisateur Firebase
   void _bindUserStream() {
     _auth.authStateChanges().listen((User? firebaseUser) async {
       if (firebaseUser != null) {
-        await _loadCurrentUser(firebaseUser.uid);
+        await handleUserState(firebaseUser.uid);
       } else {
         _user.value = null;
+        Get.offAll(() => const LoginScreen());
       }
     }, onError: (error) {
-      debugPrint("Erreur de flux d'authentification : $error");
+      debugPrint("❌ Erreur flux auth : $error");
     });
   }
 
-  Future<void> _loadCurrentUser(String uid) async {
-    if (_isNewlyRegistered) {
-      _isNewlyRegistered = false;
+  /// 🛠 Gère l'état de l'utilisateur (email vérifié + migration si nécessaire)
+  Future<void> handleUserState(String uid) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      Get.offAll(() => const LoginScreen());
       return;
     }
-    try {
-      DocumentSnapshot userDoc = await _firestore.collection('users').doc(uid).get();
-      if (userDoc.exists && userDoc.data() != null) {
-        _user.value = AppUser.fromMap(userDoc.data() as Map<String, dynamic>);
-        await _updateFCMToken(uid);
+
+    await Future.delayed(const Duration(seconds: 1)); // Attente pour éviter les conflits
+    await user.reload();
+
+    if (!user.emailVerified) {
+      Get.offAll(() => const VerifyEmailScreen());
+      return;
+    }
+
+    final userDoc = await _firestore.collection('users').doc(uid).get();
+    if (userDoc.exists) {
+      _updateUserData(userDoc);
+    } else {
+      final pendingDoc = await _firestore.collection('pending_users').doc(uid).get();
+      if (pendingDoc.exists) {
+        await _migrateUserFromPending(uid);
       } else {
-        _user.value = null;
-        _showSnackbar("Inscription en cours", "Un email de validation vous sera envoyé", const Color.fromARGB(255, 5, 71, 29));
+        _handleMissingUser();
       }
-    } catch (e) {
-      _showSnackbar("Erreur", "Impossible de charger les informations utilisateur : $e", Colors.red);
     }
   }
 
+  /// 🔄 Migration de l'utilisateur de pending_users vers users
+  Future<void> _migrateUserFromPending(String uid) async {
+    final pendingDoc = await _firestore.collection('pending_users').doc(uid).get();
+    if (pendingDoc.exists) {
+      await _firestore.collection('users').doc(uid).set(pendingDoc.data() as Map<String, dynamic>);
+      await _firestore.collection('pending_users').doc(uid).delete();
+    }
+  }
+
+  /// ✅ Met à jour les informations de l'utilisateur
+  void _updateUserData(DocumentSnapshot userDoc) {
+    if (userDoc.data() != null) {
+      _user.value = AppUser.fromMap(userDoc.data() as Map<String, dynamic>);
+      _updateFCMToken(userDoc.id);
+      if (Get.currentRoute != '/main') {
+        Get.offAll(() => const MainScreen());
+      }
+    }
+  }
+
+  /// 🔄 Gère l'authentification de l'utilisateur après la connexion
+  Future<void> handleUserAuthentication(String uid) async {
+    final userDoc = await _firestore.collection('users').doc(uid).get();
+    if (userDoc.exists) {
+      _updateUserData(userDoc);
+    } else {
+      _handleMissingUser();
+    }
+  }
+
+  /// ❌ Gestion des utilisateurs introuvables
+  void _handleMissingUser() {
+    if (_auth.currentUser?.emailVerified ?? false) {
+      _showSnackbar("Erreur", "Profil utilisateur introuvable", Colors.red);
+      signOut();
+    } else {
+      Get.offAll(() => const VerifyEmailScreen());
+    }
+  }
+
+  /// 🔥 Met à jour le Token de Notification (FCM)
   Future<void> _updateFCMToken(String uid) async {
     try {
       String? fcmToken = await _messaging.getToken();
       await _firestore.collection('users').doc(uid).update({'fcmToken': fcmToken});
         } catch (e) {
-      debugPrint("Erreur lors de la mise à jour du token FCM : $e");
+      debugPrint("⚠️ Erreur mise à jour FCM : $e");
     }
   }
 
-void _fetchAllUsers() {
-  _firestore.collection('users').snapshots().listen((snapshot) {
-    try {
-      _userList.value = snapshot.docs
-          .map((doc) => AppUser.fromMap(doc.data()))
-          .where((user) => user.nom.trim().isNotEmpty) // Filtre strict
-          .toList();
-    } catch (e) {
-      debugPrint("Erreur lors de la récupération des utilisateurs : $e");
-    }
-  }, onError: (error) {
-    debugPrint("Erreur de flux Firestore : $error");
-  });
-}
+  /// 📥 Récupère la liste des utilisateurs en temps réel
+  void _fetchAllUsers() {
+    _firestore.collection('users').snapshots().listen((snapshot) {
+      try {
+        _userList.value = snapshot.docs
+            .map((doc) => AppUser.fromMap(doc.data()))
+            .where((user) => user.nom.trim().isNotEmpty)
+            .toList();
+      } catch (e) {
+        debugPrint("⚠️ Erreur récupération utilisateurs : $e");
+      }
+    }, onError: (error) {
+      debugPrint("❌ Erreur flux Firestore : $error");
+    });
+  }
 
+  /// 🔓 Déconnexion de l'utilisateur
   Future<void> signOut() async {
     try {
       await _auth.signOut();
       _user.value = null;
-      _showSnackbar("Déconnexion réussie", "Vous avez été déconnecté.", Colors.green);
+      Get.offAll(() => const LoginScreen());
+      _showSnackbar("Déconnexion", "Vous êtes déconnecté", Colors.green);
     } catch (e) {
-      _showSnackbar("Erreur", "Une erreur est survenue lors de la déconnexion : $e", Colors.red);
+      _showSnackbar("Erreur", "Échec de la déconnexion : $e", Colors.red);
     }
   }
 
+  /// 🛑 Affiche une notification snack
   void _showSnackbar(String title, String message, Color color) {
     Get.snackbar(
       title,
@@ -102,6 +157,7 @@ void _fetchAllUsers() {
       snackPosition: SnackPosition.BOTTOM,
       backgroundColor: color,
       colorText: Colors.white,
+      duration: const Duration(seconds: 3),
     );
   }
 }

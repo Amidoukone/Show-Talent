@@ -202,10 +202,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
           firstDate: DateTime(2000),
           lastDate: DateTime(2100),
         );
-        if (pickedDate != null) {
-          onDateSelected(pickedDate);
-        }
-      },
+        onDateSelected(pickedDate!);
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(

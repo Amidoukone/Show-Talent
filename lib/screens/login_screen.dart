@@ -1,10 +1,10 @@
-import 'package:adfoot/screens/main_screen.dart';
+import 'package:adfoot/screens/signup_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:adfoot/screens/signup_screen.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:adfoot/controller/user_controller.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,90 +18,120 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  final UserController _userController = Get.find<UserController>();
 
-  Future<void> _login() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      _showErrorSnackbar('Tous les champs doivent être remplis.');
+Future<void> _login() async {
+  if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+    _showErrorSnackbar('Tous les champs doivent être remplis.');
+    return;
+  }
+
+  setState(() => _isLoading = true);
+
+  try {
+    final UserCredential userCred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    final User? user = userCred.user;
+    await user?.reload();
+    final User? refreshedUser = FirebaseAuth.instance.currentUser;
+
+    if (refreshedUser == null || !refreshedUser.emailVerified) {
+      await _handleUnverifiedUser(refreshedUser);
       return;
     }
 
-    setState(() => _isLoading = true);
+    await _updateFcmToken(refreshedUser);
+    await _userController.handleUserAuthentication(refreshedUser.uid); // 🔄 Utilisation de la méthode publique corrigée
 
-    try {
-      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+  } on FirebaseAuthException catch (e) {
+    _handleAuthError(e);
+  } catch (e) {
+    _showErrorSnackbar('Erreur inattendue : ${e.toString()}');
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
+
+
+  Future<void> _handleUnverifiedUser(User? user) async {
+    await FirebaseAuth.instance.signOut();
+    if (user != null) {
+      await user.sendEmailVerification();
+      _showErrorSnackbar(
+        'Validation requise',
+        'Veuillez vérifier votre email. Un nouveau lien a été envoyé.',
       );
-
-      User? user = userCredential.user;
-      await user?.reload(); // Recharger les données utilisateur
-      user = FirebaseAuth.instance.currentUser;
-
-      if (user != null && !user.emailVerified) {
-        await FirebaseAuth.instance.signOut();
-        await user.sendEmailVerification();
-        _showErrorSnackbar('Veuillez vérifier votre email avant de vous connecter. Un nouvel e-mail a été envoyé.');
-        return;
-      }
-
-      await _updateFcmToken(user);
-      _showSuccessSnackbar('Connexion réussie');
-      Get.offAll(() => const MainScreen());
-    } on FirebaseAuthException catch (e) {
-      _handleAuthError(e);
-    } catch (e) {
-      _showErrorSnackbar('Erreur inattendue : $e');
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _updateFcmToken(User? user) async {
-    if (user == null) return;
-
+  Future<void> _updateFcmToken(User user) async {
     try {
-      String? token = await FirebaseMessaging.instance.getToken();
+      final String? token = await FirebaseMessaging.instance.getToken();
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
         {'fcmToken': token},
         SetOptions(merge: true),
       );
-        } catch (e) {
-      print("Erreur lors de la mise à jour du token FCM : $e");
+    } catch (e) {
+      debugPrint("Erreur FCM : $e");
     }
   }
 
   Future<void> _forgotPassword() async {
     if (_emailController.text.isEmpty) {
-      _showErrorSnackbar('Veuillez entrer votre email pour réinitialiser le mot de passe.');
+      _showErrorSnackbar('Veuillez saisir votre email');
       return;
     }
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: _emailController.text.trim());
-      _showSuccessSnackbar('Un email de réinitialisation vous a été envoyé.');
+      await FirebaseAuth.instance.sendPasswordResetEmail(
+        email: _emailController.text.trim()
+      );
+      _showSuccessSnackbar('Email de réinitialisation envoyé');
     } catch (e) {
-      _showErrorSnackbar("Impossible d'envoyer l'email de réinitialisation. Veuillez réessayer.");
+      _showErrorSnackbar('Erreur lors de l\'envoi de l\'email');
     }
   }
 
   void _handleAuthError(FirebaseAuthException e) {
-    String errorMessage = 'Impossible de se connecter.';
-    if (e.code == 'user-not-found') {
-      errorMessage = 'Utilisateur introuvable. Vérifiez vos informations.';
-    } else if (e.code == 'wrong-password') {
-      errorMessage = 'Mot de passe incorrect.';
-    } else if (e.code == 'invalid-email') {
-      errorMessage = 'Adresse e-mail invalide.';
+    String message = 'Erreur de connexion';
+    switch (e.code) {
+      case 'user-not-found':
+        message = 'Aucun compte associé à cet email';
+        break;
+      case 'wrong-password':
+        message = 'Mot de passe incorrect';
+        break;
+      case 'invalid-email':
+        message = 'Format d\'email invalide';
+        break;
+      case 'too-many-requests':
+        message = 'Trop de tentatives. Réessayez plus tard';
+        break;
     }
-    _showErrorSnackbar(errorMessage);
+    _showErrorSnackbar(message);
   }
 
   void _showSuccessSnackbar(String message) {
-    Get.snackbar('Succès', message, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.green, colorText: Colors.white);
+    Get.snackbar(
+      'Succès',
+      message,
+      backgroundColor: Colors.green,
+      colorText: Colors.white,
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 
-  void _showErrorSnackbar(String message) {
-    Get.snackbar('Erreur', message, snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.red, colorText: Colors.white);
+  void _showErrorSnackbar(String title, [String? message]) {
+    Get.snackbar(
+      title,
+      message ?? '',
+      backgroundColor: Colors.red,
+      colorText: Colors.white,
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 
   @override
@@ -116,49 +146,109 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               Image.asset('assets/logo.png', height: 100),
               const SizedBox(height: 40),
-              const Text('Connectez-vous!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF214D4F))),
-              const SizedBox(height: 20),
-              TextField(controller: _emailController, decoration: const InputDecoration(labelText: 'Adresse e-mail', prefixIcon: Icon(Icons.email))),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'Mot de passe',
-                  prefixIcon: const Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  ),
+              const Text(
+                'Connectez-vous!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF214D4F),
                 ),
               ),
+              const SizedBox(height: 20),
+              _buildEmailField(),
+              const SizedBox(height: 20),
+              _buildPasswordField(),
               const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: _forgotPassword,
-                  child: const Text('Mot de passe oublié ?', style: TextStyle(color: Color(0xFF214D4F))),
-                ),
-              ),
+              _buildForgotPassword(),
               const SizedBox(height: 20),
-              _isLoading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: _login,
-                      style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      child: const Text('Se connecter', style: TextStyle(fontSize: 16, color: Colors.white)),
-                    ),
+              _buildLoginButton(),
               const SizedBox(height: 20),
-              TextButton(
-                onPressed: () => Get.to(() => const SignUpScreen()),
-                child: const Text("Vous n'avez pas de compte ? Inscrivez-vous", style: TextStyle(color: Color(0xFF214D4F))),
-              ),
+              _buildSignUpLink(),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmailField() {
+    return TextFormField(
+      controller: _emailController,
+      keyboardType: TextInputType.emailAddress,
+      decoration: const InputDecoration(
+        labelText: 'Adresse e-mail',
+        prefixIcon: Icon(Icons.email),
+        border: OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _buildPasswordField() {
+    return TextFormField(
+      controller: _passwordController,
+      obscureText: _obscurePassword,
+      decoration: InputDecoration(
+        labelText: 'Mot de passe',
+        prefixIcon: const Icon(Icons.lock),
+        border: const OutlineInputBorder(),
+        suffixIcon: IconButton(
+          icon: Icon(_obscurePassword 
+              ? Icons.visibility_off 
+              : Icons.visibility),
+          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForgotPassword() {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton(
+        onPressed: _forgotPassword,
+        child: const Text(
+          'Mot de passe oublié ?',
+          style: TextStyle(color: Color(0xFF214D4F)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoginButton() {
+    return _isLoading
+        ? const CircularProgressIndicator()
+        : ElevatedButton(
+            onPressed: _login,
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 50),
+              backgroundColor: const Color(0xFF214D4F),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'Se connecter',
+              style: TextStyle(fontSize: 16, color: Colors.white),
+            ),
+          );
+  }
+
+  Widget _buildSignUpLink() {
+    return TextButton(
+      onPressed: () => Get.to(() => const SignUpScreen()),
+      child: RichText(
+        text: const TextSpan(
+          text: 'Nouveau ici ? ',
+          style: TextStyle(color: Color(0xFF214D4F)),
+          children: <TextSpan>[
+            TextSpan(
+              text: 'Créez un compte',
+              style: TextStyle(
+                color: Color(0xFF214D4F),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ),
       ),
     );
