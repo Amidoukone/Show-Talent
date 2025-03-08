@@ -14,14 +14,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   final AuthController _authController = Get.find<AuthController>();
   bool _isLoading = false;
 
-  /// 🔄 Vérifie si l'email est validé et redémarre l'application
+  ///Vérifie si l'email est validé et redémarre l'application
   Future<void> _completeVerification() async {
     if (_isLoading) return;
     setState(() => _isLoading = true);
 
     bool success = await _authController.verifyEmail();
 
-    if (!mounted) return; // ✅ Évite l'erreur setState() after dispose
+    if (!mounted) return; // Évite l'erreur setState() after dispose
     setState(() => _isLoading = false);
 
     if (!success) {
@@ -29,11 +29,11 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       return;
     }
 
-    /// 🔥 Redémarrage automatique après validation de l'email
+    /// Redémarrage automatique après validation de l'email
     _restartApp();
   }
 
-  /// 🚀 Force le redémarrage de l’application en fermant puis relançant
+  /// Force le redémarrage de l’application en fermant puis relançant
   void _restartApp() {
     Future.delayed(const Duration(milliseconds: 500), () {
       if (Platform.isAndroid) {
@@ -44,7 +44,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     });
   }
 
-  /// 📩 Renvoyer l'email de vérification
+  /// Renvoyer l'email de vérification
   Future<void> _resendVerification() async {
     setState(() => _isLoading = true);
 
@@ -60,7 +60,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     }
   }
 
-  /// 🛑 Affiche une notification snack
+  /// Affiche une notification snack
   void _showSnackbar(String title, String message, Color color) {
     Get.snackbar(title, message, backgroundColor: color, colorText: Colors.white);
   }

@@ -28,7 +28,7 @@ class UserController extends GetxController {
     _fetchAllUsers();
   }
 
-  /// 🔄 Écoute les changements d'état de l'utilisateur Firebase
+  /// Écoute les changements d'état de l'utilisateur Firebase
   void _bindUserStream() {
     _auth.authStateChanges().listen((User? firebaseUser) async {
       if (firebaseUser != null) {
@@ -38,7 +38,7 @@ class UserController extends GetxController {
         Get.offAll(() => const LoginScreen());
       }
     }, onError: (error) {
-      debugPrint("❌ Erreur flux auth : $error");
+      debugPrint("Erreur flux auth : $error");
     });
   }
 

@@ -27,10 +27,10 @@ class AuthController extends GetxController {
     super.onReady();
     _firebaseUser.value = _auth.currentUser;
     _firebaseUser.bindStream(_auth.authStateChanges());
-    ever(_firebaseUser, handleAuthState); // ✅ Devient public
+    ever(_firebaseUser, handleAuthState); // Devient public
   }
 
-  /// 🔄 **Correction : Méthode rendue publique**
+  ///Correction : Méthode rendue publique
   Future<void> handleAuthState(User? user) async {
     if (user == null) {
       _appUser.value = null;
@@ -60,7 +60,7 @@ class AuthController extends GetxController {
     }
   }
 
-  /// ✅ Vérifie si l'email est validé et migre l'utilisateur
+  /// Vérifie si l'email est validé et migre l'utilisateur
 Future<bool> verifyEmail() async {
   User? user = _auth.currentUser;
   if (user == null) return false;
@@ -68,19 +68,19 @@ Future<bool> verifyEmail() async {
   await user.reload();
   if (user.emailVerified) {
     await _migrateUserFromPending(user.uid);
-    return true; // ✅ On ne redirige pas ici, c'est géré dans VerifyEmailScreen
+    return true; // On ne redirige pas ici, c'est géré dans VerifyEmailScreen
   }
   return false;
 }
 
 
-  /// 🔄 Vérifie si l'utilisateur existe dans Firestore (⚡ Réintégré)
+  /// Vérifie si l'utilisateur existe dans Firestore (Réintégré)
   Future<bool> userExistsInDatabase(String uid) async {
     final userDoc = await _firestore.collection('users').doc(uid).get();
     return userDoc.exists;
   }
 
-  /// 🔄 Migration d'un utilisateur de pending_users vers users
+  /// Migration d'un utilisateur de pending_users vers users
   Future<void> _migrateUserFromPending(String uid) async {
     final pendingDoc = await _firestore.collection('pending_users').doc(uid).get();
     if (pendingDoc.exists) {
@@ -90,7 +90,7 @@ Future<bool> verifyEmail() async {
     }
   }
 
-  /// 📩 Envoi d'un nouvel email de vérification
+  /// Envoi d'un nouvel email de vérification
   Future<bool> resendVerificationEmail() async {
     try {
       await _auth.currentUser?.sendEmailVerification();
@@ -101,14 +101,14 @@ Future<bool> verifyEmail() async {
     }
   }
 
-  /// 🔓 Déconnexion de l'utilisateur
+  /// Déconnexion de l'utilisateur
   Future<void> signOut() async {
     await _auth.signOut();
     _appUser.value = null;
     Get.offAll(() => const LoginScreen());
   }
 
-  /// 🛑 Affichage des messages d'erreur/succès
+  /// Affichage des messages d'erreur/succès
   void _showSnackbar(String title, String message, Color color) {
     Get.snackbar(title, message, backgroundColor: color, colorText: Colors.white);
   }
