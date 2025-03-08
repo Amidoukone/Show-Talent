@@ -45,7 +45,7 @@ class Video {
     return {
       'id': id,
       'videoUrl': videoUrl,
-      'thumbnail': thumbnailUrl, // Assurez-vous de correspondre au champ Firebase
+      'thumbnail': thumbnailUrl,
       'songName': songName,
       'caption': caption,
       'profilePhoto': profilePhoto,
