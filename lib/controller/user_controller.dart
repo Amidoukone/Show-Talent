@@ -28,7 +28,7 @@ class UserController extends GetxController {
     _fetchAllUsers();
   }
 
-  /// Écoute les changements d'état de l'utilisateur Firebase
+  /// Écoute les changements d'état de l'utilisateur Firebase**
   void _bindUserStream() {
     _auth.authStateChanges().listen((User? firebaseUser) async {
       if (firebaseUser != null) {
@@ -42,7 +42,19 @@ class UserController extends GetxController {
     });
   }
 
-  /// 🛠 Gère l'état de l'utilisateur (email vérifié + migration si nécessaire)
+  /// Met à jour l'utilisateur depuis Firestore
+  Future<void> refreshUserData() async {
+    final User? firebaseUser = _auth.currentUser;
+    if (firebaseUser == null) return;
+
+    final userDoc = await _firestore.collection('users').doc(firebaseUser.uid).get();
+    if (userDoc.exists) {
+      _user.value = AppUser.fromMap(userDoc.data() as Map<String, dynamic>);
+      update(); //  Met à jour immédiatement l'interface utilisateur
+    }
+  }
+
+  /// Gère l'état de l'utilisateur après connexion
   Future<void> handleUserState(String uid) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -50,7 +62,7 @@ class UserController extends GetxController {
       return;
     }
 
-    await Future.delayed(const Duration(seconds: 1)); // Attente pour éviter les conflits
+    await Future.delayed(const Duration(seconds: 1)); // ⏳ Attente pour éviter les conflits
     await user.reload();
 
     if (!user.emailVerified) {
@@ -71,7 +83,7 @@ class UserController extends GetxController {
     }
   }
 
-  /// 🔄 Migration de l'utilisateur de pending_users vers users
+  /// Migration de l'utilisateur de `pending_users` vers `users`
   Future<void> _migrateUserFromPending(String uid) async {
     final pendingDoc = await _firestore.collection('pending_users').doc(uid).get();
     if (pendingDoc.exists) {
@@ -80,7 +92,7 @@ class UserController extends GetxController {
     }
   }
 
-  /// ✅ Met à jour les informations de l'utilisateur
+  /// Met à jour les informations de l'utilisateur
   void _updateUserData(DocumentSnapshot userDoc) {
     if (userDoc.data() != null) {
       _user.value = AppUser.fromMap(userDoc.data() as Map<String, dynamic>);
@@ -91,7 +103,7 @@ class UserController extends GetxController {
     }
   }
 
-  /// 🔄 Gère l'authentification de l'utilisateur après la connexion
+  /// Gère l'authentification après la connexion**
   Future<void> handleUserAuthentication(String uid) async {
     final userDoc = await _firestore.collection('users').doc(uid).get();
     if (userDoc.exists) {
@@ -101,7 +113,7 @@ class UserController extends GetxController {
     }
   }
 
-  /// ❌ Gestion des utilisateurs introuvables
+  /// Gestion des utilisateurs introuvables**
   void _handleMissingUser() {
     if (_auth.currentUser?.emailVerified ?? false) {
       _showSnackbar("Erreur", "Profil utilisateur introuvable", Colors.red);
@@ -111,17 +123,19 @@ class UserController extends GetxController {
     }
   }
 
-  /// 🔥 Met à jour le Token de Notification (FCM)
+  /// Met à jour le Token de Notification (FCM)
   Future<void> _updateFCMToken(String uid) async {
     try {
       String? fcmToken = await _messaging.getToken();
-      await _firestore.collection('users').doc(uid).update({'fcmToken': fcmToken});
-        } catch (e) {
-      debugPrint("⚠️ Erreur mise à jour FCM : $e");
+      if (fcmToken != null) {
+        await _firestore.collection('users').doc(uid).update({'fcmToken': fcmToken});
+      }
+    } catch (e) {
+      debugPrint(" Erreur mise à jour FCM : $e");
     }
   }
 
-  /// 📥 Récupère la liste des utilisateurs en temps réel
+  /// Récupère la liste des utilisateurs en temps réel
   void _fetchAllUsers() {
     _firestore.collection('users').snapshots().listen((snapshot) {
       try {
@@ -129,15 +143,16 @@ class UserController extends GetxController {
             .map((doc) => AppUser.fromMap(doc.data()))
             .where((user) => user.nom.trim().isNotEmpty)
             .toList();
+        update();
       } catch (e) {
-        debugPrint("⚠️ Erreur récupération utilisateurs : $e");
+        debugPrint("Erreur récupération utilisateurs : $e");
       }
     }, onError: (error) {
-      debugPrint("❌ Erreur flux Firestore : $error");
+      debugPrint("Erreur flux Firestore : $error");
     });
   }
 
-  /// 🔓 Déconnexion de l'utilisateur
+  /// Déconnexion de l'utilisateur
   Future<void> signOut() async {
     try {
       await _auth.signOut();
@@ -149,7 +164,7 @@ class UserController extends GetxController {
     }
   }
 
-  /// 🛑 Affiche une notification snack
+  /// Affiche une notification snack
   void _showSnackbar(String title, String message, Color color) {
     Get.snackbar(
       title,
