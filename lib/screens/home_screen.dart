@@ -23,24 +23,28 @@ class HomeScreen extends StatelessWidget {
           'AD.FOOT',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
-        actions: [
-          Obx(() {
-            if (userController.user == null) {
-              return const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: CircularProgressIndicator(),
-              );
-            }
-            return IconButton(
-              icon: CircleAvatar(
-                backgroundImage: NetworkImage(userController.user!.photoProfil),
-              ),
-              onPressed: () {
-                Get.to(() => ProfileScreen(uid: userController.user!.uid));
-              },
-            );
-          }),
-        ],
+actions: [
+  Obx(() {
+    final user = userController.user;
+    if (user == null) {
+      return const Padding(
+        padding: EdgeInsets.all(8.0),
+        child: CircularProgressIndicator(),
+      );
+    }
+    return IconButton(
+      icon: CircleAvatar(
+        backgroundImage: NetworkImage(user.photoProfil.isNotEmpty
+            ? user.photoProfil
+            : 'https://via.placeholder.com/150'),
+      ),
+      onPressed: () {
+        Get.to(() => ProfileScreen(uid: user.uid));
+      },
+    );
+  }),
+],
+
       ),
       body: Obx(() {
         if (videoController.videoList.isEmpty) {
