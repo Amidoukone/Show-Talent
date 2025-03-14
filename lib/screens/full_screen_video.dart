@@ -9,7 +9,7 @@ import '../models/user.dart';
 class FullScreenVideo extends StatelessWidget {
   final Video video;
   final AppUser user;
-  final dynamic videoController; // Utilisé dans SmartVideoPlayer en interne
+  final dynamic videoController;
 
   const FullScreenVideo({
     super.key,
@@ -29,8 +29,34 @@ class FullScreenVideo extends StatelessWidget {
             videoUrl: video.videoUrl,
             video: video,
           ),
+          _buildBackButton(context), // 👈 Flèche retour ajoutée
           _buildVideoInfo(context),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBackButton(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 10,
+      left: 10,
+      child: GestureDetector(
+        onTap: () {
+          VideoManager().pause(video.videoUrl);
+          Get.back();
+        },
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.5),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.arrow_back,
+            color: Colors.white,
+            size: 26,
+          ),
+        ),
       ),
     );
   }
@@ -45,10 +71,7 @@ class FullScreenVideo extends StatelessWidget {
         children: [
           GestureDetector(
             onTap: () async {
-              // Pause la vidéo avant navigation
               VideoManager().pause(video.videoUrl);
-
-              // Navigue vers le profil
               if (video.uid.isNotEmpty) {
                 await Get.to(() => ProfileScreen(uid: video.uid, isReadOnly: true));
               } else {
@@ -73,9 +96,7 @@ class FullScreenVideo extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    video.songName.isNotEmpty
-                        ? video.songName
-                        : 'Musique inconnue',
+                    video.songName.isNotEmpty ? video.songName : 'Musique inconnue',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,

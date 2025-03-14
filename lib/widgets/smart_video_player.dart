@@ -34,7 +34,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
   final userController = Get.find<UserController>();
   bool _isInitialized = false;
   bool _isConnected = true;
-  bool _isVisible = false; // ✅ ajouté
+  bool _isVisible = false;
 
   @override
   void initState() {
@@ -55,7 +55,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
       _fadeController.forward();
 
       if (mounted && _controller.value.isInitialized && _isVisible) {
-        _controller.play(); // ✅ lecture auto si visible
+        _controller.play();
       }
     } else {
       setState(() => _isConnected = false);
@@ -77,13 +77,23 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
       onVisibilityChanged: (info) {
         _isVisible = info.visibleFraction > 0.9;
         if (_isInitialized && _isVisible) {
-          _videoManager.play(widget.videoUrl); // ✅ manager gère les autres vidéos
-        } else {
-          _controller.pause(); // ✅ pause si non visible
+          _videoManager.play(widget.videoUrl);
+        } else if (_isInitialized) {
+          _controller.pause();
         }
       },
       child: !_isInitialized
-          ? const Center(child: CircularProgressIndicator())
+          ? Stack(
+              fit: StackFit.expand,
+              children: [
+                // ✅ Correction ici (thumbnailUrl au lieu de thumbnail)
+                Image.network(
+                  widget.video.thumbnailUrl,
+                  fit: BoxFit.cover,
+                ),
+                const Center(child: CircularProgressIndicator()),
+              ],
+            )
           : FadeTransition(
               opacity: _fadeAnimation,
               child: Stack(
