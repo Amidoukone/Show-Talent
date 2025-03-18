@@ -34,15 +34,26 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
+  bool _hasHandledArguments = false;
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      // Vérifier si le UserController est prêt
       if (userController.user == null) {
         return const Scaffold(
           body: Center(child: CircularProgressIndicator()),
         );
       }
+
+      // ✅ Gérer changement d'onglet via Get.arguments une seule fois
+      if (!_hasHandledArguments &&
+          Get.arguments != null &&
+          Get.arguments is int &&
+          Get.arguments != _selectedIndex) {
+        _selectedIndex = Get.arguments as int;
+        _hasHandledArguments = true;
+      }
+
       return Scaffold(
         body: _screens[_selectedIndex],
         bottomNavigationBar: BottomNavigationBar(

@@ -39,7 +39,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: true, // ✅ Empêche le clavier de masquer les champs
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Text(
           widget.event != null ? 'Modifier l\'événement' : 'Créer un événement',
@@ -49,9 +49,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
         centerTitle: true,
       ),
       body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(), // ✅ Clic en dehors pour cacher le clavier
+        onTap: () => FocusScope.of(context).unfocus(),
         child: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag, // ✅ Glisser pour fermer le clavier
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,8 +85,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
               _buildDatePicker('Date de début', startDate, (newDate) {
                 setState(() {
                   startDate = newDate;
+                  if (endDate != null && endDate!.isBefore(startDate!)) {
+                    endDate = null; // reset si fin < début
+                  }
                 });
-              }),
+              }, isStart: true),
               const SizedBox(height: 10),
               _buildDatePicker('Date de fin', endDate, (newDate) {
                 setState(() {
@@ -140,6 +143,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
         statut: 'à venir',
         lieu: locationController.text,
         estPublic: widget.event!.estPublic,
+        createdAt: widget.event!.createdAt,
       );
       eventController.updateEvent(updatedEvent, currentUser);
     } else {
@@ -154,11 +158,12 @@ class _EventFormScreenState extends State<EventFormScreen> {
         statut: 'à venir',
         lieu: locationController.text,
         estPublic: true,
+        createdAt: DateTime.now(),
       );
       eventController.createEvent(newEvent, currentUser);
     }
 
-    Get.back();
+    Navigator.pop(context, true);
   }
 
   Widget _buildSectionTitle(String title) {
@@ -178,7 +183,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     return TextField(
       controller: controller,
       maxLines: maxLines,
-      textInputAction: TextInputAction.next, // ✅ Passage automatique au champ suivant
+      textInputAction: TextInputAction.next,
       decoration: InputDecoration(
         labelText: labelText,
         hintText: hintText,
@@ -193,21 +198,49 @@ class _EventFormScreenState extends State<EventFormScreen> {
     );
   }
 
-  Widget _buildDatePicker(String label, DateTime? date, Function(DateTime) onDateSelected) {
+  Widget _buildDatePicker(
+    String label,
+    DateTime? date,
+    Function(DateTime) onDateSelected, {
+    bool isStart = false,
+  }) {
     return InkWell(
       onTap: () async {
+        final now = DateTime.now();
+        final firstDate = isStart
+            ? now
+            : startDate != null
+                ? startDate!
+                : now;
+
         DateTime? pickedDate = await showDatePicker(
           context: context,
-          initialDate: date ?? DateTime.now(),
-          firstDate: DateTime(2000),
+          initialDate: date ?? firstDate,
+          firstDate: firstDate,
           lastDate: DateTime(2100),
+          builder: (context, child) {
+            return Theme(
+              data: ThemeData.light().copyWith(
+                colorScheme: const ColorScheme.light(
+                  primary: Color(0xFF214D4F),
+                  onPrimary: Colors.white,
+                  surface: Colors.white,
+                  onSurface: Colors.black,
+                ),
+                dialogBackgroundColor: Colors.white,
+              ),
+              child: child!,
+            );
+          },
         );
-        onDateSelected(pickedDate!);
-            },
+        if (pickedDate != null) {
+          onDateSelected(pickedDate);
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
+          border: Border.all(color: const Color(0xFF214D4F)),
           borderRadius: BorderRadius.circular(20),
           color: Colors.grey.shade100,
         ),
@@ -217,7 +250,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
             Text(label, style: const TextStyle(fontSize: 16, color: Colors.black54)),
             Text(
               date != null ? DateFormat('dd MMM yyyy').format(date) : 'Choisir une date',
-              style: const TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontSize: 16,
+                color: Color(0xFF214D4F),
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),

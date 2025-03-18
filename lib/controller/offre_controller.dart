@@ -19,13 +19,18 @@ class OffreController extends GetxController {
   }
 
   /// Récupérer les offres depuis Firestore
-  void _fetchOffres() {
-    _firestore.collection('offres').snapshots().listen((snapshot) {
-      _offres.value =
-          snapshot.docs.map((doc) => Offre.fromMap(doc.data())).toList();
-      update();
-    });
-  }
+void _fetchOffres() {
+  _firestore
+      .collection('offres')
+      .orderBy('dateCreation', descending: true) // ✅ important
+      .snapshots()
+      .listen((snapshot) {
+    _offres.value =
+        snapshot.docs.map((doc) => Offre.fromMap(doc.data())).toList();
+    update();
+  });
+}
+
 
   /// Publier une offre et notifier les joueurs
   Future<void> publierOffre(Offre offre, AppUser utilisateur) async {

@@ -42,7 +42,10 @@ class EventListScreen extends StatelessWidget {
               bool isParticipant = event.participants.any((p) => p.uid == currentUser.uid);
               bool isOrganisateur = currentUser.uid == organiser.uid;
 
-              return _buildEventCard(context, event, organiser, isParticipant, isOrganisateur, currentUser);
+              return AnimatedEventCard(
+                delay: Duration(milliseconds: 100 * index),
+                child: _buildEventCard(context, event, organiser, isParticipant, isOrganisateur, currentUser),
+              );
             },
           );
         }
@@ -53,9 +56,11 @@ class EventListScreen extends StatelessWidget {
 
   Widget _buildEventCard(BuildContext context, Event event, AppUser organiser, bool isParticipant, bool isOrganisateur, AppUser currentUser) {
     return Card(
+      color: Colors.white,
+      shadowColor: Colors.black12,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.0)),
-      elevation: 5,
-      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      elevation: 4,
+      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -157,11 +162,16 @@ class EventListScreen extends StatelessWidget {
           onPressed: (isParticipant || event.statut == 'Terminé') ? null : () {
             eventController.registerToEvent(event.id, currentUser);
           },
-          icon: const Icon(Icons.check_circle, color: Colors.white),
-          label: const Text('S\'inscrire', style: TextStyle(color: Colors.white)),
+          icon: const Icon(Icons.event_available, color: Colors.white),
+          label: const Text(
+            'S\'inscrire',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: (isParticipant || event.statut == 'Terminé') ? Colors.grey : const Color(0xFF66BB6A),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            elevation: 3,
+            padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
+            backgroundColor: (isParticipant || event.statut == 'Terminé') ? Colors.grey : const Color(0xFF2E7D32),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
           ),
         ),
         OutlinedButton.icon(
@@ -169,7 +179,8 @@ class EventListScreen extends StatelessWidget {
             Get.to(() => EventDetailsScreen(event: event));
           },
           icon: const Icon(Icons.info_outline, color: Color(0xFF2E7D32)),
-          label: const Text('Voir les détails', style: TextStyle(color: Color(0xFF2E7D32)))),
+          label: const Text('Voir les détails', style: TextStyle(color: Color(0xFF2E7D32))),
+        ),
       ],
     );
   }
@@ -200,8 +211,8 @@ class EventListScreen extends StatelessWidget {
           ),
           TextButton(
             onPressed: () async {
+              Navigator.of(context).pop();
               await eventController.deleteEvent(event.id, userController.user!);
-              Get.back();
               Get.snackbar('Succès', 'Événement supprimé avec succès.', backgroundColor: Colors.green.shade100, colorText: Colors.black87);
             },
             child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
@@ -215,5 +226,54 @@ class EventListScreen extends StatelessWidget {
     event.statut = 'Terminé';
     eventController.updateEvent(event, userController.user!);
     Get.snackbar('Succès', 'Événement marqué comme terminé.', backgroundColor: Colors.orange.shade100, colorText: Colors.black87);
+  }
+}
+
+/// Widget avec animation d’apparition (fade + slide up)
+class AnimatedEventCard extends StatefulWidget {
+  final Widget child;
+  final Duration delay;
+
+  const AnimatedEventCard({required this.child, required this.delay, super.key});
+
+  @override
+  State<AnimatedEventCard> createState() => _AnimatedEventCardState();
+}
+
+class _AnimatedEventCardState extends State<AnimatedEventCard> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _opacity;
+  late Animation<Offset> _offset;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _opacity = Tween<double>(begin: 0, end: 1).animate(_controller);
+    _offset = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    ));
+
+    Future.delayed(widget.delay, () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _offset,
+        child: widget.child,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 }
