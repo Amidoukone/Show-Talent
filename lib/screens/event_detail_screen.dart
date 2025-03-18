@@ -4,8 +4,8 @@ import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
-import 'event_form_screen.dart';
 
 class EventDetailsScreen extends StatelessWidget {
   final Event event;
@@ -31,12 +31,10 @@ class EventDetailsScreen extends StatelessWidget {
                   icon: const Icon(Icons.edit, color: Colors.white),
                   tooltip: 'Modifier',
                   onPressed: () async {
-                    // Ouvrir l'écran de modification et actualiser après retour
-                    final updated =
-                        await Get.to(() => EventFormScreen(event: event));
+                    final updated = await Get.to(() => EventFormScreen(event: event));
                     if (updated == true) {
-                      Get.find<EventController>().fetchEvents(); // Mise à jour des événements
-                      Get.back(result: true); // Retour automatique à l'écran précédent
+                      Get.find<EventController>().fetchEvents();
+                      Get.offAllNamed('/main', arguments: 2); // ✅ Revenir à EventListScreen avec bottom bar
                     }
                   },
                 ),
@@ -57,25 +55,19 @@ class EventDetailsScreen extends StatelessWidget {
     );
   }
 
-  /// Construction des détails principaux de l'événement
   Widget _buildEventDetails() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           event.titre,
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-          ),
+          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
         _buildDetailRow(
           icon: Icons.calendar_today,
           label: 'Dates',
-          value:
-              'Du ${_formatDate(event.dateDebut)} au ${_formatDate(event.dateFin)}',
+          value: 'Du ${_formatDate(event.dateDebut)} au ${_formatDate(event.dateFin)}',
         ),
         const SizedBox(height: 16),
         _buildDetailRow(
@@ -91,7 +83,7 @@ class EventDetailsScreen extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           event.description,
-          style: const TextStyle(fontSize: 16, height: 1.5, color: Colors.black87),
+          style: const TextStyle(fontSize: 16, height: 1.5),
         ),
         const SizedBox(height: 20),
         Row(
@@ -114,7 +106,6 @@ class EventDetailsScreen extends StatelessWidget {
     );
   }
 
-  /// Actions spécifiques pour l'organisateur
   Widget _buildOrganisateurActions() {
     return ElevatedButton.icon(
       onPressed: () {
@@ -125,14 +116,11 @@ class EventDetailsScreen extends StatelessWidget {
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF214D4F),
         foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
     );
   }
 
-  /// Afficher la liste des participants
   void _showParticipants(List<AppUser> participants) {
     showModalBottomSheet(
       context: Get.context!,
@@ -146,17 +134,11 @@ class EventDetailsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Participants',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
+              const Text('Participants', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const Divider(),
               if (participants.isEmpty)
                 const Center(
-                  child: Text(
-                    'Aucun participant pour le moment.',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
+                  child: Text('Aucun participant pour le moment.', style: TextStyle(fontSize: 16, color: Colors.grey)),
                 )
               else
                 ListView.builder(
@@ -174,8 +156,7 @@ class EventDetailsScreen extends StatelessWidget {
                       title: Text(participant.nom),
                       subtitle: Text(participant.email),
                       onTap: () {
-                        Get.to(() => ProfileScreen(
-                            uid: participant.uid, isReadOnly: true));
+                        Get.to(() => ProfileScreen(uid: participant.uid, isReadOnly: true));
                       },
                     );
                   },
@@ -187,7 +168,6 @@ class EventDetailsScreen extends StatelessWidget {
     );
   }
 
-  /// Construction d'une ligne de détail
   Widget _buildDetailRow({
     required IconData icon,
     required String label,
@@ -202,16 +182,9 @@ class EventDetailsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                label,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
+              Text(label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(fontSize: 16, color: Colors.black87),
-              ),
+              Text(value, style: const TextStyle(fontSize: 16)),
             ],
           ),
         ),
@@ -219,7 +192,6 @@ class EventDetailsScreen extends StatelessWidget {
     );
   }
 
-  /// Obtenir la couleur du statut
   Color _getStatusColor(String statut) {
     switch (statut) {
       case 'Terminé':
@@ -231,7 +203,6 @@ class EventDetailsScreen extends StatelessWidget {
     }
   }
 
-  /// Formater la date pour l'affichage
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
   }

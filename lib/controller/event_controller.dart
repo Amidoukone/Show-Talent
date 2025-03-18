@@ -21,8 +21,11 @@ class EventController extends GetxController {
   /// Charger les événements depuis Firestore
   void fetchEvents() {
     _firestore.collection('events').snapshots().listen((snapshot) {
-      _events.value =
-          snapshot.docs.map((doc) => Event.fromMap(doc.data())).toList();
+_events.value = snapshot.docs
+  .map((doc) => Event.fromMap(doc.data()))
+  .toList()
+  ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // ⬅️ Trier du plus récent au plus ancien
+
       update(); // Met à jour l'interface utilisateur
     });
   }

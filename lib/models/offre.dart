@@ -2,14 +2,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:adfoot/models/user.dart';
 
 class Offre {
-  String id; // Retirer final
+  String id;
   String titre;
   String description;
   DateTime dateDebut;
   DateTime dateFin;
-  AppUser recruteur; // Retirer final
-  List<AppUser> candidats; // Liste des joueurs postulants
-  String statut; // "ouverte", "fermée", "en cours"
+  AppUser recruteur;
+  List<AppUser> candidats;
+  String statut;
+  DateTime dateCreation; // ✅ nouveau champ
 
   Offre({
     required this.id,
@@ -20,9 +21,9 @@ class Offre {
     required this.recruteur,
     required this.candidats,
     required this.statut,
+    required this.dateCreation, // ✅
   });
 
-  // Méthode pour convertir une offre en Map (pour Firestore)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -33,10 +34,10 @@ class Offre {
       'recruteur': recruteur.toMap(),
       'candidats': candidats.map((joueur) => joueur.toMap()).toList(),
       'statut': statut,
+      'dateCreation': dateCreation, // ✅
     };
   }
 
-  // Méthode pour créer une offre à partir d'un Map (pour lire depuis Firestore)
   factory Offre.fromMap(Map<String, dynamic> map) {
     return Offre(
       id: map['id'],
@@ -48,6 +49,10 @@ class Offre {
       candidats: List<AppUser>.from(
           map['candidats']?.map((x) => AppUser.fromMap(x)) ?? []),
       statut: map['statut'],
+      dateCreation: map['dateCreation'] != null
+          ? (map['dateCreation'] as Timestamp).toDate()
+          : DateTime.now(), // fallback sécurité
     );
   }
 }
+

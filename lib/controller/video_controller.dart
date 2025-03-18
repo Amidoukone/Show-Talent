@@ -11,6 +11,7 @@ class VideoController extends GetxController {
     fetchVideos();
   }
 
+  /// Écoute en temps réel
   void fetchVideos() {
     FirebaseFirestore.instance
         .collection('videos')
@@ -28,6 +29,30 @@ class VideoController extends GetxController {
         }).whereType<Video>().toList(),
       );
     });
+  }
+
+  /// Chargement manuel (appelé après reconnexion Internet)
+  Future<void> fetchAllVideos() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('videos')
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      videoList.assignAll(
+        snapshot.docs.map((doc) {
+          try {
+            return Video.fromMap(doc.data());
+          } catch (e) {
+            print('Erreur lors du parsing manuel de la vidéo : $e');
+            return null;
+          }
+        }).whereType<Video>().toList(),
+      );
+    } catch (e) {
+      print('Erreur lors du chargement manuel des vidéos : $e');
+      Get.snackbar('Erreur', 'Impossible de récupérer les vidéos.');
+    }
   }
 
   Future<void> likeVideo(String videoId, String userId) async {
@@ -51,7 +76,6 @@ class VideoController extends GetxController {
 
   Future<void> partagerVideo(String videoId, String videoUrl) async {
     try {
-      // Incrémentation du compteur de partages uniquement après un partage réussi
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
       if (doc.exists) {
         var videoData = doc.data() as Map<String, dynamic>;

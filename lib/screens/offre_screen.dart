@@ -79,7 +79,7 @@ class OffreScreen extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: offre.statut == 'ouverte'
-                                      ? Colors.green
+                                      ? const Color.fromARGB(255, 76, 175, 129)
                                       : Colors.red,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -91,7 +91,7 @@ class OffreScreen extends StatelessWidget {
                                   icon: const Icon(Icons.group, size: 16),
                                   label: const Text('Voir les candidats'),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.teal.shade700,
+                                    backgroundColor: const Color.fromARGB(255, 55, 144, 33),
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8)),
@@ -188,30 +188,56 @@ class OffreScreen extends StatelessWidget {
         ],
       );
     }
+
     if (isPostulable) {
-      return ElevatedButton(
-        onPressed: () {
-          if (offre.candidats.any((c) => c.uid == currentUser!.uid)) {
-            Get.snackbar(
-              'Postulation existante',
-              'Vous avez déjà postulé à cette offre.',
-              backgroundColor: Colors.orange.shade100,
-              colorText: Colors.black87,
-            );
-          } else {
-            offreController.postulerOffre(currentUser!, offre);
-          }
+      final hasAlreadyApplied = offre.candidats.any((c) => c.uid == currentUser!.uid);
+
+      return StatefulBuilder(
+        builder: (context, setState) {
+          bool isClicked = hasAlreadyApplied;
+
+          return ElevatedButton(
+            onPressed: isClicked
+                ? null
+                : () async {
+                    await offreController.postulerOffre(currentUser!, offre);
+                    setState(() => isClicked = true);
+
+                    Get.defaultDialog(
+                      title: "Succès",
+                      middleText: "Vous avez postulé avec succès à cette offre.",
+                      textConfirm: "OK",
+                      confirmTextColor: Colors.white,
+                      onConfirm: () => Get.back(),
+                    );
+                  },
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  isClicked ? Colors.grey : Colors.teal.shade600,
+              disabledBackgroundColor: Colors.grey.shade400,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              elevation: 3,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(isClicked ? Icons.check : Icons.send,
+                    color: Colors.white),
+                const SizedBox(width: 8),
+                Text(
+                  isClicked ? "Postulé" : "Postuler",
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          );
         },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.teal,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-        child: const Text(
-          'Postuler',
-          style: TextStyle(color: Colors.white),
-        ),
       );
     }
+
     return const SizedBox();
   }
 
@@ -222,7 +248,7 @@ class OffreScreen extends StatelessWidget {
         onPressed: () {
           Get.to(() => OffreFormScreen());
         },
-        backgroundColor: Colors.teal,
+        backgroundColor: const Color.fromARGB(255, 55, 144, 33),
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       );
@@ -245,7 +271,6 @@ class OffreScreen extends StatelessWidget {
               await offreController.supprimerOffre(
                   offre.id, userController.user!, offre);
 
-              // Fermer le dialogue après suppression
               if (Get.isDialogOpen == true) {
                 Get.back();
               }
@@ -279,7 +304,7 @@ class OffreScreen extends StatelessWidget {
               style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
-                  color: Colors.teal),
+                  color: Color.fromARGB(255, 55, 144, 33)),
             ),
             const SizedBox(height: 10),
             SingleChildScrollView(

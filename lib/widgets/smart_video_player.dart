@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -26,12 +27,13 @@ class SmartVideoPlayer extends StatefulWidget {
 }
 
 class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerProviderStateMixin {
-  late VideoPlayerController _controller;
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   final VideoManager _videoManager = VideoManager();
   final videoController = Get.put(VideoController());
   final userController = Get.find<UserController>();
+
+  VideoPlayerController? _controller;
   bool _isInitialized = false;
   bool _isConnected = true;
   bool _isVisible = false;
@@ -39,23 +41,32 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
   @override
   void initState() {
     super.initState();
-    _checkConnection();
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(_fadeController);
+    _checkConnectionAndInitVideo();
   }
 
-  Future<void> _checkConnection() async {
+  Future<void> _checkConnectionAndInitVideo() async {
     final result = await Connectivity().checkConnectivity();
     if (result != ConnectivityResult.none) {
-      _controller = await _videoManager.getController(widget.videoUrl);
-      setState(() => _isInitialized = true);
-      _fadeController.forward();
+      try {
+        _controller = await _videoManager.getController(widget.videoUrl);
+        setState(() {
+          _isConnected = true;
+          _isInitialized = true;
+        });
+        _fadeController.forward();
 
-      if (mounted && _controller.value.isInitialized && _isVisible) {
-        _controller.play();
+        if (mounted && _controller!.value.isInitialized && _isVisible) {
+          _controller!.play();
+        }
+      } on SocketException catch (_) {
+        setState(() => _isConnected = false);
+      } catch (_) {
+        setState(() => _isConnected = false);
       }
     } else {
       setState(() => _isConnected = false);
@@ -79,17 +90,22 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
         if (_isInitialized && _isVisible) {
           _videoManager.play(widget.videoUrl);
         } else if (_isInitialized) {
-          _controller.pause();
+          _controller?.pause();
         }
       },
-      child: !_isInitialized
+      child: !_isInitialized || _controller == null
           ? Stack(
               fit: StackFit.expand,
               children: [
-                // ✅ Correction ici (thumbnailUrl au lieu de thumbnail)
                 Image.network(
                   widget.video.thumbnailUrl,
                   fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const ColoredBox(
+                    color: Colors.black,
+                    child: Center(
+                      child: Icon(Icons.broken_image, color: Colors.white, size: 60),
+                    ),
+                  ),
                 ),
                 const Center(child: CircularProgressIndicator()),
               ],
@@ -112,17 +128,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
     return FittedBox(
       fit: BoxFit.cover,
       child: SizedBox(
-        width: _controller.value.size.width,
-        height: _controller.value.size.height,
+        width: _controller!.value.size.width,
+        height: _controller!.value.size.height,
         child: GestureDetector(
           onTap: widget.enableTapToPlay
               ? () {
-                  _controller.value.isPlaying
-                      ? _controller.pause()
-                      : _controller.play();
+                  _controller!.value.isPlaying
+                      ? _controller!.pause()
+                      : _controller!.play();
                 }
               : null,
-          child: VideoPlayer(_controller),
+          child: VideoPlayer(_controller!),
         ),
       ),
     );
@@ -175,10 +191,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
       left: 0,
       right: 0,
       child: VideoProgressIndicator(
-        _controller,
+        _controller!,
         allowScrubbing: false,
         padding: EdgeInsets.zero,
-        colors: VideoProgressColors(
+        colors: const VideoProgressColors(
           playedColor: Colors.green,
           backgroundColor: Colors.white24,
           bufferedColor: Colors.white38,

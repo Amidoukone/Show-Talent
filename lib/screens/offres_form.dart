@@ -23,21 +23,21 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
   DateTime? _dateDebut;
   DateTime? _dateFin;
   late bool isEditing;
+  late Offre? editingOffre;
 
   @override
   void initState() {
     super.initState();
-
-    // Définir si c'est une modification ou une création
     isEditing = Get.arguments != null;
 
-    // Charger les données si modification
     if (isEditing) {
-      final offre = Get.arguments as Offre;
-      _titreController.text = offre.titre;
-      _descriptionController.text = offre.description;
-      _dateDebut = offre.dateDebut;
-      _dateFin = offre.dateFin;
+      editingOffre = Get.arguments as Offre;
+      _titreController.text = editingOffre!.titre;
+      _descriptionController.text = editingOffre!.description;
+      _dateDebut = editingOffre!.dateDebut;
+      _dateFin = editingOffre!.dateFin;
+    } else {
+      editingOffre = null;
     }
   }
 
@@ -95,25 +95,13 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
                 const SizedBox(height: 24),
                 _buildSectionTitle('Période'),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDateButton(
-                        'Date de début',
-                        _dateDebut,
-                        () => _selectDate(context, true),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildDateButton(
-                        'Date de fin',
-                        _dateFin,
-                        () => _selectDate(context, false),
-                      ),
-                    ),
-                  ],
-                ),
+                _buildDatePicker('Date de début', _dateDebut, (picked) {
+                  setState(() => _dateDebut = picked);
+                }, isStart: true),
+                const SizedBox(height: 16),
+                _buildDatePicker('Date de fin', _dateFin, (picked) {
+                  setState(() => _dateFin = picked);
+                }),
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
@@ -121,7 +109,7 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
                   child: ElevatedButton(
                     onPressed: _submitForm,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.teal,
+                      backgroundColor: const Color.fromARGB(255, 55, 144, 33),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -178,58 +166,71 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
     );
   }
 
-  Widget _buildDateButton(String label, DateTime? date, VoidCallback onPress) {
+  Widget _buildDatePicker(
+    String label,
+    DateTime? date,
+    Function(DateTime) onDateSelected, {
+    bool isStart = false,
+  }) {
     return InkWell(
-      onTap: onPress,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!),
-          borderRadius: BorderRadius.circular(12),
-          color: Colors.grey[50],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 12,
+      onTap: () async {
+        final now = DateTime.now();
+        final firstDate = isStart
+            ? now
+            : _dateDebut != null
+                ? _dateDebut!
+                : now;
+
+        DateTime? pickedDate = await showDatePicker(
+          context: context,
+          initialDate: date ?? firstDate,
+          firstDate: firstDate,
+          lastDate: DateTime(2100),
+          builder: (context, child) {
+            return Theme(
+              data: ThemeData.light().copyWith(
+                colorScheme: const ColorScheme.light(
+                  primary: Color(0xFF214D4F),
+                  onPrimary: Colors.white,
+                  surface: Colors.white,
+                  onSurface: Colors.black,
+                ),
+                dialogBackgroundColor: Colors.white,
               ),
-            ),
-            const SizedBox(height: 4),
+              child: child!,
+            );
+          },
+        );
+        if (pickedDate != null) {
+          onDateSelected(pickedDate);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFF214D4F)),
+          borderRadius: BorderRadius.circular(20),
+          color: Colors.grey.shade100,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label,
+                style: const TextStyle(fontSize: 16, color: Colors.black54)),
             Text(
-              date == null
-                  ? 'Sélectionner'
-                  : DateFormat('dd/MM/yyyy').format(date),
-              style: TextStyle(
+              date != null
+                  ? DateFormat('dd MMM yyyy').format(date)
+                  : 'Choisir une date',
+              style: const TextStyle(
                 fontSize: 16,
-                color: date == null ? Colors.grey : Colors.black87,
+                color: Color(0xFF214D4F),
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _selectDate(BuildContext context, bool isStartDate) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null) {
-      setState(() {
-        if (isStartDate) {
-          _dateDebut = picked;
-        } else {
-          _dateFin = picked;
-        }
-      });
-    }
   }
 
   void _submitForm() {
@@ -243,17 +244,19 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
       }
 
       final currentUser = userController.user!;
+
       final offre = Offre(
-        id: isEditing
-            ? (Get.arguments as Offre).id
-            : DateTime.now().toIso8601String(),
+        id: isEditing ? editingOffre!.id : DateTime.now().toIso8601String(),
         titre: _titreController.text,
         description: _descriptionController.text,
         dateDebut: _dateDebut!,
         dateFin: _dateFin!,
         recruteur: currentUser,
-        candidats: isEditing ? (Get.arguments as Offre).candidats : [],
+        candidats: isEditing ? editingOffre!.candidats : [],
         statut: 'ouverte',
+        dateCreation: isEditing
+            ? editingOffre!.dateCreation
+            : DateTime.now(),
       );
 
       if (isEditing) {
