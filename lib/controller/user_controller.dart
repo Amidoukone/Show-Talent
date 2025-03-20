@@ -127,10 +127,8 @@ class UserController extends GetxController {
   Future<void> _updateFCMToken(String uid) async {
     try {
       String? fcmToken = await _messaging.getToken();
-      if (fcmToken != null) {
-        await _firestore.collection('users').doc(uid).update({'fcmToken': fcmToken});
-      }
-    } catch (e) {
+      await _firestore.collection('users').doc(uid).update({'fcmToken': fcmToken});
+        } catch (e) {
       debugPrint(" Erreur mise à jour FCM : $e");
     }
   }

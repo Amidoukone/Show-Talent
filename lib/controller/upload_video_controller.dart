@@ -11,58 +11,66 @@ class UploadVideoController extends GetxController {
   var isUploading = false.obs;
   var uploadProgress = 0.0.obs;
 
-  /// Vérifie la durée maximale de la vidéo (3 minutes).
+  /// Miniature temporaire pour aperçu final dans snackbar
+  final Rx<File?> lastGeneratedThumbnail = Rx<File?>(null);
+
   Future<bool> isVideoDurationValid(String videoPath) async {
     final info = await VideoCompress.getMediaInfo(videoPath);
-    return (info.duration ?? 0) / 1000 <= 180; // Convertir en secondes
+    return (info.duration ?? 0) / 1000 <= 180;
   }
 
-  /// Vérifie la qualité minimale de la vidéo (360p).
   Future<bool> isVideoQualityAcceptable(String videoPath) async {
     final info = await VideoCompress.getMediaInfo(videoPath);
     final width = info.width ?? 0;
     final height = info.height ?? 0;
-    return width >= 480 && height >= 360; // Minimum requis : 480x360 (360p)
+    return width >= 480 && height >= 360;
   }
 
-  /// Compression vidéo optimisée.
   Future<File?> _compressVideo(String videoPath) async {
     try {
       final info = await VideoCompress.compressVideo(
         videoPath,
-        quality: VideoQuality
-            .MediumQuality, // Meilleur équilibre entre qualité et rapidité
+        quality: VideoQuality.MediumQuality,
         deleteOrigin: false,
       );
       return info?.file;
     } catch (e) {
-      Get.snackbar(
-        'Erreur',
-        'Échec de la compression : $e',
-        backgroundColor: Colors.redAccent,
-        colorText: Colors.white,
-      );
+      Get.snackbar('Erreur', 'Échec de la compression : $e',
+          backgroundColor: Colors.redAccent, colorText: Colors.white);
       return null;
     }
   }
 
-  /// Génération miniature optimisée.
   Future<File?> _generateThumbnail(String videoPath) async {
     try {
-      return await VideoCompress.getFileThumbnail(videoPath,
-          quality: 75); // Qualité optimisée
+      final file = await VideoCompress.getFileThumbnail(videoPath, quality: 75);
+      lastGeneratedThumbnail.value = file;
+      return file;
     } catch (e) {
-      Get.snackbar(
-        'Erreur',
-        'Échec de la génération de la miniature : $e',
-        backgroundColor: Colors.redAccent,
-        colorText: Colors.white,
-      );
+      Get.snackbar('Erreur', 'Échec de la miniature : $e',
+          backgroundColor: Colors.redAccent, colorText: Colors.white);
       return null;
     }
   }
 
-  /// Téléversement avec affichage de progression.
+  Future<bool> _showThumbnailPreview(File thumbnailFile) async {
+    return await Get.dialog<bool>(
+          AlertDialog(
+            title: Text('Prévisualisation de la miniature'),
+            content: Image.file(thumbnailFile),
+            actions: [
+              TextButton(
+                  onPressed: () => Get.back(result: false),
+                  child: Text('Annuler')),
+              TextButton(
+                  onPressed: () => Get.back(result: true),
+                  child: Text('Confirmer')),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   Future<void> _uploadFile({
     required File file,
     required Reference storageRef,
@@ -80,7 +88,6 @@ class UploadVideoController extends GetxController {
     await uploadTask;
   }
 
-  /// Téléversement vidéo avec optimisation.
   Future<void> uploadVideo(
       String songName, String caption, String videoPath) async {
     File? compressedFile;
@@ -89,26 +96,18 @@ class UploadVideoController extends GetxController {
     try {
       isUploading(true);
 
-      // Vérification de la vidéo avant téléversement
       if (!await isVideoDurationValid(videoPath)) {
-        Get.snackbar(
-          'Durée excessive',
-          'La vidéo dépasse la limite de 3 minutes. Veuillez choisir une vidéo plus courte.',
-          backgroundColor: Colors.orangeAccent,
-        );
+        Get.snackbar('Durée excessive', 'La vidéo dépasse 3 minutes.',
+            backgroundColor: Colors.orangeAccent);
         return;
       }
 
       if (!await isVideoQualityAcceptable(videoPath)) {
-        Get.snackbar(
-          'Qualité insuffisante',
-          'La qualité est insuffisante. Une qualité minimum de 360p est requise.',
-          backgroundColor: Colors.orangeAccent,
-        );
+        Get.snackbar('Qualité insuffisante', 'Minimum requis : 360p.',
+            backgroundColor: Colors.orangeAccent);
         return;
       }
 
-      // Compression et génération de miniature
       final futures = await Future.wait([
         _compressVideo(videoPath),
         _generateThumbnail(videoPath),
@@ -117,9 +116,15 @@ class UploadVideoController extends GetxController {
       compressedFile = futures[0];
       thumbnailFile = futures[1];
 
-      if (compressedFile == null) throw Exception("Compression échouée");
-      if (thumbnailFile == null) {
-        throw Exception("Génération de miniature échouée");
+      if (compressedFile == null || thumbnailFile == null) {
+        throw Exception("Fichiers non générés");
+      }
+
+      bool confirm = await _showThumbnailPreview(thumbnailFile);
+      if (!confirm) {
+        Get.snackbar('Annulé', 'Téléversement annulé',
+            backgroundColor: Colors.blueAccent, colorText: Colors.white);
+        return;
       }
 
       String videoFileName = basename(compressedFile.path);
@@ -130,30 +135,24 @@ class UploadVideoController extends GetxController {
       Reference thumbnailRef =
           FirebaseStorage.instance.ref().child('thumbnails/$thumbnailFileName');
 
-      // Téléversement avec progression
       await Future.wait([
         _uploadFile(
           file: compressedFile,
           storageRef: videoRef,
-          onProgress: (progress) {
-            uploadProgress.value = progress / 2; // 50% pour la vidéo
-          },
+          onProgress: (p) => uploadProgress.value = p / 2,
         ),
         _uploadFile(
           file: thumbnailFile,
           storageRef: thumbnailRef,
-          onProgress: (progress) {
-            uploadProgress.value =
-                0.5 + (progress / 2); // 50-100% pour la miniature
-          },
+          onProgress: (p) => uploadProgress.value = 0.5 + (p / 2),
         ),
       ]);
 
       String videoUrl = await videoRef.getDownloadURL();
       String thumbnailUrl = await thumbnailRef.getDownloadURL();
 
-      // Sauvegarde des métadonnées dans Firestore
       String videoId = FirebaseFirestore.instance.collection('videos').doc().id;
+
       await FirebaseFirestore.instance.collection('videos').doc(videoId).set({
         'id': videoId,
         'videoUrl': videoUrl,
@@ -167,22 +166,15 @@ class UploadVideoController extends GetxController {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      Get.snackbar(
-        'Succès',
-        'Vidéo téléversée avec succès !',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-      );
+      Get.snackbar('Succès', 'Vidéo téléversée avec succès !',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white);
 
-      Get.offAllNamed('/home');
+      Get.offAllNamed('/main', arguments: 0);
     } catch (e) {
-      Get.snackbar(
-        'Erreur',
-        'Échec du téléchargement : $e',
-        backgroundColor: Colors.redAccent,
-        colorText: Colors.white,
-      );
+      Get.snackbar('Erreur', 'Échec du téléchargement : $e',
+          backgroundColor: Colors.redAccent, colorText: Colors.white);
     } finally {
       isUploading(false);
       uploadProgress.value = 0.0;
