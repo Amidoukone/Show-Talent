@@ -233,10 +233,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
             );
           },
         );
-        if (pickedDate != null) {
-          onDateSelected(pickedDate);
-        }
-      },
+        onDateSelected(pickedDate!);
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(

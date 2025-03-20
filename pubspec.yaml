@@ -58,7 +58,7 @@ dependencies:
   http: ^1.2.2
   googleapis: ^13.2.0
   googleapis_auth: ^1.4.1
-  flutter_local_notifications: ^18.0.0
+  flutter_local_notifications: ^19.0.0
   flutter_cache_manager: ^3.4.1
   share_plus: ^10.1.4
   file_picker: ^9.0.2
