@@ -20,50 +20,45 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   final UserController _userController = Get.find<UserController>();
 
-Future<void> _login() async {
-  if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-    _showErrorSnackbar('Tous les champs doivent être remplis.');
-    return;
-  }
-
-  setState(() => _isLoading = true);
-
-  try {
-    final UserCredential userCred = await FirebaseAuth.instance.signInWithEmailAndPassword(
-      email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-    );
-
-    final User? user = userCred.user;
-    await user?.reload();
-    final User? refreshedUser = FirebaseAuth.instance.currentUser;
-
-    if (refreshedUser == null || !refreshedUser.emailVerified) {
-      await _handleUnverifiedUser(refreshedUser);
+  Future<void> _login() async {
+    if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
+      _showErrorSnackbar('Tous les champs doivent être remplis.');
       return;
     }
 
-    await _updateFcmToken(refreshedUser);
-    await _userController.handleUserAuthentication(refreshedUser.uid); // 🔄 Utilisation de la méthode publique corrigée
+    setState(() => _isLoading = true);
 
-  } on FirebaseAuthException catch (e) {
-    _handleAuthError(e);
-  } catch (e) {
-    _showErrorSnackbar('Erreur inattendue : ${e.toString()}');
-  } finally {
-    setState(() => _isLoading = false);
+    try {
+      final UserCredential userCred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      final User? user = userCred.user;
+      await user?.reload();
+      final User? refreshedUser = FirebaseAuth.instance.currentUser;
+
+      if (refreshedUser == null || !refreshedUser.emailVerified) {
+        await _handleUnverifiedUser(refreshedUser);
+        return;
+      }
+
+      await _updateFcmToken(refreshedUser);
+      await _userController.handleUserAuthentication(refreshedUser.uid);
+    } on FirebaseAuthException catch (e) {
+      _handleAuthError(e);
+    } catch (e) {
+      _showErrorSnackbar('Erreur inattendue : ${e.toString()}');
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
-}
-
 
   Future<void> _handleUnverifiedUser(User? user) async {
     await FirebaseAuth.instance.signOut();
     if (user != null) {
       await user.sendEmailVerification();
-      _showErrorSnackbar(
-        'Validation requise',
-        'Veuillez vérifier votre email. Un nouveau lien a été envoyé.',
-      );
+      _showErrorSnackbar('Validation requise', 'Veuillez vérifier votre email. Un nouveau lien a été envoyé.');
     }
   }
 
@@ -80,14 +75,14 @@ Future<void> _login() async {
   }
 
   Future<void> _forgotPassword() async {
-    if (_emailController.text.isEmpty) {
+    if (_emailController.text.trim().isEmpty) {
       _showErrorSnackbar('Veuillez saisir votre email');
       return;
     }
 
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailController.text.trim()
+        email: _emailController.text.trim(),
       );
       _showSuccessSnackbar('Email de réinitialisation envoyé');
     } catch (e) {
@@ -108,10 +103,13 @@ Future<void> _login() async {
         message = 'Format d\'email invalide';
         break;
       case 'too-many-requests':
-        message = 'Trop de tentatives. Réessayez plus tard';
+        message = 'Trop de tentatives. Réessayez plus tard.';
+        break;
+      default:
+        message = e.message ?? 'Erreur inconnue';
         break;
     }
-    _showErrorSnackbar(message);
+    _showErrorSnackbar('Connexion échouée', message);
   }
 
   void _showSuccessSnackbar(String message) {
@@ -121,6 +119,7 @@ Future<void> _login() async {
       backgroundColor: Colors.green,
       colorText: Colors.white,
       snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 3),
     );
   }
 
@@ -131,6 +130,7 @@ Future<void> _login() async {
       backgroundColor: Colors.red,
       colorText: Colors.white,
       snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 3),
     );
   }
 
@@ -140,27 +140,27 @@ Future<void> _login() async {
       backgroundColor: const Color(0xFFE6EEFA),
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Image.asset('assets/logo.png', height: 100),
-              const SizedBox(height: 40),
+              const SizedBox(height: 30),
               const Text(
                 'Connectez-vous!',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF214D4F),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 30),
               _buildEmailField(),
               const SizedBox(height: 20),
               _buildPasswordField(),
               const SizedBox(height: 10),
               _buildForgotPassword(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 30),
               _buildLoginButton(),
               const SizedBox(height: 20),
               _buildSignUpLink(),
@@ -175,10 +175,10 @@ Future<void> _login() async {
     return TextFormField(
       controller: _emailController,
       keyboardType: TextInputType.emailAddress,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'Adresse e-mail',
-        prefixIcon: Icon(Icons.email),
-        border: OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.email_outlined),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -189,12 +189,10 @@ Future<void> _login() async {
       obscureText: _obscurePassword,
       decoration: InputDecoration(
         labelText: 'Mot de passe',
-        prefixIcon: const Icon(Icons.lock),
-        border: const OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.lock_outline),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         suffixIcon: IconButton(
-          icon: Icon(_obscurePassword 
-              ? Icons.visibility_off 
-              : Icons.visibility),
+          icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
         ),
       ),
@@ -208,7 +206,7 @@ Future<void> _login() async {
         onPressed: _forgotPassword,
         child: const Text(
           'Mot de passe oublié ?',
-          style: TextStyle(color: Color(0xFF214D4F)),
+          style: TextStyle(color: Color(0xFF214D4F), fontWeight: FontWeight.w500),
         ),
       ),
     );
@@ -216,19 +214,22 @@ Future<void> _login() async {
 
   Widget _buildLoginButton() {
     return _isLoading
-        ? const CircularProgressIndicator()
-        : ElevatedButton(
-            onPressed: _login,
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
-              backgroundColor: const Color(0xFF214D4F),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+        ? const CircularProgressIndicator(color: Color(0xFF214D4F))
+        : SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: _login,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF214D4F),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-            ),
-            child: const Text(
-              'Se connecter',
-              style: TextStyle(fontSize: 16, color: Colors.white),
+              child: const Text(
+                'Se connecter',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
             ),
           );
   }
@@ -253,4 +254,4 @@ Future<void> _login() async {
       ),
     );
   }
-} 
+}
