@@ -22,15 +22,17 @@ class AuthController extends GetxController {
   AppUser? get user => _appUser.value;
   File? get profilePhoto => _pickedImage;
 
+  /// ✅ Getter public pour exposer FirebaseAuth
+  FirebaseAuth get auth => _auth;
+
   @override
   void onReady() {
     super.onReady();
     _firebaseUser.value = _auth.currentUser;
     _firebaseUser.bindStream(_auth.authStateChanges());
-    ever(_firebaseUser, handleAuthState); // Devient public
+    ever(_firebaseUser, handleAuthState);
   }
 
-  ///Correction : Méthode rendue publique
   Future<void> handleAuthState(User? user) async {
     if (user == null) {
       _appUser.value = null;
@@ -38,9 +40,9 @@ class AuthController extends GetxController {
       return;
     }
 
-    await Future.delayed(const Duration(seconds: 1)); // Pause pour éviter les conflits
+    await Future.delayed(const Duration(seconds: 1));
     await user.reload();
-    user = _auth.currentUser; // Rafraîchir l'utilisateur
+    user = _auth.currentUser;
 
     if (!user!.emailVerified) {
       Get.offAll(() => const VerifyEmailScreen());
@@ -60,27 +62,23 @@ class AuthController extends GetxController {
     }
   }
 
-  /// Vérifie si l'email est validé et migre l'utilisateur
-Future<bool> verifyEmail() async {
-  User? user = _auth.currentUser;
-  if (user == null) return false;
+  Future<bool> verifyEmail() async {
+    User? user = _auth.currentUser;
+    if (user == null) return false;
 
-  await user.reload();
-  if (user.emailVerified) {
-    await _migrateUserFromPending(user.uid);
-    return true; // On ne redirige pas ici, c'est géré dans VerifyEmailScreen
+    await user.reload();
+    if (user.emailVerified) {
+      await _migrateUserFromPending(user.uid);
+      return true;
+    }
+    return false;
   }
-  return false;
-}
 
-
-  /// Vérifie si l'utilisateur existe dans Firestore (Réintégré)
   Future<bool> userExistsInDatabase(String uid) async {
     final userDoc = await _firestore.collection('users').doc(uid).get();
     return userDoc.exists;
   }
 
-  /// Migration d'un utilisateur de pending_users vers users
   Future<void> _migrateUserFromPending(String uid) async {
     final pendingDoc = await _firestore.collection('pending_users').doc(uid).get();
     if (pendingDoc.exists) {
@@ -90,7 +88,6 @@ Future<bool> verifyEmail() async {
     }
   }
 
-  /// Envoi d'un nouvel email de vérification
   Future<bool> resendVerificationEmail() async {
     try {
       await _auth.currentUser?.sendEmailVerification();
@@ -101,14 +98,12 @@ Future<bool> verifyEmail() async {
     }
   }
 
-  /// Déconnexion de l'utilisateur
   Future<void> signOut() async {
     await _auth.signOut();
     _appUser.value = null;
     Get.offAll(() => const LoginScreen());
   }
 
-  /// Affichage des messages d'erreur/succès
   void _showSnackbar(String title, String message, Color color) {
     Get.snackbar(title, message, backgroundColor: color, colorText: Colors.white);
   }
