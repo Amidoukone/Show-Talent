@@ -27,6 +27,7 @@ class FullScreenVideo extends StatefulWidget {
 class _FullScreenVideoState extends State<FullScreenVideo> {
   bool _isConnected = true;
   StreamSubscription<List<ConnectivityResult>>? _subscription;
+  final VideoManager _videoManager = VideoManager();
 
   @override
   void initState() {
@@ -45,12 +46,16 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
 
   @override
   void dispose() {
+    _videoManager.pause(widget.video.videoUrl);
     _subscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final allVideos = widget.videoController.videoList;
+    final index = allVideos.indexWhere((v) => v.id == widget.video.id);
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: _isConnected
@@ -60,22 +65,25 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
                 SmartVideoPlayer(
                   videoUrl: widget.video.videoUrl,
                   video: widget.video,
+                  videoList: allVideos,
+                  currentIndex: index,
+                  enableTapToPlay: true,
                 ),
-                _buildBackButton(context),
-                _buildVideoInfo(context),
+                _buildBackButton(),
+                _buildVideoInfo(),
               ],
             )
           : _buildNoInternet(),
     );
   }
 
-  Widget _buildBackButton(BuildContext context) {
+  Widget _buildBackButton() {
     return Positioned(
       top: MediaQuery.of(context).padding.top + 10,
       left: 10,
       child: GestureDetector(
         onTap: () {
-          VideoManager().pause(widget.video.videoUrl);
+          _videoManager.pause(widget.video.videoUrl);
           Get.back();
         },
         child: Container(
@@ -94,7 +102,7 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
     );
   }
 
-  Widget _buildVideoInfo(BuildContext context) {
+  Widget _buildVideoInfo() {
     return Positioned(
       bottom: 40,
       left: 10,
@@ -104,7 +112,7 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
         children: [
           GestureDetector(
             onTap: () async {
-              VideoManager().pause(widget.video.videoUrl);
+              _videoManager.pause(widget.video.videoUrl);
               if (widget.video.uid.isNotEmpty) {
                 await Get.to(() => ProfileScreen(uid: widget.video.uid, isReadOnly: true));
               } else {

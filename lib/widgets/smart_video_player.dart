@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -14,11 +13,15 @@ class SmartVideoPlayer extends StatefulWidget {
   final String videoUrl;
   final Video video;
   final bool enableTapToPlay;
+  final int currentIndex;
+  final List<Video> videoList;
 
   const SmartVideoPlayer({
     super.key,
     required this.videoUrl,
     required this.video,
+    required this.currentIndex,
+    required this.videoList,
     this.enableTapToPlay = true,
   });
 
@@ -26,9 +29,10 @@ class SmartVideoPlayer extends StatefulWidget {
   State<SmartVideoPlayer> createState() => _SmartVideoPlayerState();
 }
 
-class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerProviderStateMixin {
-  late AnimationController _fadeController;
-  late Animation<double> _fadeAnimation;
+class _SmartVideoPlayerState extends State<SmartVideoPlayer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _fadeController;
+  late final Animation<double> _fadeAnimation;
   final VideoManager _videoManager = VideoManager();
   final videoController = Get.put(VideoController());
   final userController = Get.find<UserController>();
@@ -37,6 +41,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
   bool _isInitialized = false;
   bool _isConnected = true;
   bool _isVisible = false;
+  bool _hasInit = false;
 
   @override
   void initState() {
@@ -46,25 +51,30 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
       duration: const Duration(milliseconds: 500),
     );
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(_fadeController);
-    _checkConnectionAndInitVideo();
   }
 
-  Future<void> _checkConnectionAndInitVideo() async {
+  Future<void> _initVideo() async {
+    if (_hasInit) return;
+    _hasInit = true;
+
     final result = await Connectivity().checkConnectivity();
     if (result != ConnectivityResult.none) {
       try {
-        _controller = await _videoManager.getController(widget.videoUrl);
-        setState(() {
-          _isConnected = true;
-          _isInitialized = true;
-        });
-        _fadeController.forward();
+        final controller = await _videoManager.getController(widget.videoUrl);
+        if (!mounted) return;
 
-        if (mounted && _controller!.value.isInitialized && _isVisible) {
-          _controller!.play();
+        setState(() {
+          _controller = controller;
+          _isInitialized = true;
+          _isConnected = true;
+        });
+
+        _fadeController.forward();
+        if (_isVisible) {
+          _videoManager.play(widget.videoUrl);
         }
-      } on SocketException catch (_) {
-        setState(() => _isConnected = false);
+
+        _preloadNextVideo();
       } catch (_) {
         setState(() => _isConnected = false);
       }
@@ -73,54 +83,73 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
     }
   }
 
+  void _preloadNextVideo() {
+    final nextIndex = widget.currentIndex + 1;
+    if (nextIndex < widget.videoList.length) {
+      final nextVideo = widget.videoList[nextIndex];
+      _videoManager.preload(nextVideo.videoUrl);
+    }
+  }
+
   @override
   void dispose() {
     _fadeController.dispose();
+    _videoManager.releaseController(widget.videoUrl);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_isConnected) return _buildNoInternet();
-
     return VisibilityDetector(
       key: Key(widget.videoUrl),
       onVisibilityChanged: (info) {
-        _isVisible = info.visibleFraction > 0.9;
-        if (_isInitialized && _isVisible) {
-          _videoManager.play(widget.videoUrl);
-        } else if (_isInitialized) {
-          _controller?.pause();
+        final visible = info.visibleFraction > 0.8;
+        _isVisible = visible;
+
+        if (!_isInitialized) {
+          _initVideo();
+        } else {
+          if (visible) {
+            _videoManager.play(widget.videoUrl);
+          } else {
+            _videoManager.pause(widget.videoUrl);
+          }
         }
       },
-      child: !_isInitialized || _controller == null
-          ? Stack(
-              fit: StackFit.expand,
-              children: [
-                Image.network(
-                  widget.video.thumbnailUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const ColoredBox(
-                    color: Colors.black,
-                    child: Center(
-                      child: Icon(Icons.broken_image, color: Colors.white, size: 60),
-                    ),
+      child: !_isConnected
+          ? _buildNoInternet()
+          : !_isInitialized || _controller == null
+              ? _buildLoadingThumbnail()
+              : FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _buildVideo(),
+                      _buildActions(),
+                      _buildProgressBar(),
+                    ],
                   ),
                 ),
-                const Center(child: CircularProgressIndicator()),
-              ],
-            )
-          : FadeTransition(
-              opacity: _fadeAnimation,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  _buildVideo(),
-                  _buildActions(),
-                  _buildProgressBar(),
-                ],
-              ),
+    );
+  }
+
+  Widget _buildLoadingThumbnail() {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.network(
+          widget.video.thumbnailUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const ColoredBox(
+            color: Colors.black,
+            child: Center(
+              child: Icon(Icons.broken_image, color: Colors.white, size: 60),
             ),
+          ),
+        ),
+        const Center(child: CircularProgressIndicator()),
+      ],
     );
   }
 
@@ -133,9 +162,11 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
         child: GestureDetector(
           onTap: widget.enableTapToPlay
               ? () {
-                  _controller!.value.isPlaying
-                      ? _controller!.pause()
-                      : _controller!.play();
+                  if (_controller!.value.isPlaying) {
+                    _controller!.pause();
+                  } else {
+                    _controller!.play();
+                  }
                 }
               : null,
           child: VideoPlayer(_controller!),
@@ -162,7 +193,9 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
             ),
           _buildActionButton(
             icon: Icons.favorite,
-            color: widget.video.likes.contains(user.uid) ? Colors.red : Colors.white,
+            color: widget.video.likes.contains(user.uid)
+                ? Colors.red
+                : Colors.white,
             label: '${widget.video.likes.length}',
             onPressed: () => _toggleLike(user.uid),
           ),
@@ -178,7 +211,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
             icon: Icons.flag,
             color: Colors.white,
             label: '${widget.video.reportCount}',
-            onPressed: () => videoController.signalerVideo(widget.video.id, user.uid),
+            onPressed: () =>
+                videoController.signalerVideo(widget.video.id, user.uid),
           ),
         ],
       ),
@@ -260,7 +294,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
               videoController.deleteVideo(widget.video.id);
               Get.back();
             },
-            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+            child: const Text('Supprimer',
+                style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -274,7 +309,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
         subject: 'Vidéo partagée depuis AD.FOOT',
       );
       await videoController.partagerVideo(widget.video.id, videoUrl);
-    } catch (e) {
+    } catch (_) {
       Get.snackbar(
         'Erreur',
         'Partage impossible',
