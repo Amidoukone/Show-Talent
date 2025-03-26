@@ -21,6 +21,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final VideoController videoController = Get.put(VideoController());
   final UserController userController = Get.find<UserController>();
   final VideoManager _videoManager = VideoManager();
+  final PageController _pageController = PageController();
+
   String? currentVideoUrl;
   bool _isConnected = true;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
@@ -30,12 +32,25 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _checkInitialConnection();
     _listenToConnectionChanges();
+
+    _pageController.addListener(() {
+      final maxScroll = _pageController.position.maxScrollExtent;
+      final currentScroll = _pageController.position.pixels;
+
+      if (maxScroll - currentScroll <= 300 &&
+          !videoController.isLoading &&
+          videoController.hasMore) {
+        videoController.fetchPaginatedVideos();
+      }
+    });
   }
 
   Future<void> _checkInitialConnection() async {
     final resultList = await Connectivity().checkConnectivity();
-    final result = resultList;
-    setState(() => _isConnected = result != ConnectivityResult.none);
+    setState(() => _isConnected = resultList != ConnectivityResult.none);
+    if (_isConnected && videoController.videoList.isEmpty) {
+      videoController.fetchPaginatedVideos();
+    }
   }
 
   void _listenToConnectionChanges() {
@@ -46,15 +61,16 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _isConnected = result != null && result != ConnectivityResult.none);
 
       if (!_isConnected) return;
+
       if (!wasConnected && videoController.videoList.isEmpty) {
-        videoController.fetchAllVideos();
+        videoController.fetchPaginatedVideos();
       }
     });
   }
 
   @override
   void dispose() {
-    _videoManager.dispose();
+    _pageController.dispose();
     _connectivitySubscription?.cancel();
     super.dispose();
   }
@@ -98,7 +114,8 @@ class _HomeScreenState extends State<HomeScreen> {
       body: !_isConnected
           ? _buildNoInternet()
           : Obx(() {
-              if (videoController.videoList.isEmpty) {
+              final videos = videoController.videoList;
+              if (videos.isEmpty) {
                 return const Center(
                   child: Text(
                     'Aucune vidéo disponible',
@@ -108,20 +125,21 @@ class _HomeScreenState extends State<HomeScreen> {
               }
 
               return PageView.builder(
+                controller: _pageController,
                 scrollDirection: Axis.vertical,
-                itemCount: videoController.videoList.length,
+                itemCount: videos.length,
                 onPageChanged: (index) {
-                  final currentVideo = videoController.videoList[index];
-                  currentVideoUrl = currentVideo.videoUrl;
-                  _videoManager.play(currentVideo.videoUrl);
+                  _handlePageChange(index, videos);
                 },
                 itemBuilder: (context, index) {
-                  final video = videoController.videoList[index];
+                  final video = videos[index];
                   return Stack(
                     children: [
                       SmartVideoPlayer(
                         videoUrl: video.videoUrl,
                         video: video,
+                        currentIndex: index,
+                        videoList: videos,
                         enableTapToPlay: false,
                       ),
                       Positioned.fill(
@@ -152,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
             heroTag: 'addVideo',
             onPressed: () {
               if (currentVideoUrl != null) {
-                _videoManager.pause(currentVideoUrl!); 
+                _videoManager.pause(currentVideoUrl!);
               }
               Get.to(() => const UploadVideoScreen());
             },
@@ -163,6 +181,21 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }),
     );
+  }
+
+  void _handlePageChange(int index, List<dynamic> videos) {
+    if (index >= videos.length) return;
+
+    final previousUrl = currentVideoUrl;
+    final currentVideo = videos[index];
+
+    currentVideoUrl = currentVideo.videoUrl;
+
+    if (previousUrl != null && previousUrl != currentVideoUrl) {
+      _videoManager.pause(previousUrl);
+    }
+
+    _videoManager.play(currentVideo.videoUrl);
   }
 
   Widget _buildNoInternet() {
