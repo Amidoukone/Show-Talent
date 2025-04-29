@@ -23,16 +23,15 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Conversations"),
+        centerTitle: true,
       ),
       body: Obx(() {
         if (chatController.conversations.isEmpty) {
           return const Center(child: Text("Aucune conversation."));
         }
 
-        // Utiliser directement toutes les conversations sans filtrage
-        final conversations = chatController.conversations;
-
         // Trier les conversations par `lastMessageDate`
+        final conversations = List.from(chatController.conversations);
         conversations.sort((a, b) =>
             (b.lastMessageDate ?? DateTime(0))
                 .compareTo(a.lastMessageDate ?? DateTime(0)));
@@ -41,15 +40,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           itemCount: conversations.length,
           itemBuilder: (context, index) {
             final conversation = conversations[index];
-
-            // Récupérer l'identifiant de l'autre utilisateur
             final currentUserId = AuthController.instance.user?.uid;
             final otherUserId = conversation.utilisateurIds.firstWhere(
               (id) => id != currentUserId,
               orElse: () => '',
             );
 
-            // Vérifier que l'ID n'est pas vide afin d'éviter un appel à Firestore avec un chemin vide
             if (otherUserId.isEmpty) {
               return const ListTile(title: Text("Utilisateur inconnu"));
             }

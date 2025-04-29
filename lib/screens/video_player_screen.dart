@@ -1,12 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:flutter/material.dart';
 import 'package:adfoot/screens/video_player_item.dart';
 
 class VideoPlayerScreen extends StatelessWidget {
   final String videoUrl;
 
-  const VideoPlayerScreen(
-      {super.key, required this.videoUrl, required Video video});
+  const VideoPlayerScreen({super.key, required this.videoUrl, required Video video});
 
   @override
   Widget build(BuildContext context) {

@@ -1,157 +1,157 @@
+import 'dart:async';
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:adfoot/screens/success_toast.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:path/path.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:uuid/uuid.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/utils/video_tools.dart';
 import 'package:video_compress/video_compress.dart';
 
 class UploadVideoController extends GetxController {
   var isUploading = false.obs;
   var uploadProgress = 0.0.obs;
+  var uploadStage = ''.obs;
 
-  /// Miniature temporaire pour aperçu final dans snackbar
-  final Rx<File?> lastGeneratedThumbnail = Rx<File?>(null);
+  File? selectedVideo;
+  File? thumbnail;
+  String? songName;
+  String? caption;
+  String? originalVideoPath;
 
-  Future<bool> isVideoDurationValid(String videoPath) async {
-    final info = await VideoCompress.getMediaInfo(videoPath);
-    return (info.duration ?? 0) / 1000 <= 180;
-  }
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  Subscription? _compressionSubscription;
+  bool _internetAvailable = true;
+  UploadTask? _currentUploadTask;
 
-  Future<bool> isVideoQualityAcceptable(String videoPath) async {
-    final info = await VideoCompress.getMediaInfo(videoPath);
-    final width = info.width ?? 0;
-    final height = info.height ?? 0;
-    return width >= 480 && height >= 360;
-  }
-
-  Future<File?> _compressVideo(String videoPath) async {
-    try {
-      final info = await VideoCompress.compressVideo(
-        videoPath,
-        quality: VideoQuality.MediumQuality,
-        deleteOrigin: false,
-      );
-      return info?.file;
-    } catch (e) {
-      Get.snackbar('Erreur', 'Échec de la compression : $e',
-          backgroundColor: Colors.redAccent, colorText: Colors.white);
-      return null;
-    }
-  }
-
-  Future<File?> _generateThumbnail(String videoPath) async {
-    try {
-      final file = await VideoCompress.getFileThumbnail(videoPath, quality: 75);
-      lastGeneratedThumbnail.value = file;
-      return file;
-    } catch (e) {
-      Get.snackbar('Erreur', 'Échec de la miniature : $e',
-          backgroundColor: Colors.redAccent, colorText: Colors.white);
-      return null;
-    }
-  }
-
-  Future<bool> _showThumbnailPreview(File thumbnailFile) async {
-    return await Get.dialog<bool>(
-          AlertDialog(
-            title: Text('Prévisualisation de la miniature'),
-            content: Image.file(thumbnailFile),
-            actions: [
-              TextButton(
-                  onPressed: () => Get.back(result: false),
-                  child: Text('Annuler')),
-              TextButton(
-                  onPressed: () => Get.back(result: true),
-                  child: Text('Confirmer')),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-  Future<void> _uploadFile({
-    required File file,
-    required Reference storageRef,
-    required Function(double) onProgress,
-  }) async {
-    final uploadTask = storageRef.putFile(file);
-
-    uploadTask.snapshotEvents.listen((snapshot) {
-      if (snapshot.totalBytes > 0) {
-        double progress = snapshot.bytesTransferred / snapshot.totalBytes;
-        onProgress(progress);
-      }
+  @override
+  void onInit() {
+    super.onInit();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
+      _internetAvailable = results.contains(ConnectivityResult.mobile) || results.contains(ConnectivityResult.wifi);
     });
-
-    await uploadTask;
   }
 
-  Future<void> uploadVideo(
-      String songName, String caption, String videoPath) async {
-    File? compressedFile;
-    File? thumbnailFile;
+  @override
+  void onClose() {
+    _connectivitySubscription?.cancel();
+    _compressionSubscription?.unsubscribe();
+    VideoTools.dispose();
+    super.onClose();
+  }
+
+  Future<bool> prepareUpload({
+    required String song,
+    required String cap,
+    required String videoPath,
+  }) async {
+    try {
+      uploadStage.value = "Analyse de la vidéo...";
+      uploadProgress.value = 0.02;
+
+      originalVideoPath = videoPath;
+
+      final isValidDuration = await VideoTools.isDurationValid(videoPath, maxDuration: 60);
+      final isValidQuality = await VideoTools.isQualityAcceptable(videoPath);
+
+      if (!isValidDuration) {
+        Get.back();
+        Get.snackbar('Erreur', 'La durée dépasse 60 secondes.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
+        return false;
+      }
+
+      if (!isValidQuality) {
+        Get.back();
+        Get.snackbar('Erreur', 'Qualité vidéo insuffisante (minimum 360p).', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
+        return false;
+      }
+
+      uploadStage.value = "Compression vidéo...";
+      uploadProgress.value = 0.05;
+
+      _compressionSubscription = VideoCompress.compressProgress$.subscribe((progress) {
+        if (progress < 100) {
+          uploadProgress.value = 0.05 + (progress * 0.2 / 100);
+        }
+      });
+
+      final compressed = await VideoTools.compressVideoSilently(videoPath);
+
+      _compressionSubscription?.unsubscribe();
+
+      if (compressed != null) {
+        selectedVideo = compressed;
+        uploadProgress.value = 0.25;
+      } else {
+        selectedVideo = File(videoPath);
+        uploadStage.value = "Compression échouée, envoi original...";
+        uploadProgress.value = 0.15;
+      }
+
+      thumbnail = await VideoTools.generateThumbnail(videoPath);
+      if (thumbnail == null) {
+        Get.back();
+        Get.snackbar('Erreur', 'Erreur génération miniature.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+        return false;
+      }
+
+      uploadProgress.value = 0.3;
+      songName = song;
+      caption = cap;
+      return true;
+    } catch (e) {
+      _compressionSubscription?.unsubscribe();
+      Get.back();
+      Get.snackbar('Erreur', '$e', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      return false;
+    }
+  }
+
+  Future<void> uploadDirectly() async {
+    if (selectedVideo == null || thumbnail == null) {
+      Get.snackbar('Erreur', 'Fichier manquant', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      return;
+    }
+
+    isUploading(true);
+    uploadStage.value = "Téléversement...";
+    uploadProgress.value = 0.3;
+
+    final videoId = const Uuid().v4();
+    final videoRef = FirebaseStorage.instance.ref().child('videos/$videoId.mp4');
+    final thumbRef = FirebaseStorage.instance.ref().child('thumbnails/thumbnail_$videoId.jpg');
 
     try {
-      isUploading(true);
+      bool videoUploaded = await _safeUploadFile(
+        file: selectedVideo!,
+        storageRef: videoRef,
+        onProgress: (p) => uploadProgress.value = 0.3 + (0.35 * p),
+      );
 
-      if (!await isVideoDurationValid(videoPath)) {
-        Get.snackbar('Durée excessive', 'La vidéo dépasse 3 minutes.',
-            backgroundColor: Colors.orangeAccent);
+      if (!videoUploaded) {
+        Get.snackbar('Erreur Téléversement', 'Échec upload vidéo.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+        resetUploadState();
         return;
       }
 
-      if (!await isVideoQualityAcceptable(videoPath)) {
-        Get.snackbar('Qualité insuffisante', 'Minimum requis : 360p.',
-            backgroundColor: Colors.orangeAccent);
+      bool thumbUploaded = await _safeUploadFile(
+        file: thumbnail!,
+        storageRef: thumbRef,
+        onProgress: (p) => uploadProgress.value = 0.65 + (0.35 * p),
+      );
+
+      if (!thumbUploaded) {
+        Get.snackbar('Erreur Téléversement', 'Échec upload miniature.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+        resetUploadState();
         return;
       }
 
-      final futures = await Future.wait([
-        _compressVideo(videoPath),
-        _generateThumbnail(videoPath),
-      ]);
-
-      compressedFile = futures[0];
-      thumbnailFile = futures[1];
-
-      if (compressedFile == null || thumbnailFile == null) {
-        throw Exception("Fichiers non générés");
-      }
-
-      bool confirm = await _showThumbnailPreview(thumbnailFile);
-      if (!confirm) {
-        Get.snackbar('Annulé', 'Téléversement annulé',
-            backgroundColor: Colors.blueAccent, colorText: Colors.white);
-        return;
-      }
-
-      String videoFileName = basename(compressedFile.path);
-      String thumbnailFileName = 'thumbnail_$videoFileName';
-
-      Reference videoRef =
-          FirebaseStorage.instance.ref().child('videos/$videoFileName');
-      Reference thumbnailRef =
-          FirebaseStorage.instance.ref().child('thumbnails/$thumbnailFileName');
-
-      await Future.wait([
-        _uploadFile(
-          file: compressedFile,
-          storageRef: videoRef,
-          onProgress: (p) => uploadProgress.value = p / 2,
-        ),
-        _uploadFile(
-          file: thumbnailFile,
-          storageRef: thumbnailRef,
-          onProgress: (p) => uploadProgress.value = 0.5 + (p / 2),
-        ),
-      ]);
-
-      String videoUrl = await videoRef.getDownloadURL();
-      String thumbnailUrl = await thumbnailRef.getDownloadURL();
-
-      String videoId = FirebaseFirestore.instance.collection('videos').doc().id;
+      final videoUrl = await videoRef.getDownloadURL();
+      final thumbnailUrl = await thumbRef.getDownloadURL();
+      final user = Get.find<UserController>().user;
 
       await FirebaseFirestore.instance.collection('videos').doc(videoId).set({
         'id': videoId,
@@ -161,23 +161,90 @@ class UploadVideoController extends GetxController {
         'caption': caption,
         'likes': [],
         'shareCount': 0,
-        'uid': Get.find<UserController>().user?.uid,
-        'profilePhoto': Get.find<UserController>().user?.photoProfil,
+        'reports': [],
+        'reportCount': 0,
+        'uid': user?.uid ?? '',
+        'profilePhoto': user?.photoProfil ?? '',
         'createdAt': FieldValue.serverTimestamp(),
+        'status': 'ready',
       });
 
-      Get.snackbar('Succès', 'Vidéo téléversée avec succès !',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green,
-          colorText: Colors.white);
+      uploadProgress.value = 1.0;
+
+      showSuccessToast('Vidéo ajoutée avec succès !');
+      await Future.delayed(const Duration(milliseconds: 500));
 
       Get.offAllNamed('/main', arguments: 0);
     } catch (e) {
-      Get.snackbar('Erreur', 'Échec du téléchargement : $e',
-          backgroundColor: Colors.redAccent, colorText: Colors.white);
+      Get.snackbar('Erreur Téléversement', '$e', backgroundColor: Colors.redAccent, colorText: Colors.white);
     } finally {
-      isUploading(false);
-      uploadProgress.value = 0.0;
+      resetUploadState();
     }
+  }
+
+  Future<bool> _safeUploadFile({
+    required File file,
+    required Reference storageRef,
+    required Function(double) onProgress,
+  }) async {
+    try {
+      final metadata = SettableMetadata(
+        contentType: 'video/mp4',
+        cacheControl: 'public,max-age=3600',
+      );
+
+      final uploadTask = storageRef.putFile(file, metadata);
+      _currentUploadTask = uploadTask;
+      final completer = Completer<bool>();
+
+      uploadTask.snapshotEvents.listen((snapshot) async {
+        if (snapshot.state == TaskState.running) {
+          final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+          onProgress(progress);
+
+          if (!_internetAvailable) {
+            await uploadTask.pause();
+            Get.snackbar('Connexion perdue', 'Upload en pause...', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
+          }
+        } else if (snapshot.state == TaskState.paused && _internetAvailable) {
+          await uploadTask.resume();
+        } else if (snapshot.state == TaskState.success) {
+          completer.complete(true);
+        } else if (snapshot.state == TaskState.error) {
+          completer.complete(false);
+        }
+      }, onError: (e) {
+        completer.complete(false);
+      });
+
+      return await completer.future.timeout(
+        const Duration(minutes: 3),
+        onTimeout: () => false,
+      );
+    } catch (e) {
+      return false;
+    }
+  }
+
+  void cancelUpload() {
+    _currentUploadTask?.cancel();
+    VideoCompress.cancelCompression();
+    resetUploadState();
+    if (Get.isDialogOpen == true) {
+      Get.back();
+    }
+    Get.snackbar('Annulé', 'Téléversement annulé.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
+  }
+
+  void resetUploadState() {
+    isUploading(false);
+    uploadProgress.value = 0.0;
+    uploadStage.value = '';
+    selectedVideo = null;
+    thumbnail = null;
+    songName = null;
+    caption = null;
+    originalVideoPath = null;
+    _currentUploadTask = null;
   }
 }

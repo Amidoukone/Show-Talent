@@ -1,13 +1,13 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:share_plus/share_plus.dart';
+ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
-import 'package:adfoot/controller/user_controller.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:get/get.dart';
 import 'package:adfoot/controller/video_controller.dart';
-import 'package:adfoot/models/video.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/widgets/video_manager.dart';
+import 'package:adfoot/models/video.dart';
+import 'package:share_plus/share_plus.dart';
 
 class SmartVideoPlayer extends StatefulWidget {
   final String videoUrl;
@@ -29,8 +29,7 @@ class SmartVideoPlayer extends StatefulWidget {
   State<SmartVideoPlayer> createState() => _SmartVideoPlayerState();
 }
 
-class _SmartVideoPlayerState extends State<SmartVideoPlayer>
-    with SingleTickerProviderStateMixin {
+class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerProviderStateMixin {
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnimation;
   final VideoManager _videoManager = VideoManager();
@@ -42,15 +41,20 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   bool _isConnected = true;
   bool _isVisible = false;
   bool _hasInit = false;
+  bool _useFallback = false;
+
+  late String effectiveUrl;
 
   @override
   void initState() {
     super.initState();
     _fadeController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 400),
     );
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(_fadeController);
+
+    effectiveUrl = widget.video.hlsUrl ?? widget.video.videoUrl;
   }
 
   Future<void> _initVideo() async {
@@ -60,7 +64,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     final result = await Connectivity().checkConnectivity();
     if (result != ConnectivityResult.none) {
       try {
-        final controller = await _videoManager.getController(widget.videoUrl);
+        final controller = await _videoManager.getController(effectiveUrl);
         if (!mounted) return;
 
         setState(() {
@@ -70,13 +74,21 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         });
 
         _fadeController.forward();
+
         if (_isVisible) {
-          _videoManager.play(widget.videoUrl);
+          _videoManager.play(effectiveUrl);
         }
 
         _preloadNextVideo();
-      } catch (_) {
-        setState(() => _isConnected = false);
+      } catch (e) {
+        if (!_useFallback && widget.video.videoUrl != effectiveUrl) {
+          _useFallback = true;
+          effectiveUrl = widget.video.videoUrl;
+          _hasInit = false;
+          _initVideo();
+        } else {
+          setState(() => _isConnected = false);
+        }
       }
     } else {
       setState(() => _isConnected = false);
@@ -85,34 +97,43 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
   void _preloadNextVideo() {
     final nextIndex = widget.currentIndex + 1;
+    final secondNextIndex = widget.currentIndex + 2;
+
     if (nextIndex < widget.videoList.length) {
       final nextVideo = widget.videoList[nextIndex];
-      _videoManager.preload(nextVideo.videoUrl);
+      final nextUrl = nextVideo.hlsUrl ?? nextVideo.videoUrl;
+      _videoManager.preload(nextUrl);
+    }
+
+    if (secondNextIndex < widget.videoList.length) {
+      final secondNextVideo = widget.videoList[secondNextIndex];
+      final secondNextUrl = secondNextVideo.hlsUrl ?? secondNextVideo.videoUrl;
+      _videoManager.preload(secondNextUrl);
     }
   }
 
   @override
   void dispose() {
     _fadeController.dispose();
-    _videoManager.releaseController(widget.videoUrl);
+    _videoManager.releaseController(effectiveUrl);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return VisibilityDetector(
-      key: Key(widget.videoUrl),
+      key: Key(widget.video.id),
       onVisibilityChanged: (info) {
-        final visible = info.visibleFraction > 0.8;
+        final visible = info.visibleFraction > 0.6;
         _isVisible = visible;
 
         if (!_isInitialized) {
           _initVideo();
         } else {
           if (visible) {
-            _videoManager.play(widget.videoUrl);
+            _videoManager.play(effectiveUrl);
           } else {
-            _videoManager.pause(widget.videoUrl);
+            _videoManager.pause(effectiveUrl);
           }
         }
       },
@@ -204,15 +225,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             icon: Icons.share,
             color: Colors.white,
             label: '${widget.video.shareCount}',
-            onPressed: () => _shareVideo(widget.video.videoUrl),
+            onPressed: () => _shareVideo(effectiveUrl),
           ),
           const SizedBox(height: 16),
           _buildActionButton(
             icon: Icons.flag,
             color: Colors.white,
             label: '${widget.video.reportCount}',
-            onPressed: () =>
-                videoController.signalerVideo(widget.video.id, user.uid),
+            onPressed: () => videoController.signalerVideo(widget.video.id, user.uid),
           ),
         ],
       ),
@@ -255,18 +275,15 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   Widget _buildNoInternet() {
-    return Container(
-      color: Colors.black,
-      child: const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.wifi_off, color: Colors.white, size: 50),
-            SizedBox(height: 10),
-            Text('Pas de connexion Internet',
-                style: TextStyle(color: Colors.white, fontSize: 18)),
-          ],
-        ),
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.wifi_off, color: Colors.white, size: 50),
+          SizedBox(height: 10),
+          Text('Pas de connexion Internet',
+              style: TextStyle(color: Colors.white, fontSize: 18)),
+        ],
       ),
     );
   }
@@ -294,8 +311,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
               videoController.deleteVideo(widget.video.id);
               Get.back();
             },
-            child: const Text('Supprimer',
-                style: TextStyle(color: Colors.red)),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -318,4 +334,4 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       );
     }
   }
-}
+} 

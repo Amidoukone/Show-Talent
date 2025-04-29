@@ -1,7 +1,8 @@
 class Video {
   String id;
   String videoUrl;
-  String thumbnailUrl; // Renommé pour correspondre à son utilisation
+  String? hlsUrl;
+  String thumbnailUrl;
   String songName;
   String caption;
   String profilePhoto;
@@ -10,11 +11,13 @@ class Video {
   int shareCount;
   List<String> reports;
   int reportCount;
+  String? status; // ✅ Nouveau champ : suivi du traitement (ready, error, etc.)
 
   Video({
     required this.id,
     required this.videoUrl,
-    required this.thumbnailUrl, // Renommé ici
+    this.hlsUrl,
+    required this.thumbnailUrl,
     required this.songName,
     required this.caption,
     required this.profilePhoto,
@@ -23,13 +26,15 @@ class Video {
     this.shareCount = 0,
     this.reports = const [],
     this.reportCount = 0,
+    this.status,
   });
 
   factory Video.fromMap(Map<String, dynamic> map) {
     return Video(
       id: map['id'] ?? '',
       videoUrl: map['videoUrl'] ?? '',
-      thumbnailUrl: map['thumbnail'] ?? '', // Mapping pour correspondre à 'thumbnailUrl'
+      hlsUrl: map['hlsUrl'],
+      thumbnailUrl: map['thumbnail'] ?? '',
       songName: map['songName'] ?? '',
       caption: map['caption'] ?? '',
       profilePhoto: map['profilePhoto'] ?? '',
@@ -38,6 +43,7 @@ class Video {
       shareCount: map['shareCount'] ?? 0,
       reports: List<String>.from(map['reports'] ?? []),
       reportCount: map['reportCount'] ?? 0,
+      status: map['status'],
     );
   }
 
@@ -45,6 +51,7 @@ class Video {
     return {
       'id': id,
       'videoUrl': videoUrl,
+      'hlsUrl': hlsUrl,
       'thumbnail': thumbnailUrl,
       'songName': songName,
       'caption': caption,
@@ -54,6 +61,7 @@ class Video {
       'shareCount': shareCount,
       'reports': reports,
       'reportCount': reportCount,
+      'status': status,
     };
   }
 }
