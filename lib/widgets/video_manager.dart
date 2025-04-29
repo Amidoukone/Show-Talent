@@ -12,7 +12,15 @@ class VideoManager {
   VideoManager._internal();
 
   Future<VideoPlayerController> getController(String url) async {
-    if (_controllers.containsKey(url)) return _controllers[url]!;
+    if (_controllers.containsKey(url)) {
+      final controller = _controllers[url]!;
+      if (controller.value.isInitialized) {
+        return controller;
+      } else {
+        await controller.initialize();
+        return controller;
+      }
+    }
 
     final controller = await _initController(url);
     _controllers[url] = controller;
@@ -21,56 +29,85 @@ class VideoManager {
   }
 
   Future<VideoPlayerController> _initController(String url) async {
-    final cache = DefaultCacheManager();
-    File file;
-    final cachedFile = await cache.getFileFromCache(url);
+    late VideoPlayerController controller;
 
-    if (cachedFile != null && await cachedFile.file.exists()) {
-      file = cachedFile.file;
-    } else {
-      file = await cache.getSingleFile(url);
-    }
-
-    final controller = VideoPlayerController.file(file);
-    await controller.initialize();
-    controller.setLooping(true);
-    return controller;
-  }
-
-  void play(String url) {
-    _controllers.forEach((key, controller) {
-      if (key == url) {
-        if (!controller.value.isPlaying) controller.play();
+    try {
+      if (url.endsWith('.m3u8')) {
+        // ✅ Correction ici
+        controller = VideoPlayerController.networkUrl(Uri.parse(url));
       } else {
-        if (controller.value.isPlaying) controller.pause();
-      }
-    });
-  }
+        final cache = DefaultCacheManager();
+        File file;
+        final cachedFile = await cache.getFileFromCache(url);
 
-  void pause(String url) {
-    _controllers[url]?.pause();
+        if (cachedFile != null && await cachedFile.file.exists()) {
+          file = cachedFile.file;
+        } else {
+          file = await cache.getSingleFile(url);
+        }
+        controller = VideoPlayerController.file(file);
+      }
+
+      await controller.initialize();
+      controller.setLooping(true);
+      controller.setVolume(1.0);
+      return controller;
+    } catch (e) {
+      throw Exception('Erreur initialisation vidéo : $e');
+    }
   }
 
   void preload(String url) {
     if (!_controllers.containsKey(url)) {
       _initController(url).then((controller) {
-        _controllers[url] = controller;
-        _cleanupOldControllers();
-      }).catchError((_) {});
+        if (!_controllers.containsKey(url)) {
+          _controllers[url] = controller;
+          _cleanupOldControllers();
+        }
+      }).catchError((_) {
+        // Ignore les erreurs de preload
+      });
+    }
+  }
+
+  void play(String url) {
+    _controllers.forEach((key, controller) {
+      if (key == url) {
+        if (!controller.value.isPlaying && controller.value.isInitialized) {
+          controller.play();
+        }
+      } else {
+        if (controller.value.isPlaying) {
+          controller.pause();
+        }
+      }
+    });
+  }
+
+  void pause(String url) {
+    final controller = _controllers[url];
+    if (controller != null && controller.value.isInitialized) {
+      controller.pause();
     }
   }
 
   void releaseController(String url) {
-    _controllers[url]?.dispose();
-    _controllers.remove(url);
+    final controller = _controllers[url];
+    if (controller != null) {
+      controller.dispose();
+      _controllers.remove(url);
+    }
   }
 
   void _cleanupOldControllers() {
-    if (_controllers.length <= _maxCacheCount) return;
-    final keys = _controllers.keys.take(_controllers.length - _maxCacheCount);
-    for (final key in keys) {
-      _controllers[key]?.dispose();
-      _controllers.remove(key);
+    if (_controllers.length > _maxCacheCount) {
+      final keys = List<String>.from(_controllers.keys)..sort();
+      final removeKeys = keys.take(_controllers.length - _maxCacheCount);
+
+      for (final key in removeKeys) {
+        _controllers[key]?.dispose();
+        _controllers.remove(key);
+      }
     }
   }
 }

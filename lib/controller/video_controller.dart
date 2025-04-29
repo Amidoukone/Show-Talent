@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import '../models/video.dart';
+import '../widgets/video_manager.dart';
 
 class VideoController extends GetxController {
   var videoList = <Video>[].obs;
@@ -8,6 +9,8 @@ class VideoController extends GetxController {
   bool _hasMore = true;
   bool _isLoading = false;
   static const int _limit = 10;
+
+  final VideoManager _videoManager = VideoManager();
 
   @override
   void onInit() {
@@ -18,7 +21,6 @@ class VideoController extends GetxController {
   bool get hasMore => _hasMore;
   bool get isLoading => _isLoading;
 
-  /// Chargement initial + pagination
   Future<void> fetchPaginatedVideos() async {
     if (_isLoading || !_hasMore) return;
 
@@ -26,6 +28,7 @@ class VideoController extends GetxController {
     try {
       Query query = FirebaseFirestore.instance
           .collection('videos')
+          .where('status', isEqualTo: 'ready')
           .orderBy('createdAt', descending: true)
           .limit(_limit);
 
@@ -38,7 +41,8 @@ class VideoController extends GetxController {
       if (snapshot.docs.isNotEmpty) {
         final newVideos = snapshot.docs.map((doc) {
           try {
-            return Video.fromMap(doc.data() as Map<String, dynamic>);
+            final data = doc.data() as Map<String, dynamic>;
+            return Video.fromMap(data);
           } catch (e) {
             print('Erreur parsing vidéo : $e');
             return null;
@@ -47,6 +51,12 @@ class VideoController extends GetxController {
 
         _lastDocument = snapshot.docs.last;
         videoList.addAll(newVideos);
+
+        /// ✅ Précharge immédiatement les vidéos suivantes
+        for (final video in newVideos) {
+          final preloadUrl = video.hlsUrl ?? video.videoUrl;
+          _videoManager.preload(preloadUrl);
+        }
       }
 
       if (snapshot.docs.length < _limit) {
@@ -60,15 +70,20 @@ class VideoController extends GetxController {
     }
   }
 
-  /// Like / Unlike vidéo
+  Future<void> refreshVideos() async {
+    _lastDocument = null;
+    _hasMore = true;
+    videoList.clear();
+    await fetchPaginatedVideos();
+  }
+
   Future<void> likeVideo(String videoId, String userId) async {
     try {
       final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
       final doc = await ref.get();
-
       if (!doc.exists) return;
 
-      final videoData = doc.data() as Map<String, dynamic>;
+      final videoData = doc.data()!;
       final List<String> likes = List<String>.from(videoData['likes'] ?? []);
 
       if (likes.contains(userId)) {
@@ -79,21 +94,18 @@ class VideoController extends GetxController {
 
       await ref.update({'likes': likes});
     } catch (e) {
-      print("Erreur lors de la mise à jour des likes : $e");
+      print("Erreur mise à jour des likes : $e");
       Get.snackbar('Erreur', 'Impossible de mettre à jour les likes.');
     }
   }
 
-  /// Partage vidéo
   Future<void> partagerVideo(String videoId, String videoUrl) async {
     try {
       final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
       final doc = await ref.get();
-
       if (!doc.exists) return;
 
-      final videoData = doc.data() as Map<String, dynamic>;
-      int shareCount = videoData['shareCount'] ?? 0;
+      int shareCount = doc.data()?['shareCount'] ?? 0;
       shareCount++;
 
       await ref.update({'shareCount': shareCount});
@@ -103,17 +115,15 @@ class VideoController extends GetxController {
     }
   }
 
-  /// Signaler vidéo
   Future<void> signalerVideo(String videoId, String userId) async {
     try {
       final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
       final doc = await ref.get();
-
       if (!doc.exists) return;
 
-      final videoData = doc.data() as Map<String, dynamic>;
-      List<String> reports = List<String>.from(videoData['reports'] ?? []);
-      int reportCount = videoData['reportCount'] ?? 0;
+      final data = doc.data()!;
+      List<String> reports = List<String>.from(data['reports'] ?? []);
+      int reportCount = data['reportCount'] ?? 0;
 
       if (!reports.contains(userId)) {
         reports.add(userId);
@@ -132,7 +142,6 @@ class VideoController extends GetxController {
     }
   }
 
-  /// Supprimer vidéo
   Future<void> deleteVideo(String videoId) async {
     try {
       await FirebaseFirestore.instance.collection('videos').doc(videoId).delete();
@@ -143,12 +152,4 @@ class VideoController extends GetxController {
       Get.snackbar('Erreur', 'Erreur lors de la suppression de la vidéo.');
     }
   }
-
-  /// Reset pagination et recharge depuis le début (optionnel)
-  Future<void> refreshVideos() async {
-    _lastDocument = null;
-    _hasMore = true;
-    videoList.clear();
-    await fetchPaginatedVideos();
-  }
-}
+} 

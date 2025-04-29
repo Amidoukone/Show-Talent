@@ -25,7 +25,7 @@ class ChatScreen extends StatelessWidget {
         title: Row(
           children: [
             CircleAvatar(
-              radius: 18,
+              radius: 20,
               backgroundImage: otherUser.photoProfil.isNotEmpty
                   ? NetworkImage(otherUser.photoProfil)
                   : null,
@@ -37,7 +37,12 @@ class ChatScreen extends StatelessWidget {
                   : null,
             ),
             const SizedBox(width: 10),
-            Text(otherUser.nom), // Nom de l'autre utilisateur
+            Expanded(
+              child: Text(
+                otherUser.nom,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
           ],
         ),
       ),
@@ -77,7 +82,7 @@ class ChatScreen extends StatelessWidget {
                           vertical: 5,
                           horizontal: 10,
                         ),
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: isSentByUser
                               ? const Color.fromARGB(255, 38, 230, 12)
@@ -118,9 +123,7 @@ class ChatScreen extends StatelessWidget {
                                   Icon(
                                     _getMessageIcon(message),
                                     size: 16,
-                                    color: message.estLu
-                                        ? const Color.fromARGB(255, 12, 62, 48)
-                                        : const Color.fromARGB(255, 12, 62, 48),
+                                    color: Colors.grey[700],
                                   ),
                               ],
                             ),
@@ -143,10 +146,14 @@ class ChatScreen extends StatelessWidget {
                     decoration: InputDecoration(
                       hintText: "Tapez un message...",
                       filled: true,
-                      fillColor: Colors.grey[200],
+                      fillColor: Colors.grey[100],
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        vertical: 10,
+                        horizontal: 15,
                       ),
                     ),
                   ),
@@ -193,11 +200,7 @@ class ChatScreen extends StatelessWidget {
 
   /// Obtenir l'icône appropriée pour le message
   IconData _getMessageIcon(Message message) {
-    if (message.estLu) {
-      return Icons.done_all; // Double tick bleu
-    } else {
-      return Icons.done; // Simple tick gris
-    }
+    return message.estLu ? Icons.done_all : Icons.done;
   }
 
   /// Formater l'heure pour l'affichage

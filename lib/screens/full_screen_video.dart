@@ -46,10 +46,12 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
 
   @override
   void dispose() {
-    _videoManager.pause(widget.video.videoUrl);
+    _videoManager.pause(_currentUrl);
     _subscription?.cancel();
     super.dispose();
   }
+
+  String get _currentUrl => widget.video.hlsUrl ?? widget.video.videoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +65,7 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
               fit: StackFit.expand,
               children: [
                 SmartVideoPlayer(
-                  videoUrl: widget.video.videoUrl,
+                  videoUrl: _currentUrl,
                   video: widget.video,
                   videoList: allVideos,
                   currentIndex: index,
@@ -83,7 +85,7 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
       left: 10,
       child: GestureDetector(
         onTap: () {
-          _videoManager.pause(widget.video.videoUrl);
+          _videoManager.pause(_currentUrl);
           Get.back();
         },
         child: Container(
@@ -112,7 +114,7 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
         children: [
           GestureDetector(
             onTap: () async {
-              _videoManager.pause(widget.video.videoUrl);
+              _videoManager.pause(_currentUrl);
               if (widget.video.uid.isNotEmpty) {
                 await Get.to(() => ProfileScreen(uid: widget.video.uid, isReadOnly: true));
               } else {

@@ -14,9 +14,10 @@ class VideoPlayerItem extends StatefulWidget {
 }
 
 class _VideoPlayerItemState extends State<VideoPlayerItem> {
-  late VideoPlayerController _videoPlayerController;
+  VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
   bool _isError = false;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -26,14 +27,24 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
 
   Future<void> _initializeVideo() async {
     try {
-      final File videoFile = await DefaultCacheManager().getSingleFile(widget.videoUrl);
+      setState(() {
+        _isLoading = true;
+        _isError = false;
+      });
+
+      final File videoFile = await _getValidVideoFile(widget.videoUrl);
+
+      if (!mounted) return;
+
       _videoPlayerController = VideoPlayerController.file(videoFile)
         ..initialize().then((_) {
+          if (!mounted) return;
+
           setState(() {
             _chewieController = ChewieController(
-              videoPlayerController: _videoPlayerController,
+              videoPlayerController: _videoPlayerController!,
               autoPlay: true,
-              looping: true,
+              looping: false,
               showControls: true,
               allowFullScreen: true,
               materialProgressColors: ChewieProgressColors(
@@ -46,45 +57,68 @@ class _VideoPlayerItemState extends State<VideoPlayerItem> {
               errorBuilder: (context, errorMessage) {
                 return Center(
                   child: Text(
-                    'Erreur lors de la lecture de la vidéo: $errorMessage',
+                    'Erreur lors de la lecture de la vidéo',
                     style: const TextStyle(color: Colors.red),
                   ),
                 );
               },
             );
+            _isLoading = false;
           });
         }).catchError((error) {
           setState(() {
             _isError = true;
+            _isLoading = false;
           });
         });
+
+      _videoPlayerController!.addListener(() {
+        if (_videoPlayerController!.value.hasError) {
+          setState(() {
+            _isError = true;
+          });
+        }
+      });
     } catch (error) {
       setState(() {
         _isError = true;
+        _isLoading = false;
       });
+    }
+  }
+
+  Future<File> _getValidVideoFile(String url) async {
+    try {
+      final fileInfo = await DefaultCacheManager().getFileFromCache(url);
+      if (fileInfo != null && await fileInfo.file.exists()) {
+        return fileInfo.file;
+      }
+      return await DefaultCacheManager().getSingleFile(url);
+    } catch (e) {
+      throw Exception('Erreur lors du téléchargement de la vidéo');
     }
   }
 
   @override
   void dispose() {
-    _videoPlayerController.dispose();
+    _videoPlayerController?.dispose();
     _chewieController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isError) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_isError || _chewieController == null || !_videoPlayerController!.value.isInitialized) {
       return const Center(
         child: Text(
           'Erreur lors de la lecture de la vidéo',
           style: TextStyle(color: Colors.red, fontSize: 16),
         ),
       );
-    }
-
-    if (_chewieController == null || !_videoPlayerController.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
     }
 
     return Chewie(controller: _chewieController!);
