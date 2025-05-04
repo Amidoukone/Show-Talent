@@ -1,4 +1,4 @@
- import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:visibility_detector/visibility_detector.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -41,7 +41,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
   bool _isConnected = true;
   bool _isVisible = false;
   bool _hasInit = false;
-  bool _useFallback = false;
+  String? _errorMessage;
 
   late String effectiveUrl;
 
@@ -54,7 +54,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
     );
     _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(_fadeController);
 
-    effectiveUrl = widget.video.hlsUrl ?? widget.video.videoUrl;
+    effectiveUrl = widget.video.hlsUrl ?? '';
   }
 
   Future<void> _initVideo() async {
@@ -63,14 +63,24 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
 
     final result = await Connectivity().checkConnectivity();
     if (result != ConnectivityResult.none) {
+      if (widget.video.hlsUrl == null || widget.video.hlsUrl!.isEmpty) {
+        setState(() {
+          _isConnected = false;
+          _errorMessage = 'Vidéo non disponible (conversion en cours...)';
+        });
+        return;
+      }
+
       try {
-        final controller = await _videoManager.getController(effectiveUrl);
+        final controller = await _videoManager.getController(widget.video.hlsUrl!);
         if (!mounted) return;
 
         setState(() {
           _controller = controller;
           _isInitialized = true;
           _isConnected = true;
+          _errorMessage = null;
+          effectiveUrl = widget.video.hlsUrl!;
         });
 
         _fadeController.forward();
@@ -81,17 +91,16 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
 
         _preloadNextVideo();
       } catch (e) {
-        if (!_useFallback && widget.video.videoUrl != effectiveUrl) {
-          _useFallback = true;
-          effectiveUrl = widget.video.videoUrl;
-          _hasInit = false;
-          _initVideo();
-        } else {
-          setState(() => _isConnected = false);
-        }
+        setState(() {
+          _isConnected = false;
+          _errorMessage = 'Lecture impossible (HLS)';
+        });
       }
     } else {
-      setState(() => _isConnected = false);
+      setState(() {
+        _isConnected = false;
+        _errorMessage = 'Pas de connexion Internet';
+      });
     }
   }
 
@@ -101,14 +110,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
 
     if (nextIndex < widget.videoList.length) {
       final nextVideo = widget.videoList[nextIndex];
-      final nextUrl = nextVideo.hlsUrl ?? nextVideo.videoUrl;
-      _videoManager.preload(nextUrl);
+      final nextUrl = nextVideo.hlsUrl ?? '';
+      if (nextUrl.isNotEmpty) _videoManager.preload(nextUrl);
     }
 
     if (secondNextIndex < widget.videoList.length) {
       final secondNextVideo = widget.videoList[secondNextIndex];
-      final secondNextUrl = secondNextVideo.hlsUrl ?? secondNextVideo.videoUrl;
-      _videoManager.preload(secondNextUrl);
+      final secondNextUrl = secondNextVideo.hlsUrl ?? '';
+      if (secondNextUrl.isNotEmpty) _videoManager.preload(secondNextUrl);
     }
   }
 
@@ -138,7 +147,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
         }
       },
       child: !_isConnected
-          ? _buildNoInternet()
+          ? _buildErrorWidget()
           : !_isInitialized || _controller == null
               ? _buildLoadingThumbnail()
               : FadeTransition(
@@ -274,15 +283,18 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
     );
   }
 
-  Widget _buildNoInternet() {
-    return const Center(
+  Widget _buildErrorWidget() {
+    return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.wifi_off, color: Colors.white, size: 50),
-          SizedBox(height: 10),
-          Text('Pas de connexion Internet',
-              style: TextStyle(color: Colors.white, fontSize: 18)),
+          Icon(Icons.error_outline, color: Colors.white, size: 50),
+          const SizedBox(height: 10),
+          Text(
+            _errorMessage ?? 'Erreur de lecture vidéo',
+            style: const TextStyle(color: Colors.white, fontSize: 18),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
@@ -334,4 +346,4 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with SingleTickerPr
       );
     }
   }
-} 
+}

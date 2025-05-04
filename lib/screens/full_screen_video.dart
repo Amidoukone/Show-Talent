@@ -46,17 +46,31 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
 
   @override
   void dispose() {
-    _videoManager.pause(_currentUrl);
+    if (widget.video.hlsUrl != null && widget.video.hlsUrl!.isNotEmpty) {
+      _videoManager.pause(widget.video.hlsUrl!);
+    }
     _subscription?.cancel();
     super.dispose();
   }
-
-  String get _currentUrl => widget.video.hlsUrl ?? widget.video.videoUrl;
 
   @override
   Widget build(BuildContext context) {
     final allVideos = widget.videoController.videoList;
     final index = allVideos.indexWhere((v) => v.id == widget.video.id);
+
+    if (widget.video.hlsUrl == null || widget.video.hlsUrl!.isEmpty) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: const Center(
+          child: Text(
+            'Vidéo en conversion...',
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
+        ),
+      );
+    }
+
+    final effectiveUrl = widget.video.hlsUrl!;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -65,7 +79,7 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
               fit: StackFit.expand,
               children: [
                 SmartVideoPlayer(
-                  videoUrl: _currentUrl,
+                  videoUrl: effectiveUrl,
                   video: widget.video,
                   videoList: allVideos,
                   currentIndex: index,
@@ -85,7 +99,9 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
       left: 10,
       child: GestureDetector(
         onTap: () {
-          _videoManager.pause(_currentUrl);
+          if (widget.video.hlsUrl != null && widget.video.hlsUrl!.isNotEmpty) {
+            _videoManager.pause(widget.video.hlsUrl!);
+          }
           Get.back();
         },
         child: Container(
@@ -114,7 +130,9 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
         children: [
           GestureDetector(
             onTap: () async {
-              _videoManager.pause(_currentUrl);
+              if (widget.video.hlsUrl != null && widget.video.hlsUrl!.isNotEmpty) {
+                _videoManager.pause(widget.video.hlsUrl!);
+              }
               if (widget.video.uid.isNotEmpty) {
                 await Get.to(() => ProfileScreen(uid: widget.video.uid, isReadOnly: true));
               } else {

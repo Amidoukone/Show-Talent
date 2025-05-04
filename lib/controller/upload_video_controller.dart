@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/screens/success_toast.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -30,8 +31,9 @@ class UploadVideoController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> results) {
-      _internetAvailable = results.contains(ConnectivityResult.mobile) || results.contains(ConnectivityResult.wifi);
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((resultList) {
+      final result = resultList.firstOrNull;
+      _internetAvailable = result != null && result != ConnectivityResult.none;
     });
   }
 
@@ -57,21 +59,21 @@ class UploadVideoController extends GetxController {
       final isValidDuration = await VideoTools.isDurationValid(videoPath, maxDuration: 60);
       final isValidQuality = await VideoTools.isQualityAcceptable(videoPath);
 
-      if (!isValidDuration) {
+      if (!isValidDuration || !isValidQuality) {
         Get.back();
-        Get.snackbar('Erreur', 'La durée dépasse 60 secondes.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
-        return false;
-      }
-
-      if (!isValidQuality) {
-        Get.back();
-        Get.snackbar('Erreur', 'Qualité vidéo insuffisante (minimum 360p).', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
+        Get.snackbar(
+          'Erreur',
+          isValidDuration ? 'Qualité vidéo insuffisante (minimum 360p).' : 'La durée dépasse 60 secondes.',
+          backgroundColor: Colors.orangeAccent,
+          colorText: Colors.white,
+        );
         return false;
       }
 
       uploadStage.value = "Compression vidéo...";
       uploadProgress.value = 0.05;
 
+      _compressionSubscription?.unsubscribe();
       _compressionSubscription = VideoCompress.compressProgress$.subscribe((progress) {
         if (progress < 100) {
           uploadProgress.value = 0.05 + (progress * 0.2 / 100);
@@ -79,17 +81,10 @@ class UploadVideoController extends GetxController {
       });
 
       final compressed = await VideoTools.compressVideoSilently(videoPath);
-
       _compressionSubscription?.unsubscribe();
 
-      if (compressed != null) {
-        selectedVideo = compressed;
-        uploadProgress.value = 0.25;
-      } else {
-        selectedVideo = File(videoPath);
-        uploadStage.value = "Compression échouée, envoi original...";
-        uploadProgress.value = 0.15;
-      }
+      selectedVideo = compressed ?? File(videoPath);
+      uploadProgress.value = compressed == null ? 0.15 : 0.25;
 
       thumbnail = await VideoTools.generateThumbnail(videoPath);
       if (thumbnail == null) {
@@ -121,11 +116,14 @@ class UploadVideoController extends GetxController {
     uploadProgress.value = 0.3;
 
     final videoId = const Uuid().v4();
-    final videoRef = FirebaseStorage.instance.ref().child('videos/$videoId.mp4');
-    final thumbRef = FirebaseStorage.instance.ref().child('thumbnails/thumbnail_$videoId.jpg');
+    final videoPath = 'videos/$videoId.mp4';
+    final thumbPath = 'thumbnails/thumbnail_$videoId.jpg';
+
+    final videoRef = FirebaseStorage.instance.ref().child(videoPath);
+    final thumbRef = FirebaseStorage.instance.ref().child(thumbPath);
 
     try {
-      bool videoUploaded = await _safeUploadFile(
+      final videoUploaded = await _safeUploadFile(
         file: selectedVideo!,
         storageRef: videoRef,
         onProgress: (p) => uploadProgress.value = 0.3 + (0.35 * p),
@@ -137,7 +135,7 @@ class UploadVideoController extends GetxController {
         return;
       }
 
-      bool thumbUploaded = await _safeUploadFile(
+      final thumbUploaded = await _safeUploadFile(
         file: thumbnail!,
         storageRef: thumbRef,
         onProgress: (p) => uploadProgress.value = 0.65 + (0.35 * p),
@@ -149,14 +147,16 @@ class UploadVideoController extends GetxController {
         return;
       }
 
-      final videoUrl = await videoRef.getDownloadURL();
-      final thumbnailUrl = await thumbRef.getDownloadURL();
+      final videoDownloadUrl = await videoRef.getDownloadURL();
+      final thumbDownloadUrl = await thumbRef.getDownloadURL();
+
       final user = Get.find<UserController>().user;
 
+      final now = Timestamp.now();
       await FirebaseFirestore.instance.collection('videos').doc(videoId).set({
         'id': videoId,
-        'videoUrl': videoUrl,
-        'thumbnail': thumbnailUrl,
+        'videoUrl': videoDownloadUrl,
+        'thumbnail': thumbDownloadUrl,
         'songName': songName,
         'caption': caption,
         'likes': [],
@@ -165,21 +165,70 @@ class UploadVideoController extends GetxController {
         'reportCount': 0,
         'uid': user?.uid ?? '',
         'profilePhoto': user?.photoProfil ?? '',
-        'createdAt': FieldValue.serverTimestamp(),
-        'status': 'ready',
+        'createdAt': now,
+        'updatedAt': now,
+        'status': 'processing',
       });
 
       uploadProgress.value = 1.0;
 
+      await _waitForHlsReady(videoId);
+
+      final videoController = Get.isRegistered<VideoController>() ? Get.find<VideoController>() : null;
+      if (videoController != null) {
+        await videoController.refreshVideos();
+      }
+
       showSuccessToast('Vidéo ajoutée avec succès !');
       await Future.delayed(const Duration(milliseconds: 500));
-
       Get.offAllNamed('/main', arguments: 0);
     } catch (e) {
       Get.snackbar('Erreur Téléversement', '$e', backgroundColor: Colors.redAccent, colorText: Colors.white);
     } finally {
       resetUploadState();
     }
+  }
+
+  Future<void> _waitForHlsReady(String videoId) async {
+    const maxRetries = 15;
+    int attempts = 0;
+
+    Get.dialog(
+      const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: Colors.white),
+            SizedBox(height: 12),
+            Text(
+              "Finalisation de la vidéo...",
+              style: TextStyle(color: Colors.white, fontSize: 16),
+            ),
+          ],
+        ),
+      ),
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.7),
+    );
+
+    while (attempts < maxRetries) {
+      await Future.delayed(const Duration(seconds: 1));
+
+      final doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
+      final data = doc.data();
+
+      final status = data?['status'];
+      final hlsUrl = data?['hlsUrl'];
+
+      if (status == 'ready' && hlsUrl != null && (hlsUrl as String).isNotEmpty) {
+        Get.back(); // fermer le dialog
+        return;
+      }
+
+      attempts++;
+    }
+
+    Get.back(); // fermer le dialog même si non prêt
   }
 
   Future<bool> _safeUploadFile({
@@ -201,7 +250,6 @@ class UploadVideoController extends GetxController {
         if (snapshot.state == TaskState.running) {
           final progress = snapshot.bytesTransferred / snapshot.totalBytes;
           onProgress(progress);
-
           if (!_internetAvailable) {
             await uploadTask.pause();
             Get.snackbar('Connexion perdue', 'Upload en pause...', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
@@ -217,10 +265,7 @@ class UploadVideoController extends GetxController {
         completer.complete(false);
       });
 
-      return await completer.future.timeout(
-        const Duration(minutes: 3),
-        onTimeout: () => false,
-      );
+      return await completer.future.timeout(const Duration(minutes: 3), onTimeout: () => false);
     } catch (e) {
       return false;
     }
