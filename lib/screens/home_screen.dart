@@ -5,7 +5,7 @@ import 'package:get/get.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/screens/profile_screen.dart';
-import 'package:adfoot/screens/add_video.dart'; // ✅ nouveau fichier à utiliser
+import 'package:adfoot/screens/add_video.dart';
 import 'package:adfoot/screens/full_screen_video.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -133,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
                 itemBuilder: (context, index) {
                   final video = videos[index];
-                  final effectiveUrl = video.hlsUrl ?? video.videoUrl;
+                  final effectiveUrl = video.hlsUrl ?? '';
 
                   return Stack(
                     children: [
@@ -171,11 +171,16 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: const Color(0xFF214D4F),
             foregroundColor: Colors.white,
             heroTag: 'addVideo',
-            onPressed: () {
+            onPressed: () async {
               if (currentVideoUrl != null) {
                 _videoManager.pause(currentVideoUrl!);
               }
-              Get.to(() => const AddVideo()); // ✅ redirection vers nouveau flux
+
+              final result = await Get.to(() => const AddVideo());
+
+              if (result == true) {
+                await videoController.refreshVideos();
+              }
             },
             child: const Icon(Icons.add),
           );
@@ -191,7 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final previousUrl = currentVideoUrl;
     final video = videos[index];
-    final effectiveUrl = video.hlsUrl ?? video.videoUrl;
+    final effectiveUrl = video.hlsUrl ?? '';
 
     currentVideoUrl = effectiveUrl;
 

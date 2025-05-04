@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import '../models/video.dart';
 import '../widgets/video_manager.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class VideoController extends GetxController {
   var videoList = <Video>[].obs;
@@ -15,47 +16,75 @@ class VideoController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    fetchPaginatedVideos();
+    refreshVideos(); // Charge initialement
   }
 
   bool get hasMore => _hasMore;
   bool get isLoading => _isLoading;
 
-  Future<void> fetchPaginatedVideos() async {
+  Future<void> fetchPaginatedVideos({bool isRefresh = false}) async {
     if (_isLoading || !_hasMore) return;
 
     _isLoading = true;
+
     try {
       Query query = FirebaseFirestore.instance
           .collection('videos')
           .where('status', isEqualTo: 'ready')
-          .orderBy('createdAt', descending: true)
+          .where('hlsUrl', isGreaterThan: '') // ✅ filtre vidéos prêtes
+          .orderBy('updatedAt', descending: true)
           .limit(_limit);
 
-      if (_lastDocument != null) {
-        query = query.startAfterDocument(_lastDocument!);
+      if (!isRefresh && _lastDocument != null) {
+        final updatedAt = _lastDocument!.get('updatedAt');
+        if (updatedAt != null) {
+          query = query.startAfter([updatedAt]);
+        }
       }
 
       final snapshot = await query.get();
 
       if (snapshot.docs.isNotEmpty) {
-        final newVideos = snapshot.docs.map((doc) {
+        final newVideos = await Future.wait(snapshot.docs.map((doc) async {
           try {
             final data = doc.data() as Map<String, dynamic>;
-            return Video.fromMap(data);
+            final video = Video.fromMap(data);
+
+            final url = video.hlsUrl;
+            if (url != null && url.isNotEmpty && url.contains('googleapis.com')) {
+              try {
+                final ref = FirebaseStorage.instance.refFromURL(url);
+                final refreshedUrl = await ref.getDownloadURL();
+                video.hlsUrl = refreshedUrl;
+              } catch (_) {}
+            }
+
+            return video;
           } catch (e) {
             print('Erreur parsing vidéo : $e');
             return null;
           }
-        }).whereType<Video>().toList();
+        }).toList());
 
-        _lastDocument = snapshot.docs.last;
-        videoList.addAll(newVideos);
+        final nonNullVideos = newVideos.whereType<Video>().toList();
 
-        /// ✅ Précharge immédiatement les vidéos suivantes
-        for (final video in newVideos) {
-          final preloadUrl = video.hlsUrl ?? video.videoUrl;
-          _videoManager.preload(preloadUrl);
+        if (nonNullVideos.isNotEmpty) {
+          if (isRefresh) {
+            videoList.assignAll(nonNullVideos);
+          } else {
+            final existingIds = videoList.map((v) => v.id).toSet();
+            final uniqueNewVideos = nonNullVideos.where((v) => !existingIds.contains(v.id)).toList();
+            videoList.addAll(uniqueNewVideos);
+          }
+
+          _lastDocument = snapshot.docs.last;
+
+          for (final video in nonNullVideos) {
+            final preloadUrl = video.hlsUrl ?? '';
+            if (preloadUrl.isNotEmpty) {
+              _videoManager.preload(preloadUrl);
+            }
+          }
         }
       }
 
@@ -74,7 +103,7 @@ class VideoController extends GetxController {
     _lastDocument = null;
     _hasMore = true;
     videoList.clear();
-    await fetchPaginatedVideos();
+    await fetchPaginatedVideos(isRefresh: true);
   }
 
   Future<void> likeVideo(String videoId, String userId) async {
@@ -152,4 +181,4 @@ class VideoController extends GetxController {
       Get.snackbar('Erreur', 'Erreur lors de la suppression de la vidéo.');
     }
   }
-} 
+}

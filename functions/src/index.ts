@@ -10,7 +10,6 @@ import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import { onObjectFinalized, StorageObjectData } from "firebase-functions/v2/storage";
 import { CloudEvent } from "firebase-functions/v2";
 
-// Initialiser Firebase Admin et Storage
 admin.initializeApp();
 const storage = new Storage();
 const firestore = admin.firestore();
@@ -33,7 +32,7 @@ export const convertToHLS = onObjectFinalized({
   console.log("⚙️ Fonction déclenchée pour :", filePath);
 
   if (!filePath.startsWith("videos/") || !filePath.endsWith(".mp4") || !contentType.startsWith("video/")) {
-    console.log("⛔️ Fichier ignoré (mauvais chemin ou type).");
+    console.log("⛔️ Fichier ignoré (mauvais chemin ou type).", { filePath, contentType });
     return;
   }
 
@@ -45,21 +44,21 @@ export const convertToHLS = onObjectFinalized({
   mkdirSync(localHLSDir, { recursive: true });
 
   try {
-    console.log("⬇️ Téléchargement de la vidéo depuis GCS...");
+    console.log("⬇️ Téléchargement de la vidéo...");
     await bucket.file(filePath).download({ destination: tempLocalFile });
-    console.log("✅ Vidéo téléchargée localement :", tempLocalFile);
+    console.log("✅ Téléchargement terminé :", tempLocalFile);
 
-    console.log("🔄 Lancement de la conversion HLS...");
+    console.log("🎬 Démarrage conversion FFmpeg...");
     await new Promise<void>((resolve, reject) => {
       ffmpeg(tempLocalFile)
         .addOptions([
           "-profile:v baseline",
           "-level 3.0",
           "-start_number 0",
-          "-hls_time 4", // Petits segments = meilleure fluidité
+          "-hls_time 4",
           "-hls_list_size 0",
           "-force_key_frames expr:gte(t,n_forced*4)",
-          "-vf scale=w=720:h=1280:force_original_aspect_ratio=decrease", // ✅ scale appliqué CORRECTEMENT
+          "-vf scale=w=720:h=1280:force_original_aspect_ratio=decrease",
           "-f hls",
         ])
         .outputOptions("-hls_segment_filename", join(localHLSDir, "segment_%03d.ts"))
@@ -76,11 +75,11 @@ export const convertToHLS = onObjectFinalized({
     const m3u8Files = hlsFiles.filter((f) => f.endsWith(".m3u8"));
 
     if (tsSegments.length === 0 || m3u8Files.length === 0) {
-      throw new Error("❌ Conversion invalide : Aucun segment .ts ou fichier index.m3u8 trouvé.");
+      throw new Error("❌ Aucun fichier HLS valide généré.");
     }
 
     const hlsStorageDir = `videos/${videoId}`;
-    console.log("⬆️ Téléversement des segments...");
+    console.log("⬆️ Envoi des segments HLS...");
 
     await Promise.all(
       hlsFiles.map(async (file) => {
@@ -89,33 +88,40 @@ export const convertToHLS = onObjectFinalized({
           destination: `${hlsStorageDir}/${file}`,
           metadata: {
             contentType: file.endsWith(".m3u8") ? "application/vnd.apple.mpegurl" : "video/MP2T",
+            cacheControl: "public,max-age=86400",
           },
         });
         unlinkSync(localPath);
       })
     );
 
-    console.log("✅ Segments HLS uploadés.");
+    console.log("✅ Segments uploadés.");
 
-    const hlsUrl = `https://storage.googleapis.com/${fileBucket}/${hlsStorageDir}/index.m3u8`;
-    console.log("🌍 HLS Public URL:", hlsUrl);
-
-    console.log("📦 Mise à jour Firestore...");
-    await videoRef.set({
-      hlsUrl: hlsUrl,
-      status: "ready",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    console.log("🎯 Document Firestore mis à jour avec status 'ready'.");
-
-    await bucket.file(filePath).delete().catch((err) => {
-      console.warn("⚠️ Suppression du fichier original échouée:", (err as Error).message || err);
+    const finalM3U8Path = `${hlsStorageDir}/index.m3u8`;
+    const [signedUrl] = await bucket.file(finalM3U8Path).getSignedUrl({
+      action: "read",
+      expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
     });
 
-    console.log("✅ Nettoyage terminé pour :", videoId);
+    const updatePayload = {
+      hlsUrl: signedUrl + `?t=${Date.now()}`, // Force un lien unique à chaque fois
+      status: "ready",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    console.log("🔐 URL HLS signée :", updatePayload.hlsUrl);
+
+    await videoRef.set(updatePayload, { merge: true });
+
+    console.log("📦 Firestore mis à jour (ready).");
+
+    await bucket.file(filePath).delete().catch((err) => {
+      console.warn("⚠️ Suppression de l'original échouée :", (err as Error).message);
+    });
+
+    console.log("🧹 Nettoyage terminé pour :", videoId);
   } catch (error) {
-    console.error("❌ Erreur globale :", (error as Error).message || error);
+    console.error("❌ Erreur HLS:", (error as Error).message || error);
     await videoRef.set({
       status: "error",
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -124,9 +130,9 @@ export const convertToHLS = onObjectFinalized({
     if (existsSync(tempLocalFile)) {
       try {
         unlinkSync(tempLocalFile);
-        console.log("🧹 Fichier temporaire local supprimé.");
+        console.log("🧽 Temp local supprimé.");
       } catch (err) {
-        console.warn("⚠️ Problème de suppression fichier local :", (err as Error).message || err);
+        console.warn("⚠️ Problème suppression temporaire :", (err as Error).message || err);
       }
     }
   }
