@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import '../models/video.dart';
 import '../widgets/video_manager.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 
 class VideoController extends GetxController {
   var videoList = <Video>[].obs;
@@ -16,7 +15,7 @@ class VideoController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    refreshVideos(); // Charge initialement
+    refreshVideos();
   }
 
   bool get hasMore => _hasMore;
@@ -24,14 +23,12 @@ class VideoController extends GetxController {
 
   Future<void> fetchPaginatedVideos({bool isRefresh = false}) async {
     if (_isLoading || !_hasMore) return;
-
     _isLoading = true;
 
     try {
       Query query = FirebaseFirestore.instance
           .collection('videos')
           .where('status', isEqualTo: 'ready')
-          .where('hlsUrl', isGreaterThan: '') // ✅ filtre vidéos prêtes
           .orderBy('updatedAt', descending: true)
           .limit(_limit);
 
@@ -45,45 +42,25 @@ class VideoController extends GetxController {
       final snapshot = await query.get();
 
       if (snapshot.docs.isNotEmpty) {
-        final newVideos = await Future.wait(snapshot.docs.map((doc) async {
-          try {
-            final data = doc.data() as Map<String, dynamic>;
-            final video = Video.fromMap(data);
+        final newVideos = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          return Video.fromMap(data);
+        }).toList();
 
-            final url = video.hlsUrl;
-            if (url != null && url.isNotEmpty && url.contains('googleapis.com')) {
-              try {
-                final ref = FirebaseStorage.instance.refFromURL(url);
-                final refreshedUrl = await ref.getDownloadURL();
-                video.hlsUrl = refreshedUrl;
-              } catch (_) {}
-            }
+        final existingIds = videoList.map((v) => v.id).toSet();
+        final uniqueNewVideos = newVideos.where((v) => !existingIds.contains(v.id)).toList();
 
-            return video;
-          } catch (e) {
-            print('Erreur parsing vidéo : $e');
-            return null;
-          }
-        }).toList());
+        if (isRefresh) {
+          videoList.assignAll(uniqueNewVideos);
+        } else {
+          videoList.addAll(uniqueNewVideos);
+        }
 
-        final nonNullVideos = newVideos.whereType<Video>().toList();
+        _lastDocument = snapshot.docs.last;
 
-        if (nonNullVideos.isNotEmpty) {
-          if (isRefresh) {
-            videoList.assignAll(nonNullVideos);
-          } else {
-            final existingIds = videoList.map((v) => v.id).toSet();
-            final uniqueNewVideos = nonNullVideos.where((v) => !existingIds.contains(v.id)).toList();
-            videoList.addAll(uniqueNewVideos);
-          }
-
-          _lastDocument = snapshot.docs.last;
-
-          for (final video in nonNullVideos) {
-            final preloadUrl = video.hlsUrl ?? '';
-            if (preloadUrl.isNotEmpty) {
-              _videoManager.preload(preloadUrl);
-            }
+        for (final video in uniqueNewVideos) {
+          if (video.videoUrl.isNotEmpty) {
+            await _videoManager.preload(video.videoUrl);
           }
         }
       }
@@ -100,6 +77,7 @@ class VideoController extends GetxController {
   }
 
   Future<void> refreshVideos() async {
+    _videoManager.disposeAll(); // ⚠️ Nettoyage complet avant rechargement
     _lastDocument = null;
     _hasMore = true;
     videoList.clear();
@@ -173,8 +151,14 @@ class VideoController extends GetxController {
 
   Future<void> deleteVideo(String videoId) async {
     try {
+      final videoToDelete = videoList.firstWhereOrNull((v) => v.id == videoId);
+      if (videoToDelete != null) {
+        _videoManager.dispose(videoToDelete.videoUrl); // ⛔ libération du contrôleur vidéo
+      }
+
       await FirebaseFirestore.instance.collection('videos').doc(videoId).delete();
       videoList.removeWhere((video) => video.id == videoId);
+
       Get.snackbar('Succès', 'Vidéo supprimée avec succès.');
     } catch (e) {
       print("Erreur suppression : $e");
