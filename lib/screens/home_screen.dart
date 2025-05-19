@@ -1,14 +1,11 @@
-import 'dart:async';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/controller/connectivity_controller.dart';
 import 'package:adfoot/controller/video_controller.dart';
-import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/screens/add_video.dart';
-import 'package:adfoot/screens/full_screen_video.dart';
+import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
-import 'package:adfoot/widgets/video_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,61 +14,65 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  final VideoController videoController = Get.put(VideoController());
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+  late final VideoController videoController;
   final UserController userController = Get.find<UserController>();
-  final VideoManager _videoManager = VideoManager();
   final PageController _pageController = PageController();
-
-  String? currentVideoUrl;
   bool _isConnected = true;
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+
+  late final AnimationController _fadeController;
+  late final Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _checkInitialConnection();
-    _listenToConnectionChanges();
 
-    _pageController.addListener(() {
-      final maxScroll = _pageController.position.maxScrollExtent;
-      final currentScroll = _pageController.position.pixels;
+    if (!Get.isRegistered<VideoController>()) {
+      videoController = Get.put(VideoController(), permanent: true);
+    } else {
+      videoController = Get.find<VideoController>();
+    }
 
-      if (maxScroll - currentScroll <= 300 &&
-          !videoController.isLoading &&
-          videoController.hasMore) {
+    _fadeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _fadeAnimation = CurvedAnimation(parent: _fadeController, curve: Curves.easeIn);
+
+    _initConnectivityListener();
+    _pageController.addListener(_handleScroll);
+    _loadInitialVideos();
+    _fadeController.forward();
+  }
+
+  void _initConnectivityListener() {
+    ConnectivityService().connectionStream.listen((connected) {
+      setState(() => _isConnected = connected);
+      if (connected && videoController.videoList.isEmpty) {
         videoController.fetchPaginatedVideos();
       }
     });
   }
 
-  Future<void> _checkInitialConnection() async {
-    final resultList = await Connectivity().checkConnectivity();
-    setState(() => _isConnected = resultList != ConnectivityResult.none);
-    if (_isConnected && videoController.videoList.isEmpty) {
+  Future<void> _loadInitialVideos() async {
+    final connected = await ConnectivityService().checkInitialConnection();
+    setState(() => _isConnected = connected);
+    if (connected && videoController.videoList.isEmpty) {
+      await videoController.fetchPaginatedVideos();
+    }
+  }
+
+  void _handleScroll() {
+    final maxScroll = _pageController.position.maxScrollExtent;
+    final currentScroll = _pageController.position.pixels;
+    if (maxScroll - currentScroll <= 300 &&
+        !videoController.isLoading &&
+        videoController.hasMore) {
       videoController.fetchPaginatedVideos();
     }
   }
 
-  void _listenToConnectionChanges() {
-    _connectivitySubscription =
-        Connectivity().onConnectivityChanged.listen((resultList) {
-      final result = resultList.firstOrNull;
-      final wasConnected = _isConnected;
-      setState(() => _isConnected = result != null && result != ConnectivityResult.none);
-
-      if (!_isConnected) return;
-
-      if (!wasConnected && videoController.videoList.isEmpty) {
-        videoController.fetchPaginatedVideos();
-      }
-    });
-  }
-
   @override
   void dispose() {
+    _fadeController.dispose();
     _pageController.dispose();
-    _connectivitySubscription?.cancel();
     super.dispose();
   }
 
@@ -80,10 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text(
-          'AD.FOOT',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
+        title: const Text('AD.FOOT', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         actions: [
           Obx(() {
             final user = userController.user;
@@ -96,17 +94,10 @@ class _HomeScreenState extends State<HomeScreen> {
             return IconButton(
               icon: CircleAvatar(
                 backgroundImage: NetworkImage(
-                  user.photoProfil.isNotEmpty
-                      ? user.photoProfil
-                      : 'https://via.placeholder.com/150',
+                  user.photoProfil.isNotEmpty ? user.photoProfil : 'https://via.placeholder.com/150',
                 ),
               ),
-              onPressed: () {
-                if (currentVideoUrl != null) {
-                  _videoManager.pause(currentVideoUrl!);
-                }
-                Get.to(() => ProfileScreen(uid: user.uid));
-              },
+              onPressed: () => Get.to(() => ProfileScreen(uid: user.uid)),
             );
           }),
         ],
@@ -128,34 +119,80 @@ class _HomeScreenState extends State<HomeScreen> {
                 controller: _pageController,
                 scrollDirection: Axis.vertical,
                 itemCount: videos.length,
-                onPageChanged: (index) {
-                  _handlePageChange(index, videos);
-                },
                 itemBuilder: (context, index) {
                   final video = videos[index];
-                  final effectiveUrl = video.hlsUrl ?? '';
-
                   return Stack(
                     children: [
                       SmartVideoPlayer(
-                        videoUrl: effectiveUrl,
+                        key: ValueKey(video.id),
+                        videoUrl: video.videoUrl,
                         video: video,
                         currentIndex: index,
                         videoList: videos,
-                        enableTapToPlay: false,
+                        enableTapToPlay: true,
+                        autoPlay: true,
+                        showControls: true,
+                        showProgressBar: true,
                       ),
-                      Positioned.fill(
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              _videoManager.pause(effectiveUrl);
-                              Get.to(() => FullScreenVideo(
-                                    video: video,
-                                    user: userController.user!,
-                                    videoController: videoController,
-                                  ));
-                            },
+                      Positioned(
+                        bottom: 100,
+                        left: 10,
+                        right: 80,
+                        child: SafeArea(
+                          child: FadeTransition(
+                            opacity: _fadeAnimation,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  video.songName.isNotEmpty ? video.songName : 'Musique inconnue',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    shadows: [Shadow(color: Colors.black54, offset: Offset(1, 1), blurRadius: 2)],
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  video.caption.isNotEmpty ? video.caption : 'Pas de légende',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    shadows: [Shadow(color: Colors.black54, offset: Offset(1, 1), blurRadius: 2)],
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 10,
+                        right: 10,
+                        child: GestureDetector(
+                          onTap: () {
+                            if (video.uid.isNotEmpty) {
+                              Get.to(() => ProfileScreen(uid: video.uid, isReadOnly: true));
+                            } else {
+                              Get.snackbar(
+                                'Erreur',
+                                'Utilisateur introuvable.',
+                                backgroundColor: Colors.redAccent,
+                                colorText: Colors.white,
+                              );
+                            }
+                          },
+                          child: CircleAvatar(
+                            backgroundImage: NetworkImage(
+                              video.profilePhoto.isNotEmpty
+                                  ? video.profilePhoto
+                                  : 'https://via.placeholder.com/150',
+                            ),
+                            radius: 24,
                           ),
                         ),
                       ),
@@ -164,20 +201,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               );
             }),
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: Obx(() {
         if (userController.user?.role == 'joueur') {
           return FloatingActionButton(
-            backgroundColor: const Color(0xFF214D4F),
-            foregroundColor: Colors.white,
+            backgroundColor: Colors.white70,
+            foregroundColor: Colors.black,
+            elevation: 1,
             heroTag: 'addVideo',
+            shape: const CircleBorder(),
             onPressed: () async {
-              if (currentVideoUrl != null) {
-                _videoManager.pause(currentVideoUrl!);
-              }
-
               final result = await Get.to(() => const AddVideo());
-
               if (result == true) {
                 await videoController.refreshVideos();
               }
@@ -189,22 +223,6 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }),
     );
-  }
-
-  void _handlePageChange(int index, List<dynamic> videos) {
-    if (index >= videos.length) return;
-
-    final previousUrl = currentVideoUrl;
-    final video = videos[index];
-    final effectiveUrl = video.hlsUrl ?? '';
-
-    currentVideoUrl = effectiveUrl;
-
-    if (previousUrl != null && previousUrl != currentVideoUrl) {
-      _videoManager.pause(previousUrl);
-    }
-
-    _videoManager.play(effectiveUrl);
   }
 
   Widget _buildNoInternet() {

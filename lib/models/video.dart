@@ -1,7 +1,6 @@
 class Video {
   String id;
   String videoUrl;
-  String? hlsUrl;
   String thumbnailUrl;
   String songName;
   String caption;
@@ -11,12 +10,11 @@ class Video {
   int shareCount;
   List<String> reports;
   int reportCount;
-  String? status; // ✅ Nouveau champ : suivi du traitement (ready, error, etc.)
+  String? status;
 
   Video({
     required this.id,
     required this.videoUrl,
-    this.hlsUrl,
     required this.thumbnailUrl,
     required this.songName,
     required this.caption,
@@ -33,7 +31,6 @@ class Video {
     return Video(
       id: map['id'] ?? '',
       videoUrl: map['videoUrl'] ?? '',
-      hlsUrl: map['hlsUrl'],
       thumbnailUrl: map['thumbnail'] ?? '',
       songName: map['songName'] ?? '',
       caption: map['caption'] ?? '',
@@ -51,7 +48,6 @@ class Video {
     return {
       'id': id,
       'videoUrl': videoUrl,
-      'hlsUrl': hlsUrl,
       'thumbnail': thumbnailUrl,
       'songName': songName,
       'caption': caption,

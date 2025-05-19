@@ -1,12 +1,10 @@
-import 'dart:async';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:adfoot/models/video.dart';
+import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
-import 'package:adfoot/widgets/video_manager.dart';
-import '../models/video.dart';
-import '../models/user.dart';
+import 'package:adfoot/controller/connectivity_controller.dart';
 
 class FullScreenVideo extends StatefulWidget {
   final Video video;
@@ -25,32 +23,19 @@ class FullScreenVideo extends StatefulWidget {
 }
 
 class _FullScreenVideoState extends State<FullScreenVideo> {
+  late final String effectiveUrl;
   bool _isConnected = true;
-  StreamSubscription<List<ConnectivityResult>>? _subscription;
-  final VideoManager _videoManager = VideoManager();
 
   @override
   void initState() {
     super.initState();
-    _checkConnection();
-    _subscription = Connectivity().onConnectivityChanged.listen((resultList) {
-      final result = resultList.firstOrNull;
-      setState(() => _isConnected = result != null && result != ConnectivityResult.none);
-    });
+    effectiveUrl = widget.video.videoUrl;
+    _initConnectivity();
   }
 
-  Future<void> _checkConnection() async {
-    final result = await Connectivity().checkConnectivity();
-    setState(() => _isConnected = result != ConnectivityResult.none);
-  }
-
-  @override
-  void dispose() {
-    if (widget.video.hlsUrl != null && widget.video.hlsUrl!.isNotEmpty) {
-      _videoManager.pause(widget.video.hlsUrl!);
-    }
-    _subscription?.cancel();
-    super.dispose();
+  Future<void> _initConnectivity() async {
+    final isOnline = await ConnectivityService().checkInitialConnection();
+    setState(() => _isConnected = isOnline);
   }
 
   @override
@@ -58,38 +43,27 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
     final allVideos = widget.videoController.videoList;
     final index = allVideos.indexWhere((v) => v.id == widget.video.id);
 
-    if (widget.video.hlsUrl == null || widget.video.hlsUrl!.isEmpty) {
-      return Scaffold(
-        backgroundColor: Colors.black,
-        body: const Center(
-          child: Text(
-            'Vidéo en conversion...',
-            style: TextStyle(color: Colors.white, fontSize: 18),
-          ),
-        ),
-      );
-    }
-
-    final effectiveUrl = widget.video.hlsUrl!;
-
     return Scaffold(
       backgroundColor: Colors.black,
-      body: _isConnected
-          ? Stack(
+      body: !_isConnected
+          ? _buildNoInternet()
+          : Stack(
               fit: StackFit.expand,
               children: [
-                SmartVideoPlayer(
-                  videoUrl: effectiveUrl,
-                  video: widget.video,
-                  videoList: allVideos,
-                  currentIndex: index,
-                  enableTapToPlay: true,
-                ),
+               SmartVideoPlayer(
+  videoUrl: effectiveUrl,
+  video: widget.video,
+  currentIndex: index,
+  videoList: widget.videoController.videoList,
+  enableTapToPlay: false,
+  autoPlay: true,
+  showControls: false,
+  showProgressBar: true, // 👈 important
+),
                 _buildBackButton(),
                 _buildVideoInfo(),
               ],
-            )
-          : _buildNoInternet(),
+            ),
     );
   }
 
@@ -98,23 +72,14 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
       top: MediaQuery.of(context).padding.top + 10,
       left: 10,
       child: GestureDetector(
-        onTap: () {
-          if (widget.video.hlsUrl != null && widget.video.hlsUrl!.isNotEmpty) {
-            _videoManager.pause(widget.video.hlsUrl!);
-          }
-          Get.back();
-        },
+        onTap: () => Get.back(),
         child: Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
             color: Colors.black.withOpacity(0.5),
             shape: BoxShape.circle,
           ),
-          child: const Icon(
-            Icons.arrow_back,
-            color: Colors.white,
-            size: 26,
-          ),
+          child: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
         ),
       ),
     );
@@ -130,9 +95,6 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
         children: [
           GestureDetector(
             onTap: () async {
-              if (widget.video.hlsUrl != null && widget.video.hlsUrl!.isNotEmpty) {
-                _videoManager.pause(widget.video.hlsUrl!);
-              }
               if (widget.video.uid.isNotEmpty) {
                 await Get.to(() => ProfileScreen(uid: widget.video.uid, isReadOnly: true));
               } else {
@@ -160,11 +122,7 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
                     widget.video.songName.isNotEmpty
                         ? widget.video.songName
                         : 'Musique inconnue',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -173,9 +131,7 @@ class _FullScreenVideoState extends State<FullScreenVideo> {
           ),
           const SizedBox(height: 10),
           Text(
-            widget.video.caption.isNotEmpty
-                ? widget.video.caption
-                : 'Pas de légende',
+            widget.video.caption.isNotEmpty ? widget.video.caption : 'Pas de légende',
             style: const TextStyle(color: Colors.white, fontSize: 14),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
