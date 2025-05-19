@@ -1,21 +1,58 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:path_provider/path_provider.dart';
 import 'package:video_compress/video_compress.dart';
+import 'package:flutter/material.dart';
 
 class VideoTools {
-  /// Génère une miniature depuis un fichier vidéo
+  /// Génère une miniature robuste à partir d'une vidéo
   static Future<File?> generateThumbnail(String inputPath) async {
     try {
+      final inputFile = File(inputPath);
+      if (!await inputFile.exists()) {
+        print("Fichier vidéo introuvable: $inputPath");
+        return null;
+      }
+
       final thumbnailFile = await VideoCompress.getFileThumbnail(
         inputPath,
         quality: 50,
-        position: -1,
+        position: 1000, // Position 1 seconde
       );
-      return File(thumbnailFile.path);
+
+      if (thumbnailFile.path.isEmpty) return null;
+
+      final thumb = File(thumbnailFile.path);
+
+      // Essayer jusqu'à 3 secondes pour que le fichier apparaisse
+      int retries = 10;
+      while (!await thumb.exists() && retries > 0) {
+        await Future.delayed(const Duration(milliseconds: 300));
+        retries--;
+      }
+
+      return await thumb.exists() ? thumb : null;
     } catch (e) {
-      print('Erreur génération miniature : $e');
+      print('Erreur thumbnail: $e');
       return null;
     }
+  }
+
+  /// Miniature de secours (image noire PNG)
+  static Future<File> generateFallbackThumbnail() async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final paint = Paint()..color = Colors.black;
+    canvas.drawRect(const Rect.fromLTWH(0, 0, 128, 128), paint);
+    final picture = recorder.endRecording();
+    final img = await picture.toImage(128, 128);
+    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
+
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/fallback_thumbnail.png');
+    await file.writeAsBytes(byteData!.buffer.asUint8List());
+    return file;
   }
 
   /// Compresse la vidéo en qualité moyenne ou basse si nécessaire
@@ -24,7 +61,6 @@ class VideoTools {
       final result = await _attemptCompression(inputPath, VideoQuality.MediumQuality);
       if (result != null) return result;
 
-      // 🔁 Fallback vers qualité basse
       final fallbackResult = await _attemptCompression(inputPath, VideoQuality.LowQuality);
       return fallbackResult;
     } catch (e) {
@@ -37,7 +73,7 @@ class VideoTools {
   static Future<File?> _attemptCompression(String inputPath, VideoQuality quality) async {
     final completer = Completer<File?>();
     final subscription = VideoCompress.compressProgress$.subscribe((progress) {
-      // Optionnel : logger ou afficher le progrès
+      // Optionnel : log progression
     });
 
     final compressionFuture = VideoCompress.compressVideo(
@@ -48,7 +84,7 @@ class VideoTools {
     );
 
     compressionFuture.timeout(
-      const Duration(seconds: 90),
+      const Duration(seconds: 120),
       onTimeout: () async {
         await VideoCompress.cancelCompression();
         subscription.unsubscribe();
@@ -57,7 +93,7 @@ class VideoTools {
       },
     ).then((info) {
       subscription.unsubscribe();
-      if (info != null && info.path != null) {
+      if (info != null && info.path != null && File(info.path!).existsSync()) {
         completer.complete(File(info.path!));
       } else {
         completer.complete(null);
@@ -103,17 +139,13 @@ class VideoTools {
   static Future<void> cancelCompression() async {
     try {
       await VideoCompress.cancelCompression();
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
   }
 
   /// Supprime tous les caches vidéo compressés
   static Future<void> dispose() async {
     try {
       await VideoCompress.deleteAllCache();
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
   }
 }

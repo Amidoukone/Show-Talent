@@ -1,114 +1,173 @@
-// UPDATED VideoManager to strictly support only .m3u8 HLS sources
-import 'package:video_player/video_player.dart';
+import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 
 class VideoManager {
   static final VideoManager _instance = VideoManager._internal();
-  final Map<String, VideoPlayerController> _controllers = {};
-  static const int _maxCacheCount = 5;
-
   factory VideoManager() => _instance;
-
   VideoManager._internal();
 
-  Future<VideoPlayerController> getController(String url) async {
-    if (!_isHlsUrl(url)) {
-      throw Exception('Seuls les fichiers HLS (.m3u8) sont supportés.');
-    }
+  final Map<String, CachedVideoPlayerPlusController> _controllers = {};
+  final Map<String, Future<CachedVideoPlayerPlusController>> _initializationFutures = {};
+  final Map<String, CancelToken> _downloadCancelTokens = {};
+  final List<String> _recentUrls = [];
 
+  final int _maxCacheVideos = 3;
+  DateTime? _lastCleanup;
+
+  Future<CachedVideoPlayerPlusController> initializeController(String url) async {
     if (_controllers.containsKey(url)) {
       final controller = _controllers[url]!;
-      if (controller.value.isInitialized) {
+      if (controller.value.isInitialized && !controller.value.hasError) {
+        _markAsRecentlyUsed(url);
         return controller;
       } else {
-        try {
-          await controller.initialize();
-          return controller;
-        } catch (e) {
-          controller.dispose();
-          _controllers.remove(url);
-          return _initControllerAndCache(url);
-        }
+        await controller.dispose();
+        _controllers.remove(url);
       }
     }
 
-    return _initControllerAndCache(url);
-  }
+    if (_initializationFutures.containsKey(url)) {
+      return await _initializationFutures[url]!;
+    }
 
-  Future<VideoPlayerController> _initControllerAndCache(String url) async {
-    final controller = await _initController(url);
+    final initialization = _createCachedController(url);
+    _initializationFutures[url] = initialization;
+
+    final controller = await initialization;
     _controllers[url] = controller;
-    _cleanupOldControllers();
+    _initializationFutures.remove(url);
+    _markAsRecentlyUsed(url);
+    _enforceMemoryLimit();
+
     return controller;
   }
 
-  Future<VideoPlayerController> _initController(String url) async {
+  Future<CachedVideoPlayerPlusController> _createCachedController(String url) async {
+    final file = await _getOrDownloadVideo(url);
+    final controller = CachedVideoPlayerPlusController.file(file);
+    await controller.initialize();
+    controller.setLooping(true);
+    return controller;
+  }
+
+  Future<File> _getOrDownloadVideo(String url) async {
+    await _cleanOldCachedVideos();
+
+    final cacheDir = await getTemporaryDirectory();
+    final fileName = Uri.parse(url).pathSegments.last;
+    final filePath = '${cacheDir.path}/$fileName';
+    final file = File(filePath);
+
+    if (await file.exists()) {
+      return file;
+    }
+
+    final cancelToken = CancelToken();
+    _downloadCancelTokens[url] = cancelToken;
+
     try {
-      final controller = VideoPlayerController.networkUrl(Uri.parse(url));
-      await controller.initialize();
-      controller.setLooping(true);
-      controller.setVolume(1.0);
-      return controller;
-    } catch (e) {
-      throw Exception('Erreur initialisation HLS : $e');
-    }
-  }
+      final response = await Dio().download(url, file.path, cancelToken: cancelToken);
+      _downloadCancelTokens.remove(url);
 
-  void preload(String url) {
-    if (_isHlsUrl(url) && !_controllers.containsKey(url)) {
-      _initControllerAndCache(url).then((controller) {
-        if (!_controllers.containsKey(url)) {
-          _controllers[url] = controller;
-          _cleanupOldControllers();
-        }
-      }).catchError((_) {
-        // Ignorer les erreurs de préchargement
-      });
-    }
-  }
-
-  void play(String url) {
-    _controllers.forEach((key, controller) {
-      if (key == url) {
-        if (!controller.value.isPlaying && controller.value.isInitialized) {
-          controller.play();
-        }
+      if (response.statusCode == 200) {
+        return file;
       } else {
-        if (controller.value.isPlaying) {
-          controller.pause();
+        throw Exception('Échec téléchargement : ${response.statusCode}');
+      }
+    } catch (e) {
+      if (await file.exists()) return file;
+      throw Exception('Téléchargement échoué : $e');
+    }
+  }
+
+  Future<void> _cleanOldCachedVideos() async {
+    final now = DateTime.now();
+    if (_lastCleanup != null && now.difference(_lastCleanup!) < const Duration(hours: 2)) {
+      return;
+    }
+
+    _lastCleanup = now;
+    try {
+      final cacheDir = await getTemporaryDirectory();
+      final files = cacheDir.listSync();
+
+      for (final entity in files) {
+        if (entity is File) {
+          final stat = await entity.stat();
+          final modified = stat.modified;
+          if (now.difference(modified) > const Duration(hours: 2)) {
+            await entity.delete();
+          }
         }
       }
-    });
+    } catch (_) {}
+  }
+
+  Future<void> preload(String url) async {
+    if (_controllers.length >= _maxCacheVideos || _controllers.containsKey(url)) return;
+    try {
+      await initializeController(url);
+    } catch (_) {}
   }
 
   void pause(String url) {
     final controller = _controllers[url];
-    if (controller != null && controller.value.isInitialized) {
+    if (controller != null && controller.value.isInitialized && controller.value.isPlaying) {
       controller.pause();
     }
   }
 
-  void releaseController(String url) {
-    final controller = _controllers[url];
-    if (controller != null) {
+  void _markAsRecentlyUsed(String url) {
+    _recentUrls.remove(url);
+    _recentUrls.add(url);
+  }
+
+  void _enforceMemoryLimit() {
+    while (_recentUrls.length > _maxCacheVideos) {
+      final oldestUrl = _recentUrls.removeAt(0);
+      dispose(oldestUrl);
+    }
+  }
+
+  void cancelDownload(String url) {
+    if (_downloadCancelTokens.containsKey(url)) {
+      _downloadCancelTokens[url]?.cancel("Téléchargement annulé.");
+      _downloadCancelTokens.remove(url);
+    }
+  }
+
+  void dispose(String url) {
+    cancelDownload(url);
+    final controller = _controllers.remove(url);
+    if (controller != null && controller.value.isInitialized) {
       controller.dispose();
-      _controllers.remove(url);
+    }
+    _initializationFutures.remove(url);
+    _recentUrls.remove(url);
+  }
+
+  void disposeAllExcept(String urlToKeep) {
+    final urlsToDispose = _controllers.keys.where((url) => url != urlToKeep).toList();
+    for (final url in urlsToDispose) {
+      dispose(url);
     }
   }
 
-  void _cleanupOldControllers() {
-    if (_controllers.length > _maxCacheCount) {
-      final keys = List<String>.from(_controllers.keys);
-      final excess = _controllers.length - _maxCacheCount;
-
-      for (int i = 0; i < excess; i++) {
-        final key = keys[i];
-        _controllers[key]?.dispose();
-        _controllers.remove(key);
-      }
+  void disposeAll() {
+    for (final url in _controllers.keys.toList()) {
+      dispose(url);
     }
   }
 
-  bool _isHlsUrl(String url) {
-    return url.toLowerCase().endsWith('.m3u8');
+  bool hasController(String url) => _controllers.containsKey(url);
+
+  CachedVideoPlayerPlusController? getController(String url) {
+    final controller = _controllers[url];
+    if (controller != null && controller.value.isInitialized && !controller.value.hasError) {
+      return controller;
+    }
+    return null;
   }
 }
