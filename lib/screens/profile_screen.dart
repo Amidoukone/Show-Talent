@@ -1,3 +1,5 @@
+import 'package:adfoot/controller/video_controller.dart';
+import 'package:adfoot/screens/profil_video_scrollview.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,123 +8,208 @@ import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/models/user.dart';
-import 'package:adfoot/models/video.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/edit_profil_screen.dart';
 import 'package:adfoot/screens/follow_list_screen.dart';
-import 'package:adfoot/screens/video_player_screen.dart';
+import 'package:adfoot/widgets/video_manager.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   final String uid;
   final bool isReadOnly;
 
-  ProfileScreen({super.key, required this.uid, this.isReadOnly = false});
+  const ProfileScreen({super.key, required this.uid, this.isReadOnly = false});
 
-  final ProfileController _profileController = Get.put(ProfileController());
-  final AuthController _authController = Get.put(AuthController());
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late final ProfileController _profileController;
+  final AuthController _authController = Get.find<AuthController>();
   final FollowController _followController = Get.put(FollowController());
   final ChatController _chatController = Get.put(ChatController());
-  final ImagePicker _imagePicker = ImagePicker(); // Instance de ImagePicker
+  final ImagePicker _imagePicker = ImagePicker();
+  final VideoManager _videoManager = VideoManager();
+
+  @override
+  void initState() {
+    super.initState();
+    _profileController = Get.put(ProfileController(), tag: widget.uid);
+    _profileController.updateUserId(widget.uid);
+  }
+
+  @override
+  void dispose() {
+    final ctx = 'profile:${widget.uid}';
+    _profileController.pauseAll();
+    _videoManager.disposeAllForContext(ctx);
+    Get.delete<ProfileController>(tag: widget.uid);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    _profileController.updateUserId(uid);
+    return GetBuilder<ProfileController>(
+      tag: widget.uid,
+      builder: (controller) {
+        if (controller.user == null) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-    return GetBuilder<ProfileController>(builder: (controller) {
-      if (controller.user == null) {
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        );
-      }
+        final user = controller.user!;
+        final currentUid = _authController.currentUid;
+        final isOwnProfile = currentUid != null && currentUid == user.uid;
 
-      AppUser user = controller.user!;
-      bool isOwnProfile = _authController.user?.uid == uid;
-
-      return Scaffold(
-        appBar: AppBar(
-          title: Text(
-            user.nom.isNotEmpty ? user.nom : 'Nom inconnu',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(user.nom.isNotEmpty ? user.nom : 'Nom inconnu'),
+            centerTitle: true,
+            actions: [
+              if (isOwnProfile && !widget.isReadOnly)
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () => Get.to(() => EditProfileScreen(
+                      user: user, profileController: _profileController)),
+                )
+              else if (!isOwnProfile && currentUid != null)
+                IconButton(
+                  icon: const Icon(Icons.message),
+                  onPressed: () => _handleSendMessage(user),
+                )
+            ],
           ),
-          centerTitle: true,
-          actions: [
-            if (!isReadOnly && isOwnProfile)
-              IconButton(
-                icon: const Icon(Icons.edit),
-                onPressed: () {
-                  Get.to(() => EditProfileScreen(user: user));
-                },
-              ),
-            if (!isOwnProfile)
-              IconButton(
-                icon: const Icon(Icons.message),
-                onPressed: () async {
-                  await _handleSendMessage(user);
-                },
-              ),
-          ],
-        ),
-        body: SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                _buildProfilePhotoSection(user, isOwnProfile),
-                const SizedBox(height: 20),
-                _buildStatSection(user),
-                if (!isOwnProfile) _buildFollowUnfollowButton(user),
-                const SizedBox(height: 20),
-                _buildBioSection(user),
-                const SizedBox(height: 20),
-                _buildSpecificInfoSection(user),
-                const SizedBox(height: 20),
-                if (user.role == 'joueur') _buildVideosSection(user),
-              ],
+          body: SafeArea(
+            child: RefreshIndicator(
+              onRefresh: () => controller.refreshProfileVideos(),
+              child: Builder(builder: (_) {
+                final videos = controller.videoList;
+                final loading = controller.isLoadingVideos;
+                final hasMore = controller.hasMoreVideos;
+
+                return CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverToBoxAdapter(
+                        child: _buildProfilePhotoSection(
+                            user, isOwnProfile, widget.isReadOnly)),
+                    SliverToBoxAdapter(child: const SizedBox(height: 20)),
+                    SliverToBoxAdapter(child: _buildStatSection(user)),
+                    if (!isOwnProfile)
+                      SliverToBoxAdapter(
+                          child: _buildFollowUnfollowButton(user)),
+                    SliverToBoxAdapter(child: const SizedBox(height: 20)),
+                    SliverToBoxAdapter(child: _buildBioSection(user)),
+                    SliverToBoxAdapter(child: const SizedBox(height: 20)),
+                    SliverToBoxAdapter(child: _buildSpecificInfoSection(user)),
+                    SliverToBoxAdapter(child: const SizedBox(height: 20)),
+                    if (user.role == 'joueur') ...[
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        sliver: SliverGrid(
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            crossAxisSpacing: 4,
+                            mainAxisSpacing: 4,
+                            childAspectRatio: 9 / 16,
+                          ),
+                          delegate: SliverChildBuilderDelegate((c, index) {
+                            if (index >= videos.length) {
+                              return const Center(
+                                  child: CircularProgressIndicator());
+                            }
+                            final vid = videos[index];
+                            return GestureDetector(
+                              onTap: () async {
+                                final contextKey = 'profile:${widget.uid}';
+                                if (!Get.isRegistered<VideoController>(
+                                    tag: contextKey)) {
+                                  Get.put(
+                                      VideoController(contextKey: contextKey),
+                                      tag: contextKey,
+                                      permanent: true);
+                                }
+                                await _profileController.pauseAll();
+                                Get.find<VideoController>(tag: contextKey)
+                                    .currentIndex
+                                    .value = index;
+
+                                await Get.to(() => ProfileVideoScrollView(
+                                      videos: videos,
+                                      initialIndex: index,
+                                      uid: widget.uid,
+                                      contextKey: contextKey,
+                                    ));
+                              },
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(vid.thumbnailUrl,
+                                        fit: BoxFit.cover),
+                                  ),
+                                  const Align(
+                                    alignment: Alignment.bottomRight,
+                                    child: Padding(
+                                      padding: EdgeInsets.all(4),
+                                      child: Icon(Icons.play_circle_fill,
+                                          color: Colors.white70),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }, childCount: videos.length + (hasMore ? 1 : 0)),
+                        ),
+                      ),
+                      if (loading && hasMore)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: const Center(
+                                child: CircularProgressIndicator()),
+                          ),
+                        ),
+                    ],
+                  ],
+                );
+              }),
             ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 
   Future<void> _handleSendMessage(AppUser user) async {
-    final currentUser = _authController.user;
-
-    if (currentUser == null || currentUser.uid.isEmpty) {
-      Get.snackbar(
-        'Erreur',
-        'Vous devez être connecté pour envoyer un message.',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+    final currentUserId = _authController.currentUid;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      Get.snackbar('Erreur', 'Veuillez vous connecter.',
+          backgroundColor: Colors.red, colorText: Colors.white);
       return;
     }
 
     try {
-      String conversationId = await _chatController.createOrGetConversation(
-        currentUserId: currentUser.uid,
+      final conversationId = await _chatController.createOrGetConversation(
+        currentUserId: currentUserId,
         otherUserId: user.uid,
       );
-
       if (conversationId.isNotEmpty) {
-        Get.to(() => ChatScreen(
-              conversationId: conversationId,
-              otherUser: user,
-            ));
+        Get.to(() => ChatScreen(conversationId: conversationId, otherUser: user));
       } else {
-        throw Exception('Conversation ID invalide.');
+        throw Exception('Conversation invalide');
       }
     } catch (e) {
-      Get.snackbar(
-        'Erreur',
-        'Une erreur s\'est produite lors de l\'envoi du message : $e',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      Get.snackbar('Erreur', 'Impossible d’envoyer un message : $e',
+          backgroundColor: Colors.red, colorText: Colors.white);
     }
   }
 
-  Widget _buildProfilePhotoSection(AppUser user, bool isOwnProfile) {
+  Widget _buildProfilePhotoSection(
+      AppUser user, bool isOwnProfile, bool isReadOnly) {
     return Column(
       children: [
         Stack(
@@ -157,11 +244,8 @@ class ProfileScreen extends StatelessWidget {
               _showProfilePhoto(user.photoProfil);
             } else {
               Get.snackbar(
-                'Info',
-                'Cet utilisateur n\'a pas de photo de profil.',
-                backgroundColor: Colors.blue,
-                colorText: Colors.white,
-              );
+                  'Info', 'Cet utilisateur n\'a pas de photo de profil.',
+                  backgroundColor: Colors.blue, colorText: Colors.white);
             }
           },
           child: const Text('Voir la photo de profil'),
@@ -177,12 +261,7 @@ class ProfileScreen extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Image.network(photoUrl, fit: BoxFit.contain),
-            TextButton(
-              onPressed: () {
-                Get.back();
-              },
-              child: const Text('Fermer'),
-            ),
+            TextButton(onPressed: Get.back, child: const Text('Fermer')),
           ],
         ),
       ),
@@ -194,16 +273,14 @@ class ProfileScreen extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         GestureDetector(
-          onTap: () => Get.to(
-              () => FollowListScreen(uid: user.uid, listType: 'followers')),
-          child: _buildStatItem('Followers', user.followersList.length),
-        ),
+            onTap: () => Get.to(
+                () => FollowListScreen(uid: user.uid, listType: 'followers')),
+            child: _buildStatItem('Followers', user.followersList.length)),
         const SizedBox(width: 20),
         GestureDetector(
-          onTap: () => Get.to(
-              () => FollowListScreen(uid: user.uid, listType: 'followings')),
-          child: _buildStatItem('Followings', user.followingsList.length),
-        ),
+            onTap: () => Get.to(
+                () => FollowListScreen(uid: user.uid, listType: 'followings')),
+            child: _buildStatItem('Followings', user.followingsList.length)),
       ],
     );
   }
@@ -211,23 +288,18 @@ class ProfileScreen extends StatelessWidget {
   Widget _buildStatItem(String label, int value) {
     return Column(
       children: [
-        Text(
-          '$value',
-          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
+        Text('$value',
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         Text(label),
       ],
     );
   }
 
   Widget _buildFollowUnfollowButton(AppUser user) {
-    final String? currentUserId = _authController.user?.uid;
+    final String? currentUserId = _authController.currentUid;
+    if (currentUserId == null) return const SizedBox.shrink();
 
-    if (currentUserId == null) {
-      return const SizedBox.shrink();
-    }
-
-    bool isFollowing = user.followersList.contains(currentUserId);
+    final isFollowing = user.followersList.contains(currentUserId);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -243,34 +315,27 @@ class ProfileScreen extends StatelessWidget {
             }
             _profileController.update();
           } catch (e) {
-            Get.snackbar(
-              'Erreur',
-              'Une erreur s\'est produite lors de l\'opération : $e',
-              backgroundColor: Colors.red,
-              colorText: Colors.white,
-            );
+            Get.snackbar('Erreur',
+                'Une erreur s\'est produite lors de l\'opération : $e',
+                backgroundColor: Colors.red, colorText: Colors.white);
           }
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: isFollowing ? Colors.redAccent : Colors.green,
           padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         ),
-        child: Text(
-          isFollowing ? 'Dessuivre' : 'Suivre',
-          style: const TextStyle(fontSize: 16, color: Colors.white),
-        ),
+        child: Text(isFollowing ? 'Dessuivre' : 'Suivre',
+            style: const TextStyle(fontSize: 16, color: Colors.white)),
       ),
     );
   }
 
-  Future<void> _changeProfilePhoto(String userId) async {
-    final XFile? pickedImage =
-        await _imagePicker.pickImage(source: ImageSource.gallery);
-    if (pickedImage != null) {
-      await _profileController.updateProfilePhoto(userId, pickedImage.path);
+  Future<void> _changeProfilePhoto(String uid) async {
+    final file = await _imagePicker.pickImage(source: ImageSource.gallery);
+    if (file != null) {
+      await _profileController.updateProfilePhoto(uid, file.path);
     }
   }
 
@@ -280,18 +345,14 @@ class ProfileScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Biographie',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          const Text('Biographie',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Text(
-            user.bio?.isNotEmpty == true
-                ? user.bio!
-                : 'Aucune biographie disponible.',
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
-            textAlign: TextAlign.left,
-          ),
+              user.bio?.isNotEmpty == true
+                  ? user.bio!
+                  : 'Aucune biographie disponible.',
+              style: const TextStyle(fontSize: 16, color: Colors.black87)),
         ],
       ),
     );
@@ -307,14 +368,13 @@ class ProfileScreen extends StatelessWidget {
             _infoTile('Nombre de matchs', user.nombreDeMatchs?.toString()),
             _infoTile('Buts', user.buts?.toString()),
             _infoTile('Assistances', user.assistances?.toString()),
-            const SizedBox(height: 20),
           ],
         );
       case 'club':
         return Column(
           children: [
-            _infoTile('Localisation du Club', user.nomClub),
-            _infoTile('Niveau de Ligue', user.ligue),
+            _infoTile('Nom du Club', user.nomClub),
+            _infoTile('Ligue', user.ligue),
           ],
         );
       case 'recruteur':
@@ -325,7 +385,6 @@ class ProfileScreen extends StatelessWidget {
                 user.nombreDeRecrutements?.toString()),
           ],
         );
-      case 'fan':
       default:
         return const Text("Aucune information spécifique pour ce rôle.");
     }
@@ -333,49 +392,7 @@ class ProfileScreen extends StatelessWidget {
 
   Widget _infoTile(String label, String? value) {
     return ListTile(
-      title: Text(label),
-      subtitle: Text(value?.isNotEmpty == true ? value! : 'Non spécifié'),
-    );
-  }
-
-
-
-  Widget _buildVideosSection(AppUser user) {
-    return Obx(() {
-      List<Video> userVideos = _profileController.videoList;
-
-      if (userVideos.isEmpty) {
-        return const Text("Aucune vidéo publiée.");
-      }
-
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-        ),
-        itemCount: userVideos.length,
-        itemBuilder: (context, index) {
-          Video video = userVideos[index];
-          return GestureDetector(
-            onTap: () {
-              Get.to(() =>
-                  VideoPlayerScreen(videoUrl: video.videoUrl, video: video));
-            },
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.network(
-                video.thumbnailUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) =>
-                    const Icon(Icons.error),
-              ),
-            ),
-          );
-        },
-      );
-    });
+        title: Text(label),
+        subtitle: Text(value?.isNotEmpty == true ? value! : 'Non spécifié'));
   }
 }

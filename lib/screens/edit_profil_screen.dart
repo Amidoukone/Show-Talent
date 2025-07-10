@@ -6,6 +6,8 @@ import 'profile_screen.dart';
 
 class EditProfileScreen extends StatelessWidget {
   final AppUser user;
+  final ProfileController profileController;
+
   final TextEditingController _nomController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
   final TextEditingController _teamController = TextEditingController();
@@ -16,25 +18,21 @@ class EditProfileScreen extends StatelessWidget {
   final TextEditingController _nombreMatchsController = TextEditingController();
   final TextEditingController _butsController = TextEditingController();
   final TextEditingController _assistancesController = TextEditingController();
-  final TextEditingController _nombreRecrutementsController =
-      TextEditingController();
+  final TextEditingController _nombreRecrutementsController = TextEditingController();
 
-  EditProfileScreen({super.key, required this.user}) {
+  EditProfileScreen({super.key, required this.user, required this.profileController}) {
     _nomController.text = user.nom;
     _bioController.text = user.bio ?? '';
     _teamController.text = user.team ?? '';
-    _clubNameController.text = user.nomClub ?? ''; // Pour les clubs
+    _clubNameController.text = user.nomClub ?? '';
     _positionController.text = user.position ?? '';
     _entrepriseController.text = user.entreprise ?? '';
     _ligueController.text = user.ligue ?? '';
-    _nombreRecrutementsController.text =
-        user.nombreDeRecrutements?.toString() ?? '0';
+    _nombreRecrutementsController.text = user.nombreDeRecrutements?.toString() ?? '0';
     _nombreMatchsController.text = user.nombreDeMatchs?.toString() ?? '0';
     _butsController.text = user.buts?.toString() ?? '0';
     _assistancesController.text = user.assistances?.toString() ?? '0';
   }
-
-  final ProfileController _profileController = Get.find<ProfileController>();
 
   @override
   Widget build(BuildContext context) {
@@ -54,17 +52,13 @@ class EditProfileScreen extends StatelessWidget {
                 decoration: const InputDecoration(labelText: 'Nom'),
               ),
               const SizedBox(height: 20),
-
-              // Affichage du champ bio si le rôle n'est pas 'fan'
               if (user.role != 'fan') ...[
                 TextField(
                   controller: _bioController,
-                  decoration: const InputDecoration(
-                      labelText: 'Infos Professionnelles'),
+                  decoration: const InputDecoration(labelText: 'Infos Professionnelles'),
                 ),
                 const SizedBox(height: 20),
               ],
-
               if (user.role == 'joueur' || user.role == 'coach') ...[
                 TextField(
                   controller: _positionController,
@@ -78,8 +72,7 @@ class EditProfileScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 TextField(
                   controller: _nombreMatchsController,
-                  decoration:
-                      const InputDecoration(labelText: 'Nombre de matchs'),
+                  decoration: const InputDecoration(labelText: 'Nombre de matchs'),
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: 20),
@@ -112,16 +105,13 @@ class EditProfileScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 TextField(
                   controller: _nombreRecrutementsController,
-                  decoration: const InputDecoration(
-                      labelText: 'Nombre de recrutements'),
+                  decoration: const InputDecoration(labelText: 'Nombre de recrutements'),
                   keyboardType: TextInputType.number,
                 ),
-                const SizedBox(height: 20),
               ],
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () async {
-                  // Sauvegarde les modifications
                   AppUser updatedUser = AppUser(
                     uid: user.uid,
                     nom: _nomController.text,
@@ -134,51 +124,31 @@ class EditProfileScreen extends StatelessWidget {
                     dateInscription: user.dateInscription,
                     dernierLogin: user.dernierLogin,
                     bio: _bioController.text,
-                    team: _teamController.text.isEmpty
-                        ? null
-                        : _teamController.text, // Correction ici
-                    nomClub: _clubNameController.text.isEmpty
-                        ? null
-                        : _clubNameController.text,
-                    position: _positionController.text.isEmpty
-                        ? null
-                        : _positionController.text,
-                    entreprise: _entrepriseController.text.isEmpty
-                        ? null
-                        : _entrepriseController.text,
-                    ligue: _ligueController.text.isEmpty
-                        ? null
-                        : _ligueController.text,
-                    nombreDeMatchs:
-                        int.tryParse(_nombreMatchsController.text) ?? 0,
+                    team: _teamController.text.isEmpty ? null : _teamController.text,
+                    nomClub: _clubNameController.text.isEmpty ? null : _clubNameController.text,
+                    position: _positionController.text.isEmpty ? null : _positionController.text,
+                    entreprise: _entrepriseController.text.isEmpty ? null : _entrepriseController.text,
+                    ligue: _ligueController.text.isEmpty ? null : _ligueController.text,
+                    nombreDeMatchs: int.tryParse(_nombreMatchsController.text) ?? 0,
                     buts: int.tryParse(_butsController.text) ?? 0,
                     assistances: int.tryParse(_assistancesController.text) ?? 0,
-                    nombreDeRecrutements:
-                        int.tryParse(_nombreRecrutementsController.text) ?? 0,
+                    nombreDeRecrutements: int.tryParse(_nombreRecrutementsController.text) ?? 0,
                     videosPubliees: user.videosPubliees,
                     followersList: user.followersList,
-                    followingsList: user.followingsList, estBloque: false,
+                    followingsList: user.followingsList,
+                    estBloque: false,
                   );
-                  await _profileController.updateUserProfile(updatedUser);
 
-                  // Redirection vers la page de profil après la sauvegarde
+                  await profileController.updateUserProfile(updatedUser);
                   Get.off(() => ProfileScreen(uid: user.uid));
                   Get.snackbar('Succès', 'Profil mis à jour avec succès');
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF214D4F),
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12.0,
-                    horizontal: 24.0,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 24.0),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
                 ),
-                child: const Text(
-                  'Sauvegarder',
-                  style: TextStyle(fontSize: 16, color: Colors.white),
-                ),
+                child: const Text('Sauvegarder', style: TextStyle(fontSize: 16, color: Colors.white)),
               ),
             ],
           ),

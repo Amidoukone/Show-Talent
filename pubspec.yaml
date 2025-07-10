@@ -91,6 +91,7 @@ flutter:
   assets:
     - assets/logo.png
     - assets/default_avatar.jpg
+    - assets/default_thumbnail.png
   
 
   

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:adfoot/widgets/processing_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/upload_video_controller.dart';
@@ -20,7 +21,8 @@ class UploadForm extends StatefulWidget {
 }
 
 class _UploadFormState extends State<UploadForm> {
-  final UploadVideoController uploadVideoController = Get.find<UploadVideoController>();
+  final UploadVideoController uploadVideoController =
+      Get.find<UploadVideoController>();
   final TextEditingController songController = TextEditingController();
   final TextEditingController captionController = TextEditingController();
   late VideoPlayerController _videoPlayerController;
@@ -44,7 +46,9 @@ class _UploadFormState extends State<UploadForm> {
   void toggleVideoPlayback() {
     if (_videoPlayerController.value.isInitialized) {
       setState(() {
-        _isPlaying ? _videoPlayerController.pause() : _videoPlayerController.play();
+        _isPlaying
+            ? _videoPlayerController.pause()
+            : _videoPlayerController.play();
         _isPlaying = !_isPlaying;
       });
     }
@@ -96,8 +100,12 @@ class _UploadFormState extends State<UploadForm> {
         backgroundColor: const Color(0xFF214D4F),
       ),
       body: Obx(() {
+        if (uploadVideoController.isOptimizing.value) {
+          return const ProcessingDialog(); // Affiche "Optimisation en cours..."
+        }
+
         if (uploadVideoController.isUploading.value) {
-          return const ProgressFullScreenLoader();
+          return const ProgressFullScreenLoader(); // Affiche progression d'upload
         }
 
         return SingleChildScrollView(
@@ -115,7 +123,8 @@ class _UploadFormState extends State<UploadForm> {
                           alignment: Alignment.center,
                           children: [
                             AspectRatio(
-                              aspectRatio: _videoPlayerController.value.aspectRatio,
+                              aspectRatio:
+                                  _videoPlayerController.value.aspectRatio,
                               child: VideoPlayer(_videoPlayerController),
                             ),
                             if (!_isPlaying)

@@ -1,19 +1,20 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:adfoot/controller/video_controller.dart';
-import 'package:adfoot/screens/success_toast.dart';
+import 'package:adfoot/widgets/processing_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:video_compress/video_compress.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/utils/video_tools.dart';
-import 'package:video_compress/video_compress.dart';
+import 'package:adfoot/screens/success_toast.dart';
 
 class UploadVideoController extends GetxController {
   var isUploading = false.obs;
+  var isOptimizing = false.obs;
   var uploadProgress = 0.0.obs;
   var uploadStage = ''.obs;
 
@@ -26,6 +27,7 @@ class UploadVideoController extends GetxController {
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   Subscription? _compressionSubscription;
   bool _internetAvailable = true;
+  bool _wasPaused = false;
   UploadTask? _currentUploadTask;
 
   @override
@@ -45,6 +47,15 @@ class UploadVideoController extends GetxController {
     super.onClose();
   }
 
+  Future<bool> _checkRealInternetAccess() async {
+    try {
+      final result = await InternetAddress.lookup('example.com');
+      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> prepareUpload({
     required String song,
     required String cap,
@@ -53,7 +64,6 @@ class UploadVideoController extends GetxController {
     try {
       uploadStage.value = "Analyse de la vidéo...";
       uploadProgress.value = 0.02;
-
       originalVideoPath = videoPath;
 
       final isValidDuration = await VideoTools.isDurationValid(videoPath, maxDuration: 60);
@@ -61,11 +71,10 @@ class UploadVideoController extends GetxController {
 
       if (!isValidDuration || !isValidQuality) {
         Get.back();
-        Get.snackbar(
-          'Erreur',
-          isValidDuration ? 'Qualité vidéo insuffisante (minimum 360p).' : 'La durée dépasse 60 secondes.',
-          backgroundColor: Colors.orangeAccent,
-          colorText: Colors.white,
+        showErrorToast(
+          !isValidDuration
+              ? 'La durée dépasse 60 secondes.'
+              : 'Qualité vidéo insuffisante (minimum 360p).',
         );
         return false;
       }
@@ -75,59 +84,59 @@ class UploadVideoController extends GetxController {
 
       _compressionSubscription?.unsubscribe();
       _compressionSubscription = VideoCompress.compressProgress$.subscribe((progress) {
-        if (progress < 100) {
-          uploadProgress.value = 0.05 + (progress * 0.2 / 100);
-        }
+        uploadProgress.value = 0.05 + (progress * 0.25 / 100);
       });
 
-      final compressed = await VideoTools.compressVideoSilently(videoPath);
+      final compressed = await VideoCompress.compressVideo(
+        videoPath,
+        quality: VideoQuality.MediumQuality,
+        deleteOrigin: false,
+      );
       _compressionSubscription?.unsubscribe();
 
-      selectedVideo = compressed ?? File(videoPath);
-      uploadProgress.value = compressed == null ? 0.15 : 0.25;
+      selectedVideo = File(compressed?.path ?? videoPath);
+      uploadProgress.value = 0.3;
 
-      // Tentatives robustes de génération de miniature
-      thumbnail = await VideoTools.generateThumbnail(videoPath);
-      if (thumbnail == null) {
-        await Future.delayed(const Duration(milliseconds: 800));
-        thumbnail = await VideoTools.generateThumbnail(videoPath);
-      }
-      if (thumbnail == null) {
-        await Future.delayed(const Duration(milliseconds: 1200));
-        thumbnail = await VideoTools.generateThumbnail(videoPath);
-      }
-
+      uploadStage.value = "Génération miniature...";
+      thumbnail = await _retryThumbnail(videoPath);
       if (thumbnail == null) {
         Get.back();
-        Get.snackbar('Erreur', 'Erreur génération miniature après plusieurs tentatives.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+        showErrorToast('Erreur génération miniature.');
         return false;
       }
 
-      uploadProgress.value = 0.3;
+      uploadProgress.value = 0.35;
       songName = song;
       caption = cap;
       return true;
     } catch (e) {
       _compressionSubscription?.unsubscribe();
       Get.back();
-      Get.snackbar('Erreur', '$e', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      showErrorToast(e.toString());
       return false;
     }
   }
 
+  Future<File?> _retryThumbnail(String path, {int attempts = 3}) async {
+    for (int i = 0; i < attempts; i++) {
+      final thumb = await VideoTools.generateThumbnail(path);
+      if (thumb != null) return thumb;
+      await Future.delayed(Duration(milliseconds: 600 + (i * 200)));
+    }
+    return null;
+  }
+
   Future<void> uploadDirectly() async {
     if (selectedVideo == null || thumbnail == null) {
-      Get.snackbar('Erreur', 'Fichier manquant', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      showErrorToast('Fichier manquant');
       return;
     }
 
+    _internetAvailable = await _checkRealInternetAccess();
     isUploading(true);
+    isOptimizing(false);
     uploadStage.value = "Téléversement...";
     uploadProgress.value = 0.3;
-
-    if (!_internetAvailable) {
-      Get.snackbar('Connexion lente', 'Nous allons essayer de continuer malgré la connexion faible.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
-    }
 
     final videoId = const Uuid().v4();
     final videoPath = 'videos/$videoId.mp4';
@@ -136,109 +145,106 @@ class UploadVideoController extends GetxController {
     final videoRef = FirebaseStorage.instance.ref().child(videoPath);
     final thumbRef = FirebaseStorage.instance.ref().child(thumbPath);
 
+    final user = Get.find<UserController>().user;
+    final now = Timestamp.now();
+
+    await FirebaseFirestore.instance.collection('videos').doc(videoId).set({
+      'id': videoId,
+      'videoUrl': '',
+      'thumbnail': '',
+      'songName': songName,
+      'caption': caption,
+      'likes': [],
+      'shareCount': 0,
+      'reports': [],
+      'reportCount': 0,
+      'uid': user?.uid ?? '',
+      'profilePhoto': user?.photoProfil ?? '',
+      'createdAt': now,
+      'updatedAt': now,
+      'status': 'processing',
+    });
+
+    bool cleanupOnFailure = false;
+
     try {
-      final videoUploaded = await _safeUploadFile(
+      final videoUploaded = await _retryUploadFile(
         file: selectedVideo!,
         storageRef: videoRef,
         onProgress: (p) => uploadProgress.value = 0.3 + (0.35 * p),
       );
 
       if (!videoUploaded) {
-        Get.snackbar('Erreur Téléversement', 'Échec upload vidéo.', backgroundColor: Colors.redAccent, colorText: Colors.white);
-        resetUploadState();
-        return;
+        cleanupOnFailure = true;
+        throw 'Échec upload vidéo';
       }
 
-      final thumbUploaded = await _safeUploadFile(
+      if (!await thumbnail!.exists() || (await thumbnail!.length()) == 0) {
+        final regenerated = await VideoTools.generateThumbnail(originalVideoPath!);
+        if (regenerated != null && await regenerated.exists()) {
+          thumbnail = regenerated;
+        } else {
+          cleanupOnFailure = true;
+          throw 'Miniature manquante';
+        }
+      }
+
+      final thumbUploaded = await _retryUploadFile(
         file: thumbnail!,
         storageRef: thumbRef,
         onProgress: (p) => uploadProgress.value = 0.65 + (0.35 * p),
       );
 
       if (!thumbUploaded) {
-        Get.snackbar('Erreur Téléversement', 'Échec upload miniature.', backgroundColor: Colors.redAccent, colorText: Colors.white);
-        resetUploadState();
-        return;
+        cleanupOnFailure = true;
+        throw 'Échec upload miniature';
       }
 
-      final videoDownloadUrl = await videoRef.getDownloadURL();
-      final thumbDownloadUrl = await thumbRef.getDownloadURL();
+      final bucket = FirebaseStorage.instance.bucket;
+      final videoDownloadUrl = 'https://firebasestorage.googleapis.com/v0/b/$bucket/o/${Uri.encodeComponent(videoPath)}?alt=media';
+      final thumbDownloadUrl = 'https://firebasestorage.googleapis.com/v0/b/$bucket/o/${Uri.encodeComponent(thumbPath)}?alt=media';
 
-      final user = Get.find<UserController>().user;
-      final now = Timestamp.now();
-
-      await FirebaseFirestore.instance.collection('videos').doc(videoId).set({
-        'id': videoId,
+      await FirebaseFirestore.instance.collection('videos').doc(videoId).update({
         'videoUrl': videoDownloadUrl,
         'thumbnail': thumbDownloadUrl,
-        'songName': songName,
-        'caption': caption,
-        'likes': [],
-        'shareCount': 0,
-        'reports': [],
-        'reportCount': 0,
-        'uid': user?.uid ?? '',
-        'profilePhoto': user?.photoProfil ?? '',
-        'createdAt': now,
-        'updatedAt': now,
-        'status': 'processing',
       });
 
-      uploadProgress.value = 1.0;
+      uploadStage.value = "Optimisation en cours...";
+      isUploading(false);
+      isOptimizing(true);
 
       await _waitForVideoStatusReady(videoId);
-
-      final doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
-      if ((doc.data()?['status'] ?? '') != 'ready') {
-        Get.snackbar(
-          'Vidéo en traitement',
-          'La vidéo est en cours d’optimisation et sera visible sous peu.',
-          backgroundColor: Colors.orangeAccent,
-          colorText: Colors.white,
-        );
-      } else {
-        final videoController = Get.isRegistered<VideoController>() ? Get.find<VideoController>() : null;
-        if (videoController != null) {
-          await videoController.refreshVideos();
-        }
-
-        showSuccessToast('Vidéo ajoutée avec succès !');
-        await Future.delayed(const Duration(milliseconds: 500));
-        Get.offAllNamed('/main', arguments: 0);
-      }
     } catch (e) {
-      Get.snackbar('Erreur Téléversement', '$e', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      if (cleanupOnFailure) {
+        await _deletePartialUpload(videoPath, thumbPath);
+      }
+      showErrorToast(e.toString());
     } finally {
+      await _cleanupLocalFiles();
       resetUploadState();
     }
   }
 
-  // Reste inchangé
-  Future<void> _waitForVideoStatusReady(String videoId) async {
-    Get.dialog(
-      const _ProcessingDialog(),
-      barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.7),
-    );
+  Future<void> _cleanupLocalFiles() async {
+    try {
+      if (selectedVideo != null && selectedVideo!.path != originalVideoPath && await selectedVideo!.exists()) {
+        await selectedVideo!.delete();
+      }
+      if (thumbnail != null && await thumbnail!.exists()) {
+        await thumbnail!.delete();
+      }
+    } catch (_) {}
+  }
 
-    const timeout = Duration(minutes: 2);
-    final start = DateTime.now();
-
-    while (DateTime.now().difference(start) < timeout) {
-      try {
-        final doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
-        final status = doc.data()?['status'];
-        final optimized = doc.data()?['optimized'] ?? false;
-
-        if (status == 'ready' && optimized == true) {
-          break;
-        }
-      } catch (_) {}
-
-      await Future.delayed(const Duration(seconds: 2));
-    }
-
-    if (Get.isDialogOpen ?? false) Get.back();
+  Future<void> _deletePartialUpload(String videoPath, String thumbPath) async {
+    try {
+      final videoRef = FirebaseStorage.instance.ref(videoPath);
+      final thumbRef = FirebaseStorage.instance.ref(thumbPath);
+      await Future.wait([
+        videoRef.delete().catchError((_) {}),
+        thumbRef.delete().catchError((_) {}),
+      ]);
+    } catch (_) {}
   }
 
   Future<bool> _safeUploadFile({
@@ -247,33 +253,25 @@ class UploadVideoController extends GetxController {
     required Function(double) onProgress,
   }) async {
     try {
-      final metadata = SettableMetadata(
-        contentType: 'video/mp4',
-        cacheControl: 'public,max-age=3600',
-      );
+      final contentType = file.path.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg';
+      final metadata = SettableMetadata(contentType: contentType);
 
       final uploadTask = storageRef.putFile(file, metadata);
       _currentUploadTask = uploadTask;
+
       final completer = Completer<bool>();
 
       uploadTask.snapshotEvents.listen((snapshot) async {
         if (snapshot.state == TaskState.running) {
           final progress = snapshot.bytesTransferred / snapshot.totalBytes;
           onProgress(progress);
-          if (!_internetAvailable) {
-            await uploadTask.pause();
-            Get.snackbar('Connexion perdue', 'Upload en pause...', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
-          }
-        } else if (snapshot.state == TaskState.paused && _internetAvailable) {
-          await uploadTask.resume();
+          _handleNetworkLossDuringUpload();
         } else if (snapshot.state == TaskState.success) {
           completer.complete(true);
         } else if (snapshot.state == TaskState.error) {
           completer.complete(false);
         }
-      }, onError: (e) {
-        completer.complete(false);
-      });
+      }, onError: (_) => completer.complete(false));
 
       return await completer.future.timeout(const Duration(minutes: 3), onTimeout: () => false);
     } catch (e) {
@@ -281,18 +279,128 @@ class UploadVideoController extends GetxController {
     }
   }
 
+  Future<bool> _retryUploadFile({
+    required File file,
+    required Reference storageRef,
+    required Function(double) onProgress,
+    int maxRetries = 3,
+  }) async {
+    for (int attempt = 0; attempt < maxRetries; attempt++) {
+      final success = await _safeUploadFile(file: file, storageRef: storageRef, onProgress: onProgress);
+      if (success) return true;
+      await Future.delayed(Duration(seconds: 1 + attempt));
+    }
+    return false;
+  }
+
+  void _handleNetworkLossDuringUpload() async {
+    if (!_internetAvailable &&
+        _currentUploadTask != null &&
+        _currentUploadTask!.snapshot.state == TaskState.running) {
+      await _currentUploadTask!.pause();
+      _wasPaused = true;
+      showInfoToast('Connexion perdue, upload en pause.');
+    } else if (_wasPaused &&
+        _internetAvailable &&
+        _currentUploadTask!.snapshot.state == TaskState.paused) {
+      await _currentUploadTask!.resume();
+      _wasPaused = false;
+      showInfoToast('Connexion rétablie, upload repris.');
+    }
+  }
+
+  Future<void> _waitForVideoStatusReady(String videoId) async {
+    final completer = Completer<void>();
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? subscription;
+    Timer? fallbackTimer;
+
+    if (!(Get.isDialogOpen ?? false)) {
+      Get.dialog(
+        const ProcessingDialog(),
+        barrierDismissible: false,
+        barrierColor: Colors.black.withOpacity(0.7),
+      );
+    }
+
+    Future<void> finalizeSuccessFlow() async {
+      if (completer.isCompleted) return;
+
+      isOptimizing(false);
+      if (Get.isDialogOpen ?? false) Get.back();
+
+      await Future.delayed(const Duration(milliseconds: 300));
+      showSuccessToast('Vidéo ajoutée avec succès !');
+
+      await Future.delayed(const Duration(milliseconds: 400));
+      // ✅ Plus besoin absolue du refresh forcé, mais on le garde pour compatibilité
+      Get.offAllNamed('/main', arguments: {
+        'tab': 0,
+        'refresh': true,
+      });
+
+      completer.complete();
+    }
+
+    fallbackTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      final doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
+      final data = doc.data();
+      if (data?['status'] == 'ready' && data?['optimized'] == true) {
+        await subscription?.cancel();
+        fallbackTimer?.cancel();
+        await finalizeSuccessFlow();
+      }
+    });
+
+    subscription = FirebaseFirestore.instance
+        .collection('videos')
+        .doc(videoId)
+        .snapshots()
+        .listen((doc) async {
+      final status = doc.data()?['status'];
+      final optimized = doc.data()?['optimized'] ?? false;
+
+      if (status == 'ready' && optimized == true) {
+        await subscription?.cancel();
+        fallbackTimer?.cancel();
+        await finalizeSuccessFlow();
+      }
+    });
+
+    Future.delayed(const Duration(minutes: 3), () async {
+      if (!completer.isCompleted) {
+        await subscription?.cancel();
+        fallbackTimer?.cancel();
+        if (Get.isDialogOpen ?? false) Get.back();
+        isOptimizing(false);
+
+        showInfoToast('Votre vidéo est en cours d’optimisation. Elle sera visible sous peu.');
+        await Future.delayed(const Duration(milliseconds: 200));
+        Get.offAllNamed('/main', arguments: {
+          'tab': 0,
+          'refresh': true,
+        });
+
+        completer.complete();
+      }
+    });
+
+    return completer.future;
+  }
+
   void cancelUpload() {
+    if (isOptimizing.value) return;
     _currentUploadTask?.cancel();
     VideoCompress.cancelCompression();
     resetUploadState();
     if (Get.isDialogOpen == true) {
       Get.back();
     }
-    Get.snackbar('Annulé', 'Téléversement annulé.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
+    showInfoToast('Téléversement annulé.');
   }
 
   void resetUploadState() {
     isUploading(false);
+    isOptimizing(false);
     uploadProgress.value = 0.0;
     uploadStage.value = '';
     selectedVideo = null;
@@ -301,66 +409,6 @@ class UploadVideoController extends GetxController {
     caption = null;
     originalVideoPath = null;
     _currentUploadTask = null;
-  }
-}
-
-// ⬇️ Classe de chargement pendant optimisation
-class _ProcessingDialog extends StatefulWidget {
-  const _ProcessingDialog();
-
-  @override
-  State<_ProcessingDialog> createState() => _ProcessingDialogState();
-}
-
-class _ProcessingDialogState extends State<_ProcessingDialog> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<int> _dotAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 1),
-      vsync: this,
-    )..repeat();
-
-    _dotAnimation = StepTween(begin: 1, end: 3).animate(_controller);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  String getDots(int count) => List.generate(count, (_) => '.').join();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.9),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: AnimatedBuilder(
-          animation: _dotAnimation,
-          builder: (context, child) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(color: Colors.white),
-                const SizedBox(height: 12),
-                Text(
-                  "Optimisation en cours${getDots(_dotAnimation.value)}",
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
+    _wasPaused = false;
   }
 }

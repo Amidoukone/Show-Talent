@@ -1,25 +1,31 @@
+import 'dart:async';
+import 'package:adfoot/utils/video_cache_manager.dart';
+import 'package:adfoot/widgets/video_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:visibility_detector/visibility_detector.dart';
-import 'package:adfoot/controller/video_controller.dart';
-import 'package:adfoot/controller/user_controller.dart';
-import 'package:adfoot/models/video.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
+import 'package:adfoot/controller/video_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/widgets/tiktok_video_player.dart';
+import 'package:adfoot/models/video.dart';
 
 class SmartVideoPlayer extends StatefulWidget {
+  final String contextKey;
   final String videoUrl;
   final Video video;
   final int currentIndex;
-  final RxList<Video> videoList;
+  final List<Video> videoList;
   final bool enableTapToPlay;
   final bool showControls;
   final bool autoPlay;
   final bool showProgressBar;
   final VoidCallback? onVideoTap;
 
-  SmartVideoPlayer({
-    Key? key,
+  const SmartVideoPlayer({
+    super.key,
+    required this.contextKey,
     required this.videoUrl,
     required this.video,
     required this.currentIndex,
@@ -29,90 +35,137 @@ class SmartVideoPlayer extends StatefulWidget {
     required this.autoPlay,
     this.showProgressBar = false,
     this.onVideoTap,
-  }) : super(key: ValueKey(videoUrl));
+  });
 
   @override
   State<SmartVideoPlayer> createState() => _SmartVideoPlayerState();
 }
 
 class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
-  final videoController = Get.find<VideoController>();
-  final userController = Get.find<UserController>();
+  late final VideoController videoController;
+  late final UserController userController;
+  final videoManager = VideoManager();
 
   CachedVideoPlayerPlusController? _controller;
   bool _isPlaying = false;
   bool _isLoading = true;
-  bool _hidePlayPauseIcon = false;
-  String? _errorMessage;
+  bool _isBuffering = false;
+  bool _hidePlayPause = false;
   bool _visible = false;
+  String? _errorMessage;
+  late final int _index;
+  Timer? _debounce;
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
-    _initializeVideo();
+    videoController = Get.find<VideoController>(tag: widget.contextKey);
+    userController = Get.find<UserController>();
+    _index = widget.currentIndex;
+    _initialize();
   }
 
-  Future<void> _initializeVideo() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  Future<void> _initialize() async {
+    if (_isDisposed) return;
+
+    setState(() => _isLoading = true);
+
+    videoManager.preloadSurrounding(
+      widget.contextKey,
+      widget.videoList.map((v) => v.videoUrl).toList(),
+      _index,
+    );
 
     try {
-      _controller = CachedVideoPlayerPlusController.networkUrl(Uri.parse(widget.videoUrl));
-      await _controller!.initialize();
-      _controller!.setLooping(true);
-      _controller!.addListener(_onControllerUpdate);
+      final existingCtrl =
+          videoManager.getController(widget.contextKey, widget.videoUrl);
+      _controller = existingCtrl ??
+          await videoManager.initializeController(
+              widget.contextKey, widget.videoUrl);
 
-      if (widget.autoPlay) {
-        await _controller!.play();
-        _isPlaying = true;
-        _hidePlayPauseIcon = true;
+      if (_isDisposed || !mounted) return;
+
+      _controller!.addListener(_onUpdate);
+
+      if (widget.autoPlay && _visible) {
+        _safePlay();
       }
 
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'Erreur de lecture vidéo';
-        });
-      }
+      _errorMessage = null;
+    } on TimeoutException {
+      _errorMessage = 'Temps d’attente dépassé. Vérifie ta connexion.';
+    } catch (e) {
+      _errorMessage = 'Erreur de lecture.';
+      debugPrint('Erreur vidéo : $e');
+      try {
+        await VideoCacheManager().removeFile(widget.videoUrl);
+      } catch (_) {}
+    }
+
+    if (!_isDisposed && mounted) {
+      setState(() => _isLoading = false);
     }
   }
 
-  void _onControllerUpdate() {
-    if (!mounted || _controller == null || !_controller!.value.isInitialized) return;
-    final playingNow = _controller!.value.isPlaying;
-    if (_isPlaying != playingNow) {
-      setState(() {
-        _isPlaying = playingNow;
-        if (playingNow && widget.showControls) {
-          _hidePlayPauseIcon = true;
-        }
-      });
+  void _onUpdate() {
+    if (_isDisposed || _controller == null || !_controller!.value.isInitialized) {
+      return;
     }
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 150), () {
+      if (_isDisposed || !mounted) return;
+      final v = _controller!.value;
+      final playing = v.isPlaying;
+      final buffering = v.isBuffering;
+      if (_isPlaying != playing || _isBuffering != buffering) {
+        if (!_isDisposed && mounted) {
+          setState(() {
+            _isPlaying = playing;
+            _isBuffering = buffering;
+            if (playing && widget.showControls) _hidePlayPause = true;
+          });
+        }
+      }
+    });
   }
 
   void _togglePlayPause() {
-    if (_controller == null || !_controller!.value.isInitialized || _controller!.value.hasError) return;
-    if (_isPlaying) {
-      _controller!.pause();
-      setState(() => _hidePlayPauseIcon = false);
-    } else {
-      _controller!.play();
-      setState(() => _hidePlayPauseIcon = true);
+    if (_isDisposed || _controller == null || !_controller!.value.isInitialized) {
+      return;
     }
+    _controller!.value.isPlaying ? _safePause() : _safePlay();
+  }
+
+  void _safePlay() {
+    if (_isDisposed || _controller == null) return;
+    if (_controller!.value.isInitialized &&
+        !_controller!.value.hasError &&
+        !_controller!.value.isPlaying) {
+      _controller!.play();
+    }
+  }
+
+  void _safePause() {
+    if (_isDisposed || _controller == null) return;
+    if (_controller!.value.isInitialized &&
+        !_controller!.value.hasError &&
+        _controller!.value.isPlaying) {
+      _controller!.pause();
+    }
+  }
+
+  void _retry() {
+    if (_isDisposed) return;
+    _controller?.removeListener(_onUpdate);
+    _initialize();
   }
 
   @override
   void dispose() {
-    _controller?.removeListener(_onControllerUpdate);
-    _controller?.dispose();
+    _isDisposed = true;
+    _debounce?.cancel();
+    _controller?.removeListener(_onUpdate);
     _controller = null;
     super.dispose();
   }
@@ -122,107 +175,35 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
     return VisibilityDetector(
       key: Key(widget.video.id),
       onVisibilityChanged: (info) {
-        final fraction = info.visibleFraction;
-        if (fraction > 0.3 && !_visible) {
+        if (_isDisposed) return;
+        final vis = info.visibleFraction > 0.3;
+        if (vis && !_visible && videoController.currentIndex.value == _index) {
           _visible = true;
-          _controller?.play();
-        } else if (fraction <= 0.3 && _visible) {
+          _safePlay();
+        } else if ((!vis || videoController.currentIndex.value != _index) &&
+            _visible) {
           _visible = false;
-          _controller?.pause();
+          _safePause();
         }
       },
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (_isLoading) _buildLoadingThumbnail(),
-          if (_errorMessage != null) _buildError(),
-          if (_controller != null &&
-              _controller!.value.isInitialized &&
-              !_controller!.value.hasError)
-            _buildVideoPlayer(),
-          if (widget.showControls && !_hidePlayPauseIcon)
-            _buildPlayPauseButton(),
-          if (widget.showControls || widget.showProgressBar)
-            _buildProgressBar(),
+          TiktokVideoPlayer(
+            controller: _controller,
+            isPlaying: _isPlaying,
+            hidePlayPauseIcon: _hidePlayPause,
+            showControls: widget.showControls,
+            showProgressBar: widget.showProgressBar,
+            isBuffering: _isBuffering,
+            isLoading: _isLoading,
+            errorMessage: _errorMessage,
+            thumbnailUrl: widget.video.thumbnailUrl,
+            onTogglePlayPause: _togglePlayPause,
+            onRetry: _retry,
+          ),
           if (widget.showControls) _buildActions(),
         ],
-      ),
-    );
-  }
-
-  Widget _buildLoadingThumbnail() {
-    return Image.network(
-      widget.video.thumbnailUrl,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => const Center(
-        child: Icon(Icons.broken_image, size: 60, color: Colors.white),
-      ),
-    );
-  }
-
-  Widget _buildError() {
-    return const Center(
-      child: Text(
-        'Erreur de lecture',
-        style: TextStyle(color: Colors.white, fontSize: 16),
-      ),
-    );
-  }
-
-  Widget _buildVideoPlayer() {
-    final size = _controller!.value.size;
-    if (size.width <= 0 || size.height <= 0) {
-      return _buildLoadingThumbnail();
-    }
-
-    return GestureDetector(
-      onTap: () {
-        if (widget.showControls && widget.enableTapToPlay) {
-          _togglePlayPause();
-        } else if (widget.onVideoTap != null) {
-          widget.onVideoTap!();
-        }
-      },
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: size.width,
-          height: size.height,
-          child: CachedVideoPlayerPlus(_controller!),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPlayPauseButton() {
-    return Center(
-      child: IconButton(
-        iconSize: 60,
-        icon: Icon(
-          _isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
-          color: Colors.white.withOpacity(0.8),
-        ),
-        onPressed: _togglePlayPause,
-      ),
-    );
-  }
-
-  Widget _buildProgressBar() {
-    if (_controller == null || !_controller!.value.isInitialized) {
-      return const SizedBox.shrink();
-    }
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: VideoProgressIndicator(
-        _controller!,
-        allowScrubbing: true,
-        colors: const VideoProgressColors(
-          playedColor: Colors.green,
-          bufferedColor: Colors.white38,
-          backgroundColor: Colors.white24,
-        ),
       ),
     );
   }
@@ -245,7 +226,9 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
             ),
           _buildActionButton(
             icon: Icons.favorite,
-            color: widget.video.likes.contains(user.uid) ? Colors.red : Colors.white,
+            color: widget.video.likes.contains(user.uid)
+                ? Colors.red
+                : Colors.white,
             label: '${widget.video.likes.length}',
             onPressed: () => _toggleLike(user.uid),
           ),
@@ -261,7 +244,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
             icon: Icons.flag,
             color: Colors.white,
             label: '${widget.video.reportCount}',
-            onPressed: () => videoController.signalerVideo(widget.video.id, user.uid),
+            onPressed: () =>
+                videoController.signalerVideo(widget.video.id, user.uid),
           ),
         ],
       ),
@@ -276,10 +260,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
   }) {
     return Column(
       children: [
-        IconButton(
-          icon: Icon(icon, color: color),
-          onPressed: onPressed,
-        ),
+        IconButton(icon: Icon(icon, color: color), onPressed: onPressed),
         Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
       ],
     );
@@ -318,7 +299,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
   Future<void> _shareVideo(String videoUrl) async {
     try {
       await Share.share('Regarde cette vidéo : $videoUrl');
-      await videoController.partagerVideo(widget.video.id, videoUrl);
+      await videoController.partagerVideo(widget.video.id);
     } catch (_) {
       Get.snackbar('Erreur', 'Partage impossible',
           backgroundColor: Colors.red, colorText: Colors.white);

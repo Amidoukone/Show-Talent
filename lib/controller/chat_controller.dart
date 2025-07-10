@@ -16,34 +16,40 @@ class ChatController extends GetxController {
     _fetchUserConversations();
   }
 
-  /// Récupérer les conversations pour l'utilisateur actuel
+  /// Récupérer les conversations de l'utilisateur actuel
   void _fetchUserConversations() {
     final currentUserId = AuthController.instance.user?.uid;
-    if (currentUserId == null) return;
+
+    if (currentUserId == null) {
+      print(" Utilisateur non connecté, impossible de charger les conversations.");
+      _conversations.value = [];
+      return;
+    }
 
     _firestore
         .collection('conversations')
         .where('utilisateurIds', arrayContains: currentUserId)
         .snapshots()
         .listen((snapshot) async {
-      // Met à jour les conversations avec le calcul des messages non lus
-      _conversations.value = await Future.wait(snapshot.docs.map((doc) async {
-        final conversationData = doc.data();
-        final conversation = Conversation.fromMap(conversationData);
+      try {
+        _conversations.value = await Future.wait(snapshot.docs.map((doc) async {
+          final conversationData = doc.data();
+          final conversation = Conversation.fromMap(conversationData);
 
-        // Calculer les messages non lus pour cette conversation
-        final unreadCount =
-            await _getUnreadMessageCount(doc.id, currentUserId);
-        conversation.unreadMessagesCount = unreadCount;
+          // Calculer les messages non lus pour cette conversation
+          final unreadCount = await _getUnreadMessageCount(doc.id, currentUserId);
+          conversation.unreadMessagesCount = unreadCount;
 
-        return conversation;
-      }).toList());
+          return conversation;
+        }).toList());
+      } catch (e) {
+        print(" Erreur lors du chargement des conversations : $e");
+      }
     });
   }
 
   /// Compter les messages non lus pour un utilisateur dans une conversation
-  Future<int> _getUnreadMessageCount(
-      String conversationId, String userId) async {
+  Future<int> _getUnreadMessageCount(String conversationId, String userId) async {
     try {
       final snapshot = await _firestore
           .collection('conversations')
@@ -54,7 +60,7 @@ class ChatController extends GetxController {
           .get();
       return snapshot.docs.length;
     } catch (e) {
-      print("Erreur lors du comptage des messages non lus : $e");
+      print(" Erreur lors du comptage des messages non lus : $e");
       return 0;
     }
   }
@@ -65,7 +71,7 @@ class ChatController extends GetxController {
     required String otherUserId,
   }) async {
     try {
-      // Vérifier les conversations existantes
+      // Rechercher une conversation existante
       final query = await _firestore
           .collection('conversations')
           .where('utilisateurIds', arrayContains: currentUserId)
@@ -78,7 +84,7 @@ class ChatController extends GetxController {
         }
       }
 
-      // Créer une nouvelle conversation si aucune n'existe
+      // Créer une nouvelle conversation
       final conversationRef = _firestore.collection('conversations').doc();
 
       final newConversation = Conversation(
@@ -91,15 +97,15 @@ class ChatController extends GetxController {
       await conversationRef.set(newConversation.toMap());
       return conversationRef.id;
     } catch (e) {
-      print("Erreur lors de la création/récupération de la conversation : $e");
+      print(" Erreur lors de la création/récupération de la conversation : $e");
       rethrow;
     }
   }
 
-  /// Récupérer les messages d'une conversation spécifique
+  /// Récupérer les messages d'une conversation
   Stream<List<Message>> getMessages(String conversationId) {
     if (conversationId.isEmpty) {
-      print("Erreur : conversationId est vide.");
+      print(" Erreur : conversationId est vide.");
       return const Stream.empty();
     }
 
@@ -116,7 +122,7 @@ class ChatController extends GetxController {
     });
   }
 
-  /// Envoyer un message dans une conversation avec notification
+  /// Envoyer un message avec notification
   Future<void> sendMessage({
     required String conversationId,
     required String senderId,
@@ -133,7 +139,6 @@ class ChatController extends GetxController {
         estLu: false,
       );
 
-      // Ajouter le message dans Firestore
       final messageRef = _firestore
           .collection('conversations')
           .doc(conversationId)
@@ -141,13 +146,11 @@ class ChatController extends GetxController {
           .doc();
       await messageRef.set(message.toMap());
 
-      // Mettre à jour les informations de la conversation
       await _firestore.collection('conversations').doc(conversationId).update({
         'lastMessage': content,
         'lastMessageDate': Timestamp.now(),
       });
 
-      // Envoyer une notification push
       final recipientDoc =
           await _firestore.collection('users').doc(recipientId).get();
       final recipientData = recipientDoc.data();
@@ -163,7 +166,7 @@ class ChatController extends GetxController {
         );
       }
     } catch (e) {
-      print("Erreur lors de l'envoi du message : $e");
+      print(" Erreur lors de l'envoi du message : $e");
     }
   }
 
@@ -180,7 +183,7 @@ class ChatController extends GetxController {
           .doc(messageId)
           .update({'estLu': true});
     } catch (e) {
-      print("Erreur lors de la mise à jour du message : $e");
+      print(" Erreur lors de la mise à jour du message : $e");
     }
   }
 
@@ -199,11 +202,11 @@ class ChatController extends GetxController {
         await doc.reference.update({'estLu': true});
       }
     } catch (e) {
-      print("Erreur lors de la mise à jour des messages lus : $e");
+      print(" Erreur lors de la mise à jour des messages lus : $e");
     }
   }
 
-  /// Supprimer un message dans une conversation
+  /// Supprimer un message
   Future<void> deleteMessage(String conversationId, String messageId) async {
     try {
       await _firestore
@@ -213,14 +216,13 @@ class ChatController extends GetxController {
           .doc(messageId)
           .delete();
     } catch (e) {
-      print("Erreur lors de la suppression du message : $e");
+      print(" Erreur lors de la suppression du message : $e");
     }
   }
 
-  /// Supprimer une conversation entière (et ses messages)
+  /// Supprimer une conversation entière
   Future<void> deleteConversation(String conversationId) async {
     try {
-      // Supprimer tous les messages de la conversation
       final snapshot = await _firestore
           .collection('conversations')
           .doc(conversationId)
@@ -231,10 +233,9 @@ class ChatController extends GetxController {
         await doc.reference.delete();
       }
 
-      // Supprimer la conversation elle-même
       await _firestore.collection('conversations').doc(conversationId).delete();
     } catch (e) {
-      print("Erreur lors de la suppression de la conversation : $e");
+      print(" Erreur lors de la suppression de la conversation : $e");
     }
   }
 }
