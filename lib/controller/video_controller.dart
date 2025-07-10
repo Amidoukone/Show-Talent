@@ -1,97 +1,187 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import '../models/video.dart';
 import '../widgets/video_manager.dart';
 
 class VideoController extends GetxController {
+  final String contextKey;
+
+  VideoController({required this.contextKey});
+
   var videoList = <Video>[].obs;
-  DocumentSnapshot? _lastDocument;
+  var currentIndex = 0.obs;
+
+  DocumentSnapshot? _lastDoc;
   bool _hasMore = true;
   bool _isLoading = false;
   static const int _limit = 10;
 
   final VideoManager _videoManager = VideoManager();
-
-  @override
-  void onInit() {
-    super.onInit();
-    refreshVideos();
-  }
+  VideoManager get videoManager => _videoManager;
 
   bool get hasMore => _hasMore;
   bool get isLoading => _isLoading;
 
-  Future<void> fetchPaginatedVideos({bool isRefresh = false}) async {
-    if (_isLoading || !_hasMore) return;
+  Completer<void>? _fetchLock;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _videoSubscription;
+
+  @override
+  void onInit() {
+    super.onInit();
+    ever(currentIndex, _onCurrentIndexChanged);
+    listenToVideos();
+  }
+
+  @override
+  void onClose() {
+    _videoSubscription?.cancel();
+    videoManager.disposeAllForContext(contextKey);
+    super.onClose();
+  }
+
+  void listenToVideos() {
+    _videoSubscription?.cancel();
+
+    _videoSubscription = FirebaseFirestore.instance
+        .collection('videos')
+        .where('status', isEqualTo: 'ready')
+        .orderBy('updatedAt', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      final fetchedVideos = snapshot.docs
+          .map((doc) => Video.fromMap(doc.data()))
+          .where((v) => v.videoUrl.isNotEmpty)
+          .toList();
+
+      videoList.assignAll(fetchedVideos);
+
+      _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+      _hasMore = snapshot.docs.length >= _limit;
+    }, onError: (e) {
+      print("Erreur stream vidéos: $e");
+    });
+  }
+
+  Future<bool> fetchPaginatedVideos({bool isRefresh = false}) async {
+    if (_isLoading || !_hasMore || (_fetchLock?.isCompleted == false)) return false;
+
     _isLoading = true;
+    _fetchLock = Completer<void>();
 
     try {
-      Query query = FirebaseFirestore.instance
+      var query = FirebaseFirestore.instance
           .collection('videos')
           .where('status', isEqualTo: 'ready')
           .orderBy('updatedAt', descending: true)
           .limit(_limit);
 
-      if (!isRefresh && _lastDocument != null) {
-        final updatedAt = _lastDocument!.get('updatedAt');
-        if (updatedAt != null) {
-          query = query.startAfter([updatedAt]);
-        }
+      if (!isRefresh && _lastDoc != null) {
+        query = query.startAfterDocument(_lastDoc!);
       }
 
-      final snapshot = await query.get();
-
-      if (snapshot.docs.isNotEmpty) {
-        final newVideos = snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return Video.fromMap(data);
-        }).toList();
-
-        final existingIds = videoList.map((v) => v.id).toSet();
-        final uniqueNewVideos = newVideos.where((v) => !existingIds.contains(v.id)).toList();
-
-        if (isRefresh) {
-          videoList.assignAll(uniqueNewVideos);
-        } else {
-          videoList.addAll(uniqueNewVideos);
-        }
-
-        _lastDocument = snapshot.docs.last;
-
-        for (final video in uniqueNewVideos) {
-          if (video.videoUrl.isNotEmpty) {
-            await _videoManager.preload(video.videoUrl);
-          }
-        }
-      }
-
-      if (snapshot.docs.length < _limit) {
+      final snap = await query.get();
+      if (snap.docs.isEmpty) {
         _hasMore = false;
+        _fetchLock?.complete();
+        return false;
       }
+
+      final newVideos = snap.docs
+          .map((d) => Video.fromMap(d.data()))
+          .where((v) => v.videoUrl.isNotEmpty)
+          .toList();
+
+      final currentIds = videoList.map((v) => v.id).toSet();
+      final uniqueVideos = newVideos.where((v) => !currentIds.contains(v.id)).toList();
+
+      if (isRefresh) {
+        videoList.assignAll(uniqueVideos);
+      } else {
+        videoList.addAll(uniqueVideos);
+      }
+
+      final urls = videoList.map((v) => v.videoUrl).toList();
+
+      if (isRefresh && videoList.isNotEmpty) {
+        final firstUrl = videoList.first.videoUrl;
+
+        await videoManager.initializeController(contextKey, firstUrl);
+        await videoManager.pauseAllExcept(contextKey, firstUrl);
+        videoManager.preloadSurrounding(contextKey, urls, 0);
+
+        for (int i = 1; i < 5 && i < videoList.length; i++) {
+          unawaited(
+            videoManager.initializeController(contextKey, videoList[i].videoUrl, isPreload: true),
+          );
+        }
+      }
+
+      _lastDoc = snap.docs.last;
+      if (newVideos.length < _limit) _hasMore = false;
+
+      _fetchLock?.complete();
+      return true;
     } catch (e) {
-      print('Erreur chargement vidéos : $e');
-      Get.snackbar('Erreur', 'Impossible de charger les vidéos');
+      _fetchLock?.completeError(e);
+      rethrow;
     } finally {
       _isLoading = false;
     }
   }
 
-  Future<void> refreshVideos() async {
-    _videoManager.disposeAll(); // ⚠️ Nettoyage complet avant rechargement
-    _lastDocument = null;
-    _hasMore = true;
-    videoList.clear();
-    await fetchPaginatedVideos(isRefresh: true);
+  Future<bool> refreshVideos() async {
+    try {
+      await videoManager.disposeAllForContext(contextKey);
+      _lastDoc = null;
+      _hasMore = true;
+      videoList.clear();
+      return await fetchPaginatedVideos(isRefresh: true);
+    } catch (_) {
+      return false;
+    }
   }
 
-  Future<void> likeVideo(String videoId, String userId) async {
+  Future<void> refreshVideosIfNeeded() async {
+    if (videoList.isEmpty) {
+      await refreshVideos();
+    }
+  }
+
+  void _onCurrentIndexChanged(int index) {
+    if (index < 0 || index >= videoList.length) return;
+
+    final currentUrl = videoList[index].videoUrl;
+    final urls = videoList.map((v) => v.videoUrl).toList();
+
+    videoManager.pauseAllExcept(contextKey, currentUrl);
+    videoManager.preloadSurrounding(contextKey, urls, index);
+
+    for (int i = index + 1; i <= index + 3 && i < videoList.length; i++) {
+      final url = videoList[i].videoUrl;
+      if (!videoManager.hasController(contextKey, url)) {
+        unawaited(videoManager.initializeController(contextKey, url, isPreload: true));
+      }
+    }
+
+    if (index >= videoList.length - 2 && hasMore && !_isLoading) {
+      fetchPaginatedVideos();
+    }
+  }
+
+  Future<void> pauseAll() async {
+    await videoManager.pauseAll(contextKey);
+  }
+
+  Future<bool> likeVideo(String videoId, String userId) async {
     try {
       final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
       final doc = await ref.get();
-      if (!doc.exists) return;
+      if (!doc.exists) return false;
 
-      final videoData = doc.data()!;
-      final List<String> likes = List<String>.from(videoData['likes'] ?? []);
+      final data = doc.data()!;
+      final likes = List<String>.from(data['likes'] ?? []);
 
       if (likes.contains(userId)) {
         likes.remove(userId);
@@ -100,36 +190,36 @@ class VideoController extends GetxController {
       }
 
       await ref.update({'likes': likes});
-    } catch (e) {
-      print("Erreur mise à jour des likes : $e");
-      Get.snackbar('Erreur', 'Impossible de mettre à jour les likes.');
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
-  Future<void> partagerVideo(String videoId, String videoUrl) async {
+  Future<bool> partagerVideo(String videoId) async {
     try {
       final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
       final doc = await ref.get();
-      if (!doc.exists) return;
+      if (!doc.exists) return false;
 
       int shareCount = doc.data()?['shareCount'] ?? 0;
       shareCount++;
 
       await ref.update({'shareCount': shareCount});
-    } catch (e) {
-      print("Erreur lors du partage : $e");
-      Get.snackbar('Erreur', 'Erreur lors du partage de la vidéo.');
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
-  Future<void> signalerVideo(String videoId, String userId) async {
+  Future<bool> signalerVideo(String videoId, String userId) async {
     try {
       final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
       final doc = await ref.get();
-      if (!doc.exists) return;
+      if (!doc.exists) return false;
 
       final data = doc.data()!;
-      List<String> reports = List<String>.from(data['reports'] ?? []);
+      final reports = List<String>.from(data['reports'] ?? []);
       int reportCount = data['reportCount'] ?? 0;
 
       if (!reports.contains(userId)) {
@@ -139,30 +229,27 @@ class VideoController extends GetxController {
           'reports': reports,
           'reportCount': reportCount,
         });
-        Get.snackbar('Succès', 'Vidéo signalée avec succès.');
-      } else {
-        Get.snackbar('Info', 'Vous avez déjà signalé cette vidéo.');
+        return true;
       }
-    } catch (e) {
-      print("Erreur signalement : $e");
-      Get.snackbar('Erreur', 'Erreur lors du signalement.');
+
+      return false;
+    } catch (_) {
+      return false;
     }
   }
 
-  Future<void> deleteVideo(String videoId) async {
+  Future<bool> deleteVideo(String videoId) async {
     try {
-      final videoToDelete = videoList.firstWhereOrNull((v) => v.id == videoId);
-      if (videoToDelete != null) {
-        _videoManager.dispose(videoToDelete.videoUrl); // ⛔ libération du contrôleur vidéo
+      final toDelete = videoList.firstWhereOrNull((v) => v.id == videoId);
+      if (toDelete != null) {
+        await videoManager.pauseAll(contextKey);
       }
 
       await FirebaseFirestore.instance.collection('videos').doc(videoId).delete();
-      videoList.removeWhere((video) => video.id == videoId);
-
-      Get.snackbar('Succès', 'Vidéo supprimée avec succès.');
-    } catch (e) {
-      print("Erreur suppression : $e");
-      Get.snackbar('Erreur', 'Erreur lors de la suppression de la vidéo.');
+      videoList.removeWhere((v) => v.id == videoId);
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 }

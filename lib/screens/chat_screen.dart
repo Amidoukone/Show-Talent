@@ -7,8 +7,9 @@ import '../models/user.dart';
 
 class ChatScreen extends StatelessWidget {
   final String conversationId;
-  final AppUser otherUser; // Utilisateur complet pour la conversation
+  final AppUser otherUser;
   final ChatController chatController = Get.find();
+  final TextEditingController messageController = TextEditingController();
 
   ChatScreen({
     super.key,
@@ -16,10 +17,17 @@ class ChatScreen extends StatelessWidget {
     required this.otherUser,
   });
 
-  final TextEditingController messageController = TextEditingController();
-
   @override
   Widget build(BuildContext context) {
+    final currentUser = AuthController.instance.user;
+
+    if (currentUser == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text("Erreur")),
+        body: const Center(child: Text("Utilisateur non connecté.")),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -56,39 +64,33 @@ class ChatScreen extends StatelessWidget {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (!snapshot.hasData || snapshot.data == null) {
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(child: Text("Aucun message."));
                 }
 
                 final messages = snapshot.data!;
 
                 // Marquer les messages comme lus
-                _markMessagesAsRead(messages);
+                _markMessagesAsRead(messages, currentUser.uid);
 
                 return ListView.builder(
                   reverse: true,
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
-                    final isSentByUser = message.expediteurId ==
-                        AuthController.instance.user!.uid;
+                    final isSentByUser = message.expediteurId == currentUser.uid;
 
                     return Align(
                       alignment: isSentByUser
                           ? Alignment.centerRight
                           : Alignment.centerLeft,
                       child: Container(
-                        margin: const EdgeInsets.symmetric(
-                          vertical: 5,
-                          horizontal: 10,
-                        ),
+                        margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: isSentByUser
-                              ? const Color.fromARGB(255, 38, 230, 12)
-                                  .withOpacity(0.2)
-                              : const Color.fromARGB(255, 99, 222, 211)
-                                  .withOpacity(0.3),
+                              ? const Color.fromARGB(255, 38, 230, 12).withOpacity(0.2)
+                              : const Color.fromARGB(255, 99, 222, 211).withOpacity(0.3),
                           borderRadius: BorderRadius.only(
                             topLeft: const Radius.circular(12),
                             topRight: const Radius.circular(12),
@@ -103,20 +105,14 @@ class ChatScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              message.contenu,
-                              style: const TextStyle(fontSize: 16),
-                            ),
+                            Text(message.contenu, style: const TextStyle(fontSize: 16)),
                             const SizedBox(height: 5),
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   _formatTime(message.dateEnvoi),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                                 ),
                                 const SizedBox(width: 5),
                                 if (isSentByUser)
@@ -151,10 +147,7 @@ class ChatScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(30),
                         borderSide: BorderSide.none,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 15,
-                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
                     ),
                   ),
                 ),
@@ -168,7 +161,7 @@ class ChatScreen extends StatelessWidget {
                       if (content.isNotEmpty) {
                         chatController.sendMessage(
                           conversationId: conversationId,
-                          senderId: AuthController.instance.user!.uid,
+                          senderId: currentUser.uid,
                           recipientId: otherUser.uid,
                           content: content,
                         );
@@ -186,10 +179,9 @@ class ChatScreen extends StatelessWidget {
   }
 
   /// Marquer les messages comme lus
-  void _markMessagesAsRead(List<Message> messages) {
+  void _markMessagesAsRead(List<Message> messages, String currentUserId) {
     for (var message in messages) {
-      if (!message.estLu &&
-          message.destinataireId == AuthController.instance.user!.uid) {
+      if (!message.estLu && message.destinataireId == currentUserId) {
         chatController.markMessageAsRead(
           conversationId: conversationId,
           messageId: message.id,
@@ -198,12 +190,12 @@ class ChatScreen extends StatelessWidget {
     }
   }
 
-  /// Obtenir l'icône appropriée pour le message
+  /// Icône de statut d'envoi
   IconData _getMessageIcon(Message message) {
     return message.estLu ? Icons.done_all : Icons.done;
   }
 
-  /// Formater l'heure pour l'affichage
+  /// Formater l'heure
   String _formatTime(DateTime dateTime) {
     final now = DateTime.now();
     if (now.difference(dateTime).inDays == 0) {

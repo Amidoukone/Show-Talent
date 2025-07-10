@@ -13,7 +13,8 @@ class AddVideo extends StatefulWidget {
 }
 
 class _AddVideoState extends State<AddVideo> {
-  final UploadVideoController uploadVideoController = Get.put(UploadVideoController());
+  final UploadVideoController uploadVideoController =
+      Get.put(UploadVideoController());
   final ImagePicker _picker = ImagePicker();
   final RxBool isLoading = false.obs;
 
@@ -45,6 +46,7 @@ class _AddVideoState extends State<AddVideo> {
         backgroundColor: const Color(0xFF214D4F),
       ),
       body: Obx(() {
+        // Affichage pendant le chargement initial ou le téléversement
         if (isLoading.value || uploadVideoController.isUploading.value) {
           return Center(
             child: Column(
@@ -64,38 +66,66 @@ class _AddVideoState extends State<AddVideo> {
           );
         }
 
+        // Affichage pendant l'optimisation
+        if (uploadVideoController.isOptimizing.value) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF214D4F)),
+                SizedBox(height: 20),
+                Text(
+                  'Optimisation en cours...',
+                  style: TextStyle(fontSize: 16, color: Colors.black87),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // État par défaut : sélection de la source vidéo
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 50),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.video_collection, size: 80, color: Color(0xFF214D4F)),
+              const Icon(Icons.video_collection,
+                  size: 80, color: Color(0xFF214D4F)),
               const SizedBox(height: 30),
               const Text(
                 'Sélectionnez la source de votre vidéo',
-                style: TextStyle(fontSize: 16, color: Colors.black87, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w600),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: () => _pickVideo(ImageSource.gallery),
                 icon: const Icon(Icons.photo_library, color: Colors.white),
-                label: const Text('Galerie', style: TextStyle(fontSize: 16, color: Colors.white)),
+                label: const Text('Galerie',
+                    style: TextStyle(fontSize: 16, color: Colors.white)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF214D4F),
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                 ),
               ),
               const SizedBox(height: 15),
               ElevatedButton.icon(
                 onPressed: () => _pickVideo(ImageSource.camera),
                 icon: const Icon(Icons.camera_alt, color: Colors.white),
-                label: const Text('Caméra', style: TextStyle(fontSize: 16, color: Colors.white)),
+                label: const Text('Caméra',
+                    style: TextStyle(fontSize: 16, color: Colors.white)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF214D4F),
-                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
                 ),
               ),
             ],
