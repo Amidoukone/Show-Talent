@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
+import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/screens/event_list_screen.dart';
 import 'package:adfoot/screens/setting_screen.dart';
 import 'package:adfoot/screens/home_screen.dart';
@@ -19,6 +20,7 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   final ChatController chatController = Get.put(ChatController());
   final UserController userController = Get.find<UserController>();
+  final VideoController? videoController = Get.isRegistered<VideoController>() ? Get.find<VideoController>() : null;
 
   final List<Widget> _screens = [
     const HomeScreen(),
@@ -28,13 +30,37 @@ class _MainScreenState extends State<MainScreen> {
     SettingsScreen(),
   ];
 
+  bool _hasHandledArguments = false;
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
 
-  bool _hasHandledArguments = false;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // ✅ Ne traiter les arguments qu'une seule fois
+    if (!_hasHandledArguments) {
+      final args = Get.arguments;
+
+      if (args != null) {
+        if (args is Map && args.containsKey('tab')) {
+          _selectedIndex = args['tab'] ?? 0;
+        } else if (args is int) {
+          _selectedIndex = args;
+        }
+
+        if (args is Map && args['refresh'] == true) {
+          videoController?.refreshVideos();
+        }
+      }
+
+      _hasHandledArguments = true;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,15 +69,6 @@ class _MainScreenState extends State<MainScreen> {
         return const Scaffold(
           body: Center(child: CircularProgressIndicator()),
         );
-      }
-
-      // ✅ Gérer changement d'onglet via Get.arguments une seule fois
-      if (!_hasHandledArguments &&
-          Get.arguments != null &&
-          Get.arguments is int &&
-          Get.arguments != _selectedIndex) {
-        _selectedIndex = Get.arguments as int;
-        _hasHandledArguments = true;
       }
 
       return Scaffold(

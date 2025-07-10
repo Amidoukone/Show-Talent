@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:adfoot/widgets/video_manager.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -11,124 +13,200 @@ import 'package:adfoot/controller/user_controller.dart';
 class ProfileController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
+  final VideoManager _videoManager = VideoManager();
+
+  DocumentSnapshot? _lastVideoDoc;
+  static const int _videoFetchLimit = 20;
 
   AppUser? user;
   var isLoadingPhoto = false.obs;
   var videoList = <Video>[].obs;
 
-  /// Mise à jour de l'ID utilisateur
-  void updateUserId(String uid) async {
+  bool _hasMoreVideos = true;
+  bool _isLoadingVideos = false;
+  Completer<void>? _loadingCompleter;
+
+  bool get hasMoreVideos => _hasMoreVideos;
+  bool get isLoadingVideos => _isLoadingVideos;
+
+  @override
+  void onClose() async {
+    final ctx = 'profile:${user?.uid ?? ''}';
+    await _videoManager.disposeAllForContext(ctx);
+    super.onClose();
+  }
+
+  Future<void> updateUserId(String uid) async {
     try {
-      DocumentSnapshot userDoc = await _firestore.collection('users').doc(uid).get();
-      if (userDoc.exists) {
-        user = AppUser.fromMap(userDoc.data() as Map<String, dynamic>);
-        fetchUserVideos(uid);
-        update();
-      }
-    } catch (e) {
-      Get.snackbar('Erreur', 'Erreur lors du chargement du profil.', backgroundColor: Colors.red, colorText: Colors.white);
+      final doc = await _firestore.collection('users').doc(uid).get();
+      if (!doc.exists) throw 'Profil introuvable';
+      user = AppUser.fromMap(doc.data() as Map<String, dynamic>);
+      update();
+      await fetchUserVideos(uid, isRefresh: true);
+    } catch (e, st) {
+      debugPrint('❌ updateUserId: $e\n$st');
+      Get.snackbar('Erreur', 'Chargement du profil impossible.',
+          backgroundColor: Colors.red, colorText: Colors.white);
     }
   }
 
-  /// Mise à jour de la photo de profil
   Future<void> updateProfilePhoto(String uid, String photoPath) async {
+    isLoadingPhoto.value = true;
     try {
-      isLoadingPhoto.value = true;
+      final ref = _storage.ref('profilePhotos/$uid');
+      await ref.putFile(File(photoPath), SettableMetadata(contentType: 'image/jpeg'));
+      final url = await ref.getDownloadURL();
 
-      // Téléchargement et mise à jour de la photo
-      String photoUrl = await _uploadPhotoToStorage(uid, photoPath);
-      await _firestore.collection('users').doc(uid).update({'photoProfil': photoUrl});
-      
-      // Mise à jour locale de l'utilisateur
-      user?.photoProfil = photoUrl;
+      await _firestore.collection('users').doc(uid).update({'photoProfil': url});
+      user?.photoProfil = url;
       update();
 
-      // Mise à jour globale dans `UserController`
-      final userController = Get.find<UserController>();
-      await userController.refreshUserData();
+      await Get.find<UserController>().refreshUserData();
 
-      Get.snackbar('Succès', 'Photo de profil mise à jour avec succès.', backgroundColor: Colors.green, colorText: Colors.white);
-    } catch (e) {
-      Get.snackbar('Erreur', 'Échec de la mise à jour de la photo.', backgroundColor: Colors.red, colorText: Colors.white);
+      Get.snackbar('Succès', 'Photo mise à jour.',
+          backgroundColor: Colors.green, colorText: Colors.white);
+    } catch (e, st) {
+      debugPrint('❌ updateProfilePhoto: $e\n$st');
+      Get.snackbar('Erreur', 'Impossible de mettre à jour la photo.',
+          backgroundColor: Colors.red, colorText: Colors.white);
     } finally {
       isLoadingPhoto.value = false;
     }
   }
 
-  /// Téléversement de la photo vers Firebase Storage
-  Future<String> _uploadPhotoToStorage(String uid, String filePath) async {
-    final ref = _storage.ref().child('profilePhotos/$uid');
-    await ref.putFile(File(filePath));
-    return await ref.getDownloadURL();
-  }
+  Future<void> fetchUserVideos(String uid, {bool isRefresh = false}) async {
+    if (_loadingCompleter != null) return _loadingCompleter!.future;
+    _loadingCompleter = Completer();
+    _isLoadingVideos = true;
+    update();
 
-  /// Récupération des vidéos de l'utilisateur
-  void fetchUserVideos(String uid) async {
     try {
-      final QuerySnapshot snapshot = await _firestore.collection('videos').where('uid', isEqualTo: uid).get();
+      if (isRefresh) {
+        final ctx = 'profile:$uid';
+        await _videoManager.disposeAllForContext(ctx);
+        videoList.clear();
+        _lastVideoDoc = null;
+        _hasMoreVideos = true;
+      }
+      if (!_hasMoreVideos) return;
 
-      videoList.value = snapshot.docs.map((doc) => Video.fromMap(doc.data() as Map<String, dynamic>)).toList();
-    } catch (e) {
-      Get.snackbar('Erreur', 'Échec du chargement des vidéos.', backgroundColor: Colors.red, colorText: Colors.white);
-    }
-  }
+      Query q = _firestore
+          .collection('videos')
+          .where('uid', isEqualTo: uid)
+          .where('status', isEqualTo: 'ready')
+          .orderBy('updatedAt', descending: true)
+          .limit(_videoFetchLimit);
 
-  /// Mise à jour des informations utilisateur
-  Future<void> updateUserProfile(AppUser updatedUser) async {
-    try {
-      await _firestore.collection('users').doc(updatedUser.uid).update(updatedUser.toMap());
-      user = updatedUser;
+      if (!isRefresh && _lastVideoDoc != null) {
+        q = q.startAfter([_lastVideoDoc!.get('updatedAt')]);
+      }
+
+      final snap = await q.get();
+      if (snap.docs.isEmpty) {
+        _hasMoreVideos = false;
+      } else {
+        final newVideos = snap.docs
+            .map((d) => Video.fromMap(d.data() as Map<String, dynamic>))
+            .where((v) => v.videoUrl.isNotEmpty)
+            .toList();
+
+        final ids = videoList.map((v) => v.id).toSet();
+        final unique = newVideos.where((v) => !ids.contains(v.id)).toList();
+
+        videoList.addAll(unique);
+        _lastVideoDoc = snap.docs.last;
+
+        final ctx = 'profile:$uid';
+        final urls = videoList.map((v) => v.videoUrl).toList();
+
+        /// ✅ Initialiser et précharger la première vidéo pour lecture instantanée
+        if (isRefresh && videoList.isNotEmpty) {
+          await _videoManager.initializeController(ctx, videoList.first.videoUrl);
+          _videoManager.pauseAllExcept(ctx, videoList.first.videoUrl);
+          _videoManager.preloadSurrounding(ctx, urls, 0);
+
+          /// ✅ Préchargement des suivantes (style TikTok)
+          for (int i = 1; i < 4 && i < videoList.length; i++) {
+            unawaited(_videoManager.initializeController(ctx, videoList[i].videoUrl, isPreload: true));
+          }
+        }
+
+        if (unique.length < _videoFetchLimit) _hasMoreVideos = false;
+      }
+    } catch (e, st) {
+      debugPrint('❌ fetchUserVideos: $e\n$st');
+      if (videoList.isEmpty) {
+        Get.snackbar('Erreur', 'Chargement des vidéos impossible.',
+            backgroundColor: Colors.red, colorText: Colors.white);
+      }
+    } finally {
+      _isLoadingVideos = false;
       update();
-
-      //  Mise à jour globale dans `UserController`
-      final userController = Get.find<UserController>();
-      await userController.refreshUserData();
-
-      Get.snackbar('Succès', 'Profil mis à jour avec succès.', backgroundColor: Colors.green, colorText: Colors.white);
-    } catch (e) {
-      Get.snackbar('Erreur', 'Échec de la mise à jour du profil.', backgroundColor: Colors.red, colorText: Colors.white);
+      _loadingCompleter?.complete();
+      _loadingCompleter = null;
     }
   }
 
-  /// Gérer Follow / Unfollow
-  Future<void> followUser() async {
-    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (user == null || currentUserId == null || currentUserId == user!.uid) {
-      return;
-    }
+  Future<void> refreshProfileVideos() async {
+    if (user == null) return;
+    await fetchUserVideos(user!.uid, isRefresh: true);
+  }
 
-    String profileUserId = user!.uid;
-
+  Future<void> updateUserProfile(AppUser upd) async {
     try {
-      DocumentSnapshot<Map<String, dynamic>> currentUserSnapshot = await _firestore.collection('users').doc(currentUserId).get();
-      if (!currentUserSnapshot.exists) return;
+      await _firestore.collection('users').doc(upd.uid).update(upd.toMap());
+      user = upd;
+      update();
+      await Get.find<UserController>().refreshUserData();
+      Get.snackbar('Succès', 'Profil mis à jour.',
+          backgroundColor: Colors.green, colorText: Colors.white);
+    } catch (e) {
+      debugPrint('❌ updateUserProfile: $e');
+      Get.snackbar('Erreur', 'Impossible de mettre à jour le profil.',
+          backgroundColor: Colors.red, colorText: Colors.white);
+    }
+  }
 
-      Map<String, dynamic> currentUserData = currentUserSnapshot.data()!;
-      List<String> followings = List<String>.from(currentUserData['followings'] ?? []);
+  Future<void> followUser() async {
+    try {
+      final current = FirebaseAuth.instance.currentUser?.uid;
+      final uid = user?.uid;
+      if (current == null || uid == null || current == uid) return;
 
-      if (followings.contains(profileUserId)) {
-        followings.remove(profileUserId);
+      final snap = await _firestore.collection('users').doc(current).get();
+      final followings = List<String>.from(snap.get('followings') ?? []);
+      if (followings.contains(uid)) {
+        followings.remove(uid);
         user!.followers--;
       } else {
-        followings.add(profileUserId);
+        followings.add(uid);
         user!.followers++;
       }
 
-      await _firestore.collection('users').doc(currentUserId).update({'followings': followings});
-      await _firestore.collection('users').doc(profileUserId).update({'followers': user!.followers});
-
+      await _firestore.collection('users').doc(current).update({'followings': followings});
+      await _firestore.collection('users').doc(uid).update({'followers': user!.followers});
       update();
     } catch (e) {
-      Get.snackbar('Erreur', 'Impossible de suivre cet utilisateur.', backgroundColor: Colors.red, colorText: Colors.white);
+      debugPrint('❌ followUser: $e');
+      Get.snackbar('Erreur', 'Action de suivi impossible.',
+          backgroundColor: Colors.red, colorText: Colors.white);
     }
   }
 
-  /// 👤 **Obtenir l'utilisateur actuellement connecté**
-  AppUser? getLoggedInUser() {
-    final String? currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUserId != null && user?.uid == currentUserId) {
-      return user;
-    }
-    return null;
+  /// ✅ Pour pause globale dans ProfileScreen
+  Future<void> pauseAll() async {
+    final ctx = 'profile:${user?.uid ?? ''}';
+    await _videoManager.pauseAll(ctx);
   }
+
+  AppUser? getLoggedInUser() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    return uid == user?.uid ? user : null;
+  }
+
+  bool get isOwnProfile {
+  final current = FirebaseAuth.instance.currentUser?.uid;
+  return current != null && current == user?.uid;
+}
+
 }

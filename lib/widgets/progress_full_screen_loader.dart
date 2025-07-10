@@ -22,9 +22,12 @@ class ProgressFullScreenLoader extends StatelessWidget {
           child: Obx(() {
             final double progress = uploadController.uploadProgress.value;
             final String stage = uploadController.uploadStage.value;
+            final bool isOptimizing = uploadController.isOptimizing.value;
 
             String displayedStage;
-            if (stage.isNotEmpty) {
+            if (isOptimizing) {
+              displayedStage = 'Optimisation en cours...';
+            } else if (stage.isNotEmpty) {
               displayedStage = stage;
             } else if (progress < 0.05) {
               displayedStage = 'Préparation...';
@@ -51,33 +54,37 @@ class ProgressFullScreenLoader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-                LinearProgressIndicator(
-                  value: progress.clamp(0.0, 1.0),
-                  backgroundColor: Colors.grey[300],
-                  color: const Color(0xFF214D4F),
-                  minHeight: 8,
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  '${(progress * 100).toInt()}%',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.black87,
+                if (!isOptimizing) ...[
+                  LinearProgressIndicator(
+                    value: progress.clamp(0.0, 1.0),
+                    backgroundColor: Colors.grey[300],
+                    color: const Color(0xFF214D4F),
+                    minHeight: 8,
                   ),
-                ),
-                const SizedBox(height: 30),
-                ElevatedButton.icon(
-                  onPressed: uploadController.cancelUpload,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                  const SizedBox(height: 20),
+                  Text(
+                    '${(progress * 100).toInt()}%',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.black87,
+                    ),
                   ),
-                  icon: const Icon(Icons.cancel, color: Colors.white),
-                  label: const Text(
-                    "Annuler",
-                    style: TextStyle(color: Colors.white),
+                  const SizedBox(height: 30),
+                  ElevatedButton.icon(
+                    onPressed: uploadController.cancelUpload,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                    ),
+                    icon: const Icon(Icons.cancel, color: Colors.white),
+                    label: const Text(
+                      "Annuler",
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
-                ),
+                ] else ...[
+                  const CircularProgressIndicator(color: Color(0xFF214D4F)),
+                ],
               ],
             );
           }),

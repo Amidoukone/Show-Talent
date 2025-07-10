@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import * as admin from "firebase-admin";
 import {tmpdir} from "os";
 import {join} from "path";
@@ -5,7 +6,6 @@ import {existsSync, unlinkSync} from "fs";
 import {Storage} from "@google-cloud/storage";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
-// eslint-disable-next-line max-len
 import {onObjectFinalized, StorageObjectData} from "firebase-functions/v2/storage";
 import {CloudEvent} from "firebase-functions/v2";
 
@@ -55,20 +55,25 @@ export const optimizeMp4Video = onObjectFinalized(
       console.log("⬇️ Téléchargement...");
       await bucket.file(filePath).download({destination: tempInputFile});
 
+      // Petite pause pour stabilité I/O
+      await new Promise((res) => setTimeout(res, 200));
+
       console.log("🎬 Compression...");
       await new Promise<void>((resolve, reject) => {
         ffmpeg(tempInputFile)
           .outputOptions([
             "-c:v libx264",
             "-profile:v main",
-            "-preset fast",
+            "-preset veryfast",
             "-crf 23",
             "-movflags +faststart",
-            "-vf scale=720:-2",
+            "-vf scale='min(854,iw)':'-2'",
             "-g 30",
             "-keyint_min 30",
+            "-maxrate 1M",
+            "-bufsize 2M",
             "-c:a aac",
-            "-b:a 128k",
+            "-b:a 96k",
           ])
           .on("end", () => resolve())
           .on("error", (err) => reject(err))

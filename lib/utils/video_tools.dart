@@ -1,126 +1,129 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' as ui;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_compress/video_compress.dart';
-import 'package:flutter/material.dart';
 
 class VideoTools {
-  /// Génère une miniature robuste à partir d'une vidéo
+  static const String _logCollection = 'video_logs';
+
+  /// ✅ Génère une miniature robuste ou par défaut (image plus engageante)
   static Future<File?> generateThumbnail(String inputPath) async {
     try {
       final inputFile = File(inputPath);
       if (!await inputFile.exists()) {
         print("Fichier vidéo introuvable: $inputPath");
-        return null;
+        return await generateFallbackThumbnail();
       }
 
       final thumbnailFile = await VideoCompress.getFileThumbnail(
         inputPath,
         quality: 50,
-        position: 1000, // Position 1 seconde
+        position: -1,
       );
 
-      if (thumbnailFile.path.isEmpty) return null;
+      if (thumbnailFile.path.isEmpty || !(await File(thumbnailFile.path).exists())) {
+        print("Thumbnail path vide ou fichier inexistant.");
+        return await generateFallbackThumbnail();
+      }
 
       final thumb = File(thumbnailFile.path);
-
-      // Essayer jusqu'à 3 secondes pour que le fichier apparaisse
       int retries = 10;
       while (!await thumb.exists() && retries > 0) {
         await Future.delayed(const Duration(milliseconds: 300));
         retries--;
       }
 
-      return await thumb.exists() ? thumb : null;
+      if (await thumb.exists() && (await thumb.length()) > 0) {
+        return thumb;
+      }
+
+      return await generateFallbackThumbnail();
     } catch (e) {
-      print('Erreur thumbnail: $e');
-      return null;
+      await _logError("generateThumbnail", e.toString());
+      return await generateFallbackThumbnail();
     }
   }
 
-  /// Miniature de secours (image noire PNG)
+  /// ✅ Miniature par défaut engageante (icône vidéo)
   static Future<File> generateFallbackThumbnail() async {
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-    final paint = Paint()..color = Colors.black;
-    canvas.drawRect(const Rect.fromLTWH(0, 0, 128, 128), paint);
-    final picture = recorder.endRecording();
-    final img = await picture.toImage(128, 128);
-    final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
-
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/fallback_thumbnail.png');
-    await file.writeAsBytes(byteData!.buffer.asUint8List());
-    return file;
+    try {
+      final byteData = await rootBundle.load('assets/default_thumbnail.png');
+      final dir = await getTemporaryDirectory();
+      final filename = 'fallback_${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File('${dir.path}/$filename');
+      await file.writeAsBytes(byteData.buffer.asUint8List());
+      print("Miniature par défaut générée.");
+      return file;
+    } catch (e) {
+      await _logError("generateFallbackThumbnail", e.toString());
+      rethrow;
+    }
   }
 
-  /// Compresse la vidéo en qualité moyenne ou basse si nécessaire
+  /// ✅ Compression toujours appliquée pour homogénéisation
   static Future<File?> compressVideoSilently(String inputPath) async {
     try {
-      final result = await _attemptCompression(inputPath, VideoQuality.MediumQuality);
-      if (result != null) return result;
+      final compressedFile = await _attemptCompression(inputPath, VideoQuality.MediumQuality);
+      if (compressedFile != null && await compressedFile.length() > 100 * 1024) {
+        print("✅ Compression réussie : ${compressedFile.length()} octets");
+        return compressedFile;
+      }
 
-      final fallbackResult = await _attemptCompression(inputPath, VideoQuality.LowQuality);
-      return fallbackResult;
+      print("❌ Compression échouée ou fichier trop petit.");
+      return File(inputPath);
     } catch (e) {
-      print('Erreur compression vidéo : $e');
+      await _logError("compressVideoSilently", e.toString());
       return null;
     }
   }
 
-  /// Tente la compression vidéo avec une qualité donnée
+  /// ✅ Tentative de compression avec timeout contrôlé + fallback
   static Future<File?> _attemptCompression(String inputPath, VideoQuality quality) async {
-    final completer = Completer<File?>();
-    final subscription = VideoCompress.compressProgress$.subscribe((progress) {
-      // Optionnel : log progression
-    });
+    try {
+      final info = await VideoCompress.compressVideo(
+        inputPath,
+        quality: quality,
+        deleteOrigin: false,
+        includeAudio: true,
+      ).timeout(
+        const Duration(seconds: 120),
+        onTimeout: () async {
+          await VideoCompress.cancelCompression();
+          print("⏱️ Compression annulée : trop longue (> 2 min).");
+          await _logError("compression_timeout", "Compression > 2 minutes annulée.");
+          return null;
+        },
+      );
 
-    final compressionFuture = VideoCompress.compressVideo(
-      inputPath,
-      quality: quality,
-      deleteOrigin: false,
-      includeAudio: true,
-    );
-
-    compressionFuture.timeout(
-      const Duration(seconds: 120),
-      onTimeout: () async {
-        await VideoCompress.cancelCompression();
-        subscription.unsubscribe();
-        completer.complete(null);
-        return null;
-      },
-    ).then((info) {
-      subscription.unsubscribe();
-      if (info != null && info.path != null && File(info.path!).existsSync()) {
-        completer.complete(File(info.path!));
-      } else {
-        completer.complete(null);
+      if (info != null && info.path != null) {
+        final file = File(info.path!);
+        if (await file.exists() && await file.length() > 0) {
+          return file;
+        }
       }
-    }).catchError((error) {
-      subscription.unsubscribe();
-      completer.complete(null);
-    });
 
-    return await completer.future;
+      return null;
+    } catch (e) {
+      await _logError("_attemptCompression", e.toString());
+      return null;
+    }
   }
 
-  /// Vérifie que la qualité de la vidéo respecte les dimensions minimales
   static Future<bool> isQualityAcceptable(String videoPath, {int minWidth = 480, int minHeight = 360}) async {
     try {
       final info = await VideoCompress.getMediaInfo(videoPath);
       if (info.width != null && info.height != null) {
         return info.width! >= minWidth && info.height! >= minHeight;
       }
-      return true;
+      return false;
     } catch (e) {
-      print('Erreur vérification qualité : $e');
-      return true;
+      await _logError("isQualityAcceptable", e.toString());
+      return false;
     }
   }
 
-  /// Vérifie que la durée ne dépasse pas la limite
   static Future<bool> isDurationValid(String videoPath, {int maxDuration = 60}) async {
     try {
       final info = await VideoCompress.getMediaInfo(videoPath);
@@ -128,24 +131,36 @@ class VideoTools {
         final seconds = (info.duration! / 1000).round();
         return seconds <= maxDuration;
       }
-      return true;
+      return false;
     } catch (e) {
-      print('Erreur vérification durée : $e');
-      return true;
+      await _logError("isDurationValid", e.toString());
+      return false;
     }
   }
 
-  /// Annule toute compression en cours
   static Future<void> cancelCompression() async {
     try {
       await VideoCompress.cancelCompression();
     } catch (_) {}
   }
 
-  /// Supprime tous les caches vidéo compressés
   static Future<void> dispose() async {
     try {
       await VideoCompress.deleteAllCache();
     } catch (_) {}
+  }
+
+  /// 🔍 Loggue les erreurs dans Firestore
+  static Future<void> _logError(String source, String message) async {
+    try {
+      await FirebaseFirestore.instance.collection(_logCollection).add({
+        'timestamp': FieldValue.serverTimestamp(),
+        'source': source,
+        'message': message,
+        'device': Platform.operatingSystem,
+      });
+    } catch (e) {
+      print("Erreur lors du log Firestore: $e");
+    }
   }
 }

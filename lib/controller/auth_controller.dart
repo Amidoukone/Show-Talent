@@ -25,6 +25,12 @@ class AuthController extends GetxController {
   /// ✅ Getter public pour exposer FirebaseAuth
   FirebaseAuth get auth => _auth;
 
+  /// ✅ Indique si l'utilisateur est connecté et prêt
+  bool get isLoggedIn => _appUser.value != null && _firebaseUser.value != null;
+
+  /// ✅ Récupère l'UID actuel
+  String? get currentUid => _appUser.value?.uid;
+
   @override
   void onReady() {
     super.onReady();
