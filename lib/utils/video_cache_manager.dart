@@ -1,87 +1,128 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
 
-class VideoCacheManager {
+class VideoCacheManager extends CacheManager {
   static const key = 'videoCache';
   static VideoCacheManager? _instance;
-  late final Future<BaseCacheManager> _cacheFuture;
 
   factory VideoCacheManager() {
-    return _instance ??= VideoCacheManager._();
+    return _instance ??= VideoCacheManager._internal();
   }
 
-  VideoCacheManager._() {
-    _cacheFuture = _createCacheManager();
-  }
+  VideoCacheManager._internal()
+      : super(
+          Config(
+            key,
+            stalePeriod: const Duration(days: 15), // ✅ 15 jours
+            maxNrOfCacheObjects: 50,              // ✅ Limité à 50 vidéos
+            repo: JsonCacheInfoRepository(databaseName: key),
+            fileService: HttpFileService(),
+            // 🔥 Placeholder temporaire, remplacé dynamiquement
+            fileSystem: IOFileSystem(Directory.systemTemp.path),
+          ),
+        );
 
-  Future<BaseCacheManager> get manager async => await _cacheFuture;
-
-  Future<BaseCacheManager> _createCacheManager() async {
-    // Utilise un dossier persistant et non temporaire
-    final cacheDir = await getApplicationSupportDirectory(); 
-    final videoCacheDir = Directory('${cacheDir.path}/$key');
+  /// ✅ Dossier de cache persistant (SupportDirectory), jamais vidé automatiquement
+  static Future<String> getCacheDirectoryPath() async {
+    final supportDir = await getApplicationSupportDirectory();
+    final videoCacheDir = Directory('${supportDir.path}/$key');
 
     if (!await videoCacheDir.exists()) {
       await videoCacheDir.create(recursive: true);
+      debugPrint('[VideoCacheManager] Created persistent cache directory at ${videoCacheDir.path}');
     }
 
-    return CacheManager(
-      Config(
-        key,
-        stalePeriod: const Duration(days: 30),
-        maxNrOfCacheObjects: 50,
-        repo: JsonCacheInfoRepository(databaseName: key),
-        fileService: HttpFileService(),
-        fileSystem: IOFileSystem(videoCacheDir.path),
-      ),
-    );
+    debugPrint('[VideoCacheManager] Using persistent cache directory: ${videoCacheDir.path}');
+    return videoCacheDir.path;
   }
 
-  Future<FileInfo?> getFileFromCache(String url) async {
-    final cache = await manager;
+  /// ✅ Instanciation propre avec le bon chemin persistant
+  static Future<VideoCacheManager> getInstance() async {
+    if (_instance != null) return _instance!;
+
+    final cachePath = await getCacheDirectoryPath();
+    _instance = VideoCacheManager._withCustomPath(cachePath);
+    return _instance!;
+  }
+
+  VideoCacheManager._withCustomPath(String path)
+      : super(
+          Config(
+            key,
+            stalePeriod: const Duration(days: 15),
+            maxNrOfCacheObjects: 50,
+            repo: JsonCacheInfoRepository(databaseName: key),
+            fileService: HttpFileService(),
+            fileSystem: IOFileSystem(path),
+          ),
+        );
+
+  Future<FileInfo?> getFileIfCached(String url) async {
     try {
-      final fileInfo = await cache.getFileFromCache(url);
+      final fileInfo = await getFileFromCache(url);
       if (fileInfo != null && await fileInfo.file.exists()) {
+        debugPrint('[VideoCacheManager] File found in cache: $url');
         return fileInfo;
+      } else {
+        debugPrint('[VideoCacheManager] File not found in cache: $url');
+        return null;
       }
-      return null;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[VideoCacheManager] Error checking cache: $e');
       return null;
     }
   }
 
-  Future<File?> downloadAndCacheFile(String url) async {
-    final cache = await manager;
+  @override
+  Future<FileInfo> downloadFile(
+    String url, {
+    Map<String, String>? authHeaders,
+    bool force = false,
+    String? key,
+  }) async {
     try {
-      final fileInfo = await cache.downloadFile(url);
-      if (await fileInfo.file.exists()) {
-        return fileInfo.file;
-      }
-      return null;
-    } catch (_) {
-      return null;
+      final fileInfo = await super.downloadFile(url, authHeaders: authHeaders, force: force, key: key);
+      debugPrint('[VideoCacheManager] Downloaded and cached: $url');
+      return fileInfo;
+    } catch (e) {
+      debugPrint('[VideoCacheManager] Error downloading: $e');
+      rethrow;
     }
   }
 
-  Future<void> preloadFile(String url) async {
-    final cache = await manager;
-    try {
-      await cache.downloadFile(url);
-    } catch (_) {}
+  Future<File> downloadAndCache(String url) async {
+    final fileInfo = await downloadFile(url);
+    return fileInfo.file;
   }
 
-  Future<void> removeFile(String url) async {
-    final cache = await manager;
+  Future<void> clearCache() async {
     try {
-      await cache.removeFile(url);
-    } catch (_) {}
+      await emptyCache();
+      debugPrint('[VideoCacheManager] Cache cleared');
+    } catch (e) {
+      debugPrint('[VideoCacheManager] Error clearing cache: $e');
+    }
   }
 
-  Future<void> emptyCache() async {
-    final cache = await manager;
+  /// ✅ Option supplémentaire : surveillance manuelle de la taille totale
+  Future<int> getCacheSizeInMB() async {
     try {
-      await cache.emptyCache();
-    } catch (_) {}
+      final cacheDir = await getCacheDirectoryPath();
+      final dir = Directory(cacheDir);
+      if (!await dir.exists()) return 0;
+
+      int totalSize = 0;
+      await for (var file in dir.list(recursive: true, followLinks: false)) {
+        if (file is File) {
+          totalSize += await file.length();
+        }
+      }
+      return (totalSize / (1024 * 1024)).round();
+    } catch (e) {
+      debugPrint('[VideoCacheManager] Error calculating size: $e');
+      return 0;
+    }
   }
 }
