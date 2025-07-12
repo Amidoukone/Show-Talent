@@ -35,12 +35,14 @@ class VideoManager {
 
     final futures = _initFuturesByContext[contextKey]!;
 
+    // ✅ Si déjà présent et valide
     if (_controllersByContext[contextKey]!.containsKey(url)) {
       final ctrl = _controllersByContext[contextKey]![url]!;
       if (ctrl.value.isInitialized && !ctrl.value.hasError) {
         _markRecent(contextKey, url);
         await _enforceLimit(contextKey);
         _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
+        debugPrint("[VideoManager] Reuse existing controller for $url");
         return ctrl;
       } else {
         await safeDispose(ctrl);
@@ -48,6 +50,7 @@ class VideoManager {
       }
     }
 
+    // ✅ Si déjà en cours d'initialisation
     if (futures.containsKey(url)) {
       return await futures[url]!;
     }
@@ -63,9 +66,10 @@ class VideoManager {
         _markRecent(contextKey, url);
         await _enforceLimit(contextKey);
         _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
+        debugPrint("[VideoManager] Controller initialized and ready for $url");
         return controller;
       } catch (e, st) {
-        debugPrint("Video init error for $url: $e\n$st");
+        debugPrint("[VideoManager] Video init error for $url: $e\n$st");
         _loadStatesByContext[contextKey]![url] = VideoLoadState.errorSource;
         return Future.error(e);
       }
@@ -85,15 +89,17 @@ class VideoManager {
   }
 
   Future<File> _getCachedVideo(String url) async {
-    final cacheManager = VideoCacheManager();
-    final cached = await cacheManager.getFileFromCache(url);
-    if (cached != null && await cached.file.exists()) {
-      return cached.file;
+    final cacheManager = await VideoCacheManager.getInstance();
+    final cachedInfo = await cacheManager.getFileIfCached(url);
+    if (cachedInfo != null && await cachedInfo.file.exists()) {
+      debugPrint("[VideoManager] Using cached file for $url");
+      return cachedInfo.file;
     }
 
-    final file = await cacheManager.downloadAndCacheFile(url);
-    if (file != null && await file.exists()) {
-      return file;
+    final downloadedInfo = await cacheManager.downloadFile(url);
+    if (await downloadedInfo.file.exists()) {
+      debugPrint("[VideoManager] Downloaded file for $url");
+      return downloadedInfo.file;
     }
 
     throw Exception("Failed to download video: $url");
@@ -116,6 +122,7 @@ class VideoManager {
       }
       _loadStatesByContext[contextKey]?.remove(oldest);
       _initFuturesByContext[contextKey]?.remove(oldest);
+      debugPrint("[VideoManager] Disposed old controller for $oldest");
     }
   }
 
@@ -184,7 +191,7 @@ class VideoManager {
 
   Future<void> safeDispose(CachedVideoPlayerPlusController ctrl) async {
     try {
-      if (ctrl.value.isInitialized) {
+      if (ctrl.value.isInitialized || ctrl.value.hasError) {
         await ctrl.dispose();
       }
     } catch (_) {}

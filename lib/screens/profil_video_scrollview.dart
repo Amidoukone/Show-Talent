@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/models/video.dart';
@@ -51,13 +50,9 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
     final urls = widget.videos.map((v) => v.videoUrl).toList();
     final currentUrl = urls[idx];
 
-    /// ✅ Préchargement autour de l'index (2 avant et 2 après)
     _videoManager.preloadSurrounding(_ctxKey, urls, idx);
-
-    /// ✅ Pause toutes les vidéos sauf celle en cours
     _videoManager.pauseAllExcept(_ctxKey, currentUrl);
 
-    /// ✅ Charger explicitement la vidéo courante si non encore prête
     if (!_videoManager.hasController(_ctxKey, currentUrl)) {
       unawaited(_videoManager.initializeController(_ctxKey, currentUrl));
     }
@@ -65,7 +60,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
 
   @override
   void dispose() {
-    _videoManager.pauseAll(_ctxKey);
+    _videoManager.disposeAllForContext(_ctxKey);
     _pageController.dispose();
     super.dispose();
   }
@@ -76,7 +71,10 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(
-          child: Text('Aucune vidéo publiée', style: TextStyle(color: Colors.white)),
+          child: Text(
+            'Aucune vidéo publiée',
+            style: TextStyle(color: Colors.white),
+          ),
         ),
       );
     }
@@ -95,6 +93,8 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
             },
             itemBuilder: (_, idx) {
               final video = widget.videos[idx];
+              final controller = _videoManager.getController(_ctxKey, video.videoUrl);
+
               return Stack(
                 children: [
                   SmartVideoPlayer(
@@ -108,6 +108,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
                     autoPlay: true,
                     showControls: true,
                     showProgressBar: true,
+                    controller: controller,
                   ),
                   Positioned(
                     bottom: 100,
@@ -124,6 +125,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
                             fontSize: 16,
                             shadows: [Shadow(color: Colors.black54, offset: Offset(1, 1), blurRadius: 2)],
                           ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 6),
                         Text(
@@ -143,7 +145,6 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
               );
             },
           ),
-          // Bouton retour
           SafeArea(
             child: Align(
               alignment: Alignment.topLeft,

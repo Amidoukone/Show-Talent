@@ -7,6 +7,7 @@ import 'package:adfoot/controller/connectivity_controller.dart';
 import 'package:adfoot/screens/add_video.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
+import 'package:adfoot/widgets/video_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen>
   late final VideoController videoController;
   final UserController userController = Get.find<UserController>();
   final PageController _pageController = PageController();
+  final VideoManager videoManager = VideoManager();
 
   bool _isConnected = true;
   late final AnimationController _fadeController;
@@ -55,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen>
     _fadeController.dispose();
     _pageController.dispose();
     _connectivitySubscription?.cancel();
+    videoManager.disposeAllForContext('home');
     super.dispose();
   }
 
@@ -94,7 +97,17 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _onPageChanged(int index) {
+    final videos = videoController.videoList;
+    final currentUrl = videos[index].videoUrl;
+
     videoController.currentIndex.value = index;
+
+    videoManager.preloadSurrounding('home', videos.map((v) => v.videoUrl).toList(), index);
+    videoManager.pauseAllExcept('home', currentUrl);
+
+    if (!videoManager.hasController('home', currentUrl)) {
+      unawaited(videoManager.initializeController('home', currentUrl));
+    }
   }
 
   @override
@@ -152,6 +165,8 @@ class _HomeScreenState extends State<HomeScreen>
                 onPageChanged: _onPageChanged,
                 itemBuilder: (context, index) {
                   final video = videos[index];
+                  final controller = videoManager.getController('home', video.videoUrl);
+
                   return Stack(
                     children: [
                       SmartVideoPlayer(
@@ -165,6 +180,7 @@ class _HomeScreenState extends State<HomeScreen>
                         autoPlay: true,
                         showControls: true,
                         showProgressBar: true,
+                        controller: controller,
                       ),
                       Positioned(
                         bottom: 100,
