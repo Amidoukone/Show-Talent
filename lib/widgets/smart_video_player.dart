@@ -6,8 +6,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/widgets/video_manager.dart';
 
-class SmartVideoPlayer extends StatelessWidget {
+class SmartVideoPlayer extends StatefulWidget {
   final CachedVideoPlayerPlusController? controller;
   final Video video;
   final String contextKey;
@@ -34,48 +35,113 @@ class SmartVideoPlayer extends StatelessWidget {
   });
 
   @override
+  State<SmartVideoPlayer> createState() => _SmartVideoPlayerState();
+}
+
+class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
+  late final VideoManager _videoManager;
+  late final ValueNotifier<bool> _showPlayIcon;
+
+  @override
+  void initState() {
+    super.initState();
+    _videoManager = VideoManager();
+    _showPlayIcon = ValueNotifier(true);
+    _attachListener();
+  }
+
+  @override
+  void didUpdateWidget(SmartVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_controllerListener);
+      _attachListener();
+    }
+  }
+
+  void _attachListener() {
+    final ctrl = widget.controller;
+    if (ctrl != null) {
+      ctrl.addListener(_controllerListener);
+      _showPlayIcon.value = !(ctrl.value.isPlaying);
+    }
+  }
+
+  void _controllerListener() {
+    final ctrl = widget.controller;
+    if (!mounted || ctrl == null || !ctrl.value.isInitialized) return;
+    final isPlaying = ctrl.value.isPlaying;
+    if (_showPlayIcon.value != !isPlaying) {
+      _showPlayIcon.value = !isPlaying;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?.removeListener(_controllerListener);
+    _showPlayIcon.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final videoController = Get.find<VideoController>(tag: contextKey);
+    final videoController = Get.find<VideoController>(tag: widget.contextKey);
     final userController = Get.find<UserController>();
-
-    final ctrl = controller;
-
-    // ✅ Gestion dynamique du bouton play/pause
-    final hideIcon = ctrl?.value.isPlaying ?? false;
+    final ctrl = widget.controller;
+    final loadState = _videoManager.getLoadState(widget.contextKey, widget.videoUrl);
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        TiktokVideoPlayer(
-          controller: ctrl,
-          isPlaying: ctrl?.value.isPlaying ?? false,
-          hidePlayPauseIcon: hideIcon,
-          showControls: showControls,
-          showProgressBar: showProgressBar,
-          isBuffering: ctrl?.value.isBuffering ?? false,
-          isLoading: !(ctrl?.value.isInitialized ?? false),
-          errorMessage: ctrl?.value.hasError == true ? 'Erreur de lecture' : null,
-          thumbnailUrl: video.thumbnailUrl,
-          onTogglePlayPause: () {
-            if (ctrl == null || !ctrl.value.isInitialized) return;
-            if (ctrl.value.isPlaying) {
-              ctrl.pause();
-            } else {
-              ctrl.play();
-            }
-          },
-          onRetry: () {
-            debugPrint('[SmartVideoPlayer] Retry tapped for ${video.videoUrl}');
+        ValueListenableBuilder<bool>(
+          valueListenable: _showPlayIcon,
+          builder: (_, showIcon, __) {
+            return TiktokVideoPlayer(
+              controller: ctrl,
+              isPlaying: ctrl?.value.isPlaying ?? false,
+              hidePlayPauseIcon: !showIcon,
+              showControls: widget.showControls,
+              showProgressBar: widget.showProgressBar,
+              isBuffering: ctrl?.value.isBuffering ?? false,
+              isLoading: loadState == VideoLoadState.loading,
+              errorMessage: _getErrorMessage(loadState),
+              thumbnailUrl: widget.video.thumbnailUrl,
+              onTogglePlayPause: () {
+                if (ctrl == null || !ctrl.value.isInitialized) return;
+                ctrl.value.isPlaying ? ctrl.pause() : ctrl.play();
+              },
+              onRetry: () {
+                debugPrint('[SmartVideoPlayer] Retry tapped for ${widget.video.videoUrl}');
+                videoController.videoManager.initializeController(
+                  widget.contextKey,
+                  widget.videoUrl,
+                  autoPlay: true,
+                );
+              },
+            );
           },
         ),
-        if (showControls) _buildActions(context, videoController, userController),
+        if (widget.showControls) _buildActions(context, videoController, userController),
       ],
     );
   }
 
+  String? _getErrorMessage(VideoLoadState? state) {
+    switch (state) {
+      case VideoLoadState.errorTimeout:
+        return 'Chargement trop long';
+      case VideoLoadState.errorSource:
+        return 'Erreur de lecture';
+      default:
+        return null;
+    }
+  }
+
   Widget _buildActions(BuildContext context, VideoController videoController, UserController userController) {
-    final user = userController.user!;
-    final isOwner = video.uid == user.uid;
+    final user = userController.user;
+    if (user == null) return const SizedBox();
+
+    final isOwner = widget.video.uid == user.uid;
 
     return Positioned(
       right: 10,
@@ -91,23 +157,23 @@ class SmartVideoPlayer extends StatelessWidget {
             ),
           _buildActionButton(
             icon: Icons.favorite,
-            color: video.likes.contains(user.uid) ? Colors.red : Colors.white,
-            label: '${video.likes.length}',
+            color: widget.video.likes.contains(user.uid) ? Colors.red : Colors.white,
+            label: '${widget.video.likes.length}',
             onPressed: () => _toggleLike(videoController, user.uid),
           ),
           const SizedBox(height: 16),
           _buildActionButton(
             icon: Icons.share,
             color: Colors.white,
-            label: '${video.shareCount}',
+            label: '${widget.video.shareCount}',
             onPressed: () => _shareVideo(videoController),
           ),
           const SizedBox(height: 16),
           _buildActionButton(
             icon: Icons.flag,
             color: Colors.white,
-            label: '${video.reportCount}',
-            onPressed: () => videoController.signalerVideo(video.id, user.uid),
+            label: '${widget.video.reportCount}',
+            onPressed: () => videoController.signalerVideo(widget.video.id, user.uid),
           ),
         ],
       ),
@@ -129,12 +195,13 @@ class SmartVideoPlayer extends StatelessWidget {
   }
 
   void _toggleLike(VideoController controller, String userId) {
-    if (video.likes.contains(userId)) {
-      video.likes.remove(userId);
+    if (widget.video.likes.contains(userId)) {
+      widget.video.likes.remove(userId);
     } else {
-      video.likes.add(userId);
+      widget.video.likes.add(userId);
     }
-    controller.likeVideo(video.id, userId);
+    controller.likeVideo(widget.video.id, userId);
+    setState(() {});
   }
 
   void _confirmDelete(BuildContext context, VideoController controller) {
@@ -146,7 +213,7 @@ class SmartVideoPlayer extends StatelessWidget {
           TextButton(onPressed: Get.back, child: const Text('Annuler')),
           TextButton(
             onPressed: () {
-              controller.deleteVideo(video.id);
+              controller.deleteVideo(widget.video.id);
               Get.back();
             },
             child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
@@ -158,8 +225,8 @@ class SmartVideoPlayer extends StatelessWidget {
 
   Future<void> _shareVideo(VideoController controller) async {
     try {
-      await Share.share('Regarde cette vidéo : ${video.videoUrl}');
-      await controller.partagerVideo(video.id);
+      await Share.share('Regarde cette vidéo : ${widget.video.videoUrl}');
+      await controller.partagerVideo(widget.video.id);
     } catch (_) {
       Get.snackbar('Erreur', 'Partage impossible', backgroundColor: Colors.red, colorText: Colors.white);
     }

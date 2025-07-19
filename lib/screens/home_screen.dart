@@ -57,16 +57,41 @@ class _HomeScreenState extends State<HomeScreen>
     _fadeController.dispose();
     _pageController.dispose();
     _connectivitySubscription?.cancel();
-    videoManager.disposeAllForContext('home');
+
+    _safeDisposeVideoContext(); // <--- Dispose différé
+
     super.dispose();
+  }
+
+  /// Dispose différé sécurisé
+  Future<void> _safeDisposeVideoContext() async {
+    try {
+      await videoManager.pauseAll('home');
+      await Future.delayed(const Duration(milliseconds: 100));
+      videoManager.disposeAllForContext('home');
+    } catch (e) {
+      debugPrint('❌ Error during dispose: $e');
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      videoController.pauseAll();
+      videoManager.pauseAll('home');
     } else if (state == AppLifecycleState.resumed) {
-      videoController.currentIndex.refresh();
+      final currentIndex = videoController.currentIndex.value;
+      if (currentIndex >= 0 && currentIndex < videoController.videoList.length) {
+        final currentUrl = videoController.videoList[currentIndex].videoUrl;
+        videoManager.pauseAllExcept('home', currentUrl);
+
+        final ctrl = videoManager.getController('home', currentUrl);
+        if (ctrl != null &&
+            ctrl.value.isInitialized &&
+            !ctrl.value.hasError &&
+            !ctrl.value.isPlaying) {
+          ctrl.play();
+        }
+      }
     }
     super.didChangeAppLifecycleState(state);
   }
@@ -93,20 +118,32 @@ class _HomeScreenState extends State<HomeScreen>
       await videoController.fetchPaginatedVideos();
     }
 
+    final videos = videoController.videoList;
+    if (videos.isNotEmpty) {
+      final firstUrl = videos.first.videoUrl;
+      await videoManager.initializeController('home', firstUrl, autoPlay: true);
+      await videoManager.pauseAllExcept('home', firstUrl);
+    }
+
     if (mounted) _fadeController.forward();
   }
 
-  void _onPageChanged(int index) {
+  Future<void> _onPageChanged(int index) async {
     final videos = videoController.videoList;
+    if (index < 0 || index >= videos.length) return;
     final currentUrl = videos[index].videoUrl;
 
     videoController.currentIndex.value = index;
 
     videoManager.preloadSurrounding('home', videos.map((v) => v.videoUrl).toList(), index);
-    videoManager.pauseAllExcept('home', currentUrl);
+    await videoManager.pauseAllExcept('home', currentUrl);
 
-    if (!videoManager.hasController('home', currentUrl)) {
-      unawaited(videoManager.initializeController('home', currentUrl));
+    final ctrl = videoManager.getController('home', currentUrl);
+    if (ctrl != null &&
+        ctrl.value.isInitialized &&
+        !ctrl.value.hasError &&
+        !ctrl.value.isPlaying) {
+      await ctrl.play();
     }
   }
 
@@ -137,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
               onPressed: () async {
-                await videoController.pauseAll();
+                await videoManager.pauseAll('home');
                 await Get.to(() => ProfileScreen(uid: user.uid, isReadOnly: false));
                 videoController.currentIndex.refresh();
               },
@@ -193,25 +230,35 @@ class _HomeScreenState extends State<HomeScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  video.songName.isNotEmpty ? video.songName : 'Musique inconnue',
+                                  video.songName.isNotEmpty
+                                      ? video.songName
+                                      : 'Musique inconnue',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
                                     shadows: [
-                                      Shadow(color: Colors.black54, offset: Offset(1, 1), blurRadius: 2),
+                                      Shadow(
+                                          color: Colors.black54,
+                                          offset: Offset(1, 1),
+                                          blurRadius: 2),
                                     ],
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  video.caption.isNotEmpty ? video.caption : 'Pas de légende',
+                                  video.caption.isNotEmpty
+                                      ? video.caption
+                                      : 'Pas de légende',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 15,
                                     shadows: [
-                                      Shadow(color: Colors.black54, offset: Offset(1, 1), blurRadius: 2),
+                                      Shadow(
+                                          color: Colors.black54,
+                                          offset: Offset(1, 1),
+                                          blurRadius: 2),
                                     ],
                                   ),
                                   maxLines: 2,
@@ -227,7 +274,7 @@ class _HomeScreenState extends State<HomeScreen>
                         right: 10,
                         child: GestureDetector(
                           onTap: () async {
-                            await videoController.pauseAll();
+                            await videoManager.pauseAll('home');
                             await Get.to(() => ProfileScreen(uid: video.uid, isReadOnly: true));
                             videoController.currentIndex.refresh();
                           },
@@ -254,7 +301,7 @@ class _HomeScreenState extends State<HomeScreen>
             foregroundColor: Colors.black,
             heroTag: 'addVideo',
             onPressed: () async {
-              await videoController.pauseAll();
+              await videoManager.pauseAll('home');
               final result = await Get.to(() => const AddVideo());
               if (result == true) {
                 await videoController.refreshVideosIfNeeded();
@@ -276,7 +323,8 @@ class _HomeScreenState extends State<HomeScreen>
         children: [
           Icon(Icons.wifi_off, color: Colors.white, size: 60),
           SizedBox(height: 20),
-          Text('Pas de connexion Internet', style: TextStyle(color: Colors.white, fontSize: 18)),
+          Text('Pas de connexion Internet',
+              style: TextStyle(color: Colors.white, fontSize: 18)),
         ],
       ),
     );

@@ -17,6 +17,7 @@ class ProfileController extends GetxController {
 
   DocumentSnapshot? _lastVideoDoc;
   static const int _videoFetchLimit = 20;
+  static const int _videoMemoryLimit = 25;
 
   AppUser? user;
   var isLoadingPhoto = false.obs;
@@ -36,9 +37,25 @@ class ProfileController extends GetxController {
     super.onClose();
   }
 
+  Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(
+    DocumentReference<Map<String, dynamic>> ref,
+  ) async {
+    int attempt = 0;
+    while (attempt < 3) {
+      try {
+        return await ref.get();
+      } catch (e) {
+        attempt++;
+        if (attempt >= 3) rethrow;
+        await Future.delayed(Duration(milliseconds: 300 * attempt));
+      }
+    }
+    throw Exception("Firestore retry failed");
+  }
+
   Future<void> updateUserId(String uid) async {
     try {
-      final doc = await _firestore.collection('users').doc(uid).get();
+      final doc = await _getWithRetry(_firestore.collection('users').doc(uid));
       if (!doc.exists) throw 'Profil introuvable';
       user = AppUser.fromMap(doc.data() as Map<String, dynamic>);
       update();
@@ -81,13 +98,15 @@ class ProfileController extends GetxController {
     update();
 
     try {
+      final ctx = 'profile:$uid';
+
       if (isRefresh) {
-        final ctx = 'profile:$uid';
         await _videoManager.disposeAllForContext(ctx);
         videoList.clear();
         _lastVideoDoc = null;
         _hasMoreVideos = true;
       }
+
       if (!_hasMoreVideos) return;
 
       Query q = _firestore
@@ -116,16 +135,22 @@ class ProfileController extends GetxController {
         videoList.addAll(unique);
         _lastVideoDoc = snap.docs.last;
 
-        final ctx = 'profile:$uid';
+        // ✅ SLIDING WINDOW DE MÉMOIRE : supprimer anciens contrôleurs
+        if (videoList.length > _videoMemoryLimit) {
+          final toRemove = videoList.length - _videoMemoryLimit;
+          final removed = videoList.take(toRemove).toList();
+          final urlsToDispose = removed.map((v) => v.videoUrl).toList();
+          await _videoManager.disposeUrls(ctx, urlsToDispose);
+          videoList.removeRange(0, toRemove);
+        }
+
         final urls = videoList.map((v) => v.videoUrl).toList();
 
-        /// ✅ Initialiser et précharger la première vidéo pour lecture instantanée
         if (isRefresh && videoList.isNotEmpty) {
           await _videoManager.initializeController(ctx, videoList.first.videoUrl);
           _videoManager.pauseAllExcept(ctx, videoList.first.videoUrl);
           _videoManager.preloadSurrounding(ctx, urls, 0);
 
-          /// ✅ Préchargement des suivantes (style TikTok)
           for (int i = 1; i < 4 && i < videoList.length; i++) {
             unawaited(_videoManager.initializeController(ctx, videoList[i].videoUrl, isPreload: true));
           }
@@ -173,8 +198,8 @@ class ProfileController extends GetxController {
       final uid = user?.uid;
       if (current == null || uid == null || current == uid) return;
 
-      final snap = await _firestore.collection('users').doc(current).get();
-      final followings = List<String>.from(snap.get('followings') ?? []);
+      final doc = await _getWithRetry(_firestore.collection('users').doc(current));
+      final followings = List<String>.from(doc.get('followings') ?? []);
       if (followings.contains(uid)) {
         followings.remove(uid);
         user!.followers--;
@@ -193,7 +218,6 @@ class ProfileController extends GetxController {
     }
   }
 
-  /// ✅ Pour pause globale dans ProfileScreen
   Future<void> pauseAll() async {
     final ctx = 'profile:${user?.uid ?? ''}';
     await _videoManager.pauseAll(ctx);
@@ -205,8 +229,7 @@ class ProfileController extends GetxController {
   }
 
   bool get isOwnProfile {
-  final current = FirebaseAuth.instance.currentUser?.uid;
-  return current != null && current == user?.uid;
-}
-
+    final current = FirebaseAuth.instance.currentUser?.uid;
+    return current != null && current == user?.uid;
+  }
 }

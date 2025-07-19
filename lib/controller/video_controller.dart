@@ -56,7 +56,6 @@ class VideoController extends GetxController {
           .toList();
 
       videoList.assignAll(fetchedVideos);
-
       _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
       _hasMore = snapshot.docs.length >= _limit;
     }, onError: (e) {
@@ -125,7 +124,7 @@ class VideoController extends GetxController {
       return true;
     } catch (e) {
       _fetchLock?.completeError(e);
-      rethrow;
+      return false;
     } finally {
       _isLoading = false;
     }
@@ -174,10 +173,26 @@ class VideoController extends GetxController {
     await videoManager.pauseAll(contextKey);
   }
 
+  Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(
+    DocumentReference<Map<String, dynamic>> ref,
+  ) async {
+    int attempt = 0;
+    while (attempt < 3) {
+      try {
+        return await ref.get();
+      } catch (e) {
+        attempt++;
+        if (attempt >= 3) rethrow;
+        await Future.delayed(Duration(milliseconds: 300 * attempt));
+      }
+    }
+    throw Exception("Firestore retry failed");
+  }
+
   Future<bool> likeVideo(String videoId, String userId) async {
     try {
       final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
-      final doc = await ref.get();
+      final doc = await _getWithRetry(ref);
       if (!doc.exists) return false;
 
       final data = doc.data()!;
@@ -199,7 +214,7 @@ class VideoController extends GetxController {
   Future<bool> partagerVideo(String videoId) async {
     try {
       final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
-      final doc = await ref.get();
+      final doc = await _getWithRetry(ref);
       if (!doc.exists) return false;
 
       int shareCount = doc.data()?['shareCount'] ?? 0;
@@ -215,7 +230,7 @@ class VideoController extends GetxController {
   Future<bool> signalerVideo(String videoId, String userId) async {
     try {
       final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
-      final doc = await ref.get();
+      final doc = await _getWithRetry(ref);
       if (!doc.exists) return false;
 
       final data = doc.data()!;

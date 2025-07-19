@@ -18,13 +18,37 @@ class EventController extends GetxController {
     fetchEvents(); // Charger les événements au démarrage
   }
 
-  /// Charger les événements depuis Firestore
-  void fetchEvents() {
-    _firestore.collection('events').snapshots().listen((snapshot) {
-_events.value = snapshot.docs
-  .map((doc) => Event.fromMap(doc.data()))
-  .toList()
-  ..sort((a, b) => b.createdAt.compareTo(a.createdAt)); // ⬅️ Trier du plus récent au plus ancien
+  /// Charger les événements depuis Firestore et mettre à jour le statut si expiré
+  void fetchEvents() async {
+    _firestore.collection('events').snapshots().listen((snapshot) async {
+      List<Event> updatedEvents = [];
+
+      for (var doc in snapshot.docs) {
+        Event event = Event.fromMap(doc.data());
+
+        // Vérifie si la date de fin est dépassée
+        if (event.dateFin.isBefore(DateTime.now()) && event.statut != 'fermé') {
+          await _firestore.collection('events').doc(event.id).update({'statut': 'fermé'});
+          event = Event(
+            id: event.id,
+            titre: event.titre,
+            description: event.description,
+            dateDebut: event.dateDebut,
+            dateFin: event.dateFin,
+            organisateur: event.organisateur,
+            participants: event.participants,
+            statut: 'fermé',
+            lieu: event.lieu,
+            estPublic: event.estPublic,
+            createdAt: event.createdAt,
+          );
+        }
+
+        updatedEvents.add(event);
+      }
+
+      _events.value = updatedEvents
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       update(); // Met à jour l'interface utilisateur
     });
@@ -87,8 +111,7 @@ _events.value = snapshot.docs
     }
 
     try {
-      DocumentSnapshot eventDoc =
-          await _firestore.collection('events').doc(eventId).get();
+      DocumentSnapshot eventDoc = await _firestore.collection('events').doc(eventId).get();
 
       if (eventDoc.exists) {
         Event event = Event.fromMap(eventDoc.data() as Map<String, dynamic>);
@@ -123,15 +146,13 @@ _events.value = snapshot.docs
     }
 
     try {
-      DocumentSnapshot eventDoc =
-          await _firestore.collection('events').doc(eventId).get();
+      DocumentSnapshot eventDoc = await _firestore.collection('events').doc(eventId).get();
 
       if (eventDoc.exists) {
         Event event = Event.fromMap(eventDoc.data() as Map<String, dynamic>);
 
         if (_isAlreadyRegistered(event, participant)) {
-          event.participants
-              .removeWhere((participantItem) => participantItem.uid == participant.uid);
+          event.participants.removeWhere((p) => p.uid == participant.uid);
           await _firestore.collection('events').doc(eventId).update({
             'participants': event.participants.map((p) => p.toMap()).toList()
           });
@@ -181,8 +202,7 @@ _events.value = snapshot.docs
         if (fcmToken != null && fcmToken.isNotEmpty) {
           await PushNotificationService.sendNotification(
             title: 'Nouvel Événement',
-            body:
-                '${utilisateur.nom} a créé un nouvel événement : ${event.titre}',
+            body: '${utilisateur.nom} a créé un nouvel événement : ${event.titre}',
             token: fcmToken,
             contextType: 'event',
             contextData: event.id,
