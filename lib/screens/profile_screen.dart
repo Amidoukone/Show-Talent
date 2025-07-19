@@ -1,4 +1,5 @@
 import 'package:adfoot/controller/video_controller.dart';
+import 'package:adfoot/models/video.dart';
 import 'package:adfoot/screens/profil_video_scrollview.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -30,12 +31,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ChatController _chatController = Get.put(ChatController());
   final ImagePicker _imagePicker = ImagePicker();
   final VideoManager _videoManager = VideoManager();
+  final ScrollController _scrollController = ScrollController();
+
+  static const int visibleWindowSize = 25;
 
   @override
   void initState() {
     super.initState();
     _profileController = Get.put(ProfileController(), tag: widget.uid);
     _profileController.updateUserId(widget.uid);
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+              _scrollController.position.maxScrollExtent - 200 &&
+          !_profileController.isLoadingVideos &&
+          _profileController.hasMoreVideos) {
+        _profileController.fetchUserVideos(widget.uid);
+      }
+    });
   }
 
   @override
@@ -43,8 +56,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final ctx = 'profile:${widget.uid}';
     _profileController.pauseAll();
     _videoManager.disposeAllForContext(ctx);
+    _scrollController.dispose();
     Get.delete<ProfileController>(tag: widget.uid);
     super.dispose();
+  }
+
+  List<Video> _getVisibleVideos(List<Video> fullList) {
+    if (fullList.length <= visibleWindowSize) {
+      return fullList;
+    }
+    return fullList.sublist(fullList.length - visibleWindowSize);
   }
 
   @override
@@ -61,6 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final user = controller.user!;
         final currentUid = _authController.currentUid;
         final isOwnProfile = currentUid != null && currentUid == user.uid;
+        final visibleVideos = _getVisibleVideos(controller.videoList);
 
         return Scaffold(
           appBar: AppBar(
@@ -83,44 +105,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
           body: SafeArea(
             child: RefreshIndicator(
               onRefresh: () => controller.refreshProfileVideos(),
-              child: Builder(builder: (_) {
-                final videos = controller.videoList;
-                final loading = controller.isLoadingVideos;
-                final hasMore = controller.hasMoreVideos;
-
-                return CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    SliverToBoxAdapter(
-                        child: _buildProfilePhotoSection(
-                            user, isOwnProfile, widget.isReadOnly)),
-                    SliverToBoxAdapter(child: const SizedBox(height: 20)),
-                    SliverToBoxAdapter(child: _buildStatSection(user)),
-                    if (!isOwnProfile)
-                      SliverToBoxAdapter(
-                          child: _buildFollowUnfollowButton(user)),
-                    SliverToBoxAdapter(child: const SizedBox(height: 20)),
-                    SliverToBoxAdapter(child: _buildBioSection(user)),
-                    SliverToBoxAdapter(child: const SizedBox(height: 20)),
-                    SliverToBoxAdapter(child: _buildSpecificInfoSection(user)),
-                    SliverToBoxAdapter(child: const SizedBox(height: 20)),
-                    if (user.role == 'joueur') ...[
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        sliver: SliverGrid(
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 4,
-                            mainAxisSpacing: 4,
-                            childAspectRatio: 9 / 16,
-                          ),
-                          delegate: SliverChildBuilderDelegate((c, index) {
-                            if (index >= videos.length) {
+              child: CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: _buildProfilePhotoSection(
+                        user, isOwnProfile, widget.isReadOnly),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                  SliverToBoxAdapter(child: _buildStatSection(user)),
+                  if (!isOwnProfile)
+                    SliverToBoxAdapter(child: _buildFollowUnfollowButton(user)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                  SliverToBoxAdapter(child: _buildBioSection(user)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                  SliverToBoxAdapter(child: _buildSpecificInfoSection(user)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                  if (user.role == 'joueur') ...[
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      sliver: SliverGrid(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 4,
+                          mainAxisSpacing: 4,
+                          childAspectRatio: 9 / 16,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (c, index) {
+                            if (index >= visibleVideos.length) {
                               return const Center(
                                   child: CircularProgressIndicator());
                             }
-                            final vid = videos[index];
+                            final vid = visibleVideos[index];
                             return GestureDetector(
                               onTap: () async {
                                 final contextKey = 'profile:${widget.uid}';
@@ -135,9 +154,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 Get.find<VideoController>(tag: contextKey)
                                     .currentIndex
                                     .value = index;
-
                                 await Get.to(() => ProfileVideoScrollView(
-                                      videos: videos,
+                                      videos: visibleVideos,
                                       initialIndex: index,
                                       uid: widget.uid,
                                       contextKey: contextKey,
@@ -162,45 +180,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ],
                               ),
                             );
-                          }, childCount: videos.length + (hasMore ? 1 : 0)),
+                          },
+                          childCount: visibleVideos.length,
                         ),
                       ),
-                      if (loading && hasMore)
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 20),
-                            child: const Center(
-                                child: CircularProgressIndicator()),
-                          ),
+                    ),
+                    if (controller.isLoadingVideos && controller.hasMoreVideos)
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: Center(child: CircularProgressIndicator()),
                         ),
-                    ],
+                      ),
                   ],
-                );
-              }),
+                ],
+              ),
             ),
           ),
         );
       },
     );
-  }
-
-  Future<void> _handleSendMessage(AppUser user) async {
+  }  Future<void> _handleSendMessage(AppUser user) async {
     final currentUserId = _authController.currentUid;
     if (currentUserId == null || currentUserId.isEmpty) {
       Get.snackbar('Erreur', 'Veuillez vous connecter.',
           backgroundColor: Colors.red, colorText: Colors.white);
       return;
     }
-
     try {
       final conversationId = await _chatController.createOrGetConversation(
         currentUserId: currentUserId,
         otherUserId: user.uid,
       );
       if (conversationId.isNotEmpty) {
-        Get.to(() => ChatScreen(conversationId: conversationId, otherUser: user));
-      } else {
-        throw Exception('Conversation invalide');
+        Get.to(
+            () => ChatScreen(conversationId: conversationId, otherUser: user));
       }
     } catch (e) {
       Get.snackbar('Erreur', 'Impossible d’envoyer un message : $e',

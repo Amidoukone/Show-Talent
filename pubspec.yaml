@@ -44,7 +44,6 @@ dependencies:
   video_player: ^2.9.5
   image_picker: ^1.1.2
   path_provider: ^2.1.4
-  chewie: ^1.8.5
   get: ^4.6.5
   gap: ^3.0.1
   video_compress: ^3.1.2
