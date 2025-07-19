@@ -30,6 +30,11 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
   late final String _ctxKey;
   final VideoManager _videoManager = VideoManager();
 
+  bool _isProcessing = false;
+  String? _currentPlayingUrl;
+
+  static const int _videoSlidingWindowLimit = 25;
+
   @override
   void initState() {
     super.initState();
@@ -42,27 +47,67 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _processIndex(_currentIndex);
+      _handleIndexChange(_currentIndex);
     });
   }
 
-  void _processIndex(int idx) {
-    final urls = widget.videos.map((v) => v.videoUrl).toList();
-    final currentUrl = urls[idx];
+  Future<void> _handleIndexChange(int idx) async {
+    if (_isProcessing) return;
+    _isProcessing = true;
 
-    _videoManager.preloadSurrounding(_ctxKey, urls, idx);
-    _videoManager.pauseAllExcept(_ctxKey, currentUrl);
+    try {
+      final urls = widget.videos.map((v) => v.videoUrl).toList();
+      final currentUrl = urls[idx];
 
-    if (!_videoManager.hasController(_ctxKey, currentUrl)) {
-      unawaited(_videoManager.initializeController(_ctxKey, currentUrl));
+      await _videoManager.pauseAll(_ctxKey);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final controller = await _videoManager.initializeController(
+        _ctxKey,
+        currentUrl,
+        autoPlay: true,
+      );
+
+      _currentIndex = idx;
+      _currentPlayingUrl = currentUrl;
+      setState(() {});
+
+      // ✅ Préchargement 2 avant/après
+      _videoManager.preloadSurrounding(_ctxKey, urls, idx);
+
+      // ✅ Sliding window memory control
+      final retainedIndices = <int>[];
+      for (int i = idx - (_videoSlidingWindowLimit ~/ 2); i <= idx + (_videoSlidingWindowLimit ~/ 2); i++) {
+        if (i >= 0 && i < urls.length) retainedIndices.add(i);
+      }
+      final retainedUrls = retainedIndices.map((i) => urls[i]).toSet();
+      final allUrls = Set<String>.from(urls);
+      final toDispose = allUrls.difference(retainedUrls);
+      await _videoManager.disposeUrls(_ctxKey, toDispose.toList());
+
+      if (!controller.value.isPlaying) await controller.play();
+    } catch (e, st) {
+      debugPrint("❌ Error in _handleIndexChange: $e\n$st");
+    } finally {
+      _isProcessing = false;
     }
   }
 
   @override
   void dispose() {
-    _videoManager.disposeAllForContext(_ctxKey);
+    _disposeWithDelay();
     _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _disposeWithDelay() async {
+    try {
+      await _videoManager.pauseAll(_ctxKey);
+      await Future.delayed(const Duration(milliseconds: 100));
+      await _videoManager.disposeAllForContext(_ctxKey);
+    } catch (e) {
+      debugPrint('❌ Error during dispose: $e');
+    }
   }
 
   @override
@@ -87,10 +132,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
             controller: _pageController,
             scrollDirection: Axis.vertical,
             itemCount: widget.videos.length,
-            onPageChanged: (idx) {
-              setState(() => _currentIndex = idx);
-              _processIndex(idx);
-            },
+            onPageChanged: _handleIndexChange,
             itemBuilder: (_, idx) {
               final video = widget.videos[idx];
               final controller = _videoManager.getController(_ctxKey, video.videoUrl);
@@ -98,7 +140,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
               return Stack(
                 children: [
                   SmartVideoPlayer(
-                    key: ValueKey(video.id),
+                    key: ValueKey(_currentPlayingUrl == video.videoUrl ? video.id : '${video.id}_placeholder'),
                     contextKey: _ctxKey,
                     videoUrl: video.videoUrl,
                     video: video,
@@ -154,9 +196,8 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
                   icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
                   onPressed: () async {
                     await _videoManager.pauseAll(_ctxKey);
-                    if (mounted) {
-                      Get.back();
-                    }
+                    await Future.delayed(const Duration(milliseconds: 100));
+                    if (mounted) Get.back();
                   },
                 ),
               ),

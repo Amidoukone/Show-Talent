@@ -69,8 +69,15 @@ class EventListScreen extends StatelessWidget {
             _buildOrganiserSection(context, organiser),
             const SizedBox(height: 10),
             _buildEventDetails(event),
+            const SizedBox(height: 5),
+            Text(
+              '${event.participants.length} joueur(s) inscrit(s)',
+              style: const TextStyle(color: Colors.black87, fontSize: 14),
+            ),
             const SizedBox(height: 20),
-            isOrganisateur ? _buildOrganisateurActions(context, event) : _buildParticipantActions(context, event, currentUser, isParticipant),
+            isOrganisateur
+                ? _buildOrganisateurActions(context, event)
+                : _buildParticipantActions(context, event, currentUser, isParticipant),
           ],
         ),
       ),
@@ -86,7 +93,11 @@ class EventListScreen extends StatelessWidget {
           },
           child: CircleAvatar(
             radius: 25,
-            backgroundImage: NetworkImage(organiser.photoProfil.isNotEmpty ? organiser.photoProfil : 'https://via.placeholder.com/150'),
+            backgroundImage: NetworkImage(
+              organiser.photoProfil.isNotEmpty
+                  ? organiser.photoProfil
+                  : 'https://via.placeholder.com/150',
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -121,9 +132,19 @@ class EventListScreen extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 5),
-        Text('Lieu: ${event.lieu}', style: const TextStyle(color: Colors.grey, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(
+          'Lieu: ${event.lieu}',
+          style: const TextStyle(color: Colors.grey, fontSize: 14),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
         const SizedBox(height: 5),
-        Text('Statut: ${event.statut}', style: const TextStyle(color: Colors.grey, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(
+          'Statut: ${event.statut}',
+          style: const TextStyle(color: Colors.grey, fontSize: 14),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
       ],
     );
   }
@@ -136,19 +157,28 @@ class EventListScreen extends StatelessWidget {
           onPressed: () {
             _markAsCompleted(context, event);
           },
-          child: const Text('Terminer', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
+          child: const Text(
+            'Terminer',
+            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+          ),
         ),
         TextButton(
           onPressed: () {
             Get.to(() => EventDetailsScreen(event: event));
           },
-          child: const Text('Voir les détails', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+          child: const Text(
+            'Voir les détails',
+            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+          ),
         ),
         TextButton(
           onPressed: () {
             _confirmDeleteEvent(context, event);
           },
-          child: const Text('Supprimer', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          child: const Text(
+            'Supprimer',
+            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+          ),
         ),
       ],
     );
@@ -159,9 +189,11 @@ class EventListScreen extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         ElevatedButton.icon(
-          onPressed: (isParticipant || event.statut == 'Terminé') ? null : () {
-            eventController.registerToEvent(event.id, currentUser);
-          },
+          onPressed: (isParticipant || event.statut == 'Terminé' || event.statut == 'fermé')
+              ? null
+              : () {
+                  eventController.registerToEvent(event.id, currentUser);
+                },
           icon: const Icon(Icons.event_available, color: Colors.white),
           label: const Text(
             'S\'inscrire',
@@ -170,7 +202,9 @@ class EventListScreen extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             elevation: 3,
             padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
-            backgroundColor: (isParticipant || event.statut == 'Terminé') ? Colors.grey : const Color(0xFF2E7D32),
+            backgroundColor: (isParticipant || event.statut == 'Terminé' || event.statut == 'fermé')
+                ? Colors.grey
+                : const Color(0xFF2E7D32),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
           ),
         ),

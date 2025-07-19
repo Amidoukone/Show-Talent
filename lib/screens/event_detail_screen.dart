@@ -34,7 +34,7 @@ class EventDetailsScreen extends StatelessWidget {
                     final updated = await Get.to(() => EventFormScreen(event: event));
                     if (updated == true) {
                       Get.find<EventController>().fetchEvents();
-                      Get.offAllNamed('/main', arguments: 2); // ✅ Revenir à EventListScreen avec bottom bar
+                      Get.offAllNamed('/main', arguments: 2);
                     }
                   },
                 ),
@@ -99,6 +99,19 @@ class EventDetailsScreen extends StatelessWidget {
                 fontWeight: FontWeight.bold,
                 color: _getStatusColor(event.statut),
               ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            const Text(
+              'Joueurs inscrits: ',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '${event.participants.length}',
+              style: const TextStyle(fontSize: 18),
             ),
           ],
         ),
@@ -198,6 +211,8 @@ class EventDetailsScreen extends StatelessWidget {
         return Colors.red;
       case 'En cours':
         return Colors.orange;
+      case 'fermé':
+        return Colors.grey;
       default:
         return Colors.green;
     }

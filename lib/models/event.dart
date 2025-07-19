@@ -28,6 +28,12 @@ class Event {
     required this.createdAt,
   });
 
+  /// 🔢 Nombre total de participants
+  int get nbParticipants => participants.length;
+
+  /// 📅 Vérifie si la date de fin est dépassée
+  bool get isExpired => dateFin.isBefore(DateTime.now());
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -61,4 +67,3 @@ class Event {
     );
   }
 }
-

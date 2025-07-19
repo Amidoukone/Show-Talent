@@ -18,19 +18,41 @@ class OffreController extends GetxController {
     _fetchOffres();
   }
 
-  /// Récupérer les offres depuis Firestore
-void _fetchOffres() {
-  _firestore
-      .collection('offres')
-      .orderBy('dateCreation', descending: true) // ✅ important
-      .snapshots()
-      .listen((snapshot) {
-    _offres.value =
-        snapshot.docs.map((doc) => Offre.fromMap(doc.data())).toList();
-    update();
-  });
-}
+  /// Récupérer les offres depuis Firestore avec mise à jour du statut
+  void _fetchOffres() {
+    _firestore
+        .collection('offres')
+        .orderBy('dateCreation', descending: true)
+        .snapshots()
+        .listen((snapshot) async {
+      List<Offre> fetched = [];
 
+      for (var doc in snapshot.docs) {
+        Offre offre = Offre.fromMap(doc.data());
+
+        // Mise à jour automatique du statut si date dépassée
+        if (offre.dateFin.isBefore(DateTime.now()) && offre.statut == 'ouverte') {
+          await _firestore.collection('offres').doc(offre.id).update({'statut': 'fermée'});
+          offre = Offre(
+            id: offre.id,
+            titre: offre.titre,
+            description: offre.description,
+            dateDebut: offre.dateDebut,
+            dateFin: offre.dateFin,
+            recruteur: offre.recruteur,
+            candidats: offre.candidats,
+            statut: 'fermée',
+            dateCreation: offre.dateCreation,
+          );
+        }
+
+        fetched.add(offre);
+      }
+
+      _offres.value = fetched;
+      update();
+    });
+  }
 
   /// Publier une offre et notifier les joueurs
   Future<void> publierOffre(Offre offre, AppUser utilisateur) async {
@@ -41,11 +63,8 @@ void _fetchOffres() {
     }
 
     try {
-      // Enregistrer l'offre dans Firestore
       await _firestore.collection('offres').doc(offre.id).set(offre.toMap());
       Get.snackbar('Succès', 'Offre publiée avec succès.');
-
-      // Notifier les joueurs
       await _notifierJoueurs(offre, utilisateur);
     } catch (e) {
       print('Erreur lors de la publication de l\'offre : $e');
@@ -74,9 +93,6 @@ void _fetchOffres() {
             contextType: 'offre',
             contextData: offre.id,
           );
-          print('Notification envoyée au joueur : ${joueurData['nom']}');
-        } else {
-          print('Token FCM manquant pour le joueur : ${joueurData['nom']}');
         }
       }
     } catch (e) {
@@ -113,10 +129,7 @@ void _fetchOffres() {
 
     try {
       await _firestore.collection('offres').doc(offreId).delete();
-
-      // Fermer le dialogue après suppression
       Get.back();
-
       Get.snackbar('Succès', 'Offre supprimée avec succès.');
     } catch (e) {
       print('Erreur lors de la suppression de l\'offre : $e');
@@ -131,6 +144,7 @@ void _fetchOffres() {
           'Accès refusé', 'Seuls les joueurs peuvent postuler à une offre.');
       return;
     }
+
     if (offre.statut == 'fermée') {
       Get.snackbar(
           'Offre fermée', 'Vous ne pouvez pas postuler à une offre fermée.');
