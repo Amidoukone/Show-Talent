@@ -13,17 +13,20 @@ class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
   @override
-  _MainScreenState createState() => _MainScreenState();
+  State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
-  final ChatController chatController = Get.put(ChatController());
+
   final UserController userController = Get.find<UserController>();
-  final VideoController? videoController = Get.isRegistered<VideoController>() ? Get.find<VideoController>() : null;
+  final ChatController chatController = Get.put(ChatController());
+  final VideoController? videoController = Get.isRegistered<VideoController>()
+      ? Get.find<VideoController>()
+      : null;
 
   final List<Widget> _screens = [
-    const HomeScreen(),
+    HomeScreen(),
     OffreScreen(),
     EventListScreen(),
     ConversationsScreen(),
@@ -32,34 +35,30 @@ class _MainScreenState extends State<MainScreen> {
 
   bool _hasHandledArguments = false;
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
-    // ✅ Ne traiter les arguments qu'une seule fois
     if (!_hasHandledArguments) {
       final args = Get.arguments;
 
       if (args != null) {
-        if (args is Map && args.containsKey('tab')) {
-          _selectedIndex = args['tab'] ?? 0;
-        } else if (args is int) {
+        if (args is int) {
           _selectedIndex = args;
-        }
-
-        if (args is Map && args['refresh'] == true) {
-          videoController?.refreshVideos();
+        } else if (args is Map) {
+          _selectedIndex = args['tab'] ?? 0;
+          if (args['refresh'] == true) {
+            videoController?.refreshVideos();
+          }
         }
       }
-
       _hasHandledArguments = true;
     }
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
   @override
@@ -84,7 +83,7 @@ class _MainScreenState extends State<MainScreen> {
           items: const [
             BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Accueil'),
             BottomNavigationBarItem(icon: Icon(Icons.local_offer), label: 'Offres'),
-            BottomNavigationBarItem(icon: Icon(Icons.event), label: 'Events'),
+            BottomNavigationBarItem(icon: Icon(Icons.event), label: 'Événements'),
             BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Messages'),
             BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Paramètres'),
           ],

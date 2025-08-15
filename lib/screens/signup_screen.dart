@@ -1,30 +1,44 @@
+import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/verify_email_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../models/user.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
-
   @override
-  _SignUpScreenState createState() => _SignUpScreenState();
+  State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+
   String _selectedRole = 'joueur';
   bool _obscurePassword = true;
   bool _isLoading = false;
   final _formKey = GlobalKey<FormState>();
 
-  void _showSnackbar(String title, String message, Color color) {
+  static final ActionCodeSettings _acs = ActionCodeSettings(
+    url: 'https://adfoot.org/verify',
+    handleCodeInApp: false,
+  );
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  void _showSnackbar(String title, String msg, Color color) {
     Get.snackbar(
-      title,
-      message,
+      title, msg,
       snackPosition: SnackPosition.BOTTOM,
       backgroundColor: color,
       colorText: Colors.white,
@@ -37,63 +51,115 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+      final email = _emailController.text.trim();
+      final password = _passwordController.text.trim();
+      final nom = _nameController.text.trim();
+      final phone = _phoneController.text.trim();
+
+      final userCred = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      final user = userCred.user;
+      if (user == null) {
+        _showSnackbar('Erreur', 'Impossible de créer le compte.', Colors.red);
+        return;
+      }
+
+      await user.updateDisplayName(nom);
+
+      final now = DateTime.now();
+      final appUser = AppUser(
+        uid: user.uid,
+        nom: nom,
+        email: email,
+        role: _selectedRole,
+        photoProfil: '',
+        estActif: false,
+        estBloque: false,
+        emailVerified: false,
+        followers: 0,
+        followings: 0,
+        dateInscription: now,
+        dernierLogin: now,
+        phone: phone.isNotEmpty ? phone : null,
+        emailVerifiedAt: null,
+        bio: null,
+        position: null,
+        clubActuel: null,
+        nombreDeMatchs: null,
+        buts: null,
+        assistances: null,
+        videosPubliees: const [],
+        performances: const {},
+        nomClub: null,
+        ligue: null,
+        offrePubliees: const [],
+        eventPublies: const [],
+        entreprise: null,
+        nombreDeRecrutements: null,
+        team: null,
+        joueursSuivis: const [],
+        clubsSuivis: const [],
+        videosLikees: const [],
+        cvUrl: null,
+        followersList: const [],
+        followingsList: const [],
       );
 
-      final User? user = userCredential.user;
-      if (user != null) {
-        await user.sendEmailVerification();
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(appUser.toMap());
 
-        final newUser = AppUser(
-          uid: user.uid,
-          nom: _nameController.text.trim(),
-          email: _emailController.text.trim(),
-          role: _selectedRole,
-          photoProfil: '',
-          estActif: true,
-          estBloque: false,
-          followers: 0,
-          followings: 0,
-          dateInscription: DateTime.now(),
-          dernierLogin: DateTime.now(),
-          followersList: [],
-          followingsList: [],
+      bool sent = false;
+      int? sentAtMs;
+      try {
+        await user.sendEmailVerification(_acs);
+        sent = true;
+        sentAtMs = DateTime.now().millisecondsSinceEpoch;
+      } on FirebaseAuthException catch (e) {
+        // Si rate-limit ou autre à l’inscription, on n’insiste pas ici
+        debugPrint('sendEmailVerification error: ${e.code} - ${e.message}');
+        _showSnackbar(
+          'Attention',
+          'E-mail non envoyé. Tu pourras le renvoyer sur l’écran suivant.',
+          Colors.orange,
         );
-
-        await FirebaseFirestore.instance
-            .collection('pending_users')
-            .doc(user.uid)
-            .set(newUser.toMap());
-
-        Get.offAll(() => const VerifyEmailScreen());
-        _showSnackbar('Succès', 'Vérifiez votre email pour activer le compte', Colors.green);
       }
-    } on FirebaseAuthException catch (e) {
-      _handleAuthError(e);
-    } catch (e) {
-      _showSnackbar('Erreur', 'Une erreur inattendue est survenue : ${e.toString()}', Colors.red);
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
 
-  void _handleAuthError(FirebaseAuthException e) {
-    String errorMessage = 'Échec de l\'inscription';
-    switch (e.code) {
-      case 'email-already-in-use':
-        errorMessage = 'Cet email est déjà utilisé';
-        break;
-      case 'weak-password':
-        errorMessage = 'Mot de passe trop faible (min. 6 caractères)';
-        break;
-      case 'invalid-email':
-        errorMessage = 'Format d\'email invalide';
-        break;
+      await FirebaseAuth.instance.currentUser?.reload();
+
+      if (!mounted) return;
+      _showSnackbar(
+        'Compte créé',
+        sent
+            ? 'Vérifie ton adresse e-mail pour activer ton compte.'
+            : 'Compte créé. Renvoyez le lien depuis l’écran suivant.',
+        Colors.green,
+      );
+
+      // ⚠️ On passe l’état d’envoi au prochain écran
+      Get.offAll(
+        () => const VerifyEmailScreen(),
+        arguments: {
+          'emailSent': sent,
+          'sentAt': sentAtMs, // utilisé pour afficher un cooldown UI max 60s SEULEMENT si sent==true
+        },
+      );
+    } on FirebaseAuthException catch (e) {
+      String err = switch (e.code) {
+        'email-already-in-use' => 'Email déjà utilisé.',
+        'weak-password' => 'Mot de passe trop court.',
+        'invalid-email' => 'Email invalide.',
+        'operation-not-allowed' => 'Inscription par e-mail désactivée.',
+        _ => e.message ?? 'Erreur. Réessaye.'
+      };
+      _showSnackbar('Erreur', err, Colors.red);
+    } catch (e) {
+      _showSnackbar('Erreur', e.toString(), Colors.red);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-    _showSnackbar('Erreur', errorMessage, Colors.red);
   }
 
   @override
@@ -114,9 +180,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF214D4F)),
                 ),
                 const SizedBox(height: 30),
-                _buildNameField(),
+                _buildTextField(_nameController, 'Nom complet', Icons.person_outline, validator: _validateName),
                 const SizedBox(height: 20),
-                _buildEmailField(),
+                _buildTextField(
+                  _emailController,
+                  'Adresse email',
+                  Icons.email_outlined,
+                  keyboardType: TextInputType.emailAddress,
+                  validator: _validateEmail,
+                ),
+                const SizedBox(height: 20),
+                _buildTextField(
+                  _phoneController,
+                  'Numéro de téléphone',
+                  Icons.phone,
+                  keyboardType: TextInputType.phone,
+                ),
                 const SizedBox(height: 20),
                 _buildPasswordField(),
                 const SizedBox(height: 20),
@@ -131,44 +210,22 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  Widget _buildNameField() {
+  Widget _buildTextField(
+    TextEditingController ctrl,
+    String label,
+    IconData icon, {
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+  }) {
     return TextFormField(
-      controller: _nameController,
-      textCapitalization: TextCapitalization.words,
+      controller: ctrl,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
-        labelText: 'Nom complet',
-        prefixIcon: const Icon(Icons.person_outline),
+        labelText: label,
+        prefixIcon: Icon(icon),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      validator: (value) {
-        if (value == null || value.trim().isEmpty) {
-          return 'Le nom est obligatoire.';
-        }
-        final nameRegex = RegExp(r"^[A-Za-zÀ-ÿ\s'-]+$");
-        if (!nameRegex.hasMatch(value.trim())) {
-          return 'Le nom ne doit contenir que des lettres.';
-        }
-        return null;
-      },
-    );
-  }
-
-  Widget _buildEmailField() {
-    return TextFormField(
-      controller: _emailController,
-      keyboardType: TextInputType.emailAddress,
-      decoration: InputDecoration(
-        labelText: 'Adresse e-mail',
-        prefixIcon: const Icon(Icons.email_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      validator: (value) {
-        if (value == null || value.isEmpty) return 'L\'email est obligatoire.';
-        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
-          return 'Entrez un email valide.';
-        }
-        return null;
-      },
+      validator: validator,
     );
   }
 
@@ -185,52 +242,51 @@ class _SignUpScreenState extends State<SignUpScreen> {
           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
         ),
       ),
-      validator: (value) {
-        if (value == null || value.length < 6) {
-          return 'Minimum 6 caractères requis';
-        }
-        return null;
-      },
+      validator: (val) => (val?.length ?? 0) < 6 ? 'Minimum 6 caractères' : null,
     );
   }
 
   Widget _buildRoleDropdown() {
     return DropdownButtonFormField<String>(
       value: _selectedRole,
-      items: ['joueur', 'club', 'recruteur', 'fan']
-          .map((role) => DropdownMenuItem<String>(
-                value: role,
-                child: Text(role.capitalizeFirst!),
-              ))
-          .toList(),
-      onChanged: (value) => setState(() => _selectedRole = value!),
       decoration: InputDecoration(
-        labelText: 'Sélectionnez un rôle',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        labelText: 'Rôle',
         prefixIcon: const Icon(Icons.account_circle_outlined),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
+      items: ['joueur', 'club', 'recruteur', 'fan']
+          .map((r) => DropdownMenuItem(value: r, child: Text(r.capitalizeFirst!)))
+          .toList(),
+      onChanged: (v) => setState(() => _selectedRole = v ?? 'joueur'),
     );
   }
 
   Widget _buildSubmitButton() {
-    return _isLoading
-        ? const CircularProgressIndicator(color: Color(0xFF214D4F))
-        : SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _signUp,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF214D4F),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'S\'inscrire',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-            ),
-          );
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _signUp,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF214D4F),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        child: _isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Text('S’inscrire', style: TextStyle(fontSize: 18, color: Colors.white)),
+      ),
+    );
+  }
+
+  String? _validateName(String? v) {
+    if ((v?.trim().isEmpty ?? true)) return 'Le nom est requis';
+    if (!RegExp(r"^[A-Za-zÀ-ÿ\s'-]+$").hasMatch(v!)) return 'Nom invalide';
+    return null;
+  }
+
+  String? _validateEmail(String? v) {
+    if ((v?.trim().isEmpty ?? true)) return 'Email requis';
+    if (!RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(v!)) return 'Email invalide';
+    return null;
   }
 }

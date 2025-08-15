@@ -1,7 +1,9 @@
-import 'package:adfoot/controller/auth_controller.dart';
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'dart:io';
+import '../controller/auth_controller.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   const VerifyEmailScreen({super.key});
@@ -11,146 +13,246 @@ class VerifyEmailScreen extends StatefulWidget {
 }
 
 class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
-  final AuthController _authController = Get.find<AuthController>();
-  bool _isLoading = false;
+  final AuthController _authController = Get.find();
 
-  Future<void> _completeVerification() async {
-    if (_isLoading) return;
-    setState(() => _isLoading = true);
+  bool _isSending = false;
+  bool _isChecking = false;
+  int _cooldown = 0; // secondes restantes avant de pouvoir renvoyer
+  Timer? _timer;
 
-    await _refreshCurrentUser();
+  // Reçu depuis SignUpScreen
+  late final bool _emailSentInitially;
+  late final int? _sentAtMs; // epoch ms quand l’envoi initial a REUSSI
 
-    bool success = await _authController.verifyEmail();
+  static final ActionCodeSettings _acs = ActionCodeSettings(
+    url: 'https://adfoot.org/verify',
+    handleCodeInApp: false,
+  );
 
-    if (!mounted) return;
-    setState(() => _isLoading = false);
+  @override
+  void initState() {
+    super.initState();
+    final args = Get.arguments;
+    _emailSentInitially = (args is Map && args['emailSent'] == true);
+    _sentAtMs = (args is Map && args['sentAt'] is int) ? args['sentAt'] as int : null;
 
-    if (!success) {
-      _showSnackbar('Erreur', 'Votre email n\'est pas encore validé.', Colors.red);
-      return;
-    }
-
-    _restartApp();
+    // ❌ Plus d’envoi auto ici.
+    // Si l’e-mail a été envoyé à l’inscription, on met un petit cooldown UI (max 60s).
+    // S’il n’a pas été envoyé, bouton actif immédiatement.
+    _setupInitialCooldown();
   }
 
-  Future<void> _refreshCurrentUser() async {
-    try {
-      await Future.delayed(const Duration(milliseconds: 300));
-      await _authController.auth.currentUser?.reload();
-    } catch (e) {
-      debugPrint('Erreur de rechargement utilisateur : $e');
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _setupInitialCooldown() {
+    if (_emailSentInitially && _sentAtMs != null) {
+      final elapsed = DateTime.now()
+          .difference(DateTime.fromMillisecondsSinceEpoch(_sentAtMs))
+          .inSeconds;
+      final remain = 60 - elapsed;
+      if (remain > 0) {
+        _startCooldown(remain);
+      }
     }
   }
 
-  void _restartApp() {
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (Platform.isAndroid) {
-        exit(0);
+  void _startCooldown(int sec) {
+    setState(() => _cooldown = sec);
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return t.cancel();
+      if (_cooldown <= 1) {
+        t.cancel();
+        setState(() => _cooldown = 0);
       } else {
-        Get.offAllNamed('/');
+        setState(() => _cooldown--);
       }
     });
   }
 
-  Future<void> _resendVerification() async {
-    setState(() => _isLoading = true);
+  Future<void> _sendVerificationEmail() async {
+    if (_cooldown > 0 || _isSending) return;
+    setState(() => _isSending = true);
 
-    final success = await _authController.resendVerificationEmail();
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception('Utilisateur non connecté.');
+      await user.sendEmailVerification(_acs);
 
-    if (!mounted) return;
-    setState(() => _isLoading = false);
+      // Après un envoi réussi : cooldown léger 60s
+      _startCooldown(60);
 
-    if (success) {
-      _showSnackbar('Succès', 'Email de validation renvoyé !', Colors.green);
-    } else {
-      _showSnackbar('Erreur', 'Échec de l\'envoi.', Colors.red);
+      Get.snackbar(
+        'Lien envoyé',
+        'Un e-mail de vérification a été envoyé.',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'too-many-requests') {
+        // Backoff 180s UNIQUEMENT si Firebase bloque.
+        _startCooldown(180);
+        Get.snackbar(
+          'Trop de tentatives',
+          'Trop de demandes depuis cet appareil. Réessayez plus tard.',
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      } else {
+        Get.snackbar(
+          'Erreur',
+          e.message ?? 'Erreur d’envoi.',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Erreur',
+        e.toString(),
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      if (mounted) setState(() => _isSending = false);
     }
   }
 
-  void _showSnackbar(String title, String message, Color color) {
-    Get.snackbar(title, message, backgroundColor: color, colorText: Colors.white);
+  Future<void> _checkEmailVerified() async {
+    setState(() => _isChecking = true);
+
+    try {
+      await FirebaseAuth.instance.currentUser?.reload();
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user != null && user.emailVerified) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'emailVerified': true,
+          'estActif': true,
+          'emailVerifiedAt': FieldValue.serverTimestamp(),
+          'dernierLogin': DateTime.now(),
+        }, SetOptions(merge: true));
+
+        await _authController.handleAuthState(user);
+
+        Get.snackbar(
+          'Merci',
+          'Adresse e-mail vérifiée ✅',
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      } else {
+        Get.snackbar(
+          'Non vérifié',
+          'Clique sur le lien reçu par e-mail avant de continuer.',
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    } catch (e) {
+      Get.snackbar(
+        'Erreur',
+        e.toString(),
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } finally {
+      if (mounted) setState(() => _isChecking = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final email = FirebaseAuth.instance.currentUser?.email ?? '';
+
     return Scaffold(
       backgroundColor: const Color(0xFFE6EEFA),
       appBar: AppBar(
         title: const Text('Vérification Email'),
-        automaticallyImplyLeading: false,
         backgroundColor: const Color(0xFF214D4F),
+        centerTitle: true,
       ),
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.mark_email_unread_outlined, size: 80, color: Color(0xFF214D4F)),
-              const SizedBox(height: 30),
-              const Text(
-                'Finalisez votre inscription',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF214D4F),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset('assets/logo.png', height: 100),
+                const SizedBox(height: 24),
+                const Text(
+                  'Vérifie ton e-mail',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF214D4F)),
                 ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                '1. Vérifiez votre boîte mail et cliquez sur le lien de confirmation.',
-                style: TextStyle(fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                '2. Revenez ici et cliquez sur "J\'ai validé mon email".',
-                style: TextStyle(fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                '3. L\'application se fermera automatiquement après validation. Veuillez la relancer.',
-                style: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, color: Colors.black54),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 40),
-              _isLoading
-                  ? const CircularProgressIndicator(color: Color(0xFF214D4F))
-                  : SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _completeVerification,
-                        style: ElevatedButton.styleFrom(
-                          elevation: 4,
-                          backgroundColor: const Color(0xFF214D4F),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: const Text(
-                          "J'ai validé mon email",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
+                const SizedBox(height: 12),
+                Text(
+                  email.isNotEmpty
+                      ? 'Un lien a été envoyé à :\n$email'
+                      : 'Un lien de vérification a été envoyé.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFF214D4F)),
+                ),
+                const SizedBox(height: 24),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: (_isSending || _cooldown > 0) ? null : _sendVerificationEmail,
+                    icon: _isSending
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.mark_email_read_outlined),
+                    label: Text(
+                      _cooldown > 0 ? 'Renvoyer dans $_cooldown s' : 'Renvoyer le lien',
                     ),
-              const SizedBox(height: 20),
-              TextButton(
-                onPressed: _resendVerification,
-                child: const Text(
-                  'Renvoyer l\'email de vérification',
-                  style: TextStyle(
-                    color: Color(0xFF214D4F),
-                    fontWeight: FontWeight.w500,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF214D4F),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+
+                OutlinedButton.icon(
+                  onPressed: _isChecking ? null : _checkEmailVerified,
+                  icon: _isChecking
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.verified),
+                  label: const Text('J’ai cliqué le lien, continuer'),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF214D4F)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                TextButton(
+                  onPressed: _authController.signOut,
+                  child: const Text('Changer de compte', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
           ),
         ),
       ),
