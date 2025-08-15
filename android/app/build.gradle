@@ -1,7 +1,7 @@
 plugins {
     id "com.android.application"
     // START: FlutterFire Configuration
-    id 'com.google.gms.google-services'
+    id "com.google.gms.google-services"
     // END: FlutterFire Configuration
     id "kotlin-android"
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -11,37 +11,55 @@ plugins {
 android {
     namespace = "com.example.adfoot"
     compileSdk = 35
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "29.0.13599879"
+
+    defaultConfig {
+        applicationId = "com.example.adfoot"
+        minSdk = 24
+        targetSdk = 35
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+
+        // ✅ utile si ton app dépasse 64K méthodes (Firebase, etc.)
+        multiDexEnabled true
+
+        // (optionnel) pour compat vectorDrawable si besoin
+        // vectorDrawables.useSupportLibrary = true
+    }
 
     compileOptions {
+        // Si tu compiles avec JDK 17 côté machine, tu peux laisser 1.8 ici (ok avec Flutter).
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
+        coreLibraryDesugaringEnabled true
     }
 
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_1_8
     }
 
-    defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.adfoot"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 24
-        targetSdk = 35
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
-    }
-
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // ⚠️ à remplacer par ta vraie config de signature quand tu buildes pour le Store
             signingConfig = signingConfigs.debug
+            // minifyEnabled true
+            // shrinkResources true
+            // proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // rien de spécial
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Désugration Java (déjà ok)
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+
+    // ✅ MultiDex runtime (match avec multiDexEnabled true)
+    implementation 'androidx.multidex:multidex:2.0.1'
 }

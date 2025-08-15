@@ -13,6 +13,7 @@ import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/edit_profil_screen.dart';
 import 'package:adfoot/screens/follow_list_screen.dart';
 import 'package:adfoot/widgets/video_manager.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String uid;
@@ -373,40 +374,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildSpecificInfoSection(AppUser user) {
-    switch (user.role) {
-      case 'joueur':
-        return Column(
-          children: [
-            _infoTile('Position', user.position),
-            _infoTile('Club actuel', user.team),
-            _infoTile('Nombre de matchs', user.nombreDeMatchs?.toString()),
-            _infoTile('Buts', user.buts?.toString()),
-            _infoTile('Assistances', user.assistances?.toString()),
-          ],
-        );
-      case 'club':
-        return Column(
-          children: [
-            _infoTile('Nom du Club', user.nomClub),
-            _infoTile('Ligue', user.ligue),
-          ],
-        );
-      case 'recruteur':
-        return Column(
-          children: [
-            _infoTile('Entreprise', user.entreprise),
-            _infoTile('Nombre de recrutements',
-                user.nombreDeRecrutements?.toString()),
-          ],
-        );
-      default:
-        return const Text("Aucune information spécifique pour ce rôle.");
-    }
+  List<Widget> section = [];
+
+  switch (user.role) {
+    case 'joueur':
+      section = [
+        _infoTile('Position', user.position),
+        _infoTile('Club actuel', user.team),
+        _infoTile('Nombre de matchs', user.nombreDeMatchs?.toString()),
+        _infoTile('Buts', user.buts?.toString()),
+        _infoTile('Assistances', user.assistances?.toString()),
+        if (user.cvUrl != null)
+          ListTile(
+            leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+            title: const Text('Voir le CV'),
+            subtitle: const Text('Appuyez pour ouvrir le fichier'),
+            onTap: () async {
+              final uri = Uri.parse(user.cvUrl!);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              } else {
+                Get.snackbar('Erreur', 'Impossible d’ouvrir le CV.',
+                    backgroundColor: Colors.red, colorText: Colors.white);
+              }
+            },
+          ),
+      ];
+      break;
+
+    case 'club':
+      section = [
+        _infoTile('Nom du Club', user.nomClub),
+        _infoTile('Ligue', user.ligue),
+      ];
+      break;
+
+    case 'recruteur':
+      section = [
+        _infoTile('Entreprise', user.entreprise),
+        _infoTile('Nombre de recrutements', user.nombreDeRecrutements?.toString()),
+      ];
+      break;
+
+    default:
+      return const Text("Aucune information spécifique pour ce rôle.");
   }
 
-  Widget _infoTile(String label, String? value) {
-    return ListTile(
-        title: Text(label),
-        subtitle: Text(value?.isNotEmpty == true ? value! : 'Non spécifié'));
-  }
+  return Column(children: section);
+} 
+
+Widget _infoTile(String label, String? value) {
+  return ListTile(
+    title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+    subtitle: Text(value?.isNotEmpty == true ? value! : 'Non spécifié'),
+  );
+}
+
 }

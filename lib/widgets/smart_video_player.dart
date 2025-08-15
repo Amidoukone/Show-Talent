@@ -1,3 +1,4 @@
+import 'package:adfoot/utils/video_cache_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:adfoot/widgets/tiktok_video_player.dart';
@@ -7,9 +8,10 @@ import 'package:get/get.dart';
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/widgets/video_manager.dart';
+import 'package:video_player/video_player.dart';
 
 class SmartVideoPlayer extends StatefulWidget {
-  final CachedVideoPlayerPlusController? controller;
+  final CachedVideoPlayerPlus? player;
   final Video video;
   final String contextKey;
   final String videoUrl;
@@ -22,7 +24,7 @@ class SmartVideoPlayer extends StatefulWidget {
 
   const SmartVideoPlayer({
     super.key,
-    required this.controller,
+    required this.player,
     required this.video,
     required this.contextKey,
     required this.videoUrl,
@@ -41,44 +43,83 @@ class SmartVideoPlayer extends StatefulWidget {
 class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
   late final VideoManager _videoManager;
   late final ValueNotifier<bool> _showPlayIcon;
+  bool _hasAutoplayStarted = false;
+  VideoPlayerController? _attachedController;
 
   @override
   void initState() {
     super.initState();
     _videoManager = VideoManager();
     _showPlayIcon = ValueNotifier(true);
-    _attachListener();
+    _attachListener(widget.player?.controller);
   }
 
   @override
   void didUpdateWidget(SmartVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller?.removeListener(_controllerListener);
-      _attachListener();
+    if (oldWidget.player?.controller != widget.player?.controller) {
+      _detachListener(oldWidget.player?.controller);
+      _attachListener(widget.player?.controller);
+      _hasAutoplayStarted = false;
     }
   }
 
-  void _attachListener() {
-    final ctrl = widget.controller;
+  void _attachListener(VideoPlayerController? ctrl) {
+    _attachedController = ctrl;
     if (ctrl != null) {
       ctrl.addListener(_controllerListener);
       _showPlayIcon.value = !(ctrl.value.isPlaying);
+      if (widget.autoPlay && ctrl.value.isInitialized && !ctrl.value.isPlaying) {
+        ctrl.play();
+        _hasAutoplayStarted = true;
+      }
     }
   }
 
-  void _controllerListener() {
-    final ctrl = widget.controller;
-    if (!mounted || ctrl == null || !ctrl.value.isInitialized) return;
-    final isPlaying = ctrl.value.isPlaying;
-    if (_showPlayIcon.value != !isPlaying) {
-      _showPlayIcon.value = !isPlaying;
+  void _detachListener(VideoPlayerController? ctrl) {
+    ctrl?.removeListener(_controllerListener);
+  }
+
+  Future<void> _controllerListener() async {
+    final ctrl = widget.player?.controller;
+    if (!mounted || ctrl == null) return;
+
+    if (!ctrl.value.isInitialized || ctrl.value.hasError) {
+      await _purgeAndReloadController();
+      return;
     }
+
+    final isPlaying = ctrl.value.isPlaying;
+    _showPlayIcon.value = !isPlaying;
+
+    if (widget.autoPlay &&
+        !_hasAutoplayStarted &&
+        ctrl.value.isInitialized &&
+        !ctrl.value.hasError &&
+        !isPlaying) {
+      await ctrl.play();
+      _hasAutoplayStarted = true;
+    }
+  }
+
+  Future<void> _purgeAndReloadController() async {
+    try {
+      final file = await VideoCacheManager.getFileIfCached(widget.videoUrl);
+      if (file != null && await file.exists()) {
+        await file.delete();
+        debugPrint("[SmartVideoPlayer] Cache corrompu supprimé pour ${widget.videoUrl}");
+      }
+    } catch (_) {}
+
+    Get.find<VideoController>(tag: widget.contextKey);
+    setState(() {
+      _hasAutoplayStarted = false;
+    });
   }
 
   @override
   void dispose() {
-    widget.controller?.removeListener(_controllerListener);
+    _detachListener(_attachedController);
     _showPlayIcon.dispose();
     super.dispose();
   }
@@ -87,7 +128,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
   Widget build(BuildContext context) {
     final videoController = Get.find<VideoController>(tag: widget.contextKey);
     final userController = Get.find<UserController>();
-    final ctrl = widget.controller;
+    final ctrl = widget.player?.controller;
     final loadState = _videoManager.getLoadState(widget.contextKey, widget.videoUrl);
 
     return Stack(
@@ -110,13 +151,9 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
                 if (ctrl == null || !ctrl.value.isInitialized) return;
                 ctrl.value.isPlaying ? ctrl.pause() : ctrl.play();
               },
-              onRetry: () {
+              onRetry: () async {
                 debugPrint('[SmartVideoPlayer] Retry tapped for ${widget.video.videoUrl}');
-                videoController.videoManager.initializeController(
-                  widget.contextKey,
-                  widget.videoUrl,
-                  autoPlay: true,
-                );
+                await _purgeAndReloadController();
               },
             );
           },
@@ -137,7 +174,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
     }
   }
 
-  Widget _buildActions(BuildContext context, VideoController videoController, UserController userController) {
+  Widget _buildActions(
+      BuildContext context, VideoController videoController, UserController userController) {
     final user = userController.user;
     if (user == null) return const SizedBox();
 
@@ -228,7 +266,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
       await Share.share('Regarde cette vidéo : ${widget.video.videoUrl}');
       await controller.partagerVideo(widget.video.id);
     } catch (_) {
-      Get.snackbar('Erreur', 'Partage impossible', backgroundColor: Colors.red, colorText: Colors.white);
+      Get.snackbar('Erreur', 'Partage impossible',
+          backgroundColor: Colors.red, colorText: Colors.white);
     }
   }
 }

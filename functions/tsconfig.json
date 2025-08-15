@@ -1,18 +1,20 @@
 {
   "compilerOptions": {
+    "target": "es2022",
     "module": "NodeNext",
-    "esModuleInterop": true,
-    "moduleResolution": "nodenext",
-    "noImplicitReturns": true,
-    "noUnusedLocals": true,
+    "moduleResolution": "NodeNext",
+    "lib": ["es2022"],
+    "rootDir": "src",
     "outDir": "lib",
     "sourceMap": true,
     "strict": true,
-    "target": "es2022",
+    "esModuleInterop": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
     "skipLibCheck": true
   },
   "compileOnSave": true,
-  "include": [
-    "src"
-  ]
+  "include": ["src"]
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/video_controller.dart';
@@ -57,13 +58,10 @@ class _HomeScreenState extends State<HomeScreen>
     _fadeController.dispose();
     _pageController.dispose();
     _connectivitySubscription?.cancel();
-
-    _safeDisposeVideoContext(); // <--- Dispose différé
-
+    _safeDisposeVideoContext();
     super.dispose();
   }
 
-  /// Dispose différé sécurisé
   Future<void> _safeDisposeVideoContext() async {
     try {
       await videoManager.pauseAll('home');
@@ -84,12 +82,15 @@ class _HomeScreenState extends State<HomeScreen>
         final currentUrl = videoController.videoList[currentIndex].videoUrl;
         videoManager.pauseAllExcept('home', currentUrl);
 
-        final ctrl = videoManager.getController('home', currentUrl);
+        final player = videoManager.getController('home', currentUrl);
+        final ctrl = player?.controller;
         if (ctrl != null &&
             ctrl.value.isInitialized &&
             !ctrl.value.hasError &&
             !ctrl.value.isPlaying) {
           ctrl.play();
+        } else {
+          _tryInitAndPlay(currentUrl);
         }
       }
     }
@@ -118,14 +119,38 @@ class _HomeScreenState extends State<HomeScreen>
       await videoController.fetchPaginatedVideos();
     }
 
-    final videos = videoController.videoList;
-    if (videos.isNotEmpty) {
-      final firstUrl = videos.first.videoUrl;
-      await videoManager.initializeController('home', firstUrl, autoPlay: true);
-      await videoManager.pauseAllExcept('home', firstUrl);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final videos = videoController.videoList;
+      if (videos.isNotEmpty) {
+        final firstUrl = videos.first.videoUrl;
+        _tryInitAndPlay(firstUrl);
+      }
+    });
 
     if (mounted) _fadeController.forward();
+  }
+
+  Future<void> _tryInitAndPlay(String videoUrl) async {
+    try {
+      CachedVideoPlayerPlus? player = videoManager.getController('home', videoUrl);
+      final ctrl = player?.controller;
+
+      if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
+        player = await videoManager.initializeController('home', videoUrl, autoPlay: true);
+      }
+
+      await videoManager.pauseAllExcept('home', videoUrl);
+
+      final updatedCtrl = player?.controller;
+      if (updatedCtrl != null &&
+          updatedCtrl.value.isInitialized &&
+          !updatedCtrl.value.hasError &&
+          !updatedCtrl.value.isPlaying) {
+        await updatedCtrl.play();
+      }
+    } catch (e) {
+      debugPrint('❌ Erreur lors du chargement initial de la vidéo : $e');
+    }
   }
 
   Future<void> _onPageChanged(int index) async {
@@ -134,17 +159,9 @@ class _HomeScreenState extends State<HomeScreen>
     final currentUrl = videos[index].videoUrl;
 
     videoController.currentIndex.value = index;
-
     videoManager.preloadSurrounding('home', videos.map((v) => v.videoUrl).toList(), index);
     await videoManager.pauseAllExcept('home', currentUrl);
-
-    final ctrl = videoManager.getController('home', currentUrl);
-    if (ctrl != null &&
-        ctrl.value.isInitialized &&
-        !ctrl.value.hasError &&
-        !ctrl.value.isPlaying) {
-      await ctrl.play();
-    }
+    await _tryInitAndPlay(currentUrl);
   }
 
   @override
@@ -202,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen>
                 onPageChanged: _onPageChanged,
                 itemBuilder: (context, index) {
                   final video = videos[index];
-                  final controller = videoManager.getController('home', video.videoUrl);
+                  final player = videoManager.getController('home', video.videoUrl);
 
                   return Stack(
                     children: [
@@ -217,7 +234,7 @@ class _HomeScreenState extends State<HomeScreen>
                         autoPlay: true,
                         showControls: true,
                         showProgressBar: true,
-                        controller: controller,
+                        player: player,
                       ),
                       Positioned(
                         bottom: 100,
