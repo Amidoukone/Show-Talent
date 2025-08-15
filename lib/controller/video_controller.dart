@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import '../models/video.dart';
@@ -106,7 +107,7 @@ class VideoController extends GetxController {
       if (isRefresh && videoList.isNotEmpty) {
         final firstUrl = videoList.first.videoUrl;
 
-        await videoManager.initializeController(contextKey, firstUrl);
+        await videoManager.initializeController(contextKey, firstUrl, autoPlay: true);
         await videoManager.pauseAllExcept(contextKey, firstUrl);
         videoManager.preloadSurrounding(contextKey, urls, 0);
 
@@ -148,20 +149,29 @@ class VideoController extends GetxController {
     }
   }
 
-  void _onCurrentIndexChanged(int index) {
+  Future<void> _onCurrentIndexChanged(int index) async {
     if (index < 0 || index >= videoList.length) return;
 
     final currentUrl = videoList[index].videoUrl;
     final urls = videoList.map((v) => v.videoUrl).toList();
 
-    videoManager.pauseAllExcept(contextKey, currentUrl);
+    await videoManager.pauseAllExcept(contextKey, currentUrl);
     videoManager.preloadSurrounding(contextKey, urls, index);
 
-    for (int i = index + 1; i <= index + 3 && i < videoList.length; i++) {
-      final url = videoList[i].videoUrl;
-      if (!videoManager.hasController(contextKey, url)) {
-        unawaited(videoManager.initializeController(contextKey, url, isPreload: true));
+    CachedVideoPlayerPlus? player = videoManager.getController(contextKey, currentUrl);
+    final ctrl = player?.controller;
+
+    if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
+      try {
+        player = await videoManager.initializeController(contextKey, currentUrl, autoPlay: true);
+      } catch (e) {
+        print('❌ Erreur lors de l\'initialisation du contrôleur vidéo (onCurrentIndexChanged): $e');
+        return;
       }
+    }
+
+    if (player != null && player.controller.value.isInitialized && !player.controller.value.hasError && !player.controller.value.isPlaying) {
+      await player.controller.play();
     }
 
     if (index >= videoList.length - 2 && hasMore && !_isLoading) {

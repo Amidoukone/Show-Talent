@@ -1,5 +1,7 @@
+/* eslint-disable eol-last */
+/* eslint-disable linebreak-style */
 /* eslint-disable max-len */
-import * as admin from "firebase-admin";
+
 import {tmpdir} from "os";
 import {join} from "path";
 import {existsSync, unlinkSync} from "fs";
@@ -9,14 +11,22 @@ import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import {onObjectFinalized, StorageObjectData} from "firebase-functions/v2/storage";
 import {CloudEvent} from "firebase-functions/v2";
 
-admin.initializeApp();
-const storage = new Storage();
-const firestore = admin.firestore();
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+// ✅ Imports Admin centralisés
+import {db, fieldValue} from "./firebase";
 
+// Uniformise la région (mets "europe-west1" si c'est ta région préférée)
+const REGION = "europe-west1";
+
+// Configuration FFMPEG
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+const storage = new Storage(); // accès direct au bucket
+
+/**
+ * Optimise une vidéo MP4 uploadée dans "videos/"
+ */
 export const optimizeMp4Video = onObjectFinalized(
   {
-    region: "europe-west1",
+    region: REGION,
     memory: "2GiB",
     timeoutSeconds: 540,
   },
@@ -27,23 +37,17 @@ export const optimizeMp4Video = onObjectFinalized(
     const contentType = object.contentType || "";
     const fileName = filePath.split("/").pop() || "";
     const videoId = fileName.split(".")[0];
-    const videoRef = firestore.collection("videos").doc(videoId);
+    const videoRef = db.collection("videos").doc(videoId);
 
     console.log("🎯 Déclenchement pour :", filePath);
 
+    // Filtre strict : on ne traite que les MP4 dans le dossier videos/
     if (
       !filePath.startsWith("videos/") ||
       !filePath.endsWith(".mp4") ||
       !contentType.startsWith("video/")
     ) {
       console.log("⛔️ Ignoré (pas une vidéo MP4 valide)");
-      return;
-    }
-
-    // Vérifie si déjà optimisé
-    const docSnap = await videoRef.get();
-    if (docSnap.exists && docSnap.data()?.optimized === true) {
-      console.log("⚠️ Vidéo déjà optimisée, sortie.");
       return;
     }
 
@@ -55,7 +59,7 @@ export const optimizeMp4Video = onObjectFinalized(
       console.log("⬇️ Téléchargement...");
       await bucket.file(filePath).download({destination: tempInputFile});
 
-      // Petite pause pour stabilité I/O
+      // Petite pause I/O pour stabilité
       await new Promise((res) => setTimeout(res, 200));
 
       console.log("🎬 Compression...");
@@ -80,7 +84,7 @@ export const optimizeMp4Video = onObjectFinalized(
           .save(optimizedFile);
       });
 
-      console.log("⬆️ Upload optimisé...");
+      console.log("⬆️ Upload optimisé (remplacement du fichier d'origine)...");
       await bucket.upload(optimizedFile, {
         destination: filePath,
         metadata: {
@@ -93,7 +97,7 @@ export const optimizeMp4Video = onObjectFinalized(
         {
           status: "ready",
           optimized: true,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: fieldValue.serverTimestamp(),
         },
         {merge: true}
       );
@@ -105,7 +109,7 @@ export const optimizeMp4Video = onObjectFinalized(
         {
           status: "error",
           optimized: false,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: fieldValue.serverTimestamp(),
         },
         {merge: true}
       );
@@ -125,3 +129,9 @@ export const optimizeMp4Video = onObjectFinalized(
     return null;
   }
 );
+
+
+// ✅ Fonctions déjà présentes dans ton projet
+export {sendVerificationReminder} from "./reminder";
+export {cleanupUnverifiedUsers} from "./cleanup";
+

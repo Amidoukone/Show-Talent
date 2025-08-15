@@ -1,3 +1,4 @@
+// lib/screens/login_screen.dart
 import 'package:adfoot/screens/signup_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,15 +11,23 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+
   final UserController _userController = Get.find<UserController>();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _login() async {
     if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
@@ -29,64 +38,39 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final UserCredential userCred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final userCred = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      final User? user = userCred.user;
-      await user?.reload();
-      final User? refreshedUser = FirebaseAuth.instance.currentUser;
-
-      if (refreshedUser == null || !refreshedUser.emailVerified) {
-        await _handleUnverifiedUser(refreshedUser);
-        return;
+      final user = userCred.user;
+      if (user != null) {
+        await user.reload();
+        // 🚫 Pas d’envoi d’email ici — AuthController gère la redirection (Verify ou Main)
+        await _updateFcmToken(user);
+        await _userController.refreshUser();
       }
-
-      await _updateFcmToken(refreshedUser);
-      await _userController.handleUserAuthentication(refreshedUser.uid);
     } on FirebaseAuthException catch (e) {
       _handleAuthError(e);
     } catch (e) {
       _showErrorSnackbar('Erreur inattendue : ${e.toString()}');
     } finally {
+      if (!mounted) return;
       setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _handleUnverifiedUser(User? user) async {
-    await FirebaseAuth.instance.signOut();
-    if (user != null) {
-      await user.sendEmailVerification();
-      _showErrorSnackbar('Validation requise', 'Veuillez vérifier votre email. Un nouveau lien a été envoyé.');
     }
   }
 
   Future<void> _updateFcmToken(User user) async {
     try {
       final String? token = await FirebaseMessaging.instance.getToken();
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-        {'fcmToken': token},
-        SetOptions(merge: true),
-      );
+      if (token != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({'fcmToken': token}, SetOptions(merge: true));
+      }
     } catch (e) {
-      debugPrint("Erreur FCM : $e");
-    }
-  }
-
-  Future<void> _forgotPassword() async {
-    if (_emailController.text.trim().isEmpty) {
-      _showErrorSnackbar('Veuillez saisir votre email');
-      return;
-    }
-
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: _emailController.text.trim(),
-      );
-      _showSuccessSnackbar('Email de réinitialisation envoyé');
-    } catch (e) {
-      _showErrorSnackbar('Erreur lors de l\'envoi de l\'email');
+      debugPrint("Erreur lors de l'enregistrement du FCM Token : $e");
     }
   }
 
@@ -100,27 +84,19 @@ class _LoginScreenState extends State<LoginScreen> {
         message = 'Mot de passe incorrect';
         break;
       case 'invalid-email':
-        message = 'Format d\'email invalide';
+        message = 'Format d’email invalide';
         break;
       case 'too-many-requests':
         message = 'Trop de tentatives. Réessayez plus tard.';
+        break;
+      case 'user-disabled':
+        message = 'Ce compte a été désactivé.';
         break;
       default:
         message = e.message ?? 'Erreur inconnue';
         break;
     }
     _showErrorSnackbar('Connexion échouée', message);
-  }
-
-  void _showSuccessSnackbar(String message) {
-    Get.snackbar(
-      'Succès',
-      message,
-      backgroundColor: Colors.green,
-      colorText: Colors.white,
-      snackPosition: SnackPosition.BOTTOM,
-      duration: const Duration(seconds: 3),
-    );
   }
 
   void _showErrorSnackbar(String title, [String? message]) {
@@ -148,22 +124,67 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 30),
               const Text(
                 'Connectez-vous!',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF214D4F),
-                ),
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF214D4F)),
               ),
               const SizedBox(height: 30),
               _buildEmailField(),
               const SizedBox(height: 20),
               _buildPasswordField(),
               const SizedBox(height: 10),
-              _buildForgotPassword(),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () async {
+                    final email = _emailController.text.trim();
+                    if (email.isEmpty) {
+                      _showErrorSnackbar('Veuillez saisir votre email');
+                      return;
+                    }
+                    try {
+                      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+                      Get.snackbar(
+                        'Succès',
+                        'Email de réinitialisation envoyé',
+                        backgroundColor: Colors.green,
+                        colorText: Colors.white,
+                        snackPosition: SnackPosition.BOTTOM,
+                      );
+                    } on FirebaseAuthException catch (e) {
+                      _showErrorSnackbar('Échec', e.message ?? 'Impossible d’envoyer l’email.');
+                    } catch (e) {
+                      _showErrorSnackbar('Échec', e.toString());
+                    }
+                  },
+                  child: const Text(
+                    'Mot de passe oublié ?',
+                    style: TextStyle(color: Color(0xFF214D4F), fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
               const SizedBox(height: 30),
-              _buildLoginButton(),
+              _isLoading
+                  ? const CircularProgressIndicator(color: Color(0xFF214D4F))
+                  : SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF214D4F),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: const Text(
+                          'Se connecter',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ),
               const SizedBox(height: 20),
-              _buildSignUpLink(),
+              TextButton(
+                onPressed: () => Get.to(() => const SignUpScreen()),
+                child: const Text('Nouveau ici ? Créez un compte',
+                    style: TextStyle(color: Color(0xFF214D4F))),
+              ),
             ],
           ),
         ),
@@ -194,62 +215,6 @@ class _LoginScreenState extends State<LoginScreen> {
         suffixIcon: IconButton(
           icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
           onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildForgotPassword() {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: TextButton(
-        onPressed: _forgotPassword,
-        child: const Text(
-          'Mot de passe oublié ?',
-          style: TextStyle(color: Color(0xFF214D4F), fontWeight: FontWeight.w500),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoginButton() {
-    return _isLoading
-        ? const CircularProgressIndicator(color: Color(0xFF214D4F))
-        : SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: _login,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF214D4F),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Se connecter',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-            ),
-          );
-  }
-
-  Widget _buildSignUpLink() {
-    return TextButton(
-      onPressed: () => Get.to(() => const SignUpScreen()),
-      child: RichText(
-        text: const TextSpan(
-          text: 'Nouveau ici ? ',
-          style: TextStyle(color: Color(0xFF214D4F)),
-          children: <TextSpan>[
-            TextSpan(
-              text: 'Créez un compte',
-              style: TextStyle(
-                color: Color(0xFF214D4F),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
         ),
       ),
     );

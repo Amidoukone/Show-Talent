@@ -1,60 +1,87 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <!-- Base href (remplacé par le build Flutter) -->
-  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Une nouvelle application Flutter.">
+  <!-- SEO de base -->
+  <title>AD.FOOT — Talents de Football</title>
+  <meta
+    name="description"
+    content="AD.FOOT met en avant les jeunes talents du football : publie tes vidéos, sois repéré par des clubs, agents ou recruteurs, et échange directement."
+  />
+  <link rel="canonical" href="https://adfoot.org/" />
 
-  <!-- iOS meta tags & icons -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="adfoot">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <!-- Open Graph (partage réseaux sociaux) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://adfoot.org/" />
+  <meta property="og:title" content="AD.FOOT — Talents de Football" />
+  <meta
+    property="og:description"
+    content="Découvre, évalue et contacte les jeunes talents grâce à leurs vidéos."
+  />
+  <meta property="og:image" content="icons/og-image.png" />
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="AD.FOOT — Talents de Football" />
+  <meta
+    name="twitter:description"
+    content="La plateforme qui connecte talents et recruteurs."
+  />
+  <meta name="twitter:image" content="icons/og-image.png" />
 
-  <!-- Title -->
-  <title>adfoot</title>
-  
-  <!-- Flutter Manifest -->
-  <link rel="manifest" href="manifest.json">
-  
-  <!-- Firebase SDKs -->
-  <!-- Firebase App (required) -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js"></script>
+  <!-- Perf -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://www.googleapis.com" crossorigin />
 
-  <!-- Firebase Auth (si utilisé) -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js"></script>
+  <!-- PWA / Web App -->
+  <meta name="theme-color" content="#214D4F" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="AD.FOOT" />
 
-  <!-- Firebase Firestore (si utilisé) -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore.js"></script>
+  <!-- Manifest & Icons -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="apple-touch-icon" href="icons/Icon-192.png" />
 
-  <!-- Firebase Storage (si utilisé) -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-storage.js"></script>
+  <!-- Flutter base href -->
+  <base href="/" />
 
-  <!-- Configuration Firebase -->
-  <script type="module">
-    // Your web app's Firebase configuration
-    const firebaseConfig = {
-      apiKey: "AIzaSyAo6Jr2eYrOTekjTHlJQXImr5q1UsI2jcA",
-      authDomain: "show-talent-5987d.firebaseapp.com",
-      projectId: "show-talent-5987d",
-      storageBucket: "show-talent-5987d.appspot.com",
-      messagingSenderId: "43422248234",
-      appId: "1:43422248234:web:90e6e10558e53ab4f8c253"
-    };
+  <!-- Flutter build styles, if any -->
+  <!-- <link rel="stylesheet" href="styles.css" /> -->
 
-    // Initialize Firebase
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-    initializeApp(firebaseConfig);
-  </script>
 </head>
 <body>
-  <!-- Flutter application launch -->
+  <noscript>
+    Cette application nécessite JavaScript pour fonctionner.
+  </noscript>
+
+  <!-- Service Worker pour FCM (Firebase Cloud Messaging) -->
+  <script>
+    (function () {
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker
+            .register('/firebase-messaging-sw.js', {
+              scope: '/'
+            })
+            .then(function(reg) {
+              // Enregistrement réussi (optionnel log)
+              // console.log('SW FCM registered:', reg);
+            })
+            .catch(function (e) {
+              console.warn('SW FCM register warn:', e);
+            });
+        });
+      }
+    })();
+  </script>
+
+  <!-- Lancement Flutter -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

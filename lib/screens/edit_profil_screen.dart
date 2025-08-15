@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/profile_controller.dart';
@@ -110,6 +112,11 @@ class EditProfileScreen extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 20),
+
+              // 🆕 Section CV ajoutée
+              if (user.role == 'joueur') CvUploaderSection(user: user, profileController: profileController),
+
+              const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () async {
                   AppUser updatedUser = AppUser(
@@ -136,7 +143,9 @@ class EditProfileScreen extends StatelessWidget {
                     videosPubliees: user.videosPubliees,
                     followersList: user.followersList,
                     followingsList: user.followingsList,
-                    estBloque: false,
+                    cvUrl: user.cvUrl,
+                    estBloque: user.estBloque,
+                    emailVerified: user.emailVerified,
                   );
 
                   await profileController.updateUserProfile(updatedUser);
@@ -154,6 +163,49 @@ class EditProfileScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// 🆕 Widget réutilisable pour gérer le CV PDF
+class CvUploaderSection extends StatelessWidget {
+  final AppUser user;
+  final ProfileController profileController;
+
+  const CvUploaderSection({super.key, required this.user, required this.profileController});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('CV (PDF)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        if (user.cvUrl != null)
+          Text('CV actuel disponible', style: const TextStyle(color: Colors.green)),
+        const SizedBox(height: 8),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.upload_file),
+          label: Text(user.cvUrl == null ? 'Ajouter un CV' : 'Remplacer le CV'),
+          onPressed: () async {
+            final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
+            if (result != null && result.files.single.path != null) {
+              await profileController.uploadCvPdf(user.uid, File(result.files.single.path!));
+            }
+          },
+        ),
+        if (user.cvUrl != null) ...[
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.delete),
+            label: const Text('Supprimer le CV'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              await profileController.deleteCv(user.uid);
+            },
+          ),
+        ],
+      ],
     );
   }
 }

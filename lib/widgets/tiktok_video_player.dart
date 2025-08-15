@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cached_video_player_plus/cached_video_player_plus.dart';
+import 'package:video_player/video_player.dart';
 
 class TiktokVideoPlayer extends StatelessWidget {
-  final CachedVideoPlayerPlusController? controller;
+  final VideoPlayerController? controller;
   final bool isPlaying;
   final bool hidePlayPauseIcon;
   final bool showControls;
@@ -35,25 +35,24 @@ class TiktokVideoPlayer extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         _buildContentState(),
-        if (showControls && !hidePlayPauseIcon && controller?.value.isInitialized == true)
-          _buildPlayPauseButton(),
-        if (showProgressBar && controller?.value.isInitialized == true && !isBuffering && isPlaying)
-          _buildProgressBar(),
+        if (_shouldShowPlayPause()) _buildPlayPauseButton(),
+        if (_shouldShowProgressBar()) _buildProgressBar(),
       ],
     );
   }
 
   Widget _buildContentState() {
-    if (errorMessage != null) return _buildError();
+    final hasInit = controller?.value.isInitialized ?? false;
+    final hasError = errorMessage != null || (controller?.value.hasError ?? false);
+    final showLoader = isLoading || isBuffering || !hasInit;
 
-    final isReady = controller?.value.isInitialized == true;
-    final showLoader = isLoading || isBuffering || !isReady;
+    if (hasError) return _buildError();
 
     return Stack(
       fit: StackFit.expand,
       children: [
         _buildThumbnail(),
-        if (isReady && !showLoader) _buildVideoPlayer(),
+        if (hasInit && !showLoader) _buildVideoPlayer(),
         if (showLoader) const Center(child: CircularProgressIndicator(color: Colors.white)),
       ],
     );
@@ -63,8 +62,10 @@ class TiktokVideoPlayer extends StatelessWidget {
     return Image.network(
       thumbnailUrl,
       fit: BoxFit.cover,
-      loadingBuilder: (_, child, progress) =>
-          progress == null ? child : const Center(child: CircularProgressIndicator(color: Colors.white)),
+      loadingBuilder: (_, child, loadingProgress) =>
+          loadingProgress == null
+              ? child
+              : const Center(child: CircularProgressIndicator(color: Colors.white)),
       errorBuilder: (_, __, ___) => const Center(
         child: Icon(Icons.broken_image, size: 60, color: Colors.white),
       ),
@@ -108,7 +109,7 @@ class TiktokVideoPlayer extends StatelessWidget {
 
   Widget _buildVideoPlayer() {
     final value = controller?.value;
-    if (value == null || value.hasError || !value.isInitialized || value.size.width <= 0 || value.size.height <= 0) {
+    if (value == null || value.hasError || !value.isInitialized || value.size.isEmpty) {
       return _buildThumbnail();
     }
 
@@ -119,7 +120,7 @@ class TiktokVideoPlayer extends StatelessWidget {
         child: SizedBox(
           width: value.size.width,
           height: value.size.height,
-          child: CachedVideoPlayerPlus(controller!),
+          child: VideoPlayer(controller!),
         ),
       ),
     );
@@ -154,5 +155,18 @@ class TiktokVideoPlayer extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 4),
       ),
     );
+  }
+
+  bool _shouldShowPlayPause() {
+    return showControls &&
+        !hidePlayPauseIcon &&
+        (controller?.value.isInitialized ?? false);
+  }
+
+  bool _shouldShowProgressBar() {
+    return showProgressBar &&
+        (controller?.value.isInitialized ?? false) &&
+        !isBuffering &&
+        isPlaying;
   }
 }

@@ -62,7 +62,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
       await _videoManager.pauseAll(_ctxKey);
       await Future.delayed(const Duration(milliseconds: 100));
 
-      final controller = await _videoManager.initializeController(
+      final player = await _videoManager.initializeController(
         _ctxKey,
         currentUrl,
         autoPlay: true,
@@ -72,20 +72,22 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
       _currentPlayingUrl = currentUrl;
       setState(() {});
 
-      // ✅ Préchargement 2 avant/après
       _videoManager.preloadSurrounding(_ctxKey, urls, idx);
 
-      // ✅ Sliding window memory control
       final retainedIndices = <int>[];
       for (int i = idx - (_videoSlidingWindowLimit ~/ 2); i <= idx + (_videoSlidingWindowLimit ~/ 2); i++) {
         if (i >= 0 && i < urls.length) retainedIndices.add(i);
       }
+
       final retainedUrls = retainedIndices.map((i) => urls[i]).toSet();
       final allUrls = Set<String>.from(urls);
       final toDispose = allUrls.difference(retainedUrls);
       await _videoManager.disposeUrls(_ctxKey, toDispose.toList());
 
-      if (!controller.value.isPlaying) await controller.play();
+      final ctrl = player.controller;
+      if (!ctrl.value.isPlaying && ctrl.value.isInitialized && !ctrl.value.hasError) {
+        await ctrl.play();
+      }
     } catch (e, st) {
       debugPrint("❌ Error in _handleIndexChange: $e\n$st");
     } finally {
@@ -135,7 +137,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
             onPageChanged: _handleIndexChange,
             itemBuilder: (_, idx) {
               final video = widget.videos[idx];
-              final controller = _videoManager.getController(_ctxKey, video.videoUrl);
+              final player = _videoManager.getController(_ctxKey, video.videoUrl);
 
               return Stack(
                 children: [
@@ -150,7 +152,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
                     autoPlay: true,
                     showControls: true,
                     showProgressBar: true,
-                    controller: controller,
+                    player: player,
                   ),
                   Positioned(
                     bottom: 100,

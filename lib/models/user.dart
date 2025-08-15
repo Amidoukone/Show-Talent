@@ -11,10 +11,13 @@ class AppUser {
   String photoProfil;
   bool estActif;
   bool estBloque;
+  bool emailVerified;
   int followers;
   int followings;
   DateTime dateInscription;
   DateTime dernierLogin;
+  DateTime? emailVerifiedAt; // 🆕 Nouveau champ
+  String? phone;
 
   String? bio;
   String? position;
@@ -41,7 +44,6 @@ class AppUser {
   List<String> followersList;
   List<String> followingsList;
 
-  // Nouvelle propriété : URL du CV
   String? cvUrl;
 
   AppUser({
@@ -52,10 +54,13 @@ class AppUser {
     required this.photoProfil,
     required this.estActif,
     required this.estBloque,
+    required this.emailVerified,
     required this.followers,
     required this.followings,
     required this.dateInscription,
     required this.dernierLogin,
+    this.emailVerifiedAt,
+    this.phone,
     this.bio,
     this.position,
     this.clubActuel,
@@ -74,12 +79,11 @@ class AppUser {
     this.joueursSuivis,
     this.clubsSuivis,
     this.videosLikees,
-    this.cvUrl, // Ajout de la propriété ici
+    this.cvUrl,
     required this.followersList,
     required this.followingsList,
   });
 
-  // Suivre un utilisateur
   void follow(String uid) {
     if (!followingsList.contains(uid)) {
       followingsList.add(uid);
@@ -87,7 +91,6 @@ class AppUser {
     }
   }
 
-  // Se désabonner
   void unfollow(String uid) {
     if (followingsList.contains(uid)) {
       followingsList.remove(uid);
@@ -95,7 +98,6 @@ class AppUser {
     }
   }
 
-  // Créer un utilisateur depuis une Map
   factory AppUser.fromMap(Map<String, dynamic> map) {
     return AppUser(
       uid: map['uid'] ?? '',
@@ -103,14 +105,15 @@ class AppUser {
       email: map['email'] ?? '',
       role: map['role'] ?? 'Utilisateur',
       photoProfil: map['photoProfil'] ?? '',
-      estActif: map['estActif'] ?? true,
+      estActif: map['estActif'] ?? false,
       estBloque: map['estBloque'] ?? false,
+      emailVerified: map['emailVerified'] ?? false,
+      emailVerifiedAt: (map['emailVerifiedAt'] as Timestamp?)?.toDate(), // 🆕
       followers: map['followers'] ?? 0,
       followings: map['followings'] ?? 0,
-      dateInscription:
-          (map['dateInscription'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      dernierLogin:
-          (map['dernierLogin'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      dateInscription: (map['dateInscription'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      dernierLogin: (map['dernierLogin'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      phone: map['phone'],
       bio: map['bio'],
       position: map['position'],
       clubActuel: map['clubActuel'],
@@ -118,44 +121,35 @@ class AppUser {
       buts: map['buts'],
       assistances: map['assistances'],
       videosPubliees: map['videosPubliees'] != null
-          ? List<Video>.from(
-              map['videosPubliees'].map((video) => Video.fromMap(video)))
+          ? List<Video>.from(map['videosPubliees'].map((v) => Video.fromMap(v)))
           : [],
-      performances: map['performances'] != null
-          ? Map<String, double>.from(map['performances'])
-          : {},
+      performances: map['performances'] != null ? Map<String, double>.from(map['performances']) : {},
       nomClub: map['nomClub'],
       ligue: map['ligue'],
       offrePubliees: map['offrePubliees'] != null
-          ? List<Offre>.from(
-              map['offrePubliees'].map((offre) => Offre.fromMap(offre)))
+          ? List<Offre>.from(map['offrePubliees'].map((v) => Offre.fromMap(v)))
           : [],
       eventPublies: map['eventPublies'] != null
-          ? List<Event>.from(
-              map['eventPublies'].map((event) => Event.fromMap(event)))
+          ? List<Event>.from(map['eventPublies'].map((v) => Event.fromMap(v)))
           : [],
       entreprise: map['entreprise'],
       nombreDeRecrutements: map['nombreDeRecrutements'],
       team: map['team'],
       joueursSuivis: map['joueursSuivis'] != null
-          ? List<AppUser>.from(
-              map['joueursSuivis'].map((joueur) => AppUser.fromMap(joueur)))
+          ? List<AppUser>.from(map['joueursSuivis'].map((j) => AppUser.fromMap(j)))
           : [],
       clubsSuivis: map['clubsSuivis'] != null
-          ? List<AppUser>.from(
-              map['clubsSuivis'].map((club) => AppUser.fromMap(club)))
+          ? List<AppUser>.from(map['clubsSuivis'].map((c) => AppUser.fromMap(c)))
           : [],
       videosLikees: map['videosLikees'] != null
-          ? List<Video>.from(
-              map['videosLikees'].map((video) => Video.fromMap(video)))
+          ? List<Video>.from(map['videosLikees'].map((v) => Video.fromMap(v)))
           : [],
       followersList: List<String>.from(map['followersList'] ?? []),
       followingsList: List<String>.from(map['followingsList'] ?? []),
-      cvUrl: map['cvUrl'], // Initialisation de la propriété à partir de la Map
+      cvUrl: map['cvUrl'],
     );
   }
 
-  // Convertir un utilisateur en Map
   Map<String, dynamic> toMap() {
     return {
       'uid': uid,
@@ -165,36 +159,34 @@ class AppUser {
       'photoProfil': photoProfil,
       'estActif': estActif,
       'estBloque': estBloque,
+      'emailVerified': emailVerified,
+      'emailVerifiedAt': emailVerifiedAt != null ? Timestamp.fromDate(emailVerifiedAt!) : null, // 🆕
       'followers': followers,
       'followings': followings,
       'dateInscription': Timestamp.fromDate(dateInscription),
       'dernierLogin': Timestamp.fromDate(dernierLogin),
+      'phone': phone,
       'bio': bio,
       'position': position,
       'clubActuel': clubActuel,
       'nombreDeMatchs': nombreDeMatchs,
       'buts': buts,
       'assistances': assistances,
-      'videosPubliees':
-          videosPubliees?.map((video) => video.toMap()).toList() ?? [],
+      'videosPubliees': videosPubliees?.map((v) => v.toMap()).toList() ?? [],
       'performances': performances ?? {},
       'nomClub': nomClub,
       'ligue': ligue,
-      'offrePubliees':
-          offrePubliees?.map((offre) => offre.toMap()).toList() ?? [],
-      'eventPublies':
-          eventPublies?.map((event) => event.toMap()).toList() ?? [],
+      'offrePubliees': offrePubliees?.map((o) => o.toMap()).toList() ?? [],
+      'eventPublies': eventPublies?.map((e) => e.toMap()).toList() ?? [],
       'entreprise': entreprise,
       'nombreDeRecrutements': nombreDeRecrutements,
       'team': team,
-      'joueursSuivis':
-          joueursSuivis?.map((joueur) => joueur.toMap()).toList() ?? [],
-      'clubsSuivis': clubsSuivis?.map((club) => club.toMap()).toList() ?? [],
-      'videosLikees':
-          videosLikees?.map((video) => video.toMap()).toList() ?? [],
+      'joueursSuivis': joueursSuivis?.map((j) => j.toMap()).toList() ?? [],
+      'clubsSuivis': clubsSuivis?.map((c) => c.toMap()).toList() ?? [],
+      'videosLikees': videosLikees?.map((v) => v.toMap()).toList() ?? [],
       'followersList': followersList,
       'followingsList': followingsList,
-      'cvUrl': cvUrl, // Ajout de la propriété dans la Map
+      'cvUrl': cvUrl,
     };
   }
 }
