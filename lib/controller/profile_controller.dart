@@ -15,7 +15,7 @@ class ProfileController extends GetxController {
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final VideoManager _videoManager = VideoManager();
 
-  DocumentSnapshot? _lastVideoDoc;
+  DocumentSnapshot<Map<String, dynamic>>? _lastVideoDoc;
   static const int _videoFetchLimit = 20;
   static const int _videoMemoryLimit = 25;
 
@@ -109,7 +109,7 @@ class ProfileController extends GetxController {
 
       if (!_hasMoreVideos) return;
 
-      Query q = _firestore
+      Query<Map<String, dynamic>> q = _firestore
           .collection('videos')
           .where('uid', isEqualTo: uid)
           .where('status', isEqualTo: 'ready')
@@ -125,7 +125,7 @@ class ProfileController extends GetxController {
         _hasMoreVideos = false;
       } else {
         final newVideos = snap.docs
-            .map((d) => Video.fromMap(d.data() as Map<String, dynamic>))
+            .map((d) => Video.fromDoc(d))
             .where((v) => v.videoUrl.isNotEmpty)
             .toList();
 
@@ -146,12 +146,13 @@ class ProfileController extends GetxController {
         final urls = videoList.map((v) => v.videoUrl).toList();
 
         if (isRefresh && videoList.isNotEmpty) {
-          await _videoManager.initializeController(ctx, videoList.first.videoUrl);
-          _videoManager.pauseAllExcept(ctx, videoList.first.videoUrl);
-          _videoManager.preloadSurrounding(ctx, urls, 0);
+          final firstUrl = videoList.first.videoUrl;
+          await _videoManager.initializeController(ctx, firstUrl, autoPlay: false, activeUrl: firstUrl);
+          _videoManager.pauseAllExcept(ctx, firstUrl);
+          _videoManager.preloadSurrounding(ctx, urls, 0, activeUrl: firstUrl);
 
           for (int i = 1; i < 4 && i < videoList.length; i++) {
-            unawaited(_videoManager.initializeController(ctx, videoList[i].videoUrl, isPreload: true));
+            unawaited(_videoManager.initializeController(ctx, videoList[i].videoUrl, isPreload: true, activeUrl: firstUrl));
           }
         }
 
@@ -197,7 +198,7 @@ class ProfileController extends GetxController {
       final uid = user?.uid;
       if (current == null || uid == null || current == uid) return;
 
-      final doc = await _getWithRetry(_firestore.collection('users').doc(current));
+      final doc = await _firestore.collection('users').doc(current).get();
       final followings = List<String>.from(doc.get('followings') ?? []);
       if (followings.contains(uid)) {
         followings.remove(uid);
@@ -232,39 +233,36 @@ class ProfileController extends GetxController {
     return current != null && current == user?.uid;
   }
 
-  // Dans ProfileController
+  Future<void> uploadCvPdf(String uid, File pdfFile) async {
+    try {
+      final ref = _storage.ref('cvs/$uid/cv_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      final metadata = SettableMetadata(contentType: 'application/pdf');
+      final uploadTask = await ref.putFile(pdfFile, metadata);
+      final url = await uploadTask.ref.getDownloadURL();
 
-Future<void> uploadCvPdf(String uid, File pdfFile) async {
-  try {
-    final ref = _storage.ref('cvs/$uid/cv_${DateTime.now().millisecondsSinceEpoch}.pdf');
-    final metadata = SettableMetadata(contentType: 'application/pdf');
-    final uploadTask = await ref.putFile(pdfFile, metadata);
-    final url = await uploadTask.ref.getDownloadURL();
-
-    await _firestore.collection('users').doc(uid).update({'cvUrl': url});
-    user?.cvUrl = url;
-    update();
-    Get.snackbar('Succès', 'CV ajouté ou mis à jour.', backgroundColor: Colors.green, colorText: Colors.white);
-  } catch (e) {
-    debugPrint('❌ uploadCvPdf: $e');
-    Get.snackbar('Erreur', 'Impossible d’ajouter le CV.', backgroundColor: Colors.red, colorText: Colors.white);
-  }
-}
-
-Future<void> deleteCv(String uid) async {
-  try {
-    if (user?.cvUrl != null) {
-      final ref = _storage.refFromURL(user!.cvUrl!);
-      await ref.delete();
+      await _firestore.collection('users').doc(uid).update({'cvUrl': url});
+      user?.cvUrl = url;
+      update();
+      Get.snackbar('Succès', 'CV ajouté ou mis à jour.', backgroundColor: Colors.green, colorText: Colors.white);
+    } catch (e) {
+      debugPrint('❌ uploadCvPdf: $e');
+      Get.snackbar('Erreur', 'Impossible d’ajouter le CV.', backgroundColor: Colors.red, colorText: Colors.white);
     }
-    await _firestore.collection('users').doc(uid).update({'cvUrl': FieldValue.delete()});
-    user?.cvUrl = null;
-    update();
-    Get.snackbar('Succès', 'CV supprimé.', backgroundColor: Colors.green, colorText: Colors.white);
-  } catch (e) {
-    debugPrint('❌ deleteCv: $e');
-    Get.snackbar('Erreur', 'Impossible de supprimer le CV.', backgroundColor: Colors.red, colorText: Colors.white);
   }
-}
 
+  Future<void> deleteCv(String uid) async {
+    try {
+      if (user?.cvUrl != null) {
+        final ref = _storage.refFromURL(user!.cvUrl!);
+        await ref.delete();
+      }
+      await _firestore.collection('users').doc(uid).update({'cvUrl': FieldValue.delete()});
+      user?.cvUrl = null;
+      update();
+      Get.snackbar('Succès', 'CV supprimé.', backgroundColor: Colors.green, colorText: Colors.white);
+    } catch (e) {
+      debugPrint('❌ deleteCv: $e');
+      Get.snackbar('Erreur', 'Impossible de supprimer le CV.', backgroundColor: Colors.red, colorText: Colors.white);
+    }
+  }
 }

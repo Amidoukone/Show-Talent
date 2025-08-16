@@ -13,7 +13,7 @@ class VideoController extends GetxController {
   var videoList = <Video>[].obs;
   var currentIndex = 0.obs;
 
-  DocumentSnapshot? _lastDoc;
+  DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
   bool _hasMore = true;
   bool _isLoading = false;
   static const int _limit = 10;
@@ -27,6 +27,7 @@ class VideoController extends GetxController {
   Completer<void>? _fetchLock;
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _videoSubscription;
+  Timer? _streamDebouncer;
 
   @override
   void onInit() {
@@ -37,6 +38,7 @@ class VideoController extends GetxController {
 
   @override
   void onClose() {
+    _streamDebouncer?.cancel();
     _videoSubscription?.cancel();
     videoManager.disposeAllForContext(contextKey);
     super.onClose();
@@ -51,14 +53,23 @@ class VideoController extends GetxController {
         .orderBy('updatedAt', descending: true)
         .snapshots()
         .listen((snapshot) {
-      final fetchedVideos = snapshot.docs
-          .map((doc) => Video.fromMap(doc.data()))
-          .where((v) => v.videoUrl.isNotEmpty)
-          .toList();
+      _streamDebouncer?.cancel();
+      _streamDebouncer = Timer(const Duration(milliseconds: 120), () {
+        final incoming = snapshot.docs
+            .map((doc) => Video.fromDoc(doc))
+            .where((v) => v.videoUrl.isNotEmpty)
+            .toList();
 
-      videoList.assignAll(fetchedVideos);
-      _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
-      _hasMore = snapshot.docs.length >= _limit;
+        final byId = {for (final v in videoList) v.id: v};
+        for (final v in incoming) {
+          byId[v.id] = v; // upsert
+        }
+        final merged = incoming.map((v) => byId[v.id]!).toList();
+        videoList.value = merged;
+
+        _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
+        _hasMore = snapshot.docs.length >= _limit;
+      });
     }, onError: (e) {
       print("Erreur stream vidéos: $e");
     });
@@ -71,7 +82,7 @@ class VideoController extends GetxController {
     _fetchLock = Completer<void>();
 
     try {
-      var query = FirebaseFirestore.instance
+      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
           .collection('videos')
           .where('status', isEqualTo: 'ready')
           .orderBy('updatedAt', descending: true)
@@ -89,7 +100,7 @@ class VideoController extends GetxController {
       }
 
       final newVideos = snap.docs
-          .map((d) => Video.fromMap(d.data()))
+          .map((d) => Video.fromDoc(d))
           .where((v) => v.videoUrl.isNotEmpty)
           .toList();
 
@@ -97,7 +108,7 @@ class VideoController extends GetxController {
       final uniqueVideos = newVideos.where((v) => !currentIds.contains(v.id)).toList();
 
       if (isRefresh) {
-        videoList.assignAll(uniqueVideos);
+        videoList.assignAll(newVideos);
       } else {
         videoList.addAll(uniqueVideos);
       }
@@ -106,14 +117,13 @@ class VideoController extends GetxController {
 
       if (isRefresh && videoList.isNotEmpty) {
         final firstUrl = videoList.first.videoUrl;
-
-        await videoManager.initializeController(contextKey, firstUrl, autoPlay: true);
+        await videoManager.initializeController(contextKey, firstUrl, autoPlay: false, activeUrl: firstUrl);
         await videoManager.pauseAllExcept(contextKey, firstUrl);
-        videoManager.preloadSurrounding(contextKey, urls, 0);
+        videoManager.preloadSurrounding(contextKey, urls, 0, activeUrl: firstUrl);
 
         for (int i = 1; i < 5 && i < videoList.length; i++) {
           unawaited(
-            videoManager.initializeController(contextKey, videoList[i].videoUrl, isPreload: true),
+            videoManager.initializeController(contextKey, videoList[i].videoUrl, isPreload: true, activeUrl: firstUrl),
           );
         }
       }
@@ -156,23 +166,26 @@ class VideoController extends GetxController {
     final urls = videoList.map((v) => v.videoUrl).toList();
 
     await videoManager.pauseAllExcept(contextKey, currentUrl);
-    videoManager.preloadSurrounding(contextKey, urls, index);
+    videoManager.preloadSurrounding(contextKey, urls, index, activeUrl: currentUrl);
 
     CachedVideoPlayerPlus? player = videoManager.getController(contextKey, currentUrl);
     final ctrl = player?.controller;
 
     if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
       try {
-        player = await videoManager.initializeController(contextKey, currentUrl, autoPlay: true);
+        player = await videoManager.initializeController(
+          contextKey,
+          currentUrl,
+          autoPlay: false, // le widget jouera quand visible
+          activeUrl: currentUrl,
+        );
       } catch (e) {
-        print('❌ Erreur lors de l\'initialisation du contrôleur vidéo (onCurrentIndexChanged): $e');
+        print('❌ Erreur init contrôleur (onCurrentIndexChanged): $e');
         return;
       }
     }
 
-    if (player != null && player.controller.value.isInitialized && !player.controller.value.hasError && !player.controller.value.isPlaying) {
-      await player.controller.play();
-    }
+    // Ne force pas play ici : SmartVideoPlayer gère l’autoplay sûr quand visible.
 
     if (index >= videoList.length - 2 && hasMore && !_isLoading) {
       fetchPaginatedVideos();
@@ -183,6 +196,7 @@ class VideoController extends GetxController {
     await videoManager.pauseAll(contextKey);
   }
 
+  // --- like / partager / signaler / delete: inchangé ---
   Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(
     DocumentReference<Map<String, dynamic>> ref,
   ) async {

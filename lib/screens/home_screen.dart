@@ -2,11 +2,15 @@ import 'dart:async';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:wakelock_plus/wakelock_plus.dart'; // 🔒 Empêche la mise en veille pendant la lecture
+
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/connectivity_controller.dart';
+
 import 'package:adfoot/screens/add_video.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 
@@ -29,6 +33,41 @@ class _HomeScreenState extends State<HomeScreen>
   late final Animation<double> _fadeAnimation;
 
   StreamSubscription<bool>? _connectivitySubscription;
+
+  // --- Wakelock (niveau écran, en complément du SmartVideoPlayer) ---
+  bool _wakelockOn = false;
+  Future<void> _setWakelock(bool enable) async {
+    if (_wakelockOn == enable) return;
+    _wakelockOn = enable;
+    try {
+      if (enable) {
+        await WakelockPlus.enable();
+      } else {
+        await WakelockPlus.disable();
+      }
+    } catch (e) {
+      debugPrint('Wakelock error: $e');
+    }
+  }
+
+  Future<void> _updateWakelockForCurrent() async {
+    final idx = videoController.currentIndex.value;
+    if (idx < 0 || idx >= videoController.videoList.length) {
+      await _setWakelock(false);
+      return;
+    }
+    final url = videoController.videoList[idx].videoUrl;
+    final player = videoManager.getController('home', url);
+    final ctrl = player?.controller;
+
+    final shouldKeepAwake = ctrl != null &&
+        ctrl.value.isInitialized &&
+        ctrl.value.isPlaying &&
+        !ctrl.value.isBuffering;
+
+    await _setWakelock(shouldKeepAwake);
+  }
+  // ------------------------------------------------------------------
 
   @override
   void initState() {
@@ -58,6 +97,7 @@ class _HomeScreenState extends State<HomeScreen>
     _fadeController.dispose();
     _pageController.dispose();
     _connectivitySubscription?.cancel();
+    _setWakelock(false);
     _safeDisposeVideoContext();
     super.dispose();
   }
@@ -66,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen>
     try {
       await videoManager.pauseAll('home');
       await Future.delayed(const Duration(milliseconds: 100));
-      videoManager.disposeAllForContext('home');
+      await videoManager.disposeAllForContext('home');
     } catch (e) {
       debugPrint('❌ Error during dispose: $e');
     }
@@ -74,24 +114,16 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       videoManager.pauseAll('home');
+      _setWakelock(false);
     } else if (state == AppLifecycleState.resumed) {
-      final currentIndex = videoController.currentIndex.value;
-      if (currentIndex >= 0 && currentIndex < videoController.videoList.length) {
-        final currentUrl = videoController.videoList[currentIndex].videoUrl;
-        videoManager.pauseAllExcept('home', currentUrl);
-
-        final player = videoManager.getController('home', currentUrl);
-        final ctrl = player?.controller;
-        if (ctrl != null &&
-            ctrl.value.isInitialized &&
-            !ctrl.value.hasError &&
-            !ctrl.value.isPlaying) {
-          ctrl.play();
-        } else {
-          _tryInitAndPlay(currentUrl);
-        }
+      final idx = videoController.currentIndex.value;
+      if (idx >= 0 && idx < videoController.videoList.length) {
+        unawaited(_onPageChanged(idx));
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          unawaited(_updateWakelockForCurrent());
+        });
       }
     }
     super.didChangeAppLifecycleState(state);
@@ -104,8 +136,16 @@ class _HomeScreenState extends State<HomeScreen>
         .listen((connected) async {
       if (!mounted) return;
       setState(() => _isConnected = connected);
+
       if (connected && videoController.videoList.isEmpty) {
-        await videoController.fetchPaginatedVideos();
+        final ok = await videoController.fetchPaginatedVideos();
+        if (ok && mounted && videoController.videoList.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            videoController.currentIndex.value = 0;
+            unawaited(_onPageChanged(0));
+            unawaited(_updateWakelockForCurrent());
+          });
+        }
       }
     });
   }
@@ -119,49 +159,52 @@ class _HomeScreenState extends State<HomeScreen>
       await videoController.fetchPaginatedVideos();
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) _fadeController.forward();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final videos = videoController.videoList;
       if (videos.isNotEmpty) {
-        final firstUrl = videos.first.videoUrl;
-        _tryInitAndPlay(firstUrl);
+        videoController.currentIndex.value = 0;
+        await _onPageChanged(0);
+        await _updateWakelockForCurrent();
       }
     });
-
-    if (mounted) _fadeController.forward();
-  }
-
-  Future<void> _tryInitAndPlay(String videoUrl) async {
-    try {
-      CachedVideoPlayerPlus? player = videoManager.getController('home', videoUrl);
-      final ctrl = player?.controller;
-
-      if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
-        player = await videoManager.initializeController('home', videoUrl, autoPlay: true);
-      }
-
-      await videoManager.pauseAllExcept('home', videoUrl);
-
-      final updatedCtrl = player?.controller;
-      if (updatedCtrl != null &&
-          updatedCtrl.value.isInitialized &&
-          !updatedCtrl.value.hasError &&
-          !updatedCtrl.value.isPlaying) {
-        await updatedCtrl.play();
-      }
-    } catch (e) {
-      debugPrint('❌ Erreur lors du chargement initial de la vidéo : $e');
-    }
   }
 
   Future<void> _onPageChanged(int index) async {
     final videos = videoController.videoList;
     if (index < 0 || index >= videos.length) return;
+
     final currentUrl = videos[index].videoUrl;
 
     videoController.currentIndex.value = index;
-    videoManager.preloadSurrounding('home', videos.map((v) => v.videoUrl).toList(), index);
+
+    final urls = videos.map((v) => v.videoUrl).toList();
+    videoManager.preloadSurrounding('home', urls, index, activeUrl: currentUrl);
+
     await videoManager.pauseAllExcept('home', currentUrl);
-    await _tryInitAndPlay(currentUrl);
+
+    CachedVideoPlayerPlus? player = videoManager.getController('home', currentUrl);
+    final ctrl = player?.controller;
+
+    if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
+      try {
+        await videoManager.initializeController(
+          'home',
+          currentUrl,
+          autoPlay: false,
+          activeUrl: currentUrl,
+        );
+      } catch (e) {
+        debugPrint('❌ Erreur init contrôleur (onPageChanged): $e');
+      }
+    }
+
+    await _updateWakelockForCurrent();
+
+    if (index >= videos.length - 2 && videoController.hasMore && !videoController.isLoading) {
+      unawaited(videoController.fetchPaginatedVideos());
+    }
   }
 
   @override
@@ -179,7 +222,11 @@ class _HomeScreenState extends State<HomeScreen>
             if (user == null) {
               return const Padding(
                 padding: EdgeInsets.all(8.0),
-                child: CircularProgressIndicator(color: Colors.white),
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                ),
               );
             }
             return IconButton(
@@ -192,8 +239,10 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               onPressed: () async {
                 await videoManager.pauseAll('home');
+                await _setWakelock(false);
                 await Get.to(() => ProfileScreen(uid: user.uid, isReadOnly: false));
                 videoController.currentIndex.refresh();
+                await _updateWakelockForCurrent();
               },
             );
           }),
@@ -231,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen>
                         currentIndex: index,
                         videoList: videos,
                         enableTapToPlay: true,
-                        autoPlay: true,
+                        autoPlay: true, // <- autoplay activé côté widget
                         showControls: true,
                         showProgressBar: true,
                         player: player,
@@ -256,9 +305,10 @@ class _HomeScreenState extends State<HomeScreen>
                                     fontSize: 16,
                                     shadows: [
                                       Shadow(
-                                          color: Colors.black54,
-                                          offset: Offset(1, 1),
-                                          blurRadius: 2),
+                                        color: Colors.black54,
+                                        offset: Offset(1, 1),
+                                        blurRadius: 2,
+                                      ),
                                     ],
                                   ),
                                   overflow: TextOverflow.ellipsis,
@@ -273,9 +323,10 @@ class _HomeScreenState extends State<HomeScreen>
                                     fontSize: 15,
                                     shadows: [
                                       Shadow(
-                                          color: Colors.black54,
-                                          offset: Offset(1, 1),
-                                          blurRadius: 2),
+                                        color: Colors.black54,
+                                        offset: Offset(1, 1),
+                                        blurRadius: 2,
+                                      ),
                                     ],
                                   ),
                                   maxLines: 2,
@@ -292,8 +343,10 @@ class _HomeScreenState extends State<HomeScreen>
                         child: GestureDetector(
                           onTap: () async {
                             await videoManager.pauseAll('home');
+                            await _setWakelock(false);
                             await Get.to(() => ProfileScreen(uid: video.uid, isReadOnly: true));
                             videoController.currentIndex.refresh();
+                            await _updateWakelockForCurrent();
                           },
                           child: CircleAvatar(
                             backgroundImage: NetworkImage(
@@ -319,11 +372,13 @@ class _HomeScreenState extends State<HomeScreen>
             heroTag: 'addVideo',
             onPressed: () async {
               await videoManager.pauseAll('home');
+              await _setWakelock(false);
               final result = await Get.to(() => const AddVideo());
               if (result == true) {
                 await videoController.refreshVideosIfNeeded();
               }
               videoController.currentIndex.refresh();
+              await _updateWakelockForCurrent();
             },
             child: const Icon(Icons.add),
           );
@@ -340,8 +395,10 @@ class _HomeScreenState extends State<HomeScreen>
         children: [
           Icon(Icons.wifi_off, color: Colors.white, size: 60),
           SizedBox(height: 20),
-          Text('Pas de connexion Internet',
-              style: TextStyle(color: Colors.white, fontSize: 18)),
+          Text(
+            'Pas de connexion Internet',
+            style: TextStyle(color: Colors.white, fontSize: 18),
+          ),
         ],
       ),
     );
