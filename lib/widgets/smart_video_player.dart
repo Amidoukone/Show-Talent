@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:adfoot/utils/video_cache_manager.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
@@ -9,6 +10,7 @@ import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 import 'package:video_player/video_player.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class SmartVideoPlayer extends StatefulWidget {
   final CachedVideoPlayerPlus? player;
@@ -40,95 +42,239 @@ class SmartVideoPlayer extends StatefulWidget {
   State<SmartVideoPlayer> createState() => _SmartVideoPlayerState();
 }
 
-class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
+class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBindingObserver {
   late final VideoManager _videoManager;
   late final ValueNotifier<bool> _showPlayIcon;
+
+  CachedVideoPlayerPlus? _player;
+  VideoPlayerController? get _ctrl => _player?.controller;
+
   bool _hasAutoplayStarted = false;
-  VideoPlayerController? _attachedController;
+  bool _hasFirstFrame = false;
+  int _attachToken = 0;
+
+  late final VideoController _vc;
+  late final Worker _indexWorker; // NEW: observe l’index courant
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
     _videoManager = VideoManager();
     _showPlayIcon = ValueNotifier(true);
-    _attachListener(widget.player?.controller);
+
+    if (!Get.isRegistered<VideoController>(tag: widget.contextKey)) {
+      Get.put(VideoController(contextKey: widget.contextKey), tag: widget.contextKey, permanent: true);
+    }
+    _vc = Get.find<VideoController>(tag: widget.contextKey);
+
+    // 🔁 Autoplay sur changement d’index global (scroll)
+    _indexWorker = ever<int>(_vc.currentIndex, (i) {
+      if (!mounted) return;
+      if (i == widget.currentIndex) {
+        // Cette tuile devient courante -> autoplay
+        _maybePlay();
+      } else {
+        // Cette tuile sort de l’écran -> pause
+        _pause();
+      }
+    });
+
+    _attachOrInitialize(reuse: widget.player);
   }
 
   @override
   void didUpdateWidget(SmartVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.player?.controller != widget.player?.controller) {
+    if (oldWidget.videoUrl != widget.videoUrl || oldWidget.player?.controller != widget.player?.controller) {
       _detachListener(oldWidget.player?.controller);
-      _attachListener(widget.player?.controller);
       _hasAutoplayStarted = false;
+      _hasFirstFrame = false;
+      _attachOrInitialize(reuse: widget.player);
     }
-  }
-
-  void _attachListener(VideoPlayerController? ctrl) {
-    _attachedController = ctrl;
-    if (ctrl != null) {
-      ctrl.addListener(_controllerListener);
-      _showPlayIcon.value = !(ctrl.value.isPlaying);
-      if (widget.autoPlay && ctrl.value.isInitialized && !ctrl.value.isPlaying) {
-        ctrl.play();
-        _hasAutoplayStarted = true;
-      }
-    }
-  }
-
-  void _detachListener(VideoPlayerController? ctrl) {
-    ctrl?.removeListener(_controllerListener);
-  }
-
-  Future<void> _controllerListener() async {
-    final ctrl = widget.player?.controller;
-    if (!mounted || ctrl == null) return;
-
-    if (!ctrl.value.isInitialized || ctrl.value.hasError) {
-      await _purgeAndReloadController();
-      return;
-    }
-
-    final isPlaying = ctrl.value.isPlaying;
-    _showPlayIcon.value = !isPlaying;
-
-    if (widget.autoPlay &&
-        !_hasAutoplayStarted &&
-        ctrl.value.isInitialized &&
-        !ctrl.value.hasError &&
-        !isPlaying) {
-      await ctrl.play();
-      _hasAutoplayStarted = true;
-    }
-  }
-
-  Future<void> _purgeAndReloadController() async {
-    try {
-      final file = await VideoCacheManager.getFileIfCached(widget.videoUrl);
-      if (file != null && await file.exists()) {
-        await file.delete();
-        debugPrint("[SmartVideoPlayer] Cache corrompu supprimé pour ${widget.videoUrl}");
-      }
-    } catch (_) {}
-
-    Get.find<VideoController>(tag: widget.contextKey);
-    setState(() {
-      _hasAutoplayStarted = false;
-    });
   }
 
   @override
   void dispose() {
-    _detachListener(_attachedController);
+    WidgetsBinding.instance.removeObserver(this);
+    _indexWorker.dispose(); // stop observe
+    _setWakelock(false);
+    _detachListener(_ctrl);
     _showPlayIcon.dispose();
     super.dispose();
+  }
+
+  // lifecycle
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) return;
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _pause();
+      _setWakelock(false);
+    } else if (state == AppLifecycleState.resumed) {
+      _maybePlay();
+      _updateWakelock();
+    }
+  }
+
+  // attach / init
+  Future<void> _attachOrInitialize({CachedVideoPlayerPlus? reuse}) async {
+    final localToken = ++_attachToken;
+
+    CachedVideoPlayerPlus? p = reuse ?? _videoManager.getController(widget.contextKey, widget.videoUrl);
+    if (p == null) {
+      try {
+        p = await _videoManager.initializeController(
+          widget.contextKey,
+          widget.videoUrl,
+          autoPlay: false,
+          activeUrl: widget.videoUrl,
+        );
+      } catch (e) {
+        debugPrint('[SmartVideoPlayer] init error: $e');
+      }
+    }
+    if (!mounted || localToken != _attachToken) return;
+
+    _bindPlayer(p);
+
+    // Si on arrive déjà comme item courant et autoplay activé -> joue
+    if (widget.autoPlay && _vc.currentIndex.value == widget.currentIndex) {
+      _maybePlay();
+    }
+  }
+
+  void _bindPlayer(CachedVideoPlayerPlus? p) {
+    _player = p;
+    _detachListener(_ctrl);
+    _hasFirstFrame = false;
+
+    if (_ctrl != null) {
+      _ctrl!.addListener(_onTick);
+      if (_ctrl!.value.isInitialized && _ctrl!.value.position > Duration.zero && !_ctrl!.value.isBuffering) {
+        _hasFirstFrame = true;
+      }
+      _showPlayIcon.value = !(_ctrl!.value.isPlaying);
+    }
+    setState(() {});
+    _updateWakelock();
+  }
+
+  void _detachListener(VideoPlayerController? ctrl) {
+    try {
+      ctrl?.removeListener(_onTick);
+    } catch (_) {}
+  }
+
+  void _onTick() {
+    final c = _ctrl;
+    if (c == null) return;
+
+    if (!_hasFirstFrame && c.value.isInitialized && !c.value.isBuffering && c.value.position > Duration.zero) {
+      setState(() => _hasFirstFrame = true);
+    }
+
+    _showPlayIcon.value = !(c.value.isPlaying);
+
+    final isCurrent = _vc.currentIndex.value == widget.currentIndex;
+    if (!isCurrent && c.value.isPlaying) {
+      c.pause();
+    }
+
+    // L’ancienne logique d’autoplay basée uniquement sur les ticks reste,
+    // mais le worker d’index garantit maintenant le déclenchement au scroll.
+    if (widget.autoPlay && !_hasAutoplayStarted && c.value.isInitialized && !c.value.hasError && !c.value.isPlaying) {
+      // _maybePlay(); // (laissé possible mais non indispensable grâce au worker)
+    }
+
+    _updateWakelock();
+  }
+
+  Future<void> _maybePlay() async {
+    final c = _ctrl;
+    if (c == null) {
+      _setWakelock(false);
+      return;
+    }
+
+    if (_vc.currentIndex.value != widget.currentIndex) {
+      _setWakelock(false);
+      return;
+    }
+
+    if (!c.value.isInitialized) {
+      try {
+        await _videoManager.waitUntilInitialized(widget.contextKey, widget.videoUrl);
+      } catch (_) {
+        _setWakelock(false);
+        return;
+      }
+    }
+    if (!c.value.isInitialized || c.value.hasError) {
+      _setWakelock(false);
+      return;
+    }
+
+    if (c.value.position == Duration.zero) {
+      await c.seekTo(Duration.zero);
+    }
+
+    await _videoManager.pauseAllExcept(widget.contextKey, widget.videoUrl);
+
+    if (!c.value.isPlaying) {
+      await c.play();
+      _hasAutoplayStarted = true;
+    }
+
+    _updateWakelock();
+  }
+
+  void _pause() {
+    final c = _ctrl;
+    if (c == null) {
+      _setWakelock(false);
+      return;
+    }
+    if (c.value.isPlaying) {
+      c.pause();
+    }
+    _setWakelock(false);
+  }
+
+  // ---- Wakelock helpers ----
+  void _updateWakelock() {
+    final c = _ctrl;
+    final shouldKeepAwake =
+        c != null &&
+        c.value.isInitialized &&
+        c.value.isPlaying &&
+        !c.value.isBuffering &&
+        (_vc.currentIndex.value == widget.currentIndex);
+
+    _setWakelock(shouldKeepAwake);
+  }
+
+  bool _wakelockOn = false;
+  Future<void> _setWakelock(bool enable) async {
+    if (enable == _wakelockOn) return;
+    _wakelockOn = enable;
+    try {
+      if (enable) {
+        await WakelockPlus.enable();
+      } else {
+        await WakelockPlus.disable();
+      }
+    } catch (e) {
+      debugPrint('Wakelock error: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final videoController = Get.find<VideoController>(tag: widget.contextKey);
     final userController = Get.find<UserController>();
-    final ctrl = widget.player?.controller;
+    final ctrl = _ctrl;
     final loadState = _videoManager.getLoadState(widget.contextKey, widget.videoUrl);
 
     return Stack(
@@ -147,9 +293,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
               isLoading: loadState == VideoLoadState.loading,
               errorMessage: _getErrorMessage(loadState),
               thumbnailUrl: widget.video.thumbnailUrl,
+              hasFirstFrame: _hasFirstFrame,
               onTogglePlayPause: () {
                 if (ctrl == null || !ctrl.value.isInitialized) return;
-                ctrl.value.isPlaying ? ctrl.pause() : ctrl.play();
+                ctrl.value.isPlaying ? _pause() : _maybePlay();
               },
               onRetry: () async {
                 debugPrint('[SmartVideoPlayer] Retry tapped for ${widget.video.videoUrl}');
@@ -269,5 +416,19 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> {
       Get.snackbar('Erreur', 'Partage impossible',
           backgroundColor: Colors.red, colorText: Colors.white);
     }
+  }
+
+  Future<void> _purgeAndReloadController() async {
+    try {
+      final file = await VideoCacheManager.getFileIfCached(widget.videoUrl);
+      if (file != null && await file.exists()) {
+        await file.delete();
+        debugPrint("[SmartVideoPlayer] Cache corrompu supprimé pour ${widget.videoUrl}");
+      }
+    } catch (_) {}
+    _hasAutoplayStarted = false;
+    _hasFirstFrame = false;
+    setState(() {});
+    unawaited(_attachOrInitialize(reuse: null));
   }
 }

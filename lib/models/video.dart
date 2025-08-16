@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Video {
   String id;
   String videoUrl;
@@ -42,6 +44,14 @@ class Video {
       reportCount: map['reportCount'] ?? 0,
       status: map['status'],
     );
+  }
+
+  factory Video.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    return Video.fromMap({
+      ...data,
+      'id': data['id'] ?? doc.id,
+    });
   }
 
   Map<String, dynamic> toMap() {

@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controller/auth_controller.dart';
-import 'dart:html' as html; // Ajout pour recharger la page web
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -21,7 +20,6 @@ class _SplashScreenState extends State<SplashScreen> {
 
   bool _navigating = false;
   late final bool _shouldRouteHere;
-  String? _errorMessage; // Pour afficher une erreur en cas de problème
 
   @override
   void initState() {
@@ -88,11 +86,7 @@ class _SplashScreenState extends State<SplashScreen> {
       try {
         await _auth.signOut();
       } catch (_) {}
-
-      setState(() {
-        _errorMessage =
-            "Erreur au démarrage : ${e.toString()}\nEssayez de rafraîchir la page ou de vérifier votre connexion.";
-      });
+      return _safeOffAll(const LoginScreen());
     }
   }
 
@@ -109,31 +103,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF214D4F),
+    return const Scaffold(
+      backgroundColor: Color(0xFF214D4F),
       body: Center(
-        child: _errorMessage != null
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.error, color: Colors.red, size: 48),
-                  const SizedBox(height: 16),
-                  Text(
-                    _errorMessage!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      html.window.location.reload();
-                    },
-                    child: const Text("Rafraîchir la page"),
-                  ),
-                ],
-              )
-            : const CircularProgressIndicator(color: Colors.white),
+        child: CircularProgressIndicator(color: Colors.white),
       ),
     );
   }
-}
+} 
