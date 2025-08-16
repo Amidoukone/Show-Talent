@@ -32,13 +32,15 @@ class VideoManager {
 
     final futures = _initFuturesByContext[contextKey]!;
 
-    if (_playersByContext[contextKey]!.containsKey(url)) {
-      final existing = _playersByContext[contextKey]![url]!;
-      if (existing.controller.value.isInitialized && !existing.controller.value.hasError) {
+    // Déjà prêt ?
+    final existing = _playersByContext[contextKey]![url];
+    if (existing != null) {
+      final cv = existing.controller.value;
+      if (cv.isInitialized && !cv.hasError) {
         _markRecent(contextKey, url);
         await _enforceLimit(contextKey, activeUrl: activeUrl);
         _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
-        if (autoPlay && !existing.controller.value.isPlaying) await existing.controller.play();
+        if (autoPlay && !cv.isPlaying) await existing.controller.play();
         return existing;
       } else {
         await safeDispose(existing);
@@ -46,11 +48,16 @@ class VideoManager {
       }
     }
 
+    // Init en cours ?
     if (futures.containsKey(url)) {
-      final existingFuture = await futures[url]!;
-      if (existingFuture.controller.value.isInitialized && !existingFuture.controller.value.hasError) {
-        if (autoPlay && !existingFuture.controller.value.isPlaying) await existingFuture.controller.play();
-        return existingFuture;
+      final player = await futures[url]!;
+      final cv = player.controller.value;
+      if (cv.isInitialized && !cv.hasError) {
+        _markRecent(contextKey, url);
+        await _enforceLimit(contextKey, activeUrl: activeUrl);
+        _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
+        if (autoPlay && !cv.isPlaying) await player.controller.play();
+        return player;
       } else {
         futures.remove(url);
         _playersByContext[contextKey]?.remove(url);
@@ -64,13 +71,13 @@ class VideoManager {
         if (file == null || !await file.exists()) {
           file = await _downloadVideo(url);
         }
-
         if (!await file.exists()) throw Exception("Fichier introuvable : $url");
 
         final player = CachedVideoPlayerPlus.file(file);
 
+        // Timeout un peu plus large
         await player.initialize().timeout(
-          const Duration(seconds: 5),
+          const Duration(seconds: 12),
           onTimeout: () {
             _loadStatesByContext[contextKey]![url] = VideoLoadState.errorTimeout;
             throw TimeoutException("Timeout init : $url");
@@ -78,7 +85,7 @@ class VideoManager {
         );
 
         if (!player.controller.value.isInitialized || player.controller.value.hasError) {
-          await file.delete();
+          try { await file.delete(); } catch (_) {}
           throw Exception("Erreur initialisation player : $url");
         }
 
@@ -87,8 +94,9 @@ class VideoManager {
         _markRecent(contextKey, url);
         await _enforceLimit(contextKey, activeUrl: activeUrl);
         _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
-        if (autoPlay && !player.controller.value.isPlaying) await player.controller.play();
-
+        if (autoPlay && !player.controller.value.isPlaying) {
+          await player.controller.play();
+        }
         return player;
       } catch (e, st) {
         debugPrint("❌ Video init error: $e\n$st");
@@ -131,10 +139,11 @@ class VideoManager {
 
   Future<void> _enforceLimit(String contextKey, {String? activeUrl}) async {
     final recent = _recentByContext[contextKey]!;
+    // Purge tant qu'on dépasse, en évitant activeUrl
     while (recent.length > _maxActive) {
-      final oldest = recent.first;
-      if (oldest == activeUrl) break;
-      recent.removeAt(0);
+      final oldest = recent.firstWhere((u) => u != activeUrl, orElse: () => '');
+      if (oldest.isEmpty) break;
+      recent.remove(oldest);
       final player = _playersByContext[contextKey]?.remove(oldest);
       if (player != null) {
         await safePause(player);
@@ -218,12 +227,10 @@ class VideoManager {
       {String? activeUrl}) async {
     for (int i = 1; i <= 2; i++) {
       if (index - i >= 0) {
-        unawaited(initializeController(contextKey, urls[index - i],
-            isPreload: true, activeUrl: activeUrl));
+        unawaited(initializeController(contextKey, urls[index - i], isPreload: true, activeUrl: activeUrl));
       }
       if (index + i < urls.length) {
-        unawaited(initializeController(contextKey, urls[index + i],
-            isPreload: true, activeUrl: activeUrl));
+        unawaited(initializeController(contextKey, urls[index + i], isPreload: true, activeUrl: activeUrl));
       }
     }
   }
@@ -242,5 +249,27 @@ class VideoManager {
         await player.dispose();
       }
     } catch (_) {}
+  }
+
+  // === Ajout : attente d'initialisation ===
+  Future<void> waitUntilInitialized(String contextKey, String url) async {
+    final p = _playersByContext[contextKey]?[url];
+    if (p == null) return;
+    final c = p.controller;
+    if (c.value.isInitialized) return;
+
+    final completer = Completer<void>();
+    void listener() {
+      if (c.value.isInitialized) {
+        c.removeListener(listener);
+        if (!completer.isCompleted) completer.complete();
+      }
+    }
+    c.addListener(listener);
+    try {
+      await completer.future.timeout(const Duration(seconds: 12));
+    } catch (_) {
+      c.removeListener(listener);
+    }
   }
 }

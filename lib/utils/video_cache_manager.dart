@@ -22,6 +22,7 @@ class VideoCacheManager extends CacheManager {
             maxNrOfCacheObjects: 50,
             repo: JsonCacheInfoRepository(databaseName: key),
             fileService: HttpFileService(),
+            // NB: on préfère getInstance() qui pointe vers AppSupport
             fileSystem: IOFileSystem(Directory.systemTemp.path),
           ),
         );
@@ -64,7 +65,7 @@ class VideoCacheManager extends CacheManager {
   }) async {
     final fileInfo = await super.downloadFile(url, authHeaders: authHeaders, force: force, key: key);
     debugPrint('[VideoCacheManager] Cached: $url');
-    await _autoPurgeIfNeeded();
+    unawaited(_autoPurgeIfNeeded());
     return fileInfo;
   }
 
@@ -92,7 +93,6 @@ class VideoCacheManager extends CacheManager {
       await for (var f in dir.list(recursive: true)) {
         if (f is File) total += await f.length();
       }
-
       final sizeMB = total ~/ (1024 * 1024);
       debugPrint('[VideoCacheManager] Cache size: $sizeMB MB');
       return sizeMB;
@@ -114,7 +114,6 @@ class VideoCacheManager extends CacheManager {
 
     final fileData = <File, int>{};
     int totalSize = 0;
-
     for (final file in files) {
       try {
         final size = await file.length();
@@ -125,29 +124,34 @@ class VideoCacheManager extends CacheManager {
 
     final totalMB = totalSize ~/ (1024 * 1024);
     debugPrint('[VideoCacheManager] Cache size: $totalMB MB');
-
     if (totalMB <= maxCacheSizeMB) return;
 
     debugPrint('[VideoCacheManager] Purging cache...');
-
-    final sortedFiles = fileData.entries.toList();
-    sortedFiles.sort((a, b) {
-      final aTime = a.key.statSync().accessed;
-      final bTime = b.key.statSync().accessed;
-      return aTime.compareTo(bTime);
-    });
+    final sorted = fileData.entries.toList()
+      ..sort((a, b) {
+        DateTime aTime, bTime;
+        try {
+          aTime = a.key.statSync().modified;
+        } catch (_) {
+          aTime = DateTime.fromMillisecondsSinceEpoch(0);
+        }
+        try {
+          bTime = b.key.statSync().modified;
+        } catch (_) {
+          bTime = DateTime.fromMillisecondsSinceEpoch(0);
+        }
+        return aTime.compareTo(bTime);
+      });
 
     int freed = 0;
     final toFreeBytes = purgeBlockSizeMB * 1024 * 1024;
-
-    for (final entry in sortedFiles) {
+    for (final e in sorted) {
       try {
-        await entry.key.delete();
-        freed += entry.value;
+        await e.key.delete();
+        freed += e.value;
         if (freed >= toFreeBytes) break;
       } catch (_) {}
     }
-
     final freedMB = freed ~/ (1024 * 1024);
     debugPrint('[VideoCacheManager] Freed $freedMB MB from cache');
   }

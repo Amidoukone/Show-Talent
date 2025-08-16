@@ -11,6 +11,7 @@ class TiktokVideoPlayer extends StatelessWidget {
   final bool isLoading;
   final String? errorMessage;
   final String thumbnailUrl;
+  final bool hasFirstFrame;
   final VoidCallback? onTogglePlayPause;
   final VoidCallback? onRetry;
 
@@ -25,6 +26,7 @@ class TiktokVideoPlayer extends StatelessWidget {
     required this.isLoading,
     required this.errorMessage,
     required this.thumbnailUrl,
+    required this.hasFirstFrame,
     this.onTogglePlayPause,
     this.onRetry,
   });
@@ -51,8 +53,8 @@ class TiktokVideoPlayer extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        _buildThumbnail(),
-        if (hasInit && !showLoader) _buildVideoPlayer(),
+        if (!hasFirstFrame) _buildThumbnail(),
+        if (hasInit) _buildVideoPlayer(),
         if (showLoader) const Center(child: CircularProgressIndicator(color: Colors.white)),
       ],
     );
@@ -109,7 +111,7 @@ class TiktokVideoPlayer extends StatelessWidget {
 
   Widget _buildVideoPlayer() {
     final value = controller?.value;
-    if (value == null || value.hasError || !value.isInitialized || value.size.isEmpty) {
+    if (value == null || value.hasError || !value.isInitialized) {
       return _buildThumbnail();
     }
 
@@ -118,8 +120,8 @@ class TiktokVideoPlayer extends StatelessWidget {
       child: FittedBox(
         fit: BoxFit.cover,
         child: SizedBox(
-          width: value.size.width,
-          height: value.size.height,
+          width: value.size.width == 0 ? 9 / 16 : value.size.width,
+          height: value.size.height == 0 ? 1 : value.size.height,
           child: VideoPlayer(controller!),
         ),
       ),
@@ -140,6 +142,7 @@ class TiktokVideoPlayer extends StatelessWidget {
   }
 
   Widget _buildProgressBar() {
+    if (controller == null) return const SizedBox.shrink();
     return Positioned(
       bottom: 0,
       left: 0,
@@ -164,9 +167,7 @@ class TiktokVideoPlayer extends StatelessWidget {
   }
 
   bool _shouldShowProgressBar() {
-    return showProgressBar &&
-        (controller?.value.isInitialized ?? false) &&
-        !isBuffering &&
-        isPlaying;
+    final inited = controller?.value.isInitialized ?? false;
+    return showProgressBar && inited && !isBuffering && isPlaying;
   }
 }
