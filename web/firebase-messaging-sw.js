@@ -4,7 +4,7 @@ importScripts('https://www.gstatic.com/firebasejs/9.6.10/firebase-messaging-comp
 
 /* Configuration Firebase du projet */
 firebase.initializeApp({
-  apiKey: "AIzaSyAo6Jr2eYrOTekjTHlJQXImr5q1UsI2jcA",
+  apiKey: "BLngrlSTZrTe-mexPQOdiYul_qFP1bRZnrv7UCHwVA9vXkuYUJ1oJ3tUnD5B5QDyk6d1eSVRFG18ECIEBAazUho",
   authDomain: "show-talent-5987d.firebaseapp.com",
   projectId: "show-talent-5987d",
   storageBucket: "show-talent-5987d.appspot.com",

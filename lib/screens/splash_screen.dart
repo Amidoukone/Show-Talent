@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controller/auth_controller.dart';
+import '../controller/user_controller.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -19,31 +20,38 @@ class _SplashScreenState extends State<SplashScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   bool _navigating = false;
-  late final bool _shouldRouteHere;
+  late final bool _authControllerPresent;
 
   @override
   void initState() {
     super.initState();
-    // Si AuthController est enregistré, on lui laisse 100% la main sur la navigation
-    _shouldRouteHere = !Get.isRegistered<AuthController>();
-    _initializeUser();
+    _authControllerPresent = Get.isRegistered<AuthController>();
+
+    // Si AuthController est présent, c’est UserController qui navigue.
+    // On le "réveille" après le 1er frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        Get.find<UserController>().kickstart();
+      } catch (_) {}
+    });
+
+    // Si jamais AuthController n'est pas présent (tests/démo), on route ici.
+    if (!_authControllerPresent) {
+      _initializeFallback();
+    }
   }
 
-  Future<void> _initializeUser() async {
-    if (!_shouldRouteHere) return; // Laisse AuthController router
-
+  Future<void> _initializeFallback() async {
     // Petit délai pour laisser Firebase s'initialiser correctement
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(milliseconds: 600));
 
     try {
       final currentUser = _auth.currentUser;
 
-      // ⛔️ Pas connecté → Login
       if (currentUser == null) {
         return _safeOffAll(const LoginScreen());
       }
 
-      // 🔄 Rafraîchir l'état Firebase (emailVerified, etc.)
       await currentUser.reload();
       final refreshedUser = _auth.currentUser;
 
@@ -51,22 +59,19 @@ class _SplashScreenState extends State<SplashScreen> {
         return _safeOffAll(const LoginScreen());
       }
 
-      // ✉️ Email non vérifié → on laisse VerifyEmailScreen gérer l'envoi/renvoi
       if (!refreshedUser.emailVerified) {
         return _safeOffAll(const VerifyEmailScreen());
       }
 
-      // 🔎 Récupérer le profil Firestore
       final docRef = _firestore.collection('users').doc(refreshedUser.uid);
       final doc = await docRef.get();
 
-      // Cas rare : pas de profil → déconnexion propre
       if (!doc.exists) {
         await _auth.signOut();
         return _safeOffAll(const LoginScreen());
       }
 
-      // ✅ Si vérifié côté Auth, synchroniser les champs Firestore si besoin
+      // Sync minime
       final data = doc.data()!;
       final updates = <String, dynamic>{};
       if (data['emailVerified'] != true) updates['emailVerified'] = true;
@@ -78,11 +83,9 @@ class _SplashScreenState extends State<SplashScreen> {
         await docRef.update(updates);
       }
 
-      // 🏠 Tout est ok → Main
       return _safeOffAll(const MainScreen());
     } catch (e) {
-      // En cas d'erreur, on retourne au Login proprement
-      debugPrint('Splash _initializeUser error: $e');
+      debugPrint('Splash fallback error: $e');
       try {
         await _auth.signOut();
       } catch (_) {}
@@ -94,7 +97,6 @@ class _SplashScreenState extends State<SplashScreen> {
     if (_navigating) return;
     _navigating = true;
     try {
-      // Utilise Get.offAll pour une navigation robuste sans doublons
       await Get.offAll(() => page);
     } finally {
       _navigating = false;
@@ -110,4 +112,4 @@ class _SplashScreenState extends State<SplashScreen> {
       ),
     );
   }
-} 
+}

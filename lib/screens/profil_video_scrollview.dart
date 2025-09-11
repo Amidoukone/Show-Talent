@@ -29,6 +29,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
   late int _currentIndex;
   late final String _ctxKey;
   final VideoManager _videoManager = VideoManager();
+  late final VideoController _vc;
 
   bool _isProcessing = false;
   String? _currentPlayingUrl;
@@ -43,9 +44,9 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
     _ctxKey = widget.contextKey;
     _pageController = PageController(initialPage: _currentIndex);
 
-    if (!Get.isRegistered<VideoController>(tag: _ctxKey)) {
-      Get.put(VideoController(contextKey: _ctxKey), tag: _ctxKey, permanent: true);
-    }
+    _vc = Get.isRegistered<VideoController>(tag: _ctxKey)
+        ? Get.find<VideoController>(tag: _ctxKey)
+        : Get.put(VideoController(contextKey: _ctxKey), tag: _ctxKey, permanent: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleIndexChange(_currentIndex);
@@ -55,16 +56,19 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _disposeWithDelay();
+    _disposeResources();
     _pageController.dispose();
     super.dispose();
   }
 
-  Future<void> _disposeWithDelay() async {
+  Future<void> _disposeResources() async {
     try {
       await _videoManager.pauseAll(_ctxKey);
       await Future.delayed(const Duration(milliseconds: 100));
       await _videoManager.disposeAllForContext(_ctxKey);
+      if (Get.isRegistered<VideoController>(tag: _ctxKey)) {
+        Get.delete<VideoController>(tag: _ctxKey);
+      }
     } catch (e) {
       debugPrint('❌ Error during dispose: $e');
     }
@@ -72,33 +76,33 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Pause la vidéo si on quitte l'écran
     if (state == AppLifecycleState.paused) {
       _videoManager.pauseAll(_ctxKey);
     } else if (state == AppLifecycleState.resumed) {
-      final urls = widget.videos.map((v) => v.videoUrl).toList();
-      if (_currentIndex >= 0 && _currentIndex < urls.length) {
-        final currentUrl = urls[_currentIndex];
-        _videoManager.pauseAllExcept(_ctxKey, currentUrl);
-
-        final player = _videoManager.getController(_ctxKey, currentUrl);
-        final ctrl = player?.controller;
-        if (ctrl != null &&
-            ctrl.value.isInitialized &&
-            !ctrl.value.hasError &&
-            !ctrl.value.isPlaying) {
-          ctrl.play();
-          setState(() {}); // force le rebuild pour synchroniser l'affichage vidéo
-        } else {
-          _handleIndexChange(_currentIndex);
-        }
-      }
+      _resumeCurrentVideo();
     }
     super.didChangeAppLifecycleState(state);
   }
 
+  Future<void> _resumeCurrentVideo() async {
+    final urls = widget.videos.map((v) => v.videoUrl).toList();
+    if (_currentIndex >= 0 && _currentIndex < urls.length) {
+      final currentUrl = urls[_currentIndex];
+      _videoManager.pauseAllExcept(_ctxKey, currentUrl);
+
+      final player = _videoManager.getController(_ctxKey, currentUrl);
+      final ctrl = player?.controller;
+      if (ctrl != null && ctrl.value.isInitialized && !ctrl.value.hasError && !ctrl.value.isPlaying) {
+        await ctrl.play();
+        setState(() {});
+      } else {
+        await _handleIndexChange(_currentIndex);
+      }
+    }
+  }
+
   Future<void> _handleIndexChange(int idx) async {
-    if (_isProcessing) return;
+    if (_isProcessing || idx >= widget.videos.length || idx < 0) return;
     _isProcessing = true;
 
     try {
@@ -112,28 +116,32 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
         _ctxKey,
         currentUrl,
         autoPlay: true,
+        activeUrl: currentUrl,
       );
 
       _currentIndex = idx;
       _currentPlayingUrl = currentUrl;
+
+      /// 🔁 Synchro avec SmartVideoPlayer
+      _vc.currentIndex.value = idx;
+
       setState(() {});
 
-      _videoManager.preloadSurrounding(_ctxKey, urls, idx);
+      _videoManager.preloadSurrounding(_ctxKey, urls, idx, activeUrl: currentUrl);
 
-      final retainedIndices = <int>[];
-      for (int i = idx - (_videoSlidingWindowLimit ~/ 2); i <= idx + (_videoSlidingWindowLimit ~/ 2); i++) {
-        if (i >= 0 && i < urls.length) retainedIndices.add(i);
-      }
+      /// 🧹 Nettoyage LRU
+      final retainedIndices = List<int>.generate(_videoSlidingWindowLimit, (i) => idx - (_videoSlidingWindowLimit ~/ 2) + i)
+          .where((i) => i >= 0 && i < urls.length)
+          .toList();
 
       final retainedUrls = retainedIndices.map((i) => urls[i]).toSet();
-      final allUrls = Set<String>.from(urls);
-      final toDispose = allUrls.difference(retainedUrls);
+      final toDispose = urls.toSet().difference(retainedUrls);
       await _videoManager.disposeUrls(_ctxKey, toDispose.toList());
 
       final ctrl = player.controller;
       if (!ctrl.value.isPlaying && ctrl.value.isInitialized && !ctrl.value.hasError) {
         await ctrl.play();
-        setState(() {}); // force le rebuild pour synchroniser l'affichage vidéo
+        setState(() {});
       }
     } catch (e, st) {
       debugPrint("❌ Error in _handleIndexChange: $e\n$st");
@@ -148,10 +156,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
       return const Scaffold(
         backgroundColor: Colors.black,
         body: Center(
-          child: Text(
-            'Aucune vidéo publiée',
-            style: TextStyle(color: Colors.white),
-          ),
+          child: Text('Aucune vidéo publiée', style: TextStyle(color: Colors.white)),
         ),
       );
     }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+import '../controller/user_controller.dart';
 import 'main_screen.dart';
 
 class VerifyRedirectScreen extends StatefulWidget {
@@ -72,7 +73,12 @@ class _VerifyRedirectScreenState extends State<VerifyRedirectScreen> {
       if (user.emailVerified) {
         await _syncUserFirestore(user);
         if (!mounted) return;
-        Get.offAll(() => const MainScreen());
+
+        // 🚦 Navigation + réveil UserController
+        await Get.offAll(() => const MainScreen());
+        if (Get.isRegistered<UserController>()) {
+          Get.find<UserController>().kickstart();
+        }
         return;
       }
 

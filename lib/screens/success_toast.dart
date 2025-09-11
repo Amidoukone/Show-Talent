@@ -15,7 +15,7 @@ void showSuccessToast(String message) {
         Icon(Icons.check_circle, color: Colors.white, size: 24),
         SizedBox(width: 8),
         Text(
-          'Succès 🎉',
+          'Succès !',
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,

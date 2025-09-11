@@ -5,22 +5,30 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../theme/ad_colors.dart';
+import '../widgets/ad_text_field.dart';
+import '../widgets/ad_button.dart';
+
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
+
   @override
   State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
+  // Controllers
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  String _selectedRole = 'joueur';
-  bool _obscurePassword = true;
-  bool _isLoading = false;
+  // State
   final _formKey = GlobalKey<FormState>();
+  String _selectedRole = 'joueur';
+  bool _isLoading = false;
+
+  static const _roles = ['joueur', 'club', 'recruteur', 'fan'];
 
   static final ActionCodeSettings _acs = ActionCodeSettings(
     url: 'https://adfoot.org/verify',
@@ -38,35 +46,47 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   void _showSnackbar(String title, String msg, Color color) {
     Get.snackbar(
-      title, msg,
+      title,
+      msg,
       snackPosition: SnackPosition.BOTTOM,
       backgroundColor: color,
       colorText: Colors.white,
       duration: const Duration(seconds: 3),
+      margin: const EdgeInsets.all(12),
+      borderRadius: 12,
     );
   }
 
   Future<void> _signUp() async {
+    // Ferme le clavier
+    FocusScope.of(context).unfocus();
+
+    // Validation
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isLoading = true);
 
     try {
       final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
+      final password = _passwordController.text;
       final nom = _nameController.text.trim();
       final phone = _phoneController.text.trim();
 
-      final userCred = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(email: email, password: password);
-
+      // 1) Création Auth
+      final userCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
       final user = userCred.user;
       if (user == null) {
-        _showSnackbar('Erreur', 'Impossible de créer le compte.', Colors.red);
+        _showSnackbar('Erreur', 'Impossible de créer le compte.', AdColors.error);
         return;
       }
 
+      // 2) Affichage du nom (Auth)
       await user.updateDisplayName(nom);
 
+      // 3) Création du profil Firestore
       final now = DateTime.now();
       final appUser = AppUser(
         uid: user.uid,
@@ -106,11 +126,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
         followingsList: const [],
       );
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .set(appUser.toMap());
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(appUser.toMap());
 
+      // 4) Email de vérification
       bool sent = false;
       int? sentAtMs;
       try {
@@ -118,91 +136,179 @@ class _SignUpScreenState extends State<SignUpScreen> {
         sent = true;
         sentAtMs = DateTime.now().millisecondsSinceEpoch;
       } on FirebaseAuthException catch (e) {
-        // Si rate-limit ou autre à l’inscription, on n’insiste pas ici
+        // Infos seulement; on n’empêche pas d’aller à l’écran de vérification
         debugPrint('sendEmailVerification error: ${e.code} - ${e.message}');
         _showSnackbar(
           'Attention',
           'E-mail non envoyé. Tu pourras le renvoyer sur l’écran suivant.',
-          Colors.orange,
+          AdColors.warning,
         );
       }
 
+      // 5) Refresh Auth (sécurité)
       await FirebaseAuth.instance.currentUser?.reload();
 
       if (!mounted) return;
+
+      // 6) Info utilisateur
       _showSnackbar(
         'Compte créé',
         sent
             ? 'Vérifie ton adresse e-mail pour activer ton compte.'
             : 'Compte créé. Renvoyez le lien depuis l’écran suivant.',
-        Colors.green,
+        AdColors.success,
       );
 
-      // ⚠️ On passe l’état d’envoi au prochain écran
+      // 7) Navigation vers VerifyEmailScreen (comme avant), avec arguments de cooldown
       Get.offAll(
         () => const VerifyEmailScreen(),
         arguments: {
           'emailSent': sent,
-          'sentAt': sentAtMs, // utilisé pour afficher un cooldown UI max 60s SEULEMENT si sent==true
+          'sentAt': sentAtMs,
         },
       );
     } on FirebaseAuthException catch (e) {
-      String err = switch (e.code) {
+      final err = switch (e.code) {
         'email-already-in-use' => 'Email déjà utilisé.',
         'weak-password' => 'Mot de passe trop court.',
         'invalid-email' => 'Email invalide.',
         'operation-not-allowed' => 'Inscription par e-mail désactivée.',
         _ => e.message ?? 'Erreur. Réessaye.'
       };
-      _showSnackbar('Erreur', err, Colors.red);
+      _showSnackbar('Erreur', err, AdColors.error);
     } catch (e) {
-      _showSnackbar('Erreur', e.toString(), Colors.red);
+      _showSnackbar('Erreur', e.toString(), AdColors.error);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // --- UI ---
+
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFE6EEFA),
+      backgroundColor: cs.surface,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                Image.asset('assets/logo.png', height: 100),
-                const SizedBox(height: 30),
-                const Text(
-                  'Créez un compte',
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF214D4F)),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: AutovalidateMode.disabled,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Logo + titre
+                      Align(
+                        alignment: Alignment.center,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.asset('assets/logo.png', height: 80, fit: BoxFit.contain),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Créez un compte',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: cs.onSurface,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Rejoins la communauté AD.FOOT',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: cs.onSurface.withOpacity(.7),
+                              fontWeight: FontWeight.w600,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Nom
+                      AdTextField(
+                        controller: _nameController,
+                        label: 'Nom complet',
+                        prefixIcon: const Icon(Icons.person_outline),
+                        validator: _validateName,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Email
+                      AdTextField(
+                        controller: _emailController,
+                        label: 'Adresse e-mail',
+                        keyboardType: TextInputType.emailAddress,
+                        prefixIcon: const Icon(Icons.email_outlined),
+                        validator: _validateEmail,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Téléphone (optionnel)
+                      AdTextField(
+                        controller: _phoneController,
+                        label: 'Numéro de téléphone (optionnel)',
+                        keyboardType: TextInputType.phone,
+                        prefixIcon: const Icon(Icons.phone_outlined),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Mot de passe
+                      AdTextField(
+                        controller: _passwordController,
+                        label: 'Mot de passe',
+                        isPassword: true,
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        validator: (val) => (val?.length ?? 0) < 6 ? 'Minimum 6 caractères' : null,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Rôle (dropdown pour ne rien casser)
+                      DropdownButtonFormField<String>(
+                        value: _selectedRole,
+                        decoration: const InputDecoration(
+                          labelText: 'Rôle',
+                          prefixIcon: Icon(Icons.account_circle_outlined),
+                        ),
+                        items: _roles
+                            .map((r) => DropdownMenuItem(
+                                  value: r,
+                                  child: Text(r.capitalizeFirst!),
+                                ))
+                            .toList(),
+                        onChanged: (v) => setState(() => _selectedRole = v ?? 'joueur'),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // CTA
+                      AdButton(
+                        label: 'S’inscrire',
+                        onPressed: _isLoading ? null : _signUp,
+                        loading: _isLoading,
+                        leading: Icons.person_add_alt_1_rounded,
+                        kind: AdButtonKind.primary,
+                      ),
+
+                      const SizedBox(height: 8),
+                      // Lien vers login (optionnel, non destructif)
+                      TextButton(
+                        onPressed: _isLoading ? null : () => Get.back(),
+                        child: const Text('Déjà un compte ? Se connecter'),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 30),
-                _buildTextField(_nameController, 'Nom complet', Icons.person_outline, validator: _validateName),
-                const SizedBox(height: 20),
-                _buildTextField(
-                  _emailController,
-                  'Adresse email',
-                  Icons.email_outlined,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: _validateEmail,
-                ),
-                const SizedBox(height: 20),
-                _buildTextField(
-                  _phoneController,
-                  'Numéro de téléphone',
-                  Icons.phone,
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 20),
-                _buildPasswordField(),
-                const SizedBox(height: 20),
-                _buildRoleDropdown(),
-                const SizedBox(height: 30),
-                _buildSubmitButton(),
-              ],
+              ),
             ),
           ),
         ),
@@ -210,83 +316,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  Widget _buildTextField(
-    TextEditingController ctrl,
-    String label,
-    IconData icon, {
-    TextInputType keyboardType = TextInputType.text,
-    String? Function(String?)? validator,
-  }) {
-    return TextFormField(
-      controller: ctrl,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      validator: validator,
-    );
-  }
-
-  Widget _buildPasswordField() {
-    return TextFormField(
-      controller: _passwordController,
-      obscureText: _obscurePassword,
-      decoration: InputDecoration(
-        labelText: 'Mot de passe',
-        prefixIcon: const Icon(Icons.lock_outline),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        suffixIcon: IconButton(
-          icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-        ),
-      ),
-      validator: (val) => (val?.length ?? 0) < 6 ? 'Minimum 6 caractères' : null,
-    );
-  }
-
-  Widget _buildRoleDropdown() {
-    return DropdownButtonFormField<String>(
-      value: _selectedRole,
-      decoration: InputDecoration(
-        labelText: 'Rôle',
-        prefixIcon: const Icon(Icons.account_circle_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-      items: ['joueur', 'club', 'recruteur', 'fan']
-          .map((r) => DropdownMenuItem(value: r, child: Text(r.capitalizeFirst!)))
-          .toList(),
-      onChanged: (v) => setState(() => _selectedRole = v ?? 'joueur'),
-    );
-  }
-
-  Widget _buildSubmitButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _signUp,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF214D4F),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        ),
-        child: _isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : const Text('S’inscrire', style: TextStyle(fontSize: 18, color: Colors.white)),
-      ),
-    );
-  }
+  // --- Validators ---
 
   String? _validateName(String? v) {
-    if ((v?.trim().isEmpty ?? true)) return 'Le nom est requis';
-    if (!RegExp(r"^[A-Za-zÀ-ÿ\s'-]+$").hasMatch(v!)) return 'Nom invalide';
+    final value = v?.trim() ?? '';
+    if (value.isEmpty) return 'Le nom est requis';
+    // Autorise lettres avec accents, espaces, apostrophes et tirets
+    if (!RegExp(r"^[A-Za-zÀ-ÿ\s'’-]+$").hasMatch(value)) return 'Nom invalide';
     return null;
+    // Remarque : si tu veux permettre les chiffres dans les noms (ex: U17), adapte la regex.
   }
 
   String? _validateEmail(String? v) {
-    if ((v?.trim().isEmpty ?? true)) return 'Email requis';
-    if (!RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,}$').hasMatch(v!)) return 'Email invalide';
+    final value = v?.trim() ?? '';
+    if (value.isEmpty) return 'Email requis';
+    if (!RegExp(r'^[\w\.\-+]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(value)) return 'Email invalide';
     return null;
   }
 }

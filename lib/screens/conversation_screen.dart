@@ -16,7 +16,11 @@ class ConversationsScreen extends StatefulWidget {
 }
 
 class _ConversationsScreenState extends State<ConversationsScreen> {
-  final ChatController chatController = Get.put(ChatController());
+  // ✅ Évite de créer plusieurs ChatController
+  final ChatController chatController = Get.isRegistered<ChatController>()
+      ? Get.find<ChatController>()
+      : Get.put(ChatController(), permanent: true);
+
   final AuthController authController = Get.find<AuthController>();
 
   @override
@@ -35,11 +39,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                 return const Center(child: Text("Aucune conversation."));
               }
 
-              // Trier par date du dernier message
-              final conversations = List.from(chatController.conversations);
-              conversations.sort((a, b) =>
-                  (b.lastMessageDate ?? DateTime(0))
-                      .compareTo(a.lastMessageDate ?? DateTime(0)));
+              final conversations = List.from(chatController.conversations)
+                ..sort(
+                  (a, b) => (b.lastMessageDate ?? DateTime(0))
+                      .compareTo(a.lastMessageDate ?? DateTime(0)),
+                );
 
               return ListView.builder(
                 itemCount: conversations.length,
@@ -56,6 +60,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     return const ListTile(title: Text("Utilisateur inconnu"));
                   }
 
+                  // On peut garder FutureBuilder (lecture ponctuelle) pour l'utilisateur distant
                   return FutureBuilder<DocumentSnapshot>(
                     future: FirebaseFirestore.instance
                         .collection('users')
@@ -67,85 +72,127 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       }
 
                       if (!snapshot.hasData || snapshot.data == null) {
-                        return const ListTile(title: Text("Utilisateur inconnu"));
+                        return const ListTile(title: Text("Utilisateur introuvable"));
                       }
 
-                      final Map<String, dynamic>? userData =
-                          snapshot.data?.data() as Map<String, dynamic>?;
-                      if (userData == null) {
-                        return const ListTile(title: Text("Erreur utilisateur"));
+                      final data = snapshot.data!.data() as Map<String, dynamic>?;
+                      if (data == null ||
+                          !(data['estActif'] ?? false) ||
+                          !(data['emailVerified'] ?? false)) {
+                        return const ListTile(title: Text("Utilisateur inactif ou non vérifié"));
                       }
 
-                      final otherUser = AppUser.fromMap(userData);
-                      final int unreadCount = conversation.unreadMessagesCount;
+                      final otherUser = AppUser.fromMap(data);
 
-                      return GestureDetector(
-                        onLongPress: () => _confirmDelete(conversation.id),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            radius: 25,
-                            backgroundImage: otherUser.photoProfil.isNotEmpty
-                                ? NetworkImage(otherUser.photoProfil)
-                                : null,
-                            child: otherUser.photoProfil.isEmpty
-                                ? Text(
-                                    otherUser.nom.substring(0, 1).toUpperCase(),
-                                    style: const TextStyle(
-                                        color: Colors.black, fontSize: 18),
-                                  )
-                                : null,
-                          ),
-                          title: Text(
-                            otherUser.nom,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: Text(
-                            conversation.lastMessage ?? "Aucun message",
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.grey),
-                          ),
-                          trailing: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _formatDateOrTime(conversation.lastMessageDate),
-                                style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      // ✅ Stream temps réel sur les messages non lus destinés à l'utilisateur courant
+                      final unreadStream = FirebaseFirestore.instance
+                          .collection('conversations')
+                          .doc(conversation.id)
+                          .collection('messages')
+                          .where('destinataireId', isEqualTo: currentUserId)
+                          .where('estLu', isEqualTo: false)
+                          .snapshots();
+
+                      return StreamBuilder<QuerySnapshot>(
+                        stream: unreadStream,
+                        builder: (context, unreadSnap) {
+                          // Fallback sur la valeur calculée côté controller si stream pas prêt
+                          final unreadCount = (unreadSnap.hasData)
+                              ? unreadSnap.data!.docs.length
+                              : conversation.unreadMessagesCount;
+
+                          return GestureDetector(
+                            onLongPress: () => _confirmDelete(conversation.id),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                radius: 25,
+                                backgroundImage: otherUser.photoProfil.isNotEmpty
+                                    ? NetworkImage(otherUser.photoProfil)
+                                    : null,
+                                child: otherUser.photoProfil.isEmpty
+                                    ? Text(
+                                        otherUser.nom.substring(0, 1).toUpperCase(),
+                                        style: const TextStyle(
+                                          color: Colors.black,
+                                          fontSize: 18,
+                                        ),
+                                      )
+                                    : null,
                               ),
-                              if (unreadCount > 0)
-                                Container(
-                                  margin: const EdgeInsets.only(top: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.teal,
-                                    borderRadius: BorderRadius.circular(12),
+                              title: Text(
+                                otherUser.nom,
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                conversation.lastMessage ?? "Aucun message",
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: Colors.grey),
+                              ),
+                              trailing: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    _formatDateOrTime(conversation.lastMessageDate),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
                                   ),
-                                  child: Text(
-                                    "$unreadCount",
-                                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          onTap: () async {
-                            try {
-                              if (unreadCount > 0) {
-                                await chatController.markMessagesAsRead(
-                                    conversation.id, currentUserId);
-                              }
+                                  if (unreadCount > 0)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 4),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.teal,
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Colors.black26,
+                                            offset: Offset(0, 1),
+                                            blurRadius: 2,
+                                          )
+                                        ],
+                                      ),
+                                      child: Text(
+                                        "$unreadCount",
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              onTap: () async {
+                                try {
+                                  // Lecture immédiate (au cas où) en ouvrant la conversation
+                                  if (unreadCount > 0) {
+                                    await chatController.markMessagesAsRead(
+                                      conversation.id,
+                                      currentUserId,
+                                    );
+                                  }
 
-                              Get.to(() => ChatScreen(
-                                    conversationId: conversation.id,
-                                    otherUser: otherUser,
-                                  ));
-                            } catch (e) {
-                              Get.snackbar('Erreur',
-                                  'Impossible d\'ouvrir la conversation : $e',
-                                  backgroundColor: Colors.red,
-                                  colorText: Colors.white);
-                            }
-                          },
-                        ),
+                                  Get.to(() => ChatScreen(
+                                        conversationId: conversation.id,
+                                        otherUser: otherUser,
+                                      ));
+                                } catch (e) {
+                                  Get.snackbar(
+                                    'Erreur',
+                                    'Impossible d\'ouvrir la conversation : $e',
+                                    backgroundColor: Colors.red,
+                                    colorText: Colors.white,
+                                  );
+                                }
+                              },
+                            ),
+                          );
+                        },
                       );
                     },
                   );
@@ -153,16 +200,13 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               );
             }),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Get.to(() => const SelectUserScreen());
-        },
+        onPressed: () => Get.to(() => const SelectUserScreen()),
         backgroundColor: const Color.fromARGB(255, 20, 147, 4),
         child: const Icon(Icons.message, color: Colors.white),
       ),
     );
   }
 
-  /// Confirmer la suppression d'une conversation
   void _confirmDelete(String conversationId) {
     showDialog(
       context: context,
@@ -186,17 +230,14 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
   }
 
-  /// Formater l'heure ou la date du dernier message
   String _formatDateOrTime(DateTime? dateTime) {
     if (dateTime == null) return "Inconnue";
 
     final now = DateTime.now();
     final isToday = now.difference(dateTime).inDays == 0;
 
-    if (isToday) {
-      return DateFormat('HH:mm').format(dateTime);
-    } else {
-      return DateFormat('dd/MM/yyyy').format(dateTime);
-    }
+    return isToday
+        ? DateFormat('HH:mm').format(dateTime)
+        : DateFormat('dd/MM/yyyy').format(dateTime);
   }
 }
