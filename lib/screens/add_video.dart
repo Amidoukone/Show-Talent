@@ -1,7 +1,11 @@
 import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+
 import 'package:adfoot/controller/upload_video_controller.dart';
 import 'upload_form.dart';
 
@@ -14,124 +18,413 @@ class AddVideo extends StatefulWidget {
 
 class _AddVideoState extends State<AddVideo> {
   final UploadVideoController uploadVideoController =
-      Get.put(UploadVideoController());
+      Get.put(UploadVideoController(), permanent: false);
+
   final ImagePicker _picker = ImagePicker();
   final RxBool isLoading = false.obs;
 
-  Future<void> _pickVideo(ImageSource source) async {
+  // Couleurs de marque
+  static const Color kBrand = Color(0xFF214D4F);
+  static const Color kBrandDark = Color(0xFF18383A);
+
+  Future<void> _pickVideoFromGallery() async {
     try {
       isLoading.value = true;
-      final pickedFile = await _picker.pickVideo(source: source);
+
+      // Galerie uniquement (caméra désactivée)
+      final pickedFile = await _picker.pickVideo(source: ImageSource.gallery);
+
       isLoading.value = false;
 
-      if (pickedFile != null) {
-        final file = File(pickedFile.path);
-        Get.to(() => UploadForm(videoFile: file, videoPath: pickedFile.path));
-      } else {
-        Get.snackbar('Erreur', 'Aucune vidéo sélectionnée',
-            backgroundColor: Colors.redAccent, colorText: Colors.white);
+      if (pickedFile == null) {
+        Get.snackbar(
+          'Info',
+          'Aucune vidéo sélectionnée',
+          backgroundColor: Colors.blueGrey.shade700,
+          colorText: Colors.white,
+        );
+        return;
       }
+
+      final file = File(pickedFile.path);
+      // Navigation vers le formulaire d’upload
+      Get.to(() => UploadForm(videoFile: file, videoPath: pickedFile.path));
+    } on PlatformException catch (e) {
+      isLoading.value = false;
+      // Gestion permission/refus galerie
+      Get.snackbar(
+        'Autorisation requise',
+        "Veuillez autoriser l'accès à la galerie pour sélectionner une vidéo.\n($e)",
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 5),
+      );
     } catch (e) {
       isLoading.value = false;
-      Get.snackbar('Erreur', 'Échec lors de la sélection : $e',
-          backgroundColor: Colors.redAccent, colorText: Colors.white);
+      Get.snackbar(
+        'Erreur',
+        'Échec lors de la sélection : $e',
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: const Text('Ajouter une vidéo'),
-        backgroundColor: const Color(0xFF214D4F),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
       ),
-      body: Obx(() {
-        // Affichage pendant le chargement initial ou le téléversement
-        if (isLoading.value || uploadVideoController.isUploading.value) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(
-                  value: uploadVideoController.uploadProgress.value,
-                  color: const Color(0xFF214D4F),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Téléversement en cours : ${(uploadVideoController.uploadProgress.value * 100).toInt()}%',
-                  style: const TextStyle(fontSize: 16, color: Colors.black87),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // Affichage pendant l'optimisation
-        if (uploadVideoController.isOptimizing.value) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(color: Color(0xFF214D4F)),
-                SizedBox(height: 20),
-                Text(
-                  'Optimisation en cours...',
-                  style: TextStyle(fontSize: 16, color: Colors.black87),
-                ),
-              ],
-            ),
-          );
-        }
-
-        // État par défaut : sélection de la source vidéo
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 50),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.video_collection,
-                  size: 80, color: Color(0xFF214D4F)),
-              const SizedBox(height: 30),
-              const Text(
-                'Sélectionnez la source de votre vidéo',
-                style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.black87,
-                    fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () => _pickVideo(ImageSource.gallery),
-                icon: const Icon(Icons.photo_library, color: Colors.white),
-                label: const Text('Galerie',
-                    style: TextStyle(fontSize: 16, color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF214D4F),
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
-                ),
-              ),
-              const SizedBox(height: 15),
-              ElevatedButton.icon(
-                onPressed: () => _pickVideo(ImageSource.camera),
-                icon: const Icon(Icons.camera_alt, color: Colors.white),
-                label: const Text('Caméra',
-                    style: TextStyle(fontSize: 16, color: Colors.white)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF214D4F),
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
-                ),
-              ),
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          // Dégradé moderne d’arrière-plan
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFE7F1F1),
+              Color(0xFFEAF3F3),
+              Color(0xFFEFF6F6),
             ],
           ),
-        );
-      }),
+        ),
+        child: SafeArea(
+          child: Obx(() {
+            final uploading = uploadVideoController.isUploading.value;
+            final optimizing = uploadVideoController.isOptimizing.value;
+            final loading = isLoading.value;
+
+            // Contenu principal
+            final content = _BodyCard(
+              onPick: _pickVideoFromGallery,
+            );
+
+            // Superpose un overlay “verre dépoli” quand on charge / upload / optimise
+            final showOverlay = loading || uploading || optimizing;
+
+            return Stack(
+              children: [
+                // Header décoratif
+                _Header(),
+                // Contenu avec animations douces
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      top: media.size.height * 0.18,
+                      left: 20,
+                      right: 20,
+                    ),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 350),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      child: content,
+                    ),
+                  ),
+                ),
+
+                if (showOverlay) _ProgressOverlay(controller: uploadVideoController, waiting: loading),
+              ],
+            );
+          }),
+        ),
+      ),
+    );
+  }
+}
+
+/// En-tête décoratif avec gradient et icône
+class _Header extends StatelessWidget {
+  static const Color kBrand = Color(0xFF214D4F);
+
+  const _Header();
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return Container(
+      height: media.size.height * 0.26,
+      width: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [kBrand, Color(0xFF2C6E72)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(
+          bottom: Radius.circular(28),
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -30,
+            top: -30,
+            child: _Bubble(size: 110, opacity: .08),
+          ),
+          Positioned(
+            left: -40,
+            bottom: -40,
+            child: _Bubble(size: 160, opacity: .06),
+          ),
+          const Align(
+            alignment: Alignment.center,
+            child: Icon(
+              Icons.video_collection_rounded,
+              color: Colors.white,
+              size: 64,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Petite bulle décorative
+class _Bubble extends StatelessWidget {
+  final double size;
+  final double opacity;
+  const _Bubble({required this.size, required this.opacity});
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: opacity,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
+/// Carte principale avec bouton “Choisir depuis la galerie”
+class _BodyCard extends StatelessWidget {
+  static const Color kBrand = Color(0xFF214D4F);
+  final VoidCallback onPick;
+
+  const _BodyCard({required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 10,
+      shadowColor: kBrand.withOpacity(.15),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Illustration cercle + icône
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: kBrand.withOpacity(.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: Icon(Icons.video_library_rounded, size: 42, color: kBrand),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Sélectionnez une vidéo depuis votre galerie',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                letterSpacing: .2,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF0E1B1C),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Durée maximale 60s • Qualité conseillée 480×360+',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.black54,
+              ),
+            ),
+            const SizedBox(height: 22),
+
+            // Bouton principal
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onPick,
+                icon: const Icon(Icons.photo_library_rounded, color: Colors.white),
+                label: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'Choisir depuis la galerie',
+                    style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kBrand,
+                  elevation: 3,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            // Tips + puces
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
+              children: const [
+                _TipChip(icon: Icons.timer_rounded, label: '≤ 60 secondes'),
+                _TipChip(icon: Icons.hd_rounded, label: '≥ 480×360'),
+                _TipChip(icon: Icons.data_saver_on_rounded, label: 'Compression auto'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TipChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _TipChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      labelPadding: const EdgeInsets.only(right: 8),
+      avatar: Icon(icon, size: 18, color: const Color(0xFF214D4F)),
+      label: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF214D4F),
+        ),
+      ),
+      backgroundColor: const Color(0xFF214D4F).withOpacity(.08),
+    );
+  }
+}
+
+/// Overlay de progression en “verre dépoli”
+class _ProgressOverlay extends StatelessWidget {
+  static const Color kBrand = Color(0xFF214D4F);
+
+  final UploadVideoController controller;
+  final bool waiting; // état "chargement" avant d'ouvrir la galerie
+
+  const _ProgressOverlay({required this.controller, required this.waiting});
+
+  @override
+  Widget build(BuildContext context) {
+    final uploading = controller.isUploading.value;
+    final optimizing = controller.isOptimizing.value;
+    final progress = controller.uploadProgress.value;
+    final hasValue = progress > 0 && progress <= 1;
+
+    String title;
+    String subtitle = '';
+    Widget progressWidget;
+
+    if (waiting) {
+      title = 'Chargement…';
+      progressWidget = const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
+    } else if (optimizing) {
+      title = 'Optimisation en cours…';
+      progressWidget = const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
+    } else if (uploading) {
+      title = 'Téléversement en cours';
+      subtitle = '${(progress * 100).toInt()}%';
+      progressWidget = CircularProgressIndicator(
+        strokeWidth: 3,
+        color: Colors.white,
+        value: hasValue ? progress : null,
+      );
+    } else {
+      title = 'Veuillez patienter…';
+      progressWidget = const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
+    }
+
+    return Positioned.fill(
+      child: Container(
+        alignment: Alignment.center,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+            child: Container(
+              width: 320,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 22),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(.55),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white.withOpacity(.08)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  progressWidget,
+                  const SizedBox(height: 14),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: .2,
+                    ),
+                  ),
+                  if (subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(.9),
+                        fontSize: 13.5,
+                      ),
+                    ),
+                  ],
+                  if (uploading && hasValue) ...[
+                    const SizedBox(height: 14),
+                    LinearProgressIndicator(
+                      value: progress.clamp(0.0, 1.0),
+                      minHeight: 6,
+                      color: Colors.white,
+                      backgroundColor: Colors.white.withOpacity(.25),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

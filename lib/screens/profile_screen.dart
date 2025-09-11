@@ -40,7 +40,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final VideoManager _videoManager = VideoManager();
   final ScrollController _scrollController = ScrollController();
 
+  /// Fenêtre glissante de vignettes réellement rendues (stabilité UI)
   static const int visibleWindowSize = 25;
+
+  /// Plafond "soft" côté écran pour éviter trop d’appels quand la grille est volumineuse
+  /// (le ProfileController a déjà sa propre limite mémoire)
+  static const int maxLoadedVideos = 100;
+
+  /// Throttle de pagination pour éviter le spam lors d’un scroll très rapide
+  DateTime? _lastFetchAttemptAt;
+  static const Duration _fetchThrottle = Duration(milliseconds: 350);
 
   @override
   void initState() {
@@ -48,18 +57,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _profileController = Get.put(ProfileController(), tag: widget.uid);
     _profileController.updateUserId(widget.uid);
 
-    _scrollController.addListener(() {
-      if (_scrollController.position.pixels >=
-              _scrollController.position.maxScrollExtent - 200 &&
-          !_profileController.isLoadingVideos &&
-          _profileController.hasMoreVideos) {
-        _profileController.fetchUserVideos(widget.uid);
-      }
-    });
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final now = DateTime.now();
+    if (_lastFetchAttemptAt != null &&
+        now.difference(_lastFetchAttemptAt!) < _fetchThrottle) {
+      return;
+    }
+    _lastFetchAttemptAt = now;
+
+    final nearBottom = _scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200;
+
+    if (nearBottom &&
+        !_profileController.isLoadingVideos &&
+        _profileController.hasMoreVideos &&
+        _profileController.videoList.length < maxLoadedVideos) {
+      _profileController.fetchUserVideos(widget.uid);
+    }
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     final ctx = 'profile:${widget.uid}';
     _profileController.pauseAll();
     _videoManager.disposeAllForContext(ctx);
@@ -91,12 +113,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final isOwnProfile = currentUid != null && currentUid == user.uid;
         final visibleVideos = _getVisibleVideos(controller.videoList);
 
+        // ✅ AppBar: titre et icônes (dont flèche retour) en blanc
         final theme = Theme.of(context).copyWith(
           scaffoldBackgroundColor: kSurface,
           appBarTheme: const AppBarTheme(
             backgroundColor: kPrimary,
             elevation: 1,
             centerTitle: true,
+            // Titre blanc
+            titleTextStyle: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+            // Icônes de l'AppBar (dont flèche retour) en blanc
+            iconTheme: IconThemeData(color: Colors.white),
+            actionsIconTheme: IconThemeData(color: Colors.white),
           ),
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
@@ -120,6 +152,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           data: theme,
           child: Scaffold(
             appBar: AppBar(
+              // Le style du texte (couleur blanche) vient du AppBarTheme.titleTextStyle ci-dessus.
               title: Text(user.nom.isNotEmpty ? user.nom : 'Nom inconnu'),
               actions: [
                 if (isOwnProfile && !widget.isReadOnly)
@@ -233,31 +266,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     child: CircularProgressIndicator());
                               }
                               final vid = visibleVideos[index];
-                              return _VideoTile(
-                                video: vid,
-                                onTap: () async {
-                                  final contextKey = 'profile:${widget.uid}';
-                                  if (!Get.isRegistered<VideoController>(
-                                      tag: contextKey)) {
-                                    Get.put(
-                                      VideoController(contextKey: contextKey),
-                                      tag: contextKey,
-                                      permanent: true,
+
+                              // ✅ RepaintBoundary pour limiter les re-rendus
+                              return RepaintBoundary(
+                                key: ValueKey(vid.id),
+                                child: _VideoTile(
+                                  video: vid,
+                                  onTap: () async {
+                                    final contextKey = 'profile:${widget.uid}';
+                                    if (!Get.isRegistered<VideoController>(
+                                        tag: contextKey)) {
+                                      Get.put(
+                                        VideoController(contextKey: contextKey),
+                                        tag: contextKey,
+                                        permanent: true,
+                                      );
+                                    }
+
+                                    await _profileController.pauseAll();
+                                    Get.find<VideoController>(tag: contextKey)
+                                        .currentIndex
+                                        .value = index;
+
+                                    await Get.to(
+                                      () => ProfileVideoScrollView(
+                                        videos: visibleVideos,
+                                        initialIndex: index,
+                                        uid: widget.uid,
+                                        contextKey: contextKey,
+                                      ),
                                     );
-                                  }
-                                  await _profileController.pauseAll();
-                                  Get.find<VideoController>(tag: contextKey)
-                                      .currentIndex
-                                      .value = index;
-                                  await Get.to(
-                                    () => ProfileVideoScrollView(
-                                      videos: visibleVideos,
-                                      initialIndex: index,
-                                      uid: widget.uid,
-                                      contextKey: contextKey,
-                                    ),
-                                  );
-                                },
+
+                                    /// ✅ Pré-déchargement au retour (sécurité mémoire)
+                                    await _videoManager
+                                        .disposeAllForContext(contextKey);
+                                    if (Get.isRegistered<VideoController>(
+                                        tag: contextKey)) {
+                                      Get.delete<VideoController>(
+                                          tag: contextKey);
+                                    }
+                                  },
+                                ),
                               );
                             },
                             childCount: visibleVideos.length,
@@ -299,7 +348,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         otherUserId: user.uid,
       );
       if (conversationId.isNotEmpty) {
-        Get.to(() => ChatScreen(conversationId: conversationId, otherUser: user));
+        Get.to(() =>
+            ChatScreen(conversationId: conversationId, otherUser: user));
       }
     } catch (e) {
       Get.snackbar('Erreur', 'Impossible d’envoyer un message : $e',
@@ -330,16 +380,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () async {
               try {
                 if (isFollowing) {
-                  await _followController.unfollowUser(currentUserId, user.uid);
+                  await _followController.unfollowUser(
+                      currentUserId, user.uid);
                   user.followersList.remove(currentUserId);
                 } else {
-                  await _followController.followUser(currentUserId, user.uid);
+                  await _followController.followUser(
+                      currentUserId, user.uid);
                   user.followersList.add(currentUserId);
                 }
                 _profileController.update();
               } catch (e) {
-                Get.snackbar('Erreur',
-                    'Une erreur s\'est produite lors de l\'opération : $e',
+                Get.snackbar(
+                    'Erreur', 'Une erreur s\'est produite lors de l\'opération : $e',
                     backgroundColor: kDanger, colorText: Colors.white);
               }
             },
@@ -661,7 +713,12 @@ class _VideoTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(video.thumbnailUrl, fit: BoxFit.cover),
+            // ✅ image optimisée (qualité basse) pour limiter le coût GPU lors du scroll
+            Image.network(
+              video.thumbnailUrl,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.low,
+            ),
             // dégradé pour lisibilité
             Positioned.fill(
               child: DecoratedBox(
@@ -718,8 +775,7 @@ class _SectionCard extends StatelessWidget {
                   radius: 18,
                   backgroundColor:
                       _ProfileScreenState.kPrimary.withValues(alpha: 0.08),
-                  child:
-                      Icon(icon, color: _ProfileScreenState.kPrimary),
+                  child: Icon(icon, color: _ProfileScreenState.kPrimary),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

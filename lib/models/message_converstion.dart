@@ -3,11 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// Modèle représentant un message entre deux utilisateurs
 class Message {
   final String id;
-  final String expediteurId; // ID de l'expéditeur
-  final String destinataireId; // ID du destinataire
-  final String contenu; // Contenu du message
-  final DateTime dateEnvoi; // Date d'envoi du message
-  final bool estLu; // Indicateur si le message est lu
+  final String expediteurId;
+  final String destinataireId;
+  final String contenu;
+  final DateTime dateEnvoi;
+  final bool estLu;
 
   Message({
     required this.id,
@@ -18,10 +18,8 @@ class Message {
     required this.estLu,
   });
 
-  /// Convertir un objet Message en Map pour Firestore
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'expediteurId': expediteurId,
       'destinataireId': destinataireId,
       'contenu': contenu,
@@ -30,10 +28,9 @@ class Message {
     };
   }
 
-  /// Créer un objet Message à partir des données Firestore
   factory Message.fromMap(Map<String, dynamic> map) {
     return Message(
-      id: map['id'] ?? '',
+      id: map['id'] ?? '', // injecté par le controller depuis doc.id
       expediteurId: map['expediteurId'] ?? '',
       destinataireId: map['destinataireId'] ?? '',
       contenu: map['contenu'] ?? '',
@@ -46,12 +43,12 @@ class Message {
 /// Modèle représentant une conversation entre deux utilisateurs
 class Conversation {
   final String id;
-  final String utilisateur1Id; // ID du premier utilisateur
-  final String utilisateur2Id; // ID du second utilisateur
-  final List<String> utilisateurIds; // IDs des participants
-  String? lastMessage; // Dernier message de la conversation
-  DateTime? lastMessageDate; // Date du dernier message
-  int unreadMessagesCount; // Nombre de messages non lus dans la conversation
+  final String utilisateur1Id;
+  final String utilisateur2Id;
+  final List<String> utilisateurIds;
+  String? lastMessage;
+  DateTime? lastMessageDate;
+  int unreadMessagesCount;
 
   Conversation({
     required this.id,
@@ -63,7 +60,6 @@ class Conversation {
     this.unreadMessagesCount = 0,
   });
 
-  /// Convertir un objet Conversation en Map pour Firestore
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -71,11 +67,12 @@ class Conversation {
       'utilisateur2Id': utilisateur2Id,
       'utilisateurIds': utilisateurIds,
       'lastMessage': lastMessage,
-      'lastMessageDate': lastMessageDate != null ? Timestamp.fromDate(lastMessageDate!) : null,
+      'lastMessageDate': lastMessageDate != null
+          ? Timestamp.fromDate(lastMessageDate!)
+          : null,
     };
   }
 
-  /// Créer un objet Conversation à partir des données Firestore
   factory Conversation.fromMap(Map<String, dynamic> map) {
     return Conversation(
       id: map['id'] ?? '',
@@ -86,10 +83,10 @@ class Conversation {
       lastMessageDate: map['lastMessageDate'] != null
           ? (map['lastMessageDate'] as Timestamp).toDate()
           : null,
+      unreadMessagesCount: 0, // ⚠️ Toujours initialisé ici
     );
   }
 
-  /// Met à jour le dernier message et sa date
   void updateLastMessage(String message, DateTime date) {
     lastMessage = message;
     lastMessageDate = date;

@@ -1,4 +1,3 @@
-import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/login_screen.dart';
 import 'package:adfoot/screens/main_screen.dart';
@@ -8,11 +7,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import 'package:adfoot/services/web_messaging_helper.dart';
-
 /// UserController
-/// - Gère le profil courant + la liste des users.
-/// - Navigation fallback si AuthController absent.
+/// - Source de vérité pour la navigation (Login / Verify / Main)
+/// - Hydrate AppUser, écoute FirebaseAuth et Firestore.
+/// - Navigation SAFE: n'exécute pas Get.offAll tant que le Navigator n'est pas prêt.
+/// - Si le doc Firestore n'existe pas encore, il est créé idempotemment.
 class UserController extends GetxController {
   static UserController instance = Get.find();
 
@@ -26,111 +25,102 @@ class UserController extends GetxController {
   List<AppUser> get userList => _userList.value;
 
   bool _navigating = false;
-
-  /// Fallback uniquement si AuthController n’est pas enregistré.
-  bool get _shouldRouteHere => !Get.isRegistered<AuthController>();
+  bool _navScheduled = false; // empêche les doublons pendant l'init
 
   @override
   void onInit() {
     super.onInit();
-    _bindAuthStream();
-    _listenAllUsers();
-  }
 
-  void _bindAuthStream() {
-    _auth.authStateChanges().listen(
+    // 🔁 idTokenChanges => login/logout/refresh
+    _auth.idTokenChanges().listen(
       (User? firebaseUser) async {
-        if (firebaseUser != null) {
-          await _handleAuth(firebaseUser);
-        } else {
-          _user.value = null;
-          if (_shouldRouteHere) {
-            await _safeOffAll(const LoginScreen());
-          }
-        }
+        await _routeFromAuth(firebaseUser);
       },
-      onError: (error) => debugPrint("Erreur auth stream : $error"),
+      onError: (e) => debugPrint('UserController idTokenChanges error: $e'),
     );
+
+    _listenAllUsers();
+
+    // Réveil après 1er frame (cold start)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      kickstart();
+    });
   }
 
-  Future<void> _handleAuth(User firebaseUser) async {
+  /// Permet de relancer une passe de routage (appelé par Splash/Login si besoin)
+  void kickstart() {
+    _routeFromAuth(_auth.currentUser);
+  }
+
+  Future<void> _routeFromAuth(User? firebaseUser) async {
     try {
+      if (firebaseUser == null) {
+        _user.value = null;
+        await _safeOffAll(const LoginScreen());
+        return;
+      }
+
       await firebaseUser.reload();
       final refreshed = _auth.currentUser;
-
       if (refreshed == null) {
         _user.value = null;
-        if (_shouldRouteHere) {
-          await _safeOffAll(const LoginScreen());
-        }
+        await _safeOffAll(const LoginScreen());
         return;
       }
 
       final uid = refreshed.uid;
 
-      // 1) Si email non vérifié → VerifyEmailScreen
+      // 1) Email non vérifié → hydrate min. et route Verify
       if (!refreshed.emailVerified) {
         try {
           final doc = await _firestore.collection('users').doc(uid).get();
           if (doc.exists) _user.value = AppUser.fromMap(doc.data()!);
-        } catch (_) { /* no-op */ }
-
-        if (_shouldRouteHere) {
-          await _safeOffAll(const VerifyEmailScreen());
-          _showSnackbar(
-            'Email non vérifié',
-            'Vérifiez votre e‑mail pour activer votre compte.',
-            Colors.orange,
-          );
-        }
+        } catch (_) {/* no-op */}
+        await _safeOffAll(const VerifyEmailScreen());
         return;
       }
 
-      // 2) Email vérifié → synchronisation des métadonnées Firestore
-      final doc = await _waitUserDoc(uid, attempts: 12, delay: const Duration(milliseconds: 250));
+      // 2) Email vérifié → s'assurer que le doc Firestore est prêt
+      var doc = await _waitUserDoc(uid, attempts: 20, delay: const Duration(milliseconds: 250));
       if (doc == null || !doc.exists) {
-        if (_shouldRouteHere) {
-          await signOut();
-        } else {
-          debugPrint('UserController: profil utilisateur introuvable après attente.');
+        // 🔧 Création idempotente du profil minimal si nécessaire
+        await _firestore.collection('users').doc(uid).set({
+          'uid': uid,
+          'email': refreshed.email,
+          'nom': refreshed.displayName ?? '',
+          'photoUrl': refreshed.photoURL,
+          'createdAt': FieldValue.serverTimestamp(),
+          'estActif': true,
+          'emailVerified': true,
+          'emailVerifiedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+
+        // Relire le doc
+        doc = await _firestore.collection('users').doc(uid).get();
+        if (!doc.exists) {
+          // Si toujours pas dispo (réseau très lent), ne casse pas le login :
+          // route vers Main et l'hydratation finira en arrière-plan.
+          await _safeOffAll(const MainScreen());
+          return;
         }
-        return;
       }
 
+      // 3) Hydrate AppUser
       final userData = AppUser.fromMap(doc.data()!);
+      _user.value = userData;
 
-      final updates = <String, dynamic>{};
-      if (userData.emailVerified != true) updates['emailVerified'] = true;
-      if (userData.estActif != true) updates['estActif'] = true;
-      if (userData.emailVerifiedAt == null) {
-        updates['emailVerifiedAt'] = FieldValue.serverTimestamp();
-      }
-
-      if (updates.isNotEmpty) {
-        await _firestore.collection('users').doc(uid).update(updates);
-      }
-
-      final updatedDoc = await _firestore.collection('users').doc(uid).get();
-      _user.value = AppUser.fromMap(updatedDoc.data()!);
-
-      // 3) Mise à jour du token FCM en silence
-      await _updateFcmToken(uid);
-
-      // 4) Navigation vers MainScreen si nécessaire
-      if (_shouldRouteHere) {
-        await _safeOffAll(const MainScreen());
-      }
+      // 4) Route vers Main uniquement quand AppUser est prêt
+      await _safeOffAll(const MainScreen());
     } catch (e) {
-      debugPrint("Erreur dans _handleAuth : $e");
-      if (_shouldRouteHere) {
-        await signOut();
-      }
+      debugPrint('UserController _routeFromAuth error: $e');
+      _user.value = null;
+      await _safeOffAll(const LoginScreen());
     }
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>?> _waitUserDoc(
     String uid, {
-    int attempts = 6,
+    int attempts = 20,
     Duration delay = const Duration(milliseconds: 250),
   }) async {
     DocumentSnapshot<Map<String, dynamic>>? doc;
@@ -147,26 +137,12 @@ class UserController extends GetxController {
       (snapshot) {
         _userList.value = snapshot.docs
             .map((d) => AppUser.fromMap(d.data()))
-            .where((u) => ((u.nom).trim().isNotEmpty))
+            .where((u) => (u.nom).trim().isNotEmpty)
             .toList();
         update();
       },
       onError: (e) => debugPrint("Erreur fetch users : $e"),
     );
-  }
-
-  Future<void> _updateFcmToken(String uid) async {
-    try {
-      final token = await WebMessagingHelper.getTokenWithRetry(retries: 2);
-      if (token != null) {
-        await _firestore.collection('users').doc(uid).set(
-          {'fcmToken': token},
-          SetOptions(merge: true),
-        );
-      }
-    } catch (e) {
-      debugPrint("Erreur update FCM token : $e");
-    }
   }
 
   Future<void> refreshUser() async {
@@ -183,35 +159,50 @@ class UserController extends GetxController {
     try {
       await _auth.signOut();
       _user.value = null;
-
-      if (_shouldRouteHere) {
-        await _safeOffAll(const LoginScreen());
-        _showSnackbar('Déconnexion', 'Vous êtes déconnecté', Colors.green);
-      }
+      // Navigation: idTokenChanges -> _routeFromAuth
     } catch (e) {
-      _showSnackbar('Erreur', 'Échec de déconnexion : $e', Colors.red);
+      Get.snackbar(
+        'Erreur',
+        'Échec de déconnexion : $e',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 3),
+      );
     }
   }
 
-  void _showSnackbar(String title, String message, Color color) {
-    if (!_shouldRouteHere) return;
-    Get.snackbar(
-      title,
-      message,
-      backgroundColor: color,
-      colorText: Colors.white,
-      snackPosition: SnackPosition.BOTTOM,
-      duration: const Duration(seconds: 3),
-    );
-  }
-
+  // --- Navigation robuste / idempotente / navigator-aware ---
   Future<void> _safeOffAll(Widget page) async {
-    if (!_shouldRouteHere || _navigating) return;
+    // Navigator pas prêt ? on postpose au prochain frame
+    if (Get.key.currentState == null) {
+      if (_navScheduled) return;
+      _navScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        _navScheduled = false;
+        await _safeOffAll(page);
+      });
+      return;
+    }
+
+    if (_navigating) return;
     _navigating = true;
     try {
+      // Évite de boucler si on est déjà sur la bonne page
+      final String current = Get.currentRoute;
+      final String? target = _namedRouteFor(page);
+      if (target != null && current == target) return;
+
       await Get.offAll(() => page);
     } finally {
       _navigating = false;
     }
+  }
+
+  String? _namedRouteFor(Widget page) {
+    if (page is LoginScreen) return '/login';
+    if (page is MainScreen) return '/main';
+    // VerifyEmailScreen: pas de route nommée dédiée (différente de /verify web)
+    return null;
   }
 }

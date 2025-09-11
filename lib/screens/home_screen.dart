@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:wakelock_plus/wakelock_plus.dart'; // 🔒 Empêche la mise en veille pendant la lecture
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
@@ -33,18 +33,13 @@ class _HomeScreenState extends State<HomeScreen>
   late final Animation<double> _fadeAnimation;
 
   StreamSubscription<bool>? _connectivitySubscription;
-
-  // --- Wakelock (niveau écran, en complément du SmartVideoPlayer) ---
   bool _wakelockOn = false;
+
   Future<void> _setWakelock(bool enable) async {
     if (_wakelockOn == enable) return;
     _wakelockOn = enable;
     try {
-      if (enable) {
-        await WakelockPlus.enable();
-      } else {
-        await WakelockPlus.disable();
-      }
+      enable ? await WakelockPlus.enable() : await WakelockPlus.disable();
     } catch (e) {
       debugPrint('Wakelock error: $e');
     }
@@ -59,25 +54,21 @@ class _HomeScreenState extends State<HomeScreen>
     final url = videoController.videoList[idx].videoUrl;
     final player = videoManager.getController('home', url);
     final ctrl = player?.controller;
-
     final shouldKeepAwake = ctrl != null &&
         ctrl.value.isInitialized &&
         ctrl.value.isPlaying &&
         !ctrl.value.isBuffering;
-
     await _setWakelock(shouldKeepAwake);
   }
-  // ------------------------------------------------------------------
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    const contextKey = 'home';
     videoController = Get.put(
-      VideoController(contextKey: contextKey),
-      tag: contextKey,
+      VideoController(contextKey: 'home'),
+      tag: 'home',
       permanent: true,
     );
 
@@ -100,6 +91,13 @@ class _HomeScreenState extends State<HomeScreen>
     _setWakelock(false);
     _safeDisposeVideoContext();
     super.dispose();
+  }
+
+  @override
+  void deactivate() {
+    videoManager.pauseAll('home');
+    _setWakelock(false);
+    super.deactivate();
   }
 
   Future<void> _safeDisposeVideoContext() async {
@@ -136,7 +134,6 @@ class _HomeScreenState extends State<HomeScreen>
         .listen((connected) async {
       if (!mounted) return;
       setState(() => _isConnected = connected);
-
       if (connected && videoController.videoList.isEmpty) {
         final ok = await videoController.fetchPaginatedVideos();
         if (ok && mounted && videoController.videoList.isNotEmpty) {
@@ -171,12 +168,31 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
+  /// ✅ Correction robuste
+  Future<void> _handleAfterAddVideo() async {
+    await videoManager.pauseAll('home');
+    await videoManager.disposeAllForContext('home');
+
+    await videoController.refreshVideos();
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    if (!mounted || videoController.videoList.isEmpty) return;
+
+    videoController.currentIndex.value = 0;
+    _pageController.jumpToPage(0);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.delayed(const Duration(milliseconds: 100));
+      await _onPageChanged(0);
+      await _updateWakelockForCurrent();
+    });
+  }
+
   Future<void> _onPageChanged(int index) async {
     final videos = videoController.videoList;
     if (index < 0 || index >= videos.length) return;
 
     final currentUrl = videos[index].videoUrl;
-
     videoController.currentIndex.value = index;
 
     final urls = videos.map((v) => v.videoUrl).toList();
@@ -189,15 +205,22 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
       try {
-        await videoManager.initializeController(
+        player = await videoManager.initializeController(
           'home',
           currentUrl,
-          autoPlay: false,
+          autoPlay: true,
           activeUrl: currentUrl,
         );
       } catch (e) {
         debugPrint('❌ Erreur init contrôleur (onPageChanged): $e');
+        return;
       }
+    }
+
+    if (player?.controller != null && !player!.controller.value.isPlaying) {
+      try {
+        await player.controller.play();
+      } catch (_) {}
     }
 
     await _updateWakelockForCurrent();
@@ -212,10 +235,7 @@ class _HomeScreenState extends State<HomeScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text(
-          'AD.FOOT',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-        ),
+        title: const Text('AD.FOOT', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         actions: [
           Obx(() {
             final user = userController.user;
@@ -232,9 +252,7 @@ class _HomeScreenState extends State<HomeScreen>
             return IconButton(
               icon: CircleAvatar(
                 backgroundImage: NetworkImage(
-                  user.photoProfil.isNotEmpty
-                      ? user.photoProfil
-                      : 'https://via.placeholder.com/150',
+                  user.photoProfil.isNotEmpty ? user.photoProfil : 'https://via.placeholder.com/150',
                 ),
               ),
               onPressed: () async {
@@ -254,10 +272,8 @@ class _HomeScreenState extends State<HomeScreen>
               final videos = videoController.videoList;
               if (videos.isEmpty) {
                 return const Center(
-                  child: Text(
-                    'Aucune vidéo disponible',
-                    style: TextStyle(color: Colors.white, fontSize: 18),
-                  ),
+                  child: Text('Aucune vidéo disponible',
+                      style: TextStyle(color: Colors.white, fontSize: 18)),
                 );
               }
 
@@ -265,6 +281,7 @@ class _HomeScreenState extends State<HomeScreen>
                 controller: _pageController,
                 scrollDirection: Axis.vertical,
                 itemCount: videos.length,
+                physics: const ClampingScrollPhysics(),
                 onPageChanged: _onPageChanged,
                 itemBuilder: (context, index) {
                   final video = videos[index];
@@ -280,7 +297,7 @@ class _HomeScreenState extends State<HomeScreen>
                         currentIndex: index,
                         videoList: videos,
                         enableTapToPlay: true,
-                        autoPlay: true, // <- autoplay activé côté widget
+                        autoPlay: true,
                         showControls: true,
                         showProgressBar: true,
                         player: player,
@@ -296,38 +313,22 @@ class _HomeScreenState extends State<HomeScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  video.songName.isNotEmpty
-                                      ? video.songName
-                                      : 'Musique inconnue',
+                                  video.songName.isNotEmpty ? video.songName : 'Musique inconnue',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black54,
-                                        offset: Offset(1, 1),
-                                        blurRadius: 2,
-                                      ),
-                                    ],
+                                    shadows: [Shadow(color: Colors.black54, offset: Offset(1, 1), blurRadius: 2)],
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  video.caption.isNotEmpty
-                                      ? video.caption
-                                      : 'Pas de légende',
+                                  video.caption.isNotEmpty ? video.caption : 'Pas de légende',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 15,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black54,
-                                        offset: Offset(1, 1),
-                                        blurRadius: 2,
-                                      ),
-                                    ],
+                                    shadows: [Shadow(color: Colors.black54, offset: Offset(1, 1), blurRadius: 2)],
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
@@ -375,10 +376,11 @@ class _HomeScreenState extends State<HomeScreen>
               await _setWakelock(false);
               final result = await Get.to(() => const AddVideo());
               if (result == true) {
-                await videoController.refreshVideosIfNeeded();
+                await _handleAfterAddVideo();
+              } else {
+                videoController.currentIndex.refresh();
+                await _updateWakelockForCurrent();
               }
-              videoController.currentIndex.refresh();
-              await _updateWakelockForCurrent();
             },
             child: const Icon(Icons.add),
           );
@@ -395,10 +397,8 @@ class _HomeScreenState extends State<HomeScreen>
         children: [
           Icon(Icons.wifi_off, color: Colors.white, size: 60),
           SizedBox(height: 20),
-          Text(
-            'Pas de connexion Internet',
-            style: TextStyle(color: Colors.white, fontSize: 18),
-          ),
+          Text('Pas de connexion Internet',
+              style: TextStyle(color: Colors.white, fontSize: 18)),
         ],
       ),
     );

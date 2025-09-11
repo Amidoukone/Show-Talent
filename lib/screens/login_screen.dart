@@ -1,11 +1,18 @@
 // lib/screens/login_screen.dart
 import 'package:adfoot/screens/signup_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:adfoot/screens/main_screen.dart';
+import 'package:adfoot/screens/verify_email_screen.dart';
+
+import 'package:adfoot/controller/auth_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:adfoot/controller/user_controller.dart';
+
+import '../theme/ad_colors.dart';
+import '../widgets/ad_text_field.dart';
+import '../widgets/ad_button.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,12 +22,13 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // Controllers
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
-  bool _isLoading = false;
 
-  final UserController _userController = Get.find<UserController>();
+  // State
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -30,52 +38,82 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) {
-      _showErrorSnackbar('Tous les champs doivent être remplis.');
-      return;
-    }
+    // Ferme le clavier
+    FocusScope.of(context).unfocus();
+
+    // Validation formulaire
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
+      final email = _emailController.text.trim();
+      final pass = _passwordController.text;
+
       final userCred = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        email: email,
+        password: pass,
       );
 
       final user = userCred.user;
       if (user != null) {
+        // Rafraîchit l’état et force un token frais (utile si backend)
         await user.reload();
-        // 🚫 Pas d’envoi d’email ici — AuthController gère la redirection (Verify ou Main)
-        await _updateFcmToken(user);
-        await _userController.refreshUser();
+        final refreshed = FirebaseAuth.instance.currentUser;
+        await refreshed?.getIdToken(true);
+
+        // 🔧 Sync “métier” (FCM/Firestore, etc.) — ⚠️ ne doit pas naviguer
+        if (Get.isRegistered<AuthController>()) {
+          await Get.find<AuthController>().handleAuthState(refreshed);
+        }
+
+        // 🚦 Navigation déterministe et immédiate
+        if (refreshed != null && refreshed.emailVerified == true) {
+          await Get.offAll(() => const MainScreen());
+        } else {
+          await Get.offAll(() => const VerifyEmailScreen());
+        }
+
+        // 🔁 Réveille UserController pour hydratation en arrière-plan
+        if (Get.isRegistered<UserController>()) {
+          Get.find<UserController>().kickstart();
+        }
       }
     } on FirebaseAuthException catch (e) {
       _handleAuthError(e);
     } catch (e) {
       _showErrorSnackbar('Erreur inattendue : ${e.toString()}');
     } finally {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _updateFcmToken(User user) async {
+  Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showErrorSnackbar('Veuillez saisir votre email');
+      return;
+    }
     try {
-      final String? token = await FirebaseMessaging.instance.getToken();
-      if (token != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .set({'fcmToken': token}, SetOptions(merge: true));
-      }
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      Get.snackbar(
+        'Succès',
+        'Email de réinitialisation envoyé',
+        backgroundColor: AdColors.success,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+        margin: const EdgeInsets.all(12),
+        borderRadius: 12,
+      );
+    } on FirebaseAuthException catch (e) {
+      _showErrorSnackbar(e.message ?? 'Impossible d’envoyer l’email.');
     } catch (e) {
-      debugPrint("Erreur lors de l'enregistrement du FCM Token : $e");
+      _showErrorSnackbar(e.toString());
     }
   }
 
   void _handleAuthError(FirebaseAuthException e) {
-    String message = 'Erreur de connexion';
+    String message;
     switch (e.code) {
       case 'user-not-found':
         message = 'Aucun compte associé à cet email';
@@ -96,125 +134,145 @@ class _LoginScreenState extends State<LoginScreen> {
         message = e.message ?? 'Erreur inconnue';
         break;
     }
-    _showErrorSnackbar('Connexion échouée', message);
+    _showErrorSnackbar(message);
   }
 
-  void _showErrorSnackbar(String title, [String? message]) {
+  void _showErrorSnackbar(String message) {
     Get.snackbar(
-      title,
-      message ?? '',
-      backgroundColor: Colors.red,
+      'Connexion échouée',
+      message,
+      backgroundColor: AdColors.error,
       colorText: Colors.white,
       snackPosition: SnackPosition.BOTTOM,
       duration: const Duration(seconds: 3),
+      margin: const EdgeInsets.all(12),
+      borderRadius: 12,
     );
   }
+
+  // --- UI ---
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFE6EEFA),
+      backgroundColor: cs.surface,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Image.asset('assets/logo.png', height: 100),
-              const SizedBox(height: 30),
-              const Text(
-                'Connectez-vous!',
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF214D4F)),
-              ),
-              const SizedBox(height: 30),
-              _buildEmailField(),
-              const SizedBox(height: 20),
-              _buildPasswordField(),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () async {
-                    final email = _emailController.text.trim();
-                    if (email.isEmpty) {
-                      _showErrorSnackbar('Veuillez saisir votre email');
-                      return;
-                    }
-                    try {
-                      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-                      Get.snackbar(
-                        'Succès',
-                        'Email de réinitialisation envoyé',
-                        backgroundColor: Colors.green,
-                        colorText: Colors.white,
-                        snackPosition: SnackPosition.BOTTOM,
-                      );
-                    } on FirebaseAuthException catch (e) {
-                      _showErrorSnackbar('Échec', e.message ?? 'Impossible d’envoyer l’email.');
-                    } catch (e) {
-                      _showErrorSnackbar('Échec', e.toString());
-                    }
-                  },
-                  child: const Text(
-                    'Mot de passe oublié ?',
-                    style: TextStyle(color: Color(0xFF214D4F), fontWeight: FontWeight.w500),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: AutovalidateMode.disabled,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Logo + titre
+                      Align(
+                        alignment: Alignment.center,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.asset('assets/logo.png', height: 80, fit: BoxFit.contain),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Connectez-vous',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: cs.onSurface,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Ravi de vous revoir !',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: cs.onSurface.withOpacity(.7),
+                              fontWeight: FontWeight.w600,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Email
+                      AdTextField(
+                        controller: _emailController,
+                        label: 'Adresse e-mail',
+                        keyboardType: TextInputType.emailAddress,
+                        prefixIcon: const Icon(Icons.email_outlined),
+                        validator: (v) {
+                          final value = v?.trim() ?? '';
+                          if (value.isEmpty) return 'Email requis';
+                          final ok = RegExp(r'^[\w\.\-+]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(value);
+                          if (!ok) return 'Email invalide';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Mot de passe
+                      AdTextField(
+                        controller: _passwordController,
+                        label: 'Mot de passe',
+                        isPassword: true,
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        validator: (v) => (v == null || v.isEmpty) ? 'Mot de passe requis' : null,
+                        onSubmitted: _login,
+                      ),
+
+                      // Mot de passe oublié
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _isLoading ? null : _resetPassword,
+                          child: const Text('Mot de passe oublié ?'),
+                        ),
+                      ),
+
+                      const SizedBox(height: 8),
+
+                      // CTA
+                      AdButton(
+                        label: 'Se connecter',
+                        onPressed: _isLoading ? null : _login,
+                        loading: _isLoading,
+                        leading: Icons.login_rounded,
+                        kind: AdButtonKind.primary,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Lien inscription
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Nouveau ici ?',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: cs.onSurface.withOpacity(.8),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                          TextButton(
+                            onPressed: _isLoading ? null : () => Get.to(() => const SignUpScreen()),
+                            child: const Text('Créez un compte'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
-              _isLoading
-                  ? const CircularProgressIndicator(color: Color(0xFF214D4F))
-                  : SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _login,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF214D4F),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: const Text(
-                          'Se connecter',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                      ),
-                    ),
-              const SizedBox(height: 20),
-              TextButton(
-                onPressed: () => Get.to(() => const SignUpScreen()),
-                child: const Text('Nouveau ici ? Créez un compte',
-                    style: TextStyle(color: Color(0xFF214D4F))),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmailField() {
-    return TextFormField(
-      controller: _emailController,
-      keyboardType: TextInputType.emailAddress,
-      decoration: InputDecoration(
-        labelText: 'Adresse e-mail',
-        prefixIcon: const Icon(Icons.email_outlined),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
-  Widget _buildPasswordField() {
-    return TextFormField(
-      controller: _passwordController,
-      obscureText: _obscurePassword,
-      decoration: InputDecoration(
-        labelText: 'Mot de passe',
-        prefixIcon: const Icon(Icons.lock_outline),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-        suffixIcon: IconButton(
-          icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
         ),
       ),
     );

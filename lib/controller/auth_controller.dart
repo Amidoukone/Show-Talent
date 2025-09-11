@@ -1,7 +1,4 @@
 import 'package:adfoot/models/user.dart';
-import 'package:adfoot/screens/login_screen.dart';
-import 'package:adfoot/screens/main_screen.dart';
-import 'package:adfoot/screens/verify_email_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +7,10 @@ import 'package:get/get.dart';
 import 'package:adfoot/services/notifications.dart';
 import 'package:adfoot/services/web_messaging_helper.dart';
 
+/// AuthController ne navigue plus.
+/// - Il maintient AppUser "métier", synchronise Firestore,
+///   gère FCM et permission système.
+/// - La navigation est entièrement gérée par UserController.
 class AuthController extends GetxController {
   static AuthController instance = Get.find();
 
@@ -22,21 +23,25 @@ class AuthController extends GetxController {
   AppUser? get user => _appUser.value;
   String? get currentUid => _appUser.value?.uid;
 
-  bool _navigating = false;
   bool _askedNotifThisSession = false;
 
   @override
   void onReady() {
     super.onReady();
-    _firebaseUser.bindStream(_auth.authStateChanges());
-    ever<User?>(_firebaseUser, handleAuthState);
-    handleAuthState(_auth.currentUser); // Cold-start
+    // On continue d’écouter pour garder _appUser à jour,
+    // mais on NE NAVIGUE PAS.
+    _firebaseUser.bindStream(_auth.idTokenChanges());
+    ever<User?>(_firebaseUser, _syncState);
+    // Cold start
+    _syncState(_auth.currentUser);
   }
 
-  Future<void> handleAuthState(User? firebaseUser) async {
+  /// Met à jour _appUser et Firestore (si nécessaire).
+  /// Pas de navigation ici.
+  Future<void> _syncState(User? firebaseUser) async {
     if (firebaseUser == null) {
       _appUser.value = null;
-      return _safeOffAll(const LoginScreen());
+      return;
     }
 
     try {
@@ -44,12 +49,12 @@ class AuthController extends GetxController {
       final refreshed = _auth.currentUser;
       if (refreshed == null) {
         _appUser.value = null;
-        return _safeOffAll(const LoginScreen());
+        return;
       }
 
       final uid = refreshed.uid;
 
-      // 📩 Priorité à la vérification email
+      // Email non vérifié : on hydrate si doc existe, sans router.
       if (!refreshed.emailVerified) {
         try {
           final doc = await _firestore.collection('users').doc(uid).get();
@@ -57,25 +62,25 @@ class AuthController extends GetxController {
         } catch (_) {
           _appUser.value = null;
         }
-        return _safeOffAll(const VerifyEmailScreen());
+        return;
       }
 
-      // ✅ Email vérifié
+      // Email vérifié : on s’assure que le doc existe
       final doc = await _waitUserDoc(uid, attempts: 20, delay: const Duration(milliseconds: 250));
       if (doc == null || !doc.exists) {
         _appUser.value = null;
-        return _safeOffAll(const LoginScreen());
+        return;
       }
 
       final userData = AppUser.fromMap(doc.data()!);
 
+      // Sync idempotente
       final updates = <String, dynamic>{};
       if (userData.emailVerified != true) updates['emailVerified'] = true;
       if (userData.estActif != true) updates['estActif'] = true;
       if (userData.emailVerifiedAt == null) {
         updates['emailVerifiedAt'] = FieldValue.serverTimestamp();
       }
-
       if (updates.isNotEmpty) {
         await _firestore.collection('users').doc(uid).update(updates);
       }
@@ -83,14 +88,14 @@ class AuthController extends GetxController {
       final updated = await _firestore.collection('users').doc(uid).get();
       _appUser.value = AppUser.fromMap(updated.data()!);
 
+      // Mise à jour FCM si dispo
       await _updateFcmToken(refreshed);
-      await _safeOffAll(const MainScreen());
-      await _maybeAskNotifications(refreshed);
 
+      // Demande permission système (une fois par session)
+      await _ensureSystemNotificationPromptOnce(refreshed);
     } catch (e) {
-      debugPrint('AuthController.handleAuthState error: $e');
+      debugPrint('AuthController _syncState error: $e');
       _appUser.value = null;
-      return _safeOffAll(const LoginScreen());
     }
   }
 
@@ -111,7 +116,7 @@ class AuthController extends GetxController {
   Future<void> signOut() async {
     await _auth.signOut();
     _appUser.value = null;
-    return _safeOffAll(const LoginScreen());
+    // Pas de navigation ici; UserController réagira au sign-out et routera.
   }
 
   Future<void> _updateFcmToken(User user) async {
@@ -128,54 +133,17 @@ class AuthController extends GetxController {
     }
   }
 
-  Future<void> _maybeAskNotifications(User user) async {
+  Future<void> _ensureSystemNotificationPromptOnce(User user) async {
     if (_askedNotifThisSession) return;
     _askedNotifThisSession = true;
-
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (Get.isDialogOpen == true) return;
-
-    final accepted = await Get.dialog<bool>(
-      AlertDialog(
-        title: const Text('Activer les notifications ?'),
-        content: const Text(
-          "Recevez une alerte quand un recruteur consulte vos vidéos, "
-          "quand vous recevez un message, ou qu’une nouvelle offre vous concerne.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Get.back(result: false),
-            child: const Text('Plus tard'),
-          ),
-          ElevatedButton(
-            onPressed: () => Get.back(result: true),
-            child: const Text('Activer'),
-          ),
-        ],
-      ),
-      barrierDismissible: true,
-    );
-
-    if (accepted == true) {
-      await NotificationService.askPermissionAndUpdateToken(currentUser: user);
-      Get.snackbar(
-        'Notifications',
-        'Activées (si autorisées par le navigateur).',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-        duration: const Duration(seconds: 2),
-      );
-    }
-  }
-
-  Future<void> _safeOffAll(Widget page) async {
-    if (_navigating) return;
-    _navigating = true;
     try {
-      await Get.offAll(() => page);
-    } finally {
-      _navigating = false;
+      await NotificationService.askPermissionAndUpdateToken(currentUser: user);
+    } catch (e) {
+      debugPrint('AuthController notifications permission error: $e');
     }
   }
+
+  /// Appelée par tes écrans (Login/Verify) – garde le même nom/signature
+  /// pour compatibilité. Elle ne navigue pas, elle synchronise juste l’état.
+  Future<void> handleAuthState(User? firebaseUser) => _syncState(firebaseUser);
 }
