@@ -15,7 +15,10 @@ class SelectUserScreen extends StatefulWidget {
 
 class _SelectUserScreenState extends State<SelectUserScreen> {
   final UserController userController = Get.put(UserController());
-  final ChatController chatController = Get.put(ChatController());
+  // ✅ Ne pas recréer un ChatController : on réutilise l’existant
+  final ChatController chatController = Get.isRegistered<ChatController>()
+      ? Get.find<ChatController>()
+      : Get.put(ChatController(), permanent: true);
   final AuthController authController = Get.find<AuthController>();
 
   final TextEditingController searchController = TextEditingController();
@@ -34,7 +37,6 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
           ? const Center(child: Text("Utilisateur non connecté."))
           : Column(
               children: [
-                // Barre de recherche
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: TextField(
@@ -51,12 +53,13 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     },
                   ),
                 ),
-                // Liste des utilisateurs
                 Expanded(
                   child: Obx(() {
-                    // Exclure l'utilisateur courant et les utilisateurs sans nom
                     var users = userController.userList.where((user) {
-                      return user.uid != currentUid && user.nom.isNotEmpty;
+                      return user.uid != currentUid &&
+                          user.nom.isNotEmpty &&
+                          user.emailVerified == true &&
+                          user.estActif == true;
                     }).toList();
 
                     if (users.isEmpty) {
@@ -65,7 +68,6 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                       );
                     }
 
-                    // Filtrer selon la recherche
                     var filteredUsers = users.where((user) {
                       return user.nom.toLowerCase().contains(searchTerm.value);
                     }).toList();
@@ -120,10 +122,12 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                                     otherUser: user,
                                   ));
                             } catch (e) {
-                              Get.snackbar('Erreur',
-                                  'Impossible de démarrer la conversation : $e',
-                                  backgroundColor: Colors.red,
-                                  colorText: Colors.white);
+                              Get.snackbar(
+                                'Erreur',
+                                'Impossible de démarrer la conversation : $e',
+                                backgroundColor: Colors.red,
+                                colorText: Colors.white,
+                              );
                             }
                           },
                         );

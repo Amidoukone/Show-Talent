@@ -28,11 +28,18 @@ class VideoController extends GetxController {
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _videoSubscription;
   Timer? _streamDebouncer;
+  Timer? _indexDebouncer;
 
   @override
   void onInit() {
     super.onInit();
-    ever(currentIndex, _onCurrentIndexChanged);
+    // Throttled reaction to index changes
+    ever<int>(currentIndex, (idx) {
+      _indexDebouncer?.cancel();
+      _indexDebouncer = Timer(const Duration(milliseconds: 200), () {
+        _onCurrentIndexChangedThrottled(idx);
+      });
+    });
     listenToVideos();
   }
 
@@ -40,13 +47,13 @@ class VideoController extends GetxController {
   void onClose() {
     _streamDebouncer?.cancel();
     _videoSubscription?.cancel();
+    _indexDebouncer?.cancel();
     videoManager.disposeAllForContext(contextKey);
     super.onClose();
   }
 
   void listenToVideos() {
     _videoSubscription?.cancel();
-
     _videoSubscription = FirebaseFirestore.instance
         .collection('videos')
         .where('status', isEqualTo: 'ready')
@@ -60,12 +67,11 @@ class VideoController extends GetxController {
             .where((v) => v.videoUrl.isNotEmpty)
             .toList();
 
-        final byId = {for (final v in videoList) v.id: v};
-        for (final v in incoming) {
-          byId[v.id] = v; // upsert
+        final byId = {for (var v in videoList) v.id: v};
+        for (var v in incoming) {
+          byId[v.id] = v;
         }
-        final merged = incoming.map((v) => byId[v.id]!).toList();
-        videoList.value = merged;
+        videoList.value = incoming.map((v) => byId[v.id]!).toList();
 
         _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
         _hasMore = snapshot.docs.length >= _limit;
@@ -105,7 +111,8 @@ class VideoController extends GetxController {
           .toList();
 
       final currentIds = videoList.map((v) => v.id).toSet();
-      final uniqueVideos = newVideos.where((v) => !currentIds.contains(v.id)).toList();
+      final uniqueVideos =
+          newVideos.where((v) => !currentIds.contains(v.id)).toList();
 
       if (isRefresh) {
         videoList.assignAll(newVideos);
@@ -113,19 +120,8 @@ class VideoController extends GetxController {
         videoList.addAll(uniqueVideos);
       }
 
-      final urls = videoList.map((v) => v.videoUrl).toList();
-
       if (isRefresh && videoList.isNotEmpty) {
-        final firstUrl = videoList.first.videoUrl;
-        await videoManager.initializeController(contextKey, firstUrl, autoPlay: false, activeUrl: firstUrl);
-        await videoManager.pauseAllExcept(contextKey, firstUrl);
-        videoManager.preloadSurrounding(contextKey, urls, 0, activeUrl: firstUrl);
-
-        for (int i = 1; i < 5 && i < videoList.length; i++) {
-          unawaited(
-            videoManager.initializeController(contextKey, videoList[i].videoUrl, isPreload: true, activeUrl: firstUrl),
-          );
-        }
+        await _setupInitialPlayback();
       }
 
       _lastDoc = snap.docs.last;
@@ -153,42 +149,68 @@ class VideoController extends GetxController {
     }
   }
 
-  Future<void> refreshVideosIfNeeded() async {
-    if (videoList.isEmpty) {
-      await refreshVideos();
+  Future<void> _setupInitialPlayback() async {
+    currentIndex.value = 0;
+    final urls = videoList.map((v) => v.videoUrl).toList();
+    final firstUrl = urls.first;
+
+    await videoManager.disposeAllForContext(contextKey);
+    await videoManager.initializeController(
+      contextKey,
+      firstUrl,
+      autoPlay: true,
+      activeUrl: firstUrl,
+    );
+    await videoManager.pauseAllExcept(contextKey, firstUrl);
+    videoManager.preloadSurrounding(contextKey, urls, 0, activeUrl: firstUrl);
+
+    for (int i = 1; i < 5 && i < urls.length; i++) {
+      unawaited(
+        videoManager.initializeController(
+          contextKey,
+          urls[i],
+          isPreload: true,
+          activeUrl: firstUrl,
+        ),
+      );
     }
   }
 
-  Future<void> _onCurrentIndexChanged(int index) async {
+  /// Méthode protégée pour éviter exécutions concurrentes
+  Future<void> _onCurrentIndexChangedThrottled(int index) async {
     if (index < 0 || index >= videoList.length) return;
 
-    final currentUrl = videoList[index].videoUrl;
+    final url = videoList[index].videoUrl;
     final urls = videoList.map((v) => v.videoUrl).toList();
+    await _processVideoPlaybackChange(urls, index, url);
 
-    await videoManager.pauseAllExcept(contextKey, currentUrl);
-    videoManager.preloadSurrounding(contextKey, urls, index, activeUrl: currentUrl);
+    if (index >= videoList.length - 2 && hasMore && !_isLoading) {
+      unawaited(fetchPaginatedVideos());
+    }
+  }
 
-    CachedVideoPlayerPlus? player = videoManager.getController(contextKey, currentUrl);
+  /// Traitement sécurisé du changement de vidéo
+  Future<void> _processVideoPlaybackChange(
+      List<String> urls, int idx, String activeUrl) async {
+    await videoManager.pauseAllExcept(contextKey, activeUrl);
+    videoManager.preloadSurrounding(contextKey, urls, idx, activeUrl: activeUrl);
+
+    CachedVideoPlayerPlus? player =
+        videoManager.getController(contextKey, activeUrl);
     final ctrl = player?.controller;
 
     if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
       try {
         player = await videoManager.initializeController(
           contextKey,
-          currentUrl,
-          autoPlay: false, // le widget jouera quand visible
-          activeUrl: currentUrl,
+          activeUrl,
+          autoPlay: false,
+          activeUrl: activeUrl,
         );
       } catch (e) {
-        print('❌ Erreur init contrôleur (onCurrentIndexChanged): $e');
+        print('❌ Error init controller in onIndexChanged: $e');
         return;
       }
-    }
-
-    // Ne force pas play ici : SmartVideoPlayer gère l’autoplay sûr quand visible.
-
-    if (index >= videoList.length - 2 && hasMore && !_isLoading) {
-      fetchPaginatedVideos();
     }
   }
 
@@ -196,10 +218,9 @@ class VideoController extends GetxController {
     await videoManager.pauseAll(contextKey);
   }
 
-  // --- like / partager / signaler / delete: inchangé ---
+  /// Réutilise ta logique existante (retry, like, share, etc.) sans modification
   Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(
-    DocumentReference<Map<String, dynamic>> ref,
-  ) async {
+      DocumentReference<Map<String, dynamic>> ref) async {
     int attempt = 0;
     while (attempt < 3) {
       try {

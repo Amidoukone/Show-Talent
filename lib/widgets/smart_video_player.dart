@@ -1,16 +1,20 @@
+// SmartVideoPlayer.dart
 import 'dart:async';
-import 'package:adfoot/utils/video_cache_manager.dart';
-import 'package:flutter/material.dart';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:video_player/video_player.dart';
+
+import 'package:adfoot/utils/video_cache_manager.dart';
 import 'package:adfoot/widgets/tiktok_video_player.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:get/get.dart';
+
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/widgets/video_manager.dart';
-import 'package:video_player/video_player.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
 class SmartVideoPlayer extends StatefulWidget {
   final CachedVideoPlayerPlus? player;
@@ -54,7 +58,20 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBinding
   int _attachToken = 0;
 
   late final VideoController _vc;
-  late final Worker _indexWorker; // NEW: observe l’index courant
+  late final Worker _indexWorker;
+
+  AppLifecycleState _appState = AppLifecycleState.resumed;
+  bool _isTryingToPlay = false;
+  bool _wakelockOn = false;
+
+  Timer? _playDebounceTimer;
+  static const Duration _playDebounce = Duration(milliseconds: 120);
+
+  Timer? _stallTimer;
+  Duration _lastKnownPos = Duration.zero;
+  int _stallStrikes = 0;
+  static const Duration _stallCheckInterval = Duration(milliseconds: 700);
+  static const int _stallMaxStrikesBeforeReload = 4;
 
   @override
   void initState() {
@@ -69,15 +86,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBinding
     }
     _vc = Get.find<VideoController>(tag: widget.contextKey);
 
-    // 🔁 Autoplay sur changement d’index global (scroll)
     _indexWorker = ever<int>(_vc.currentIndex, (i) {
       if (!mounted) return;
       if (i == widget.currentIndex) {
-        // Cette tuile devient courante -> autoplay
-        _maybePlay();
+        _scheduleMaybePlay();
       } else {
-        // Cette tuile sort de l’écran -> pause
-        _pause();
+        _becomePassive();
       }
     });
 
@@ -87,42 +101,62 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBinding
   @override
   void didUpdateWidget(SmartVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.videoUrl != widget.videoUrl || oldWidget.player?.controller != widget.player?.controller) {
+    final urlChanged = oldWidget.videoUrl != widget.videoUrl;
+    final controllerChanged = oldWidget.player?.controller != widget.player?.controller;
+
+    if (urlChanged || controllerChanged) {
       _detachListener(oldWidget.player?.controller);
+      _stopStallWatchdog();
       _hasAutoplayStarted = false;
       _hasFirstFrame = false;
       _attachOrInitialize(reuse: widget.player);
+    } else {
+      if (!_isActuallyVisible()) {
+        _becomePassive();
+      } else if (widget.autoPlay && _vc.currentIndex.value == widget.currentIndex && _isActuallyVisible()) {
+        _scheduleMaybePlay();
+      }
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _indexWorker.dispose(); // stop observe
+    _indexWorker.dispose();
     _setWakelock(false);
     _detachListener(_ctrl);
     _showPlayIcon.dispose();
+    _playDebounceTimer?.cancel();
+    _stopStallWatchdog();
     super.dispose();
   }
 
-  // lifecycle
+  @override
+  void deactivate() {
+    _becomePassive();
+    _setWakelock(false);
+    super.deactivate();
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appState = state;
     if (!mounted) return;
+
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      _pause();
+      _becomePassive();
       _setWakelock(false);
     } else if (state == AppLifecycleState.resumed) {
-      _maybePlay();
-      _updateWakelock();
+      if (_isActuallyVisible() && _vc.currentIndex.value == widget.currentIndex) {
+        _scheduleMaybePlay();
+      }
     }
   }
 
-  // attach / init
   Future<void> _attachOrInitialize({CachedVideoPlayerPlus? reuse}) async {
     final localToken = ++_attachToken;
-
     CachedVideoPlayerPlus? p = reuse ?? _videoManager.getController(widget.contextKey, widget.videoUrl);
+
     if (p == null) {
       try {
         p = await _videoManager.initializeController(
@@ -135,13 +169,13 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBinding
         debugPrint('[SmartVideoPlayer] init error: $e');
       }
     }
+
     if (!mounted || localToken != _attachToken) return;
 
     _bindPlayer(p);
 
-    // Si on arrive déjà comme item courant et autoplay activé -> joue
-    if (widget.autoPlay && _vc.currentIndex.value == widget.currentIndex) {
-      _maybePlay();
+    if (widget.autoPlay && _vc.currentIndex.value == widget.currentIndex && _isActuallyVisible()) {
+      _scheduleMaybePlay();
     }
   }
 
@@ -150,14 +184,24 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBinding
     _detachListener(_ctrl);
     _hasFirstFrame = false;
 
-    if (_ctrl != null) {
-      _ctrl!.addListener(_onTick);
-      if (_ctrl!.value.isInitialized && _ctrl!.value.position > Duration.zero && !_ctrl!.value.isBuffering) {
+    final ctrl = _ctrl;
+    if (ctrl != null) {
+      ctrl.addListener(_onTick);
+
+      if (ctrl.value.isInitialized &&
+          ctrl.value.position > Duration.zero &&
+          !ctrl.value.isBuffering) {
         _hasFirstFrame = true;
       }
-      _showPlayIcon.value = !(_ctrl!.value.isPlaying);
+
+      if (_vc.currentIndex.value != widget.currentIndex) {
+        _safeSetVolume(0.0);
+      }
+
+      _showPlayIcon.value = !(ctrl.value.isPlaying);
     }
-    setState(() {});
+
+    if (mounted) setState(() {});
     _updateWakelock();
   }
 
@@ -171,78 +215,110 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBinding
     final c = _ctrl;
     if (c == null) return;
 
-    if (!_hasFirstFrame && c.value.isInitialized && !c.value.isBuffering && c.value.position > Duration.zero) {
-      setState(() => _hasFirstFrame = true);
+    if (!_hasFirstFrame &&
+        c.value.isInitialized &&
+        !c.value.isBuffering &&
+        c.value.position > Duration.zero) {
+      if (mounted) setState(() => _hasFirstFrame = true);
     }
 
     _showPlayIcon.value = !(c.value.isPlaying);
 
-    final isCurrent = _vc.currentIndex.value == widget.currentIndex;
-    if (!isCurrent && c.value.isPlaying) {
+    final shouldBePlaying = _vc.currentIndex.value == widget.currentIndex && _isActuallyVisible();
+    if (!shouldBePlaying && c.value.isPlaying) {
       c.pause();
-    }
-
-    // L’ancienne logique d’autoplay basée uniquement sur les ticks reste,
-    // mais le worker d’index garantit maintenant le déclenchement au scroll.
-    if (widget.autoPlay && !_hasAutoplayStarted && c.value.isInitialized && !c.value.hasError && !c.value.isPlaying) {
-      // _maybePlay(); // (laissé possible mais non indispensable grâce au worker)
+      _safeSetVolume(0.0);
     }
 
     _updateWakelock();
+    _kickStallWatchdog();
+  }
+
+  bool _isActuallyVisible() {
+    if (!mounted) return false;
+    if (_appState != AppLifecycleState.resumed) return false;
+
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return false;
+
+    return _vc.currentIndex.value == widget.currentIndex;
+  }
+
+  void _scheduleMaybePlay() {
+    _playDebounceTimer?.cancel();
+    _playDebounceTimer = Timer(_playDebounce, _maybePlay);
   }
 
   Future<void> _maybePlay() async {
-    final c = _ctrl;
-    if (c == null) {
-      _setWakelock(false);
-      return;
-    }
+    if (_isTryingToPlay) return;
+    _isTryingToPlay = true;
 
-    if (_vc.currentIndex.value != widget.currentIndex) {
-      _setWakelock(false);
-      return;
-    }
-
-    if (!c.value.isInitialized) {
-      try {
-        await _videoManager.waitUntilInitialized(widget.contextKey, widget.videoUrl);
-      } catch (_) {
+    try {
+      final c = _ctrl;
+      if (c == null || !_isActuallyVisible()) {
         _setWakelock(false);
         return;
       }
-    }
-    if (!c.value.isInitialized || c.value.hasError) {
-      _setWakelock(false);
-      return;
-    }
 
-    if (c.value.position == Duration.zero) {
-      await c.seekTo(Duration.zero);
+      if (!c.value.isInitialized) {
+        try {
+          await _videoManager.waitUntilInitialized(widget.contextKey, widget.videoUrl);
+        } catch (_) {
+          _setWakelock(false);
+          return;
+        }
+      }
+
+      if (!c.value.isInitialized || c.value.hasError) {
+        _setWakelock(false);
+        return;
+      }
+
+      await _videoManager.pauseAllExcept(widget.contextKey, widget.videoUrl);
+      _safeSetVolume(1.0);
+
+      if (c.value.position == Duration.zero) {
+        try {
+          await c.seekTo(const Duration(milliseconds: 50)); // 🔧 micro-seek added
+        } catch (_) {}
+      }
+
+      if (!c.value.isPlaying) {
+        await c.play();
+        _hasAutoplayStarted = true;
+      }
+
+      _updateWakelock();
+      _kickStallWatchdog(forceRestart: true);
+    } finally {
+      _isTryingToPlay = false;
     }
-
-    await _videoManager.pauseAllExcept(widget.contextKey, widget.videoUrl);
-
-    if (!c.value.isPlaying) {
-      await c.play();
-      _hasAutoplayStarted = true;
-    }
-
-    _updateWakelock();
   }
 
-  void _pause() {
+  void _becomePassive() {
     final c = _ctrl;
-    if (c == null) {
-      _setWakelock(false);
-      return;
-    }
-    if (c.value.isPlaying) {
-      c.pause();
+    if (c != null) {
+      if (c.value.isPlaying) {
+        try {
+          c.pause();
+        } catch (_) {}
+      }
+      _safeSetVolume(0.0);
     }
     _setWakelock(false);
+    _stopStallWatchdog();
   }
 
-  // ---- Wakelock helpers ----
+  void _safeSetVolume(double v) {
+    final c = _ctrl;
+    if (c == null) return;
+    try {
+      if (c.value.isInitialized) {
+        c.setVolume(v.clamp(0.0, 1.0));
+      }
+    } catch (_) {}
+  }
+
   void _updateWakelock() {
     final c = _ctrl;
     final shouldKeepAwake =
@@ -250,23 +326,96 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBinding
         c.value.isInitialized &&
         c.value.isPlaying &&
         !c.value.isBuffering &&
-        (_vc.currentIndex.value == widget.currentIndex);
-
+        _isActuallyVisible();
     _setWakelock(shouldKeepAwake);
   }
 
-  bool _wakelockOn = false;
   Future<void> _setWakelock(bool enable) async {
-    if (enable == _wakelockOn) return;
+    if (_wakelockOn == enable) return;
     _wakelockOn = enable;
     try {
-      if (enable) {
-        await WakelockPlus.enable();
-      } else {
-        await WakelockPlus.disable();
-      }
+      enable ? await WakelockPlus.enable() : await WakelockPlus.disable();
     } catch (e) {
       debugPrint('Wakelock error: $e');
+    }
+  }
+
+  void _kickStallWatchdog({bool forceRestart = false}) {
+    final c = _ctrl;
+    if (c == null) return;
+
+    if (!c.value.isInitialized || !c.value.isPlaying) {
+      _stopStallWatchdog();
+      return;
+    }
+
+    if (_stallTimer != null && !forceRestart) return;
+
+    _stallTimer?.cancel();
+    _lastKnownPos = c.value.position;
+    _stallStrikes = 0;
+
+    _stallTimer = Timer.periodic(_stallCheckInterval, (_) async {
+      final cc = _ctrl;
+      if (cc == null) {
+        _stopStallWatchdog();
+        return;
+      }
+
+      final v = cc.value;
+      if (!v.isInitialized || v.hasError) {
+        _stopStallWatchdog();
+        return;
+      }
+
+      if (!v.isPlaying) {
+        _stopStallWatchdog();
+        return;
+      }
+
+      if (v.isBuffering) {
+        _lastKnownPos = v.position;
+        _stallStrikes = 0;
+        return;
+      }
+
+      final pos = v.position;
+      final advanced = pos > _lastKnownPos;
+      _lastKnownPos = pos;
+
+      if (!advanced) {
+        _stallStrikes++;
+        if (_stallStrikes == 2) {
+          try {
+            final target = pos + const Duration(milliseconds: 1);
+            await cc.seekTo(target);
+          } catch (_) {}
+        } else if (_stallStrikes >= _stallMaxStrikesBeforeReload) {
+          _stallStrikes = 0;
+          await _softReloadController();
+        }
+      } else {
+        _stallStrikes = 0;
+      }
+    });
+  }
+
+  void _stopStallWatchdog() {
+    _stallTimer?.cancel();
+    _stallTimer = null;
+    _stallStrikes = 0;
+    _lastKnownPos = Duration.zero;
+  }
+
+  Future<void> _softReloadController() async {
+    final c = _ctrl;
+    if (c == null) return;
+    try {
+      await c.pause();
+      await Future.delayed(const Duration(milliseconds: 50));
+      await c.play();
+    } catch (_) {
+      await _purgeAndReloadController();
     }
   }
 
@@ -296,7 +445,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBinding
               hasFirstFrame: _hasFirstFrame,
               onTogglePlayPause: () {
                 if (ctrl == null || !ctrl.value.isInitialized) return;
-                ctrl.value.isPlaying ? _pause() : _maybePlay();
+                ctrl.value.isPlaying ? _becomePassive() : _scheduleMaybePlay();
               },
               onRetry: () async {
                 debugPrint('[SmartVideoPlayer] Retry tapped for ${widget.video.videoUrl}');
@@ -321,8 +470,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBinding
     }
   }
 
-  Widget _buildActions(
-      BuildContext context, VideoController videoController, UserController userController) {
+  Widget _buildActions(BuildContext context, VideoController videoController, UserController userController) {
     final user = userController.user;
     if (user == null) return const SizedBox();
 
@@ -419,16 +567,19 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer> with WidgetsBinding
   }
 
   Future<void> _purgeAndReloadController() async {
-    try {
-      final file = await VideoCacheManager.getFileIfCached(widget.videoUrl);
-      if (file != null && await file.exists()) {
-        await file.delete();
-        debugPrint("[SmartVideoPlayer] Cache corrompu supprimé pour ${widget.videoUrl}");
-      }
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        final file = await VideoCacheManager.getFileIfCached(widget.videoUrl);
+        if (file != null && await file.exists()) {
+          await file.delete();
+          debugPrint("[SmartVideoPlayer] Cache corrompu supprimé pour ${widget.video.videoUrl}");
+        }
+      } catch (_) {}
+    }
     _hasAutoplayStarted = false;
     _hasFirstFrame = false;
-    setState(() {});
+    _stopStallWatchdog();
+    if (mounted) setState(() {});
     unawaited(_attachOrInitialize(reuse: null));
   }
 }

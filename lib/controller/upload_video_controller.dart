@@ -1,5 +1,8 @@
+
+
 import 'dart:async';
 import 'dart:io';
+
 import 'package:adfoot/widgets/processing_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -7,7 +10,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
-import 'package:video_compress/video_compress.dart';
+
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/utils/video_tools.dart';
 import 'package:adfoot/screens/success_toast.dart';
@@ -25,7 +28,6 @@ class UploadVideoController extends GetxController {
   String? originalVideoPath;
 
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-  Subscription? _compressionSubscription;
   bool _internetAvailable = true;
   bool _wasPaused = false;
   UploadTask? _currentUploadTask;
@@ -42,7 +44,6 @@ class UploadVideoController extends GetxController {
   @override
   void onClose() {
     _connectivitySubscription?.cancel();
-    _compressionSubscription?.unsubscribe();
     VideoTools.dispose();
     super.onClose();
   }
@@ -66,52 +67,37 @@ class UploadVideoController extends GetxController {
       uploadProgress.value = 0.02;
       originalVideoPath = videoPath;
 
-      final isValidDuration = await VideoTools.isDurationValid(videoPath, maxDuration: 60);
+      final isValidDuration = await VideoTools.isDurationValid(videoPath, maxDuration: 62);
       final isValidQuality = await VideoTools.isQualityAcceptable(videoPath);
 
       if (!isValidDuration || !isValidQuality) {
-        Get.back();
+        if (Get.isDialogOpen == true) Get.back();
         showErrorToast(
           !isValidDuration
               ? 'La durée dépasse 60 secondes.'
-              : 'Qualité vidéo insuffisante (minimum 360p).',
+              : 'Qualité vidéo insuffisante (minimum 480×360).',
         );
         return false;
       }
 
-      uploadStage.value = "Compression vidéo...";
-      uploadProgress.value = 0.05;
+      uploadStage.value = "Préparation du fichier...";
+      uploadProgress.value = 0.08;
+      selectedVideo = File(videoPath);
 
-      _compressionSubscription?.unsubscribe();
-      _compressionSubscription = VideoCompress.compressProgress$.subscribe((progress) {
-        uploadProgress.value = 0.05 + (progress * 0.25 / 100);
-      });
-
-      final compressed = await VideoCompress.compressVideo(
-        videoPath,
-        quality: VideoQuality.MediumQuality,
-        deleteOrigin: false,
-      );
-      _compressionSubscription?.unsubscribe();
-
-      selectedVideo = File(compressed?.path ?? videoPath);
-      uploadProgress.value = 0.3;
-
-      uploadStage.value = "Génération miniature...";
+      uploadStage.value = "Génération de la miniature...";
       thumbnail = await _retryThumbnail(videoPath);
       if (thumbnail == null) {
-        Get.back();
-        showErrorToast('Erreur génération miniature.');
+        if (Get.isDialogOpen == true) Get.back();
+        showErrorToast('Erreur lors de la génération de la miniature.');
         return false;
       }
 
-      uploadProgress.value = 0.35;
-      songName = song;
-      caption = cap;
+      uploadProgress.value = 0.15;
+      songName = song.trim();
+      caption = cap.trim();
       return true;
     } catch (e) {
-      _compressionSubscription?.unsubscribe();
-      Get.back();
+      if (Get.isDialogOpen == true) Get.back();
       showErrorToast(e.toString());
       return false;
     }
@@ -136,17 +122,24 @@ class UploadVideoController extends GetxController {
     isUploading(true);
     isOptimizing(false);
     uploadStage.value = "Téléversement...";
-    uploadProgress.value = 0.3;
+    uploadProgress.value = 0.2;
 
     final videoId = const Uuid().v4();
+
+    final thumbContentType = VideoTools.inferImageContentTypeFromPath(thumbnail!.path);
+    final thumbExt = thumbContentType == 'image/png' ? 'png' : 'jpg';
+
     final videoPath = 'videos/$videoId.mp4';
-    final thumbPath = 'thumbnails/thumbnail_$videoId.jpg';
+    final thumbPath = 'thumbnails/thumbnail_$videoId.$thumbExt';
 
     final videoRef = FirebaseStorage.instance.ref().child(videoPath);
     final thumbRef = FirebaseStorage.instance.ref().child(thumbPath);
 
     final user = Get.find<UserController>().user;
     final now = Timestamp.now();
+
+    final durationSec = await VideoTools.getDurationSeconds(originalVideoPath!);
+    final (w, h) = await VideoTools.getDimensions(originalVideoPath!);
 
     await FirebaseFirestore.instance.collection('videos').doc(videoId).set({
       'id': videoId,
@@ -163,6 +156,10 @@ class UploadVideoController extends GetxController {
       'createdAt': now,
       'updatedAt': now,
       'status': 'processing',
+      'optimized': false,
+      if (durationSec != null) 'duration': durationSec,
+      if (w != null) 'width': w,
+      if (h != null) 'height': h,
     });
 
     bool cleanupOnFailure = false;
@@ -171,7 +168,8 @@ class UploadVideoController extends GetxController {
       final videoUploaded = await _retryUploadFile(
         file: selectedVideo!,
         storageRef: videoRef,
-        onProgress: (p) => uploadProgress.value = 0.3 + (0.35 * p),
+        onProgress: (p) => uploadProgress.value = 0.2 + (0.45 * p),
+        contentType: 'video/mp4',
       );
 
       if (!videoUploaded) {
@@ -193,6 +191,7 @@ class UploadVideoController extends GetxController {
         file: thumbnail!,
         storageRef: thumbRef,
         onProgress: (p) => uploadProgress.value = 0.65 + (0.35 * p),
+        contentType: thumbContentType,
       );
 
       if (!thumbUploaded) {
@@ -200,13 +199,10 @@ class UploadVideoController extends GetxController {
         throw 'Échec upload miniature';
       }
 
-      final bucket = FirebaseStorage.instance.bucket;
-      final videoDownloadUrl = 'https://firebasestorage.googleapis.com/v0/b/$bucket/o/${Uri.encodeComponent(videoPath)}?alt=media';
-      final thumbDownloadUrl = 'https://firebasestorage.googleapis.com/v0/b/$bucket/o/${Uri.encodeComponent(thumbPath)}?alt=media';
-
       await FirebaseFirestore.instance.collection('videos').doc(videoId).update({
-        'videoUrl': videoDownloadUrl,
-        'thumbnail': thumbDownloadUrl,
+        'storagePath': videoPath,
+        'thumbnailPath': thumbPath,
+        'updatedAt': Timestamp.now(),
       });
 
       uploadStage.value = "Optimisation en cours...";
@@ -227,7 +223,9 @@ class UploadVideoController extends GetxController {
 
   Future<void> _cleanupLocalFiles() async {
     try {
-      if (selectedVideo != null && selectedVideo!.path != originalVideoPath && await selectedVideo!.exists()) {
+      if (selectedVideo != null &&
+          selectedVideo!.path != originalVideoPath &&
+          await selectedVideo!.exists()) {
         await selectedVideo!.delete();
       }
       if (thumbnail != null && await thumbnail!.exists()) {
@@ -251,19 +249,26 @@ class UploadVideoController extends GetxController {
     required File file,
     required Reference storageRef,
     required Function(double) onProgress,
+    String? contentType,
   }) async {
     try {
-      final contentType = file.path.endsWith('.mp4') ? 'video/mp4' : 'image/jpeg';
-      final metadata = SettableMetadata(contentType: contentType);
+      final meta = SettableMetadata(
+        contentType: contentType ?? (file.path.toLowerCase().endsWith('.mp4')
+            ? 'video/mp4'
+            : VideoTools.inferImageContentTypeFromPath(file.path)),
+        cacheControl: 'public,max-age=86400',
+      );
 
-      final uploadTask = storageRef.putFile(file, metadata);
+      final uploadTask = storageRef.putFile(file, meta);
       _currentUploadTask = uploadTask;
 
       final completer = Completer<bool>();
 
       uploadTask.snapshotEvents.listen((snapshot) async {
         if (snapshot.state == TaskState.running) {
-          final progress = snapshot.bytesTransferred / snapshot.totalBytes;
+          final total = snapshot.totalBytes;
+          final sent = snapshot.bytesTransferred;
+          final progress = total > 0 ? sent / total : 0.0;
           onProgress(progress);
           _handleNetworkLossDuringUpload();
         } else if (snapshot.state == TaskState.success) {
@@ -274,7 +279,7 @@ class UploadVideoController extends GetxController {
       }, onError: (_) => completer.complete(false));
 
       return await completer.future.timeout(const Duration(minutes: 3), onTimeout: () => false);
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
@@ -283,10 +288,16 @@ class UploadVideoController extends GetxController {
     required File file,
     required Reference storageRef,
     required Function(double) onProgress,
+    String? contentType,
     int maxRetries = 3,
   }) async {
     for (int attempt = 0; attempt < maxRetries; attempt++) {
-      final success = await _safeUploadFile(file: file, storageRef: storageRef, onProgress: onProgress);
+      final success = await _safeUploadFile(
+        file: file,
+        storageRef: storageRef,
+        onProgress: onProgress,
+        contentType: contentType,
+      );
       if (success) return true;
       await Future.delayed(Duration(seconds: 1 + attempt));
     }
@@ -302,7 +313,7 @@ class UploadVideoController extends GetxController {
       showInfoToast('Connexion perdue, upload en pause.');
     } else if (_wasPaused &&
         _internetAvailable &&
-        _currentUploadTask!.snapshot.state == TaskState.paused) {
+        _currentUploadTask?.snapshot.state == TaskState.paused) {
       await _currentUploadTask!.resume();
       _wasPaused = false;
       showInfoToast('Connexion rétablie, upload repris.');
@@ -332,11 +343,7 @@ class UploadVideoController extends GetxController {
       showSuccessToast('Vidéo ajoutée avec succès !');
 
       await Future.delayed(const Duration(milliseconds: 400));
-      // ✅ Plus besoin absolue du refresh forcé, mais on le garde pour compatibilité
-      Get.offAllNamed('/main', arguments: {
-        'tab': 0,
-        'refresh': true,
-      });
+      Get.offAllNamed('/main', arguments: {'tab': 0, 'refresh': true});
 
       completer.complete();
     }
@@ -351,11 +358,7 @@ class UploadVideoController extends GetxController {
       }
     });
 
-    subscription = FirebaseFirestore.instance
-        .collection('videos')
-        .doc(videoId)
-        .snapshots()
-        .listen((doc) async {
+    subscription = FirebaseFirestore.instance.collection('videos').doc(videoId).snapshots().listen((doc) async {
       final status = doc.data()?['status'];
       final optimized = doc.data()?['optimized'] ?? false;
 
@@ -375,10 +378,7 @@ class UploadVideoController extends GetxController {
 
         showInfoToast('Votre vidéo est en cours d’optimisation. Elle sera visible sous peu.');
         await Future.delayed(const Duration(milliseconds: 200));
-        Get.offAllNamed('/main', arguments: {
-          'tab': 0,
-          'refresh': true,
-        });
+        Get.offAllNamed('/main', arguments: {'tab': 0, 'refresh': true});
 
         completer.complete();
       }
@@ -390,7 +390,6 @@ class UploadVideoController extends GetxController {
   void cancelUpload() {
     if (isOptimizing.value) return;
     _currentUploadTask?.cancel();
-    VideoCompress.cancelCompression();
     resetUploadState();
     if (Get.isDialogOpen == true) {
       Get.back();

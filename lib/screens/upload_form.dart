@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:adfoot/widgets/processing_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -23,46 +24,78 @@ class UploadForm extends StatefulWidget {
 class _UploadFormState extends State<UploadForm> {
   final UploadVideoController uploadVideoController =
       Get.find<UploadVideoController>();
+
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController songController = TextEditingController();
   final TextEditingController captionController = TextEditingController();
+  final FocusNode _songFocus = FocusNode();
+  final FocusNode _captionFocus = FocusNode();
+
   late VideoPlayerController _videoPlayerController;
   bool _isPlaying = false;
+  Duration _duration = Duration.zero;
 
   @override
   void initState() {
     super.initState();
     _videoPlayerController = VideoPlayerController.file(widget.videoFile)
-      ..initialize().then((_) => setState(() {}));
+      ..setLooping(true)
+      ..initialize().then((_) {
+        if (mounted) {
+          setState(() {
+            _duration = _videoPlayerController.value.duration;
+          });
+        }
+      });
   }
 
   @override
   void dispose() {
+    _videoPlayerController.pause();
     _videoPlayerController.dispose();
     songController.dispose();
     captionController.dispose();
+    _songFocus.dispose();
+    _captionFocus.dispose();
     super.dispose();
   }
 
   void toggleVideoPlayback() {
     if (_videoPlayerController.value.isInitialized) {
       setState(() {
-        _isPlaying
-            ? _videoPlayerController.pause()
-            : _videoPlayerController.play();
+        if (_isPlaying) {
+          _videoPlayerController.pause();
+        } else {
+          _videoPlayerController.play();
+        }
         _isPlaying = !_isPlaying;
       });
     }
   }
 
-  Future<void> _handleUpload() async {
-    final song = songController.text.trim();
-    final caption = captionController.text.trim();
+  String _formatDuration(Duration d) {
+    final mm = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final ss = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final hh = d.inHours;
+    if (hh > 0) {
+      return '${hh.toString().padLeft(2, '0')}:$mm:$ss';
+    }
+    return '$mm:$ss';
+  }
 
-    if (song.isEmpty || caption.isEmpty) {
-      Get.snackbar('Erreur', 'Veuillez remplir tous les champs.',
-          backgroundColor: Colors.redAccent, colorText: Colors.white);
+  Future<void> _handleUpload() async {
+    // Évite double-clic pendant un état actif
+    if (uploadVideoController.isUploading.value ||
+        uploadVideoController.isOptimizing.value) {
       return;
     }
+
+    // Validation formulaire
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    // Fermer les claviers avant d’ouvrir le loader
+    _songFocus.unfocus();
+    _captionFocus.unfocus();
 
     Get.dialog(
       const ProgressFullScreenLoader(),
@@ -71,8 +104,8 @@ class _UploadFormState extends State<UploadForm> {
 
     try {
       final isReady = await uploadVideoController.prepareUpload(
-        song: song,
-        cap: caption,
+        song: songController.text.trim(),
+        cap: captionController.text.trim(),
         videoPath: widget.videoPath,
       );
 
@@ -87,13 +120,19 @@ class _UploadFormState extends State<UploadForm> {
       if (Get.isDialogOpen == true) {
         Get.back(); // Toujours fermer en cas d'erreur
       }
-      Get.snackbar('Erreur', 'Erreur inattendue : $e',
-          backgroundColor: Colors.redAccent, colorText: Colors.white);
+      Get.snackbar(
+        'Erreur',
+        'Erreur inattendue : $e',
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Téléverser une vidéo'),
@@ -101,25 +140,37 @@ class _UploadFormState extends State<UploadForm> {
       ),
       body: Obx(() {
         if (uploadVideoController.isOptimizing.value) {
-          return const ProcessingDialog(); // Affiche "Optimisation en cours..."
+          // Affiche "Optimisation en cours..."
+          return const ProcessingDialog();
         }
 
         if (uploadVideoController.isUploading.value) {
-          return const ProgressFullScreenLoader(); // Affiche progression d'upload
+          // Affiche progression d'upload (étapes + barre)
+          return const ProgressFullScreenLoader();
         }
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                height: 200,
-                decoration: const BoxDecoration(color: Colors.black),
-                child: _videoPlayerController.value.isInitialized
-                    ? GestureDetector(
-                        onTap: toggleVideoPlayback,
-                        child: Stack(
+        // Formulaire de saisie + prévisualisation
+        return GestureDetector(
+          onTap: () {
+            // Ferme le clavier si on tape ailleurs
+            _songFocus.unfocus();
+            _captionFocus.unfocus();
+          },
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Player
+                Container(
+                  height: 220,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: _videoPlayerController.value.isInitialized
+                      ? Stack(
                           alignment: Alignment.center,
                           children: [
                             AspectRatio(
@@ -127,55 +178,136 @@ class _UploadFormState extends State<UploadForm> {
                                   _videoPlayerController.value.aspectRatio,
                               child: VideoPlayer(_videoPlayerController),
                             ),
-                            if (!_isPlaying)
-                              const Icon(
-                                Icons.play_circle_outline,
-                                color: Colors.white,
-                                size: 50,
+                            // Bouton play/pause au centre
+                            GestureDetector(
+                              onTap: toggleVideoPlayback,
+                              child: AnimatedOpacity(
+                                opacity: _isPlaying ? 0.0 : 1.0,
+                                duration: const Duration(milliseconds: 150),
+                                child: const Icon(
+                                  Icons.play_circle_outline,
+                                  color: Colors.white,
+                                  size: 64,
+                                ),
                               ),
+                            ),
+                            // Durée en haut à droite
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(
+                                  _formatDuration(_duration),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
+                        )
+                      : const Center(child: CircularProgressIndicator()),
+                ),
+                const SizedBox(height: 20),
+
+                // Form
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        focusNode: _songFocus,
+                        controller: songController,
+                        textInputAction: TextInputAction.next,
+                        maxLength: 80,
+                        decoration: const InputDecoration(
+                          labelText: 'Description (obligatoire)',
+                          counterText: '',
+                          filled: true,
+                          fillColor: Color(0xFFEFEFEF),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(10)),
+                          ),
+                          hintText: 'Ex: Dribble + frappe pied gauche',
                         ),
-                      )
-                    : const Center(child: CircularProgressIndicator()),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: songController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  filled: true,
-                  fillColor: Color(0xFFE0E0E0),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(10)),
+                        validator: (val) {
+                          final v = (val ?? '').trim();
+                          if (v.isEmpty) {
+                            return 'La description est requise.';
+                          }
+                          if (v.length < 3) {
+                            return 'Au moins 3 caractères.';
+                          }
+                          return null;
+                        },
+                        onFieldSubmitted: (_) {
+                          FocusScope.of(context).requestFocus(_captionFocus);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        focusNode: _captionFocus,
+                        controller: captionController,
+                        textInputAction: TextInputAction.done,
+                        maxLines: 2,
+                        maxLength: 140,
+                        decoration: const InputDecoration(
+                          labelText: 'Légende (obligatoire)',
+                          counterText: '',
+                          filled: true,
+                          fillColor: Color(0xFFEFEFEF),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(10)),
+                          ),
+                          hintText: 'Ex: #U17 #Ailier #Vitesse',
+                        ),
+                        validator: (val) {
+                          final v = (val ?? '').trim();
+                          if (v.isEmpty) {
+                            return 'La légende est requise.';
+                          }
+                          return null;
+                        },
+                        onFieldSubmitted: (_) => _handleUpload(),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: captionController,
-                decoration: const InputDecoration(
-                  labelText: 'Légende',
-                  filled: true,
-                  fillColor: Color(0xFFE0E0E0),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(10)),
+                const SizedBox(height: 20),
+
+                // Bouton d’upload
+                ElevatedButton.icon(
+                  onPressed: _handleUpload,
+                  icon: const Icon(Icons.cloud_upload, color: Colors.white),
+                  label: const Text(
+                    'Téléverser la vidéo',
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF214D4F),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    textStyle: theme.textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _handleUpload,
-                icon: const Icon(Icons.cloud_upload, color: Colors.white),
-                label: const Text(
-                  'Téléverser la vidéo',
-                  style: TextStyle(fontSize: 16, color: Colors.white),
+                const SizedBox(height: 8),
+                const Text(
+                  'Rappel : durée max 60s • qualité conseillée ≥ 480×360',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.black54, fontSize: 12),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF214D4F),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       }),
