@@ -1,3 +1,4 @@
+// lib/screens/add_video.dart
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -8,6 +9,10 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:adfoot/controller/upload_video_controller.dart';
 import 'upload_form.dart';
+
+/// 🎨 Couleurs de marque centralisées (évite les doublons + warnings)
+const Color kBrand = Color(0xFF214D4F);     // vert foncé (brand)
+const Color kBrandDark = Color(0xFF18383A); // variante plus sombre
 
 class AddVideo extends StatefulWidget {
   const AddVideo({super.key});
@@ -22,10 +27,6 @@ class _AddVideoState extends State<AddVideo> {
 
   final ImagePicker _picker = ImagePicker();
   final RxBool isLoading = false.obs;
-
-  // Couleurs de marque
-  static const Color kBrand = Color(0xFF214D4F);
-  static const Color kBrandDark = Color(0xFF18383A);
 
   Future<void> _pickVideoFromGallery() async {
     try {
@@ -75,12 +76,20 @@ class _AddVideoState extends State<AddVideo> {
     final media = MediaQuery.of(context);
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      // ❌ On n’étend plus derrière l’AppBar pour garantir lisibilité
+      extendBodyBehindAppBar: false,
       appBar: AppBar(
         title: const Text('Ajouter une vidéo'),
-        backgroundColor: Colors.transparent,
+        backgroundColor: kBrand,                 // ✅ fond vert foncé
+        foregroundColor: Colors.white,           // ✅ icônes + texte blancs
         elevation: 0,
         centerTitle: true,
+        scrolledUnderElevation: 0,
+        systemOverlayStyle: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light, // ✅ icônes de statut en clair
+          statusBarBrightness: Brightness.dark,      // iOS
+        ),
       ),
       body: Container(
         width: double.infinity,
@@ -114,7 +123,7 @@ class _AddVideoState extends State<AddVideo> {
             return Stack(
               children: [
                 // Header décoratif
-                _Header(),
+                const _Header(),
                 // Contenu avec animations douces
                 Align(
                   alignment: Alignment.topCenter,
@@ -133,7 +142,8 @@ class _AddVideoState extends State<AddVideo> {
                   ),
                 ),
 
-                if (showOverlay) _ProgressOverlay(controller: uploadVideoController, waiting: loading),
+                if (showOverlay)
+                  _ProgressOverlay(controller: uploadVideoController, waiting: loading),
               ],
             );
           }),
@@ -145,8 +155,6 @@ class _AddVideoState extends State<AddVideo> {
 
 /// En-tête décoratif avec gradient et icône
 class _Header extends StatelessWidget {
-  static const Color kBrand = Color(0xFF214D4F);
-
   const _Header();
 
   @override
@@ -157,7 +165,7 @@ class _Header extends StatelessWidget {
       width: double.infinity,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [kBrand, Color(0xFF2C6E72)],
+          colors: [kBrand, kBrandDark], // ✅ cohérent avec la charte
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -166,7 +174,7 @@ class _Header extends StatelessWidget {
         ),
       ),
       child: Stack(
-        children: [
+        children: const [
           Positioned(
             right: -30,
             top: -30,
@@ -177,7 +185,7 @@ class _Header extends StatelessWidget {
             bottom: -40,
             child: _Bubble(size: 160, opacity: .06),
           ),
-          const Align(
+          Align(
             alignment: Alignment.center,
             child: Icon(
               Icons.video_collection_rounded,
@@ -215,7 +223,6 @@ class _Bubble extends StatelessWidget {
 
 /// Carte principale avec bouton “Choisir depuis la galerie”
 class _BodyCard extends StatelessWidget {
-  static const Color kBrand = Color(0xFF214D4F);
   final VoidCallback onPick;
 
   const _BodyCard({required this.onPick});
@@ -224,7 +231,7 @@ class _BodyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 10,
-      shadowColor: kBrand.withOpacity(.15),
+      shadowColor: kBrand.withValues(alpha: .15),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
@@ -236,7 +243,7 @@ class _BodyCard extends StatelessWidget {
               width: 88,
               height: 88,
               decoration: BoxDecoration(
-                color: kBrand.withOpacity(.08),
+                color: kBrand.withValues(alpha: .08),
                 shape: BoxShape.circle,
               ),
               child: const Center(
@@ -317,24 +324,23 @@ class _TipChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       labelPadding: const EdgeInsets.only(right: 8),
-      avatar: Icon(icon, size: 18, color: const Color(0xFF214D4F)),
+      // Correction: ne PAS mettre `const` ici car `icon` est une variable
+      avatar: Icon(icon, size: 18, color: kBrand),
       label: Text(
         label,
         style: const TextStyle(
           fontSize: 12.5,
           fontWeight: FontWeight.w600,
-          color: Color(0xFF214D4F),
+          color: kBrand,
         ),
       ),
-      backgroundColor: const Color(0xFF214D4F).withOpacity(.08),
+      backgroundColor: kBrand.withValues(alpha: .08),
     );
   }
 }
 
 /// Overlay de progression en “verre dépoli”
 class _ProgressOverlay extends StatelessWidget {
-  static const Color kBrand = Color(0xFF214D4F);
-
   final UploadVideoController controller;
   final bool waiting; // état "chargement" avant d'ouvrir la galerie
 
@@ -370,7 +376,7 @@ class _ProgressOverlay extends StatelessWidget {
       progressWidget = const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
     }
 
-    return Positioned.fill(
+    return PositionedFill(
       child: Container(
         alignment: Alignment.center,
         child: ClipRRect(
@@ -381,9 +387,9 @@ class _ProgressOverlay extends StatelessWidget {
               width: 320,
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 22),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(.55),
+                color: Colors.black.withValues(alpha: .55), 
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withOpacity(.08)),
+                border: Border.all(color: Colors.white.withValues(alpha: .08)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -405,7 +411,7 @@ class _ProgressOverlay extends StatelessWidget {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(.9),
+                        color: Colors.white.withValues(alpha: .9), 
                         fontSize: 13.5,
                       ),
                     ),
@@ -416,7 +422,7 @@ class _ProgressOverlay extends StatelessWidget {
                       value: progress.clamp(0.0, 1.0),
                       minHeight: 6,
                       color: Colors.white,
-                      backgroundColor: Colors.white.withOpacity(.25),
+                      backgroundColor: Colors.white.withValues(alpha: .25),
                     ),
                   ],
                 ],
@@ -425,6 +431,20 @@ class _ProgressOverlay extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Petit helper pour éviter le boilerplate Positioned.fill
+class PositionedFill extends StatelessWidget {
+  final Widget child;
+  const PositionedFill({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Positioned(
+      left: 0, right: 0, top: 0, bottom: 0,
+      child: SizedBox.expand(child: null),
     );
   }
 }

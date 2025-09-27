@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -24,7 +25,8 @@ class ProfileVideoScrollView extends StatefulWidget {
   State<ProfileVideoScrollView> createState() => _ProfileVideoScrollViewState();
 }
 
-class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with WidgetsBindingObserver {
+class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
+    with WidgetsBindingObserver {
   late final PageController _pageController;
   late int _currentIndex;
   late final String _ctxKey;
@@ -32,6 +34,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
   late final VideoController _vc;
 
   bool _isProcessing = false;
+  int _requestToken = 0; // ✅ pour annuler les appels obsolètes
   String? _currentPlayingUrl;
 
   static const int _videoSlidingWindowLimit = 25;
@@ -46,7 +49,11 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
 
     _vc = Get.isRegistered<VideoController>(tag: _ctxKey)
         ? Get.find<VideoController>(tag: _ctxKey)
-        : Get.put(VideoController(contextKey: _ctxKey), tag: _ctxKey, permanent: true);
+        : Get.put(
+            VideoController(contextKey: _ctxKey),
+            tag: _ctxKey,
+            permanent: true,
+          );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleIndexChange(_currentIndex);
@@ -56,15 +63,14 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _disposeResources();
     _pageController.dispose();
+    unawaited(_disposeResources());
     super.dispose();
   }
 
   Future<void> _disposeResources() async {
     try {
       await _videoManager.pauseAll(_ctxKey);
-      await Future.delayed(const Duration(milliseconds: 100));
       await _videoManager.disposeAllForContext(_ctxKey);
       if (Get.isRegistered<VideoController>(tag: _ctxKey)) {
         Get.delete<VideoController>(tag: _ctxKey);
@@ -76,7 +82,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _videoManager.pauseAll(_ctxKey);
     } else if (state == AppLifecycleState.resumed) {
       _resumeCurrentVideo();
@@ -86,63 +92,79 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
 
   Future<void> _resumeCurrentVideo() async {
     final urls = widget.videos.map((v) => v.videoUrl).toList();
-    if (_currentIndex >= 0 && _currentIndex < urls.length) {
-      final currentUrl = urls[_currentIndex];
-      _videoManager.pauseAllExcept(_ctxKey, currentUrl);
+    if (_currentIndex < 0 || _currentIndex >= urls.length) return;
 
-      final player = _videoManager.getController(_ctxKey, currentUrl);
-      final ctrl = player?.controller;
-      if (ctrl != null && ctrl.value.isInitialized && !ctrl.value.hasError && !ctrl.value.isPlaying) {
+    final currentUrl = urls[_currentIndex];
+    final player = _videoManager.getController(_ctxKey, currentUrl);
+    final ctrl = player?.controller;
+
+    if (ctrl != null && ctrl.value.isInitialized && !ctrl.value.hasError) {
+      if (!ctrl.value.isPlaying) {
+        await _videoManager.pauseAllExcept(_ctxKey, currentUrl);
         await ctrl.play();
-        setState(() {});
-      } else {
-        await _handleIndexChange(_currentIndex);
       }
+      if (mounted) setState(() => _currentPlayingUrl = currentUrl);
+    } else {
+      // Si pas prêt, relance la séquence standard (init + preload + window)
+      await _handleIndexChange(_currentIndex);
     }
   }
 
   Future<void> _handleIndexChange(int idx) async {
-    if (_isProcessing || idx >= widget.videos.length || idx < 0) return;
+    if (idx < 0 || idx >= widget.videos.length) return;
+    if (_isProcessing) {
+      // On laisse l'appel courant se terminer et ce nouveau swipe sera traité ensuite
+      return;
+    }
     _isProcessing = true;
+    final localToken = ++_requestToken;
 
     try {
       final urls = widget.videos.map((v) => v.videoUrl).toList();
       final currentUrl = urls[idx];
 
-      await _videoManager.pauseAll(_ctxKey);
-      await Future.delayed(const Duration(milliseconds: 100));
+      // Met l'index tôt pour synchroniser SmartVideoPlayer
+      _vc.currentIndex.value = idx;
 
+      // Stoppe toute lecture en cours immédiatement (pas de delay arbitraire)
+      await _videoManager.pauseAll(_ctxKey);
+      if (localToken != _requestToken) return;
+
+      // Initialise/attache le player pour la vidéo courante
       final player = await _videoManager.initializeController(
         _ctxKey,
         currentUrl,
         autoPlay: true,
         activeUrl: currentUrl,
       );
+      if (localToken != _requestToken) return;
 
       _currentIndex = idx;
       _currentPlayingUrl = currentUrl;
+      if (mounted) setState(() {});
 
-      /// 🔁 Synchro avec SmartVideoPlayer
-      _vc.currentIndex.value = idx;
-
-      setState(() {});
-
+      // Précharge les voisins (VideoManager limite déjà la concurrence)
       _videoManager.preloadSurrounding(_ctxKey, urls, idx, activeUrl: currentUrl);
 
-      /// 🧹 Nettoyage LRU
-      final retainedIndices = List<int>.generate(_videoSlidingWindowLimit, (i) => idx - (_videoSlidingWindowLimit ~/ 2) + i)
-          .where((i) => i >= 0 && i < urls.length)
-          .toList();
+      // 🧹 Sliding window : ne garde que 25 vidéos autour de l’index
+      final retainedIndices = List<int>.generate(
+        _videoSlidingWindowLimit,
+        (i) => idx - (_videoSlidingWindowLimit ~/ 2) + i,
+      ).where((i) => i >= 0 && i < urls.length).toList();
 
       final retainedUrls = retainedIndices.map((i) => urls[i]).toSet();
       final toDispose = urls.toSet().difference(retainedUrls);
-      await _videoManager.disposeUrls(_ctxKey, toDispose.toList());
-
-      final ctrl = player.controller;
-      if (!ctrl.value.isPlaying && ctrl.value.isInitialized && !ctrl.value.hasError) {
-        await ctrl.play();
-        setState(() {});
+      if (toDispose.isNotEmpty) {
+        await _videoManager.disposeUrls(_ctxKey, toDispose.toList());
       }
+
+      // Assure la lecture
+      final ctrl = player.controller;
+      if (ctrl.value.isInitialized && !ctrl.value.hasError && !ctrl.value.isPlaying) {
+        await _videoManager.pauseAllExcept(_ctxKey, currentUrl);
+        await ctrl.play();
+      }
+      if (mounted) setState(() {});
     } catch (e, st) {
       debugPrint("❌ Error in _handleIndexChange: $e\n$st");
     } finally {
@@ -177,7 +199,11 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
               return Stack(
                 children: [
                   SmartVideoPlayer(
-                    key: ValueKey(_currentPlayingUrl == video.videoUrl ? video.id : '${video.id}_placeholder'),
+                    key: ValueKey(
+                      _currentPlayingUrl == video.videoUrl
+                          ? video.id
+                          : '${video.id}_placeholder',
+                    ),
                     contextKey: _ctxKey,
                     videoUrl: video.videoUrl,
                     video: video,
@@ -197,22 +223,38 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          video.songName.isNotEmpty ? video.songName : 'Musique inconnue',
+                          video.songName.isNotEmpty
+                              ? video.songName
+                              : 'Musique inconnue',
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
-                            shadows: [Shadow(color: Colors.black54, offset: Offset(1, 1), blurRadius: 2)],
+                            shadows: [
+                              Shadow(
+                                color: Colors.black54,
+                                offset: Offset(1, 1),
+                                blurRadius: 2,
+                              )
+                            ],
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          video.caption.isNotEmpty ? video.caption : 'Pas de légende',
+                          video.caption.isNotEmpty
+                              ? video.caption
+                              : 'Pas de légende',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 15,
-                            shadows: [Shadow(color: Colors.black54, offset: Offset(1, 1), blurRadius: 2)],
+                            shadows: [
+                              Shadow(
+                                color: Colors.black54,
+                                offset: Offset(1, 1),
+                                blurRadius: 2,
+                              )
+                            ],
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -233,7 +275,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> with Wi
                   icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
                   onPressed: () async {
                     await _videoManager.pauseAll(_ctxKey);
-                    await Future.delayed(const Duration(milliseconds: 100));
+                    await _videoManager.disposeAllForContext(_ctxKey);
                     if (mounted) Get.back();
                   },
                 ),
