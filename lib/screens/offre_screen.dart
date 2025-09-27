@@ -41,12 +41,12 @@ class OffreScreen extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final offre = offres[index];
                   final isOwner = currentUser?.uid == offre.recruteur.uid;
-                  final isPostulable = currentUser?.role == 'joueur' &&
-                      offre.statut == 'ouverte';
+                  final isPostulable =
+                      currentUser?.role == 'joueur' && offre.statut == 'ouverte';
 
                   return Card(
-                    margin: const EdgeInsets.symmetric(
-                        vertical: 8.0, horizontal: 8.0),
+                    margin:
+                        const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                     elevation: 5,
@@ -88,16 +88,16 @@ class OffreScreen extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: offre.statut == 'ouverte'
-                                      ? const Color.fromARGB(255, 76, 175, 129)
+                                      ? const Color.fromARGB(255, 17, 69, 45)
                                       : Colors.red,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              // ✅ Suppression du doublon ici (conservé uniquement dans action buttons)
                             ],
                           ),
                           const SizedBox(height: 8),
-                          _buildActionButtons(context, offre, isOwner, isPostulable, currentUser),
+                          _buildActionButtons(context, offre, isOwner,
+                              isPostulable, currentUser),
                         ],
                       ),
                     ),
@@ -109,10 +109,16 @@ class OffreScreen extends StatelessWidget {
     );
   }
 
+  bool _isValidPhotoUrl(String? url) {
+    if (url == null) return false;
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return false;
+    return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+  }
+
   Widget _buildRecruteurSection(BuildContext context, Offre offre) {
     final String photoUrl = offre.recruteur.photoProfil;
-    final bool isValidPhoto = photoUrl.isNotEmpty &&
-        Uri.tryParse(photoUrl)?.hasAbsolutePath == true;
+    final bool isValidPhoto = _isValidPhotoUrl(photoUrl);
 
     return Row(
       children: [
@@ -126,9 +132,10 @@ class OffreScreen extends StatelessWidget {
           child: CircleAvatar(
             radius: 25,
             backgroundColor: Colors.grey.shade200,
-            backgroundImage: NetworkImage(
-              isValidPhoto ? photoUrl : 'https://via.placeholder.com/150',
-            ),
+            backgroundImage: isValidPhoto ? NetworkImage(photoUrl) : null,
+            child: isValidPhoto
+                ? null
+                : const Icon(Icons.person, size: 24, color: Colors.white70),
           ),
         ),
         const SizedBox(width: 10),
@@ -144,6 +151,7 @@ class OffreScreen extends StatelessWidget {
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                 ),
+                overflow: TextOverflow.ellipsis,
               ),
               Text(
                 offre.recruteur.role.isNotEmpty
@@ -203,7 +211,7 @@ class OffreScreen extends StatelessWidget {
                 icon: const Icon(Icons.group, size: 16),
                 label: const Text('Voir les candidats'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color.fromARGB(255, 55, 144, 33),
+                  backgroundColor: const Color.fromARGB(255, 12, 40, 37),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -215,45 +223,37 @@ class OffreScreen extends StatelessWidget {
         else if (isPostulable)
           StatefulBuilder(
             builder: (context, setState) {
-              bool isClicked = offre.candidats
+              bool isInscrit = offre.candidats
                   .any((candidat) => candidat.uid == currentUser!.uid);
 
               return ElevatedButton(
-                onPressed: isClicked
-                    ? null
-                    : () async {
-                        await offreController.postulerOffre(
-                            currentUser!, offre);
-                        setState(() => isClicked = true);
-
-                        Get.defaultDialog(
-                          title: "Succès",
-                          middleText:
-                              "Vous avez postulé avec succès à cette offre.",
-                          textConfirm: "OK",
-                          confirmTextColor: Colors.white,
-                          onConfirm: () => Get.back(),
-                        );
-                      },
+                onPressed: () async {
+                  if (isInscrit) {
+                    await offreController
+                        .seDesinscrireOffre(currentUser!, offre);
+                  } else {
+                    await offreController.postulerOffre(currentUser!, offre);
+                  }
+                  setState(() => isInscrit = !isInscrit);
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor:
-                      isClicked ? Colors.grey : Colors.teal.shade600,
-                  disabledBackgroundColor: Colors.grey.shade400,
+                      isInscrit ? Colors.red : Colors.teal.shade600,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   elevation: 3,
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(isClicked ? Icons.check : Icons.send,
+                    Icon(isInscrit ? Icons.close : Icons.send,
                         color: Colors.white),
                     const SizedBox(width: 8),
                     Text(
-                      isClicked ? "Postulé" : "Postuler",
+                      isInscrit ? "Se désinscrire" : "Postuler",
                       style: const TextStyle(
                           color: Colors.white, fontWeight: FontWeight.bold),
                     ),
@@ -273,7 +273,7 @@ class OffreScreen extends StatelessWidget {
         onPressed: () {
           Get.to(() => OffreFormScreen());
         },
-        backgroundColor: const Color.fromARGB(255, 55, 144, 33),
+        backgroundColor: const Color.fromARGB(255, 12, 40, 37),
         foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       );
@@ -297,8 +297,7 @@ class OffreScreen extends StatelessWidget {
                   offre.id, userController.user!, offre);
               if (Get.isDialogOpen == true) Get.back();
             },
-            child:
-                const Text('Supprimer', style: TextStyle(color: Colors.red)),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -327,41 +326,78 @@ class OffreScreen extends StatelessWidget {
               style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
-                  color: Color.fromARGB(255, 55, 144, 33)),
+                  color: Color.fromARGB(255, 12, 40, 37)),
             ),
-            const SizedBox(height: 10),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: offre.candidats.map((candidat) {
+            const SizedBox(height: 12),
+            if (offre.candidats.isEmpty)
+              const Text(
+                "Aucun candidat pour l’instant",
+                style: TextStyle(color: Colors.grey),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: offre.candidats.length,
+                separatorBuilder: (_, __) => const Divider(height: 12),
+                itemBuilder: (context, index) {
+                  final candidat = offre.candidats[index];
+                  final bool valid = _isValidPhotoUrl(candidat.photoProfil);
+
                   return GestureDetector(
                     onTap: () {
                       Get.to(() => ProfileScreen(
-                          uid: candidat.uid, isReadOnly: true));
+                            uid: candidat.uid,
+                            isReadOnly: true,
+                          ));
                     },
-                    child: Column(
+                    child: Row(
                       children: [
                         CircleAvatar(
-                          radius: 30,
+                          radius: 28,
+                          backgroundColor: Colors.grey.shade200,
                           backgroundImage:
-                              NetworkImage(candidat.photoProfil),
+                              valid ? NetworkImage(candidat.photoProfil) : null,
+                          child: valid
+                              ? null
+                              : const Icon(Icons.person,
+                                  size: 28, color: Colors.white70),
                         ),
-                        const SizedBox(height: 5),
-                        Text(
-                          candidat.nom,
-                          style: const TextStyle(fontSize: 12),
-                          overflow: TextOverflow.ellipsis,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                candidat.nom.isNotEmpty
+                                    ? candidat.nom
+                                    : "Nom inconnu",
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                candidat.role.isNotEmpty
+                                    ? candidat.role
+                                    : "Rôle inconnu",
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   );
-                }).toList(),
+                },
               ),
-            ),
           ],
         ),
       ),
     );
   }
 }
-  

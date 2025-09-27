@@ -7,6 +7,7 @@ import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/event_detail_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class EventListScreen extends StatelessWidget {
   final EventController eventController = Get.put(EventController());
@@ -54,6 +55,14 @@ class EventListScreen extends StatelessWidget {
     );
   }
 
+  bool _isValidPhotoUrl(String? url) {
+    if (url == null) return false;
+    url = url.trim();
+    if (url.isEmpty) return false;
+    if (!(url.startsWith('http://') || url.startsWith('https://'))) return false;
+    return true;
+  }
+
   Widget _buildEventCard(BuildContext context, Event event, AppUser organiser, bool isParticipant, bool isOrganisateur, AppUser currentUser) {
     return Card(
       color: Colors.white,
@@ -91,14 +100,16 @@ class EventListScreen extends StatelessWidget {
           onTap: () {
             Get.to(() => ProfileScreen(uid: organiser.uid, isReadOnly: true));
           },
-          child: CircleAvatar(
-            radius: 25,
-            backgroundImage: NetworkImage(
-              organiser.photoProfil.isNotEmpty
-                  ? organiser.photoProfil
-                  : 'https://via.placeholder.com/150',
-            ),
-          ),
+          child: _isValidPhotoUrl(organiser.photoProfil)
+              ? CircleAvatar(
+                  radius: 25,
+                  backgroundImage: CachedNetworkImageProvider(organiser.photoProfil.trim()),
+                )
+              : CircleAvatar(
+                  radius: 25,
+                  backgroundColor: Colors.grey.shade300,
+                  child: const Icon(Icons.person, size: 24, color: Colors.white70),
+                ),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -185,15 +196,15 @@ class EventListScreen extends StatelessWidget {
   }
 
   Widget _buildParticipantActions(BuildContext context, Event event, AppUser currentUser, bool isParticipant) {
+    bool isDisabled = event.statut == 'Terminé' || event.statut == 'fermé';
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         ElevatedButton.icon(
-          onPressed: (isParticipant || event.statut == 'Terminé' || event.statut == 'fermé')
-              ? null
-              : () {
-                  eventController.registerToEvent(event.id, currentUser);
-                },
+          onPressed: (!isParticipant && !isDisabled)
+              ? () => eventController.registerToEvent(event.id, currentUser)
+              : null,
           icon: const Icon(Icons.event_available, color: Colors.white),
           label: const Text(
             'S\'inscrire',
@@ -202,19 +213,31 @@ class EventListScreen extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             elevation: 3,
             padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
-            backgroundColor: (isParticipant || event.statut == 'Terminé' || event.statut == 'fermé')
-                ? Colors.grey
-                : const Color(0xFF2E7D32),
+            backgroundColor: (!isParticipant && !isDisabled)
+                ? const Color(0xFF2E7D32)
+                : Colors.grey,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
           ),
         ),
-        OutlinedButton.icon(
-          onPressed: () {
-            Get.to(() => EventDetailsScreen(event: event));
-          },
-          icon: const Icon(Icons.info_outline, color: Color(0xFF2E7D32)),
-          label: const Text('Voir les détails', style: TextStyle(color: Color(0xFF2E7D32))),
-        ),
+        if (isParticipant && !isDisabled)
+          OutlinedButton.icon(
+            onPressed: () {
+              _confirmUnregisterEvent(context, event, currentUser);
+            },
+            icon: const Icon(Icons.cancel, color: Colors.red),
+            label: const Text(
+              'Se désinscrire',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          )
+        else
+          OutlinedButton.icon(
+            onPressed: () {
+              Get.to(() => EventDetailsScreen(event: event));
+            },
+            icon: const Icon(Icons.info_outline, color: Color(0xFF2E7D32)),
+            label: const Text('Voir les détails', style: TextStyle(color: Color(0xFF2E7D32))),
+          ),
       ],
     );
   }
@@ -256,6 +279,28 @@ class EventListScreen extends StatelessWidget {
     );
   }
 
+  void _confirmUnregisterEvent(BuildContext context, Event event, AppUser currentUser) {
+    Get.dialog(
+      AlertDialog(
+        title: const Text('Se désinscrire'),
+        content: const Text('Voulez-vous vraiment vous désinscrire de cet événement ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await eventController.unregisterFromEvent(event.id, currentUser);
+            },
+            child: const Text('Confirmer', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _markAsCompleted(BuildContext context, Event event) {
     event.statut = 'Terminé';
     eventController.updateEvent(event, userController.user!);
@@ -263,7 +308,6 @@ class EventListScreen extends StatelessWidget {
   }
 }
 
-/// Widget avec animation d’apparition (fade + slide up)
 class AnimatedEventCard extends StatefulWidget {
   final Widget child;
   final Duration delay;

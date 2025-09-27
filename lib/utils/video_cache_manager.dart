@@ -1,3 +1,5 @@
+// ignore_for_file: invalid_return_type_for_catch_error
+
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -7,8 +9,15 @@ import 'package:path_provider/path_provider.dart';
 class VideoCacheManager extends CacheManager {
   static const key = 'videoCache';
   static VideoCacheManager? _instance;
+
+  /// Limite max du cache en Mo
   static const int maxCacheSizeMB = 300;
+
+  /// Taille minimale à libérer lors d’un purge (Mo)
   static const int purgeBlockSizeMB = 50;
+
+  /// Empêche les purges concurrentes
+  static bool _purgeLock = false;
 
   factory VideoCacheManager() {
     return _instance ??= VideoCacheManager._internal();
@@ -19,17 +28,18 @@ class VideoCacheManager extends CacheManager {
           Config(
             key,
             stalePeriod: const Duration(days: 15),
-            maxNrOfCacheObjects: 50,
+            maxNrOfCacheObjects: 100, // on augmente légèrement
             repo: JsonCacheInfoRepository(databaseName: key),
             fileService: HttpFileService(),
-            // NB: on préfère getInstance() qui pointe vers AppSupport
             fileSystem: IOFileSystem(Directory.systemTemp.path),
           ),
         );
 
+  /// 🔧 Retourne un chemin de cache dédié aux vidéos
   static Future<String> getCacheDirectoryPath() async {
     final supportDir = await getApplicationSupportDirectory();
     final videoCacheDir = Directory('${supportDir.path}/$key');
+
     if (!await videoCacheDir.exists()) {
       await videoCacheDir.create(recursive: true);
       debugPrint('[VideoCacheManager] Created directory at ${videoCacheDir.path}');
@@ -37,6 +47,7 @@ class VideoCacheManager extends CacheManager {
     return videoCacheDir.path;
   }
 
+  /// Singleton avec chemin correct
   static Future<VideoCacheManager> getInstance() async {
     if (_instance != null) return _instance!;
     final cachePath = await getCacheDirectoryPath();
@@ -49,13 +60,14 @@ class VideoCacheManager extends CacheManager {
           Config(
             key,
             stalePeriod: const Duration(days: 15),
-            maxNrOfCacheObjects: 50,
+            maxNrOfCacheObjects: 100,
             repo: JsonCacheInfoRepository(databaseName: key),
             fileService: HttpFileService(),
             fileSystem: IOFileSystem(path),
           ),
         );
 
+  /// 🔧 Télécharge et met en cache le fichier
   @override
   Future<FileInfo> downloadFile(
     String url, {
@@ -69,6 +81,7 @@ class VideoCacheManager extends CacheManager {
     return fileInfo;
   }
 
+  /// Vérifie si une vidéo est déjà en cache
   static Future<File?> getFileIfCached(String url) async {
     try {
       final manager = await getInstance();
@@ -83,6 +96,7 @@ class VideoCacheManager extends CacheManager {
     return null;
   }
 
+  /// Taille actuelle du cache
   static Future<int> getCacheSizeInMB() async {
     try {
       final path = await getCacheDirectoryPath();
@@ -102,57 +116,67 @@ class VideoCacheManager extends CacheManager {
     }
   }
 
+  /// 🔧 Purge automatique si la taille dépasse la limite
   Future<void> _autoPurgeIfNeeded() async {
-    final cacheDirPath = await getCacheDirectoryPath();
-    final dir = Directory(cacheDirPath);
-    if (!await dir.exists()) return;
+    if (_purgeLock) return; // évite purges concurrentes
+    _purgeLock = true;
 
-    final files = <File>[];
-    await for (var entity in dir.list(recursive: true, followLinks: false)) {
-      if (entity is File) files.add(entity);
-    }
+    try {
+      final cacheDirPath = await getCacheDirectoryPath();
+      final dir = Directory(cacheDirPath);
+      if (!await dir.exists()) return;
 
-    final fileData = <File, int>{};
-    int totalSize = 0;
-    for (final file in files) {
-      try {
-        final size = await file.length();
-        fileData[file] = size;
-        totalSize += size;
-      } catch (_) {}
-    }
+      final files = <File>[];
+      await for (var entity in dir.list(recursive: true, followLinks: false)) {
+        if (entity is File) files.add(entity);
+      }
 
-    final totalMB = totalSize ~/ (1024 * 1024);
-    debugPrint('[VideoCacheManager] Cache size: $totalMB MB');
-    if (totalMB <= maxCacheSizeMB) return;
-
-    debugPrint('[VideoCacheManager] Purging cache...');
-    final sorted = fileData.entries.toList()
-      ..sort((a, b) {
-        DateTime aTime, bTime;
+      final fileData = <File, int>{};
+      int totalSize = 0;
+      for (final file in files) {
         try {
-          aTime = a.key.statSync().modified;
-        } catch (_) {
-          aTime = DateTime.fromMillisecondsSinceEpoch(0);
-        }
-        try {
-          bTime = b.key.statSync().modified;
-        } catch (_) {
-          bTime = DateTime.fromMillisecondsSinceEpoch(0);
-        }
-        return aTime.compareTo(bTime);
-      });
+          final size = await file.length();
+          fileData[file] = size;
+          totalSize += size;
+        } catch (_) {}
+      }
 
-    int freed = 0;
-    final toFreeBytes = purgeBlockSizeMB * 1024 * 1024;
-    for (final e in sorted) {
-      try {
-        await e.key.delete();
-        freed += e.value;
-        if (freed >= toFreeBytes) break;
-      } catch (_) {}
+      final totalMB = totalSize ~/ (1024 * 1024);
+      debugPrint('[VideoCacheManager] Cache size before purge: $totalMB MB');
+
+      if (totalMB <= maxCacheSizeMB) return;
+
+      debugPrint('[VideoCacheManager] Purging cache...');
+      final sorted = fileData.entries.toList()
+        ..sort((a, b) {
+          final aTime = _safeModifiedTime(a.key);
+          final bTime = _safeModifiedTime(b.key);
+          return aTime.compareTo(bTime); // plus ancien d’abord
+        });
+
+      int freed = 0;
+      final toFreeBytes = purgeBlockSizeMB * 1024 * 1024;
+      for (final e in sorted) {
+        try {
+          await e.key.delete().catchError((_) => null);
+          freed += e.value;
+          if (freed >= toFreeBytes) break;
+        } catch (_) {}
+      }
+
+      final freedMB = freed ~/ (1024 * 1024);
+      debugPrint('[VideoCacheManager] Freed $freedMB MB from cache');
+    } finally {
+      _purgeLock = false;
     }
-    final freedMB = freed ~/ (1024 * 1024);
-    debugPrint('[VideoCacheManager] Freed $freedMB MB from cache');
+  }
+
+  /// 🔧 Récupère la date de dernière modif en toute sécurité
+  DateTime _safeModifiedTime(File f) {
+    try {
+      return f.statSync().modified;
+    } catch (_) {
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
   }
 }

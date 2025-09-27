@@ -348,8 +348,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         otherUserId: user.uid,
       );
       if (conversationId.isNotEmpty) {
-        Get.to(() =>
-            ChatScreen(conversationId: conversationId, otherUser: user));
+        Get.to(
+            () => ChatScreen(conversationId: conversationId, otherUser: user));
       }
     } catch (e) {
       Get.snackbar('Erreur', 'Impossible d’envoyer un message : $e',
@@ -380,26 +380,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () async {
               try {
                 if (isFollowing) {
-                  await _followController.unfollowUser(
-                      currentUserId, user.uid);
+                  await _followController.unfollowUser(currentUserId, user.uid);
                   user.followersList.remove(currentUserId);
                 } else {
-                  await _followController.followUser(
-                      currentUserId, user.uid);
+                  await _followController.followUser(currentUserId, user.uid);
                   user.followersList.add(currentUserId);
                 }
                 _profileController.update();
               } catch (e) {
-                Get.snackbar(
-                    'Erreur', 'Une erreur s\'est produite lors de l\'opération : $e',
+                Get.snackbar('Erreur',
+                    'Une erreur s\'est produite lors de l\'opération : $e',
                     backgroundColor: kDanger, colorText: Colors.white);
               }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: isFollowing ? kDanger : kAccent,
               foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -418,8 +415,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: kPrimary,
               foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -473,8 +469,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       case 'recruteur':
         tiles = [
           _infoTile('Entreprise', user.entreprise),
-          _infoTile('Nombre de recrutements',
-              user.nombreDeRecrutements?.toString()),
+          _infoTile(
+              'Nombre de recrutements', user.nombreDeRecrutements?.toString()),
         ];
         break;
       default:
@@ -737,8 +733,8 @@ class _VideoTile extends StatelessWidget {
             const Positioned(
               right: 6,
               bottom: 6,
-              child: Icon(Icons.play_circle_fill,
-                  color: Colors.white70, size: 24),
+              child:
+                  Icon(Icons.play_circle_fill, color: Colors.white70, size: 24),
             ),
           ],
         ),
@@ -808,8 +804,7 @@ class _SectionHeader extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 16,
-          backgroundColor:
-              _ProfileScreenState.kPrimary.withValues(alpha: 0.08),
+          backgroundColor: _ProfileScreenState.kPrimary.withValues(alpha: 0.08),
           child: Icon(
             icon,
             color: _ProfileScreenState.kPrimary,

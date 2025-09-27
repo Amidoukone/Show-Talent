@@ -5,3 +5,6 @@
 # Xcode-related
 **/dgph
 **/xcuserdata/
+
+# Ignorer le fichier Firebase service worker
+web/firebase-messaging-sw.js
