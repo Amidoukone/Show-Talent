@@ -169,4 +169,33 @@ class OffreController extends GetxController {
       Get.snackbar('Erreur', 'Impossible de postuler : $e');
     }
   }
+
+  /// Permettre aux joueurs de se désinscrire d'une offre
+  Future<void> seDesinscrireOffre(AppUser joueur, Offre offre) async {
+    if (joueur.role != 'joueur') {
+      Get.snackbar('Accès refusé', 'Seuls les joueurs peuvent se désinscrire.');
+      return;
+    }
+
+    bool estCandidat = offre.candidats.any((c) => c.uid == joueur.uid);
+    if (!estCandidat) {
+      Get.snackbar('Non inscrit', 'Vous n\'êtes pas inscrit à cette offre.');
+      return;
+    }
+
+    try {
+      final candidats = offre.candidats
+          .where((c) => c.uid != joueur.uid)
+          .toList();
+
+      await _firestore.collection('offres').doc(offre.id).update({
+        'candidats': candidats.map((c) => c.toMap()).toList(),
+      });
+
+      Get.snackbar('Désinscription réussie', 'Vous vous êtes désinscrit de l\'offre.');
+    } catch (e) {
+      print('Erreur lors de la désinscription : $e');
+      Get.snackbar('Erreur', 'Impossible de se désinscrire : $e');
+    }
+  }
 }

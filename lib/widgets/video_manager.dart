@@ -19,8 +19,12 @@ class VideoManager {
   final Map<String, Map<String, Future<CachedVideoPlayerPlus>>> _initFuturesByContext = {};
   final Map<String, Map<String, VideoLoadState>> _loadStatesByContext = {};
 
-  // Configurable LRU cache size
-  final int _maxActive = 15;
+  /// 🔧 LRU stricte
+  final int _maxActive = 8;
+
+  /// 🔧 Limite du nombre d’inits simultanées
+  int _activeInits = 0;
+  final int _maxConcurrentInits = 3;
 
   Future<CachedVideoPlayerPlus> initializeController(
     String contextKey,
@@ -36,11 +40,12 @@ class VideoManager {
     final futures = _initFuturesByContext[contextKey]!;
     final lru = _lruByContext[contextKey]!;
 
+    // ✅ Déjà en cache et valide
     if (lru.containsKey(url)) {
       final existing = lru.remove(url)!;
       final cv = existing.controller.value;
       if (cv.isInitialized && !cv.hasError) {
-        lru[url] = existing;
+        lru[url] = existing; // remet en fin de LRU
         await _enforceLimit(contextKey, activeUrl: activeUrl);
         _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
         if (autoPlay && !cv.isPlaying) await existing.controller.play().catchError((_) {});
@@ -50,6 +55,7 @@ class VideoManager {
       lru.remove(url);
     }
 
+    // ✅ Init déjà en cours
     if (futures.containsKey(url)) {
       try {
         final player = await futures[url]!;
@@ -66,6 +72,7 @@ class VideoManager {
       lru.remove(url);
     }
 
+    // ✅ Nouvelle init contrôlée par sémaphore
     Future<CachedVideoPlayerPlus> loadVideo() async {
       final stopwatch = Stopwatch()..start();
       File? file;
@@ -77,7 +84,12 @@ class VideoManager {
           player = CachedVideoPlayerPlus.networkUrl(Uri.parse(url));
         } else {
           file = await VideoCacheManager.getFileIfCached(url);
-          file ??= await _downloadVideo(url);
+
+          // retry si cache corrompu
+          if (file == null || !(await file.exists())) {
+            file = await _downloadVideo(url, force: true);
+          }
+
           if (!await file.exists()) throw Exception("Fichier introuvable : $url");
           player = CachedVideoPlayerPlus.file(file);
         }
@@ -89,7 +101,7 @@ class VideoManager {
 
         final v = player.controller.value;
         if (!v.isInitialized || v.hasError) {
-          if (!kIsWeb && file != null) file.delete().catchError((_) {});
+          if (!kIsWeb && file != null) unawaited(file.delete().catchError((_) {}));
           throw Exception("Init error : $url");
         }
 
@@ -97,22 +109,31 @@ class VideoManager {
         lru[url] = player;
         await _enforceLimit(contextKey, activeUrl: activeUrl);
         _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
-        if (autoPlay && !player.controller.value.isPlaying) await player.controller.play().catchError((_) {});
+
+        if (autoPlay && !player.controller.value.isPlaying) {
+          await player.controller.play().catchError((_) {});
+        }
 
         stopwatch.stop();
-        debugPrint("[VideoManager] Initialization for $url took ${stopwatch.elapsedMilliseconds}ms");
-
+        debugPrint("[VideoManager] Init $url in ${stopwatch.elapsedMilliseconds}ms");
         return player;
       } catch (e, st) {
-        debugPrint("❌ Video init error for $url: $e\n$st");
+        debugPrint("❌ Video init error $url: $e\n$st");
         _loadStatesByContext[contextKey]![url] = VideoLoadState.errorSource;
         lru.remove(url);
         return Future.error(e);
       }
     }
 
-    final future = loadVideo();
+    // ✅ Gestion sémaphore
+    while (_activeInits >= _maxConcurrentInits) {
+      await Future.delayed(const Duration(milliseconds: 80));
+    }
+
+    _activeInits++;
+    final future = loadVideo().whenComplete(() => _activeInits--);
     futures[url] = future;
+
     try {
       final result = await future;
       futures.remove(url);
@@ -125,9 +146,17 @@ class VideoManager {
     }
   }
 
-  Future<File> _downloadVideo(String url) async {
+  Future<File> _downloadVideo(String url, {bool force = false}) async {
     final conn = await Connectivity().checkConnectivity();
     if (conn == ConnectivityResult.none) throw Exception("No internet : $url");
+
+    if (force) {
+      final cached = await VideoCacheManager.getFileIfCached(url);
+      if (cached != null && await cached.exists()) {
+        await cached.delete().catchError((_) {});
+      }
+    }
+
     final info = await VideoCacheManager.getInstance().then((m) => m.downloadFile(url));
     return info.file;
   }
@@ -139,7 +168,6 @@ class VideoManager {
       if (oldestKey.isEmpty) break;
       final player = lru.remove(oldestKey)!;
       await safePause(player);
-      await Future.delayed(const Duration(milliseconds: 40));
       await safeDispose(player);
       _initFuturesByContext[contextKey]?.remove(oldestKey);
       _loadStatesByContext[contextKey]?.remove(oldestKey);
@@ -175,7 +203,6 @@ class VideoManager {
     if (lru != null) {
       for (final player in lru.values) {
         await safePause(player);
-        await Future.delayed(const Duration(milliseconds: 40));
         await safeDispose(player);
       }
     }
@@ -190,7 +217,6 @@ class VideoManager {
       final player = lru.remove(url);
       if (player != null) {
         await safePause(player);
-        await Future.delayed(const Duration(milliseconds: 40));
         await safeDispose(player);
         debugPrint("[VideoManager] Disposed URL: $url");
       }
@@ -221,8 +247,12 @@ class VideoManager {
     if (conn == ConnectivityResult.wifi || conn == ConnectivityResult.ethernet) radius = 2;
 
     for (int i = 1; i <= radius; i++) {
-      if (index - i >= 0) unawaited(initializeController(contextKey, urls[index - i], isPreload: true, activeUrl: activeUrl));
-      if (index + i < urls.length) unawaited(initializeController(contextKey, urls[index + i], isPreload: true, activeUrl: activeUrl));
+      if (index - i >= 0) {
+        unawaited(initializeController(contextKey, urls[index - i], isPreload: true, activeUrl: activeUrl));
+      }
+      if (index + i < urls.length) {
+        unawaited(initializeController(contextKey, urls[index + i], isPreload: true, activeUrl: activeUrl));
+      }
     }
   }
 

@@ -1,5 +1,3 @@
-
-
 import 'dart:async';
 import 'dart:io';
 
@@ -35,9 +33,11 @@ class UploadVideoController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((resultList) {
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen((resultList) {
       final result = resultList.firstOrNull;
-      _internetAvailable = result != null && result != ConnectivityResult.none;
+      _internetAvailable =
+          result != null && result != ConnectivityResult.none;
     });
   }
 
@@ -50,7 +50,7 @@ class UploadVideoController extends GetxController {
 
   Future<bool> _checkRealInternetAccess() async {
     try {
-      final result = await InternetAddress.lookup('example.com');
+      final result = await InternetAddress.lookup('google.com');
       return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
     } catch (_) {
       return false;
@@ -67,16 +67,16 @@ class UploadVideoController extends GetxController {
       uploadProgress.value = 0.02;
       originalVideoPath = videoPath;
 
-      final isValidDuration = await VideoTools.isDurationValid(videoPath, maxDuration: 62);
-      final isValidQuality = await VideoTools.isQualityAcceptable(videoPath);
+      final isValidDuration =
+          await VideoTools.isDurationValid(videoPath, maxDuration: 62);
+      final isValidQuality =
+          await VideoTools.isQualityAcceptable(videoPath);
 
       if (!isValidDuration || !isValidQuality) {
         if (Get.isDialogOpen == true) Get.back();
-        showErrorToast(
-          !isValidDuration
-              ? 'La durée dépasse 60 secondes.'
-              : 'Qualité vidéo insuffisante (minimum 480×360).',
-        );
+        showErrorToast(!isValidDuration
+            ? 'La durée dépasse 60 secondes.'
+            : 'Qualité vidéo insuffisante (minimum 480×360).');
         return false;
       }
 
@@ -126,7 +126,8 @@ class UploadVideoController extends GetxController {
 
     final videoId = const Uuid().v4();
 
-    final thumbContentType = VideoTools.inferImageContentTypeFromPath(thumbnail!.path);
+    final thumbContentType =
+        VideoTools.inferImageContentTypeFromPath(thumbnail!.path);
     final thumbExt = thumbContentType == 'image/png' ? 'png' : 'jpg';
 
     final videoPath = 'videos/$videoId.mp4';
@@ -138,10 +139,14 @@ class UploadVideoController extends GetxController {
     final user = Get.find<UserController>().user;
     final now = Timestamp.now();
 
-    final durationSec = await VideoTools.getDurationSeconds(originalVideoPath!);
+    final durationSec =
+        await VideoTools.getDurationSeconds(originalVideoPath!);
     final (w, h) = await VideoTools.getDimensions(originalVideoPath!);
 
-    await FirebaseFirestore.instance.collection('videos').doc(videoId).set({
+    await FirebaseFirestore.instance
+        .collection('videos')
+        .doc(videoId)
+        .set({
       'id': videoId,
       'videoUrl': '',
       'thumbnail': '',
@@ -168,7 +173,8 @@ class UploadVideoController extends GetxController {
       final videoUploaded = await _retryUploadFile(
         file: selectedVideo!,
         storageRef: videoRef,
-        onProgress: (p) => uploadProgress.value = 0.2 + (0.45 * p),
+        onProgress: (p) =>
+            uploadProgress.value = 0.2 + (0.45 * p),
         contentType: 'video/mp4',
       );
 
@@ -178,7 +184,8 @@ class UploadVideoController extends GetxController {
       }
 
       if (!await thumbnail!.exists() || (await thumbnail!.length()) == 0) {
-        final regenerated = await VideoTools.generateThumbnail(originalVideoPath!);
+        final regenerated =
+            await VideoTools.generateThumbnail(originalVideoPath!);
         if (regenerated != null && await regenerated.exists()) {
           thumbnail = regenerated;
         } else {
@@ -190,7 +197,8 @@ class UploadVideoController extends GetxController {
       final thumbUploaded = await _retryUploadFile(
         file: thumbnail!,
         storageRef: thumbRef,
-        onProgress: (p) => uploadProgress.value = 0.65 + (0.35 * p),
+        onProgress: (p) =>
+            uploadProgress.value = 0.65 + (0.35 * p),
         contentType: thumbContentType,
       );
 
@@ -199,7 +207,10 @@ class UploadVideoController extends GetxController {
         throw 'Échec upload miniature';
       }
 
-      await FirebaseFirestore.instance.collection('videos').doc(videoId).update({
+      await FirebaseFirestore.instance
+          .collection('videos')
+          .doc(videoId)
+          .update({
         'storagePath': videoPath,
         'thumbnailPath': thumbPath,
         'updatedAt': Timestamp.now(),
@@ -222,19 +233,17 @@ class UploadVideoController extends GetxController {
   }
 
   Future<void> _cleanupLocalFiles() async {
-    try {
-      if (selectedVideo != null &&
-          selectedVideo!.path != originalVideoPath &&
-          await selectedVideo!.exists()) {
-        await selectedVideo!.delete();
-      }
-      if (thumbnail != null && await thumbnail!.exists()) {
-        await thumbnail!.delete();
-      }
-    } catch (_) {}
+    for (final f in [selectedVideo, thumbnail]) {
+      try {
+        if (f != null && await f.exists()) {
+          await f.delete();
+        }
+      } catch (_) {}
+    }
   }
 
-  Future<void> _deletePartialUpload(String videoPath, String thumbPath) async {
+  Future<void> _deletePartialUpload(
+      String videoPath, String thumbPath) async {
     try {
       final videoRef = FirebaseStorage.instance.ref(videoPath);
       final thumbRef = FirebaseStorage.instance.ref(thumbPath);
@@ -253,9 +262,10 @@ class UploadVideoController extends GetxController {
   }) async {
     try {
       final meta = SettableMetadata(
-        contentType: contentType ?? (file.path.toLowerCase().endsWith('.mp4')
-            ? 'video/mp4'
-            : VideoTools.inferImageContentTypeFromPath(file.path)),
+        contentType: contentType ??
+            (file.path.toLowerCase().endsWith('.mp4')
+                ? 'video/mp4'
+                : VideoTools.inferImageContentTypeFromPath(file.path)),
         cacheControl: 'public,max-age=86400',
       );
 
@@ -265,20 +275,28 @@ class UploadVideoController extends GetxController {
       final completer = Completer<bool>();
 
       uploadTask.snapshotEvents.listen((snapshot) async {
-        if (snapshot.state == TaskState.running) {
-          final total = snapshot.totalBytes;
-          final sent = snapshot.bytesTransferred;
-          final progress = total > 0 ? sent / total : 0.0;
-          onProgress(progress);
-          _handleNetworkLossDuringUpload();
-        } else if (snapshot.state == TaskState.success) {
-          completer.complete(true);
-        } else if (snapshot.state == TaskState.error) {
-          completer.complete(false);
+        switch (snapshot.state) {
+          case TaskState.running:
+            final total = snapshot.totalBytes;
+            final sent = snapshot.bytesTransferred;
+            final progress = total > 0 ? sent / total : 0.0;
+            onProgress(progress);
+            _handleNetworkLossDuringUpload();
+            break;
+          case TaskState.success:
+            completer.complete(true);
+            break;
+          case TaskState.error:
+          case TaskState.canceled:
+            completer.complete(false);
+            break;
+          default:
+            break;
         }
       }, onError: (_) => completer.complete(false));
 
-      return await completer.future.timeout(const Duration(minutes: 3), onTimeout: () => false);
+      return await completer.future
+          .timeout(const Duration(minutes: 5), onTimeout: () => false);
     } catch (_) {
       return false;
     }
@@ -299,7 +317,7 @@ class UploadVideoController extends GetxController {
         contentType: contentType,
       );
       if (success) return true;
-      await Future.delayed(Duration(seconds: 1 + attempt));
+      await Future.delayed(Duration(seconds: 1 << attempt)); // backoff 1s,2s,4s
     }
     return false;
   }
@@ -322,7 +340,8 @@ class UploadVideoController extends GetxController {
 
   Future<void> _waitForVideoStatusReady(String videoId) async {
     final completer = Completer<void>();
-    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? subscription;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+        subscription;
     Timer? fallbackTimer;
 
     if (!(Get.isDialogOpen ?? false)) {
@@ -348,8 +367,12 @@ class UploadVideoController extends GetxController {
       completer.complete();
     }
 
-    fallbackTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
-      final doc = await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
+    fallbackTimer =
+        Timer.periodic(const Duration(seconds: 10), (_) async {
+      final doc = await FirebaseFirestore.instance
+          .collection('videos')
+          .doc(videoId)
+          .get();
       final data = doc.data();
       if (data?['status'] == 'ready' && data?['optimized'] == true) {
         await subscription?.cancel();
@@ -358,7 +381,11 @@ class UploadVideoController extends GetxController {
       }
     });
 
-    subscription = FirebaseFirestore.instance.collection('videos').doc(videoId).snapshots().listen((doc) async {
+    subscription = FirebaseFirestore.instance
+        .collection('videos')
+        .doc(videoId)
+        .snapshots()
+        .listen((doc) async {
       final status = doc.data()?['status'];
       final optimized = doc.data()?['optimized'] ?? false;
 
@@ -376,7 +403,8 @@ class UploadVideoController extends GetxController {
         if (Get.isDialogOpen ?? false) Get.back();
         isOptimizing(false);
 
-        showInfoToast('Votre vidéo est en cours d’optimisation. Elle sera visible sous peu.');
+        showInfoToast(
+            'Votre vidéo est en cours d’optimisation. Elle sera visible sous peu.');
         await Future.delayed(const Duration(milliseconds: 200));
         Get.offAllNamed('/main', arguments: {'tab': 0, 'refresh': true});
 

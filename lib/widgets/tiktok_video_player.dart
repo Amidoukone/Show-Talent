@@ -38,19 +38,21 @@ class TiktokVideoPlayer extends StatelessWidget {
     final bool hasErr = (value?.hasError ?? false) || (errorMessage != null);
     final bool showLoader = isLoading || isBuffering || !inited;
 
-    return Semantics(
-      label: 'Lecteur vidéo',
-      liveRegion: true,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Couche contenu principal (vidéo/thumbnail/loader)
-          _buildContentLayer(inited: inited, hasErr: hasErr, showLoader: showLoader),
-          // Icône Play/Pause (optionnelle)
-          if (_shouldShowPlayPause(inited)) _buildPlayPauseButton(),
-          // Barre de progression (optionnelle)
-          if (_shouldShowProgressBar(inited)) _buildProgressBar(),
-        ],
+    return RepaintBoundary(
+      child: Semantics(
+        label: 'Lecteur vidéo',
+        liveRegion: true,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Couche vidéo / thumbnail / loader
+            _buildContentLayer(inited: inited, hasErr: hasErr, showLoader: showLoader),
+            // Icône Play/Pause
+            if (_shouldShowPlayPause(inited)) _buildPlayPauseButton(),
+            // Barre de progression améliorée
+            if (_shouldShowProgressBar(inited)) _buildProgressBarOverlay(),
+          ],
+        ),
       ),
     );
   }
@@ -67,17 +69,17 @@ class TiktokVideoPlayer extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Thumbnail visible tant qu'on n'a pas rendu la 1re frame
         _buildThumbnail(fadeOut: inited && hasFirstFrame),
-        // Vidéo une fois initialisée
         if (inited) _buildVideoPlayer(),
-        // Loader centré si nécessaire
         if (showLoader)
           const Center(
             child: SizedBox(
               width: 36,
               height: 36,
-              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+              child: CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2.5,
+              ),
             ),
           ),
       ],
@@ -98,10 +100,12 @@ class TiktokVideoPlayer extends StatelessWidget {
           fit: BoxFit.cover,
           gaplessPlayback: true,
           filterQuality: FilterQuality.low,
-          loadingBuilder: (_, child, loadingProgress) =>
-              loadingProgress == null
-                  ? child
-                  : const Center(child: CircularProgressIndicator(color: Colors.white)),
+          loadingBuilder: (_, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          },
           errorBuilder: (_, __, ___) => const Center(
             child: Icon(Icons.broken_image, size: 60, color: Colors.white),
           ),
@@ -113,14 +117,15 @@ class TiktokVideoPlayer extends StatelessWidget {
   // ------ VIDEO ------
 
   Widget _buildVideoPlayer() {
-    final value = controller!.value;
+    final value = controller?.value;
 
-    // Sécurités : si l’état n’est pas bon, on laisse le thumbnail
-    if (value.hasError || !value.isInitialized) {
+    if (value == null || value.hasError || !value.isInitialized) {
       return _buildThumbnail(fadeOut: false);
     }
 
-    // Rendu "cover" propre : on clippe pour éviter tout débordement
+    final double width = (value.size.width > 0) ? value.size.width : 9;
+    final double height = (value.size.height > 0) ? value.size.height : 16;
+
     return GestureDetector(
       onTap: showControls ? onTogglePlayPause : null,
       behavior: HitTestBehavior.opaque,
@@ -128,9 +133,8 @@ class TiktokVideoPlayer extends StatelessWidget {
         child: FittedBox(
           fit: BoxFit.cover,
           child: SizedBox(
-            // Valeurs fallback très sûres si le player n'a pas encore mesuré
-            width: (value.size.width == 0) ? 9 : value.size.width,
-            height: (value.size.height == 0) ? 16 : value.size.height,
+            width: width,
+            height: height,
             child: VideoPlayer(controller!),
           ),
         ),
@@ -150,7 +154,7 @@ class TiktokVideoPlayer extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.35),
+              color: Colors.black.withOpacity(0.4),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -190,23 +194,26 @@ class TiktokVideoPlayer extends StatelessWidget {
     return IgnorePointer(
       ignoring: !showControls,
       child: Center(
-        child: AnimatedOpacity(
-          opacity: (showControls && !hidePlayPauseIcon) ? 1.0 : 0.0,
-          duration: const Duration(milliseconds: 120),
-          child: IconButton(
-            iconSize: 64,
-            icon: Icon(
-              isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
-              color: Colors.white.withOpacity(0.9),
-            ),
-            onPressed: onTogglePlayPause,
-          ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: (showControls && !hidePlayPauseIcon)
+              ? IconButton(
+                  key: ValueKey(isPlaying),
+                  iconSize: 64,
+                  icon: Icon(
+                    isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                  onPressed: onTogglePlayPause,
+                )
+              : const SizedBox.shrink(),
         ),
       ),
     );
   }
 
-  Widget _buildProgressBar() {
+  /// ✅ Progress bar avec fond semi-transparent (effet premium Facebook/TikTok)
+  Widget _buildProgressBarOverlay() {
     final ctrl = controller;
     if (ctrl == null) return const SizedBox.shrink();
 
@@ -214,17 +221,20 @@ class TiktokVideoPlayer extends StatelessWidget {
       bottom: 0,
       left: 0,
       right: 0,
-      child: IgnorePointer(
-        ignoring: !showControls, // scrubbing uniquement si contrôles visibles
-        child: VideoProgressIndicator(
-          ctrl,
-          allowScrubbing: showControls,
-          colors: const VideoProgressColors(
-            playedColor: Colors.green,
-            bufferedColor: Colors.white38,
-            backgroundColor: Colors.white24,
+      child: Container(
+        color: Colors.black.withOpacity(0.25), // fond léger pour lisibilité
+        child: Opacity(
+          opacity: 0.7, // progress bar semi-transparente
+          child: VideoProgressIndicator(
+            ctrl,
+            allowScrubbing: showControls,
+            colors: const VideoProgressColors(
+              playedColor: Colors.greenAccent,
+              bufferedColor: Colors.white54,
+              backgroundColor: Colors.white30,
+            ),
+            padding: EdgeInsets.zero, // ✅ collé au bas
           ),
-          padding: const EdgeInsets.only(bottom: 4),
         ),
       ),
     );
@@ -233,12 +243,10 @@ class TiktokVideoPlayer extends StatelessWidget {
   // ------ CONDITIONS D’AFFICHAGE ------
 
   bool _shouldShowPlayPause(bool inited) {
-    // Affiche l'icône si contrôles visibles + player initialisé
     return showControls && !hidePlayPauseIcon && inited;
   }
 
   bool _shouldShowProgressBar(bool inited) {
-    // Barre uniquement si initialisé, en lecture et pas en buffering
     return showProgressBar && inited && isPlaying && !isBuffering;
   }
 }
