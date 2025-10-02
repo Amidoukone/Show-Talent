@@ -1,3 +1,4 @@
+// lib/screens/signup_screen.dart
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/verify_email_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -5,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../services/verify_email_throttle.dart';
+import '../utils/auth_error_mapper.dart';
 import '../theme/ad_colors.dart';
 import '../widgets/ad_text_field.dart';
 import '../widgets/ad_button.dart';
@@ -31,7 +34,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
   static const _roles = ['joueur', 'club', 'recruteur', 'fan'];
 
   static final ActionCodeSettings _acs = ActionCodeSettings(
-    url: 'https://adfoot.org/verify',
+    url: 'https://adfoot.org/verify', // 👉 route /verify (main.dart) -> VerifyEmailScreen
     handleCodeInApp: false,
   );
 
@@ -84,9 +87,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       // 2) Affichage du nom (Auth)
-      await user.updateDisplayName(nom);
+      if (nom.isNotEmpty) {
+        await user.updateDisplayName(nom);
+      }
 
-      // 3) Création du profil Firestore
+      // 3) Création/merge du profil Firestore (idempotent)
       final now = DateTime.now();
       final appUser = AppUser(
         uid: user.uid,
@@ -126,17 +131,23 @@ class _SignUpScreenState extends State<SignUpScreen> {
         followingsList: const [],
       );
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(appUser.toMap());
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set(appUser.toMap(), SetOptions(merge: true));
 
-      // 4) Email de vérification
+      // 4) Email de vérification (avec seed du throttle)
       bool sent = false;
       int? sentAtMs;
       try {
         await user.sendEmailVerification(_acs);
         sent = true;
         sentAtMs = DateTime.now().millisecondsSinceEpoch;
+        // Seed + start throttle pour éviter un renvoi immédiat
+        VerifyEmailThrottle.lastSentAt = DateTime.fromMillisecondsSinceEpoch(sentAtMs);
+        VerifyEmailThrottle.markSentNow();
       } on FirebaseAuthException catch (e) {
-        // Infos seulement; on n’empêche pas d’aller à l’écran de vérification
+        // Infos seulement; on n’empêche pas d’aller à l’écran de vérif
         debugPrint('sendEmailVerification error: ${e.code} - ${e.message}');
         _showSnackbar(
           'Attention',
@@ -159,7 +170,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         AdColors.success,
       );
 
-      // 7) Navigation vers VerifyEmailScreen (comme avant), avec arguments de cooldown
+      // 7) Navigation vers VerifyEmailScreen (unifiée), avec arguments de cooldown
       Get.offAll(
         () => const VerifyEmailScreen(),
         arguments: {
@@ -168,16 +179,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
         },
       );
     } on FirebaseAuthException catch (e) {
-      final err = switch (e.code) {
-        'email-already-in-use' => 'Email déjà utilisé.',
-        'weak-password' => 'Mot de passe trop court.',
-        'invalid-email' => 'Email invalide.',
-        'operation-not-allowed' => 'Inscription par e-mail désactivée.',
-        _ => e.message ?? 'Erreur. Réessaye.'
-      };
-      _showSnackbar('Erreur', err, AdColors.error);
+      _showSnackbar('Erreur', AuthErrorMapper.toMessage(e), AdColors.error);
     } catch (e) {
-      _showSnackbar('Erreur', e.toString(), AdColors.error);
+      _showSnackbar('Erreur', 'Une erreur inattendue s’est produite. Réessayez.', AdColors.error);
+      debugPrint('SignUp unexpected error: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

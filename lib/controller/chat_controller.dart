@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // ✅ on écoute l’auth directement
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:adfoot/controller/push_notification.dart';
 import 'package:adfoot/models/message_converstion.dart';
 import 'package:adfoot/controller/auth_controller.dart';
@@ -16,24 +16,26 @@ class ChatController extends GetxController {
   final Rx<List<Conversation>> _conversations = Rx<List<Conversation>>([]);
   List<Conversation> get conversations => _conversations.value;
 
-  // Subscriptions pour gérer proprement les (re)écoutes
+  final RxInt _totalUnread = 0.obs;
+  int get totalUnread => _totalUnread.value;
+
   StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _convSub;
 
   @override
   void onInit() {
     super.onInit();
-    // ✅ Écouter l’auth pour binder les conversations quand un user est prêt
+    // 🔗 écoute login/logout
     _authSub = _auth.authStateChanges().listen((user) {
       if (user == null) {
         _unbindConversations();
         _conversations.value = [];
+        _totalUnread.value = 0;
         return;
       }
       _bindConversationsFor(user.uid);
     });
 
-    // Cold start: si déjà connecté (ex: token restauré), on force un bind
     final uid = AuthController.instance.currentUid ?? _auth.currentUser?.uid;
     if (uid != null) {
       _bindConversationsFor(uid);
@@ -47,20 +49,19 @@ class ChatController extends GetxController {
     super.onClose();
   }
 
-  /// Appel manuel si besoin (re-binde sur l’UID actuel)
   void refreshConversations() {
     final uid = AuthController.instance.currentUid ?? _auth.currentUser?.uid;
     if (uid == null) {
       _unbindConversations();
       _conversations.value = [];
+      _totalUnread.value = 0;
       return;
     }
     _bindConversationsFor(uid);
   }
 
-  /// (Re)branche le listener Firestore pour un user donné.
   void _bindConversationsFor(String userId) {
-    _unbindConversations(); // évite les écoutes multiples
+    _unbindConversations();
 
     _convSub = _firestore
         .collection('conversations')
@@ -70,32 +71,35 @@ class ChatController extends GetxController {
       try {
         final items = await Future.wait(snapshot.docs.map((doc) async {
           final data = doc.data();
-          data['id'] = doc.id; // ✅ injecter l'id du doc
+          data['id'] = doc.id;
           final conv = Conversation.fromMap(data);
-
-          // Non lus (pour badger)
-          conv.unreadMessagesCount = await _getUnreadMessageCount(doc.id, userId);
+          conv.unreadMessagesCount =
+              await _getUnreadMessageCount(doc.id, userId);
           return conv;
         }).toList());
 
         _conversations.value = items;
+        _recalculateTotalUnread();
       } catch (e) {
-        // ignore: avoid_print
         print("Erreur lors du chargement des conversations : $e");
       }
     }, onError: (e) {
-      // ignore: avoid_print
       print("Erreur écoute conversations : $e");
     });
   }
 
-  /// Annule l’écoute Firestore des conversations
   void _unbindConversations() {
     _convSub?.cancel();
     _convSub = null;
   }
 
-  /// Compte les messages non lus pour un utilisateur dans une conversation
+  /// 🔄 recalcul du total non-lu
+  void _recalculateTotalUnread() {
+    final total = _conversations.value.fold<int>(
+        0, (sum, c) => sum + c.unreadMessagesCount);
+    _totalUnread.value = total;
+  }
+
   Future<int> _getUnreadMessageCount(String conversationId, String userId) async {
     try {
       final snapshot = await _firestore
@@ -107,13 +111,11 @@ class ChatController extends GetxController {
           .get();
       return snapshot.docs.length;
     } catch (e) {
-      // ignore: avoid_print
       print("Erreur lors du comptage des messages non lus : $e");
       return 0;
     }
   }
 
-  /// Créer ou récupérer une conversation existante (1-1)
   Future<String> createOrGetConversation({
     required String currentUserId,
     required String otherUserId,
@@ -142,17 +144,14 @@ class ChatController extends GetxController {
       await conversationRef.set(newConversation.toMap());
       return conversationRef.id;
     } catch (e) {
-      // ignore: avoid_print
-      print("Erreur lors de la création/récupération de la conversation : $e");
+      print("Erreur création conversation : $e");
       rethrow;
     }
   }
 
-  /// Récupérer les messages d'une conversation
   Stream<List<Message>> getMessages(String conversationId) {
     if (conversationId.isEmpty) {
-      // ignore: avoid_print
-      print("Erreur : conversationId est vide.");
+      print("Erreur : conversationId vide");
       return const Stream.empty();
     }
 
@@ -165,13 +164,12 @@ class ChatController extends GetxController {
         .map((snapshot) {
       return snapshot.docs.map((doc) {
         final data = doc.data();
-        data['id'] = doc.id; // ✅ expose l'ID du doc dans le modèle
+        data['id'] = doc.id;
         return Message.fromMap(data);
       }).toList();
     });
   }
 
-  /// Envoi d'un message + notification si le destinataire n'est PAS en conversation active
   Future<void> sendMessage({
     required String conversationId,
     required String senderId,
@@ -194,7 +192,6 @@ class ChatController extends GetxController {
         estLu: false,
       );
 
-      // Écritures atomiques : message + meta conversation
       final batch = _firestore.batch();
       batch.set(messageRef, message.toMap());
       batch.update(
@@ -206,17 +203,13 @@ class ChatController extends GetxController {
       );
       await batch.commit();
 
-      // Vérifier la présence / activité du destinataire
       final shouldNotify = await _shouldSendNotification(
         recipientId: recipientId,
         conversationId: conversationId,
       );
 
-      if (!shouldNotify) {
-        return; // ✅ On ne notifie pas si l'autre est déjà dans cette conversation
-      }
+      if (!shouldNotify) return;
 
-      // Envoi FCM si token dispo
       final recipientDoc =
           await _firestore.collection('users').doc(recipientId).get();
       final recipientData = recipientDoc.data();
@@ -232,42 +225,35 @@ class ChatController extends GetxController {
         );
       }
     } catch (e) {
-      // ignore: avoid_print
-      print("Erreur lors de l'envoi du message : $e");
+      print("Erreur envoi message : $e");
     }
   }
 
-  /// Renvoie true si on DOIT envoyer une notification push,
-  /// false si le destinataire est très probablement en train de discuter dans CETTE conversation.
   Future<bool> _shouldSendNotification({
     required String recipientId,
     required String conversationId,
   }) async {
     try {
       final doc = await _firestore.collection('users').doc(recipientId).get();
-      if (!doc.exists) return true; // pas d'info -> on notifie par défaut
+      if (!doc.exists) return true;
 
       final data = doc.data() ?? {};
       final activeConvId = data['activeConversationId'] as String?;
       final ts = data['activeAt'] as Timestamp?;
       final activeAt = ts?.toDate();
 
-      // Si l'utilisateur regarde justement CETTE conversation et a été actif récem­ment,
-      // on considère que la notification est inutile (discussion instantanée).
       if (activeConvId == conversationId && activeAt != null) {
         final isRecent =
             DateTime.now().difference(activeAt) <= _activeWindowTolerance;
-        if (isRecent) return false;
+        return !isRecent;
       }
 
       return true;
     } catch (_) {
-      // En cas d'erreur de lecture, on préfère notifier pour ne pas rater un push important.
       return true;
     }
   }
 
-  /// Marquer un message comme lu
   Future<void> markMessageAsRead({
     required String conversationId,
     required String messageId,
@@ -280,12 +266,10 @@ class ChatController extends GetxController {
           .doc(messageId)
           .update({'estLu': true});
     } catch (e) {
-      // ignore: avoid_print
-      print("Erreur lors de la mise à jour du message : $e");
+      print("Erreur mise à jour message lu : $e");
     }
   }
 
-  /// Marquer tous les messages non lus comme lus (pour un destinataire)
   Future<void> markMessagesAsRead(String conversationId, String userId) async {
     try {
       final unreadMessages = await _firestore
@@ -296,16 +280,62 @@ class ChatController extends GetxController {
           .where('estLu', isEqualTo: false)
           .get();
 
+      final batch = _firestore.batch();
       for (var doc in unreadMessages.docs) {
-        await doc.reference.update({'estLu': true});
+        batch.update(doc.reference, {'estLu': true});
+      }
+      await batch.commit();
+
+      // MAJ locale
+      final index = _conversations.value.indexWhere((c) => c.id == conversationId);
+      if (index != -1) {
+        _conversations.value[index].unreadMessagesCount = 0;
+        _recalculateTotalUnread();
       }
     } catch (e) {
-      // ignore: avoid_print
-      print("Erreur lors de la mise à jour des messages lus : $e");
+      print("Erreur mise à jour messages lus : $e");
     }
   }
 
-  /// Supprimer un message
+  /// ✅ NOUVEAU — marque toutes les conversations comme lues instantanément côté local
+  void markAllAsReadLocal() {
+    for (var conv in _conversations.value) {
+      conv.unreadMessagesCount = 0;
+    }
+    _recalculateTotalUnread();
+    _conversations.refresh(); // force l’UI à se rafraîchir (badge disparaît)
+    // Optionnel : lancer la mise à jour Firestore en arrière-plan
+    Future.microtask(() => markAllAsReadOnServer());
+  }
+
+  /// ✅ NOUVEAU — synchronise toutes les conversations côté serveur
+  Future<void> markAllAsReadOnServer() async {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) return;
+
+    for (var conv in _conversations.value) {
+      try {
+        final unreadMessages = await _firestore
+            .collection('conversations')
+            .doc(conv.id)
+            .collection('messages')
+            .where('destinataireId', isEqualTo: userId)
+            .where('estLu', isEqualTo: false)
+            .get();
+
+        if (unreadMessages.docs.isEmpty) continue;
+
+        final batch = _firestore.batch();
+        for (var doc in unreadMessages.docs) {
+          batch.update(doc.reference, {'estLu': true});
+        }
+        await batch.commit();
+      } catch (e) {
+        print("Erreur markAllAsReadOnServer conv ${conv.id} : $e");
+      }
+    }
+  }
+
   Future<void> deleteMessage(String conversationId, String messageId) async {
     try {
       await _firestore
@@ -314,13 +344,23 @@ class ChatController extends GetxController {
           .collection('messages')
           .doc(messageId)
           .delete();
+
+      final currentUid = _auth.currentUser?.uid;
+      if (currentUid != null) {
+        final remaining =
+            await _getUnreadMessageCount(conversationId, currentUid);
+        final index =
+            _conversations.value.indexWhere((c) => c.id == conversationId);
+        if (index != -1) {
+          _conversations.value[index].unreadMessagesCount = remaining;
+          _recalculateTotalUnread();
+        }
+      }
     } catch (e) {
-      // ignore: avoid_print
-      print("Erreur lors de la suppression du message : $e");
+      print("Erreur suppression message : $e");
     }
   }
 
-  /// Supprimer une conversation entière
   Future<void> deleteConversation(String conversationId) async {
     try {
       final snapshot = await _firestore
@@ -329,14 +369,15 @@ class ChatController extends GetxController {
           .collection('messages')
           .get();
 
+      final batch = _firestore.batch();
       for (var doc in snapshot.docs) {
-        await doc.reference.delete();
+        batch.delete(doc.reference);
       }
 
-      await _firestore.collection('conversations').doc(conversationId).delete();
+      batch.delete(_firestore.collection('conversations').doc(conversationId));
+      await batch.commit();
     } catch (e) {
-      // ignore: avoid_print
-      print("Erreur lors de la suppression de la conversation : $e");
+      print("Erreur suppression conversation : $e");
     }
   }
 }

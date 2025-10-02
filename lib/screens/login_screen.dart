@@ -13,6 +13,7 @@ import 'package:get/get.dart';
 import '../theme/ad_colors.dart';
 import '../widgets/ad_text_field.dart';
 import '../widgets/ad_button.dart';
+import '../utils/auth_error_mapper.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,10 +39,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
-    // Ferme le clavier
-    FocusScope.of(context).unfocus();
+    FocusScope.of(context).unfocus(); // Ferme le clavier
 
-    // Validation formulaire
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
@@ -57,30 +56,30 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final user = userCred.user;
       if (user != null) {
-        // Rafraîchit l’état et force un token frais (utile si backend)
+        // Rafraîchir état et token
         await user.reload();
         final refreshed = FirebaseAuth.instance.currentUser;
         await refreshed?.getIdToken(true);
 
-        // 🔧 Sync “métier” (FCM/Firestore, etc.) — ⚠️ ne doit pas naviguer
+        // Sync métier (sans navigation)
         if (Get.isRegistered<AuthController>()) {
           await Get.find<AuthController>().handleAuthState(refreshed);
         }
 
-        // 🚦 Navigation déterministe et immédiate
+        // Navigation immédiate
         if (refreshed != null && refreshed.emailVerified == true) {
           await Get.offAll(() => const MainScreen());
         } else {
           await Get.offAll(() => const VerifyEmailScreen());
         }
 
-        // 🔁 Réveille UserController pour hydratation en arrière-plan
+        // Hydratation UserController en arrière-plan
         if (Get.isRegistered<UserController>()) {
           Get.find<UserController>().kickstart();
         }
       }
     } on FirebaseAuthException catch (e) {
-      _handleAuthError(e);
+      _showErrorSnackbar(AuthErrorMapper.toMessage(e));
     } catch (e) {
       _showErrorSnackbar('Erreur inattendue : ${e.toString()}');
     } finally {
@@ -91,14 +90,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _resetPassword() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      _showErrorSnackbar('Veuillez saisir votre email');
+      _showErrorSnackbar('Veuillez saisir votre e-mail.');
       return;
     }
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
       Get.snackbar(
         'Succès',
-        'Email de réinitialisation envoyé',
+        'E-mail de réinitialisation envoyé.',
         backgroundColor: AdColors.success,
         colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,
@@ -106,35 +105,10 @@ class _LoginScreenState extends State<LoginScreen> {
         borderRadius: 12,
       );
     } on FirebaseAuthException catch (e) {
-      _showErrorSnackbar(e.message ?? 'Impossible d’envoyer l’email.');
+      _showErrorSnackbar(AuthErrorMapper.toMessage(e));
     } catch (e) {
-      _showErrorSnackbar(e.toString());
+      _showErrorSnackbar('Erreur : ${e.toString()}');
     }
-  }
-
-  void _handleAuthError(FirebaseAuthException e) {
-    String message;
-    switch (e.code) {
-      case 'user-not-found':
-        message = 'Aucun compte associé à cet email';
-        break;
-      case 'wrong-password':
-        message = 'Mot de passe incorrect';
-        break;
-      case 'invalid-email':
-        message = 'Format d’email invalide';
-        break;
-      case 'too-many-requests':
-        message = 'Trop de tentatives. Réessayez plus tard.';
-        break;
-      case 'user-disabled':
-        message = 'Ce compte a été désactivé.';
-        break;
-      default:
-        message = e.message ?? 'Erreur inconnue';
-        break;
-    }
-    _showErrorSnackbar(message);
   }
 
   void _showErrorSnackbar(String message) {
@@ -210,9 +184,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         prefixIcon: const Icon(Icons.email_outlined),
                         validator: (v) {
                           final value = v?.trim() ?? '';
-                          if (value.isEmpty) return 'Email requis';
+                          if (value.isEmpty) return 'E-mail requis';
                           final ok = RegExp(r'^[\w\.\-+]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(value);
-                          if (!ok) return 'Email invalide';
+                          if (!ok) return 'E-mail invalide';
                           return null;
                         },
                       ),

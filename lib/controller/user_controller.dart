@@ -1,3 +1,5 @@
+// lib/controller/user_controller.dart
+
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/login_screen.dart';
 import 'package:adfoot/screens/main_screen.dart';
@@ -8,10 +10,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 /// UserController
-/// - Source de vérité pour la navigation (Login / Verify / Main)
+/// - Source de vérité pour l’état utilisateur, navigation (Login / Verify / Main)
 /// - Hydrate AppUser, écoute FirebaseAuth et Firestore.
-/// - Navigation SAFE: n'exécute pas Get.offAll tant que le Navigator n'est pas prêt.
-/// - Si le doc Firestore n'existe pas encore, il est créé idempotemment.
+/// - Ne perd pas les fonctionnalités existantes, tout en ajoutant robustesse.
 class UserController extends GetxController {
   static UserController instance = Get.find();
 
@@ -25,13 +26,13 @@ class UserController extends GetxController {
   List<AppUser> get userList => _userList.value;
 
   bool _navigating = false;
-  bool _navScheduled = false; // empêche les doublons pendant l'init
+  bool _navScheduled = false;
 
   @override
   void onInit() {
     super.onInit();
 
-    // 🔁 idTokenChanges => login/logout/refresh
+    // écoute les changements d’auth (login / logout / refresh)
     _auth.idTokenChanges().listen(
       (User? firebaseUser) async {
         await _routeFromAuth(firebaseUser);
@@ -41,13 +42,13 @@ class UserController extends GetxController {
 
     _listenAllUsers();
 
-    // Réveil après 1er frame (cold start)
+    // Le trigger initial après le premier frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       kickstart();
     });
   }
 
-  /// Permet de relancer une passe de routage (appelé par Splash/Login si besoin)
+  /// Lance le routage selon l’état utilisateur actuel
   void kickstart() {
     _routeFromAuth(_auth.currentUser);
   }
@@ -70,46 +71,48 @@ class UserController extends GetxController {
 
       final uid = refreshed.uid;
 
-      // 1) Email non vérifié → hydrate min. et route Verify
+      // Cas : email non vérifié → accéder à vérification
       if (!refreshed.emailVerified) {
         try {
           final doc = await _firestore.collection('users').doc(uid).get();
-          if (doc.exists) _user.value = AppUser.fromMap(doc.data()!);
-        } catch (_) {/* no-op */}
+          if (doc.exists) {
+            _user.value = AppUser.fromMap(doc.data()!);
+          }
+        } catch (_) {
+          // ignore
+        }
         await _safeOffAll(const VerifyEmailScreen());
         return;
       }
 
-      // 2) Email vérifié → s'assurer que le doc Firestore est prêt
+      // Cas : email vérifié → s’assurer que document utilisateur existe
       var doc = await _waitUserDoc(uid, attempts: 20, delay: const Duration(milliseconds: 250));
       if (doc == null || !doc.exists) {
-        // 🔧 Création idempotente du profil minimal si nécessaire
+        // création minimale du profil si absent
         await _firestore.collection('users').doc(uid).set({
           'uid': uid,
           'email': refreshed.email,
           'nom': refreshed.displayName ?? '',
-          'photoUrl': refreshed.photoURL,
-          'createdAt': FieldValue.serverTimestamp(),
+          'photoProfil': refreshed.photoURL ?? '',
+          'dateInscription': FieldValue.serverTimestamp(),
           'estActif': true,
           'emailVerified': true,
           'emailVerifiedAt': FieldValue.serverTimestamp(),
+          // initialiser les listes vides pour éviter null
+          'followersList': <String>[],
+          'followingsList': <String>[],
         }, SetOptions(merge: true));
 
-        // Relire le doc
         doc = await _firestore.collection('users').doc(uid).get();
         if (!doc.exists) {
-          // Si toujours pas dispo (réseau très lent), ne casse pas le login :
-          // route vers Main et l'hydratation finira en arrière-plan.
           await _safeOffAll(const MainScreen());
           return;
         }
       }
 
-      // 3) Hydrate AppUser
       final userData = AppUser.fromMap(doc.data()!);
       _user.value = userData;
 
-      // 4) Route vers Main uniquement quand AppUser est prêt
       await _safeOffAll(const MainScreen());
     } catch (e) {
       debugPrint('UserController _routeFromAuth error: $e');
@@ -145,6 +148,7 @@ class UserController extends GetxController {
     );
   }
 
+  /// Rafraîchit les données de l’utilisateur connecté depuis Firestore
   Future<void> refreshUser() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
@@ -159,7 +163,7 @@ class UserController extends GetxController {
     try {
       await _auth.signOut();
       _user.value = null;
-      // Navigation: idTokenChanges -> _routeFromAuth
+      // idTokenChanges déclenchera la redirection vers Login
     } catch (e) {
       Get.snackbar(
         'Erreur',
@@ -172,9 +176,7 @@ class UserController extends GetxController {
     }
   }
 
-  // --- Navigation robuste / idempotente / navigator-aware ---
   Future<void> _safeOffAll(Widget page) async {
-    // Navigator pas prêt ? on postpose au prochain frame
     if (Get.key.currentState == null) {
       if (_navScheduled) return;
       _navScheduled = true;
@@ -188,7 +190,6 @@ class UserController extends GetxController {
     if (_navigating) return;
     _navigating = true;
     try {
-      // Évite de boucler si on est déjà sur la bonne page
       final String current = Get.currentRoute;
       final String? target = _namedRouteFor(page);
       if (target != null && current == target) return;
@@ -202,7 +203,7 @@ class UserController extends GetxController {
   String? _namedRouteFor(Widget page) {
     if (page is LoginScreen) return '/login';
     if (page is MainScreen) return '/main';
-    // VerifyEmailScreen: pas de route nommée dédiée (différente de /verify web)
+    if (page is VerifyEmailScreen) return '/verify';
     return null;
   }
 }
