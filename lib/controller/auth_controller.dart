@@ -1,3 +1,4 @@
+// lib/controller/auth_controller.dart
 import 'package:adfoot/models/user.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,9 +7,10 @@ import 'package:get/get.dart';
 
 import 'package:adfoot/services/notifications.dart';
 import 'package:adfoot/services/web_messaging_helper.dart';
+import 'package:adfoot/services/email_link_handler.dart'; // ✅ pour stopper l’écoute au signOut (sécurisé)
 
-/// AuthController ne navigue plus.
-/// - Il maintient AppUser "métier", synchronise Firestore,
+/// AuthController ne navigue pas.
+/// - Maintient AppUser "métier", synchronise Firestore,
 ///   gère FCM et permission système.
 /// - La navigation est entièrement gérée par UserController.
 class AuthController extends GetxController {
@@ -28,16 +30,14 @@ class AuthController extends GetxController {
   @override
   void onReady() {
     super.onReady();
-    // On continue d’écouter pour garder _appUser à jour,
-    // mais on NE NAVIGUE PAS.
+    // Écoute auth pour garder _appUser à jour (sans navigation).
     _firebaseUser.bindStream(_auth.idTokenChanges());
     ever<User?>(_firebaseUser, _syncState);
     // Cold start
     _syncState(_auth.currentUser);
   }
 
-  /// Met à jour _appUser et Firestore (si nécessaire).
-  /// Pas de navigation ici.
+  /// Met à jour _appUser et Firestore (si nécessaire). Aucune navigation ici.
   Future<void> _syncState(User? firebaseUser) async {
     if (firebaseUser == null) {
       _appUser.value = null;
@@ -54,7 +54,7 @@ class AuthController extends GetxController {
 
       final uid = refreshed.uid;
 
-      // Email non vérifié : on hydrate si doc existe, sans router.
+      // Email non vérifié : hydrate si doc existe, sans router.
       if (!refreshed.emailVerified) {
         try {
           final doc = await _firestore.collection('users').doc(uid).get();
@@ -65,7 +65,7 @@ class AuthController extends GetxController {
         return;
       }
 
-      // Email vérifié : on s’assure que le doc existe
+      // Email vérifié : on s’assure que le doc existe (attente raisonnable)
       final doc = await _waitUserDoc(uid, attempts: 20, delay: const Duration(milliseconds: 250));
       if (doc == null || !doc.exists) {
         _appUser.value = null;
@@ -74,7 +74,7 @@ class AuthController extends GetxController {
 
       final userData = AppUser.fromMap(doc.data()!);
 
-      // Sync idempotente
+      // Sync idempotente (ne casse pas l’existant)
       final updates = <String, dynamic>{};
       if (userData.emailVerified != true) updates['emailVerified'] = true;
       if (userData.estActif != true) updates['estActif'] = true;
@@ -88,7 +88,7 @@ class AuthController extends GetxController {
       final updated = await _firestore.collection('users').doc(uid).get();
       _appUser.value = AppUser.fromMap(updated.data()!);
 
-      // Mise à jour FCM si dispo
+      // Mise à jour FCM si dispo (web/mobile)
       await _updateFcmToken(refreshed);
 
       // Demande permission système (une fois par session)
@@ -101,7 +101,7 @@ class AuthController extends GetxController {
 
   Future<DocumentSnapshot<Map<String, dynamic>>?> _waitUserDoc(
     String uid, {
-    int attempts = 6,
+    int attempts = 20, // ✅ aligné avec UserController pour cohérence
     Duration delay = const Duration(milliseconds: 250),
   }) async {
     DocumentSnapshot<Map<String, dynamic>>? doc;
@@ -114,8 +114,13 @@ class AuthController extends GetxController {
   }
 
   Future<void> signOut() async {
+    try {
+      // ✅ Stopper poliment l’écoute des liens pour éviter fuites (optionnel mais safe)
+      await EmailLinkHandler.dispose();
+    } catch (_) {}
     await _auth.signOut();
     _appUser.value = null;
+    _askedNotifThisSession = false; // ✅ reset session flag
     // Pas de navigation ici; UserController réagira au sign-out et routera.
   }
 

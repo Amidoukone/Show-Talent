@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+
 import '../controller/auth_controller.dart';
 import '../controller/chat_controller.dart';
 import '../models/user.dart';
@@ -16,7 +17,6 @@ class ConversationsScreen extends StatefulWidget {
 }
 
 class _ConversationsScreenState extends State<ConversationsScreen> {
-  // ✅ Évite de créer plusieurs ChatController
   final ChatController chatController = Get.isRegistered<ChatController>()
       ? Get.find<ChatController>()
       : Get.put(ChatController(), permanent: true);
@@ -35,22 +35,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       body: currentUserId == null
           ? const Center(child: Text("Utilisateur non connecté."))
           : Obx(() {
-              if (chatController.conversations.isEmpty) {
+              final conversations = chatController.conversations;
+
+              if (conversations.isEmpty) {
                 return const Center(child: Text("Aucune conversation."));
               }
 
-              final conversations = List.from(chatController.conversations)
-                ..sort(
-                  (a, b) => (b.lastMessageDate ?? DateTime(0))
-                      .compareTo(a.lastMessageDate ?? DateTime(0)),
-                );
+              final sorted = List.from(conversations)
+                ..sort((a, b) => (b.lastMessageDate ?? DateTime(0))
+                    .compareTo(a.lastMessageDate ?? DateTime(0)));
 
               return ListView.builder(
-                itemCount: conversations.length,
+                itemCount: sorted.length,
                 itemBuilder: (context, index) {
-                  final conversation = conversations[index];
-
-                  // Trouver l'autre utilisateur
+                  final conversation = sorted[index];
                   final otherUserId = conversation.utilisateurIds.firstWhere(
                     (id) => id != currentUserId,
                     orElse: () => '',
@@ -60,7 +58,6 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     return const ListTile(title: Text("Utilisateur inconnu"));
                   }
 
-                  // On peut garder FutureBuilder (lecture ponctuelle) pour l'utilisateur distant
                   return FutureBuilder<DocumentSnapshot>(
                     future: FirebaseFirestore.instance
                         .collection('users')
@@ -84,7 +81,6 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
                       final otherUser = AppUser.fromMap(data);
 
-                      // ✅ Stream temps réel sur les messages non lus destinés à l'utilisateur courant
                       final unreadStream = FirebaseFirestore.instance
                           .collection('conversations')
                           .doc(conversation.id)
@@ -96,8 +92,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       return StreamBuilder<QuerySnapshot>(
                         stream: unreadStream,
                         builder: (context, unreadSnap) {
-                          // Fallback sur la valeur calculée côté controller si stream pas prêt
-                          final unreadCount = (unreadSnap.hasData)
+                          final unreadCount = unreadSnap.hasData
                               ? unreadSnap.data!.docs.length
                               : conversation.unreadMessagesCount;
 
@@ -109,13 +104,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                                 backgroundImage: otherUser.photoProfil.isNotEmpty
                                     ? NetworkImage(otherUser.photoProfil)
                                     : null,
+                                backgroundColor: Colors.grey.shade200,
                                 child: otherUser.photoProfil.isEmpty
                                     ? Text(
                                         otherUser.nom.substring(0, 1).toUpperCase(),
                                         style: const TextStyle(
-                                          color: Colors.black,
-                                          fontSize: 18,
-                                        ),
+                                            color: Colors.black, fontSize: 18),
                                       )
                                     : null,
                               ),
@@ -168,27 +162,17 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                                 ],
                               ),
                               onTap: () async {
-                                try {
-                                  // Lecture immédiate (au cas où) en ouvrant la conversation
-                                  if (unreadCount > 0) {
-                                    await chatController.markMessagesAsRead(
-                                      conversation.id,
-                                      currentUserId,
-                                    );
-                                  }
-
-                                  Get.to(() => ChatScreen(
-                                        conversationId: conversation.id,
-                                        otherUser: otherUser,
-                                      ));
-                                } catch (e) {
-                                  Get.snackbar(
-                                    'Erreur',
-                                    'Impossible d\'ouvrir la conversation : $e',
-                                    backgroundColor: Colors.red,
-                                    colorText: Colors.white,
+                                if (unreadCount > 0) {
+                                  await chatController.markMessagesAsRead(
+                                    conversation.id,
+                                    currentUserId,
                                   );
                                 }
+
+                                Get.to(() => ChatScreen(
+                                      conversationId: conversation.id,
+                                      otherUser: otherUser,
+                                    ));
                               },
                             ),
                           );
@@ -219,9 +203,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             child: const Text("Annuler"),
           ),
           TextButton(
-            onPressed: () {
-              chatController.deleteConversation(conversationId);
+            onPressed: () async {
               Navigator.pop(context);
+              await chatController.deleteConversation(conversationId);
+              Get.snackbar('Conversation supprimée', '',
+                  snackPosition: SnackPosition.BOTTOM);
             },
             child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
           ),
@@ -234,7 +220,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     if (dateTime == null) return "Inconnue";
 
     final now = DateTime.now();
-    final isToday = now.difference(dateTime).inDays == 0;
+    final isToday = now.day == dateTime.day &&
+        now.month == dateTime.month &&
+        now.year == dateTime.year;
 
     return isToday
         ? DateFormat('HH:mm').format(dateTime)

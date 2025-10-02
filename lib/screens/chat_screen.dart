@@ -30,9 +30,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _listScroll = ScrollController();
 
-  late final Stream<List<Message>> _messagesStream; // stream stabilisé
+  late final Stream<List<Message>> _messagesStream;
 
-  // --- Présence / activité ---
   Timer? _heartbeatTimer;
   DateTime? _lastTouchAt;
   static const Duration _heartbeatPeriod = Duration(seconds: 12);
@@ -42,11 +41,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
-    // 1) Un seul stream pour éviter tout re-subscribe pendant la saisie
     _messagesStream = chatController.getMessages(widget.conversationId);
 
-    // 2) Focus: scroll bas + "touch" activité (throttle)
     _inputFocus.addListener(() {
       if (_inputFocus.hasFocus) {
         _scrollToBottom(delay: const Duration(milliseconds: 150));
@@ -54,13 +50,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     });
 
-    // 3) Saisie: "touch" activité (throttle), pas de setState global
     messageController.addListener(_throttledTouchActiveAt);
 
-    // 4) Se déclarer actif dans cette conversation
     _enterActiveConversation();
-
-    // 5) Heartbeat périodique pour signaler qu'on est toujours dans l'écran
     _startHeartbeat();
   }
 
@@ -68,10 +60,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stopHeartbeat();
-
-    // Nettoyer la présence
     _leaveActiveConversation();
-
     _inputFocus.dispose();
     _listScroll.dispose();
     messageController.dispose();
@@ -80,7 +69,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Si l'app passe en arrière-plan, on libère la conversation active pour autoriser les notifications
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
@@ -107,7 +95,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     return WillPopScope(
       onWillPop: () async {
-        // Nettoyer tout de suite (dispose le fera aussi, mais on assure)
         await _leaveActiveConversation();
         return true;
       },
@@ -141,10 +128,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         body: SafeArea(
           child: Column(
             children: [
-              // Liste des messages
               Expanded(
                 child: StreamBuilder<List<Message>>(
-                  stream: _messagesStream, // ✅ ne change jamais
+                  stream: _messagesStream,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
@@ -155,18 +141,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     }
 
                     final messages = snapshot.data!;
-
-                    // Marquer comme lus les messages destinés à l'utilisateur courant
                     _markMessagesAsRead(messages, currentUser.uid);
 
-                    // Après construction, scroll en bas
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       _scrollToBottom();
                     });
 
                     return ListView.builder(
                       controller: _listScroll,
-                      reverse: true, // le bas logique est index 0
+                      reverse: true,
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       itemCount: messages.length,
                       itemBuilder: (context, index) {
@@ -174,64 +157,70 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         final isSentByUser =
                             message.expediteurId == currentUser.uid;
 
-                        return Align(
-                          alignment: isSentByUser
-                              ? Alignment.centerRight
-                              : Alignment.centerLeft,
-                          child: Container(
-                            margin: const EdgeInsets.symmetric(
-                              vertical: 5,
-                              horizontal: 10,
-                            ),
-                            padding: const EdgeInsets.all(12),
-                            constraints: BoxConstraints(
-                              maxWidth:
-                                  MediaQuery.of(context).size.width * 0.75,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSentByUser
-                                  ? const Color(0xFFDBF4D3)
-                                  : const Color(0xFFD2F2F0),
-                              borderRadius: BorderRadius.only(
-                                topLeft: const Radius.circular(12),
-                                topRight: const Radius.circular(12),
-                                bottomLeft: isSentByUser
-                                    ? const Radius.circular(12)
-                                    : Radius.zero,
-                                bottomRight: isSentByUser
-                                    ? Radius.zero
-                                    : const Radius.circular(12),
+                        return GestureDetector(
+                          onLongPress: () {
+                            if (isSentByUser) {
+                              _confirmDeleteMessage(message);
+                            }
+                          },
+                          child: Align(
+                            alignment: isSentByUser
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(
+                                vertical: 5,
+                                horizontal: 10,
                               ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Le texte wrappe naturellement (multi-lignes)
-                                Text(
-                                  message.contenu,
-                                  style: const TextStyle(fontSize: 16),
+                              padding: const EdgeInsets.all(12),
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.of(context).size.width * 0.75,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSentByUser
+                                    ? const Color(0xFFDBF4D3)
+                                    : const Color(0xFFD2F2F0),
+                                borderRadius: BorderRadius.only(
+                                  topLeft: const Radius.circular(12),
+                                  topRight: const Radius.circular(12),
+                                  bottomLeft: isSentByUser
+                                      ? const Radius.circular(12)
+                                      : Radius.zero,
+                                  bottomRight: isSentByUser
+                                      ? Radius.zero
+                                      : const Radius.circular(12),
                                 ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      _formatTime(message.dateEnvoi),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey[600],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    message.contenu,
+                                    style: const TextStyle(fontSize: 16),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _formatTime(message.dateEnvoi),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    if (isSentByUser)
-                                      Icon(
-                                        _getMessageIcon(message),
-                                        size: 16,
-                                        color: Colors.grey[700],
-                                      ),
-                                  ],
-                                ),
-                              ],
+                                      const SizedBox(width: 6),
+                                      if (isSentByUser)
+                                        Icon(
+                                          _getMessageIcon(message),
+                                          size: 16,
+                                          color: Colors.grey[700],
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         );
@@ -240,13 +229,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   },
                 ),
               ),
-
-              // Barre d'entrée message (collée au bas, remonte avec le clavier)
-              _MessageInputBar(
+              MessageInputBar(
                 controller: messageController,
                 focusNode: _inputFocus,
                 onSend: () => _sendMessage(currentUser.uid, otherUser.uid),
-                onUserActivity: _throttledTouchActiveAt, // ✅ signale une activité légère
+                onUserActivity: _throttledTouchActiveAt,
               ),
             ],
           ),
@@ -255,7 +242,49 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  // --- Présence / activité ---
+  void _confirmDeleteMessage(Message message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Supprimer ce message"),
+        content: const Text("Voulez-vous vraiment supprimer ce message ?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler"),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await chatController.deleteMessage(
+                    widget.conversationId, message.id);
+                Get.snackbar(
+                  "Message supprimé",
+                  "",
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: Colors.grey.shade800,
+                  colorText: Colors.white,
+                );
+              } catch (e) {
+                Get.snackbar(
+                  "Erreur",
+                  "Échec de la suppression du message : $e",
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: Colors.red,
+                  colorText: Colors.white,
+                );
+              }
+            },
+            child: const Text(
+              "Supprimer",
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _enterActiveConversation() async {
     final user = AuthController.instance.user;
@@ -266,9 +295,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         'activeAt': FieldValue.serverTimestamp(),
       });
       _lastTouchAt = DateTime.now();
-    } catch (_) {
-      // On ignore discrètement : la conversation continue de fonctionner
-    }
+    } catch (_) {}
   }
 
   Future<void> _leaveActiveConversation() async {
@@ -279,14 +306,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         'activeConversationId': null,
         'activeAt': FieldValue.serverTimestamp(),
       });
-    } catch (_) {
-      // Pas bloquant
-    }
+    } catch (_) {}
   }
 
   void _startHeartbeat() {
     _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(_heartbeatPeriod, (_) => _touchActiveAt());
+    _heartbeatTimer =
+        Timer.periodic(_heartbeatPeriod, (_) => _touchActiveAt());
   }
 
   void _stopHeartbeat() {
@@ -307,13 +333,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final user = AuthController.instance.user;
     if (user == null) return;
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'activeAt': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {/* no-op */}
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({'activeAt': FieldValue.serverTimestamp()});
+    } catch (_) {}
   }
-
-  // --- Messagerie ---
 
   void _sendMessage(String senderId, String recipientId) {
     final content = messageController.text.trim();
@@ -328,13 +353,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     messageController.clear();
     _scrollToBottom(delay: const Duration(milliseconds: 120));
-
-    // On signale aussi une activité récente
     _throttledTouchActiveAt();
   }
 
   void _scrollToBottom({Duration delay = Duration.zero}) {
-    // Avec reverse:true, la position 0.0 est le bas logique (dernier message)
     Future.delayed(delay, () {
       if (!_listScroll.hasClients) return;
       _listScroll.animateTo(
@@ -375,14 +397,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 }
 
-/// Barre d'entrée moderne et responsive (multilignes, remonte au clavier)
-class _MessageInputBar extends StatelessWidget {
+/// Widget d’entrée de message corrigé
+class MessageInputBar extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final VoidCallback onSend;
   final VoidCallback onUserActivity;
 
-  const _MessageInputBar({
+  const MessageInputBar({
+    super.key,
     required this.controller,
     required this.focusNode,
     required this.onSend,
@@ -391,27 +414,26 @@ class _MessageInputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom; // hauteur clavier
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
       padding: EdgeInsets.only(
         left: 8,
         right: 8,
-        bottom: bottom > 0 ? bottom + 8 : 8, // remonte au-dessus du clavier
+        bottom: bottom > 0 ? bottom + 8 : 8,
         top: 6,
       ),
       child: Row(
         children: [
-          // Champ de texte multilignes avec hauteur max
           Expanded(
             child: ConstrainedBox(
               constraints: const BoxConstraints(
                 minHeight: 48,
-                maxHeight: 140, // ~5-6 lignes max
+                maxHeight: 140,
               ),
               child: Scrollbar(
                 child: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: controller, // ne rebuild que la barre
+                  valueListenable: controller,
                   builder: (context, value, _) {
                     return TextField(
                       controller: controller,
@@ -419,8 +441,8 @@ class _MessageInputBar extends StatelessWidget {
                       keyboardType: TextInputType.multiline,
                       textInputAction: TextInputAction.newline,
                       minLines: 1,
-                      maxLines: null, // wrap + croissance
-                      onChanged: (_) => onUserActivity(), // ✅ signale activité
+                      maxLines: null,
+                      onChanged: (_) => onUserActivity(),
                       onTap: onUserActivity,
                       decoration: InputDecoration(
                         hintText: "Tapez un message…",
@@ -442,7 +464,6 @@ class _MessageInputBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Bouton envoyer (réagit aux changements de saisie, sans setState global)
           ValueListenableBuilder<TextEditingValue>(
             valueListenable: controller,
             builder: (context, value, _) {
