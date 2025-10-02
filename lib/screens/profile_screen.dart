@@ -34,20 +34,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   late final ProfileController _profileController;
   final AuthController _authController = Get.find<AuthController>();
-  final FollowController _followController = Get.put(FollowController());
-  final ChatController _chatController = Get.put(ChatController());
+  final FollowController _followController = Get.find<FollowController>();
+  final ChatController _chatController = Get.find<ChatController>();
   final ImagePicker _imagePicker = ImagePicker();
   final VideoManager _videoManager = VideoManager();
   final ScrollController _scrollController = ScrollController();
 
-  /// Fenêtre glissante de vignettes réellement rendues (stabilité UI)
   static const int visibleWindowSize = 25;
-
-  /// Plafond "soft" côté écran pour éviter trop d’appels quand la grille est volumineuse
-  /// (le ProfileController a déjà sa propre limite mémoire)
   static const int maxLoadedVideos = 100;
 
-  /// Throttle de pagination pour éviter le spam lors d’un scroll très rapide
   DateTime? _lastFetchAttemptAt;
   static const Duration _fetchThrottle = Duration(milliseconds: 350);
 
@@ -113,27 +108,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final isOwnProfile = currentUid != null && currentUid == user.uid;
         final visibleVideos = _getVisibleVideos(controller.videoList);
 
-        // ✅ AppBar: titre et icônes (dont flèche retour) en blanc
+        // Thème local pour ce profil
         final theme = Theme.of(context).copyWith(
           scaffoldBackgroundColor: kSurface,
           appBarTheme: const AppBarTheme(
             backgroundColor: kPrimary,
             elevation: 1,
             centerTitle: true,
-            // Titre blanc
             titleTextStyle: TextStyle(
               color: Colors.white,
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
-            // Icônes de l'AppBar (dont flèche retour) en blanc
             iconTheme: IconThemeData(color: Colors.white),
             actionsIconTheme: IconThemeData(color: Colors.white),
           ),
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
               backgroundColor: kPrimary,
-              foregroundColor: Colors.white, // texte & icône blanc
+              foregroundColor: Colors.white,
               elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -143,7 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           textButtonTheme: TextButtonThemeData(
             style: TextButton.styleFrom(
-              foregroundColor: Colors.white, // si on en utilise sur fond coloré
+              foregroundColor: Colors.white,
             ),
           ),
         );
@@ -152,7 +145,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           data: theme,
           child: Scaffold(
             appBar: AppBar(
-              // Le style du texte (couleur blanche) vient du AppBarTheme.titleTextStyle ci-dessus.
               title: Text(user.nom.isNotEmpty ? user.nom : 'Nom inconnu'),
               actions: [
                 if (isOwnProfile && !widget.isReadOnly)
@@ -266,8 +258,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     child: CircularProgressIndicator());
                               }
                               final vid = visibleVideos[index];
-
-                              // ✅ RepaintBoundary pour limiter les re-rendus
                               return RepaintBoundary(
                                 key: ValueKey(vid.id),
                                 child: _VideoTile(
@@ -297,7 +287,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                     );
 
-                                    /// ✅ Pré-déchargement au retour (sécurité mémoire)
                                     await _videoManager
                                         .disposeAllForContext(contextKey);
                                     if (Get.isRegistered<VideoController>(
@@ -348,8 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         otherUserId: user.uid,
       );
       if (conversationId.isNotEmpty) {
-        Get.to(
-            () => ChatScreen(conversationId: conversationId, otherUser: user));
+        Get.to(() => ChatScreen(conversationId: conversationId, otherUser: user));
       }
     } catch (e) {
       Get.snackbar('Erreur', 'Impossible d’envoyer un message : $e',
@@ -361,35 +349,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final file = await _imagePicker.pickImage(source: ImageSource.gallery);
     if (file != null) {
       await _profileController.updateProfilePhoto(uid, file.path);
-      // L’image se rechargera grâce au cache-busting dans l’UI
     }
   }
-
-  // --- UI Builders ---
 
   Widget _buildFollowMessageRow(AppUser user) {
     final String? currentUserId = _authController.currentUid;
     if (currentUserId == null) return const SizedBox.shrink();
 
-    final isFollowing = user.followersList.contains(currentUserId);
+    // on vérifie si l’utilisateur courant figure dans la liste des abonnés du profil
+    final bool isFollowing = user.followersList.contains(currentUserId);
 
     return Row(
       children: [
         Expanded(
           child: ElevatedButton.icon(
             onPressed: () async {
-              try {
+              // Mise à jour locale optimiste
+              if (isFollowing) {
+                user.followersList.remove(currentUserId);
+              } else {
+                user.followersList.add(currentUserId);
+              }
+              _profileController.update();
+
+              final bool ok = isFollowing
+                  ? await _followController.unfollowUser(currentUserId, user.uid)
+                  : await _followController.followUser(currentUserId, user.uid);
+
+              if (!ok) {
+                // rollback
                 if (isFollowing) {
-                  await _followController.unfollowUser(currentUserId, user.uid);
-                  user.followersList.remove(currentUserId);
-                } else {
-                  await _followController.followUser(currentUserId, user.uid);
                   user.followersList.add(currentUserId);
+                } else {
+                  user.followersList.remove(currentUserId);
                 }
                 _profileController.update();
-              } catch (e) {
-                Get.snackbar('Erreur',
-                    'Une erreur s\'est produite lors de l\'opération : $e',
+
+                Get.snackbar('Erreur', 'Action impossible.',
                     backgroundColor: kDanger, colorText: Colors.white);
               }
             },
@@ -401,9 +397,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            icon: Icon(isFollowing ? Icons.person_remove : Icons.person_add),
+            icon: Icon(isFollowing ? Icons.person_remove_alt_1 : Icons.person_add_alt),
             label: Text(
-              isFollowing ? 'Dessuivre' : 'Suivre',
+              isFollowing ? 'Se désabonner' : 'S’abonner',
               style: const TextStyle(fontSize: 15, color: Colors.white),
             ),
           ),
@@ -495,9 +491,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// =====================
-// Sous-widgets stylés
-// =====================
+// === sous‐widgets ===
 
 class _HeaderCard extends StatelessWidget {
   final AppUser user;
@@ -530,12 +524,11 @@ class _HeaderCard extends StatelessWidget {
               Obx(
                 () => CircleAvatar(
                   radius: 60,
-                  backgroundColor: kPrimary.withValues(alpha: 0.08),
+                  backgroundColor: kPrimary.withOpacity(0.08),
                   backgroundImage: profileController.isLoadingPhoto.value
                       ? null
                       : NetworkImage(
                           user.photoProfil.isNotEmpty
-                              // cache-busting pour voir immédiatement la nouvelle photo
                               ? '${user.photoProfil}?v=${DateTime.now().millisecondsSinceEpoch}'
                               : 'https://via.placeholder.com/150',
                         ),
@@ -552,8 +545,7 @@ class _HeaderCard extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kAccent,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -561,8 +553,7 @@ class _HeaderCard extends StatelessWidget {
                     ),
                     onPressed: onChangePhoto,
                     icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                    label: const Text('Changer',
-                        style: TextStyle(color: Colors.white)),
+                    label: const Text('Changer', style: TextStyle(color: Colors.white)),
                   ),
                 ),
             ],
@@ -576,15 +567,12 @@ class _HeaderCard extends StatelessWidget {
                     if (user.photoProfil.isNotEmpty) {
                       _showProfilePhoto(user.photoProfil);
                     } else {
-                      Get.snackbar('Info',
-                          'Cet utilisateur n\'a pas de photo de profil.',
-                          backgroundColor: Colors.blue,
-                          colorText: Colors.white);
+                      Get.snackbar('Info', 'Cet utilisateur n\'a pas de photo de profil.',
+                          backgroundColor: Colors.blue, colorText: Colors.white);
                     }
                   },
                   icon: const Icon(Icons.image_search_rounded),
-                  label: const Text('Voir la photo',
-                      style: TextStyle(color: Colors.white)),
+                  label: const Text('Voir la photo', style: TextStyle(color: Colors.white)),
                 ),
               ),
             ],
@@ -601,14 +589,12 @@ class _HeaderCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Image.network(
-              // cache-busting pour l’agrandissement
               '$photoUrl?v=${DateTime.now().millisecondsSinceEpoch}',
               fit: BoxFit.contain,
             ),
             TextButton(
               onPressed: Get.back,
-              child:
-                  const Text('Fermer', style: TextStyle(color: Colors.black87)),
+              child: const Text('Fermer', style: TextStyle(color: Colors.black87)),
             ),
           ],
         ),
@@ -631,14 +617,14 @@ class _StatsCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _StatChip(
-            label: 'Followers',
+            label: 'Abonnés',
             value: user.followersList.length,
             onTap: () => Get.to(
               () => FollowListScreen(uid: user.uid, listType: 'followers'),
             ),
           ),
           _StatChip(
-            label: 'Followings',
+            label: 'Abonnements',
             value: user.followingsList.length,
             onTap: () => Get.to(
               () => FollowListScreen(uid: user.uid, listType: 'followings'),
@@ -709,13 +695,11 @@ class _VideoTile extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // ✅ image optimisée (qualité basse) pour limiter le coût GPU lors du scroll
             Image.network(
               video.thumbnailUrl,
               fit: BoxFit.cover,
               filterQuality: FilterQuality.low,
             ),
-            // dégradé pour lisibilité
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -723,7 +707,7 @@ class _VideoTile extends StatelessWidget {
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
                     colors: [
-                      Colors.black.withValues(alpha: 0.25),
+                      Colors.black.withOpacity(0.25),
                       Colors.transparent,
                     ],
                   ),
@@ -733,8 +717,7 @@ class _VideoTile extends StatelessWidget {
             const Positioned(
               right: 6,
               bottom: 6,
-              child:
-                  Icon(Icons.play_circle_fill, color: Colors.white70, size: 24),
+              child: Icon(Icons.play_circle_fill, color: Colors.white70, size: 24),
             ),
           ],
         ),
@@ -769,16 +752,14 @@ class _SectionCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor:
-                      _ProfileScreenState.kPrimary.withValues(alpha: 0.08),
+                  backgroundColor: _ProfileScreenState.kPrimary.withOpacity(0.08),
                   child: Icon(icon, color: _ProfileScreenState.kPrimary),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
@@ -804,7 +785,7 @@ class _SectionHeader extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 16,
-          backgroundColor: _ProfileScreenState.kPrimary.withValues(alpha: 0.08),
+          backgroundColor: _ProfileScreenState.kPrimary.withOpacity(0.08),
           child: Icon(
             icon,
             color: _ProfileScreenState.kPrimary,

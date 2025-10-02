@@ -6,6 +6,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/connectivity_controller.dart';
 
 import 'package:adfoot/screens/add_video.dart';
@@ -25,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final VideoController videoController;
   final UserController userController = Get.find<UserController>();
+  final FollowController followController = Get.find<FollowController>();
   final PageController _pageController = PageController();
   final VideoManager videoManager = VideoManager();
 
@@ -35,7 +37,6 @@ class _HomeScreenState extends State<HomeScreen>
   StreamSubscription<bool>? _connectivitySubscription;
   bool _wakelockOn = false;
 
-  /// 🔋 Gestion wakelock
   Future<void> _setWakelock(bool enable) async {
     if (_wakelockOn == enable) return;
     _wakelockOn = enable;
@@ -104,8 +105,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       videoManager.pauseAll('home');
       _setWakelock(false);
     } else if (state == AppLifecycleState.resumed) {
@@ -120,7 +120,6 @@ class _HomeScreenState extends State<HomeScreen>
     super.didChangeAppLifecycleState(state);
   }
 
-  /// 🌐 Listener réseau
   void _initConnectivityListener() {
     _connectivitySubscription = ConnectivityService()
         .connectionStream
@@ -141,7 +140,6 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
-  /// ⏬ Chargement initial
   Future<void> _loadInitialVideos() async {
     final connected = await ConnectivityService().checkInitialConnection();
     if (!mounted) return;
@@ -163,7 +161,6 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
-  /// 🎥 Après ajout vidéo
   Future<void> _handleAfterAddVideo() async {
     await videoManager.pauseAll('home');
     await videoManager.disposeAllForContext('home');
@@ -181,7 +178,6 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
-  /// 🔄 Scroll / changement de page
   Future<void> _onPageChanged(int index) async {
     final videos = videoController.videoList;
     if (index < 0 || index >= videos.length) return;
@@ -190,8 +186,7 @@ class _HomeScreenState extends State<HomeScreen>
     videoController.currentIndex.value = index;
 
     final urls = videos.map((v) => v.videoUrl).toList();
-    videoManager.preloadSurrounding('home', urls, index,
-        activeUrl: currentUrl);
+    videoManager.preloadSurrounding('home', urls, index, activeUrl: currentUrl);
 
     await videoManager.pauseAllExcept('home', currentUrl);
 
@@ -213,8 +208,7 @@ class _HomeScreenState extends State<HomeScreen>
       }
     }
 
-    if (player?.controller != null &&
-        !player!.controller.value.isPlaying) {
+    if (player?.controller != null && !player!.controller.value.isPlaying) {
       try {
         await player.controller.play();
       } catch (_) {}
@@ -222,14 +216,12 @@ class _HomeScreenState extends State<HomeScreen>
 
     await _updateWakelockForCurrent();
 
-    // 🔄 Pagination
     if (index >= videos.length - 2 &&
         videoController.hasMore &&
         !videoController.isLoading) {
       unawaited(videoController.fetchPaginatedVideos());
     }
 
-    // 🧹 Sliding window : on garde max 25 vidéos en mémoire
     const window = 25;
     if (videos.length > window) {
       final start = (index - window ~/ 2).clamp(0, videos.length);
@@ -275,8 +267,7 @@ class _HomeScreenState extends State<HomeScreen>
               onPressed: () async {
                 await videoManager.pauseAll('home');
                 await _setWakelock(false);
-                await Get.to(() =>
-                    ProfileScreen(uid: user.uid, isReadOnly: false));
+                await Get.to(() => ProfileScreen(uid: user.uid, isReadOnly: false));
                 videoController.currentIndex.refresh();
                 await _updateWakelockForCurrent();
               },
@@ -378,18 +369,29 @@ class _HomeScreenState extends State<HomeScreen>
                           onTap: () async {
                             await videoManager.pauseAll('home');
                             await _setWakelock(false);
-                            await Get.to(() =>
-                                ProfileScreen(uid: video.uid, isReadOnly: true));
+                            await Get.to(() => ProfileScreen(uid: video.uid, isReadOnly: true));
                             videoController.currentIndex.refresh();
                             await _updateWakelockForCurrent();
                           },
-                          child: CircleAvatar(
-                            backgroundImage: NetworkImage(
-                              video.profilePhoto.isNotEmpty
-                                  ? video.profilePhoto
-                                  : 'https://via.placeholder.com/150',
-                            ),
-                            radius: 24,
+                          child: Stack(
+                            children: [
+                              CircleAvatar(
+                                backgroundImage: NetworkImage(
+                                  video.profilePhoto.isNotEmpty
+                                      ? video.profilePhoto
+                                      : 'https://via.placeholder.com/150',
+                                ),
+                                radius: 24,
+                              ),
+                              // bouton "+" si ce n’est pas l’utilisateur courant
+                              if (userController.user?.uid != video.uid &&
+                                  !(userController.user?.followingsList.contains(video.uid) ?? false))
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: _FollowToggleButton(video: video),
+                                ),
+                            ],
                           ),
                         ),
                       ),
@@ -434,6 +436,92 @@ class _HomeScreenState extends State<HomeScreen>
           Text('Pas de connexion Internet',
               style: TextStyle(color: Colors.white, fontSize: 18)),
         ],
+      ),
+    );
+  }
+}
+
+/// Widget séparé pour le bouton “+ / abonnement” avec état de chargement
+class _FollowToggleButton extends StatefulWidget {
+  final dynamic video;
+  const _FollowToggleButton({required this.video});
+
+  @override
+  State<_FollowToggleButton> createState() => _FollowToggleButtonState();
+}
+
+class _FollowToggleButtonState extends State<_FollowToggleButton> {
+  bool _isLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final userCtrl = Get.find<UserController>();
+    final followCtrl = Get.find<FollowController>();
+    final currUser = userCtrl.user;
+    final targetUid = widget.video.uid;
+
+    return GestureDetector(
+      onTap: () async {
+        if (_isLoading) return;
+        if (currUser == null) return;
+        if (currUser.uid == targetUid) return;
+
+        final already = currUser.followingsList.contains(targetUid);
+
+        // 🎯 Mise à jour locale optimiste
+        setState(() {
+          _isLoading = true;
+          if (already) {
+            currUser.followingsList.remove(targetUid);
+            currUser.followings--;
+          } else {
+            currUser.followingsList.add(targetUid);
+            currUser.followings++;
+          }
+        });
+
+        final ok = already
+            ? await followCtrl.unfollowUser(currUser.uid, targetUid)
+            : await followCtrl.followUser(currUser.uid, targetUid);
+
+        if (!ok) {
+          // rollback si erreur
+          setState(() {
+            if (already) {
+              // l’action était unfollow, donc on remet follow
+              currUser.followingsList.add(targetUid);
+              currUser.followings++;
+            } else {
+              currUser.followingsList.remove(targetUid);
+              currUser.followings--;
+            }
+          });
+          Get.snackbar('Erreur', 'Impossible d’effectuer l’action.', backgroundColor: Colors.red, colorText: Colors.white);
+        }
+
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.blueAccent,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white, width: 1.5),
+        ),
+        child: _isLoading
+            ? const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.add, size: 16, color: Colors.white),
       ),
     );
   }

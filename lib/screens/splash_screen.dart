@@ -1,3 +1,4 @@
+// lib/screens/splash_screen.dart
 import 'package:adfoot/screens/login_screen.dart';
 import 'package:adfoot/screens/main_screen.dart';
 import 'package:adfoot/screens/verify_email_screen.dart';
@@ -28,7 +29,6 @@ class _SplashScreenState extends State<SplashScreen> {
     _authControllerPresent = Get.isRegistered<AuthController>();
 
     // Si AuthController est présent, c’est UserController qui navigue.
-    // On le "réveille" après le 1er frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         Get.find<UserController>().kickstart();
@@ -49,6 +49,7 @@ class _SplashScreenState extends State<SplashScreen> {
       final currentUser = _auth.currentUser;
 
       if (currentUser == null) {
+        // Route nommée pour garder la cohérence des contrôleurs
         return _safeOffAll(const LoginScreen());
       }
 
@@ -60,27 +61,42 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       if (!refreshedUser.emailVerified) {
+        // 🔁 Utilise la route nommée '/verify' (écran unifié)
         return _safeOffAll(const VerifyEmailScreen());
+        // Alternative stricte route nommée : await Get.offAllNamed('/verify');
       }
 
       final docRef = _firestore.collection('users').doc(refreshedUser.uid);
-      final doc = await docRef.get();
+      var doc = await docRef.get();
 
       if (!doc.exists) {
-        await _auth.signOut();
-        return _safeOffAll(const LoginScreen());
-      }
+        // 🧩 Création idempotente minimale (alignée avec UserController)
+        await docRef.set({
+          'uid': refreshedUser.uid,
+          'email': refreshedUser.email,
+          'nom': refreshedUser.displayName ?? '',
+          'photoUrl': refreshedUser.photoURL,
+          'createdAt': FieldValue.serverTimestamp(),
+          'estActif': true,
+          'emailVerified': true,
+          'emailVerifiedAt': FieldValue.serverTimestamp(),
+          'dernierLogin': DateTime.now(),
+        }, SetOptions(merge: true));
 
-      // Sync minime
-      final data = doc.data()!;
-      final updates = <String, dynamic>{};
-      if (data['emailVerified'] != true) updates['emailVerified'] = true;
-      if (data['estActif'] != true) updates['estActif'] = true;
-      if (data['emailVerifiedAt'] == null) {
-        updates['emailVerifiedAt'] = FieldValue.serverTimestamp();
-      }
-      if (updates.isNotEmpty) {
-        await docRef.update(updates);
+        doc = await docRef.get();
+      } else {
+        // Sync minime si déjà existant
+        final data = doc.data()!;
+        final updates = <String, dynamic>{};
+        if (data['emailVerified'] != true) updates['emailVerified'] = true;
+        if (data['estActif'] != true) updates['estActif'] = true;
+        if (data['emailVerifiedAt'] == null) {
+          updates['emailVerifiedAt'] = FieldValue.serverTimestamp();
+        }
+        updates['dernierLogin'] = DateTime.now();
+        if (updates.isNotEmpty) {
+          await docRef.set(updates, SetOptions(merge: true));
+        }
       }
 
       return _safeOffAll(const MainScreen());

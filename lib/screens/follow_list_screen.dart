@@ -1,28 +1,55 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:adfoot/controller/follow_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/screens/profile_screen.dart';
 
-class FollowListScreen extends StatelessWidget {
+class FollowListScreen extends StatefulWidget {
   final String uid;
   final String listType; // 'followers' ou 'followings'
 
-  FollowListScreen({super.key, required this.uid, required this.listType});
+  const FollowListScreen({
+    super.key,
+    required this.uid,
+    required this.listType,
+  });
 
+  @override
+  State<FollowListScreen> createState() => _FollowListScreenState();
+}
+
+class _FollowListScreenState extends State<FollowListScreen> {
   final FollowController _followController = Get.find<FollowController>();
+
+  late Future<List<FollowUserItem>> _futureList;
+
+  @override
+  void initState() {
+    super.initState();
+    _futureList = _fetchFollowList();
+  }
+
+  Future<List<FollowUserItem>> _fetchFollowList() async {
+    final raw = await _followController.fetchFollowList(
+      widget.uid,
+      widget.listType,
+    );
+    return raw.map((m) => FollowUserItem.fromMap(m)).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          listType == 'followers' ? 'Followers' : 'Followings',
+          widget.listType == 'followers' ? 'Abonnés' : 'Abonnements',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         backgroundColor: const Color(0xFF214D4F),
+        centerTitle: true,
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _fetchFollowList(),
+      body: FutureBuilder<List<FollowUserItem>>(
+        future: _futureList,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -37,45 +64,47 @@ class FollowListScreen extends StatelessWidget {
             );
           }
 
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          final list = snapshot.data;
+          if (list == null || list.isEmpty) {
             return Center(
               child: Text(
-                listType == 'followers'
-                    ? 'Aucun follower pour l’instant.'
-                    : 'Aucune personne suivie pour l’instant.',
+                widget.listType == 'followers'
+                    ? 'Aucun abonné pour l’instant.'
+                    : 'Aucun abonnement pour l’instant.',
                 style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
             );
           }
 
-          List<Map<String, dynamic>> users = snapshot.data!;
           return ListView.builder(
-            shrinkWrap: true,
             physics: const BouncingScrollPhysics(),
-            itemCount: users.length,
+            itemCount: list.length,
             itemBuilder: (context, index) {
-              Map<String, dynamic> user = users[index];
+              final u = list[index];
               return Padding(
                 padding:
                     const EdgeInsets.symmetric(vertical: 5.0, horizontal: 10.0),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundImage: user['photoProfil'] != ''
-                        ? NetworkImage(user['photoProfil'])
+                    backgroundImage: u.photoProfil.isNotEmpty
+                        ? NetworkImage(u.photoProfil)
                         : const AssetImage('assets/images/default_avatar.png')
                             as ImageProvider,
                     backgroundColor: Colors.grey.shade200,
                   ),
                   title: Text(
-                    user['nom'] ?? 'Utilisateur',
+                    u.nom,
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(
-                    user['role'] ?? 'Non spécifié',
+                    u.role,
                     style: const TextStyle(color: Colors.grey),
                   ),
-                  trailing: _buildFollowButton(user),
+                  trailing: _FollowListButton(u: u),
+                  onTap: () {
+                    Get.to(() => ProfileScreen(uid: u.uid, isReadOnly: true));
+                  },
                 ),
               );
             },
@@ -84,76 +113,107 @@ class FollowListScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  /// Bouton Suivre/Dessuivre
-  Widget _buildFollowButton(Map<String, dynamic> user) {
-    bool isFollowing = user['isFollowing'] ?? false;
+/// Bouton “S’abonner / Se désabonner” optimisé dans la liste
+class _FollowListButton extends StatefulWidget {
+  final FollowUserItem u;
+
+  const _FollowListButton({required this.u});
+
+  @override
+  State<_FollowListButton> createState() => _FollowListButtonState();
+}
+
+class _FollowListButtonState extends State<_FollowListButton> {
+  bool _isLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentUserId = Get.find<UserController>().user?.uid;
+    final followCtrl = Get.find<FollowController>();
+
+    // Si c'est son propre compte → ne pas afficher le bouton
+    if (currentUserId == null || widget.u.uid == currentUserId) {
+      return const SizedBox.shrink();
+    }
+
+    final bool isFollowing = widget.u.isFollowing;
+
     return ElevatedButton(
       onPressed: () async {
-        String currentUserId = uid;
+        if (_isLoading) return;
+
+        setState(() {
+          _isLoading = true;
+          widget.u.isFollowing = !isFollowing; // Optimisme
+        });
+
+        bool success;
         if (isFollowing) {
-          await _followController.unfollowUser(currentUserId, user['uid']);
+          success = await followCtrl.unfollowUser(currentUserId, widget.u.uid);
         } else {
-          await _followController.followUser(currentUserId, user['uid']);
+          success = await followCtrl.followUser(currentUserId, widget.u.uid);
         }
-        // Mise à jour de l'interface
-        Get.forceAppUpdate();
+
+        if (!success) {
+          // rollback si erreur
+          widget.u.isFollowing = isFollowing;
+          Get.snackbar('Erreur', 'Impossible d’effectuer l’action.',
+              backgroundColor: Colors.red, colorText: Colors.white);
+        }
+
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       },
       style: ElevatedButton.styleFrom(
-        backgroundColor: isFollowing ? Colors.red : Colors.green,
+        backgroundColor: widget.u.isFollowing ? Colors.red : Colors.blueAccent,
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       ),
-      child: Text(
-        isFollowing ? 'Dessuivre' : 'Suivre',
-        style: const TextStyle(color: Colors.white, fontSize: 14),
-      ),
+      child: _isLoading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+          : Text(
+              widget.u.isFollowing ? 'Se désabonner' : 'S’abonner',
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
     );
   }
+}
 
-  /// Méthode pour récupérer les followers ou followings depuis Firestore
-  Future<List<Map<String, dynamic>>> _fetchFollowList() async {
-    try {
-      // Récupérer la liste des IDs des utilisateurs
-      DocumentSnapshot userSnapshot =
-          await _followController.firestore.collection('users').doc(uid).get();
 
-      if (!userSnapshot.exists) return [];
+/// Modèle local pour la ligne utilisateur dans la liste Follow
+class FollowUserItem {
+  final String uid;
+  final String nom;
+  final String photoProfil;
+  final String role;
+  bool isFollowing;
 
-      List<String> userIds = List<String>.from(listType == 'followers'
-          ? userSnapshot['followersList']
-          : userSnapshot['followingsList']);
+  FollowUserItem({
+    required this.uid,
+    required this.nom,
+    required this.photoProfil,
+    required this.role,
+    required this.isFollowing,
+  });
 
-      if (userIds.isEmpty) return [];
-
-      // Récupérer les informations des utilisateurs correspondants
-      QuerySnapshot<Map<String, dynamic>> usersSnapshot =
-          await _followController.firestore
-              .collection('users')
-              .where(FieldPath.documentId, whereIn: userIds)
-              .get();
-
-      // Identifier si l'utilisateur actuel suit déjà chaque utilisateur
-      String currentUserId = uid;
-      DocumentSnapshot currentUserSnapshot = await _followController.firestore
-          .collection('users')
-          .doc(currentUserId)
-          .get();
-      List<String> currentFollowings =
-          List<String>.from(currentUserSnapshot['followingsList'] ?? []);
-
-      return usersSnapshot.docs.map((doc) {
-        Map<String, dynamic> data = doc.data();
-        return {
-          'uid': doc.id,
-          'nom': data['nom'] ?? 'Utilisateur',
-          'photoProfil': data['photoProfil'] ?? '',
-          'role': data['role'] ?? 'Non spécifié',
-          'isFollowing': currentFollowings.contains(doc.id),
-        };
-      }).toList();
-    } catch (e) {
-      Get.snackbar('Erreur', 'Échec de chargement des données : $e');
-      return [];
-    }
+  factory FollowUserItem.fromMap(Map<String, dynamic> m) {
+    return FollowUserItem(
+      uid: m['uid'] as String,
+      nom: (m['nom'] as String?) ?? '',
+      photoProfil: (m['photoProfil'] as String?) ?? '',
+      role: (m['role'] as String?) ?? '',
+      isFollowing: (m['isFollowing'] as bool?) ?? false,
+    );
   }
 }
