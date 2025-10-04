@@ -51,18 +51,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _profileController = Get.put(ProfileController(), tag: widget.uid);
     _profileController.updateUserId(widget.uid);
-
     _scrollController.addListener(_onScroll);
   }
 
   void _onScroll() {
     final now = DateTime.now();
     if (_lastFetchAttemptAt != null &&
-        now.difference(_lastFetchAttemptAt!) < _fetchThrottle) {
-      return;
-    }
-    _lastFetchAttemptAt = now;
+        now.difference(_lastFetchAttemptAt!) < _fetchThrottle) return;
 
+    _lastFetchAttemptAt = now;
     final nearBottom = _scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200;
 
@@ -86,9 +83,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   List<Video> _getVisibleVideos(List<Video> fullList) {
-    if (fullList.length <= visibleWindowSize) {
-      return fullList;
-    }
+    if (fullList.length <= visibleWindowSize) return fullList;
     return fullList.sublist(fullList.length - visibleWindowSize);
   }
 
@@ -108,7 +103,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final isOwnProfile = currentUid != null && currentUid == user.uid;
         final visibleVideos = _getVisibleVideos(controller.videoList);
 
-        // Thème local pour ce profil
         final theme = Theme.of(context).copyWith(
           scaffoldBackgroundColor: kSurface,
           appBarTheme: const AppBarTheme(
@@ -121,7 +115,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               fontWeight: FontWeight.w600,
             ),
             iconTheme: IconThemeData(color: Colors.white),
-            actionsIconTheme: IconThemeData(color: Colors.white),
           ),
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
@@ -135,9 +128,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
           ),
         );
 
@@ -172,6 +163,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
+                    // --- Header + photo ---
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -184,12 +176,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
+
+                    // --- Statistiques ---
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: _StatsCard(user: user),
                       ),
                     ),
+
                     if (!isOwnProfile)
                       SliverToBoxAdapter(
                         child: Padding(
@@ -198,6 +193,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: _buildFollowMessageRow(user),
                         ),
                       ),
+
+                    // --- Biographie ---
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -216,6 +213,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
+
+                    // --- Informations ---
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -226,7 +225,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
+
                     const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+                    // --- Vidéos (joueurs uniquement) ---
                     if (user.role == 'joueur') ...[
                       SliverToBoxAdapter(
                         child: Padding(
@@ -356,7 +358,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final String? currentUserId = _authController.currentUid;
     if (currentUserId == null) return const SizedBox.shrink();
 
-    // on vérifie si l’utilisateur courant figure dans la liste des abonnés du profil
     final bool isFollowing = user.followersList.contains(currentUserId);
 
     return Row(
@@ -364,7 +365,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Expanded(
           child: ElevatedButton.icon(
             onPressed: () async {
-              // Mise à jour locale optimiste
               if (isFollowing) {
                 user.followersList.remove(currentUserId);
               } else {
@@ -377,7 +377,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   : await _followController.followUser(currentUserId, user.uid);
 
               if (!ok) {
-                // rollback
                 if (isFollowing) {
                   user.followersList.add(currentUserId);
                 } else {
@@ -425,12 +424,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // --- Ajout du champ téléphone ici ---
   Widget _buildSpecificInfoSection(AppUser user) {
-    final List<Widget> tiles;
+    final List<Widget> tiles = [];
+
+    // On ajoute le téléphone pour tous les rôles
+    tiles.add(_infoTile('Téléphone', user.phone));
 
     switch (user.role) {
       case 'joueur':
-        tiles = [
+        tiles.addAll([
           _infoTile('Position', user.position),
           _infoTile('Club actuel', user.team),
           _infoTile('Nombre de matchs', user.nombreDeMatchs?.toString()),
@@ -454,27 +457,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }
               },
             ),
-        ];
+        ]);
         break;
+
       case 'club':
-        tiles = [
-          _infoTile('Nom du Club', user.nomClub),
+        tiles.addAll([
+          _infoTile('Nom du club', user.nomClub),
           _infoTile('Ligue', user.ligue),
-        ];
+        ]);
         break;
+
       case 'recruteur':
-        tiles = [
+        tiles.addAll([
           _infoTile('Entreprise', user.entreprise),
           _infoTile(
               'Nombre de recrutements', user.nombreDeRecrutements?.toString()),
-        ];
+        ]);
         break;
+
       default:
-        tiles = const [
-          ListTile(
-            title: Text("Aucune information spécifique pour ce rôle."),
-          )
-        ];
+        tiles.add(const ListTile(
+          title: Text("Aucune information spécifique pour ce rôle."),
+        ));
     }
 
     return Column(children: tiles);
@@ -491,7 +495,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// === sous‐widgets ===
+// === Sous‐widgets ===
 
 class _HeaderCard extends StatelessWidget {
   final AppUser user;
@@ -545,7 +549,8 @@ class _HeaderCard extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: kAccent,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -553,7 +558,8 @@ class _HeaderCard extends StatelessWidget {
                     ),
                     onPressed: onChangePhoto,
                     icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                    label: const Text('Changer', style: TextStyle(color: Colors.white)),
+                    label: const Text('Changer',
+                        style: TextStyle(color: Colors.white)),
                   ),
                 ),
             ],
@@ -567,12 +573,15 @@ class _HeaderCard extends StatelessWidget {
                     if (user.photoProfil.isNotEmpty) {
                       _showProfilePhoto(user.photoProfil);
                     } else {
-                      Get.snackbar('Info', 'Cet utilisateur n\'a pas de photo de profil.',
-                          backgroundColor: Colors.blue, colorText: Colors.white);
+                      Get.snackbar('Info',
+                          'Cet utilisateur n\'a pas de photo de profil.',
+                          backgroundColor: Colors.blue,
+                          colorText: Colors.white);
                     }
                   },
                   icon: const Icon(Icons.image_search_rounded),
-                  label: const Text('Voir la photo', style: TextStyle(color: Colors.white)),
+                  label: const Text('Voir la photo',
+                      style: TextStyle(color: Colors.white)),
                 ),
               ),
             ],
@@ -594,7 +603,8 @@ class _HeaderCard extends StatelessWidget {
             ),
             TextButton(
               onPressed: Get.back,
-              child: const Text('Fermer', style: TextStyle(color: Colors.black87)),
+              child:
+                  const Text('Fermer', style: TextStyle(color: Colors.black87)),
             ),
           ],
         ),
@@ -717,7 +727,8 @@ class _VideoTile extends StatelessWidget {
             const Positioned(
               right: 6,
               bottom: 6,
-              child: Icon(Icons.play_circle_fill, color: Colors.white70, size: 24),
+              child:
+                  Icon(Icons.play_circle_fill, color: Colors.white70, size: 24),
             ),
           ],
         ),
@@ -752,14 +763,16 @@ class _SectionCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: _ProfileScreenState.kPrimary.withOpacity(0.08),
+                  backgroundColor:
+                      _ProfileScreenState.kPrimary.withOpacity(0.08),
                   child: Icon(icon, color: _ProfileScreenState.kPrimary),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                 ),
               ],
@@ -786,11 +799,7 @@ class _SectionHeader extends StatelessWidget {
         CircleAvatar(
           radius: 16,
           backgroundColor: _ProfileScreenState.kPrimary.withOpacity(0.08),
-          child: Icon(
-            icon,
-            color: _ProfileScreenState.kPrimary,
-            size: 18,
-          ),
+          child: Icon(icon, color: _ProfileScreenState.kPrimary, size: 18),
         ),
         const SizedBox(width: 8),
         Text(

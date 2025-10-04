@@ -10,14 +10,16 @@ class EditProfileScreen extends StatelessWidget {
   final AppUser user;
   final ProfileController profileController;
 
-  // Couleurs & styles
+  // --- Couleurs ---
   static const kPrimary = Color(0xFF214D4F);
   static const kAccent = Color(0xFF00BFA6);
   static const kDanger = Color(0xFFE53935);
   static const kSurface = Color(0xFFF7FAFA);
 
+  // --- Controllers de texte ---
   final TextEditingController _nomController = TextEditingController();
   final TextEditingController _bioController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _teamController = TextEditingController();
   final TextEditingController _clubNameController = TextEditingController();
   final TextEditingController _positionController = TextEditingController();
@@ -33,8 +35,10 @@ class EditProfileScreen extends StatelessWidget {
     required this.user,
     required this.profileController,
   }) {
+    // Préremplissage
     _nomController.text = user.nom;
     _bioController.text = user.bio ?? '';
+    _phoneController.text = user.phone ?? '';
     _teamController.text = user.team ?? '';
     _clubNameController.text = user.nomClub ?? '';
     _positionController.text = user.position ?? '';
@@ -65,7 +69,7 @@ class EditProfileScreen extends StatelessWidget {
           elevatedButtonTheme: ElevatedButtonThemeData(
             style: ElevatedButton.styleFrom(
               backgroundColor: kPrimary,
-              foregroundColor: Colors.white, // texte + icône en blanc
+              foregroundColor: Colors.white,
               elevation: 2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -97,6 +101,7 @@ class EditProfileScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // --- SECTION INFOS GÉNÉRALES ---
                       _SectionCard(
                         title: 'Informations générales',
                         icon: Icons.badge_rounded,
@@ -104,14 +109,21 @@ class EditProfileScreen extends StatelessWidget {
                           children: [
                             _buildTextField(
                               controller: _nomController,
-                              label: 'Nom',
+                              label: 'Nom complet',
                               icon: Icons.person_outline,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildTextField(
+                              controller: _phoneController,
+                              label: 'Numéro de téléphone',
+                              icon: Icons.phone_outlined,
+                              keyboardType: TextInputType.phone,
                             ),
                             if (user.role != 'fan') ...[
                               const SizedBox(height: 12),
                               _buildTextField(
                                 controller: _bioController,
-                                label: 'Infos Professionnelles',
+                                label: 'Infos professionnelles',
                                 icon: Icons.info_outline,
                                 maxLines: 3,
                               ),
@@ -119,8 +131,10 @@ class EditProfileScreen extends StatelessWidget {
                           ],
                         ),
                       ),
+
                       const SizedBox(height: 16),
 
+                      // --- SECTION SPÉCIFIQUE AU RÔLE ---
                       if (user.role == 'joueur' || user.role == 'coach')
                         _SectionCard(
                           title: user.role == 'coach'
@@ -137,7 +151,7 @@ class EditProfileScreen extends StatelessWidget {
                               const SizedBox(height: 12),
                               _buildTextField(
                                 controller: _teamController,
-                                label: 'Club Actuel',
+                                label: 'Club actuel',
                                 icon: Icons.flag_outlined,
                               ),
                               const SizedBox(height: 12),
@@ -180,8 +194,8 @@ class EditProfileScreen extends StatelessWidget {
                             children: [
                               _buildTextField(
                                 controller: _clubNameController,
-                                label: 'Situation géographique',
-                                icon: Icons.place_outlined,
+                                label: 'Nom du club',
+                                icon: Icons.apartment_outlined,
                               ),
                               const SizedBox(height: 12),
                               _buildTextField(
@@ -213,9 +227,10 @@ class EditProfileScreen extends StatelessWidget {
                             ],
                           ),
                         ),
+
                       const SizedBox(height: 16),
 
-                      // Section CV (joueur)
+                      // --- CV JOUEUR ---
                       if (user.role == 'joueur') ...[
                         CvUploaderSection(
                           user: user,
@@ -224,7 +239,7 @@ class EditProfileScreen extends StatelessWidget {
                         const SizedBox(height: 16),
                       ],
 
-                      // Bouton Sauvegarder (full width)
+                      // --- BOUTON SAUVEGARDER ---
                       ElevatedButton.icon(
                         onPressed: () async {
                           final updatedUser = AppUser(
@@ -239,6 +254,9 @@ class EditProfileScreen extends StatelessWidget {
                             dateInscription: user.dateInscription,
                             dernierLogin: user.dernierLogin,
                             bio: _bioController.text,
+                            phone: _phoneController.text.isEmpty
+                                ? null
+                                : _phoneController.text,
                             team: _teamController.text.isEmpty
                                 ? null
                                 : _teamController.text,
@@ -260,8 +278,7 @@ class EditProfileScreen extends StatelessWidget {
                             assistances:
                                 int.tryParse(_assistancesController.text) ?? 0,
                             nombreDeRecrutements:
-                                int.tryParse(_nombreRecrutementsController.text) ??
-                                    0,
+                                int.tryParse(_nombreRecrutementsController.text) ?? 0,
                             videosPubliees: user.videosPubliees,
                             followersList: user.followersList,
                             followingsList: user.followingsList,
@@ -272,7 +289,9 @@ class EditProfileScreen extends StatelessWidget {
 
                           await profileController.updateUserProfile(updatedUser);
                           Get.off(() => ProfileScreen(uid: user.uid));
-                          Get.snackbar('Succès', 'Profil mis à jour avec succès');
+                          Get.snackbar('Succès', 'Profil mis à jour avec succès',
+                              backgroundColor: kAccent,
+                              colorText: Colors.white);
                         },
                         icon: const Icon(Icons.save_rounded),
                         label: const Text(
@@ -291,8 +310,7 @@ class EditProfileScreen extends StatelessWidget {
     );
   }
 
-  // ---- UI helpers ----
-
+  // ---- Thème des champs de saisie ----
   InputDecorationTheme _inputDecorationTheme(BuildContext context) {
     final base = Theme.of(context).inputDecorationTheme;
     final border = OutlineInputBorder(
@@ -335,7 +353,7 @@ class EditProfileScreen extends StatelessWidget {
 }
 
 // ---------------------------
-// CV Uploader (stylisé)
+// CV UPLOADER
 // ---------------------------
 class CvUploaderSection extends StatelessWidget {
   final AppUser user;
@@ -387,7 +405,7 @@ class CvUploaderSection extends StatelessWidget {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: kAccent,
-              foregroundColor: Colors.white, // texte & icône en blanc
+              foregroundColor: Colors.white,
             ),
             icon: const Icon(Icons.upload_file_rounded),
             label: Text(
@@ -403,7 +421,7 @@ class CvUploaderSection extends StatelessWidget {
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: kDanger,
-                foregroundColor: Colors.white, // texte & icône en blanc
+                foregroundColor: Colors.white,
               ),
               icon: const Icon(Icons.delete_forever_rounded),
               label: const Text('Supprimer le CV',
@@ -417,7 +435,7 @@ class CvUploaderSection extends StatelessWidget {
 }
 
 // ---------------------------
-// Carte de section réutilisable
+// SECTION CARD
 // ---------------------------
 class _SectionCard extends StatelessWidget {
   final String title;
