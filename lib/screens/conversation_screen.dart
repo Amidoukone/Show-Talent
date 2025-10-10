@@ -13,7 +13,7 @@ class ConversationsScreen extends StatefulWidget {
   const ConversationsScreen({super.key});
 
   @override
-  _ConversationsScreenState createState() => _ConversationsScreenState();
+  State<ConversationsScreen> createState() => _ConversationsScreenState();
 }
 
 class _ConversationsScreenState extends State<ConversationsScreen> {

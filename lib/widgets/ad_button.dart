@@ -27,7 +27,13 @@ class AdButton extends StatelessWidget {
       onPressed: loading ? null : onPressed,
       icon: loading
           ? const SizedBox(
-              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
           : (leading != null ? Icon(leading, size: 20) : const SizedBox.shrink()),
       label: Text(label),
       style: _styleFor(context),
@@ -52,8 +58,10 @@ class AdButton extends StatelessWidget {
           foregroundColor: const WidgetStatePropertyAll(Colors.white),
         );
       case AdButtonKind.tonal:
+        // ✅ Remplacement withOpacity(.12) -> withValues(alpha: 0.12) pour éviter la dépréciation
         return base.copyWith(
-          backgroundColor: WidgetStatePropertyAll(AdColors.brandOn.withOpacity(.12)),
+          backgroundColor:
+              WidgetStatePropertyAll(AdColors.brandOn.withValues(alpha: 0.12)),
           foregroundColor: const WidgetStatePropertyAll(AdColors.brand),
         );
       case AdButtonKind.danger:

@@ -13,7 +13,7 @@ class EventFormScreen extends StatefulWidget {
   const EventFormScreen({super.key, this.event});
 
   @override
-  _EventFormScreenState createState() => _EventFormScreenState();
+  State<EventFormScreen> createState() => _EventFormScreenState();
 }
 
 class _EventFormScreenState extends State<EventFormScreen> {
@@ -213,9 +213,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 ? startDate!
                 : now;
 
-        DateTime? pickedDate = await showDatePicker(
+        final initial = date ?? firstDate;
+
+        final pickedDate = await showDatePicker(
           context: context,
-          initialDate: date ?? firstDate,
+          initialDate: initial,
           firstDate: firstDate,
           lastDate: DateTime(2100),
           builder: (context, child) {
@@ -226,14 +228,22 @@ class _EventFormScreenState extends State<EventFormScreen> {
                   onPrimary: Colors.white,
                   surface: Colors.white,
                   onSurface: Colors.black,
-                ), dialogTheme: DialogThemeData(backgroundColor: Colors.white),
+                ),
+                // ✅ Correction : DialogThemeData (et non DialogTheme)
+                dialogTheme: const DialogThemeData(
+                  backgroundColor: Colors.white,
+                ),
               ),
               child: child!,
             );
           },
         );
-        onDateSelected(pickedDate!);
-            },
+
+        // sécurité : si l’utilisateur annule
+        if (pickedDate == null) return;
+
+        onDateSelected(pickedDate);
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(

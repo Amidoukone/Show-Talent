@@ -34,7 +34,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
   static const _roles = ['joueur', 'club', 'recruteur', 'fan'];
 
   static final ActionCodeSettings _acs = ActionCodeSettings(
-    url: 'https://adfoot.org/verify', // 👉 route /verify (main.dart) -> VerifyEmailScreen
+    // 👉 route /verify (main.dart) -> VerifyEmailScreen
+    url: 'https://adfoot.org/verify',
     handleCodeInApp: false,
   );
 
@@ -217,7 +218,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         alignment: Alignment.center,
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(16),
-                          child: Image.asset('assets/logo.png', height: 80, fit: BoxFit.contain),
+                          child: Image.asset(
+                            'assets/logo.png',
+                            height: 80,
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -233,7 +238,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       Text(
                         'Rejoins la communauté AD.FOOT',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: cs.onSurface.withOpacity(.7),
+                              // ⬇️ Remplacement withOpacity(...) -> withValues(alpha: ...)
+                              color: cs.onSurface.withValues(alpha: 0.7),
                               fontWeight: FontWeight.w600,
                             ),
                         textAlign: TextAlign.center,
@@ -278,7 +284,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Rôle (dropdown pour ne rien casser)
+                      // Rôle (dropdown)
                       DropdownButtonFormField<String>(
                         value: _selectedRole,
                         decoration: const InputDecoration(
@@ -305,7 +311,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
 
                       const SizedBox(height: 8),
-                      // Lien vers login (optionnel, non destructif)
+
+                      // Lien vers login
                       TextButton(
                         onPressed: _isLoading ? null : () => Get.back(),
                         child: const Text('Déjà un compte ? Se connecter'),
@@ -329,7 +336,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
     // Autorise lettres avec accents, espaces, apostrophes et tirets
     if (!RegExp(r"^[A-Za-zÀ-ÿ\s'’-]+$").hasMatch(value)) return 'Nom invalide';
     return null;
-    // Remarque : si tu veux permettre les chiffres dans les noms (ex: U17), adapte la regex.
   }
 
   String? _validateEmail(String? v) {

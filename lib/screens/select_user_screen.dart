@@ -10,19 +10,24 @@ class SelectUserScreen extends StatefulWidget {
   const SelectUserScreen({super.key});
 
   @override
-  _SelectUserScreenState createState() => _SelectUserScreenState();
+  State<SelectUserScreen> createState() => _SelectUserScreenState();
 }
 
 class _SelectUserScreenState extends State<SelectUserScreen> {
-  final UserController userController = Get.put(UserController());
+  // ✅ Réutilise un UserController existant si présent, sinon l’instancie
+  final UserController userController = Get.isRegistered<UserController>()
+      ? Get.find<UserController>()
+      : Get.put(UserController(), permanent: true);
+
   // ✅ Ne pas recréer un ChatController : on réutilise l’existant
   final ChatController chatController = Get.isRegistered<ChatController>()
       ? Get.find<ChatController>()
       : Get.put(ChatController(), permanent: true);
+
   final AuthController authController = Get.find<AuthController>();
 
   final TextEditingController searchController = TextEditingController();
-  RxString searchTerm = ''.obs;
+  final RxString searchTerm = ''.obs;
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +60,8 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                 ),
                 Expanded(
                   child: Obx(() {
-                    var users = userController.userList.where((user) {
+                    // Liste filtrée des utilisateurs éligibles
+                    final users = userController.userList.where((user) {
                       return user.uid != currentUid &&
                           user.nom.isNotEmpty &&
                           user.emailVerified == true &&
@@ -68,7 +74,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                       );
                     }
 
-                    var filteredUsers = users.where((user) {
+                    final filteredUsers = users.where((user) {
                       return user.nom.toLowerCase().contains(searchTerm.value);
                     }).toList();
 
@@ -81,7 +87,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     return ListView.builder(
                       itemCount: filteredUsers.length,
                       itemBuilder: (context, index) {
-                        AppUser user = filteredUsers[index];
+                        final AppUser user = filteredUsers[index];
 
                         return ListTile(
                           leading: CircleAvatar(
@@ -94,16 +100,19 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                                 ? Text(
                                     user.nom[0].toUpperCase(),
                                     style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 20,
-                                        color: Colors.black),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 20,
+                                      color: Colors.black,
+                                    ),
                                   )
                                 : null,
                           ),
                           title: Text(
                             user.nom,
                             style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 16),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
                           ),
                           subtitle: Text(
                             user.role.isNotEmpty ? user.role : 'Rôle inconnu',
@@ -111,7 +120,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                           ),
                           onTap: () async {
                             try {
-                              String conversationId =
+                              final String conversationId =
                                   await chatController.createOrGetConversation(
                                 currentUserId: currentUid,
                                 otherUserId: user.uid,

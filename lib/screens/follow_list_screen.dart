@@ -170,7 +170,7 @@ class _FollowListButtonState extends State<_FollowListButton> {
         }
       },
       style: ElevatedButton.styleFrom(
-        backgroundColor: widget.u.isFollowing ? Colors.red : Colors.blueAccent,
+        backgroundColor: widget.u.isFollowing ? const Color.fromARGB(255, 158, 50, 42) : const Color.fromARGB(255, 7, 99, 79),
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       ),
       child: _isLoading
