@@ -105,7 +105,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       videoManager.pauseAll('home');
       _setWakelock(false);
     } else if (state == AppLifecycleState.resumed) {
@@ -237,11 +238,24 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+
     return Scaffold(
       backgroundColor: Colors.black,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('AD.FOOT',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'AD.FOOT',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.2,
+            color: Colors.white,
+          ),
+        ),
         actions: [
           Obx(() {
             final user = userController.user;
@@ -252,25 +266,36 @@ class _HomeScreenState extends State<HomeScreen>
                   width: 24,
                   height: 24,
                   child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2),
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
                 ),
               );
             }
-            return IconButton(
-              icon: CircleAvatar(
-                backgroundImage: NetworkImage(
-                  user.photoProfil.isNotEmpty
-                      ? user.photoProfil
-                      : 'https://via.placeholder.com/150',
+            return Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: GestureDetector(
+                onTap: () async {
+                  await videoManager.pauseAll('home');
+                  await _setWakelock(false);
+                  await Get.to(
+                    () => ProfileScreen(uid: user.uid, isReadOnly: false),
+                  );
+                  videoController.currentIndex.refresh();
+                  await _updateWakelockForCurrent();
+                },
+                child: Hero(
+                  tag: 'profileAvatar',
+                  child: CircleAvatar(
+                    radius: 18,
+                    backgroundImage: NetworkImage(
+                      user.photoProfil.isNotEmpty
+                          ? user.photoProfil
+                          : 'https://via.placeholder.com/150',
+                    ),
+                  ),
                 ),
               ),
-              onPressed: () async {
-                await videoManager.pauseAll('home');
-                await _setWakelock(false);
-                await Get.to(() => ProfileScreen(uid: user.uid, isReadOnly: false));
-                videoController.currentIndex.refresh();
-                await _updateWakelockForCurrent();
-              },
             );
           }),
         ],
@@ -281,8 +306,10 @@ class _HomeScreenState extends State<HomeScreen>
               final videos = videoController.videoList;
               if (videos.isEmpty) {
                 return const Center(
-                  child: Text('Aucune vidéo disponible',
-                      style: TextStyle(color: Colors.white, fontSize: 18)),
+                  child: Text(
+                    'Aucune vidéo disponible',
+                    style: TextStyle(color: Colors.white70, fontSize: 18),
+                  ),
                 );
               }
 
@@ -298,6 +325,7 @@ class _HomeScreenState extends State<HomeScreen>
                       videoManager.getController('home', video.videoUrl);
 
                   return Stack(
+                    fit: StackFit.expand,
                     children: [
                       SmartVideoPlayer(
                         key: ValueKey(video.id),
@@ -313,67 +341,73 @@ class _HomeScreenState extends State<HomeScreen>
                         player: player,
                       ),
                       Positioned(
-                        bottom: 100,
-                        left: 10,
+                        bottom: screenHeight * 0.15,
+                        left: 12,
                         right: 80,
-                        child: SafeArea(
-                          child: FadeTransition(
-                            opacity: _fadeAnimation,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  video.songName.isNotEmpty
-                                      ? video.songName
-                                      : 'Musique inconnue',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                    shadows: [
-                                      Shadow(
-                                          color: Colors.black54,
-                                          offset: Offset(1, 1),
-                                          blurRadius: 2)
-                                    ],
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                        child: FadeTransition(
+                          opacity: _fadeAnimation,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                video.songName.isNotEmpty
+                                    ? ' ${video.songName}'
+                                    : 'Musique inconnue',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black54,
+                                      offset: Offset(1, 1),
+                                      blurRadius: 2,
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  video.caption.isNotEmpty
-                                      ? video.caption
-                                      : 'Pas de légende',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    shadows: [
-                                      Shadow(
-                                          color: Colors.black54,
-                                          offset: Offset(1, 1),
-                                          blurRadius: 2)
-                                    ],
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                video.caption.isNotEmpty
+                                    ? video.caption
+                                    : 'Pas de légende',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black54,
+                                      offset: Offset(1, 1),
+                                      blurRadius: 2,
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
                       ),
+                      // ✅ Avatar avec bouton "+" fusionné (effet TikTok)
                       Positioned(
-                        bottom: 10,
-                        right: 10,
+                        bottom: screenHeight * 0.12,
+                        right: 16,
                         child: GestureDetector(
                           onTap: () async {
                             await videoManager.pauseAll('home');
                             await _setWakelock(false);
-                            await Get.to(() => ProfileScreen(uid: video.uid, isReadOnly: true));
+                            await Get.to(() => ProfileScreen(
+                                  uid: video.uid,
+                                  isReadOnly: true,
+                                ));
                             videoController.currentIndex.refresh();
                             await _updateWakelockForCurrent();
                           },
                           child: Stack(
+                            alignment: Alignment.bottomCenter,
+                            clipBehavior: Clip.none,
                             children: [
                               CircleAvatar(
                                 backgroundImage: NetworkImage(
@@ -381,14 +415,14 @@ class _HomeScreenState extends State<HomeScreen>
                                       ? video.profilePhoto
                                       : 'https://via.placeholder.com/150',
                                 ),
-                                radius: 24,
+                                radius: 28,
                               ),
-                              // bouton "+" si ce n’est pas l’utilisateur courant
                               if (userController.user?.uid != video.uid &&
-                                  !(userController.user?.followingsList.contains(video.uid) ?? false))
+                                  !(userController.user?.followingsList
+                                          .contains(video.uid) ??
+                                      false))
                                 Positioned(
-                                  bottom: 0,
-                                  right: 0,
+                                  bottom: -6,
                                   child: _FollowToggleButton(video: video),
                                 ),
                             ],
@@ -403,22 +437,26 @@ class _HomeScreenState extends State<HomeScreen>
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
       floatingActionButton: Obx(() {
         if (userController.user?.role == 'joueur') {
-          return FloatingActionButton(
-            backgroundColor: Colors.white70,
-            foregroundColor: Colors.black,
-            heroTag: 'addVideo',
-            onPressed: () async {
-              await videoManager.pauseAll('home');
-              await _setWakelock(false);
-              final result = await Get.to(() => const AddVideo());
-              if (result == true) {
-                await _handleAfterAddVideo();
-              } else {
-                videoController.currentIndex.refresh();
-                await _updateWakelockForCurrent();
-              }
-            },
-            child: const Icon(Icons.add),
+          return AnimatedOpacity(
+            opacity: 1,
+            duration: const Duration(milliseconds: 400),
+            child: FloatingActionButton(
+              backgroundColor: Colors.white.withOpacity(0.9),
+              foregroundColor: Colors.black,
+              heroTag: 'addVideo',
+              onPressed: () async {
+                await videoManager.pauseAll('home');
+                await _setWakelock(false);
+                final result = await Get.to(() => const AddVideo());
+                if (result == true) {
+                  await _handleAfterAddVideo();
+                } else {
+                  videoController.currentIndex.refresh();
+                  await _updateWakelockForCurrent();
+                }
+              },
+              child: const Icon(Icons.add, size: 28),
+            ),
           );
         }
         return const SizedBox.shrink();
@@ -431,17 +469,16 @@ class _HomeScreenState extends State<HomeScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.wifi_off, color: Colors.white, size: 60),
+          Icon(Icons.wifi_off, color: Colors.white70, size: 60),
           SizedBox(height: 20),
           Text('Pas de connexion Internet',
-              style: TextStyle(color: Colors.white, fontSize: 18)),
+              style: TextStyle(color: Colors.white70, fontSize: 18)),
         ],
       ),
     );
   }
 }
 
-/// Widget séparé pour le bouton “+ / abonnement” avec état de chargement
 class _FollowToggleButton extends StatefulWidget {
   final dynamic video;
   const _FollowToggleButton({required this.video});
@@ -453,8 +490,16 @@ class _FollowToggleButton extends StatefulWidget {
 class _FollowToggleButtonState extends State<_FollowToggleButton> {
   bool _isLoading = false;
 
+  // ✅ NEW: cache local pour masquer le bouton immédiatement après clic
+  bool _hidden = false;
+
   @override
   Widget build(BuildContext context) {
+    if (_hidden) {
+      // bouton caché localement (disparaît tout de suite)
+      return const SizedBox.shrink();
+    }
+
     final userCtrl = Get.find<UserController>();
     final followCtrl = Get.find<FollowController>();
     final currUser = userCtrl.user;
@@ -468,10 +513,13 @@ class _FollowToggleButtonState extends State<_FollowToggleButton> {
 
         final already = currUser.followingsList.contains(targetUid);
 
-        // 🎯 Mise à jour locale optimiste
+        // 🔥 Disparition immédiate du bouton (optimiste visuel)
         setState(() {
           _isLoading = true;
+          _hidden = true; // <-- rend le bouton invisible tout de suite
           if (already) {
+            // Normalement, ce bouton n'apparaît que si "already == false",
+            // mais on garde la logique robuste.
             currUser.followingsList.remove(targetUid);
             currUser.followings--;
           } else {
@@ -485,30 +533,37 @@ class _FollowToggleButtonState extends State<_FollowToggleButton> {
             : await followCtrl.followUser(currUser.uid, targetUid);
 
         if (!ok) {
-          // rollback si erreur
-          setState(() {
-            if (already) {
-              // l’action était unfollow, donc on remet follow
-              currUser.followingsList.add(targetUid);
-              currUser.followings++;
-            } else {
-              currUser.followingsList.remove(targetUid);
-              currUser.followings--;
-            }
-          });
-          Get.snackbar('Erreur', 'Impossible d’effectuer l’action.', backgroundColor: Colors.red, colorText: Colors.white);
-        }
-
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+          // ❌ échec Firestore → rollback visuel + ré-afficher le bouton
+          if (mounted) {
+            setState(() {
+              _hidden = false; // ré-affiche le bouton
+              if (already) {
+                currUser.followingsList.add(targetUid);
+                currUser.followings++;
+              } else {
+                currUser.followingsList.remove(targetUid);
+                currUser.followings--;
+              }
+              _isLoading = false;
+            });
+          }
+          Get.snackbar('Erreur', 'Impossible d’effectuer l’action.',
+              backgroundColor: Colors.red, colorText: Colors.white);
+        } else {
+          // ✅ succès → on laisse le bouton caché (utilisateur suivi)
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+              // _hidden reste true
+            });
+          }
         }
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: Colors.blueAccent,
+          color: const Color.fromARGB(255, 1, 35, 93),
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 1.5),
         ),

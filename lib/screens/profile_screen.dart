@@ -57,7 +57,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _onScroll() {
     final now = DateTime.now();
     if (_lastFetchAttemptAt != null &&
-        now.difference(_lastFetchAttemptAt!) < _fetchThrottle) return;
+        now.difference(_lastFetchAttemptAt!) < _fetchThrottle) {
+      return;
+    }
 
     _lastFetchAttemptAt = now;
     final nearBottom = _scrollController.position.pixels >=
@@ -163,7 +165,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
-                    // --- Header + photo ---
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -176,15 +177,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-
-                    // --- Statistiques ---
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: _StatsCard(user: user),
                       ),
                     ),
-
                     if (!isOwnProfile)
                       SliverToBoxAdapter(
                         child: Padding(
@@ -193,8 +191,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: _buildFollowMessageRow(user),
                         ),
                       ),
-
-                    // --- Biographie ---
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -213,8 +209,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-
-                    // --- Informations ---
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -225,10 +219,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                     ),
-
                     const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-                    // --- Vidéos (joueurs uniquement) ---
                     if (user.role == 'joueur') ...[
                       SliverToBoxAdapter(
                         child: Padding(
@@ -324,8 +315,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // --- Actions ---
-
   Future<void> _handleSendMessage(AppUser user) async {
     final currentUserId = _authController.currentUid;
     if (currentUserId == null || currentUserId.isEmpty) {
@@ -396,7 +385,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            icon: Icon(isFollowing ? Icons.person_remove_alt_1 : Icons.person_add_alt),
+            icon: Icon(isFollowing
+                ? Icons.person_remove_alt_1
+                : Icons.person_add_alt),
             label: Text(
               isFollowing ? 'Se désabonner' : 'S’abonner',
               style: const TextStyle(fontSize: 15, color: Colors.white),
@@ -424,11 +415,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // --- Ajout du champ téléphone ici ---
   Widget _buildSpecificInfoSection(AppUser user) {
     final List<Widget> tiles = [];
-
-    // On ajoute le téléphone pour tous les rôles
     tiles.add(_infoTile('Téléphone', user.phone));
 
     switch (user.role) {
@@ -528,7 +516,7 @@ class _HeaderCard extends StatelessWidget {
               Obx(
                 () => CircleAvatar(
                   radius: 60,
-                  backgroundColor: kPrimary.withOpacity(0.08),
+                  backgroundColor: kPrimary.withValues(alpha: 0.08),
                   backgroundImage: profileController.isLoadingPhoto.value
                       ? null
                       : NetworkImage(
@@ -717,7 +705,7 @@ class _VideoTile extends StatelessWidget {
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
                     colors: [
-                      Colors.black.withOpacity(0.25),
+                      Colors.black.withValues(alpha: 0.25),
                       Colors.transparent,
                     ],
                   ),
@@ -764,7 +752,7 @@ class _SectionCard extends StatelessWidget {
                 CircleAvatar(
                   radius: 18,
                   backgroundColor:
-                      _ProfileScreenState.kPrimary.withOpacity(0.08),
+                      _ProfileScreenState.kPrimary.withValues(alpha: 0.08),
                   child: Icon(icon, color: _ProfileScreenState.kPrimary),
                 ),
                 const SizedBox(width: 10),
@@ -798,7 +786,8 @@ class _SectionHeader extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 16,
-          backgroundColor: _ProfileScreenState.kPrimary.withOpacity(0.08),
+          backgroundColor:
+              _ProfileScreenState.kPrimary.withValues(alpha: 0.08),
           child: Icon(icon, color: _ProfileScreenState.kPrimary, size: 18),
         ),
         const SizedBox(width: 8),

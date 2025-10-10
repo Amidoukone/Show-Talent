@@ -12,95 +12,101 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'firebase_options.dart';
 
-// 🔧 Controllers & services
+//  Controllers & services
 import 'controller/auth_controller.dart';
 import 'controller/offre_controller.dart';
 import 'controller/user_controller.dart';
-import 'controller/follow_controller.dart'; // ✅ ajouté pour FollowController
+import 'controller/follow_controller.dart';
 import 'widgets/video_manager.dart';
 import 'services/email_link_handler.dart';
 import 'services/notifications.dart';
 
-// 🔱 UI
+//  UI
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_screen.dart';
-import 'screens/verify_email_screen.dart'; // ✅ écran unifié de vérification
+import 'screens/verify_email_screen.dart';
+import 'screens/reset_password_screen.dart'; // ✅ Ajout pour gestion reset password
 
-// 🎨 Theme
+//  Theme
 import 'theme/app_theme.dart';
 import 'theme/ad_colors.dart';
 
-/// 🔔 Notifications en arrière-plan (isolate) — uniquement hors Web
+///  Notifications en arrière-plan (isolate) — uniquement hors Web
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  // TODO: logs/traitements BG si nécessaire (ne bloque pas)
+
+  //  Ici tu peux ajouter un log léger ou un enregistrement analytique :
+  // Exemple : NotificationService.logBackgroundMessage(message);
+  // Ce bloc ne doit pas bloquer, donc aucun await long ici.
 }
 
 Future<void> main() async {
-  /// ✅ Tout est maintenant à l’intérieur de runZonedGuarded (Zone mismatch corrigé)
+  //  Zone sécurisée pour capturer toutes les erreurs non gérées
   runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized(); // 🟢 déplacé ici
+    WidgetsFlutterBinding.ensureInitialized();
 
-    // (Optionnel) verrouiller l’orientation en portrait
+    // Optionnel : verrouille l’orientation portrait si nécessaire
     // await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-    // Barre de statut lisible sur AppBar brand
+    // Barre de statut transparente et lisible
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
-      statusBarBrightness: Brightness.dark, // iOS
+      statusBarBrightness: Brightness.dark,
     ));
 
-    // Init Firebase
+    //  Initialisation Firebase
     await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-    // Langue des emails/erreurs Auth
     FirebaseAuth.instance.setLanguageCode('fr');
 
-    // Désactive l’auto-init FCM sur Web pour éviter tout prompt avant login
+    //  Empêche l’auto-init FCM sur Web
     if (kIsWeb) {
       await FirebaseMessaging.instance.setAutoInitEnabled(false);
     }
 
-    // Notifications locales + écoute foreground (safe Web/Mobile)
+    //  Notifications locales et foreground
     await NotificationService.initLocal();
     if (!kIsWeb) {
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     }
     NotificationService.listenForeground();
 
-    // 🧩 Enregistre les controllers critiques (ordre important)
+    //  Injection GetX (ordre important)
     Get.put<VideoManager>(VideoManager(), permanent: true);
     Get.put<AuthController>(AuthController(), permanent: true);
     Get.put<OffreController>(OffreController(), permanent: true);
     Get.put<UserController>(UserController(), permanent: true);
-    Get.put<FollowController>(FollowController(), permanent: true); // ✅ ajouté ici
+    Get.put<FollowController>(FollowController(), permanent: true);
 
-    // 🔗 Deep links d’auth (adfoot.org/verify?...&oobCode=...)
+    //  Gestion des liens d’authentification par e-mail
     try {
       await EmailLinkHandler.init();
-    } catch (_) {
-      // ne bloque pas le démarrage
+    } catch (e, st) {
+      if (kDebugMode) {
+        print('EmailLinkHandler init error: $e\n$st');
+      }
+      // En production, ignorer sans bloquer
     }
 
-    // Garde-fous erreurs : en prod on évite un crash “silencieux”
+    //  Gestion des erreurs Flutter (UI thread)
     FlutterError.onError = (FlutterErrorDetails details) {
       if (kDebugMode) {
         FlutterError.dumpErrorToConsole(details);
       } else {
-        // TODO: reporter aux crash logs si nécessaire
+        //  En production, envoie aux crash logs Firebase
+        // await FirebaseCrashlytics.instance.recordFlutterError(details);
       }
     };
 
-    /// ✅ runApp dans la même zone
+    //  Lancement de l’application
     runApp(const MyApp());
-  }, (error, stack) {
+  }, (error, stack) async {
     if (kDebugMode) {
-      // ignore: avoid_print
       print('Uncaught zone error: $error\n$stack');
     } else {
-      // TODO: reporter aux crash logs si nécessaire
+      //  En production, log des erreurs non capturées
+      // await FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     }
   });
 }
@@ -113,12 +119,13 @@ class MyApp extends StatelessWidget {
     return GetMaterialApp(
       title: 'AD.FOOT',
       debugShowCheckedModeBanner: false,
-      navigatorKey: Get.key, // ✅ sécurité navigation GetX
-      theme: AppTheme.light(), // 🎨 thème moderne unifié (Material 3)
+      navigatorKey: Get.key,
+      theme: AppTheme.light(),
       defaultTransition: Transition.fadeIn,
-      // Builder global : tap-to-unfocus + scroll sans glow + textScale plafonné
+
+      //  Wrapper global : gestion focus, scroll et accessibilité
       builder: (context, child) {
-        // Tap pour fermer le clavier
+        // Ferme le clavier sur tap hors champ
         final wrapped = GestureDetector(
           behavior: HitTestBehavior.deferToChild,
           onTap: () {
@@ -128,27 +135,43 @@ class MyApp extends StatelessWidget {
           child: child,
         );
 
-        // Supprime l’effet “glow” overscroll & plafonne textScale
+        //  Correction définitive du warning et du bug sur TextScaler
+        final currentScaler =
+            MediaQuery.of(context).textScaler; // récupère le scaler courant
+        final scaleValue = currentScaler.scale(1.0).clamp(0.85, 1.15);
+        final clampedScaler = TextScaler.linear(scaleValue);
+
         return ScrollConfiguration(
           behavior: const _AppScrollBehavior(),
           child: MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(
-                MediaQuery.of(context).textScaleFactor.clamp(0.85, 1.15),
-              ),
-            ),
+            data: MediaQuery.of(context).copyWith(textScaler: clampedScaler),
             child: wrapped,
           ),
         );
       },
-      // Page initiale (routing réel délégué aux controllers)
+
+      // Page initiale
       home: const SplashScreen(),
+
+      // ✅ Routes GetX
       getPages: [
         GetPage(name: '/', page: () => const SplashScreen()),
         GetPage(name: '/login', page: () => const LoginScreen()),
         GetPage(name: '/main', page: () => const MainScreen()),
         GetPage(name: '/verify', page: () => const VerifyEmailScreen()),
+
+        // ✅ Nouvelle route pour réinitialisation du mot de passe
+        GetPage(
+          name: '/reset',
+          page: () {
+            // Récupère le oobCode transmis par Get.arguments (depuis EmailLinkHandler)
+            final args = Get.arguments as Map<String, dynamic>?;
+            final oobCode = args?['oobCode'] ?? '';
+            return ResetPasswordScreen(oobCode: oobCode);
+          },
+        ),
       ],
+
       color: AdColors.brand,
     );
   }
@@ -159,13 +182,14 @@ class _AppScrollBehavior extends ScrollBehavior {
   const _AppScrollBehavior();
 
   @override
-  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) {
-    return child; // pas de glow
+  Widget buildOverscrollIndicator(
+      BuildContext context, Widget child, ScrollableDetails details) {
+    return child; // Supprime le glow
   }
 
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
-    // Conserve une sensation native (bouncing iOS, clamping Android)
+    // Bouncing pour iOS, Clamping pour Android
     if (Theme.of(context).platform == TargetPlatform.iOS ||
         Theme.of(context).platform == TargetPlatform.macOS) {
       return const BouncingScrollPhysics();

@@ -26,6 +26,42 @@ class VideoManager {
   int _activeInits = 0;
   final int _maxConcurrentInits = 3;
 
+
+  Future<bool> _hasConnectivity() async {
+    try {
+      final dynamic res = await Connectivity().checkConnectivity();
+      if (res is List<ConnectivityResult>) {
+        return res.any((r) => r != ConnectivityResult.none);
+      }
+      if (res is ConnectivityResult) {
+        return res != ConnectivityResult.none;
+      }
+      // Si le type évolue encore, on préfère ne pas bloquer.
+      return true;
+    } catch (_) {
+      // En cas d’échec de détection, on évite de bloquer par défaut.
+      return true;
+    }
+  }
+
+  /// Indique si l’on est probablement sur un réseau "rapide" (wifi/ethernet).
+  Future<bool> _isHighBandwidth() async {
+    try {
+      final dynamic res = await Connectivity().checkConnectivity();
+      if (res is List<ConnectivityResult>) {
+        return res.contains(ConnectivityResult.wifi) ||
+            res.contains(ConnectivityResult.ethernet);
+      }
+      if (res is ConnectivityResult) {
+        return res == ConnectivityResult.wifi ||
+            res == ConnectivityResult.ethernet;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<CachedVideoPlayerPlus> initializeController(
     String contextKey,
     String url, {
@@ -147,8 +183,9 @@ class VideoManager {
   }
 
   Future<File> _downloadVideo(String url, {bool force = false}) async {
-    final conn = await Connectivity().checkConnectivity();
-    if (conn == ConnectivityResult.none) throw Exception("No internet : $url");
+    // 🔧 Remplacé: supporte toutes versions de connectivity_plus
+    final hasNet = await _hasConnectivity();
+    if (!hasNet) throw Exception("No internet : $url");
 
     if (force) {
       final cached = await VideoCacheManager.getFileIfCached(url);
@@ -243,15 +280,28 @@ class VideoManager {
     String? activeUrl,
   }) async {
     int radius = 1;
-    final conn = await Connectivity().checkConnectivity();
-    if (conn == ConnectivityResult.wifi || conn == ConnectivityResult.ethernet) radius = 2;
+
+    // 🔧 Remplacé: décision basée sur _isHighBandwidth() compatible toutes versions
+    if (await _isHighBandwidth()) {
+      radius = 2;
+    }
 
     for (int i = 1; i <= radius; i++) {
       if (index - i >= 0) {
-        unawaited(initializeController(contextKey, urls[index - i], isPreload: true, activeUrl: activeUrl));
+        unawaited(initializeController(
+          contextKey,
+          urls[index - i],
+          isPreload: true,
+          activeUrl: activeUrl,
+        ));
       }
       if (index + i < urls.length) {
-        unawaited(initializeController(contextKey, urls[index + i], isPreload: true, activeUrl: activeUrl));
+        unawaited(initializeController(
+          contextKey,
+          urls[index + i],
+          isPreload: true,
+          activeUrl: activeUrl,
+        ));
       }
     }
   }

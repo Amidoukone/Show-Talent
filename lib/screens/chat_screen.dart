@@ -1,12 +1,10 @@
 import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/models/message_converstion.dart';
-
 import '../controller/chat_controller.dart';
 import '../models/user.dart';
 
@@ -93,10 +91,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     final otherUser = widget.otherUser;
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      // ✅ Correction : onPopInvoked → onPopInvokedWithResult (Flutter 3.22+)
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return; // si le pop est déjà géré, ne rien faire
         await _leaveActiveConversation();
-        return true;
+        if (mounted) Get.back(result: result);
       },
       child: Scaffold(
         resizeToAvoidBottomInset: true,
@@ -397,7 +398,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 }
 
-/// Widget d’entrée de message corrigé
+/// Widget d’entrée de message
 class MessageInputBar extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -469,8 +470,9 @@ class MessageInputBar extends StatelessWidget {
             builder: (context, value, _) {
               final canSend = value.text.trim().isNotEmpty;
               return CircleAvatar(
-                backgroundColor:
-                    canSend ? const Color.fromARGB(255, 3, 121, 9) : Colors.grey.shade400,
+                backgroundColor: canSend
+                    ? const Color.fromARGB(255, 3, 121, 9)
+                    : Colors.grey.shade400,
                 child: IconButton(
                   icon: const Icon(Icons.send, color: Colors.white),
                   onPressed: canSend ? onSend : null,

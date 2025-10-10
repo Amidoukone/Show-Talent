@@ -10,10 +10,11 @@ class OffreFormScreen extends StatefulWidget {
   const OffreFormScreen({super.key});
 
   @override
-  _OffreFormScreenState createState() => _OffreFormScreenState();
+  State<OffreFormScreen> createState() => OffreFormScreenState();
 }
 
-class _OffreFormScreenState extends State<OffreFormScreen> {
+/// Classe publique (évite l'erreur "private type in public API")
+class OffreFormScreenState extends State<OffreFormScreen> {
   final OffreController offreController = Get.find();
   final UserController userController = Get.find<UserController>();
   final _formKey = GlobalKey<FormState>();
@@ -181,9 +182,11 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
                 ? _dateDebut!
                 : now;
 
+        final initialDate = date ?? firstDate;
+
         DateTime? pickedDate = await showDatePicker(
           context: context,
-          initialDate: date ?? firstDate,
+          initialDate: initialDate,
           firstDate: firstDate,
           lastDate: DateTime(2100),
           builder: (context, child) {
@@ -194,14 +197,20 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
                   onPrimary: Colors.white,
                   surface: Colors.white,
                   onSurface: Colors.black,
-                ), dialogTheme: DialogThemeData(backgroundColor: Colors.white),
+                ),
+                dialogTheme: const DialogThemeData(
+                  backgroundColor: Colors.white,
+                ),
               ),
               child: child!,
             );
           },
         );
-        onDateSelected(pickedDate!);
-            },
+
+        if (pickedDate != null) {
+          onDateSelected(pickedDate);
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(
@@ -212,8 +221,10 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label,
-                style: const TextStyle(fontSize: 16, color: Colors.black54)),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 16, color: Colors.black54),
+            ),
             Text(
               date != null
                   ? DateFormat('dd MMM yyyy').format(date)
@@ -235,8 +246,11 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
         _dateDebut != null &&
         _dateFin != null) {
       if (_dateDebut!.isAfter(_dateFin!)) {
-        _showSnackbar('Erreur', 'La date de début doit précéder la date de fin',
-            Colors.red);
+        _showSnackbar(
+          'Erreur',
+          'La date de début doit précéder la date de fin',
+          Colors.red,
+        );
         return;
       }
 
@@ -251,9 +265,8 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
         recruteur: currentUser,
         candidats: isEditing ? editingOffre!.candidats : [],
         statut: 'ouverte',
-        dateCreation: isEditing
-            ? editingOffre!.dateCreation
-            : DateTime.now(),
+        dateCreation:
+            isEditing ? editingOffre!.dateCreation : DateTime.now(),
       );
 
       if (isEditing) {
@@ -277,7 +290,8 @@ class _OffreFormScreenState extends State<OffreFormScreen> {
     Get.snackbar(
       title,
       message,
-      backgroundColor: color.withOpacity(0.2),
+      //  Nouveau format : .withValues(alpha: ...)
+      backgroundColor: color.withValues(alpha: 0.2),
       colorText: Colors.black87,
       snackPosition: SnackPosition.TOP,
     );

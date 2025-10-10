@@ -1,7 +1,15 @@
-const String IMAGE_PATH = "assets/images";
+
+// Le chemin racine des images dans le projet
+const String imagePath = "assets/images";
+
 
 class ImageAssets {
-  static const String logo = "$IMAGE_PATH/logo.jpeg"; // Chemin du logo
-  static const String authBg = "$IMAGE_PATH/auth.jpg"; // Fond d'écran pour les écrans d'authentification
-  static const String avatar = "$IMAGE_PATH/avatar-round.png"; // Image d'avatar par défaut
+  /// 🖼️ Logo principal de l’application
+  static const String logo = "$imagePath/logo.jpeg";
+
+  /// 🌅 Image de fond utilisée sur les écrans d’authentification
+  static const String authBg = "$imagePath/auth.jpg";
+
+  /// 👤 Image d’avatar par défaut pour les profils utilisateurs
+  static const String avatar = "$imagePath/avatar-round.png";
 }

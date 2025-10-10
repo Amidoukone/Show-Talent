@@ -45,11 +45,8 @@ class TiktokVideoPlayer extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Couche vidéo / thumbnail / loader
             _buildContentLayer(inited: inited, hasErr: hasErr, showLoader: showLoader),
-            // Icône Play/Pause
             if (_shouldShowPlayPause(inited)) _buildPlayPauseButton(),
-            // Barre de progression améliorée
             if (_shouldShowProgressBar(inited)) _buildProgressBarOverlay(),
           ],
         ),
@@ -57,7 +54,9 @@ class TiktokVideoPlayer extends StatelessWidget {
     );
   }
 
-  // ------ LAYERS ------
+  // =====================
+  // == LAYERS PRINCIPAUX ==
+  // =====================
 
   Widget _buildContentLayer({
     required bool inited,
@@ -86,7 +85,9 @@ class TiktokVideoPlayer extends StatelessWidget {
     );
   }
 
-  // ------ THUMBNAIL ------
+  // =====================
+  // == THUMBNAIL ==
+  // =====================
 
   Widget _buildThumbnail({required bool fadeOut}) {
     return AnimatedOpacity(
@@ -114,7 +115,9 @@ class TiktokVideoPlayer extends StatelessWidget {
     );
   }
 
-  // ------ VIDEO ------
+  // =====================
+  // == PLAYER ==
+  // =====================
 
   Widget _buildVideoPlayer() {
     final value = controller?.value;
@@ -142,7 +145,9 @@ class TiktokVideoPlayer extends StatelessWidget {
     );
   }
 
-  // ------ ERREUR ------
+  // =====================
+  // == ÉTAT ERREUR ==
+  // =====================
 
   Widget _buildError() {
     return Stack(
@@ -154,7 +159,7 @@ class TiktokVideoPlayer extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.4),
+              color: Colors.black.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -188,7 +193,9 @@ class TiktokVideoPlayer extends StatelessWidget {
     );
   }
 
-  // ------ UI OVERLAYS ------
+  // =====================
+  // == PLAY / PAUSE ==
+  // =====================
 
   Widget _buildPlayPauseButton() {
     return IgnorePointer(
@@ -202,7 +209,7 @@ class TiktokVideoPlayer extends StatelessWidget {
                   iconSize: 64,
                   icon: Icon(
                     isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill,
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                   ),
                   onPressed: onTogglePlayPause,
                 )
@@ -212,7 +219,10 @@ class TiktokVideoPlayer extends StatelessWidget {
     );
   }
 
-  /// ✅ Progress bar avec fond semi-transparent (effet premium Facebook/TikTok)
+  // =====================
+  // == PROGRESS BAR ==
+  // =====================
+
   Widget _buildProgressBarOverlay() {
     final ctrl = controller;
     if (ctrl == null) return const SizedBox.shrink();
@@ -222,9 +232,9 @@ class TiktokVideoPlayer extends StatelessWidget {
       left: 0,
       right: 0,
       child: Container(
-        color: Colors.black.withOpacity(0.25), // fond léger pour lisibilité
+        color: Colors.black.withValues(alpha: 0.25),
         child: Opacity(
-          opacity: 0.7, // progress bar semi-transparente
+          opacity: 0.7,
           child: VideoProgressIndicator(
             ctrl,
             allowScrubbing: showControls,
@@ -233,14 +243,16 @@ class TiktokVideoPlayer extends StatelessWidget {
               bufferedColor: Colors.white54,
               backgroundColor: Colors.white30,
             ),
-            padding: EdgeInsets.zero, // ✅ collé au bas
+            padding: EdgeInsets.zero,
           ),
         ),
       ),
     );
   }
 
-  // ------ CONDITIONS D’AFFICHAGE ------
+  // =====================
+  // == CONDITIONS D’AFFICHAGE ==
+  // =====================
 
   bool _shouldShowPlayPause(bool inited) {
     return showControls && !hidePlayPauseIcon && inited;

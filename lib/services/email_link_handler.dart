@@ -5,8 +5,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart'; // ✅ Ajout pour navigation GetX (reset password)
+import '../screens/reset_password_screen.dart'; // ✅ pour redirection locale
 
 /// Gère les liens de vérification Firebase (mode=verifyEmail & oobCode=...)
+/// et désormais la réinitialisation de mot de passe (mode=resetPassword)
 /// via App/Universal Links (package:app_links) — pas de Firebase Dynamic Links.
 /// - Mobile: écoute des liens d'app.
 /// - Web: no-op (géré dans VerifyEmailScreen).
@@ -112,7 +115,47 @@ class EmailLinkHandler {
     final mode = params['mode'];
     final oob = params['oobCode'];
 
-    // On ne traite que la vérification d’e-mail
+    // 🔹 Nouvelle gestion du reset password
+    if (mode == 'resetPassword' && oob != null && oob.isNotEmpty) {
+      if (kDebugMode) {
+        print('EmailLinkHandler: lien resetPassword détecté → redirection.');
+      }
+
+      // Anti double-traitement pour ce code de réinitialisation
+      if (_handledOobCodes.contains(oob)) {
+        if (kDebugMode) print('EmailLinkHandler: oobCode reset déjà traité, on ignore.');
+        return false;
+      }
+      _handledOobCodes.add(oob);
+
+      try {
+        // Vérifie que le code est valide
+        await FirebaseAuth.instance.verifyPasswordResetCode(oob);
+
+        // Redirige l'utilisateur vers l'écran ResetPasswordScreen
+        // Utilise la navigation GetX cohérente avec ta structure
+        if (Get.isRegistered<GetMaterialApp>() || Get.key.currentState != null) {
+          Get.to(() => ResetPasswordScreen(oobCode: oob));
+        } else {
+          // fallback si Get non prêt
+          Future.delayed(const Duration(milliseconds: 300), () {
+            Get.to(() => ResetPasswordScreen(oobCode: oob));
+          });
+        }
+
+        return true;
+      } on FirebaseAuthException catch (e) {
+        if (kDebugMode) {
+          print("EmailLinkHandler resetPassword FirebaseAuthException: ${e.code} ${e.message}");
+        }
+        return false;
+      } catch (e) {
+        if (kDebugMode) print("EmailLinkHandler resetPassword unexpected: $e");
+        return false;
+      }
+    }
+
+    // 🔹 Gestion existante : vérification d’e-mail
     if (mode != 'verifyEmail' || oob == null || oob.isEmpty) {
       if (kDebugMode) {
         print('EmailLinkHandler: lien non pertinent (mode/oobCode manquant): $link');
