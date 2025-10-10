@@ -10,7 +10,8 @@ class ProgressFullScreenLoader extends StatelessWidget {
     final UploadVideoController uploadController = Get.find<UploadVideoController>();
 
     return Scaffold(
-      backgroundColor: Colors.black.withOpacity(0.7),
+      // ✅ Remplacement de withOpacity par withValues(alpha: ...)
+      backgroundColor: Colors.black.withValues(alpha: 0.7),
       body: Center(
         child: Container(
           padding: const EdgeInsets.all(24),
@@ -20,7 +21,10 @@ class ProgressFullScreenLoader extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
           ),
           child: Obx(() {
-            final double progress = uploadController.uploadProgress.value;
+            // Sécurisation légère: évite une valeur non-finie qui casserait l’affichage
+            final double rawProgress = uploadController.uploadProgress.value;
+            final double progress = rawProgress.isFinite ? rawProgress : 0.0;
+
             final String stage = uploadController.uploadStage.value;
             final bool isOptimizing = uploadController.isOptimizing.value;
 
@@ -54,6 +58,7 @@ class ProgressFullScreenLoader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
+
                 if (!isOptimizing) ...[
                   LinearProgressIndicator(
                     value: progress.clamp(0.0, 1.0),
@@ -63,7 +68,7 @@ class ProgressFullScreenLoader extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    '${(progress * 100).toInt()}%',
+                    '${(progress.clamp(0.0, 1.0) * 100).toInt()}%',
                     style: const TextStyle(
                       fontSize: 16,
                       color: Colors.black87,

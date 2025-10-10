@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 class ProcessingDialog extends StatefulWidget {
   final String message;
   final String? uploadStage;
-  final double? progressPercent;
+  final double? progressPercent; // 0.0 → 1.0
   final VoidCallback? onCancel;
 
   const ProcessingDialog({
@@ -18,7 +18,8 @@ class ProcessingDialog extends StatefulWidget {
   State<ProcessingDialog> createState() => _ProcessingDialogState();
 }
 
-class _ProcessingDialogState extends State<ProcessingDialog> with SingleTickerProviderStateMixin {
+class _ProcessingDialogState extends State<ProcessingDialog>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<int> _dotAnimation;
 
@@ -41,6 +42,10 @@ class _ProcessingDialogState extends State<ProcessingDialog> with SingleTickerPr
 
   String getDots(int count) => '.' * count;
 
+  // Sécurise la valeur du pourcentage pour l’affichage (0..1)
+  double? get _clampedProgress =>
+      widget.progressPercent?.clamp(0.0, 1.0);
+
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -50,7 +55,8 @@ class _ProcessingDialogState extends State<ProcessingDialog> with SingleTickerPr
           padding: const EdgeInsets.all(24),
           width: 300,
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.9),
+            // Remplacement withOpacity → withValues(alpha: ...)
+            color: Colors.black.withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(12),
           ),
           child: AnimatedBuilder(
@@ -74,10 +80,10 @@ class _ProcessingDialogState extends State<ProcessingDialog> with SingleTickerPr
                       textAlign: TextAlign.center,
                     ),
                   ],
-                  if (widget.progressPercent != null) ...[
+                  if (_clampedProgress != null) ...[
                     const SizedBox(height: 8),
                     Text(
-                      "${(widget.progressPercent! * 100).toStringAsFixed(0)}%",
+                      "${(_clampedProgress! * 100).toStringAsFixed(0)}%",
                       style: const TextStyle(color: Colors.grey, fontSize: 14),
                     ),
                   ],

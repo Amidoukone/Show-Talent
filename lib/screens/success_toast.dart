@@ -6,6 +6,11 @@ const _defaultBorderRadius = 16.0;
 const _defaultAnimationDuration = Duration(milliseconds: 500);
 const _defaultOverlayBlur = 1.5;
 
+// Centralisation de l’opacité d’overlay pour cohérence
+const _overlayAlphaSuccess = 0.20;
+const _overlayAlphaError   = 0.25;
+const _overlayAlphaInfo    = 0.20;
+
 void showSuccessToast(String message) {
   Get.snackbar(
     '',
@@ -38,7 +43,8 @@ void showSuccessToast(String message) {
     reverseAnimationCurve: Curves.easeInBack,
     isDismissible: true,
     overlayBlur: _defaultOverlayBlur,
-    overlayColor: Colors.black.withOpacity(0.2),
+    //  Remplacement withOpacity(...) -> withValues(alpha: ...)
+    overlayColor: Colors.black.withValues(alpha: _overlayAlphaSuccess),
   );
 }
 
@@ -74,7 +80,8 @@ void showErrorToast(String message) {
     reverseAnimationCurve: Curves.easeInBack,
     isDismissible: true,
     overlayBlur: _defaultOverlayBlur,
-    overlayColor: Colors.black.withOpacity(0.25),
+    // Remplacement withOpacity(...) -> withValues(alpha: ...)
+    overlayColor: Colors.black.withValues(alpha: _overlayAlphaError),
   );
 }
 
@@ -110,6 +117,7 @@ void showInfoToast(String message) {
     reverseAnimationCurve: Curves.easeInBack,
     isDismissible: true,
     overlayBlur: _defaultOverlayBlur,
-    overlayColor: Colors.black.withOpacity(0.2),
+    //  Remplacement withOpacity(...) -> withValues(alpha: ...)
+    overlayColor: Colors.black.withValues(alpha: _overlayAlphaInfo),
   );
 }

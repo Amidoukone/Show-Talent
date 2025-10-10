@@ -3,6 +3,7 @@ import 'ad_colors.dart';
 import 'ad_typography.dart';
 
 class AppTheme {
+  /// Thème clair principal — utilisé dans toute l’application
   static ThemeData light() {
     final colorScheme = ColorScheme(
       brightness: Brightness.light,
@@ -23,6 +24,19 @@ class AppTheme {
       shadow: Colors.black12,
       scrim: Colors.black54,
       inversePrimary: AdColors.brandOn,
+
+      // Champs supplémentaires pour compatibilité M3
+      surfaceBright: AdColors.surface,
+      surfaceDim: AdColors.surfaceAlt,
+      surfaceContainer: AdColors.surface,
+      surfaceContainerLow: AdColors.surfaceAlt,
+      surfaceContainerHigh: AdColors.surfaceAlt,
+      tertiary: AdColors.accent,
+      onTertiary: AdColors.white,
+      tertiaryContainer: AdColors.accentDark,
+      onTertiaryContainer: AdColors.white,
+      inverseSurface: AdColors.surfaceAlt,
+      onInverseSurface: AdColors.onSurface,
     );
 
     final inputBorder = OutlineInputBorder(
@@ -35,6 +49,8 @@ class AppTheme {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AdColors.surface,
       textTheme: adTextTheme,
+
+      // --- AppBar ---
       appBarTheme: const AppBarTheme(
         backgroundColor: AdColors.brand,
         foregroundColor: AdColors.white,
@@ -47,6 +63,8 @@ class AppTheme {
         ),
         iconTheme: IconThemeData(color: AdColors.white),
       ),
+
+      // --- Boutons ---
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AdColors.brand,
@@ -74,6 +92,8 @@ class AppTheme {
           textStyle: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
+
+      // --- Champs de texte (InputDecoration) ---
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AdColors.white,
@@ -89,9 +109,14 @@ class AppTheme {
           borderSide: const BorderSide(color: AdColors.error, width: 1.2),
         ),
         labelStyle: const TextStyle(color: AdColors.brand),
-        hintStyle: TextStyle(color: AdColors.onSurface.withOpacity(.6)),
+        // ✅ Remplacement withOpacity → withValues(alpha: 0.6)
+        hintStyle: TextStyle(
+          color: AdColors.onSurface.withValues(alpha: 0.6),
+        ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
+
+      // --- Barre de navigation ---
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: AdColors.brand,
         selectedItemColor: AdColors.white,
@@ -100,16 +125,23 @@ class AppTheme {
         unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w600),
         type: BottomNavigationBarType.fixed,
       ),
+
       dividerColor: AdColors.divider,
+
+      // --- SnackBars ---
       snackBarTheme: const SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: AdColors.brand,
-        contentTextStyle: TextStyle(color: AdColors.white, fontWeight: FontWeight.w600),
+        contentTextStyle: TextStyle(
+          color: AdColors.white,
+          fontWeight: FontWeight.w600,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
       ),
-      // ✅ Corrigé : ThemeData.cardTheme attend un CardThemeData
+
+      // --- Cartes ---
       cardTheme: CardThemeData(
         color: AdColors.white,
         surfaceTintColor: Colors.transparent, // évite la sur-teinte M3
@@ -119,8 +151,18 @@ class AppTheme {
           borderRadius: BorderRadius.circular(16),
         ),
       ),
+
+      // --- Indicateurs de chargement ---
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: AdColors.brand,
+      ),
+
+      // --- Autres ---
+      iconTheme: const IconThemeData(color: AdColors.onSurface),
+      dividerTheme: const DividerThemeData(
+        color: AdColors.divider,
+        thickness: 1,
+        space: 1,
       ),
     );
   }

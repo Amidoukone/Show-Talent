@@ -169,7 +169,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       Text(
                         'Ravi de vous revoir !',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: cs.onSurface.withOpacity(.7),
+                              // remplace withOpacity(.7)
+                              color: cs.onSurface.withValues(alpha: .7),
                               fontWeight: FontWeight.w600,
                             ),
                         textAlign: TextAlign.center,
@@ -231,7 +232,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           Text(
                             'Nouveau ici ?',
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: cs.onSurface.withOpacity(.8),
+                                  // remplace withOpacity(.8)
+                                  color: cs.onSurface.withValues(alpha: .8),
                                   fontWeight: FontWeight.w600,
                                 ),
                           ),

@@ -464,7 +464,8 @@ class _SectionCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor: EditProfileScreen.kPrimary.withOpacity(0.1),
+                  // ⬇️ Remplacement de withOpacity par withValues (aucun changement visuel)
+                  backgroundColor: EditProfileScreen.kPrimary.withValues(alpha: 0.1),
                   child: Icon(icon, color: EditProfileScreen.kPrimary),
                 ),
                 const SizedBox(width: 10),

@@ -1,4 +1,3 @@
-// lib/widgets/smart_video_player.dart
 import 'dart:async';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
@@ -6,12 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:video_player/video_player.dart';
+import 'package:share_plus/share_plus.dart'; // ✅ Import correct de SharePlus
 
 import 'package:adfoot/utils/video_cache_manager.dart';
 import 'package:adfoot/widgets/tiktok_video_player.dart';
 import 'package:adfoot/models/video.dart';
-import 'package:share_plus/share_plus.dart';
-
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -54,7 +52,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   CachedVideoPlayerPlus? _player;
   VideoPlayerController? get _ctrl => _player?.controller;
 
-  // Devient utile pour éviter des relances/redondances de lecture
   bool _hasAutoplayStarted = false;
   bool _hasFirstFrame = false;
   int _attachToken = 0;
@@ -92,7 +89,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     }
     _vc = Get.find<VideoController>(tag: widget.contextKey);
 
-    // Se met en mode actif/passif quand l'index courant change
     _indexWorker = ever<int>(_vc.currentIndex, (i) {
       if (!mounted) return;
       if (i == widget.currentIndex) {
@@ -219,7 +215,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       }
     }
 
-    if (mounted) setState(() {}); // pour peindre la frame initiale
+    if (mounted) setState(() {});
     _updateWakelock();
   }
 
@@ -233,7 +229,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     final c = _ctrl;
     if (c == null) return;
 
-    // Première frame : on fade-out le thumbnail
     if (!_hasFirstFrame &&
         c.value.isInitialized &&
         !c.value.isBuffering &&
@@ -241,13 +236,11 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       if (mounted) setState(() => _hasFirstFrame = true);
     }
 
-    // Met à jour l’icône de lecture si besoin
     final newIcon = !(c.value.isPlaying);
     if (newIcon != _showPlayIcon.value) {
       _showPlayIcon.value = newIcon;
     }
 
-    // Si non visible, passe en passif
     final shouldBePlaying =
         _vc.currentIndex.value == widget.currentIndex && _isActuallyVisible();
     if (!shouldBePlaying && c.value.isPlaying) {
@@ -256,7 +249,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _hasAutoplayStarted = false;
     }
 
-    // Si on s’arrête (pause/erreur), on réinitialise le flag autoplay
     if (!c.value.isPlaying || c.value.hasError) {
       _hasAutoplayStarted = false;
     }
@@ -291,7 +283,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         return;
       }
 
-      // Si déjà démarré et en lecture, rien à faire
       if (_hasAutoplayStarted && c.value.isPlaying) {
         _updateWakelock();
         return;
@@ -317,7 +308,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
       if (c.value.position == Duration.zero) {
         try {
-          // Micro-seek pour débloquer certains drivers
           await c.seekTo(const Duration(milliseconds: 50));
         } catch (_) {}
       }
@@ -426,8 +416,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         _stallStrikes++;
         if (_stallStrikes == 2) {
           try {
-            final target = pos + const Duration(milliseconds: 1);
-            await cc.seekTo(target);
+            await cc.seekTo(pos + const Duration(milliseconds: 1));
           } catch (_) {}
         } else if (_stallStrikes >= _stallMaxStrikesBeforeReload) {
           _stallStrikes = 0;
@@ -488,7 +477,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 if (!widget.enableTapToPlay) return;
                 if (ctrl == null || !ctrl.value.isInitialized) return;
                 if (ctrl.value.isPlaying) {
-                  _becomePassive(); // met aussi _hasAutoplayStarted à false
+                  _becomePassive();
                 } else {
                   _scheduleMaybePlay();
                 }
@@ -525,10 +514,16 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
     final isOwner = widget.video.uid == user.uid;
 
+    // 🔥 Décalage dynamique pour éviter tout chevauchement avec l’avatar + bouton + (placés dans HomeScreen)
+    final screenHeight = MediaQuery.of(context).size.height;
+    double bottomOffset = screenHeight * 0.22; // ~22% de la hauteur écran
+    if (bottomOffset < 120) bottomOffset = 120; // garde un minimum sur petits écrans
+
     return Positioned(
       right: 10,
-      bottom: 70,
+      bottom: bottomOffset,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           if (isOwner)
             _buildActionButton(
@@ -537,6 +532,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
               label: 'Supprimer',
               onPressed: () => _confirmDelete(context, videoController),
             ),
+          if (isOwner) const SizedBox(height: 24),
+
           _buildActionButton(
             icon: Icons.favorite,
             color: widget.video.likes.contains(user.uid)
@@ -545,14 +542,16 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             label: '${widget.video.likes.length}',
             onPressed: () => _toggleLike(videoController, user.uid),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
+
           _buildActionButton(
             icon: Icons.share,
             color: Colors.white,
             label: '${widget.video.shareCount}',
             onPressed: () => _shareVideo(videoController),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
+
           _buildActionButton(
             icon: Icons.flag,
             color: Colors.white,
@@ -573,7 +572,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }) {
     return Column(
       children: [
-        IconButton(icon: Icon(icon, color: color), onPressed: onPressed),
+        IconButton(icon: Icon(icon, color: color, size: 30), onPressed: onPressed),
         Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
       ],
     );
@@ -586,7 +585,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       widget.video.likes.add(userId);
     }
     controller.likeVideo(widget.video.id, userId);
-    setState(() {}); // met à jour l’UI locale
+    setState(() {});
   }
 
   void _confirmDelete(BuildContext context, VideoController controller) {
@@ -610,11 +609,20 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
   Future<void> _shareVideo(VideoController controller) async {
     try {
-      await Share.share('Regarde cette vidéo : ${widget.video.videoUrl}');
+      // ✅ Nouvelle API SharePlus
+      await SharePlus.instance.share(
+        ShareParams(
+          text: 'Regarde cette vidéo : ${widget.video.videoUrl}',
+        ),
+      );
       await controller.partagerVideo(widget.video.id);
     } catch (_) {
-      Get.snackbar('Erreur', 'Partage impossible',
-          backgroundColor: Colors.red, colorText: Colors.white);
+      Get.snackbar(
+        'Erreur',
+        'Partage impossible',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
     }
   }
 

@@ -81,7 +81,7 @@ class EventListScreen extends StatelessWidget {
             const SizedBox(height: 5),
             Text(
               '${event.participants.length} joueur(s) inscrit(s)',
-              style: const TextStyle(color: Colors.black87, fontSize: 14),
+              style: const TextStyle(color: Color.fromARGB(221, 40, 81, 99), fontSize: 14),
             ),
             const SizedBox(height: 20),
             isOrganisateur
@@ -214,7 +214,7 @@ class EventListScreen extends StatelessWidget {
             elevation: 3,
             padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
             backgroundColor: (!isParticipant && !isDisabled)
-                ? const Color(0xFF2E7D32)
+                ? const Color.fromARGB(255, 38, 101, 101)
                 : Colors.grey,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
           ),
@@ -235,8 +235,8 @@ class EventListScreen extends StatelessWidget {
             onPressed: () {
               Get.to(() => EventDetailsScreen(event: event));
             },
-            icon: const Icon(Icons.info_outline, color: Color(0xFF2E7D32)),
-            label: const Text('Voir les détails', style: TextStyle(color: Color(0xFF2E7D32))),
+            icon: const Icon(Icons.info_outline, color: Color.fromARGB(255, 34, 88, 91)),
+            label: const Text('Voir les détails', style: TextStyle(color: Color.fromARGB(255, 41, 113, 98))),
           ),
       ],
     );
