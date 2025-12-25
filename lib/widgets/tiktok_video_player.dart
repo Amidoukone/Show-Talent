@@ -119,6 +119,12 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     _progressTimer?.cancel();
   }
 
+  void _ensureProgressUpdaterRunning() {
+    if (_progressTimer == null || !(_progressTimer?.isActive ?? false)) {
+      _startProgressUpdater();
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Feedback & overlays
   // ---------------------------------------------------------------------------
@@ -248,6 +254,8 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
         ],
       );
     }
+
+    _ensureProgressUpdaterRunning();
 
     final value = widget.controller!.value;
     final bool hasError = value.hasError || widget.errorMessage != null;
