@@ -223,9 +223,9 @@ class _ProfileLoadingBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       width: double.infinity,
       color: const Color(0xFF214D4F),
-      child: Row(
+      child: const Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
+        children: [
           SizedBox(
             width: 14,
             height: 14,

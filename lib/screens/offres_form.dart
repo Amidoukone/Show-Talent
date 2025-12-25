@@ -207,10 +207,8 @@ class OffreFormScreenState extends State<OffreFormScreen> {
           },
         );
 
-        if (pickedDate != null) {
-          onDateSelected(pickedDate);
-        }
-      },
+        onDateSelected(pickedDate!);
+            },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(

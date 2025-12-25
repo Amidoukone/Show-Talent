@@ -246,7 +246,7 @@ class EventListScreen extends StatelessWidget {
     if (currentUser.role == 'club' || currentUser.role == 'recruteur') {
       return FloatingActionButton(
         onPressed: () {
-          Get.to(() => EventFormScreen());
+          Get.to(() => const EventFormScreen());
         },
         backgroundColor: const Color(0xFF214D4F),
         foregroundColor: Colors.white,

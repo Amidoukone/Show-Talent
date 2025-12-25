@@ -15,8 +15,8 @@ void showSuccessToast(String message) {
   Get.snackbar(
     '',
     '',
-    titleText: Row(
-      children: const [
+    titleText: const Row(
+      children: [
         Icon(Icons.check_circle, color: Colors.white, size: 24),
         SizedBox(width: 8),
         Text(
@@ -52,8 +52,8 @@ void showErrorToast(String message) {
   Get.snackbar(
     '',
     '',
-    titleText: Row(
-      children: const [
+    titleText: const Row(
+      children: [
         Icon(Icons.error_outline, color: Colors.white, size: 24),
         SizedBox(width: 8),
         Text(
@@ -89,8 +89,8 @@ void showInfoToast(String message) {
   Get.snackbar(
     '',
     '',
-    titleText: Row(
-      children: const [
+    titleText: const Row(
+      children: [
         Icon(Icons.info_outline, color: Colors.white, size: 24),
         SizedBox(width: 8),
         Text(

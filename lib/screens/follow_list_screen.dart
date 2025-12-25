@@ -56,10 +56,10 @@ class _FollowListScreenState extends State<FollowListScreen> {
           }
 
           if (snapshot.hasError) {
-            return Center(
+            return const Center(
               child: Text(
                 'Une erreur est survenue. Veuillez réessayer.',
-                style: const TextStyle(fontSize: 16, color: Colors.red),
+                style: TextStyle(fontSize: 16, color: Colors.red),
               ),
             );
           }
