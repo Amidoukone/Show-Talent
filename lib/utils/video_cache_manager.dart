@@ -155,7 +155,7 @@ class VideoCacheManager extends CacheManager {
         });
 
       int freed = 0;
-      final toFreeBytes = purgeBlockSizeMB * 1024 * 1024;
+      const toFreeBytes = purgeBlockSizeMB * 1024 * 1024;
       for (final e in sorted) {
         try {
           await e.key.delete().catchError((_) => null);

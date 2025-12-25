@@ -1,13 +1,15 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:async';
+import 'package:adfoot/screens/add_video.dart';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:video_player/video_player.dart';
-import 'package:share_plus/share_plus.dart'; // ✅ Import correct de SharePlus
-
-import 'package:adfoot/utils/video_cache_manager.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:adfoot/utils/video_cache_manager.dart' as custom_cache;
 import 'package:adfoot/widgets/tiktok_video_player.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/controller/video_controller.dart';
@@ -52,16 +54,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   CachedVideoPlayerPlus? _player;
   VideoPlayerController? get _ctrl => _player?.controller;
 
-  bool _hasAutoplayStarted = false;
   bool _hasFirstFrame = false;
   int _attachToken = 0;
 
-  late final VideoController _vc;
-  late final Worker _indexWorker;
+  // ✅ On garde une référence locale (ne jamais refaire Get.find dans build)
+  VideoController? _vc;
+  Worker? _indexWorker;
 
   AppLifecycleState _appState = AppLifecycleState.resumed;
   bool _isTryingToPlay = false;
   bool _wakelockOn = false;
+  bool _isDisposed = false;
 
   Timer? _playDebounceTimer;
   static const Duration _playDebounce = Duration(milliseconds: 120);
@@ -80,17 +83,21 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _videoManager = VideoManager();
     _showPlayIcon = ValueNotifier<bool>(true);
 
-    if (!Get.isRegistered<VideoController>(tag: widget.contextKey)) {
-      Get.put(
+    // ✅ GetX: robuste — on essaie de récupérer le controller si présent
+    if (Get.isRegistered<VideoController>(tag: widget.contextKey)) {
+      _vc = Get.find<VideoController>(tag: widget.contextKey);
+    } else {
+      // Conserve ton comportement existant (crée si absent)
+      _vc = Get.put(
         VideoController(contextKey: widget.contextKey),
         tag: widget.contextKey,
         permanent: true,
       );
     }
-    _vc = Get.find<VideoController>(tag: widget.contextKey);
 
-    _indexWorker = ever<int>(_vc.currentIndex, (i) {
-      if (!mounted) return;
+    // ✅ Worker protégé (si _vc devient null, on ne crash pas)
+    _indexWorker = ever<int>(_vc!.currentIndex, (i) {
+      if (!mounted || _isDisposed) return;
       if (i == widget.currentIndex) {
         _scheduleMaybePlay();
       } else {
@@ -102,60 +109,44 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   @override
-  void didUpdateWidget(SmartVideoPlayer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final urlChanged = oldWidget.videoUrl != widget.videoUrl;
-    final controllerChanged =
-        oldWidget.player?.controller != widget.player?.controller;
-
-    if (urlChanged || controllerChanged) {
-      _detachListener(oldWidget.player?.controller);
-      _stopStallWatchdog();
-      _hasAutoplayStarted = false;
-      _hasFirstFrame = false;
-      _attachOrInitialize(reuse: widget.player);
-    } else {
-      if (!_isActuallyVisible()) {
-        _becomePassive();
-      } else if (widget.autoPlay &&
-          _vc.currentIndex.value == widget.currentIndex &&
-          _isActuallyVisible()) {
-        _scheduleMaybePlay();
-      }
-    }
-  }
-
-  @override
   void dispose() {
+    _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
-    _indexWorker.dispose();
-    _setWakelock(false);
+
+    // ✅ stop worker proprement
+    try {
+      _indexWorker?.dispose();
+    } catch (_) {}
+
     _detachListener(_ctrl);
+
     _showPlayIcon.dispose();
     _playDebounceTimer?.cancel();
     _stopStallWatchdog();
+
+    // ✅ wakelock off
+    unawaited(_setWakelock(false));
+
     super.dispose();
   }
 
   @override
   void deactivate() {
     _becomePassive();
-    _setWakelock(false);
+    unawaited(_setWakelock(false));
     super.deactivate();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _appState = state;
-    if (!mounted) return;
+    if (!mounted || _isDisposed) return;
 
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       _becomePassive();
-      _setWakelock(false);
     } else if (state == AppLifecycleState.resumed) {
-      if (_isActuallyVisible() &&
-          _vc.currentIndex.value == widget.currentIndex) {
+      if (_isActuallyVisible() && (_vc?.currentIndex.value == widget.currentIndex)) {
         _scheduleMaybePlay();
       }
     }
@@ -163,6 +154,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
   Future<void> _attachOrInitialize({CachedVideoPlayerPlus? reuse}) async {
     final localToken = ++_attachToken;
+
     CachedVideoPlayerPlus? p =
         reuse ?? _videoManager.getController(widget.contextKey, widget.videoUrl);
 
@@ -179,44 +171,41 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       }
     }
 
-    if (!mounted || localToken != _attachToken) return;
+    if (!mounted || _isDisposed || localToken != _attachToken) return;
 
     _bindPlayer(p);
 
     if (widget.autoPlay &&
-        _vc.currentIndex.value == widget.currentIndex &&
+        (_vc?.currentIndex.value == widget.currentIndex) &&
         _isActuallyVisible()) {
       _scheduleMaybePlay();
     }
   }
 
   void _bindPlayer(CachedVideoPlayerPlus? p) {
-    _player = p;
     _detachListener(_ctrl);
+    _player = p;
     _hasFirstFrame = false;
 
     final ctrl = _ctrl;
-    if (ctrl != null) {
-      ctrl.addListener(_onTick);
-
-      if (ctrl.value.isInitialized &&
-          ctrl.value.position > Duration.zero &&
-          !ctrl.value.isBuffering) {
-        _hasFirstFrame = true;
-      }
-
-      if (_vc.currentIndex.value != widget.currentIndex) {
-        _safeSetVolume(0.0);
-      }
-
-      final newIcon = !(ctrl.value.isPlaying);
-      if (newIcon != _showPlayIcon.value) {
-        _showPlayIcon.value = newIcon;
-      }
+    if (_isControllerValid(ctrl)) {
+      ctrl?.addListener(_onTick);
+      _showPlayIcon.value = !(ctrl!.value.isPlaying);
+    } else {
+      // si pas valide, on force icône "play" visible
+      _showPlayIcon.value = true;
     }
 
-    if (mounted) setState(() {});
+    if (mounted && !_isDisposed) setState(() {});
     _updateWakelock();
+  }
+
+  bool _isControllerValid(VideoPlayerController? ctrl) {
+    try {
+      return !_isDisposed && ctrl != null && ctrl.value.isInitialized;
+    } catch (_) {
+      return false;
+    }
   }
 
   void _detachListener(VideoPlayerController? ctrl) {
@@ -226,45 +215,58 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   void _onTick() {
+    if (_isDisposed) return;
+
     final c = _ctrl;
-    if (c == null) return;
+    if (!_isControllerValid(c)) return;
 
-    if (!_hasFirstFrame &&
-        c.value.isInitialized &&
-        !c.value.isBuffering &&
-        c.value.position > Duration.zero) {
-      if (mounted) setState(() => _hasFirstFrame = true);
+    // ⚠️ Si le player natif a été détruit en arrière-plan, évite les accès risqués
+    final v = c!.value;
+    if (v.hasError) {
+      _becomePassive();
+      return;
     }
 
-    final newIcon = !(c.value.isPlaying);
-    if (newIcon != _showPlayIcon.value) {
-      _showPlayIcon.value = newIcon;
+    if (!_hasFirstFrame && v.position > Duration.zero && !v.isBuffering) {
+      _hasFirstFrame = true;
     }
+
+    _showPlayIcon.value = !(v.isPlaying);
 
     final shouldBePlaying =
-        _vc.currentIndex.value == widget.currentIndex && _isActuallyVisible();
-    if (!shouldBePlaying && c.value.isPlaying) {
-      c.pause();
-      _safeSetVolume(0.0);
-      _hasAutoplayStarted = false;
-    }
+        (_vc?.currentIndex.value == widget.currentIndex) && _isActuallyVisible();
 
-    if (!c.value.isPlaying || c.value.hasError) {
-      _hasAutoplayStarted = false;
+    if (!shouldBePlaying && v.isPlaying) {
+      try {
+        c.pause();
+      } catch (_) {}
     }
 
     _updateWakelock();
     _kickStallWatchdog();
   }
 
+  void _updateWakelock() {
+    final ctrl = _ctrl;
+    if (!_isControllerValid(ctrl)) {
+      unawaited(_setWakelock(false));
+      return;
+    }
+
+    final shouldKeepAwake = ctrl!.value.isPlaying &&
+        (_vc?.currentIndex.value == widget.currentIndex);
+
+    unawaited(_setWakelock(shouldKeepAwake));
+  }
+
   bool _isActuallyVisible() {
-    if (!mounted) return false;
+    if (!mounted || _isDisposed) return false;
     if (_appState != AppLifecycleState.resumed) return false;
 
     final route = ModalRoute.of(context);
     if (route != null && !route.isCurrent) return false;
 
-    return _vc.currentIndex.value == widget.currentIndex;
+    return (_vc?.currentIndex.value == widget.currentIndex);
   }
 
   void _scheduleMaybePlay() {
@@ -273,48 +275,21 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   Future<void> _maybePlay() async {
-    if (_isTryingToPlay) return;
+    if (_isTryingToPlay || _isDisposed) return;
     _isTryingToPlay = true;
 
     try {
       final c = _ctrl;
-      if (c == null || !_isActuallyVisible()) {
-        _setWakelock(false);
-        return;
-      }
-
-      if (_hasAutoplayStarted && c.value.isPlaying) {
-        _updateWakelock();
-        return;
-      }
-
-      if (!c.value.isInitialized) {
-        try {
-          await _videoManager.waitUntilInitialized(
-              widget.contextKey, widget.videoUrl);
-        } catch (_) {
-          _setWakelock(false);
-          return;
-        }
-      }
-
-      if (!c.value.isInitialized || c.value.hasError) {
-        _setWakelock(false);
-        return;
-      }
+      if (!_isControllerValid(c) || !_isActuallyVisible()) return;
 
       await _videoManager.pauseAllExcept(widget.contextKey, widget.videoUrl);
-      _safeSetVolume(1.0);
 
-      if (c.value.position == Duration.zero) {
+      if (!(c?.value.isPlaying ?? false)) {
         try {
-          await c.seekTo(const Duration(milliseconds: 50));
-        } catch (_) {}
-      }
-
-      if (!c.value.isPlaying) {
-        await c.play();
-        _hasAutoplayStarted = true;
+          await c?.play();
+        } catch (e) {
+          debugPrint("⚠️ play error: $e");
+        }
       }
 
       _updateWakelock();
@@ -326,78 +301,33 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
   void _becomePassive() {
     final c = _ctrl;
-    if (c != null) {
-      if (c.value.isPlaying) {
-        try {
-          c.pause();
-        } catch (_) {}
-      }
-      _safeSetVolume(0.0);
+    if (_isControllerValid(c) && (c?.value.isPlaying ?? false)) {
+      try {
+        c?.pause();
+      } catch (_) {}
     }
-    _hasAutoplayStarted = false;
-    _setWakelock(false);
+    unawaited(_setWakelock(false));
     _stopStallWatchdog();
-  }
-
-  void _safeSetVolume(double v) {
-    final c = _ctrl;
-    if (c == null) return;
-    try {
-      if (c.value.isInitialized) {
-        c.setVolume(v.clamp(0.0, 1.0));
-      }
-    } catch (_) {}
-  }
-
-  void _updateWakelock() {
-    final c = _ctrl;
-    final shouldKeepAwake = c != null &&
-        c.value.isInitialized &&
-        c.value.isPlaying &&
-        !c.value.isBuffering &&
-        _isActuallyVisible();
-    _setWakelock(shouldKeepAwake);
-  }
-
-  Future<void> _setWakelock(bool enable) async {
-    if (_wakelockOn == enable) return;
-    _wakelockOn = enable;
-    try {
-      enable ? await WakelockPlus.enable() : await WakelockPlus.disable();
-    } catch (e) {
-      debugPrint('Wakelock error: $e');
-    }
   }
 
   void _kickStallWatchdog({bool forceRestart = false}) {
     final c = _ctrl;
-    if (c == null) return;
-
-    if (!c.value.isInitialized || !c.value.isPlaying) {
-      _stopStallWatchdog();
-      return;
-    }
-
+    if (!_isControllerValid(c)) return;
+    if (!(c?.value.isInitialized ?? false) || !(c?.value.isPlaying ?? false)) return;
     if (_stallTimer != null && !forceRestart) return;
 
     _stallTimer?.cancel();
-    _lastKnownPos = c.value.position;
+    _lastKnownPos = c!.value.position;
     _stallStrikes = 0;
 
     _stallTimer = Timer.periodic(_stallCheckInterval, (_) async {
-      final cc = _ctrl;
-      if (cc == null) {
+      if (_isDisposed) {
         _stopStallWatchdog();
         return;
       }
 
-      final v = cc.value;
-      if (!v.isInitialized || v.hasError) {
-        _stopStallWatchdog();
-        return;
-      }
-
-      if (!v.isPlaying) {
+      final v = c.value;
+      if (!v.isInitialized || v.hasError || !v.isPlaying) {
         _stopStallWatchdog();
         return;
       }
@@ -408,23 +338,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         return;
       }
 
-      final pos = v.position;
-      final advanced = pos > _lastKnownPos;
-      _lastKnownPos = pos;
-
-      if (!advanced) {
+      if (v.position <= _lastKnownPos) {
         _stallStrikes++;
-        if (_stallStrikes == 2) {
-          try {
-            await cc.seekTo(pos + const Duration(milliseconds: 1));
-          } catch (_) {}
-        } else if (_stallStrikes >= _stallMaxStrikesBeforeReload) {
+        if (_stallStrikes >= _stallMaxStrikesBeforeReload) {
           _stallStrikes = 0;
           await _softReloadController();
         }
       } else {
         _stallStrikes = 0;
       }
+
+      _lastKnownPos = v.position;
     });
   }
 
@@ -437,25 +361,36 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
   Future<void> _softReloadController() async {
     final c = _ctrl;
-    if (c == null) return;
+    if (!_isControllerValid(c)) return;
     try {
-      await c.pause();
+      await c?.pause();
       await Future.delayed(const Duration(milliseconds: 50));
-      await c.play();
-      _hasAutoplayStarted = true;
+      if (_isDisposed) return;
+      await c?.play();
     } catch (_) {
       await _purgeAndReloadController();
     }
   }
 
+  Future<void> _setWakelock(bool enable) async {
+    if (_wakelockOn == enable) return;
+    _wakelockOn = enable;
+    try {
+      enable ? await WakelockPlus.enable() : await WakelockPlus.disable();
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
-    final videoController = Get.find<VideoController>(tag: widget.contextKey);
+    // ✅ IMPORTANT : plus de Get.find dans build (évite crash au retour)
+    final videoController = _vc;
     final userController = Get.find<UserController>();
+
     final ctrl = _ctrl;
     final loadState =
         _videoManager.getLoadState(widget.contextKey, widget.videoUrl);
 
+    // Si jamais _vc est null (cas rare), on affiche seulement la vidéo (UI safe)
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -475,22 +410,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
               hasFirstFrame: _hasFirstFrame,
               onTogglePlayPause: () {
                 if (!widget.enableTapToPlay) return;
-                if (ctrl == null || !ctrl.value.isInitialized) return;
-                if (ctrl.value.isPlaying) {
-                  _becomePassive();
-                } else {
-                  _scheduleMaybePlay();
+                if (_isControllerValid(ctrl)) {
+                  (ctrl?.value.isPlaying ?? false)
+                      ? _becomePassive()
+                      : _scheduleMaybePlay();
                 }
               },
-              onRetry: () async {
-                debugPrint(
-                    '[SmartVideoPlayer] Retry tapped for ${widget.video.videoUrl}');
-                await _purgeAndReloadController();
-              },
+              onRetry: _purgeAndReloadController,
             );
           },
         ),
-        if (widget.showControls)
+        if (widget.showControls && videoController != null)
           _buildActions(context, videoController, userController),
       ],
     );
@@ -507,17 +437,36 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     }
   }
 
-  Widget _buildActions(BuildContext context, VideoController videoController,
-      UserController userController) {
+  Widget _animatedActionButton({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 32),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActions(
+    BuildContext context,
+    VideoController videoController,
+    UserController userController,
+  ) {
     final user = userController.user;
     if (user == null) return const SizedBox();
 
     final isOwner = widget.video.uid == user.uid;
-
-    // 🔥 Décalage dynamique pour éviter tout chevauchement avec l’avatar + bouton + (placés dans HomeScreen)
     final screenHeight = MediaQuery.of(context).size.height;
-    double bottomOffset = screenHeight * 0.22; // ~22% de la hauteur écran
-    if (bottomOffset < 120) bottomOffset = 120; // garde un minimum sur petits écrans
+    double bottomOffset = screenHeight * 0.22;
+    if (bottomOffset < 120) bottomOffset = 120;
 
     return Positioned(
       right: 10,
@@ -526,55 +475,67 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         mainAxisSize: MainAxisSize.min,
         children: [
           if (isOwner)
-            _buildActionButton(
+            _animatedActionButton(
               icon: Icons.delete,
               color: Colors.red,
               label: 'Supprimer',
-              onPressed: () => _confirmDelete(context, videoController),
+              onTap: () => _confirmDelete(context, videoController),
             ),
           if (isOwner) const SizedBox(height: 24),
-
-          _buildActionButton(
+          _animatedActionButton(
             icon: Icons.favorite,
             color: widget.video.likes.contains(user.uid)
                 ? Colors.red
                 : Colors.white,
             label: '${widget.video.likes.length}',
-            onPressed: () => _toggleLike(videoController, user.uid),
+            onTap: () => _toggleLike(videoController, user.uid),
           ),
           const SizedBox(height: 24),
-
-          _buildActionButton(
+          _animatedActionButton(
             icon: Icons.share,
             color: Colors.white,
             label: '${widget.video.shareCount}',
-            onPressed: () => _shareVideo(videoController),
+            onTap: () => _shareVideo(videoController),
           ),
           const SizedBox(height: 24),
-
-          _buildActionButton(
+          _animatedActionButton(
             icon: Icons.flag,
             color: Colors.white,
             label: '${widget.video.reportCount}',
-            onPressed: () =>
+            onTap: () =>
                 videoController.signalerVideo(widget.video.id, user.uid),
           ),
+          const SizedBox(height: 28),
+          if (user.role == 'joueur')
+            Column(
+              children: [
+                FloatingActionButton(
+                  heroTag: 'addVideo_${widget.video.id}',
+                  mini: true,
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  elevation: 3,
+                  onPressed: () async {
+                    await _videoManager.pauseAll(widget.contextKey);
+                    await _setWakelock(false);
+                    final result = await Get.to(() => const AddVideo());
+                    if (result == true) {
+                      await videoController.refreshVideos();
+                    } else {
+                      _scheduleMaybePlay();
+                    }
+                  },
+                  child: const Icon(Icons.add),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Ajouter',
+                  style: TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ],
+            ),
         ],
       ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required Color color,
-    required String label,
-    required VoidCallback onPressed,
-  }) {
-    return Column(
-      children: [
-        IconButton(icon: Icon(icon, color: color, size: 30), onPressed: onPressed),
-        Text(label, style: const TextStyle(color: Colors.white, fontSize: 12)),
-      ],
     );
   }
 
@@ -585,7 +546,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       widget.video.likes.add(userId);
     }
     controller.likeVideo(widget.video.id, userId);
-    setState(() {});
+    if (mounted && !_isDisposed) setState(() {});
   }
 
   void _confirmDelete(BuildContext context, VideoController controller) {
@@ -609,11 +570,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
   Future<void> _shareVideo(VideoController controller) async {
     try {
-      // ✅ Nouvelle API SharePlus
       await SharePlus.instance.share(
-        ShareParams(
-          text: 'Regarde cette vidéo : ${widget.video.videoUrl}',
-        ),
+        ShareParams(text: 'Regarde cette vidéo : ${widget.video.videoUrl}'),
       );
       await controller.partagerVideo(widget.video.id);
     } catch (_) {
@@ -629,18 +587,16 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   Future<void> _purgeAndReloadController() async {
     if (!kIsWeb) {
       try {
-        final file = await VideoCacheManager.getFileIfCached(widget.videoUrl);
+        final file =
+            await custom_cache.VideoCacheManager.getFileIfCached(widget.videoUrl);
         if (file != null && await file.exists()) {
           await file.delete();
-          debugPrint(
-              "[SmartVideoPlayer] Cache corrompu supprimé pour ${widget.video.videoUrl}");
         }
       } catch (_) {}
     }
-    _hasAutoplayStarted = false;
     _hasFirstFrame = false;
     _stopStallWatchdog();
-    if (mounted) setState(() {});
+    if (mounted && !_isDisposed) setState(() {});
     unawaited(_attachOrInitialize(reuse: null));
   }
 }

@@ -173,8 +173,8 @@ class _Header extends StatelessWidget {
           bottom: Radius.circular(28),
         ),
       ),
-      child: Stack(
-        children: const [
+      child: const Stack(
+        children: [
           Positioned(
             right: -30,
             top: -30,
@@ -296,11 +296,11 @@ class _BodyCard extends StatelessWidget {
             const SizedBox(height: 14),
 
             // Tips + puces
-            Wrap(
+            const Wrap(
               alignment: WrapAlignment.center,
               spacing: 8,
               runSpacing: 8,
-              children: const [
+              children: [
                 _TipChip(icon: Icons.timer_rounded, label: '≤ 60 secondes'),
                 _TipChip(icon: Icons.hd_rounded, label: '≥ 480×360'),
                 _TipChip(icon: Icons.data_saver_on_rounded, label: 'Compression auto'),

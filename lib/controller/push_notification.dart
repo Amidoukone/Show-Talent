@@ -51,7 +51,7 @@ class PushNotificationService {
     required String contextData,
   }) async {
     final String serverKey = await getAccessToken();
-    final String firebaseMessagingEndpoint = 'https://fcm.googleapis.com/v1/projects/show-talent-5987d/messages:send';
+    const String firebaseMessagingEndpoint = 'https://fcm.googleapis.com/v1/projects/show-talent-5987d/messages:send';
 
     final Map<String, dynamic> notificationMessage = {
       'message': {
