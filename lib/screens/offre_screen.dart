@@ -192,7 +192,7 @@ class OffreScreen extends StatelessWidget {
             children: [
               TextButton.icon(
                 onPressed: () =>
-                    Get.to(() => OffreFormScreen(), arguments: offre),
+                    Get.to(() => const OffreFormScreen(), arguments: offre),
                 icon: const Icon(Icons.edit, color: Colors.blue),
                 label: const Text("Modifier"),
               ),
@@ -271,7 +271,7 @@ class OffreScreen extends StatelessWidget {
     if (currentUser?.role == 'club' || currentUser?.role == 'recruteur') {
       return FloatingActionButton(
         onPressed: () {
-          Get.to(() => OffreFormScreen());
+          Get.to(() => const OffreFormScreen());
         },
         backgroundColor: const Color.fromARGB(255, 12, 40, 37),
         foregroundColor: Colors.white,

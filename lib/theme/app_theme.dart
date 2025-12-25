@@ -5,7 +5,7 @@ import 'ad_typography.dart';
 class AppTheme {
   /// Thème clair principal — utilisé dans toute l’application
   static ThemeData light() {
-    final colorScheme = ColorScheme(
+    const colorScheme = ColorScheme(
       brightness: Brightness.light,
       primary: AdColors.brand,
       onPrimary: AdColors.white,

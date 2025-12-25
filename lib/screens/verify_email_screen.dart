@@ -11,6 +11,7 @@ import '../controller/user_controller.dart';
 import '../services/email_link_handler.dart';
 import '../services/verify_email_throttle.dart';
 import '../theme/ad_colors.dart';
+import 'login_screen.dart';
 import 'main_screen.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class VerifyEmailScreen extends StatefulWidget {
 
 class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   bool _isProcessing = true;
+  bool _finishing = false; // évite double traitement / double navigation
   String? _message;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -50,8 +52,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       _sentAtMs = args['sentAt'] is int ? args['sentAt'] as int : null;
       if (_sentAtMs != null) {
         // Seed du throttle pour éviter renvois multiples au démarrage
-        VerifyEmailThrottle.lastSentAt =
-            DateTime.fromMillisecondsSinceEpoch(_sentAtMs!);
+        VerifyEmailThrottle.lastSentAt = DateTime.fromMillisecondsSinceEpoch(_sentAtMs!);
       }
     }
 
@@ -67,6 +68,30 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     _pollingTimer?.cancel();
     _linkSub?.cancel();
     super.dispose();
+  }
+
+  String _defaultUxMessage({required bool emailSent}) {
+    final email = _auth.currentUser?.email;
+    final emailLine = (email != null && email.isNotEmpty) ? "Adresse : $email\n\n" : "";
+
+    // Message UX clair, réduit la frustration
+    return emailSent
+        ? "Un e-mail de vérification a été envoyé.\n\n$emailLine"
+            "👉 Ouvre ta boîte de réception et clique sur le lien.\n"
+            "👉 Si tu ne le vois pas, vérifie aussi « Spam » / « Indésirables » / « Promotions ».\n\n"
+            "Après avoir cliqué, reviens ici et appuie sur « J’ai cliqué sur le lien, continuer »."
+        : "Vérifie ta boîte mail et clique sur le lien de vérification.\n\n$emailLine"
+            "👉 Si tu ne le vois pas, vérifie aussi « Spam » / « Indésirables » / « Promotions ».\n\n"
+            "Après avoir cliqué, reviens ici et appuie sur « J’ai cliqué sur le lien, continuer ».";
+  }
+
+  Future<void> _goBackToLogin() async {
+    // Retour “propre” pour éviter état bloqué (compte non vérifié)
+    try {
+      await _auth.signOut();
+    } catch (_) {}
+    if (!mounted) return;
+    await Get.offAll(() => const LoginScreen());
   }
 
   // --- WEB: appliqué si la page /verify contient ?mode=verifyEmail&oobCode=...
@@ -101,6 +126,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
       if (user == null) {
         // L’utilisateur a vérifié depuis un navigateur sans session active
+        if (!mounted) return;
         setState(() {
           _isProcessing = false;
           _message = "E-mail vérifié. Veuillez vous reconnecter pour continuer.";
@@ -125,6 +151,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     // Mobile (app links) : notification via EmailLinkHandler
     EmailLinkHandler.init().then((_) {
       _linkSub = EmailLinkHandler.onEmailVerified.listen((_) {
+        // Lien vérifié détecté → finaliser
+        // ignore: discarded_futures
         _onEmailVerified();
       });
     });
@@ -134,39 +162,78 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     _pollingTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
       final user = _auth.currentUser;
       if (user == null) return;
-      await user.reload();
+
+      try {
+        await user.reload();
+      } catch (_) {
+        // réseau lent / reload échoue : on laisse le timer continuer
+        return;
+      }
+
       final refreshed = _auth.currentUser;
       if (refreshed != null && refreshed.emailVerified) {
+        // ignore: discarded_futures
         _onEmailVerified();
       }
     });
 
+    if (!mounted) return;
     setState(() {
       _isProcessing = false;
-      _message = _emailSent
-          ? "Un e-mail de vérification a été envoyé. Clique sur le lien pour activer ton compte."
-          : "Vérifie ta boîte mail et clique sur le lien pour activer ton compte.";
+      _message = _defaultUxMessage(emailSent: _emailSent);
     });
   }
 
   Future<void> _onEmailVerified() async {
-    _pollingTimer?.cancel();
-    _linkSub?.cancel();
+    if (_finishing) return;
+    _finishing = true;
 
-    final user = _auth.currentUser;
-    if (user == null) {
-      setState(() {
-        _message = "Utilisateur non connecté.";
-      });
-      return;
-    }
+    try {
+      _pollingTimer?.cancel();
+      _linkSub?.cancel();
 
-    await _syncUserFirestore(user);
+      final user = _auth.currentUser;
+      if (user == null) {
+        if (!mounted) return;
+        setState(() {
+          _message = "Utilisateur non connecté. Veuillez vous reconnecter.";
+        });
+        return;
+      }
 
-    if (!mounted) return;
-    await Get.offAll(() => const MainScreen());
-    if (Get.isRegistered<UserController>()) {
-      Get.find<UserController>().kickstart();
+      // IMPORTANT: évite de marquer Firestore “emailVerified=true” si l’utilisateur
+      // appuie sur le bouton sans avoir réellement vérifié.
+      try {
+        await user.reload();
+      } catch (_) {}
+
+      final refreshed = _auth.currentUser;
+      if (refreshed == null) {
+        if (!mounted) return;
+        setState(() {
+          _message = "Session expirée. Veuillez vous reconnecter.";
+        });
+        return;
+      }
+
+      if (!refreshed.emailVerified) {
+        if (!mounted) return;
+        setState(() {
+          _message = "${_defaultUxMessage(emailSent: _emailSent)}\n\n⚠️ Ton e-mail n’est pas encore détecté comme vérifié.\nAprès avoir cliqué sur le lien, attends 2–5 secondes puis réessaie.";
+        });
+        return;
+      }
+
+      await _syncUserFirestore(refreshed);
+
+      if (!mounted) return;
+      await Get.offAll(() => const MainScreen());
+
+      if (Get.isRegistered<UserController>()) {
+        Get.find<UserController>().kickstart();
+      }
+    } finally {
+      _finishing = false;
     }
   }
 
@@ -195,10 +262,16 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     try {
       final user = _auth.currentUser;
       if (user == null) throw Exception('Utilisateur non connecté');
+
       await user.sendEmailVerification(_acs);
       VerifyEmailThrottle.markSentNow();
 
       if (!mounted) return;
+      setState(() {
+        _emailSent = true;
+        _message = _defaultUxMessage(emailSent: true);
+      });
+
       Get.snackbar(
         'Lien envoyé',
         'Un e-mail de vérification a été renvoyé.',
@@ -236,6 +309,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         centerTitle: true,
         backgroundColor: const Color(0xFF214D4F),
         foregroundColor: Colors.white,
+
+        // ✅ Bouton retour demandé (sans casser ta structure)
+        // On fait un retour "propre" : signOut + retour au Login.
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _isProcessing ? null : _goBackToLogin,
+          tooltip: 'Retour',
+        ),
       ),
       body: Center(
         child: _isProcessing
@@ -246,15 +327,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      _message ?? 'Erreur inconnue.',
+                      _message ?? _defaultUxMessage(emailSent: _emailSent),
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: Colors.black87),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
-                      onPressed: _onEmailVerified,
+                      onPressed: _finishing ? null : _onEmailVerified,
                       icon: const Icon(Icons.check_circle_outline),
-                      label: const Text("J’ai cliqué sur le lien, continuer"),
+                      label: Text(_finishing ? "Vérification..." : "J’ai cliqué sur le lien, continuer"),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF214D4F),
                         foregroundColor: Colors.white,
@@ -266,7 +347,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
-                      onPressed: _resendEmail,
+                      onPressed: _finishing ? null : _resendEmail,
                       icon: const Icon(Icons.email_outlined),
                       label: const Text("Renvoyer le lien de vérification"),
                       style: ElevatedButton.styleFrom(

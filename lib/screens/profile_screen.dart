@@ -221,11 +221,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SliverToBoxAdapter(child: SizedBox(height: 12)),
                     if (user.role == 'joueur') ...[
-                      SliverToBoxAdapter(
+                      const SliverToBoxAdapter(
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
                           child: Row(
-                            children: const [
+                            children: [
                               _SectionHeader(
                                 icon: Icons.video_collection_outlined,
                                 title: 'Vidéos',

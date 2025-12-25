@@ -6,7 +6,7 @@ import 'dart:io' show File;
 import 'package:flutter/foundation.dart'; // kIsWeb, debugPrint
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:adfoot/utils/video_cache_manager.dart';
+import 'package:adfoot/utils/video_cache_manager.dart' as custom_cache;
 
 enum VideoLoadState { loading, ready, errorTimeout, errorSource }
 
@@ -19,13 +19,9 @@ class VideoManager {
   final Map<String, Map<String, Future<CachedVideoPlayerPlus>>> _initFuturesByContext = {};
   final Map<String, Map<String, VideoLoadState>> _loadStatesByContext = {};
 
-  /// 🔧 LRU stricte
   final int _maxActive = 8;
-
-  /// 🔧 Limite du nombre d’inits simultanées
   int _activeInits = 0;
   final int _maxConcurrentInits = 3;
-
 
   Future<bool> _hasConnectivity() async {
     try {
@@ -36,15 +32,12 @@ class VideoManager {
       if (res is ConnectivityResult) {
         return res != ConnectivityResult.none;
       }
-      // Si le type évolue encore, on préfère ne pas bloquer.
       return true;
     } catch (_) {
-      // En cas d’échec de détection, on évite de bloquer par défaut.
       return true;
     }
   }
 
-  /// Indique si l’on est probablement sur un réseau "rapide" (wifi/ethernet).
   Future<bool> _isHighBandwidth() async {
     try {
       final dynamic res = await Connectivity().checkConnectivity();
@@ -76,12 +69,11 @@ class VideoManager {
     final futures = _initFuturesByContext[contextKey]!;
     final lru = _lruByContext[contextKey]!;
 
-    // ✅ Déjà en cache et valide
     if (lru.containsKey(url)) {
       final existing = lru.remove(url)!;
       final cv = existing.controller.value;
       if (cv.isInitialized && !cv.hasError) {
-        lru[url] = existing; // remet en fin de LRU
+        lru[url] = existing;
         await _enforceLimit(contextKey, activeUrl: activeUrl);
         _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
         if (autoPlay && !cv.isPlaying) await existing.controller.play().catchError((_) {});
@@ -91,7 +83,6 @@ class VideoManager {
       lru.remove(url);
     }
 
-    // ✅ Init déjà en cours
     if (futures.containsKey(url)) {
       try {
         final player = await futures[url]!;
@@ -108,7 +99,6 @@ class VideoManager {
       lru.remove(url);
     }
 
-    // ✅ Nouvelle init contrôlée par sémaphore
     Future<CachedVideoPlayerPlus> loadVideo() async {
       final stopwatch = Stopwatch()..start();
       File? file;
@@ -119,9 +109,9 @@ class VideoManager {
         if (kIsWeb) {
           player = CachedVideoPlayerPlus.networkUrl(Uri.parse(url));
         } else {
-          file = await VideoCacheManager.getFileIfCached(url);
+          file = await custom_cache.VideoCacheManager.getFileIfCached(url);
 
-          // retry si cache corrompu
+          // ignore: unnecessary_null_comparison
           if (file == null || !(await file.exists())) {
             file = await _downloadVideo(url, force: true);
           }
@@ -161,7 +151,6 @@ class VideoManager {
       }
     }
 
-    // ✅ Gestion sémaphore
     while (_activeInits >= _maxConcurrentInits) {
       await Future.delayed(const Duration(milliseconds: 80));
     }
@@ -183,18 +172,17 @@ class VideoManager {
   }
 
   Future<File> _downloadVideo(String url, {bool force = false}) async {
-    // 🔧 Remplacé: supporte toutes versions de connectivity_plus
     final hasNet = await _hasConnectivity();
     if (!hasNet) throw Exception("No internet : $url");
 
     if (force) {
-      final cached = await VideoCacheManager.getFileIfCached(url);
+      final cached = await custom_cache.VideoCacheManager.getFileIfCached(url);
       if (cached != null && await cached.exists()) {
         await cached.delete().catchError((_) {});
       }
     }
 
-    final info = await VideoCacheManager.getInstance().then((m) => m.downloadFile(url));
+    final info = await custom_cache.VideoCacheManager.getInstance().then((m) => m.downloadFile(url));
     return info.file;
   }
 
@@ -214,7 +202,7 @@ class VideoManager {
 
   Future<void> _checkCacheSize() async {
     if (!kIsWeb) {
-      final size = await VideoCacheManager.getCacheSizeInMB();
+      final size = await custom_cache.VideoCacheManager.getCacheSizeInMB();
       if (size > 300) debugPrint("⚠️ Cache >300MB: ${size}MB");
     }
   }
@@ -281,7 +269,6 @@ class VideoManager {
   }) async {
     int radius = 1;
 
-    // 🔧 Remplacé: décision basée sur _isHighBandwidth() compatible toutes versions
     if (await _isHighBandwidth()) {
       radius = 2;
     }

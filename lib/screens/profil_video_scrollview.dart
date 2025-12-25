@@ -28,14 +28,16 @@ class ProfileVideoScrollView extends StatefulWidget {
 class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     with WidgetsBindingObserver {
   late final PageController _pageController;
-  late int _currentIndex;
-  late final String _ctxKey;
-  final VideoManager _videoManager = VideoManager();
   late final VideoController _vc;
+  final VideoManager _videoManager = VideoManager();
+
+  late int _currentIndex;
 
   bool _isProcessing = false;
-  int _requestToken = 0; // ✅ pour annuler les appels obsolètes
-  String? _currentPlayingUrl;
+  int _requestToken = 0;
+  bool _isDisposed = false;
+
+  bool _isExiting = false;
 
   static const int _videoSlidingWindowLimit = 25;
 
@@ -43,79 +45,85 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
     _currentIndex = widget.initialIndex;
-    _ctxKey = widget.contextKey;
     _pageController = PageController(initialPage: _currentIndex);
 
-    _vc = Get.isRegistered<VideoController>(tag: _ctxKey)
-        ? Get.find<VideoController>(tag: _ctxKey)
+    _vc = Get.isRegistered<VideoController>(tag: widget.contextKey)
+        ? Get.find<VideoController>(tag: widget.contextKey)
         : Get.put(
-            VideoController(contextKey: _ctxKey),
-            tag: _ctxKey,
+            VideoController(contextKey: widget.contextKey),
+            tag: widget.contextKey,
             permanent: true,
           );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _handleIndexChange(_currentIndex);
+      if (!_isDisposed && !_isExiting) {
+        _handleIndexChange(_currentIndex);
+      }
     });
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
+    _requestToken++; // annule toutes les async en cours
     WidgetsBinding.instance.removeObserver(this);
-    _pageController.dispose();
-    unawaited(_disposeResources());
-    super.dispose();
-  }
 
-  Future<void> _disposeResources() async {
-    try {
-      await _videoManager.pauseAll(_ctxKey);
-      await _videoManager.disposeAllForContext(_ctxKey);
-      if (Get.isRegistered<VideoController>(tag: _ctxKey)) {
-        Get.delete<VideoController>(tag: _ctxKey);
-      }
-    } catch (e) {
-      debugPrint('❌ Error during dispose: $e');
+    // Le PageController peut disposer sans souci
+    _pageController.dispose();
+
+    // IMPORTANT:
+    // On ne force PAS de rebuild VideoPlayer ici (l’arbre est déjà en teardown),
+    // on stoppe juste la lecture puis on dispose le contexte.
+    unawaited(_videoManager.pauseAll(widget.contextKey));
+    unawaited(_videoManager.disposeAllForContext(widget.contextKey));
+
+    if (Get.isRegistered<VideoController>(tag: widget.contextKey)) {
+      Get.delete<VideoController>(tag: widget.contextKey);
     }
+
+    super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      _videoManager.pauseAll(_ctxKey);
-    } else if (state == AppLifecycleState.resumed) {
-      _resumeCurrentVideo();
+    if (_isDisposed || _isExiting) return;
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      unawaited(_videoManager.pauseAll(widget.contextKey));
     }
-    super.didChangeAppLifecycleState(state);
   }
 
-  Future<void> _resumeCurrentVideo() async {
-    final urls = widget.videos.map((v) => v.videoUrl).toList();
-    if (_currentIndex < 0 || _currentIndex >= urls.length) return;
+  Future<void> _safeExit() async {
+    if (_isDisposed || _isExiting) return;
 
-    final currentUrl = urls[_currentIndex];
-    final player = _videoManager.getController(_ctxKey, currentUrl);
-    final ctrl = player?.controller;
+    setState(() => _isExiting = true);
 
-    if (ctrl != null && ctrl.value.isInitialized && !ctrl.value.hasError) {
-      if (!ctrl.value.isPlaying) {
-        await _videoManager.pauseAllExcept(_ctxKey, currentUrl);
-        await ctrl.play();
-      }
-      if (mounted) setState(() => _currentPlayingUrl = currentUrl);
-    } else {
-      // Si pas prêt, relance la séquence standard (init + preload + window)
-      await _handleIndexChange(_currentIndex);
+    // Annule toute logique async en cours (init/preload/disposeUrls)
+    _requestToken++;
+
+    // Couper toute lecture + désactiver tout “actif”
+    try {
+      _vc.currentIndex.value = -1;
+    } catch (_) {}
+
+    await _videoManager.pauseAll(widget.contextKey);
+
+    // Laisse Flutter “retirer” proprement les widgets VideoPlayer de l’arbre
+    // avant de pop la route (évite le build plugin pendant la transition).
+    await WidgetsBinding.instance.endOfFrame;
+
+    if (!_isDisposed && mounted) {
+      Get.back();
     }
   }
 
   Future<void> _handleIndexChange(int idx) async {
+    if (_isDisposed || _isExiting) return;
+    if (_isProcessing) return;
     if (idx < 0 || idx >= widget.videos.length) return;
-    if (_isProcessing) {
-      // On laisse l'appel courant se terminer et ce nouveau swipe sera traité ensuite
-      return;
-    }
+
     _isProcessing = true;
     final localToken = ++_requestToken;
 
@@ -123,50 +131,56 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
       final urls = widget.videos.map((v) => v.videoUrl).toList();
       final currentUrl = urls[idx];
 
-      // Met l'index tôt pour synchroniser SmartVideoPlayer
       _vc.currentIndex.value = idx;
 
-      // Stoppe toute lecture en cours immédiatement (pas de delay arbitraire)
-      await _videoManager.pauseAll(_ctxKey);
-      if (localToken != _requestToken) return;
+      // Pause d’abord (safe)
+      await _videoManager.pauseAll(widget.contextKey);
+      if (_isDisposed || _isExiting || localToken != _requestToken) return;
 
-      // Initialise/attache le player pour la vidéo courante
+      // Init uniquement si toujours actif
       final player = await _videoManager.initializeController(
-        _ctxKey,
+        widget.contextKey,
         currentUrl,
         autoPlay: true,
         activeUrl: currentUrl,
       );
-      if (localToken != _requestToken) return;
+      if (_isDisposed || _isExiting || localToken != _requestToken) return;
 
       _currentIndex = idx;
-      _currentPlayingUrl = currentUrl;
       if (mounted) setState(() {});
 
-      // Précharge les voisins (VideoManager limite déjà la concurrence)
-      _videoManager.preloadSurrounding(_ctxKey, urls, idx, activeUrl: currentUrl);
+      // Preload voisinage (non bloquant)
+      _videoManager.preloadSurrounding(
+        widget.contextKey,
+        urls,
+        idx,
+        activeUrl: currentUrl,
+      );
 
-      // 🧹 Sliding window : ne garde que 25 vidéos autour de l’index
-      final retainedIndices = List<int>.generate(
+      // Fenêtre glissante mémoire (dispose hors fenêtre)
+      final retained = List<int>.generate(
         _videoSlidingWindowLimit,
         (i) => idx - (_videoSlidingWindowLimit ~/ 2) + i,
-      ).where((i) => i >= 0 && i < urls.length).toList();
+      ).where((i) => i >= 0 && i < urls.length);
 
-      final retainedUrls = retainedIndices.map((i) => urls[i]).toSet();
-      final toDispose = urls.toSet().difference(retainedUrls);
+      final keepUrls = retained.map((i) => urls[i]).toSet();
+      final toDispose = urls.toSet().difference(keepUrls);
+
       if (toDispose.isNotEmpty) {
-        await _videoManager.disposeUrls(_ctxKey, toDispose.toList());
+        // ⚠️ Important: ne dispose pas si on est en train de sortir
+        if (!_isExiting && !_isDisposed && localToken == _requestToken) {
+          await _videoManager.disposeUrls(widget.contextKey, toDispose.toList());
+        }
       }
 
-      // Assure la lecture
+      // Play sécurisé
       final ctrl = player.controller;
-      if (ctrl.value.isInitialized && !ctrl.value.hasError && !ctrl.value.isPlaying) {
-        await _videoManager.pauseAllExcept(_ctxKey, currentUrl);
+      if (!ctrl.value.isPlaying) {
+        await _videoManager.pauseAllExcept(widget.contextKey, currentUrl);
         await ctrl.play();
       }
-      if (mounted) setState(() {});
-    } catch (e, st) {
-      debugPrint("❌ Error in _handleIndexChange: $e\n$st");
+    } catch (_) {
+      // fail-safe
     } finally {
       _isProcessing = false;
     }
@@ -174,37 +188,34 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.videos.isEmpty) {
-      return const Scaffold(
+    return WillPopScope(
+      onWillPop: () async {
+        await _safeExit();
+        return false;
+      },
+      child: Scaffold(
         backgroundColor: Colors.black,
-        body: Center(
-          child: Text('Aucune vidéo publiée', style: TextStyle(color: Colors.white)),
-        ),
-      );
-    }
+        body: Stack(
+          children: [
+            // Pendant EXITING : on retire PageView -> plus aucun VideoPlayer build
+            if (_isExiting)
+              const SizedBox.expand(child: ColoredBox(color: Colors.black))
+            else
+              PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                itemCount: widget.videos.length,
+                onPageChanged: _handleIndexChange,
+                itemBuilder: (_, idx) {
+                  final video = widget.videos[idx];
+                  final player = _videoManager.getController(
+                    widget.contextKey,
+                    video.videoUrl,
+                  );
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.vertical,
-            itemCount: widget.videos.length,
-            onPageChanged: _handleIndexChange,
-            itemBuilder: (_, idx) {
-              final video = widget.videos[idx];
-              final player = _videoManager.getController(_ctxKey, video.videoUrl);
-
-              return Stack(
-                children: [
-                  SmartVideoPlayer(
-                    key: ValueKey(
-                      _currentPlayingUrl == video.videoUrl
-                          ? video.id
-                          : '${video.id}_placeholder',
-                    ),
-                    contextKey: _ctxKey,
+                  return SmartVideoPlayer(
+                    key: ValueKey(video.id),
+                    contextKey: widget.contextKey,
                     videoUrl: video.videoUrl,
                     video: video,
                     currentIndex: idx,
@@ -214,75 +225,22 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
                     showControls: true,
                     showProgressBar: true,
                     player: player,
-                  ),
-                  Positioned(
-                    bottom: 100,
-                    left: 10,
-                    right: 80,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          video.songName.isNotEmpty
-                              ? video.songName
-                              : 'Musique inconnue',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black54,
-                                offset: Offset(1, 1),
-                                blurRadius: 2,
-                              )
-                            ],
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          video.caption.isNotEmpty
-                              ? video.caption
-                              : 'Pas de légende',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black54,
-                                offset: Offset(1, 1),
-                                blurRadius: 2,
-                              )
-                            ],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Padding(
-                padding: const EdgeInsets.all(12.0),
+                  );
+                },
+              ),
+
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topLeft,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
-                  onPressed: () async {
-                    await _videoManager.pauseAll(_ctxKey);
-                    await _videoManager.disposeAllForContext(_ctxKey);
-                    if (mounted) Get.back();
-                  },
+                  icon: const Icon(Icons.arrow_back,
+                      color: Colors.white, size: 30),
+                  onPressed: _isExiting ? null : _safeExit,
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
