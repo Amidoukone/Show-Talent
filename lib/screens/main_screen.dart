@@ -1,4 +1,6 @@
 import 'dart:ui'; // pour ImageFilter.blur
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/video_controller.dart';
+import 'package:adfoot/controller/connectivity_controller.dart';
 
 import 'package:adfoot/screens/event_list_screen.dart';
 import 'package:adfoot/screens/setting_screen.dart';
@@ -25,6 +28,10 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
 
+  /// 🛰︎ État de la connectivité
+  bool _isOnline = true;
+  StreamSubscription<bool>? _connectivitySub;
+
   // Controllers
   final UserController userController = Get.find<UserController>();
   final ChatController chatController = Get.put(ChatController());
@@ -41,6 +48,35 @@ class _MainScreenState extends State<MainScreen> {
   ];
 
   bool _hasHandledArguments = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenConnectivity();
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    super.dispose();
+  }
+
+  /// 👇 Écoute la connectivité réseau et met à jour l’état
+  void _listenConnectivity() {
+    _connectivitySub =
+        ConnectivityService().connectionStream.listen((connected) {
+      if (!mounted) return;
+      setState(() => _isOnline = connected);
+    }, onError: (_) {
+      // Si erreur, on conserve l’état précédent
+    });
+
+    // Initialisation immédiate
+    ConnectivityService().checkInitialConnection().then((connected) {
+      if (!mounted) return;
+      setState(() => _isOnline = connected);
+    }).catchError((_) {});
+  }
 
   @override
   void didChangeDependencies() {
@@ -63,31 +99,49 @@ class _MainScreenState extends State<MainScreen> {
 
   /// ✅ Quand l’utilisateur change d’onglet
   void _onItemTapped(int index) {
-    // Haptique légère pour un ressenti moderne
     HapticFeedback.selectionClick();
 
-    // Si l’utilisateur clique sur Chat, on marque tout comme lu côté local immédiatement
+    // Si l’utilisateur clique sur Chat, on marque tout comme lu côté local
     if (index == 3) {
       chatController.markAllAsReadLocal();
     }
-
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  /// 👇 Badge + icône Home avec indicateur offline
+  Widget _buildHomeIcon({required bool active}) {
+    final icon = active ? Icons.home_rounded : Icons.home_outlined;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(icon),
+        if (!_isOnline)
+          const Positioned(
+            right: -2,
+            top: -2,
+            child: CircleAvatar(
+              radius: 4,
+              backgroundColor: Colors.redAccent,
+            ),
+          ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final firebaseUser = FirebaseAuth.instance.currentUser;
 
-    // Sécurité : transition après signOut
+    // Sécurité: redirection si non connecté
     if (firebaseUser == null) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    // Sécurité : si email non vérifié
+    // Sécurité: email non vérifié
     if (firebaseUser.emailVerified != true) {
       if (Get.currentRoute != '/verify') {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -99,11 +153,9 @@ class _MainScreenState extends State<MainScreen> {
       );
     }
 
-    // Obx : réagit au profil AppUser + unread Chat
+    // UI principale
     return Obx(() {
       final appUser = userController.user;
-
-      // 📨 total non-lu (mis à jour par ChatController)
       final unread = chatController.totalUnread;
 
       return Scaffold(
@@ -113,20 +165,17 @@ class _MainScreenState extends State<MainScreen> {
             Expanded(child: _screens[_selectedIndex]),
           ],
         ),
-        // ===== 🔥 NavBar modernisée (sobre, arrondie, légère transparence) =====
         bottomNavigationBar: SafeArea(
           top: false,
           child: Container(
-            // ✅ Remplissage anti "trous" aux coins arrondis
             color: const Color(0xFF214D4F),
             child: ClipRRect(
-              clipBehavior: Clip.hardEdge, // assure un clipping net
+              clipBehavior: Clip.hardEdge,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                 child: Container(
                   decoration: BoxDecoration(
-                    // Couleurs cohérentes avec l'existant (kPrimary = 0xFF214D4F)
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
@@ -150,8 +199,7 @@ class _MainScreenState extends State<MainScreen> {
                     ],
                   ),
                   child: BottomNavigationBar(
-                    backgroundColor:
-                        Colors.transparent, // le Container gère le fond
+                    backgroundColor: Colors.transparent,
                     selectedItemColor: const Color(0xFFE6EEFA),
                     unselectedItemColor: const Color(0xFF8AB98A),
                     currentIndex: _selectedIndex,
@@ -171,9 +219,9 @@ class _MainScreenState extends State<MainScreen> {
                     selectedIconTheme: const IconThemeData(size: 26),
                     unselectedIconTheme: const IconThemeData(size: 24),
                     items: [
-                      const BottomNavigationBarItem(
-                        icon: Icon(Icons.home_outlined),
-                        activeIcon: Icon(Icons.home_rounded),
+                      BottomNavigationBarItem(
+                        icon: _buildHomeIcon(active: false),
+                        activeIcon: _buildHomeIcon(active: true),
                         label: 'Accueil',
                       ),
                       const BottomNavigationBarItem(
@@ -243,7 +291,6 @@ class _ProfileLoadingBanner extends StatelessWidget {
   }
 }
 
-/// Icône de chat avec badge "non lus", compatible actif/inactif
 class _ChatIconWithBadge extends StatelessWidget {
   final int unread;
   final bool active;

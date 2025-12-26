@@ -43,47 +43,62 @@ class PushNotificationService {
     }
 
   // Fonction pour envoyer la notification
-  static Future<void> sendNotification({
-    required String title,
-    required String body,
-    required String token,
-    required String contextType,
-    required String contextData,
-  }) async {
-    final String serverKey = await getAccessToken();
-    const String firebaseMessagingEndpoint = 'https://fcm.googleapis.com/v1/projects/show-talent-5987d/messages:send';
+static Future<void> sendNotification({
+  required String title,
+  required String body,
+  required String token,
+  required String contextType,
+  required String contextData,
+}) async {
+  final String accessToken = await getAccessToken();
 
-    final Map<String, dynamic> notificationMessage = {
-      'message': {
-        'token': token,
+  const String firebaseMessagingEndpoint =
+      'https://fcm.googleapis.com/v1/projects/show-talent-5987d/messages:send';
+
+  final Map<String, dynamic> notificationMessage = {
+    'message': {
+      'token': token,
+
+      // 🔥 ANDROID CONFIG — CRUCIAL
+      'android': {
+        'priority': 'HIGH',
         'notification': {
-          'title': title,
-          'body': body,
+          'channel_id': 'high_importance_channel',
+          'sound': 'default',
+          'notification_priority': 'PRIORITY_MAX',
+          'default_sound': true,
         },
-        'data': {
-          'type': contextType,
-          'id': contextData,
-        },
-      }
-    };
-
-    // Convertir en chaîne JSON
-    final String bodyJson = jsonEncode(notificationMessage);
-
-    // Envoyer la requête POST avec la chaîne JSON dans le corps
-    final response = await http.post(
-      Uri.parse(firebaseMessagingEndpoint),
-      headers: {
-        'Authorization': 'Bearer $serverKey',
-        'Content-Type': 'application/json',
       },
-      body: bodyJson, // Le corps est maintenant au format JSON
-    );
 
-    if (response.statusCode == 200) {
-      print('Notification envoyée avec succès.');
-    } else {
-      print('Erreur lors de l\'envoi de la notification : ${response.body}');
+      // Notification visible
+      'notification': {
+        'title': title,
+        'body': body,
+      },
+
+      // Data pour navigation interne
+      'data': {
+        'type': contextType,
+        'id': contextData,
+      },
     }
+  };
+
+  final response = await http.post(
+    Uri.parse(firebaseMessagingEndpoint),
+    headers: {
+      'Authorization': 'Bearer $accessToken',
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode(notificationMessage),
+  );
+
+  if (response.statusCode == 200) {
+    print('✅ Notification envoyée avec succès.');
+  } else {
+    print('❌ Erreur notification FCM : ${response.statusCode}');
+    print(response.body);
   }
+}
+
 }
