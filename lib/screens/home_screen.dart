@@ -162,59 +162,63 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
-  Future<void> _onPageChanged(int index) async {
-    final videos = videoController.videoList;
-    if (index < 0 || index >= videos.length) return;
+Future<void> _onPageChanged(int index) async {
+  final videos = videoController.videoList;
+  if (index < 0 || index >= videos.length) return;
 
-    final currentUrl = videos[index].videoUrl;
-    videoController.currentIndex.value = index;
+  final currentUrl = videos[index].videoUrl;
+  videoController.currentIndex.value = index;
 
-    final urls = videos.map((v) => v.videoUrl).toList();
-    videoManager.preloadSurrounding('home', urls, index, activeUrl: currentUrl);
+  final urls = videos.map((v) => v.videoUrl).toList();
+  videoManager.preloadSurrounding('home', urls, index, activeUrl: currentUrl);
 
-    await videoManager.pauseAllExcept('home', currentUrl);
+  await videoManager.pauseAllExcept('home', currentUrl);
 
-    CachedVideoPlayerPlus? player =
-        videoManager.getController('home', currentUrl);
-    final ctrl = player?.controller;
+  CachedVideoPlayerPlus? player = videoManager.getController('home', currentUrl);
+  final ctrl = player?.controller;
 
-    if (ctrl == null ||
-        !ctrl.value.isInitialized ||
-        ctrl.value.hasError ||
-        !mounted) {
-      try {
-        player = await videoManager.initializeController(
-          'home',
-          currentUrl,
-          autoPlay: true,
-          activeUrl: currentUrl,
-        );
-      } catch (e) {
-        debugPrint('❌ Erreur init contrôleur (onPageChanged): $e');
-        return;
-      }
+  if (ctrl == null ||
+      !ctrl.value.isInitialized ||
+      ctrl.value.hasError ||
+      !mounted) {
+    try {
+      final stopwatch = Stopwatch()..start();
+      player = await videoManager.initializeController(
+        'home',
+        currentUrl,
+        autoPlay: true,
+        activeUrl: currentUrl,
+      );
+      stopwatch.stop();
+      debugPrint("[HomeScreen] Video [$index] loaded in ${stopwatch.elapsedMilliseconds}ms");
+    } catch (e) {
+      debugPrint('❌ Erreur init contrôleur (onPageChanged): $e');
+      return;
     }
-
-    final actualCtrl = player?.controller;
-    if (actualCtrl != null &&
-        actualCtrl.value.isInitialized &&
-        !actualCtrl.value.isPlaying &&
-        mounted) {
-      try {
-        await actualCtrl.play();
-      } catch (_) {}
-    }
-
-    await _updateWakelockForCurrent();
-
-    if (index >= videos.length - 2 &&
-        videoController.hasMore &&
-        !videoController.isLoading) {
-      unawaited(videoController.fetchPaginatedVideos());
-    }
-
-    _disposeFarPlayers(index, urls);
   }
+
+  final actualCtrl = player?.controller;
+  if (actualCtrl != null &&
+      actualCtrl.value.isInitialized &&
+      !actualCtrl.value.isPlaying &&
+      mounted) {
+    try {
+      await actualCtrl.play();
+    } catch (_) {}
+  }
+
+  await Future.delayed(const Duration(milliseconds: 50)); // petit délai de sécurité
+  await _updateWakelockForCurrent();
+
+  if (index >= videos.length - 2 &&
+      videoController.hasMore &&
+      !videoController.isLoading) {
+    unawaited(videoController.fetchPaginatedVideos());
+  }
+
+  _disposeFarPlayers(index, urls);
+}
+
 
   void _disposeFarPlayers(int index, List<String> urls) {
     const window = 25;

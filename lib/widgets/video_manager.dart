@@ -98,58 +98,64 @@ class VideoManager {
       futures.remove(url);
       lru.remove(url);
     }
+Future<CachedVideoPlayerPlus> loadVideo() async {
+  final stopwatch = Stopwatch()..start();
+  bool usedCache = false;
+  String sourceLabel = kIsWeb ? 'web' : 'download';
+  File? file;
 
-    Future<CachedVideoPlayerPlus> loadVideo() async {
-      final stopwatch = Stopwatch()..start();
-      File? file;
-      try {
-        final timeout = isPreload ? const Duration(seconds: 8) : const Duration(seconds: 12);
-        CachedVideoPlayerPlus player;
+  try {
+    final timeout = isPreload ? const Duration(seconds: 8) : const Duration(seconds: 12);
+    CachedVideoPlayerPlus player;
 
-        if (kIsWeb) {
-          player = CachedVideoPlayerPlus.networkUrl(Uri.parse(url));
-        } else {
-          file = await custom_cache.VideoCacheManager.getFileIfCached(url);
+    if (kIsWeb) {
+      player = CachedVideoPlayerPlus.networkUrl(Uri.parse(url));
+    } else {
+      file = await custom_cache.VideoCacheManager.getFileIfCached(url);
+      usedCache = file != null && await file.exists();
+      sourceLabel = usedCache ? 'cache' : 'download';
 
-          // ignore: unnecessary_null_comparison
-          if (file == null || !(await file.exists())) {
-            file = await _downloadVideo(url, force: true);
-          }
-
-          if (!await file.exists()) throw Exception("Fichier introuvable : $url");
-          player = CachedVideoPlayerPlus.file(file);
-        }
-
-        await player.initialize().timeout(timeout, onTimeout: () {
-          _loadStatesByContext[contextKey]![url] = VideoLoadState.errorTimeout;
-          throw TimeoutException("Init timeout : $url");
-        });
-
-        final v = player.controller.value;
-        if (!v.isInitialized || v.hasError) {
-          if (!kIsWeb && file != null) unawaited(file.delete().catchError((_) {}));
-          throw Exception("Init error : $url");
-        }
-
-        player.controller.setLooping(true);
-        lru[url] = player;
-        await _enforceLimit(contextKey, activeUrl: activeUrl);
-        _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
-
-        if (autoPlay && !player.controller.value.isPlaying) {
-          await player.controller.play().catchError((_) {});
-        }
-
-        stopwatch.stop();
-        debugPrint("[VideoManager] Init $url in ${stopwatch.elapsedMilliseconds}ms");
-        return player;
-      } catch (e, st) {
-        debugPrint("❌ Video init error $url: $e\n$st");
-        _loadStatesByContext[contextKey]![url] = VideoLoadState.errorSource;
-        lru.remove(url);
-        return Future.error(e);
+      // ignore: unnecessary_null_comparison
+      if (file == null || !(await file.exists())) {
+        file = await _downloadVideo(url, force: true);
       }
+
+      if (!await file.exists()) throw Exception("Fichier introuvable : $url");
+      player = CachedVideoPlayerPlus.file(file);
     }
+
+    await player.initialize().timeout(timeout, onTimeout: () {
+      _loadStatesByContext[contextKey]![url] = VideoLoadState.errorTimeout;
+      throw TimeoutException("Init timeout : $url");
+    });
+
+    final v = player.controller.value;
+    if (!v.isInitialized || v.hasError) {
+      if (!kIsWeb && file != null) unawaited(file.delete().catchError((_) {}));
+      throw Exception("Init error : $url");
+    }
+
+    player.controller.setLooping(true);
+    lru[url] = player;
+    await _enforceLimit(contextKey, activeUrl: activeUrl);
+    _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
+
+    if (autoPlay && !player.controller.value.isPlaying) {
+      await player.controller.play().catchError((_) {});
+    }
+
+    stopwatch.stop();
+    debugPrint("[VideoManager] Init ${isPreload ? 'preload' : 'active'} "
+        "$sourceLabel in ${stopwatch.elapsedMilliseconds}ms -> $url");
+    return player;
+  } catch (e, st) {
+    debugPrint("❌ Video init error $url: $e\n$st");
+    _loadStatesByContext[contextKey]![url] = VideoLoadState.errorSource;
+    lru.remove(url);
+    return Future.error(e);
+  }
+}
+
 
     while (_activeInits >= _maxConcurrentInits) {
       await Future.delayed(const Duration(milliseconds: 80));
