@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -7,6 +8,40 @@ import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/models/message_converstion.dart';
 import '../controller/chat_controller.dart';
 import '../models/user.dart';
+
+/// ------------------------------
+/// Mini design system Chat (simple, moderne, safe)
+/// - Zéro impact logique : uniquement UI
+/// - Adapté aux réseaux lents (pas de widgets lourds)
+/// ------------------------------
+class ChatUi {
+  // Spacing
+  static const double pagePad = 12;
+  static const double bubblePadH = 12;
+  static const double bubblePadV = 10;
+  static const double bubbleRadius = 18;
+  static const double bubbleMaxWidthFactor = 0.78;
+  static const double avatarRadius = 18;
+
+  // Text sizes
+  static const double msgFont = 15.5;
+  static const double metaFont = 11.5;
+
+  // Colors (cohérent avec ton thème brand teal)
+  // Astuce: on s'appuie sur ColorScheme quand possible (dark mode friendly),
+  // mais on garde des fallback stables.
+  static Color sentBubble(ColorScheme cs) =>
+      cs.secondaryContainer; // accentDark / teal-ish
+  static Color receivedBubble(ColorScheme cs) =>
+      cs.surfaceContainerHighest; // gris clair moderne
+
+  static Color sentText(ColorScheme cs) => cs.onSecondaryContainer;
+  static Color receivedText(ColorScheme cs) => cs.onSurface;
+
+  static Color meta(ColorScheme cs) => cs.onSurface.withValues(alpha: 0.55);
+
+  static const Color onlineDot = Color(0xFF2DBA8C);
+}
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
@@ -35,15 +70,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   static const Duration _heartbeatPeriod = Duration(seconds: 12);
   static const Duration _touchThrottle = Duration(seconds: 3);
 
+  // ✅ Petit cache UI : regroupe l'affichage des dates
+  String? _lastDateHeaderKey;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
     _messagesStream = chatController.getMessages(widget.conversationId);
 
     _inputFocus.addListener(() {
       if (_inputFocus.hasFocus) {
-        _scrollToBottom(delay: const Duration(milliseconds: 150));
+        _scrollToBottom(delay: const Duration(milliseconds: 120));
         _throttledTouchActiveAt();
       }
     });
@@ -90,159 +129,173 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
 
     final otherUser = widget.otherUser;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return PopScope(
-      // ✅ Correction : onPopInvoked → onPopInvokedWithResult (Flutter 3.22+)
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return; // si le pop est déjà géré, ne rien faire
+        if (didPop) return;
         await _leaveActiveConversation();
         if (mounted) Get.back(result: result);
       },
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
+          titleSpacing: 0,
           title: Row(
             children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundImage: otherUser.photoProfil.isNotEmpty
-                    ? NetworkImage(otherUser.photoProfil)
-                    : null,
-                child: otherUser.photoProfil.isEmpty
-                    ? Text(
-                        otherUser.nom.substring(0, 1).toUpperCase(),
-                        style: const TextStyle(color: Colors.black),
-                      )
-                    : null,
-              ),
+              const SizedBox(width: 8),
+              _ChatHeaderAvatar(user: otherUser),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  otherUser.nom,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      otherUser.nom,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white.withValues(alpha: 0.95),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: ChatUi.onlineDot.withValues(alpha: 0.9),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          "En ligne", // UI seulement (ne change pas ta logique)
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
         ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: StreamBuilder<List<Message>>(
-                  stream: _messagesStream,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+        body: DecoratedBox(
+          // ✅ fond subtil (moderne) sans assets
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                cs.surface,
+                cs.surfaceContainerLow,
+              ],
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: StreamBuilder<List<Message>>(
+                    stream: _messagesStream,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return const Center(child: Text("Aucun message."));
-                    }
+                      final messages = snapshot.data ?? const <Message>[];
 
-                    final messages = snapshot.data!;
-                    _markMessagesAsRead(messages, currentUser.uid);
-
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      _scrollToBottom();
-                    });
-
-                    return ListView.builder(
-                      controller: _listScroll,
-                      reverse: true,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      itemCount: messages.length,
-                      itemBuilder: (context, index) {
-                        final message = messages[index];
-                        final isSentByUser =
-                            message.expediteurId == currentUser.uid;
-
-                        return GestureDetector(
-                          onLongPress: () {
-                            if (isSentByUser) {
-                              _confirmDeleteMessage(message);
-                            }
-                          },
-                          child: Align(
-                            alignment: isSentByUser
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(
-                                vertical: 5,
-                                horizontal: 10,
-                              ),
-                              padding: const EdgeInsets.all(12),
-                              constraints: BoxConstraints(
-                                maxWidth:
-                                    MediaQuery.of(context).size.width * 0.75,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isSentByUser
-                                    ? const Color(0xFFDBF4D3)
-                                    : const Color(0xFFD2F2F0),
-                                borderRadius: BorderRadius.only(
-                                  topLeft: const Radius.circular(12),
-                                  topRight: const Radius.circular(12),
-                                  bottomLeft: isSentByUser
-                                      ? const Radius.circular(12)
-                                      : Radius.zero,
-                                  bottomRight: isSentByUser
-                                      ? Radius.zero
-                                      : const Radius.circular(12),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    message.contenu,
-                                    style: const TextStyle(fontSize: 16),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        _formatTime(message.dateEnvoi),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey[600],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      if (isSentByUser)
-                                        Icon(
-                                          _getMessageIcon(message),
-                                          size: 16,
-                                          color: Colors.grey[700],
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                      if (messages.isEmpty) {
+                        return _EmptyChatState(
+                          otherUserName: otherUser.nom,
                         );
-                      },
-                    );
-                  },
+                      }
+
+                      // ✅ Marque comme lu (logique existante conservée)
+                      _markMessagesAsRead(messages, currentUser.uid);
+
+                      // ✅ Scroll au bas après frame (comme avant)
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _scrollToBottom();
+                      });
+
+                      // reset date header state each build for correct grouping
+                      _lastDateHeaderKey = null;
+
+                      return ListView.builder(
+                        controller: _listScroll,
+                        reverse: true,
+                        padding: const EdgeInsets.fromLTRB(
+                          ChatUi.pagePad,
+                          10,
+                          ChatUi.pagePad,
+                          10,
+                        ),
+                        itemCount: messages.length,
+                        itemBuilder: (context, index) {
+                          final message = messages[index];
+                          final isSentByUser =
+                              message.expediteurId == currentUser.uid;
+
+                          // ✅ Date grouping (UI only) - fonctionne avec reverse:true
+                          // On compare avec le message suivant (plus ancien visuellement)
+                          final String dateKey = _dayKey(message.dateEnvoi);
+                          bool showDateHeader = false;
+
+                          if (_lastDateHeaderKey != dateKey) {
+                            showDateHeader = true;
+                            _lastDateHeaderKey = dateKey;
+                          }
+
+                          return Column(
+                            children: [
+                              if (showDateHeader)
+                                _DatePill(
+                                    label: _formatDayLabel(message.dateEnvoi)),
+                              _MessageBubble(
+                                cs: cs,
+                                isMe: isSentByUser,
+                                message: message,
+                                onLongPress: () {
+                                  if (isSentByUser) {
+                                    _confirmDeleteMessage(message);
+                                  }
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  ),
                 ),
-              ),
-              MessageInputBar(
-                controller: messageController,
-                focusNode: _inputFocus,
-                onSend: () => _sendMessage(currentUser.uid, otherUser.uid),
-                onUserActivity: _throttledTouchActiveAt,
-              ),
-            ],
+
+                // ✅ Input bar modernisée + cohérente avec ConversationsScreen
+                MessageInputBar(
+                  controller: messageController,
+                  focusNode: _inputFocus,
+                  onSend: () => _sendMessage(currentUser.uid, otherUser.uid),
+                  onUserActivity: _throttledTouchActiveAt,
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
+  // ------------------------------
+  // Delete message
+  // ------------------------------
   void _confirmDeleteMessage(Message message) {
     showDialog(
       context: context,
@@ -277,21 +330,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 );
               }
             },
-            child: const Text(
-              "Supprimer",
-              style: TextStyle(color: Colors.red),
-            ),
+            child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
   }
 
+  // ------------------------------
+  // Active conversation (notif throttle) - logique existante conservée
+  // ------------------------------
   Future<void> _enterActiveConversation() async {
     final user = AuthController.instance.user;
     if (user == null) return;
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
         'activeConversationId': widget.conversationId,
         'activeAt': FieldValue.serverTimestamp(),
       });
@@ -303,7 +359,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final user = AuthController.instance.user;
     if (user == null) return;
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
         'activeConversationId': null,
         'activeAt': FieldValue.serverTimestamp(),
       });
@@ -312,8 +371,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _startHeartbeat() {
     _heartbeatTimer?.cancel();
-    _heartbeatTimer =
-        Timer.periodic(_heartbeatPeriod, (_) => _touchActiveAt());
+    _heartbeatTimer = Timer.periodic(_heartbeatPeriod, (_) => _touchActiveAt());
   }
 
   void _stopHeartbeat() {
@@ -341,6 +399,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     } catch (_) {}
   }
 
+  // ------------------------------
+  // Send + scroll - logique existante conservée
+  // ------------------------------
   void _sendMessage(String senderId, String recipientId) {
     final content = messageController.text.trim();
     if (content.isEmpty) return;
@@ -353,7 +414,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
 
     messageController.clear();
-    _scrollToBottom(delay: const Duration(milliseconds: 120));
+    _scrollToBottom(delay: const Duration(milliseconds: 110));
     _throttledTouchActiveAt();
   }
 
@@ -379,26 +440,251 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  IconData _getMessageIcon(Message message) {
-    return message.estLu ? Icons.done_all : Icons.done;
+  // ------------------------------
+  // Formatting helpers (UI only)
+  // ------------------------------
+  String _dayKey(DateTime dt) => "${dt.year}-${dt.month}-${dt.day}";
+
+  String _formatDayLabel(DateTime dateTime) {
+    final now = DateTime.now();
+    final todayKey = _dayKey(now);
+    final dKey = _dayKey(dateTime);
+
+    if (dKey == todayKey) return "Aujourd’hui";
+
+    final yesterday = now.subtract(const Duration(days: 1));
+    if (_dayKey(yesterday) == dKey) return "Hier";
+
+    final d = dateTime.day.toString().padLeft(2, '0');
+    final m = dateTime.month.toString().padLeft(2, '0');
+    final y = dateTime.year.toString();
+    return "$d/$m/$y";
   }
 
-  String _formatTime(DateTime dateTime) {
-    final now = DateTime.now();
-    if (now.difference(dateTime).inDays == 0) {
-      final h = dateTime.hour.toString().padLeft(2, '0');
-      final m = dateTime.minute.toString().padLeft(2, '0');
-      return "$h:$m";
-    } else {
-      final d = dateTime.day.toString().padLeft(2, '0');
-      final mo = dateTime.month.toString().padLeft(2, '0');
-      final y = dateTime.year.toString();
-      return "$d/$mo/$y";
-    }
+  // ------------------------------
+  // UI components
+  // ------------------------------
+
+  Widget _DatePill({required String label}) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Colors.black.withValues(alpha: 0.6),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _EmptyChatState({required String otherUserName}) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 22),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 56,
+              color: cs.onSurface.withValues(alpha: 0.35),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Aucun message",
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "Commence la discussion avec $otherUserName.",
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.65),
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
-/// Widget d’entrée de message
+/// Avatar header modernisé (UI-only)
+class _ChatHeaderAvatar extends StatelessWidget {
+  final AppUser user;
+
+  const _ChatHeaderAvatar({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fallbackBg = theme.colorScheme.surfaceContainerHighest;
+
+    final initial =
+        user.nom.trim().isNotEmpty ? user.nom.trim()[0].toUpperCase() : "?";
+
+    return Stack(
+      children: [
+        CircleAvatar(
+          radius: ChatUi.avatarRadius,
+          backgroundColor: fallbackBg,
+          backgroundImage: user.photoProfil.isNotEmpty
+              ? NetworkImage(user.photoProfil)
+              : null,
+          child: user.photoProfil.isEmpty
+              ? Text(
+                  initial,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                )
+              : null,
+        ),
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: ChatUi.onlineDot,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 1.5),
+            ),
+          ),
+        )
+      ],
+    );
+  }
+}
+
+/// Bulle message moderne, cohérente (UI-only) + long-press delete conservé
+class _MessageBubble extends StatelessWidget {
+  final ColorScheme cs;
+  final bool isMe;
+  final Message message;
+  final VoidCallback onLongPress;
+
+  const _MessageBubble({
+    required this.cs,
+    required this.isMe,
+    required this.message,
+    required this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final maxW =
+        MediaQuery.of(context).size.width * ChatUi.bubbleMaxWidthFactor;
+
+    final bubbleColor =
+        isMe ? ChatUi.sentBubble(cs) : ChatUi.receivedBubble(cs);
+    final textColor = isMe ? ChatUi.sentText(cs) : ChatUi.receivedText(cs);
+    final metaColor = ChatUi.meta(cs);
+
+    final radius = Radius.circular(ChatUi.bubbleRadius);
+
+    // Forme moderne : légèrement différente pour moi vs autre
+    final borderRadius = BorderRadius.only(
+      topLeft: radius,
+      topRight: radius,
+      bottomLeft: isMe ? radius : const Radius.circular(6),
+      bottomRight: isMe ? const Radius.circular(6) : radius,
+    );
+
+    return Padding(
+      padding: EdgeInsets.only(
+        top: 4,
+        bottom: 4,
+        left: isMe ? 54 : 0,
+        right: isMe ? 0 : 54,
+      ),
+      child: Align(
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: GestureDetector(
+          onLongPress: onLongPress,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxW),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: ChatUi.bubblePadH,
+                vertical: ChatUi.bubblePadV,
+              ),
+              decoration: BoxDecoration(
+                color: bubbleColor,
+                borderRadius: borderRadius,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    message.contenu,
+                    style: TextStyle(
+                      fontSize: ChatUi.msgFont,
+                      height: 1.25,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _formatTime(message.dateEnvoi),
+                        style: TextStyle(
+                          fontSize: ChatUi.metaFont,
+                          color: metaColor,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (isMe) ...[
+                        const SizedBox(width: 6),
+                        Icon(
+                          message.estLu ? Icons.done_all : Icons.done,
+                          size: 16,
+                          color: metaColor,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(DateTime dt) {
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return "$h:$m";
+  }
+}
+
+/// Widget d’entrée de message modernisé + cohérent (UI-only)
 class MessageInputBar extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
@@ -415,73 +701,99 @@ class MessageInputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 8,
-        right: 8,
-        bottom: bottom > 0 ? bottom + 8 : 8,
-        top: 6,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                minHeight: 48,
-                maxHeight: 140,
-              ),
-              child: Scrollbar(
-                child: ValueListenableBuilder<TextEditingValue>(
-                  valueListenable: controller,
-                  builder: (context, value, _) {
-                    return TextField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.newline,
-                      minLines: 1,
-                      maxLines: null,
-                      onChanged: (_) => onUserActivity(),
-                      onTap: onUserActivity,
-                      decoration: InputDecoration(
-                        hintText: "Tapez un message…",
-                        filled: true,
-                        fillColor: Colors.grey[100],
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide.none,
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 10,
+          right: 10,
+          bottom: bottom > 0 ? bottom + 8 : 10,
+          top: 8,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: theme.dividerColor.withValues(alpha: 0.7),
+                  ),
+                ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    minHeight: 44,
+                    maxHeight: 140,
+                  ),
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: controller,
+                    builder: (context, value, _) {
+                      return TextField(
+                        controller: controller,
+                        focusNode: focusNode,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        minLines: 1,
+                        maxLines: null,
+                        onChanged: (_) => onUserActivity(),
+                        onTap: onUserActivity,
+                        decoration: InputDecoration(
+                          hintText: "Tapez un message…",
+                          hintStyle: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.55),
+                            fontWeight: FontWeight.w600,
+                          ),
+                          isDense: true,
+                          filled: false,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10,
+                            horizontal: 10,
+                          ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 14,
-                        ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (context, value, _) {
-              final canSend = value.text.trim().isNotEmpty;
-              return CircleAvatar(
-                backgroundColor: canSend
-                    ? const Color.fromARGB(255, 3, 121, 9)
-                    : Colors.grey.shade400,
-                child: IconButton(
-                  icon: const Icon(Icons.send, color: Colors.white),
-                  onPressed: canSend ? onSend : null,
-                  tooltip: 'Envoyer',
-                ),
-              );
-            },
-          ),
-        ],
+            const SizedBox(width: 10),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (context, value, _) {
+                final canSend = value.text.trim().isNotEmpty;
+
+                return AnimatedScale(
+                  duration: const Duration(milliseconds: 120),
+                  scale: canSend ? 1.0 : 0.98,
+                  child: Material(
+                    color: canSend
+                        ? cs.primary
+                        : cs.onSurface.withValues(alpha: 0.25),
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: canSend ? onSend : null,
+                      child: const SizedBox(
+                        width: 46,
+                        height: 46,
+                        child: Icon(Icons.send_rounded,
+                            color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

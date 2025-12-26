@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
 import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
@@ -14,12 +15,11 @@ class SelectUserScreen extends StatefulWidget {
 }
 
 class _SelectUserScreenState extends State<SelectUserScreen> {
-  // ✅ Réutilise un UserController existant si présent, sinon l’instancie
+  // ✅ Réutilise les controllers existants
   final UserController userController = Get.isRegistered<UserController>()
       ? Get.find<UserController>()
       : Get.put(UserController(), permanent: true);
 
-  // ✅ Ne pas recréer un ChatController : on réutilise l’existant
   final ChatController chatController = Get.isRegistered<ChatController>()
       ? Get.find<ChatController>()
       : Get.put(ChatController(), permanent: true);
@@ -30,37 +30,61 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
   final RxString searchTerm = ''.obs;
 
   @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final currentUid = authController.user?.uid;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sélectionner un utilisateur'),
-        backgroundColor: const Color(0xFF214D4F),
+        title: const Text('Nouvelle conversation'),
+        centerTitle: true,
       ),
       body: currentUid == null
           ? const Center(child: Text("Utilisateur non connecté."))
           : Column(
               children: [
+                // 🔍 Barre de recherche moderne
                 Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: TextField(
-                    controller: searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Rechercher un utilisateur...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: theme.dividerColor.withValues(alpha: 0.6),
                       ),
                     ),
-                    onChanged: (value) {
-                      searchTerm.value = value.toLowerCase();
-                    },
+                    child: TextField(
+                      controller: searchController,
+                      onChanged: (value) => searchTerm.value = value.toLowerCase(),
+                      decoration: InputDecoration(
+                        hintText: 'Rechercher un utilisateur…',
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: cs.onSurface.withValues(alpha: 0.6),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
+
+                const SizedBox(height: 6),
+
+                // 👥 Liste utilisateurs
                 Expanded(
                   child: Obx(() {
-                    // Liste filtrée des utilisateurs éligibles
                     final users = userController.userList.where((user) {
                       return user.uid != currentUid &&
                           user.nom.isNotEmpty &&
@@ -69,8 +93,11 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     }).toList();
 
                     if (users.isEmpty) {
-                      return const Center(
-                        child: Text('Aucun utilisateur disponible.'),
+                      return _EmptyState(
+                        icon: Icons.group_off_outlined,
+                        title: "Aucun utilisateur disponible",
+                        subtitle:
+                            "Il n’y a actuellement aucun utilisateur avec qui discuter.",
                       );
                     }
 
@@ -79,48 +106,25 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     }).toList();
 
                     if (filteredUsers.isEmpty) {
-                      return const Center(
-                        child: Text('Aucun utilisateur trouvé.'),
+                      return _EmptyState(
+                        icon: Icons.search_off,
+                        title: "Aucun résultat",
+                        subtitle: "Aucun utilisateur ne correspond à ta recherche.",
                       );
                     }
 
-                    return ListView.builder(
+                    return ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
                       itemCount: filteredUsers.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
                         final AppUser user = filteredUsers[index];
 
-                        return ListTile(
-                          leading: CircleAvatar(
-                            radius: 25,
-                            backgroundColor: Colors.grey[200],
-                            backgroundImage: user.photoProfil.isNotEmpty
-                                ? NetworkImage(user.photoProfil)
-                                : null,
-                            child: user.photoProfil.isEmpty
-                                ? Text(
-                                    user.nom[0].toUpperCase(),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 20,
-                                      color: Colors.black,
-                                    ),
-                                  )
-                                : null,
-                          ),
-                          title: Text(
-                            user.nom,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          subtitle: Text(
-                            user.role.isNotEmpty ? user.role : 'Rôle inconnu',
-                            style: const TextStyle(color: Colors.grey),
-                          ),
+                        return _UserCard(
+                          user: user,
                           onTap: () async {
                             try {
-                              final String conversationId =
+                              final conversationId =
                                   await chatController.createOrGetConversation(
                                 currentUserId: currentUid,
                                 otherUserId: user.uid,
@@ -136,6 +140,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                                 'Impossible de démarrer la conversation : $e',
                                 backgroundColor: Colors.red,
                                 colorText: Colors.white,
+                                snackPosition: SnackPosition.BOTTOM,
                               );
                             }
                           },
@@ -146,6 +151,147 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+/// ------------------------------
+/// UI Components
+/// ------------------------------
+
+class _UserCard extends StatelessWidget {
+  final AppUser user;
+  final VoidCallback onTap;
+
+  const _UserCard({
+    required this.user,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final initial =
+        user.nom.trim().isNotEmpty ? user.nom.trim()[0].toUpperCase() : "?";
+
+    return Material(
+      color: cs.surface,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: theme.dividerColor.withValues(alpha: 0.6),
+            ),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: cs.surfaceContainerHighest,
+                backgroundImage:
+                    user.photoProfil.isNotEmpty ? NetworkImage(user.photoProfil) : null,
+                child: user.photoProfil.isEmpty
+                    ? Text(
+                        initial,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.nom,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      user.role.isNotEmpty ? user.role : 'Rôle non renseigné',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.65),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: cs.onSurface.withValues(alpha: 0.5),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 56,
+              color: cs.onSurface.withValues(alpha: 0.4),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: cs.onSurface.withValues(alpha: 0.65),
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

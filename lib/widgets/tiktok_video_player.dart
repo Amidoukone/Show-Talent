@@ -113,6 +113,13 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     });
   }
 
+/// ✅ NOUVEAU : garantit que le timer est actif quand le player est utilisable
+  void _ensureProgressUpdaterRunning() {
+    if (_progressTimer == null || !(_progressTimer?.isActive ?? false)) {
+      _startProgressUpdater();
+    }
+  }
+
   void _stopAllTimers() {
     _feedbackTimer?.cancel();
     _overlayTimer?.cancel();
@@ -248,6 +255,11 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
         ],
       );
     }
+ if (_progressTimer == null || !(_progressTimer?.isActive ?? false)) {
+      _startProgressUpdater();
+    }
+   /// ✅ garantit progression active dès que le player est prêt
+    _ensureProgressUpdaterRunning();
 
     final value = widget.controller!.value;
     final bool hasError = value.hasError || widget.errorMessage != null;
