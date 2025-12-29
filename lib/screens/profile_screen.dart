@@ -1,6 +1,11 @@
+// lib/screens/profile_screen.dart
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/screens/profil_video_scrollview.dart';
+import 'package:adfoot/widgets/advanced/agent_advanced_form.dart';
+import 'package:adfoot/widgets/advanced/club_advanced_form.dart';
+import 'package:adfoot/widgets/advanced/player_advanced_form.dart';
+import 'package:adfoot/widgets/advanced/player_stats_availability_form.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -19,14 +24,18 @@ class ProfileScreen extends StatefulWidget {
   final String uid;
   final bool isReadOnly;
 
-  const ProfileScreen({super.key, required this.uid, this.isReadOnly = false});
+  const ProfileScreen({
+    super.key,
+    required this.uid,
+    this.isReadOnly = false,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // Palette
+  // 🎨 Palette officielle
   static const kPrimary = Color(0xFF214D4F);
   static const kAccent = Color(0xFF00BFA6);
   static const kDanger = Color(0xFFE53935);
@@ -40,8 +49,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final VideoManager _videoManager = VideoManager();
   final ScrollController _scrollController = ScrollController();
 
-  static const int visibleWindowSize = 25;
-  static const int maxLoadedVideos = 100;
+  static const int _visibleWindowSize = 25;
+  static const int _maxLoadedVideos = 100;
 
   DateTime? _lastFetchAttemptAt;
   static const Duration _fetchThrottle = Duration(milliseconds: 350);
@@ -62,13 +71,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     _lastFetchAttemptAt = now;
+
     final nearBottom = _scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200;
 
     if (nearBottom &&
         !_profileController.isLoadingVideos &&
         _profileController.hasMoreVideos &&
-        _profileController.videoList.length < maxLoadedVideos) {
+        _profileController.videoList.length < _maxLoadedVideos) {
       _profileController.fetchUserVideos(widget.uid);
     }
   }
@@ -84,9 +94,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  List<Video> _getVisibleVideos(List<Video> fullList) {
-    if (fullList.length <= visibleWindowSize) return fullList;
-    return fullList.sublist(fullList.length - visibleWindowSize);
+  List<Video> _getVisibleVideos(List<Video> full) {
+    if (full.length <= _visibleWindowSize) return full;
+    return full.sublist(full.length - _visibleWindowSize);
   }
 
   @override
@@ -105,208 +115,246 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final isOwnProfile = currentUid != null && currentUid == user.uid;
         final visibleVideos = _getVisibleVideos(controller.videoList);
 
-        final theme = Theme.of(context).copyWith(
-          scaffoldBackgroundColor: kSurface,
-          appBarTheme: const AppBarTheme(
+        return Scaffold(
+          backgroundColor: kSurface,
+          appBar: AppBar(
             backgroundColor: kPrimary,
-            elevation: 1,
+            title: Text(
+              user.nom.isNotEmpty ? user.nom : 'Profil',
+            ),
             centerTitle: true,
-            titleTextStyle: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-            iconTheme: IconThemeData(color: Colors.white),
+            actions: [
+              if (isOwnProfile && !widget.isReadOnly)
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () => Get.to(
+                    () => EditProfileScreen(
+                      user: user,
+                      profileController: _profileController,
+                    ),
+                  ),
+                )
+              else if (!isOwnProfile && currentUid != null)
+                IconButton(
+                  icon: const Icon(Icons.message),
+                  onPressed: () => _handleSendMessage(user),
+                ),
+            ],
           ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kPrimary,
-              foregroundColor: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            ),
-          ),
-          textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
-          ),
-        );
-
-        return Theme(
-          data: theme,
-          child: Scaffold(
-            appBar: AppBar(
-              title: Text(user.nom.isNotEmpty ? user.nom : 'Nom inconnu'),
-              actions: [
-                if (isOwnProfile && !widget.isReadOnly)
-                  IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.white),
-                    onPressed: () => Get.to(
-                      () => EditProfileScreen(
+          body: SafeArea(
+            child: RefreshIndicator(
+              color: kPrimary,
+              onRefresh: () => controller.refreshProfileVideos(),
+              child: CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: _HeaderCard(
                         user: user,
+                        isOwnProfile: isOwnProfile,
+                        isReadOnly: widget.isReadOnly,
+                        onChangePhoto: () => _changeProfilePhoto(user.uid),
                         profileController: _profileController,
                       ),
                     ),
-                  )
-                else if (!isOwnProfile && currentUid != null)
-                  IconButton(
-                    icon: const Icon(Icons.message, color: Colors.white),
-                    onPressed: () => _handleSendMessage(user),
                   ),
-              ],
-            ),
-            body: SafeArea(
-              child: RefreshIndicator(
-                color: kPrimary,
-                onRefresh: () => controller.refreshProfileVideos(),
-                child: CustomScrollView(
-                  controller: _scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
+
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: _StatsCard(user: user),
+                    ),
+                  ),
+
+                  if (!isOwnProfile)
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                        child: _HeaderCard(
-                          user: user,
-                          isOwnProfile: isOwnProfile,
-                          isReadOnly: widget.isReadOnly,
-                          onChangePhoto: () => _changeProfilePhoto(user.uid),
-                          profileController: _profileController,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: _buildFollowMessageRow(user),
+                      ),
+                    ),
+
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: _SectionCard(
+                        title: 'Biographie',
+                        icon: Icons.notes_rounded,
+                        child: Text(
+                          user.bio?.isNotEmpty == true
+                              ? user.bio!
+                              : 'Aucune biographie disponible.',
+                          style: const TextStyle(fontSize: 15),
                         ),
                       ),
                     ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        child: _StatsCard(user: user),
-                      ),
-                    ),
-                    if (!isOwnProfile)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          child: _buildFollowMessageRow(user),
-                        ),
-                      ),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                        child: _SectionCard(
-                          title: 'Biographie',
-                          icon: Icons.notes_rounded,
-                          child: Text(
-                            user.bio?.isNotEmpty == true
-                                ? user.bio!
-                                : 'Aucune biographie disponible.',
-                            style: const TextStyle(
-                              fontSize: 15,
-                              color: Colors.black87,
+                  ),
+
+                  // Badge niveau + CTA avancé
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: Row(
+                        children: [
+                          _buildProfileLevelBadge(user),
+                          const Spacer(),
+                          if (user.age != null)
+                            Text(
+                              '${user.age} ans',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black.withValues(alpha: 0.7),
+                              ),
                             ),
-                          ),
-                        ),
+                        ],
                       ),
                     ),
+                  ),
+
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: _buildAdvancedCtaIfNeeded(
+                        user,
+                        isOwnProfile: isOwnProfile,
+                      ),
+                    ),
+                  ),
+
+                  // 1) Football Base (MVP / Connect)
+                  if (!user.isFan)
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: _SectionCard(
-                          title: 'Informations',
-                          icon: Icons.info_outline,
-                          child: _buildSpecificInfoSection(user),
+                          title: 'Football — Base',
+                          icon: Icons.sports_soccer_outlined,
+                          child: _buildBaseFootballSection(user),
                         ),
                       ),
                     ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                    if (user.role == 'joueur') ...[
+
+                  // 2) Dossier scout (Avancé)
+                  if (user.shouldShowAdvancedSection)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        child: _SectionCard(
+                          title: 'Dossier scout — Avancé',
+                          icon: Icons.auto_awesome_rounded,
+                          child: _buildAdvancedFootballSection(user),
+                        ),
+                      ),
+                    ),
+
+                  // 3) Preuves / Documents
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: _SectionCard(
+                        title: 'Preuves & documents',
+                        icon: Icons.folder_open_rounded,
+                        child: _buildEvidenceSection(user),
+                      ),
+                    ),
+                  ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 12)),
+
+                  if (user.role == 'joueur') ...[
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: _SectionHeader(
+                          icon: Icons.video_collection_outlined,
+                          title: 'Vidéos',
+                        ),
+                      ),
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      sliver: SliverGrid(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 6,
+                          mainAxisSpacing: 6,
+                          childAspectRatio: 9 / 16,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            if (index >= visibleVideos.length) {
+                              return const Center(
+                                child: CircularProgressIndicator(),
+                              );
+                            }
+
+                            final video = visibleVideos[index];
+
+                            return _VideoTile(
+                              video: video,
+                              onTap: () async {
+                                final contextKey = 'profile:${widget.uid}';
+
+                                if (!Get.isRegistered<VideoController>(
+                                  tag: contextKey,
+                                )) {
+                                  Get.put(
+                                    VideoController(contextKey: contextKey),
+                                    tag: contextKey,
+                                    permanent: true,
+                                  );
+                                }
+
+                                await _profileController.pauseAll();
+
+                                Get.find<VideoController>(tag: contextKey)
+                                    .currentIndex
+                                    .value = index;
+
+                                await Get.to(
+                                  () => ProfileVideoScrollView(
+                                    videos: visibleVideos,
+                                    initialIndex: index,
+                                    uid: widget.uid,
+                                    contextKey: contextKey,
+                                  ),
+                                );
+
+                                await _videoManager
+                                    .disposeAllForContext(contextKey);
+
+                                if (Get.isRegistered<VideoController>(
+                                  tag: contextKey,
+                                )) {
+                                  Get.delete<VideoController>(
+                                    tag: contextKey,
+                                  );
+                                }
+                              },
+                            );
+                          },
+                          childCount: visibleVideos.length,
+                        ),
+                      ),
+                    ),
+                    if (controller.isLoadingVideos && controller.hasMoreVideos)
                       const SliverToBoxAdapter(
                         child: Padding(
-                          padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                          child: Row(
-                            children: [
-                              _SectionHeader(
-                                icon: Icons.video_collection_outlined,
-                                title: 'Vidéos',
-                              ),
-                            ],
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: Center(
+                            child: CircularProgressIndicator(),
                           ),
                         ),
                       ),
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        sliver: SliverGrid(
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 3,
-                            crossAxisSpacing: 6,
-                            mainAxisSpacing: 6,
-                            childAspectRatio: 9 / 16,
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                            (c, index) {
-                              if (index >= visibleVideos.length) {
-                                return const Center(
-                                    child: CircularProgressIndicator());
-                              }
-                              final vid = visibleVideos[index];
-                              return RepaintBoundary(
-                                key: ValueKey(vid.id),
-                                child: _VideoTile(
-                                  video: vid,
-                                  onTap: () async {
-                                    final contextKey = 'profile:${widget.uid}';
-                                    if (!Get.isRegistered<VideoController>(
-                                        tag: contextKey)) {
-                                      Get.put(
-                                        VideoController(contextKey: contextKey),
-                                        tag: contextKey,
-                                        permanent: true,
-                                      );
-                                    }
-
-                                    await _profileController.pauseAll();
-                                    Get.find<VideoController>(tag: contextKey)
-                                        .currentIndex
-                                        .value = index;
-
-                                    await Get.to(
-                                      () => ProfileVideoScrollView(
-                                        videos: visibleVideos,
-                                        initialIndex: index,
-                                        uid: widget.uid,
-                                        contextKey: contextKey,
-                                      ),
-                                    );
-
-                                    await _videoManager
-                                        .disposeAllForContext(contextKey);
-                                    if (Get.isRegistered<VideoController>(
-                                        tag: contextKey)) {
-                                      Get.delete<VideoController>(
-                                          tag: contextKey);
-                                    }
-                                  },
-                                ),
-                              );
-                            },
-                            childCount: visibleVideos.length,
-                          ),
-                        ),
-                      ),
-                      if (controller.isLoadingVideos &&
-                          controller.hasMoreVideos)
-                        const SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20),
-                            child: Center(child: CircularProgressIndicator()),
-                          ),
-                        ),
-                    ],
-                    const SliverToBoxAdapter(child: SizedBox(height: 16)),
                   ],
-                ),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                ],
               ),
             ),
           ),
@@ -315,37 +363,166 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // =======================
+  // Actions
+  // =======================
+
   Future<void> _handleSendMessage(AppUser user) async {
     final currentUserId = _authController.currentUid;
-    if (currentUserId == null || currentUserId.isEmpty) {
-      Get.snackbar('Erreur', 'Veuillez vous connecter.',
-          backgroundColor: kDanger, colorText: Colors.white);
-      return;
-    }
-    try {
-      final conversationId = await _chatController.createOrGetConversation(
-        currentUserId: currentUserId,
-        otherUserId: user.uid,
+    if (currentUserId == null) return;
+
+    final conversationId = await _chatController.createOrGetConversation(
+      currentUserId: currentUserId,
+      otherUserId: user.uid,
+    );
+
+    if (conversationId.isNotEmpty) {
+      Get.to(
+        () => ChatScreen(
+          conversationId: conversationId,
+          otherUser: user,
+        ),
       );
-      if (conversationId.isNotEmpty) {
-        Get.to(() => ChatScreen(conversationId: conversationId, otherUser: user));
-      }
-    } catch (e) {
-      Get.snackbar('Erreur', 'Impossible d’envoyer un message : $e',
-          backgroundColor: kDanger, colorText: Colors.white);
     }
   }
 
   Future<void> _changeProfilePhoto(String uid) async {
-    final file = await _imagePicker.pickImage(source: ImageSource.gallery);
+    final file = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+    );
     if (file != null) {
       await _profileController.updateProfilePhoto(uid, file.path);
     }
   }
 
+  // =======================
+  // UI helpers (MVP / Avancé)
+  // =======================
+
+  Widget _buildProfileLevelBadge(AppUser user) {
+    // Couleurs simples, cohérentes et lisibles
+    Color bg;
+    Color fg = Colors.white;
+    IconData icon;
+
+    switch (user.profileLevelLabel) {
+      case 'Profil Élite':
+        bg = const Color(0xFF1E3A8A); // bleu profond
+        icon = Icons.verified_rounded;
+        break;
+      case 'Profil Avancé':
+        bg = kAccent; // ton accent
+        icon = Icons.auto_awesome_rounded;
+        break;
+      case 'Profil Vérifié':
+        bg = const Color(0xFF2E7D32); // vert
+        icon = Icons.check_circle_rounded;
+        break;
+      default:
+        bg = const Color(0xFF607D8B); // gris bleuté
+        icon = Icons.info_rounded;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: fg, size: 18),
+          const SizedBox(width: 8),
+          Text(
+            user.profileLevelLabel,
+            style: TextStyle(color: fg, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdvancedCtaIfNeeded(AppUser user, {required bool isOwnProfile}) {
+    // CTA seulement sur son profil (sinon confusion)
+    if (!isOwnProfile) return const SizedBox.shrink();
+    if (user.isFan) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: kPrimary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kPrimary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.lightbulb_outline_rounded, color: kPrimary),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Ajoute tes informations avancées (Dossier scout) pour augmenter tes chances d’être repéré.',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: kPrimary),
+            onPressed: () {
+              if (user.isPlayer) {
+                Get.bottomSheet(
+                  SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Column(
+                        children: [
+                          PlayerAdvancedForm(
+                            user: user,
+                            profileController: _profileController,
+                          ),
+                          const Divider(height: 32),
+                          PlayerStatsAvailabilityForm(
+                            user: user,
+                            profileController: _profileController,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  isScrollControlled: true,
+                );
+              } else if (user.isClub) {
+                Get.bottomSheet(
+                  ClubAdvancedForm(
+                    user: user,
+                    profileController: _profileController,
+                  ),
+                  isScrollControlled: true,
+                );
+              } else if (user.isRecruiter) {
+                Get.bottomSheet(
+                  AgentAdvancedForm(
+                    user: user,
+                    profileController: _profileController,
+                  ),
+                  isScrollControlled: true,
+                );
+              }
+            },
+            child: Text(
+              user.hasAdvancedProfile ? 'Modifier' : 'Compléter',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFollowMessageRow(AppUser user) {
-    final String? currentUserId = _authController.currentUid;
-    if (currentUserId == null) return const SizedBox.shrink();
+    final currentUserId = _authController.currentUid;
+    if (currentUserId == null) {
+      return const SizedBox.shrink();
+    }
 
     final bool isFollowing = user.followersList.contains(currentUserId);
 
@@ -353,120 +530,295 @@ class _ProfileScreenState extends State<ProfileScreen> {
       children: [
         Expanded(
           child: ElevatedButton.icon(
+            icon: Icon(
+              isFollowing ? Icons.person_remove_alt_1 : Icons.person_add_alt,
+            ),
+            label: Text(
+              isFollowing ? 'Se désabonner' : 'S’abonner',
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isFollowing ? kDanger : kAccent,
+            ),
             onPressed: () async {
-              if (isFollowing) {
-                user.followersList.remove(currentUserId);
-              } else {
-                user.followersList.add(currentUserId);
-              }
-              _profileController.update();
-
-              final bool ok = isFollowing
-                  ? await _followController.unfollowUser(currentUserId, user.uid)
+              final ok = isFollowing
+                  ? await _followController.unfollowUser(
+                      currentUserId, user.uid)
                   : await _followController.followUser(currentUserId, user.uid);
 
               if (!ok) {
-                if (isFollowing) {
-                  user.followersList.add(currentUserId);
-                } else {
-                  user.followersList.remove(currentUserId);
-                }
-                _profileController.update();
-
-                Get.snackbar('Erreur', 'Action impossible.',
-                    backgroundColor: kDanger, colorText: Colors.white);
+                Get.snackbar(
+                  'Erreur',
+                  'Action impossible.',
+                  backgroundColor: kDanger,
+                  colorText: Colors.white,
+                );
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isFollowing ? kDanger : kAccent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            icon: Icon(isFollowing
-                ? Icons.person_remove_alt_1
-                : Icons.person_add_alt),
-            label: Text(
-              isFollowing ? 'Se désabonner' : 'S’abonner',
-              style: const TextStyle(fontSize: 15, color: Colors.white),
-            ),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: ElevatedButton.icon(
-            onPressed: () => _handleSendMessage(user),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kPrimary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
             icon: const Icon(Icons.message_outlined),
-            label: const Text('Message',
-                style: TextStyle(fontSize: 15, color: Colors.white)),
+            label: const Text('Message'),
+            onPressed: () => _handleSendMessage(user),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSpecificInfoSection(AppUser user) {
-    final List<Widget> tiles = [];
+  // =======================
+  // Sections (Base / Avancé / Preuves)
+  // =======================
+
+  Widget _buildBaseFootballSection(AppUser user) {
+    final tiles = <Widget>[];
+
+    // Commun minimal
+    if (user.languages != null && user.languages!.isNotEmpty) {
+      tiles.add(
+        _infoTile('Langues', user.languages!.join(', ')),
+      );
+    }
+
     tiles.add(_infoTile('Téléphone', user.phone));
 
-    switch (user.role) {
-      case 'joueur':
-        tiles.addAll([
-          _infoTile('Position', user.position),
-          _infoTile('Club actuel', user.team),
-          _infoTile('Nombre de matchs', user.nombreDeMatchs?.toString()),
-          _infoTile('Buts', user.buts?.toString()),
-          _infoTile('Assistances', user.assistances?.toString()),
-          if (user.cvUrl != null)
-            ListTile(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-              title: const Text('Voir le CV',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Appuyez pour ouvrir le fichier'),
-              onTap: () async {
-                final uri = Uri.parse(user.cvUrl!);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
-                } else {
-                  Get.snackbar('Erreur', 'Impossible d’ouvrir le CV.',
-                      backgroundColor: kDanger, colorText: Colors.white);
-                }
-              },
+    if (user.isPlayer || user.isCoach) {
+      tiles.addAll([
+        _infoTile('Position', user.position),
+        _infoTile('Club actuel', user.team),
+        _infoTile('Matchs joués', user.nombreDeMatchs?.toString()),
+        _infoTile('Buts', user.buts?.toString()),
+        _infoTile('Passes décisives', user.assistances?.toString()),
+      ]);
+    } else if (user.isClub) {
+      tiles.addAll([
+        _infoTile('Nom du club', user.nomClub),
+        _infoTile('Ligue', user.ligue),
+      ]);
+    } else if (user.isRecruiter) {
+      tiles.addAll([
+        _infoTile('Entreprise', user.entreprise),
+        _infoTile('Recrutements', user.nombreDeRecrutements?.toString()),
+      ]);
+    } else {
+      tiles.add(const ListTile(title: Text('Aucune information de base.')));
+    }
+
+    return Column(children: tiles);
+  }
+Widget _buildAdvancedFootballSection(AppUser user) {
+  // Si pas encore rempli, on montre un résumé “vide + conseil”
+  if (!user.hasAdvancedProfile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Ce profil n’a pas encore de données avancées.',
+          style: TextStyle(color: Colors.black.withValues(alpha: 0.7)),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          user.isPlayer
+              ? 'Ajoute taille, poids, pied fort, positions, stats et disponibilité.'
+              : user.isClub
+                  ? 'Ajoute structure, catégories et besoins.'
+                  : user.isRecruiter
+                      ? 'Ajoute licence et zones.'
+                      : 'Complète les informations avancées.',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+
+  // ======================
+  // 👤 JOUEUR
+  // ======================
+  if (user.isPlayer) {
+    final p = user.playerProfile ?? {};
+
+    // ---- Physical
+    final physical = p['physical'] as Map<String, dynamic>? ?? {};
+    final height = physical['heightCm']?.toString();
+    final weight = physical['weightKg']?.toString();
+    final foot = physical['strongFoot']?.toString();
+
+    // ---- Positions & skills
+    final positions = (p['positions'] is List)
+        ? (p['positions'] as List).join(', ')
+        : null;
+
+    final skills = (p['skills'] is List)
+        ? (p['skills'] as List).join(', ')
+        : null;
+
+    // ---- Stats
+    final stats = p['stats'] as Map<String, dynamic>? ?? {};
+    final minutes = stats['minutes']?.toString();
+
+    // ---- Availability
+    final availability = p['availability'] as Map<String, dynamic>? ?? {};
+    final open = availability.containsKey('open')
+        ? (availability['open'] == true ? 'Oui' : 'Non')
+        : null;
+
+    final regions = (availability['regions'] is List)
+        ? (availability['regions'] as List).join(', ')
+        : null;
+
+    return Column(
+      children: [
+        _infoTile('Taille (cm)', height),
+        _infoTile('Poids (kg)', weight),
+        _infoTile('Pied fort', foot),
+        _infoTile('Positions (avancé)', positions),
+        _infoTile('Compétences', skills),
+        const Divider(),
+        _infoTile('Minutes jouées', minutes),
+        const Divider(),
+        _infoTile('Disponible', open),
+        _infoTile('Régions', regions),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            user.hasScoutReadyProfile
+                ? '✅ Dossier scout prêt (Élite)'
+                : '🟡 Dossier scout partiel',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: user.hasScoutReadyProfile
+                  ? const Color(0xFF2E7D32)
+                  : Colors.orange,
             ),
-        ]);
-        break;
+          ),
+        ),
+      ],
+    );
+  }
 
-      case 'club':
-        tiles.addAll([
-          _infoTile('Nom du club', user.nomClub),
-          _infoTile('Ligue', user.ligue),
-        ]);
-        break;
+  // ======================
+  // 🏟️ CLUB
+  // ======================
+  if (user.isClub) {
+    final c = user.clubProfile ?? {};
 
-      case 'recruteur':
-        tiles.addAll([
-          _infoTile('Entreprise', user.entreprise),
-          _infoTile(
-              'Nombre de recrutements', user.nombreDeRecrutements?.toString()),
-        ]);
-        break;
+    final structureType = c['structureType']?.toString();
+    final categories = (c['categories'] is List)
+        ? (c['categories'] as List).join(', ')
+        : null;
 
-      default:
+    String? needsText;
+    final needs = c['needs'];
+    if (needs is List && needs.isNotEmpty) {
+      needsText = needs
+          .map((e) {
+            if (e is Map) {
+              final pos = e['position']?.toString() ?? '';
+              final prio = e['priority']?.toString() ?? '';
+              return prio.isNotEmpty ? '$pos ($prio)' : pos;
+            }
+            return e.toString();
+          })
+          .where((s) => s.trim().isNotEmpty)
+          .join(', ');
+    }
+
+    return Column(
+      children: [
+        _infoTile('Structure', structureType),
+        _infoTile('Catégories', categories),
+        _infoTile('Besoins', needsText),
+      ],
+    );
+  }
+
+  // ======================
+  // 🧑‍💼 AGENT / RECRUTEUR
+  // ======================
+  if (user.isRecruiter) {
+    final a = user.agentProfile ?? {};
+
+    final license = a['licenseNumber']?.toString();
+    final country = a['licenseCountry']?.toString();
+    final zones =
+        (a['zones'] is List) ? (a['zones'] as List).join(', ') : null;
+
+    return Column(
+      children: [
+        _infoTile('Licence', license),
+        _infoTile('Pays licence', country),
+        _infoTile('Zones', zones),
+      ],
+    );
+  }
+
+  return const Text('Aucun profil avancé pour ce rôle.');
+}
+
+
+  Widget _buildEvidenceSection(AppUser user) {
+    final tiles = <Widget>[];
+    // CV joueur
+    if (user.isPlayer) {
+      if (user.cvUrl != null) {
+        tiles.add(
+          ListTile(
+            leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+            title: const Text('Voir le CV'),
+            subtitle: const Text('Document PDF'),
+            onTap: () async {
+              final uri = Uri.parse(user.cvUrl!);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        );
+      } else {
         tiles.add(const ListTile(
-          title: Text("Aucune information spécifique pour ce rôle."),
+          leading: Icon(Icons.picture_as_pdf_outlined),
+          title: Text('CV'),
+          subtitle: Text('Aucun CV ajouté'),
         ));
+      }
+
+      // Performances (Map<String,double>)
+      if (user.performances != null && user.performances!.isNotEmpty) {
+        final perf = user.performances!;
+        final keys = perf.keys.toList()..sort();
+        final preview = keys.take(6).map((k) => '$k: ${perf[k]}').join(' • ');
+
+        tiles.add(
+          ListTile(
+            leading: const Icon(Icons.insights_outlined),
+            title: const Text('Performances'),
+            subtitle: Text(preview),
+          ),
+        );
+      } else {
+        tiles.add(const ListTile(
+          leading: Icon(Icons.insights_outlined),
+          title: Text('Performances'),
+          subtitle: Text('Non renseigné'),
+        ));
+      }
+    }
+
+    // Vidéos publiées (simple indicateur ici)
+    if (user.isPlayer) {
+      final hasVideos = (user.videosPubliees?.isNotEmpty ?? false);
+      tiles.add(
+        ListTile(
+          leading: const Icon(Icons.video_library_outlined),
+          title: const Text('Vidéos'),
+          subtitle: Text(
+            hasVideos ? 'Vidéos disponibles' : 'Aucune vidéo liée au profil',
+          ),
+        ),
+      );
     }
 
     return Column(children: tiles);
@@ -477,13 +829,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
       subtitle: Text(value?.isNotEmpty == true ? value! : 'Non spécifié'),
-      tileColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
     );
   }
 }
 
-// === Sous‐widgets ===
+// =======================
+// Widgets secondaires
+// =======================
 
 class _HeaderCard extends StatelessWidget {
   final AppUser user;
@@ -491,9 +843,6 @@ class _HeaderCard extends StatelessWidget {
   final bool isReadOnly;
   final VoidCallback onChangePhoto;
   final ProfileController profileController;
-
-  static const kPrimary = _ProfileScreenState.kPrimary;
-  static const kAccent = _ProfileScreenState.kAccent;
 
   const _HeaderCard({
     required this.user,
@@ -510,92 +859,24 @@ class _HeaderCard extends StatelessWidget {
       icon: Icons.person_outline,
       child: Column(
         children: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              Obx(
-                () => CircleAvatar(
-                  radius: 60,
-                  backgroundColor: kPrimary.withValues(alpha: 0.08),
-                  backgroundImage: profileController.isLoadingPhoto.value
-                      ? null
-                      : NetworkImage(
-                          user.photoProfil.isNotEmpty
-                              ? '${user.photoProfil}?v=${DateTime.now().millisecondsSinceEpoch}'
-                              : 'https://via.placeholder.com/150',
-                        ),
-                  child: profileController.isLoadingPhoto.value
-                      ? const CircularProgressIndicator()
-                      : null,
-                ),
-              ),
-              if (isOwnProfile && !isReadOnly)
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kAccent,
-                      foregroundColor: Colors.white,
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 1,
-                    ),
-                    onPressed: onChangePhoto,
-                    icon: const Icon(Icons.camera_alt_rounded, size: 18),
-                    label: const Text('Changer',
-                        style: TextStyle(color: Colors.white)),
-                  ),
-                ),
-            ],
+          Obx(
+            () => CircleAvatar(
+              radius: 60,
+              backgroundImage: user.photoProfil.isNotEmpty
+                  ? NetworkImage(user.photoProfil)
+                  : null,
+              child: profileController.isLoadingPhoto.value
+                  ? const CircularProgressIndicator()
+                  : null,
+            ),
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    if (user.photoProfil.isNotEmpty) {
-                      _showProfilePhoto(user.photoProfil);
-                    } else {
-                      Get.snackbar('Info',
-                          'Cet utilisateur n\'a pas de photo de profil.',
-                          backgroundColor: Colors.blue,
-                          colorText: Colors.white);
-                    }
-                  },
-                  icon: const Icon(Icons.image_search_rounded),
-                  label: const Text('Voir la photo',
-                      style: TextStyle(color: Colors.white)),
-                ),
-              ),
-            ],
-          ),
+          if (isOwnProfile && !isReadOnly)
+            TextButton.icon(
+              onPressed: onChangePhoto,
+              icon: const Icon(Icons.camera_alt),
+              label: const Text('Changer la photo'),
+            ),
         ],
-      ),
-    );
-  }
-
-  void _showProfilePhoto(String photoUrl) {
-    Get.dialog(
-      Dialog(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.network(
-              '$photoUrl?v=${DateTime.now().millisecondsSinceEpoch}',
-              fit: BoxFit.contain,
-            ),
-            TextButton(
-              onPressed: Get.back,
-              child:
-                  const Text('Fermer', style: TextStyle(color: Colors.black87)),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -609,8 +890,8 @@ class _StatsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: 'Statistiques',
-      icon: Icons.insights_outlined,
+      title: 'Réseau',
+      icon: Icons.people_outline,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
@@ -639,8 +920,6 @@ class _StatChip extends StatelessWidget {
   final int value;
   final VoidCallback onTap;
 
-  static const kPrimary = _ProfileScreenState.kPrimary;
-
   const _StatChip({
     required this.label,
     required this.value,
@@ -650,29 +929,15 @@ class _StatChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: const Color(0xFFDFE8E8)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Text(
-              '$value',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: kPrimary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontSize: 12)),
-          ],
-        ),
+      child: Column(
+        children: [
+          Text(
+            '$value',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          Text(label),
+        ],
       ),
     );
   }
@@ -682,7 +947,10 @@ class _VideoTile extends StatelessWidget {
   final Video video;
   final VoidCallback onTap;
 
-  const _VideoTile({required this.video, required this.onTap});
+  const _VideoTile({
+    required this.video,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -690,35 +958,9 @@ class _VideoTile extends StatelessWidget {
       onTap: onTap,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.network(
-              video.thumbnailUrl,
-              fit: BoxFit.cover,
-              filterQuality: FilterQuality.low,
-            ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.25),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const Positioned(
-              right: 6,
-              bottom: 6,
-              child:
-                  Icon(Icons.play_circle_fill, color: Colors.white70, size: 24),
-            ),
-          ],
+        child: Image.network(
+          video.thumbnailUrl,
+          fit: BoxFit.cover,
         ),
       ),
     );
@@ -739,33 +981,25 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 0.8,
-      shadowColor: Colors.black12,
+      elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor:
-                      _ProfileScreenState.kPrimary.withValues(alpha: 0.08),
-                  child: Icon(icon, color: _ProfileScreenState.kPrimary),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w700),
-                  ),
+                Icon(icon),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             child,
           ],
         ),
@@ -778,22 +1012,20 @@ class _SectionHeader extends StatelessWidget {
   final IconData icon;
   final String title;
 
-  const _SectionHeader({required this.icon, required this.title});
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        CircleAvatar(
-          radius: 16,
-          backgroundColor:
-              _ProfileScreenState.kPrimary.withValues(alpha: 0.08),
-          child: Icon(icon, color: _ProfileScreenState.kPrimary, size: 18),
-        ),
-        const SizedBox(width: 8),
+        Icon(icon),
+        const SizedBox(width: 6),
         Text(
           title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ],
     );
