@@ -9,6 +9,7 @@ import 'package:adfoot/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 class EventListScreen extends StatefulWidget {
   EventListScreen({super.key});
@@ -40,11 +41,13 @@ class _EventListScreenState extends State<EventListScreen> {
   @override
   Widget build(BuildContext context) {
     final AppUser currentUser = userController.user!;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Événements'),
-        backgroundColor: const Color(0xFF214D4F),
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         centerTitle: true,
       ),
       body: Obx(() {
@@ -468,7 +471,7 @@ class _EventListScreenState extends State<EventListScreen> {
     return Chip(
       avatar: Icon(icon, size: 16),
       label: Text(label),
-      backgroundColor: Colors.grey.shade100,
+      backgroundColor: AdColors.surfaceCardAlt,
     );
   }
 
@@ -476,7 +479,7 @@ class _EventListScreenState extends State<EventListScreen> {
     if (currentUser.role == 'club' || currentUser.role == 'recruteur') {
       return FloatingActionButton(
         onPressed: () => Get.to(() => const EventFormScreen()),
-        backgroundColor: const Color(0xFF214D4F),
+        backgroundColor: AdColors.brand,
         child: const Icon(Icons.add),
       );
     }

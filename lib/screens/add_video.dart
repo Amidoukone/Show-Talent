@@ -9,10 +9,11 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:adfoot/controller/upload_video_controller.dart';
 import 'upload_form.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 /// 🎨 Couleurs de marque centralisées (évite les doublons + warnings)
-const Color kBrand = Color(0xFF214D4F);     // vert foncé (brand)
-const Color kBrandDark = Color(0xFF18383A); // variante plus sombre
+const Color kBrand = Color(0xFF2ED573); // vert lumineux (action)
+const Color kBrandDark = Color(0xFF26C165); // variante plus sombre
 
 class AddVideo extends StatefulWidget {
   const AddVideo({super.key});
@@ -74,14 +75,15 @@ class _AddVideoState extends State<AddVideo> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       // ❌ On n’étend plus derrière l’AppBar pour garantir lisibilité
       extendBodyBehindAppBar: false,
       appBar: AppBar(
         title: const Text('Ajouter une vidéo'),
-        backgroundColor: kBrand,                 // ✅ fond vert foncé
-        foregroundColor: Colors.white,           // ✅ icônes + texte blancs
+        backgroundColor: cs.surface, // ✅ fond sombre cohérent
+        foregroundColor: cs.onSurface, // ✅ icônes + texte lisibles
         elevation: 0,
         centerTitle: true,
         scrolledUnderElevation: 0,
@@ -94,18 +96,17 @@ class _AddVideoState extends State<AddVideo> {
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
-          // Dégradé moderne d’arrière-plan
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFE7F1F1),
-              Color(0xFFEAF3F3),
-              Color(0xFFEFF6F6),
-            ],
-          ),
-        ),
+        decoration: BoxDecoration(
+            // Dégradé sombre et immersif
+            gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AdColors.surface,
+            AdColors.surfaceAlt,
+            AdColors.surfaceCard,
+          ],
+        )),
         child: SafeArea(
           child: Obx(() {
             final uploading = uploadVideoController.isUploading.value;
