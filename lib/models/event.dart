@@ -9,10 +9,22 @@ class Event {
   final DateTime dateFin;
   final AppUser organisateur;
   final List<AppUser> participants;
+
+  /// Statuts recommandés : brouillon / ouvert / fermé / archivé
   String statut;
+
   final String lieu;
   final bool estPublic;
   final DateTime createdAt;
+
+  // Champs optionnels additionnels (rétrocompatibles)
+  int? capaciteMax;
+  List<String>? tags;
+  String? streamingUrl;
+  String? flyerUrl;
+  int? views;
+  DateTime? archivedAt;
+  DateTime? lastUpdated;
 
   Event({
     required this.id,
@@ -26,6 +38,13 @@ class Event {
     required this.lieu,
     required this.estPublic,
     required this.createdAt,
+    this.capaciteMax,
+    this.tags,
+    this.streamingUrl,
+    this.flyerUrl,
+    this.views,
+    this.archivedAt,
+    this.lastUpdated,
   });
 
   /// 🔢 Nombre total de participants
@@ -33,6 +52,10 @@ class Event {
 
   /// 📅 Vérifie si la date de fin est dépassée
   bool get isExpired => dateFin.isBefore(DateTime.now());
+
+  /// 🔒 Indique si l'événement est "inscriptible"
+  bool get isOpenForRegistration =>
+      statut == 'ouvert' && (archivedAt == null);
 
   Map<String, dynamic> toMap() {
     return {
@@ -47,23 +70,52 @@ class Event {
       'lieu': lieu,
       'estPublic': estPublic,
       'createdAt': Timestamp.fromDate(createdAt),
+
+      // Champs optionnels (écriture conditionnelle pour garder Firestore propre)
+      if (capaciteMax != null) 'capaciteMax': capaciteMax,
+      if (tags != null) 'tags': tags,
+      if (streamingUrl != null) 'streamingUrl': streamingUrl,
+      if (flyerUrl != null) 'flyerUrl': flyerUrl,
+      if (views != null) 'views': views,
+      if (archivedAt != null) 'archivedAt': Timestamp.fromDate(archivedAt!),
+      if (lastUpdated != null) 'lastUpdated': Timestamp.fromDate(lastUpdated!),
     };
   }
 
   factory Event.fromMap(Map<String, dynamic> map) {
+    // Participants : robuste même si null / mal formé
+    final rawParticipants = map['participants'];
+    final List<AppUser> parsedParticipants = rawParticipants is List
+        ? rawParticipants
+            .map((x) => AppUser.fromMap((x as Map?)?.cast<String, dynamic>() ?? {}))
+            .toList()
+        : <AppUser>[];
+
     return Event(
       id: map['id'] ?? '',
       titre: map['titre'] ?? '',
       description: map['description'] ?? '',
       dateDebut: (map['dateDebut'] as Timestamp).toDate(),
       dateFin: (map['dateFin'] as Timestamp).toDate(),
-      organisateur: AppUser.fromMap(map['organisateur'] ?? {}),
-      participants: List<AppUser>.from(
-        (map['participants'] ?? []).map((x) => AppUser.fromMap(x))),
-      statut: map['statut'] ?? 'à venir',
+      organisateur: AppUser.fromMap(
+        (map['organisateur'] as Map?)?.cast<String, dynamic>() ?? {},
+      ),
+      participants: parsedParticipants,
+
+      // Par défaut : "ouvert" (aligné avec le controller)
+      statut: map['statut'] ?? 'ouvert',
+
       lieu: map['lieu'] ?? '',
       estPublic: map['estPublic'] ?? true,
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+
+      capaciteMax: (map['capaciteMax'] as num?)?.toInt(),
+      tags: map['tags'] is List ? List<String>.from(map['tags'] as List) : null,
+      streamingUrl: map['streamingUrl'] as String?,
+      flyerUrl: map['flyerUrl'] as String?,
+      views: (map['views'] as num?)?.toInt(),
+      archivedAt: (map['archivedAt'] as Timestamp?)?.toDate(),
+      lastUpdated: (map['lastUpdated'] as Timestamp?)?.toDate(),
     );
   }
 }
