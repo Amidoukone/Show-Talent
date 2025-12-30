@@ -26,9 +26,12 @@ class VideoTools {
 
   // Petit délai après sélection (certains OS écrivent encore le fichier).
   static const Duration _settleDelay = Duration(milliseconds: 120);
+  static const Duration _playerProbeTimeout = Duration(seconds: 7);
+  static const Duration _playerProbeRetryDelay = Duration(milliseconds: 200);
 
   // Cache simple (chemin -> durée en ms) pour éviter de recalculer.
   static final Map<String, int> _durationCacheMs = {};
+  static final Map<String, (int, int)> _dimensionsCache = {};
 
   // ---------------------------------------------------------------------------
   // MINIATURES
@@ -92,19 +95,28 @@ class VideoTools {
     int minHeight = 360,
   }) async {
     try {
-      final info = await VideoCompress.getMediaInfo(videoPath);
-      final int? w = (info.width is num) ? (info.width as num).round() : null;
-      final int? h = (info.height is num) ? (info.height as num).round() : null;
+      final dims = await _getDimensionsRobust(videoPath);
+      final w = dims?.$1;
+      final h = dims?.$2;
 
       if (w != null && h != null) {
         final ok = w >= minWidth && h >= minHeight;
         if (!ok) {
-          await _logInfo("isQualityAcceptable", "Too low: ${w}x$h (min ${minWidth}x$minHeight)");
+          await _logInfo(
+            "isQualityAcceptable",
+            "Too low: ${w}x$h (min ${minWidth}x$minHeight)",
+          );
         }
         return ok;
       }
-      await _logInfo("isQualityAcceptable", "Missing width/height.");
-      return false;
+
+      // En cas d'impossibilité de lire les dimensions (certains devices ne renvoient
+      // pas les métadonnées), on ne bloque pas l'utilisateur mais on trace l'événement.
+      await _logInfo(
+        "isQualityAcceptable",
+        "Missing width/height after probes → allow upload.",
+      );
+      return true;
     } catch (e) {
       await _logError("isQualityAcceptable", e.toString());
       return false;
@@ -116,8 +128,10 @@ class VideoTools {
     try {
       final ms = await _getDurationMsRobust(videoPath);
       if (ms == null) {
-        await _logInfo("isDurationValid", "Missing duration after probing.");
-        return false;
+        // Certains devices ne renvoient pas de durée (problèmes de codecs/metadata).
+        // Dans ce cas, on ne bloque pas l'utilisateur mais on trace pour diagnostic.
+        await _logInfo("isDurationValid", "Missing duration after probing → allow upload.");
+        return true;
       }
 
       final secondsFloor = (ms / 1000).floor();
@@ -145,10 +159,8 @@ class VideoTools {
 
   static Future<(int?, int?)> getDimensions(String videoPath) async {
     try {
-      final info = await VideoCompress.getMediaInfo(videoPath);
-      final int? w = (info.width is num) ? (info.width as num).round() : null;
-      final int? h = (info.height is num) ? (info.height as num).round() : null;
-      return (w, h);
+      final dims = await _getDimensionsRobust(videoPath);
+      return (dims?.$1, dims?.$2);
     } catch (e) {
       await _logError("getDimensions", e.toString());
       return (null, null);
@@ -206,13 +218,13 @@ class VideoTools {
       if (!await file.exists()) return null;
 
       ctrl = VideoPlayerController.file(file);
-      await ctrl.initialize().timeout(const Duration(seconds: 5));
+      await ctrl.initialize().timeout(_playerProbeTimeout);
 
       Duration d = ctrl.value.duration;
 
       if (d.inMilliseconds <= 0) {
         for (int i = 0; i < 5; i++) {
-          await Future.delayed(const Duration(milliseconds: 200));
+          await Future.delayed(_playerProbeRetryDelay);
           d = ctrl.value.duration;
           if (d.inMilliseconds > 0) break;
         }
@@ -257,8 +269,82 @@ class VideoTools {
   static Future<void> purgeCacheForVideo(String path) async {
     try {
       _durationCacheMs.remove(path);
+      _dimensionsCache.remove(path);
       await VideoCompress.deleteAllCache();
     } catch (_) {}
+  }
+
+  static Future<(int, int)?> _getDimensionsRobust(String videoPath) async {
+    final cached = _dimensionsCache[videoPath];
+    if (cached != null) return cached;
+
+    await Future.delayed(_settleDelay);
+
+    int? bestW;
+    int? bestH;
+
+    void consider(int? w, int? h) {
+      if (w == null || h == null) return;
+      if (w <= 0 || h <= 0) return;
+      bestW = bestW != null ? (w > bestW! ? w : bestW!) : w;
+      bestH = bestH != null ? (h > bestH! ? h : bestH!) : h;
+    }
+
+    Future<void> probeWithVideoPlayer() async {
+      VideoPlayerController? ctrl;
+      try {
+        final file = File(videoPath);
+        if (!await file.exists()) return;
+        ctrl = VideoPlayerController.file(file);
+        await ctrl.initialize().timeout(_playerProbeTimeout);
+
+        var size = ctrl.value.size;
+        if (size.width <= 0 || size.height <= 0) {
+          for (int i = 0; i < 4; i++) {
+            await Future.delayed(_playerProbeRetryDelay);
+            size = ctrl.value.size;
+            if (size.width > 0 && size.height > 0) break;
+          }
+        }
+
+        consider(size.width.round(), size.height.round());
+      } catch (_) {
+        // absorb, we will try other strategies
+      } finally {
+        await ctrl?.dispose();
+      }
+    }
+
+    Future<void> probeWithVideoCompress() async {
+      try {
+        final info = await VideoCompress.getMediaInfo(videoPath);
+        consider(
+          (info.width is num) ? (info.width as num).round() : null,
+          (info.height is num) ? (info.height as num).round() : null,
+        );
+      } catch (_) {}
+    }
+
+    await probeWithVideoCompress();
+    await probeWithVideoPlayer();
+
+    // Second pass if nothing found yet (cache nettoyé + délai supplémentaire)
+    if (bestW == null || bestH == null) {
+      try {
+        await VideoCompress.deleteAllCache();
+      } catch (_) {}
+      await Future.delayed(_playerProbeRetryDelay * 2);
+      await probeWithVideoCompress();
+      await probeWithVideoPlayer();
+    }
+
+    if (bestW != null && bestH != null) {
+      final tuple = (bestW!, bestH!);
+      _dimensionsCache[videoPath] = tuple;
+      return tuple;
+    }
+
+    return null;
   }
 
   // ---------------------------------------------------------------------------
