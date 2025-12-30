@@ -5,6 +5,7 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:intl/intl.dart';
 import 'package:adfoot/screens/offre_screen.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 class OffreFormScreen extends StatefulWidget {
   const OffreFormScreen({super.key});
@@ -56,20 +57,17 @@ class OffreFormScreenState extends State<OffreFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.white,
-        title: Text(
-          isEditing ? 'Modifier l\'offre' : 'Nouvelle offre',
-          style: const TextStyle(
-            color: Colors.black87,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
+        title: Text(isEditing ? 'Modifier l\'offre' : 'Nouvelle offre'),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: Icon(Icons.arrow_back, color: cs.onSurface),
           onPressed: () => Get.back(),
         ),
       ),
@@ -81,11 +79,12 @@ class OffreFormScreenState extends State<OffreFormScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSectionTitle('Informations générales'),
+                _buildSectionTitle('Informations générales', cs),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _titreController,
                   decoration: _buildInputDecoration(
+                    cs,
                     'Titre de l\'offre',
                     'Entrez le titre de l\'offre',
                     Icons.work_outline,
@@ -97,6 +96,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                 TextFormField(
                   controller: _descriptionController,
                   decoration: _buildInputDecoration(
+                    cs,
                     'Description',
                     'Décrivez l\'offre en détail',
                     Icons.description_outlined,
@@ -109,6 +109,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                 TextFormField(
                   controller: _posteController,
                   decoration: _buildInputDecoration(
+                    cs,
                     'Poste recherché',
                     'Ex: Attaquant, Milieu',
                     Icons.sports_soccer,
@@ -118,6 +119,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                 TextFormField(
                   controller: _niveauController,
                   decoration: _buildInputDecoration(
+                    cs,
                     'Niveau / Section',
                     'Ex: U19, Sénior, Pro',
                     Icons.leaderboard_outlined,
@@ -127,6 +129,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                 TextFormField(
                   controller: _localisationController,
                   decoration: _buildInputDecoration(
+                    cs,
                     'Localisation',
                     'Ville, Pays ou région',
                     Icons.place_outlined,
@@ -136,13 +139,14 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                 TextFormField(
                   controller: _remunerationController,
                   decoration: _buildInputDecoration(
+                    cs,
                     'Rémunération (optionnel)',
                     'Ex: 2k-3k €/mois',
                     Icons.payments_outlined,
                   ),
                 ),
                 const SizedBox(height: 24),
-                _buildSectionTitle('Période'),
+                _buildSectionTitle('Période', cs),
                 const SizedBox(height: 16),
                 _buildDatePicker(
                   'Date de début',
@@ -163,7 +167,8 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                   child: ElevatedButton(
                     onPressed: _submitForm,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 55, 144, 33),
+                      backgroundColor: AdColors.brand,
+                      foregroundColor: AdColors.brandOn,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -172,7 +177,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                       isEditing ? 'Mettre à jour' : 'Publier l\'offre',
                       style: const TextStyle(
                         fontSize: 16,
-                        color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -186,18 +190,19 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(String title, ColorScheme cs) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
-        color: Colors.black87,
+        color: cs.onSurface,
       ),
     );
   }
 
   InputDecoration _buildInputDecoration(
+    ColorScheme cs,
     String label,
     String hint,
     IconData icon,
@@ -205,12 +210,14 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, color: Colors.grey),
+      prefixIcon: Icon(icon, color: cs.primary),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
       ),
       filled: true,
-      fillColor: Colors.grey[50],
+      fillColor: AdColors.surfaceCard,
+      labelStyle: TextStyle(color: cs.onSurface),
+      hintStyle: TextStyle(color: cs.onSurfaceMuted),
     );
   }
 
@@ -245,22 +252,25 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFF214D4F)),
+          border: Border.all(color: AdColors.divider),
           borderRadius: BorderRadius.circular(20),
-          color: Colors.grey.shade100,
+          color: AdColors.surfaceCard,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label,
-                style: const TextStyle(fontSize: 16, color: Colors.black54)),
+                style: const TextStyle(
+                    fontSize: 16,
+                    color: AdColors.onSurfaceMuted,
+                    fontWeight: FontWeight.w600)),
             Text(
               date != null
                   ? DateFormat('dd MMM yyyy').format(date)
                   : 'Choisir une date',
               style: const TextStyle(
                 fontSize: 16,
-                color: Color(0xFF214D4F),
+                color: AdColors.brand,
                 fontWeight: FontWeight.bold,
               ),
             ),

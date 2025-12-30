@@ -40,6 +40,8 @@ class _OffreScreenState extends State<OffreScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -47,7 +49,8 @@ class _OffreScreenState extends State<OffreScreen> {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF214D4F),
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
       ),
       body: Obx(() {
         final currentUser = userController.user;
@@ -137,48 +140,55 @@ class _OffreScreenState extends State<OffreScreen> {
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: [
-                              if (offre.posteRecherche?.isNotEmpty ?? false)
-                                _buildChip(
-                                    Icons.sports_soccer, offre.posteRecherche!),
-                              if (offre.niveau?.isNotEmpty ?? false)
-                                _buildChip(Icons.star_border, offre.niveau!),
-                              if (offre.localisation?.isNotEmpty ?? false)
-                                _buildChip(
-                                    Icons.place_outlined, offre.localisation!),
-                              if (offre.remuneration?.isNotEmpty ?? false)
-                                _buildChip(Icons.payments_outlined,
-                                    offre.remuneration!),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.event,
-                                  size: 16, color: Colors.black54),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Valide jusqu\'au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)}',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.black54,
-                                ),
+                          children: [
+                            if (offre.posteRecherche?.isNotEmpty ?? false)
+                              _buildChip(
+                                  Icons.sports_soccer, offre.posteRecherche!),
+                            if (offre.niveau?.isNotEmpty ?? false)
+                              _buildChip(Icons.star_border, offre.niveau!),
+                            if (offre.localisation?.isNotEmpty ?? false)
+                              _buildChip(
+                                  Icons.place_outlined, offre.localisation!),
+                            if (offre.remuneration?.isNotEmpty ?? false)
+                              _buildChip(Icons.payments_outlined,
+                                  offre.remuneration!),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(Icons.event,
+                                size: 16, color: cs.onSurfaceMuted),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Valide jusqu\'au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: cs.onSurfaceMuted,
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(Icons.remove_red_eye_outlined,
-                                  size: 16),
-                              const SizedBox(width: 4),
-                              Text('${offre.vues ?? 0} vues'),
-                              const SizedBox(width: 12),
-                              const Icon(Icons.group_outlined, size: 16),
-                              const SizedBox(width: 4),
-                              Text('${offre.candidats.length} candidatures'),
-                            ],
-                          ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(Icons.remove_red_eye_outlined,
+                                size: 16, color: cs.onSurfaceMuted),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${offre.vues ?? 0} vues',
+                              style: TextStyle(color: cs.onSurface),
+                            ),
+                            const SizedBox(width: 12),
+                            Icon(Icons.group_outlined,
+                                size: 16, color: cs.onSurfaceMuted),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${offre.candidats.length} candidatures',
+                              style: TextStyle(color: cs.onSurface),
+                            ),
+                          ],
+                        ),
                           const SizedBox(height: 8),
                           _buildActionButtons(
                             context,
@@ -366,10 +376,14 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   Widget _buildChip(IconData icon, String label) {
+    final cs = Theme.of(context).colorScheme;
     return Chip(
-      avatar: Icon(icon, size: 16),
-      label: Text(label),
-      backgroundColor: Colors.grey.shade100,
+      avatar: Icon(icon, size: 16, color: cs.primary),
+      label: Text(
+        label,
+        style: TextStyle(color: cs.onSurface),
+      ),
+      backgroundColor: AdColors.surfaceCard,
     );
   }
 

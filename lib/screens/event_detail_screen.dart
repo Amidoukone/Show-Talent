@@ -22,6 +22,7 @@ class EventDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppUser currentUser = Get.find<UserController>().user!;
     final bool isOrganisateur = event.organisateur.uid == currentUser.uid;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -29,7 +30,8 @@ class EventDetailsScreen extends StatelessWidget {
           'Détails de l’événement',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF214D4F),
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         centerTitle: true,
         actions: isOrganisateur
             ? [
