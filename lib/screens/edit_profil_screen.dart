@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -44,6 +45,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _nombreMatchsController;
   late final TextEditingController _butsController;
   late final TextEditingController _assistancesController;
+  DateTime? _selectedBirthDate;
 
   // Club
   late final TextEditingController _clubNameController;
@@ -90,6 +92,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _performancesController = TextEditingController(
       text: _performancesToText(user.performances),
     );
+    _selectedBirthDate = user.birthDate;
   }
 
   @override
@@ -218,6 +221,76 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  Widget _buildBirthDateField(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: _pickBirthDate,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Date de naissance',
+          prefixIcon: const Icon(Icons.cake_outlined, color: kPrimary),
+          suffixIcon: _selectedBirthDate != null
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => setState(() => _selectedBirthDate = null),
+                  tooltip: 'Effacer',
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _selectedBirthDate != null
+                    ? _formatBirthDate(_selectedBirthDate!)
+                    : 'Ajoute ta date de naissance',
+                style: TextStyle(
+                  color: _selectedBirthDate != null
+                      ? AdColors.onSurface
+                      : AdColors.onSurfaceMuted,
+                  fontWeight:
+                      _selectedBirthDate != null ? FontWeight.w600 : null,
+                ),
+              ),
+            ),
+            const Icon(Icons.edit_calendar_outlined, color: kPrimary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatBirthDate(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    return '$day/$month/${date.year}';
+  }
+
+  Future<void> _pickBirthDate() async {
+    final now = DateTime.now();
+    final initial =
+        _selectedBirthDate ?? DateTime(now.year - 18, now.month, now.day);
+    final earliest = DateTime(now.year - 60);
+    final latest = DateTime(now.year - 10, now.month, now.day);
+    DateTime initialDate = initial;
+    if (initialDate.isAfter(latest)) initialDate = latest;
+    if (initialDate.isBefore(earliest)) initialDate = earliest;
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: earliest,
+      lastDate: latest,
+      helpText: 'Choisir ta date de naissance',
+      confirmText: 'Valider',
+      cancelText: 'Annuler',
+    );
+
+    if (picked != null) {
+      setState(() => _selectedBirthDate = picked);
+    }
+  }
+
   bool get _isPlayer => user.role == 'joueur' || user.role == 'coach';
   bool get _isClub => user.role == 'club';
   bool get _isRecruiter => user.role == 'recruteur';
@@ -250,6 +323,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       // Joueur / Coach (MVP)
       // =====================
       if (_isPlayer) {
+        if (_selectedBirthDate != null) {
+          patch['birthDate'] = Timestamp.fromDate(_selectedBirthDate!);
+        } else if (user.birthDate != null) {
+          patch['birthDate'] = FieldValue.delete();
+        }
+
         patch['position'] = _trimOrNull(_positionController.text);
         patch['team'] = _trimOrNull(_teamController.text);
         patch['nombreDeMatchs'] =
@@ -387,6 +466,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 icon: Icons.language_outlined,
                                 hint: 'Français, Anglais, Espagnol',
                               ),
+                              if (_isPlayer) ...[
+                                const SizedBox(height: 12),
+                                _buildBirthDateField(context),
+                              ],
                               if (user.role != 'fan') ...[
                                 const SizedBox(height: 12),
                                 _buildTextField(
