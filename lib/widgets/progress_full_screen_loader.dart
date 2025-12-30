@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/upload_video_controller.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 class ProgressFullScreenLoader extends StatelessWidget {
   const ProgressFullScreenLoader({super.key});
@@ -17,8 +18,16 @@ class ProgressFullScreenLoader extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           margin: const EdgeInsets.symmetric(horizontal: 30),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AdColors.surfaceCard,
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AdColors.divider),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.35),
+                blurRadius: 14,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Obx(() {
             // Sécurisation légère: évite une valeur non-finie qui casserait l’affichage
@@ -54,7 +63,7 @@ class ProgressFullScreenLoader extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF214D4F),
+                    color: AdColors.onSurface,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -62,8 +71,8 @@ class ProgressFullScreenLoader extends StatelessWidget {
                 if (!isOptimizing) ...[
                   LinearProgressIndicator(
                     value: progress.clamp(0.0, 1.0),
-                    backgroundColor: Colors.grey[300],
-                    color: const Color(0xFF214D4F),
+                    backgroundColor: AdColors.surfaceAlt,
+                    color: AdColors.brand,
                     minHeight: 8,
                   ),
                   const SizedBox(height: 20),
@@ -71,7 +80,7 @@ class ProgressFullScreenLoader extends StatelessWidget {
                     '${(progress.clamp(0.0, 1.0) * 100).toInt()}%',
                     style: const TextStyle(
                       fontSize: 16,
-                      color: Colors.black87,
+                      color: AdColors.onSurfaceMuted,
                     ),
                   ),
                   const SizedBox(height: 30),
@@ -88,7 +97,7 @@ class ProgressFullScreenLoader extends StatelessWidget {
                     ),
                   ),
                 ] else ...[
-                  const CircularProgressIndicator(color: Color(0xFF214D4F)),
+                  const CircularProgressIndicator(color: AdColors.brand),
                 ],
               ],
             );

@@ -40,6 +40,8 @@ class _OffreScreenState extends State<OffreScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -47,7 +49,8 @@ class _OffreScreenState extends State<OffreScreen> {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF214D4F),
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
       ),
       body: Obx(() {
         final currentUser = userController.user;
