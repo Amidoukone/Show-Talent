@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:adfoot/controller/upload_video_controller.dart';
 import 'package:adfoot/widgets/progress_full_screen_loader.dart';
 import 'package:video_player/video_player.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 class UploadForm extends StatefulWidget {
   final File videoFile;
@@ -132,11 +133,13 @@ class _UploadFormState extends State<UploadForm> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Téléverser une vidéo'),
-        backgroundColor: const Color(0xFF214D4F),
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
       ),
       body: Obx(() {
         if (uploadVideoController.isOptimizing.value) {
@@ -259,12 +262,12 @@ class _UploadFormState extends State<UploadForm> {
                         textInputAction: TextInputAction.done,
                         maxLines: 2,
                         maxLength: 140,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Légende (obligatoire)',
                           counterText: '',
                           filled: true,
-                          fillColor: Color(0xFFEFEFEF),
-                          border: OutlineInputBorder(
+                          fillColor: AdColors.surfaceCard,
+                          border: const OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(10)),
                           ),
                           hintText: 'Ex: #U17 #Ailier #Vitesse',
@@ -292,19 +295,20 @@ class _UploadFormState extends State<UploadForm> {
                     style: TextStyle(fontSize: 16, color: Colors.white),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF214D4F),
+                    backgroundColor: AdColors.brand,
+                    foregroundColor: AdColors.brandOn,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     textStyle: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
+                      color: AdColors.brandOn,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Rappel : durée max 60s • qualité conseillée ≥ 480×360',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.black54, fontSize: 12),
+                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7), fontSize: 12),
                 ),
               ],
             ),

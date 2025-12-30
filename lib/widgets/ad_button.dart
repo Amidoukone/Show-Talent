@@ -31,7 +31,7 @@ class AdButton extends StatelessWidget {
               height: 18,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Colors.white,
+                color: AdColors.brandOn,
               ),
             )
           : (leading != null ? Icon(leading, size: 20) : const SizedBox.shrink()),
@@ -49,19 +49,20 @@ class AdButton extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      elevation: 0,
     );
 
     switch (kind) {
       case AdButtonKind.primary:
         return base.copyWith(
           backgroundColor: const WidgetStatePropertyAll(AdColors.brand),
-          foregroundColor: const WidgetStatePropertyAll(Colors.white),
+          foregroundColor: const WidgetStatePropertyAll(AdColors.brandOn),
         );
       case AdButtonKind.tonal:
         // ✅ Remplacement withOpacity(.12) -> withValues(alpha: 0.12) pour éviter la dépréciation
         return base.copyWith(
           backgroundColor:
-              WidgetStatePropertyAll(AdColors.brandOn.withValues(alpha: 0.12)),
+              WidgetStatePropertyAll(AdColors.brand.withValues(alpha: 0.14)),
           foregroundColor: const WidgetStatePropertyAll(AdColors.brand),
         );
       case AdButtonKind.danger:
