@@ -16,7 +16,7 @@ import '../models/user.dart';
 /// ------------------------------
 class ChatUi {
   // Spacing
-  static const double pagePad = 12;
+  static const double pagePad = 14;
   static const double bubblePadH = 12;
   static const double bubblePadV = 10;
   static const double bubbleRadius = 18;
@@ -31,14 +31,14 @@ class ChatUi {
   // Astuce: on s'appuie sur ColorScheme quand possible (dark mode friendly),
   // mais on garde des fallback stables.
   static Color sentBubble(ColorScheme cs) =>
-      cs.secondaryContainer; // accentDark / teal-ish
+      cs.primaryContainer; // accent brand / teal-ish
   static Color receivedBubble(ColorScheme cs) =>
-      cs.surfaceContainerHighest; // gris clair moderne
+      cs.surfaceContainerHigh; // gris clair moderne
 
-  static Color sentText(ColorScheme cs) => cs.onSecondaryContainer;
+  static Color sentText(ColorScheme cs) => cs.onPrimaryContainer;
   static Color receivedText(ColorScheme cs) => cs.onSurface;
 
-  static Color meta(ColorScheme cs) => cs.onSurface.withValues(alpha: 0.55);
+  static Color meta(ColorScheme cs) => cs.onSurface.withValues(alpha: 0.62);
 
   static const Color onlineDot = Color(0xFF2DBA8C);
 }
@@ -118,6 +118,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _handleBackNavigation({Object? result}) async {
+    await _leaveActiveConversation();
+    if (mounted) Get.back(result: result);
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUser = AuthController.instance.user;
@@ -136,13 +141,36 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        await _leaveActiveConversation();
-        if (mounted) Get.back(result: result);
+        await _handleBackNavigation(result: result);
       },
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            onPressed: () => _handleBackNavigation(),
+          ),
+          flexibleSpace: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  cs.surface,
+                  cs.surfaceContainerHighest.withValues(alpha: 0.9),
+                ],
+              ),
+            ),
+          ),
           titleSpacing: 0,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: cs.outline.withValues(alpha: 0.35),
+            ),
+          ),
           title: Row(
             children: [
               const SizedBox(width: 8),
@@ -157,8 +185,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white.withValues(alpha: 0.95),
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -174,10 +202,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          "En ligne", // UI seulement (ne change pas ta logique)
+                          "Discussion en direct", // UI seulement (ne change pas ta logique)
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface.withValues(alpha: 0.75),
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
@@ -197,6 +225,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               colors: [
                 cs.surface,
                 cs.surfaceContainerLow,
+                cs.surfaceContainerHigh,
               ],
             ),
           ),
@@ -233,6 +262,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       return ListView.builder(
                         controller: _listScroll,
                         reverse: true,
+                        physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(
                           ChatUi.pagePad,
                           10,
@@ -466,20 +496,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // ------------------------------
 
   Widget _DatePill({required String label}) {
+    final cs = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.06),
+          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: cs.outline.withValues(alpha: 0.4)),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: Colors.black.withValues(alpha: 0.6),
+            color: cs.onSurface.withValues(alpha: 0.7),
           ),
         ),
       ),
@@ -504,8 +537,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             const SizedBox(height: 12),
             Text(
               "Aucun message",
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
@@ -513,7 +548,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               "Commence la discussion avec $otherUserName.",
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: cs.onSurface.withValues(alpha: 0.65),
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
               textAlign: TextAlign.center,
             ),
@@ -631,11 +666,15 @@ class _MessageBubble extends StatelessWidget {
                     color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
-                  )
+                  ),
                 ],
+                border: Border.all(
+                  color: cs.outline.withValues(alpha: isMe ? 0.28 : 0.18),
+                ),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
                   Text(
                     message.contenu,
@@ -649,6 +688,8 @@ class _MessageBubble extends StatelessWidget {
                   const SizedBox(height: 6),
                   Row(
                     mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment:
+                        isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
                     children: [
                       Text(
                         _formatTime(message.dateEnvoi),
@@ -719,13 +760,20 @@ class MessageInputBar extends StatelessWidget {
           children: [
             Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: cs.surface,
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(
-                    color: theme.dividerColor.withValues(alpha: 0.7),
+                    color: cs.outline.withValues(alpha: 0.35),
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
                 ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(
@@ -742,6 +790,10 @@ class MessageInputBar extends StatelessWidget {
                         textInputAction: TextInputAction.newline,
                         minLines: 1,
                         maxLines: null,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
+                        ),
                         onChanged: (_) => onUserActivity(),
                         onTap: onUserActivity,
                         decoration: InputDecoration(
@@ -773,11 +825,31 @@ class MessageInputBar extends StatelessWidget {
                 return AnimatedScale(
                   duration: const Duration(milliseconds: 120),
                   scale: canSend ? 1.0 : 0.98,
-                  child: Material(
-                    color: canSend
-                        ? cs.primary
-                        : cs.onSurface.withValues(alpha: 0.25),
-                    shape: const CircleBorder(),
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: canSend
+                          ? LinearGradient(
+                              colors: [
+                                cs.primary,
+                                cs.secondaryContainer,
+                              ],
+                            )
+                          : LinearGradient(
+                              colors: [
+                                cs.onSurface.withValues(alpha: 0.25),
+                                cs.onSurface.withValues(alpha: 0.22),
+                              ],
+                            ),
+                      boxShadow: [
+                        if (canSend)
+                          BoxShadow(
+                            color: cs.primary.withValues(alpha: 0.35),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                      ],
+                    ),
                     child: InkWell(
                       customBorder: const CircleBorder(),
                       onTap: canSend ? onSend : null,
