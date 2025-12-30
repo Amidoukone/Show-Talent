@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 class FollowListScreen extends StatefulWidget {
   final String uid;
@@ -39,13 +40,16 @@ class _FollowListScreenState extends State<FollowListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
           widget.listType == 'followers' ? 'Abonnés' : 'Abonnements',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF214D4F),
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         centerTitle: true,
       ),
       body: FutureBuilder<List<FollowUserItem>>(
@@ -71,7 +75,10 @@ class _FollowListScreenState extends State<FollowListScreen> {
                 widget.listType == 'followers'
                     ? 'Aucun abonné pour l’instant.'
                     : 'Aucun abonnement pour l’instant.',
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
+                style: const TextStyle(
+                    fontSize: 16,
+                    color: AdColors.onSurfaceMuted,
+                    fontWeight: FontWeight.w600),
               ),
             );
           }

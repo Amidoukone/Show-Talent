@@ -9,10 +9,11 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:adfoot/controller/upload_video_controller.dart';
 import 'upload_form.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 /// 🎨 Couleurs de marque centralisées (évite les doublons + warnings)
-const Color kBrand = Color(0xFF214D4F);     // vert foncé (brand)
-const Color kBrandDark = Color(0xFF18383A); // variante plus sombre
+const Color kBrand = Color(0xFF2ED573); // vert lumineux (action)
+const Color kBrandDark = Color(0xFF26C165); // variante plus sombre
 
 class AddVideo extends StatefulWidget {
   const AddVideo({super.key});
@@ -74,14 +75,15 @@ class _AddVideoState extends State<AddVideo> {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       // ❌ On n’étend plus derrière l’AppBar pour garantir lisibilité
       extendBodyBehindAppBar: false,
       appBar: AppBar(
         title: const Text('Ajouter une vidéo'),
-        backgroundColor: kBrand,                 // ✅ fond vert foncé
-        foregroundColor: Colors.white,           // ✅ icônes + texte blancs
+        backgroundColor: cs.surface, // ✅ fond sombre cohérent
+        foregroundColor: cs.onSurface, // ✅ icônes + texte lisibles
         elevation: 0,
         centerTitle: true,
         scrolledUnderElevation: 0,
@@ -94,18 +96,17 @@ class _AddVideoState extends State<AddVideo> {
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: const BoxDecoration(
-          // Dégradé moderne d’arrière-plan
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFE7F1F1),
-              Color(0xFFEAF3F3),
-              Color(0xFFEFF6F6),
-            ],
-          ),
-        ),
+        decoration: BoxDecoration(
+            // Dégradé sombre et immersif
+            gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AdColors.surface,
+            AdColors.surfaceAlt,
+            AdColors.surfaceCard,
+          ],
+        )),
         child: SafeArea(
           child: Obx(() {
             final uploading = uploadVideoController.isUploading.value;
@@ -251,23 +252,23 @@ class _BodyCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Sélectionnez une vidéo depuis votre galerie',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 18,
-                letterSpacing: .2,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF0E1B1C),
-              ),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontSize: 18,
+                    letterSpacing: .2,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Durée maximale 60s • Qualité conseillée 480×360+',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 fontSize: 13,
-                color: Colors.black54,
+                color: AdColors.onSurfaceMuted,
               ),
             ),
             const SizedBox(height: 22),
@@ -320,21 +321,23 @@ class _TipChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Chip(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       labelPadding: const EdgeInsets.only(right: 8),
       // Correction: ne PAS mettre `const` ici car `icon` est une variable
-      avatar: Icon(icon, size: 18, color: kBrand),
+      avatar: Icon(icon, size: 18, color: cs.primary),
       label: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12.5,
           fontWeight: FontWeight.w600,
-          color: kBrand,
+          color: cs.primary,
         ),
       ),
-      backgroundColor: kBrand.withValues(alpha: .08),
+      backgroundColor: cs.primary.withValues(alpha: .12),
     );
   }
 }

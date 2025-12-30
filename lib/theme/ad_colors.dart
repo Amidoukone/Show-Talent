@@ -2,26 +2,30 @@ import 'package:flutter/material.dart';
 
 /// Palette de l'app (Material-friendly)
 class AdColors {
-  // Brand
-  static const brand = Color(0xFF214D4F);
-  static const brandVariant = Color(0xFF1B4042);
-  static const brandOn = Color(0xFFE6EEFA);
+  // Brand (vert principal)
+  static const brand = Color(0xFF2ED573);
+  static const brandVariant = Color(0xFF26C165);
+  static const brandOn = Color(0xFF07130D);
 
-  // Surfaces
-  static const surface = Color(0xFFE6EEFA);
-  static const surfaceAlt = Color(0xFFF2F6FD);
-  static const onSurface = Color(0xFF1E2A2A);
+  // Surfaces (UI sombre immersive)
+  static const surface = Color(0xFF0E1114);
+  static const surfaceAlt = Color(0xFF12161C);
+  static const surfaceCard = Color(0xFF1A1F26);
+  static const surfaceCardAlt = Color(0xFF202632);
+  static const onSurface = Color(0xFFEDEDED);
+  static const onSurfaceMuted = Color(0xFF9AA3AD);
+  static const onSurfaceDisabled = Color(0xFF5F6A75);
 
-  // Accents
-  static const accent = Color(0xFF2DBA8C);
-  static const accentDark = Color(0xFF189C73);
-  static const warning = Color(0xFFFFB020);
+  // Accents secondaires
+  static const accent = Color(0xFFB6F04A);
+  static const accentDark = Color(0xFF8BC23A);
+  static const warning = Color(0xFFE6C75A);
   static const error = Color(0xFFE53935);
-  static const success = Color(0xFF2E7D32);
+  static const success = Color(0xFF26C165);
 
   // States
-  static const disabled = Color(0xFFB4C5C5);
-  static const divider = Color(0xFFCAD8D8);
+  static const disabled = Color(0xFF5F6A75);
+  static const divider = Color(0xFF202632);
 
   // Shades
   static const white = Colors.white;

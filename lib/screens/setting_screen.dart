@@ -57,10 +57,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
 
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Paramètres"),
-        backgroundColor: const Color(0xFF214D4F),
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
       ),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
@@ -71,7 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionTitle("Compte"),
 
           ListTile(
-            leading: const Icon(Icons.person, color: Color(0xFF214D4F)),
+            leading: Icon(Icons.person, color: cs.primary),
             title: const Text('Voir le profil'),
             enabled: !_isDeleting,
             onTap: () {
@@ -87,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
 
           ListTile(
-            leading: const Icon(Icons.logout, color: Color(0xFF214D4F)),
+            leading: Icon(Icons.logout, color: cs.primary),
             title: const Text('Se déconnecter'),
             enabled: !_isDeleting,
             onTap: () async {
