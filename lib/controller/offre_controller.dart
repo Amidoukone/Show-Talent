@@ -1,6 +1,7 @@
 import 'dart:developer' as developer;
 import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:adfoot/controller/push_notification.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
@@ -13,6 +14,9 @@ class OffreController extends GetxController {
   final Rx<List<Offre>> _offres = Rx<List<Offre>>([]);
   List<Offre> get offres => _offres.value;
 
+  final RxBool _isLoading = true.obs;
+  bool get isLoading => _isLoading.value;
+
   @override
   void onInit() {
     super.onInit();
@@ -21,6 +25,8 @@ class OffreController extends GetxController {
 
   /// 🔁 Récupère les offres depuis Firestore et met à jour automatiquement leur statut.
   void _fetchOffres() {
+    _isLoading.value = true;
+
     _firestore
         .collection('offres')
         .orderBy('dateCreation', descending: true)
@@ -35,12 +41,12 @@ class OffreController extends GetxController {
         if (offre.dateFin.isBefore(DateTime.now()) &&
             offre.statut == 'ouverte') {
           try {
-            await _firestore
-                .collection('offres')
-                .doc(offre.id)
-                .update({'statut': 'fermée'});
+            await _firestore.collection('offres').doc(offre.id).update({
+              'statut': 'fermée',
+              'lastUpdated': FieldValue.serverTimestamp(),
+            });
 
-            // Pas de copyWith disponible : on reconstruit l'objet en conservant les champs existants
+            // Reconstruction manuelle (pas de copyWith)
             offre = Offre(
               id: offre.id,
               titre: offre.titre,
@@ -51,6 +57,14 @@ class OffreController extends GetxController {
               candidats: offre.candidats,
               statut: 'fermée',
               dateCreation: offre.dateCreation,
+              localisation: offre.localisation,
+              remuneration: offre.remuneration,
+              niveau: offre.niveau,
+              posteRecherche: offre.posteRecherche,
+              pieceJointeUrl: offre.pieceJointeUrl,
+              vues: offre.vues,
+              archivedAt: offre.archivedAt,
+              lastUpdated: DateTime.now(),
             );
           } catch (e, st) {
             developer.log(
@@ -67,6 +81,7 @@ class OffreController extends GetxController {
 
       _offres.value = fetched;
       update();
+      _isLoading.value = false;
     }, onError: (error, stackTrace) {
       developer.log(
         'Erreur écoute Firestore pour les offres : $error',
@@ -74,7 +89,36 @@ class OffreController extends GetxController {
         error: error,
         stackTrace: stackTrace,
       );
+      _isLoading.value = false;
     });
+  }
+
+  // =========================================================
+  // 👁️ VUES : incrémentation atomique (correction)
+  // =========================================================
+  /// 👁️ Incrémenter les vues d'une offre (safe / atomique)
+  /// - Ne compte pas le propriétaire
+  /// - Utilise FieldValue.increment(1) pour éviter les conflits
+  Future<void> incrementVues({
+    required Offre offre,
+    required AppUser viewer,
+  }) async {
+    // ❌ Ne pas compter le propriétaire
+    if (viewer.uid == offre.recruteur.uid) return;
+
+    try {
+      await _firestore.collection('offres').doc(offre.id).update({
+        'vues': FieldValue.increment(1),
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+    } catch (e, st) {
+      developer.log(
+        'Erreur incrémentation vues : $e',
+        name: 'OffreController.incrementVues',
+        error: e,
+        stackTrace: st,
+      );
+    }
   }
 
   /// 📨 Publier une offre et notifier les joueurs
@@ -103,7 +147,7 @@ class OffreController extends GetxController {
     }
   }
 
-  /// 🔔 Notifier tous les joueurs d'une nouvelle offre
+  /// 🔔 Notifier les joueurs (future version : ciblage par poste / niveau)
   Future<void> _notifierJoueurs(Offre offre, AppUser recruteur) async {
     try {
       final joueursSnapshot = await _firestore
@@ -118,8 +162,7 @@ class OffreController extends GetxController {
         if (fcmToken != null && fcmToken.isNotEmpty) {
           await PushNotificationService.sendNotification(
             title: 'Nouvelle offre disponible',
-            body:
-                'Une nouvelle offre a été publiée par ${recruteur.nom}. Découvrez-la maintenant.',
+            body: 'Une nouvelle offre a été publiée par ${recruteur.nom}.',
             token: fcmToken,
             contextType: 'offre',
             contextData: offre.id,
@@ -133,7 +176,6 @@ class OffreController extends GetxController {
         error: e,
         stackTrace: st,
       );
-      Get.snackbar('Erreur', 'Impossible d\'envoyer les notifications : $e');
     }
   }
 
@@ -161,7 +203,32 @@ class OffreController extends GetxController {
     }
   }
 
-  /// ❌ Supprimer une offre
+  /// 🔄 Changer le statut d’une offre (ouverte / fermée / archivée)
+  Future<void> changerStatut(Offre offre, String nouveauStatut) async {
+    try {
+      await _firestore.collection('offres').doc(offre.id).update({
+        'statut': nouveauStatut,
+        'lastUpdated': FieldValue.serverTimestamp(),
+        if (nouveauStatut == 'archivée')
+          'archivedAt': FieldValue.serverTimestamp(),
+      });
+
+      Get.snackbar(
+        'Statut mis à jour',
+        'Le statut est maintenant "$nouveauStatut".',
+      );
+    } catch (e, st) {
+      developer.log(
+        'Erreur lors du changement de statut : $e',
+        name: 'OffreController.changerStatut',
+        error: e,
+        stackTrace: st,
+      );
+      Get.snackbar('Erreur', 'Impossible de modifier le statut : $e');
+    }
+  }
+
+  /// ❌ Supprimer une offre (à terme : remplacer par archivage)
   Future<void> supprimerOffre(
     String offreId,
     AppUser utilisateur,
@@ -200,10 +267,10 @@ class OffreController extends GetxController {
       return;
     }
 
-    if (offre.statut == 'fermée') {
+    if (offre.statut != 'ouverte') {
       Get.snackbar(
-        'Offre fermée',
-        'Vous ne pouvez pas postuler à une offre fermée.',
+        'Offre indisponible',
+        'Vous ne pouvez pas postuler à cette offre.',
       );
       return;
     }
@@ -219,9 +286,11 @@ class OffreController extends GetxController {
 
     try {
       final candidats = [...offre.candidats, joueur];
+
       await _firestore.collection('offres').doc(offre.id).update({
         'candidats': candidats.map((c) => c.toMap()).toList(),
       });
+
       Get.snackbar('Succès', 'Vous avez postulé à l\'offre.');
     } catch (e, st) {
       developer.log(
@@ -254,7 +323,8 @@ class OffreController extends GetxController {
     }
 
     try {
-      final candidats = offre.candidats.where((c) => c.uid != joueur.uid).toList();
+      final candidats =
+          offre.candidats.where((c) => c.uid != joueur.uid).toList();
 
       await _firestore.collection('offres').doc(offre.id).update({
         'candidats': candidats.map((c) => c.toMap()).toList(),

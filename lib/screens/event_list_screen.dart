@@ -1,19 +1,41 @@
-import 'package:adfoot/screens/event_form_screen.dart';
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
+import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/event_detail_screen.dart';
+import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
-class EventListScreen extends StatelessWidget {
+class EventListScreen extends StatefulWidget {
+  EventListScreen({super.key});
+
+  @override
+  State<EventListScreen> createState() => _EventListScreenState();
+}
+
+class _EventListScreenState extends State<EventListScreen> {
   final EventController eventController = Get.put(EventController());
   final UserController userController = Get.find<UserController>();
+  final ChatController chatController =
+      Get.isRegistered<ChatController>() ? Get.find() : Get.put(ChatController());
 
-  EventListScreen({super.key});
+  final TextEditingController _searchController = TextEditingController();
+
+  String _selectedStatus = 'tous';
+  String _selectedVisibility = 'tous';
+  bool _onlyUpcoming = true;
+
+  final Map<String, bool> _pendingInscription = {};
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,95 +43,309 @@ class EventListScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Liste des événements'),
+        title: const Text('Événements'),
         backgroundColor: const Color(0xFF214D4F),
         centerTitle: true,
       ),
       body: Obx(() {
-        if (eventController.events.isEmpty) {
-          return const Center(
-            child: Text(
-              'Aucun événement disponible pour l\'instant.',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-          );
-        } else {
-          return ListView.builder(
-            padding: const EdgeInsets.all(8.0),
-            itemCount: eventController.events.length,
-            itemBuilder: (context, index) {
-              Event event = eventController.events[index];
-              AppUser organiser = event.organisateur;
-              bool isParticipant = event.participants.any((p) => p.uid == currentUser.uid);
-              bool isOrganisateur = currentUser.uid == organiser.uid;
-
-              return AnimatedEventCard(
-                delay: Duration(milliseconds: 100 * index),
-                child: _buildEventCard(context, event, organiser, isParticipant, isOrganisateur, currentUser),
-              );
-            },
-          );
+        if (eventController.isLoading) {
+          return _buildSkeletons();
         }
+
+        final events = _filterEvents(eventController.events);
+
+        if (events.isEmpty) {
+          return _buildEmptyState(currentUser);
+        }
+
+        return Column(
+          children: [
+            _buildFilters(),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(8),
+                itemCount: events.length,
+                itemBuilder: (context, index) {
+                  final event = events[index];
+                  final organiser = event.organisateur;
+                  final isParticipant =
+                      event.participants.any((p) => p.uid == currentUser.uid);
+                  final isOrganisateur = organiser.uid == currentUser.uid;
+
+                  return Card(
+                    elevation: 4,
+                    margin:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildOrganiserSection(organiser),
+                          const SizedBox(height: 10),
+
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      event.titre,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      event.description,
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _StatusBadge(status: event.statut),
+                            ],
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _buildChip(
+                                Icons.calendar_today,
+                                '${DateFormat('dd MMM').format(event.dateDebut)} → ${DateFormat('dd MMM').format(event.dateFin)}',
+                              ),
+                              _buildChip(
+                                  Icons.place_outlined, event.lieu),
+                              _buildChip(
+                                Icons.privacy_tip_outlined,
+                                event.estPublic ? 'Public' : 'Privé',
+                              ),
+                              _buildChip(
+                                Icons.group_outlined,
+                                '${event.participants.length} participants',
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          _buildActions(
+                            context: context,
+                            event: event,
+                            organiser: organiser,
+                            currentUser: currentUser,
+                            isParticipant: isParticipant,
+                            isOrganisateur: isOrganisateur,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
       }),
       floatingActionButton: _buildFloatingActionButton(currentUser),
     );
   }
 
-  bool _isValidPhotoUrl(String? url) {
-    if (url == null) return false;
-    url = url.trim();
-    if (url.isEmpty) return false;
-    if (!(url.startsWith('http://') || url.startsWith('https://'))) return false;
-    return true;
+  // =========================================================
+  // 🔍 FILTRAGE / RECHERCHE
+  // =========================================================
+
+  List<Event> _filterEvents(List<Event> source) {
+    final query = _searchController.text.toLowerCase().trim();
+
+    return source.where((event) {
+      final matchesSearch = query.isEmpty ||
+          event.titre.toLowerCase().contains(query) ||
+          event.lieu.toLowerCase().contains(query);
+
+      final matchesStatus =
+          _selectedStatus == 'tous' ? true : event.statut == _selectedStatus;
+
+      final matchesVisibility = _selectedVisibility == 'tous'
+          ? true
+          : (_selectedVisibility == 'public'
+              ? event.estPublic
+              : !event.estPublic);
+
+      final matchesUpcoming =
+          !_onlyUpcoming ? true : event.dateFin.isAfter(DateTime.now());
+
+      return matchesSearch &&
+          matchesStatus &&
+          matchesVisibility &&
+          matchesUpcoming;
+    }).toList()
+      ..sort((a, b) => a.dateDebut.compareTo(b.dateDebut));
   }
 
-  Widget _buildEventCard(BuildContext context, Event event, AppUser organiser, bool isParticipant, bool isOrganisateur, AppUser currentUser) {
-    return Card(
-      color: Colors.white,
-      shadowColor: Colors.black12,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15.0)),
-      elevation: 4,
-      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4),
+  // =========================================================
+  // 🧱 UI BUILDERS
+  // =========================================================
+
+  Widget _buildSkeletons() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: 3,
+      itemBuilder: (_, __) => Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(height: 16, width: 160, color: Colors.grey.shade300),
+              const SizedBox(height: 10),
+              Container(height: 14, width: double.infinity, color: Colors.grey.shade300),
+              const SizedBox(height: 6),
+              Container(height: 14, width: double.infinity, color: Colors.grey.shade300),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(AppUser currentUser) {
+    final isOrganizer =
+        currentUser.role == 'club' || currentUser.role == 'recruteur';
+
+    return Center(
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _buildOrganiserSection(context, organiser),
-            const SizedBox(height: 10),
-            _buildEventDetails(event),
-            const SizedBox(height: 5),
-            Text(
-              '${event.participants.length} joueur(s) inscrit(s)',
-              style: const TextStyle(color: Color.fromARGB(221, 40, 81, 99), fontSize: 14),
+            const Icon(Icons.event_busy, size: 72, color: Colors.grey),
+            const SizedBox(height: 12),
+            const Text(
+              'Aucun événement disponible',
+              style: TextStyle(fontSize: 18, color: Colors.grey),
             ),
-            const SizedBox(height: 20),
-            isOrganisateur
-                ? _buildOrganisateurActions(context, event)
-                : _buildParticipantActions(context, event, currentUser, isParticipant),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: isOrganizer
+                  ? () => Get.to(() => const EventFormScreen())
+                  : () => Get.offAllNamed('/main', arguments: {'tab': 2}),
+              icon: Icon(isOrganizer ? Icons.add : Icons.groups),
+              label: Text(
+                isOrganizer ? 'Créer un événement' : 'Voir les clubs',
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOrganiserSection(BuildContext context, AppUser organiser) {
+  Widget _buildFilters() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      color: Colors.grey.shade50,
+      child: Column(
+        children: [
+          TextField(
+            controller: _searchController,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              hintText: 'Rechercher (titre, lieu)...',
+              prefixIcon: const Icon(Icons.search),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _FilterChip(
+                  label: 'Tous',
+                  selected: _selectedStatus == 'tous',
+                  onTap: () => setState(() => _selectedStatus = 'tous'),
+                ),
+                _FilterChip(
+                  label: 'Ouverts',
+                  selected: _selectedStatus == 'ouvert',
+                  onTap: () => setState(() => _selectedStatus = 'ouvert'),
+                ),
+                _FilterChip(
+                  label: 'Fermés',
+                  selected: _selectedStatus == 'fermé',
+                  onTap: () => setState(() => _selectedStatus = 'fermé'),
+                ),
+                _FilterChip(
+                  label: 'Archivés',
+                  selected: _selectedStatus == 'archivé',
+                  onTap: () => setState(() => _selectedStatus = 'archivé'),
+                ),
+                const SizedBox(width: 8),
+                _FilterChip(
+                  label: 'Public',
+                  selected: _selectedVisibility == 'public',
+                  onTap: () => setState(() => _selectedVisibility = 'public'),
+                ),
+                _FilterChip(
+                  label: 'Privé',
+                  selected: _selectedVisibility == 'prive',
+                  onTap: () => setState(() => _selectedVisibility = 'prive'),
+                ),
+                _FilterChip(
+                  label: 'Tous',
+                  selected: _selectedVisibility == 'tous',
+                  onTap: () => setState(() => _selectedVisibility = 'tous'),
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: const Text('À venir'),
+                  selected: _onlyUpcoming,
+                  onSelected: (_) =>
+                      setState(() => _onlyUpcoming = !_onlyUpcoming),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrganiserSection(AppUser organiser) {
+    final hasPhoto = organiser.photoProfil.trim().startsWith('http');
+
     return Row(
       children: [
         GestureDetector(
-          onTap: () {
-            Get.to(() => ProfileScreen(uid: organiser.uid, isReadOnly: true));
-          },
-          child: _isValidPhotoUrl(organiser.photoProfil)
-              ? CircleAvatar(
-                  radius: 25,
-                  backgroundImage: CachedNetworkImageProvider(organiser.photoProfil.trim()),
-                )
-              : CircleAvatar(
-                  radius: 25,
-                  backgroundColor: Colors.grey.shade300,
-                  child: const Icon(Icons.person, size: 24, color: Colors.white70),
-                ),
+          onTap: () =>
+              Get.to(() => ProfileScreen(uid: organiser.uid, isReadOnly: true)),
+          child: CircleAvatar(
+            radius: 22,
+            backgroundImage: hasPhoto ? NetworkImage(organiser.photoProfil) : null,
+            child: hasPhoto
+                ? null
+                : const Icon(Icons.person, color: Colors.white70),
+          ),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -117,12 +353,12 @@ class EventListScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                organiser.nom.isNotEmpty ? organiser.nom : 'Utilisateur inconnu',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                overflow: TextOverflow.ellipsis,
+                organiser.nom,
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
               Text(
-                organiser.role == 'club' ? 'Club' : 'Recruteur',
+                organiser.role,
                 style: const TextStyle(color: Colors.grey),
               ),
             ],
@@ -132,124 +368,115 @@ class EventListScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEventDetails(Event event) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          event.titre,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 5),
-        Text(
-          'Lieu: ${event.lieu}',
-          style: const TextStyle(color: Colors.grey, fontSize: 14),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 5),
-        Text(
-          'Statut: ${event.statut}',
-          style: const TextStyle(color: Colors.grey, fontSize: 14),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
-  }
+  Widget _buildActions({
+    required BuildContext context,
+    required Event event,
+    required AppUser organiser,
+    required AppUser currentUser,
+    required bool isParticipant,
+    required bool isOrganisateur,
+  }) {
+    final isClosed = event.statut == 'fermé' || event.statut == 'archivé';
+    final isBusy = _pendingInscription[event.id] == true;
 
-  Widget _buildOrganisateurActions(BuildContext context, Event event) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        TextButton(
-          onPressed: () {
-            _markAsCompleted(context, event);
-          },
-          child: const Text(
-            'Terminer',
-            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+    if (isOrganisateur) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          DropdownButton<String>(
+            value: event.statut,
+            underline: const SizedBox.shrink(),
+            items: const [
+              DropdownMenuItem(value: 'brouillon', child: Text('Brouillon')),
+              DropdownMenuItem(value: 'ouvert', child: Text('Ouvert')),
+              DropdownMenuItem(value: 'fermé', child: Text('Fermé')),
+              DropdownMenuItem(value: 'archivé', child: Text('Archivé')),
+            ],
+            onChanged: (value) async {
+              if (value == null) return;
+              final updated = Event(
+                id: event.id,
+                titre: event.titre,
+                description: event.description,
+                dateDebut: event.dateDebut,
+                dateFin: event.dateFin,
+                organisateur: event.organisateur,
+                participants: event.participants,
+                statut: value,
+                lieu: event.lieu,
+                estPublic: event.estPublic,
+                createdAt: event.createdAt,
+                capaciteMax: event.capaciteMax,
+                tags: event.tags,
+                streamingUrl: event.streamingUrl,
+                flyerUrl: event.flyerUrl,
+                views: event.views,
+                archivedAt:
+                    value == 'archivé' ? DateTime.now() : event.archivedAt,
+                lastUpdated: DateTime.now(),
+              );
+              await eventController.updateEvent(updated, organiser);
+            },
           ),
-        ),
-        TextButton(
-          onPressed: () {
-            Get.to(() => EventDetailsScreen(event: event));
-          },
-          child: const Text(
-            'Voir les détails',
-            style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+          TextButton(
+            onPressed: () =>
+                Get.to(() => EventDetailsScreen(event: event)),
+            child: const Text('Détails'),
           ),
-        ),
-        TextButton(
-          onPressed: () {
-            _confirmDeleteEvent(context, event);
-          },
-          child: const Text(
-            'Supprimer',
-            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+          TextButton(
+            onPressed: () => _confirmDeleteEvent(context, event),
+            child: const Text('Supprimer',
+                style: TextStyle(color: Colors.red)),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildParticipantActions(BuildContext context, Event event, AppUser currentUser, bool isParticipant) {
-    bool isDisabled = event.statut == 'Terminé' || event.statut == 'fermé';
+        ],
+      );
+    }
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         ElevatedButton.icon(
-          onPressed: (!isParticipant && !isDisabled)
-              ? () => eventController.registerToEvent(event.id, currentUser)
+          onPressed: (!isParticipant && !isClosed && !isBusy)
+              ? () async {
+                  setState(() => _pendingInscription[event.id] = true);
+                  await eventController.registerToEvent(event.id, currentUser);
+                  setState(() => _pendingInscription[event.id] = false);
+                }
               : null,
-          icon: const Icon(Icons.event_available, color: Colors.white),
-          label: const Text(
-            'S\'inscrire',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-          style: ElevatedButton.styleFrom(
-            elevation: 3,
-            padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 12),
-            backgroundColor: (!isParticipant && !isDisabled)
-                ? const Color.fromARGB(255, 38, 101, 101)
-                : Colors.grey,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-          ),
+          icon: const Icon(Icons.event_available),
+          label: const Text('S’inscrire'),
         ),
-        if (isParticipant && !isDisabled)
-          OutlinedButton.icon(
-            onPressed: () {
-              _confirmUnregisterEvent(context, event, currentUser);
-            },
-            icon: const Icon(Icons.cancel, color: Colors.red),
-            label: const Text(
-              'Se désinscrire',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
+        if (isParticipant && !isClosed)
+          OutlinedButton(
+            onPressed: isBusy
+                ? null
+                : () => _confirmUnregisterEvent(context, event, currentUser),
+            child: const Text('Se désinscrire',
+                style: TextStyle(color: Colors.red)),
           )
         else
-          OutlinedButton.icon(
-            onPressed: () {
-              Get.to(() => EventDetailsScreen(event: event));
-            },
-            icon: const Icon(Icons.info_outline, color: Color.fromARGB(255, 34, 88, 91)),
-            label: const Text('Voir les détails', style: TextStyle(color: Color.fromARGB(255, 41, 113, 98))),
+          OutlinedButton(
+            onPressed: () =>
+                Get.to(() => EventDetailsScreen(event: event)),
+            child: const Text('Détails'),
           ),
       ],
+    );
+  }
+
+  Widget _buildChip(IconData icon, String label) {
+    return Chip(
+      avatar: Icon(icon, size: 16),
+      label: Text(label),
+      backgroundColor: Colors.grey.shade100,
     );
   }
 
   FloatingActionButton? _buildFloatingActionButton(AppUser currentUser) {
     if (currentUser.role == 'club' || currentUser.role == 'recruteur') {
       return FloatingActionButton(
-        onPressed: () {
-          Get.to(() => const EventFormScreen());
-        },
+        onPressed: () => Get.to(() => const EventFormScreen()),
         backgroundColor: const Color(0xFF214D4F),
-        foregroundColor: Colors.white,
         child: const Icon(Icons.add),
       );
     }
@@ -260,98 +487,102 @@ class EventListScreen extends StatelessWidget {
     Get.dialog(
       AlertDialog(
         title: const Text('Supprimer'),
-        content: const Text('Voulez-vous vraiment supprimer cet événement ?'),
+        content:
+            const Text('Voulez-vous vraiment supprimer cet événement ?'),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Annuler'),
-          ),
+          TextButton(onPressed: Get.back, child: const Text('Annuler')),
           TextButton(
             onPressed: () async {
               Navigator.of(context).pop();
-              await eventController.deleteEvent(event.id, userController.user!);
-              Get.snackbar('Succès', 'Événement supprimé avec succès.', backgroundColor: Colors.green.shade100, colorText: Colors.black87);
+              await eventController.deleteEvent(
+                  event.id, userController.user!);
             },
-            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+            child:
+                const Text('Supprimer', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
   }
 
-  void _confirmUnregisterEvent(BuildContext context, Event event, AppUser currentUser) {
+  void _confirmUnregisterEvent(
+      BuildContext context, Event event, AppUser currentUser) {
     Get.dialog(
       AlertDialog(
         title: const Text('Se désinscrire'),
-        content: const Text('Voulez-vous vraiment vous désinscrire de cet événement ?'),
+        content: const Text(
+            'Voulez-vous vraiment vous désinscrire de cet événement ?'),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Annuler'),
-          ),
+          TextButton(onPressed: Get.back, child: const Text('Annuler')),
           TextButton(
             onPressed: () async {
               Navigator.of(context).pop();
-              await eventController.unregisterFromEvent(event.id, currentUser);
+              await eventController.unregisterFromEvent(
+                  event.id, currentUser);
             },
-            child: const Text('Confirmer', style: TextStyle(color: Colors.red)),
+            child:
+                const Text('Confirmer', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
   }
-
-  void _markAsCompleted(BuildContext context, Event event) {
-    event.statut = 'Terminé';
-    eventController.updateEvent(event, userController.user!);
-    Get.snackbar('Succès', 'Événement marqué comme terminé.', backgroundColor: Colors.orange.shade100, colorText: Colors.black87);
-  }
 }
 
-class AnimatedEventCard extends StatefulWidget {
-  final Widget child;
-  final Duration delay;
+// =========================================================
+// 🎨 WIDGETS UTILITAIRES
+// =========================================================
 
-  const AnimatedEventCard({required this.child, required this.delay, super.key});
-
-  @override
-  State<AnimatedEventCard> createState() => _AnimatedEventCardState();
-}
-
-class _AnimatedEventCardState extends State<AnimatedEventCard> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _opacity;
-  late Animation<Offset> _offset;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
-    _opacity = Tween<double>(begin: 0, end: 1).animate(_controller);
-    _offset = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    ));
-
-    Future.delayed(widget.delay, () {
-      if (mounted) _controller.forward();
-    });
-  }
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.status});
+  final String status;
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _opacity,
-      child: SlideTransition(
-        position: _offset,
-        child: widget.child,
-      ),
+    Color color;
+    switch (status) {
+      case 'ouvert':
+        color = Colors.green.shade100;
+        break;
+      case 'fermé':
+        color = Colors.red.shade100;
+        break;
+      case 'archivé':
+        color = Colors.grey.shade300;
+        break;
+      default:
+        color = Colors.blueGrey.shade100;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration:
+          BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
+      child: Text(status,
+          style: const TextStyle(fontWeight: FontWeight.bold)),
     );
   }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
+      ),
+    );
   }
 }
