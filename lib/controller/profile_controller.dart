@@ -298,24 +298,28 @@ class ProfileController extends GetxController {
     // Champs simples (si présents)
     if (patch.containsKey('phone')) u.phone = patch['phone'] as String?;
     if (patch.containsKey('bio')) u.bio = patch['bio'] as String?;
-    if (patch.containsKey('position'))
+    if (patch.containsKey('position')) {
       u.position = patch['position'] as String?;
+    }
     if (patch.containsKey('team')) u.team = patch['team'] as String?;
     if (patch.containsKey('clubActuel')) {
       u.clubActuel = patch['clubActuel'] as String?;
     }
 
-    if (patch.containsKey('nombreDeMatchs'))
+    if (patch.containsKey('nombreDeMatchs')) {
       u.nombreDeMatchs = patch['nombreDeMatchs'] as int?;
+    }
     if (patch.containsKey('buts')) u.buts = patch['buts'] as int?;
-    if (patch.containsKey('assistances'))
+    if (patch.containsKey('assistances')) {
       u.assistances = patch['assistances'] as int?;
+    }
 
     if (patch.containsKey('nomClub')) u.nomClub = patch['nomClub'] as String?;
     if (patch.containsKey('ligue')) u.ligue = patch['ligue'] as String?;
 
-    if (patch.containsKey('entreprise'))
+    if (patch.containsKey('entreprise')) {
       u.entreprise = patch['entreprise'] as String?;
+    }
     if (patch.containsKey('nombreDeRecrutements')) {
       u.nombreDeRecrutements = patch['nombreDeRecrutements'] as int?;
     }

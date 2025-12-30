@@ -12,6 +12,16 @@ class Offre {
   String statut;
   DateTime dateCreation; // ✅ nouveau champ
 
+  // Champs enrichis (facultatifs)
+  String? localisation;
+  String? remuneration;
+  String? niveau;
+  String? posteRecherche;
+  String? pieceJointeUrl;
+  int? vues;
+  DateTime? archivedAt;
+  DateTime? lastUpdated;
+
   Offre({
     required this.id,
     required this.titre,
@@ -22,6 +32,14 @@ class Offre {
     required this.candidats,
     required this.statut,
     required this.dateCreation, // ✅
+    this.localisation,
+    this.remuneration,
+    this.niveau,
+    this.posteRecherche,
+    this.pieceJointeUrl,
+    this.vues,
+    this.archivedAt,
+    this.lastUpdated,
   });
 
   Map<String, dynamic> toMap() {
@@ -35,6 +53,16 @@ class Offre {
       'candidats': candidats.map((joueur) => joueur.toMap()).toList(),
       'statut': statut,
       'dateCreation': dateCreation, // ✅
+
+      // champs enrichis
+      'localisation': localisation,
+      'remuneration': remuneration,
+      'niveau': niveau,
+      'posteRecherche': posteRecherche,
+      'pieceJointeUrl': pieceJointeUrl,
+      'vues': vues,
+      'archivedAt': archivedAt,
+      'lastUpdated': lastUpdated,
     };
   }
 
@@ -47,12 +75,22 @@ class Offre {
       dateFin: (map['dateFin'] as Timestamp).toDate(),
       recruteur: AppUser.fromMap(map['recruteur']),
       candidats: List<AppUser>.from(
-          map['candidats']?.map((x) => AppUser.fromMap(x)) ?? []),
-      statut: map['statut'],
+        map['candidats']?.map((x) => AppUser.fromMap(x)) ?? [],
+      ),
+      statut: map['statut'] ?? 'ouverte',
       dateCreation: map['dateCreation'] != null
           ? (map['dateCreation'] as Timestamp).toDate()
           : DateTime.now(), // fallback sécurité
+
+      // champs enrichis
+      localisation: map['localisation'] as String?,
+      remuneration: map['remuneration'] as String?,
+      niveau: map['niveau'] as String?,
+      posteRecherche: map['posteRecherche'] as String?,
+      pieceJointeUrl: map['pieceJointeUrl'] as String?,
+      vues: (map['vues'] as num?)?.toInt(),
+      archivedAt: (map['archivedAt'] as Timestamp?)?.toDate(),
+      lastUpdated: (map['lastUpdated'] as Timestamp?)?.toDate(),
     );
   }
 }
-
