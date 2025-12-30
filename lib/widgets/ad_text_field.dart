@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/ad_colors.dart';
 
 class AdTextField extends StatefulWidget {
   final TextEditingController controller;
@@ -36,6 +35,8 @@ class _AdTextFieldState extends State<AdTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return TextFormField(
       controller: widget.controller,
       keyboardType: widget.keyboardType,
@@ -50,7 +51,10 @@ class _AdTextFieldState extends State<AdTextField> {
         suffixIcon: widget.isPassword
             ? IconButton(
                 onPressed: () => setState(() => _obscure = !_obscure),
-                icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: AdColors.brand),
+                icon: Icon(
+                  _obscure ? Icons.visibility_off : Icons.visibility,
+                  color: cs.primary,
+                ),
               )
             : widget.suffix,
       ),

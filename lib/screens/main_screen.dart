@@ -10,6 +10,7 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/connectivity_controller.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 import 'package:adfoot/screens/event_list_screen.dart';
 import 'package:adfoot/screens/setting_screen.dart';
@@ -168,7 +169,6 @@ class _MainScreenState extends State<MainScreen> {
         bottomNavigationBar: SafeArea(
           top: false,
           child: Container(
-            color: const Color(0xFF214D4F),
             child: ClipRRect(
               clipBehavior: Clip.hardEdge,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
@@ -179,29 +179,29 @@ class _MainScreenState extends State<MainScreen> {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: const [
-                        Color(0xFF214D4F),
-                        Color(0xFF214D4F),
-                      ].map((c) => c.withOpacity(0.95)).toList(),
+                      colors: [
+                        AdColors.surfaceAlt.withOpacity(0.9),
+                        AdColors.surface.withOpacity(0.95),
+                      ],
                     ),
                     border: Border(
                       top: BorderSide(
-                        color: Colors.white.withOpacity(0.06),
-                        width: 1,
+                        color: AdColors.divider.withOpacity(0.9),
+                        width: 1.2,
                       ),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.18),
-                        blurRadius: 14,
-                        offset: const Offset(0, -6),
+                        color: Colors.black.withOpacity(0.35),
+                        blurRadius: 18,
+                        offset: const Offset(0, -8),
                       ),
                     ],
                   ),
                   child: BottomNavigationBar(
                     backgroundColor: Colors.transparent,
-                    selectedItemColor: const Color(0xFFE6EEFA),
-                    unselectedItemColor: const Color(0xFF8AB98A),
+                    selectedItemColor: AdColors.brand,
+                    unselectedItemColor: AdColors.onSurfaceMuted,
                     currentIndex: _selectedIndex,
                     onTap: _onItemTapped,
                     type: BottomNavigationBarType.fixed,
@@ -270,20 +270,20 @@ class _ProfileLoadingBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       width: double.infinity,
-      color: const Color(0xFF214D4F),
-      child: const Row(
+      color: AdColors.surfaceAlt,
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           SizedBox(
             width: 14,
             height: 14,
             child: CircularProgressIndicator(
-                strokeWidth: 2, color: Colors.white),
+                strokeWidth: 2, color: AdColors.brand),
           ),
           SizedBox(width: 8),
           Text(
             'Chargement du profil…',
-            style: TextStyle(color: Colors.white, fontSize: 12),
+            style: TextStyle(color: AdColors.onSurface, fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ],
       ),

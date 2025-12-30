@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/profile_controller.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 import '../models/user.dart';
 import 'profile_screen.dart';
@@ -24,10 +25,10 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   // --- Couleurs ---
-  static const kPrimary = Color(0xFF214D4F);
-  static const kAccent = Color(0xFF00BFA6);
-  static const kDanger = Color(0xFFE53935);
-  static const kSurface = Color(0xFFF7FAFA);
+  static const kPrimary = AdColors.brand;
+  static const kAccent = AdColors.accent;
+  static const kDanger = AdColors.error;
+  static const kSurface = AdColors.surface;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -186,12 +187,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     return base.copyWith(
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AdColors.surfaceCard,
       border: border,
       enabledBorder: border,
       focusedBorder: focused,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      labelStyle: const TextStyle(color: Colors.black87),
+      labelStyle: const TextStyle(color: AdColors.onSurfaceMuted),
     );
   }
 

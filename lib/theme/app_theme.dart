@@ -6,35 +6,35 @@ class AppTheme {
   /// Thème clair principal — utilisé dans toute l’application
   static ThemeData light() {
     const colorScheme = ColorScheme(
-      brightness: Brightness.light,
+      brightness: Brightness.dark,
       primary: AdColors.brand,
-      onPrimary: AdColors.white,
+      onPrimary: AdColors.brandOn,
       secondary: AdColors.accent,
-      onSecondary: AdColors.white,
+      onSecondary: AdColors.surface,
       error: AdColors.error,
       onError: AdColors.white,
-      surface: AdColors.white,
+      surface: AdColors.surface,
       onSurface: AdColors.onSurface,
       primaryContainer: AdColors.brandVariant,
-      onPrimaryContainer: AdColors.brandOn,
+      onPrimaryContainer: AdColors.surface,
       secondaryContainer: AdColors.accentDark,
-      onSecondaryContainer: AdColors.white,
-      surfaceContainerHighest: AdColors.surfaceAlt,
+      onSecondaryContainer: AdColors.surface,
+      surfaceContainerHighest: AdColors.surfaceCardAlt,
       outline: AdColors.divider,
-      shadow: Colors.black12,
+      shadow: Colors.black54,
       scrim: Colors.black54,
       inversePrimary: AdColors.brandOn,
 
       // Champs supplémentaires pour compatibilité M3
-      surfaceBright: AdColors.surface,
-      surfaceDim: AdColors.surfaceAlt,
-      surfaceContainer: AdColors.surface,
+      surfaceBright: AdColors.surfaceAlt,
+      surfaceDim: AdColors.surface,
+      surfaceContainer: AdColors.surfaceAlt,
       surfaceContainerLow: AdColors.surfaceAlt,
-      surfaceContainerHigh: AdColors.surfaceAlt,
+      surfaceContainerHigh: AdColors.surfaceCard,
       tertiary: AdColors.accent,
-      onTertiary: AdColors.white,
+      onTertiary: AdColors.surface,
       tertiaryContainer: AdColors.accentDark,
-      onTertiaryContainer: AdColors.white,
+      onTertiaryContainer: AdColors.surface,
       inverseSurface: AdColors.surfaceAlt,
       onInverseSurface: AdColors.onSurface,
     );
@@ -47,28 +47,30 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
+      brightness: Brightness.dark,
       scaffoldBackgroundColor: AdColors.surface,
       textTheme: adTextTheme,
+      canvasColor: AdColors.surface,
 
       // --- AppBar ---
       appBarTheme: const AppBarTheme(
-        backgroundColor: AdColors.brand,
-        foregroundColor: AdColors.white,
+        backgroundColor: Colors.transparent,
+        foregroundColor: AdColors.onSurface,
         elevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          color: AdColors.white,
+          color: AdColors.onSurface,
           fontSize: 20,
           fontWeight: FontWeight.w800,
         ),
-        iconTheme: IconThemeData(color: AdColors.white),
+        iconTheme: IconThemeData(color: AdColors.onSurface),
       ),
 
       // --- Boutons ---
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AdColors.brand,
-          foregroundColor: AdColors.white,
+          foregroundColor: AdColors.brandOn,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -96,7 +98,7 @@ class AppTheme {
       // --- Champs de texte (InputDecoration) ---
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AdColors.white,
+        fillColor: AdColors.surfaceCard,
         border: inputBorder,
         enabledBorder: inputBorder,
         focusedBorder: inputBorder.copyWith(
@@ -108,21 +110,21 @@ class AppTheme {
         focusedErrorBorder: inputBorder.copyWith(
           borderSide: const BorderSide(color: AdColors.error, width: 1.2),
         ),
-        labelStyle: const TextStyle(color: AdColors.brand),
+        labelStyle: const TextStyle(color: AdColors.onSurfaceMuted),
         // ✅ Remplacement withOpacity → withValues(alpha: 0.6)
         hintStyle: TextStyle(
-          color: AdColors.onSurface.withValues(alpha: 0.6),
+          color: AdColors.onSurfaceMuted.withValues(alpha: 0.8),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       ),
 
       // --- Barre de navigation ---
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-        backgroundColor: AdColors.brand,
-        selectedItemColor: AdColors.white,
-        unselectedItemColor: Colors.white70,
-        selectedLabelStyle: TextStyle(fontWeight: FontWeight.w700),
-        unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w600),
+        backgroundColor: AdColors.surfaceAlt,
+        selectedItemColor: AdColors.brand,
+        unselectedItemColor: AdColors.onSurfaceMuted,
+        selectedLabelStyle: TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.2),
+        unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w600, letterSpacing: 0.1),
         type: BottomNavigationBarType.fixed,
       ),
 
@@ -131,9 +133,9 @@ class AppTheme {
       // --- SnackBars ---
       snackBarTheme: const SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: AdColors.brand,
+        backgroundColor: AdColors.surfaceCard,
         contentTextStyle: TextStyle(
-          color: AdColors.white,
+          color: AdColors.onSurface,
           fontWeight: FontWeight.w600,
         ),
         shape: RoundedRectangleBorder(
@@ -143,13 +145,15 @@ class AppTheme {
 
       // --- Cartes ---
       cardTheme: CardThemeData(
-        color: AdColors.white,
+        color: AdColors.surfaceCard,
         surfaceTintColor: Colors.transparent, // évite la sur-teinte M3
-        elevation: 0,
+        elevation: 6,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AdColors.divider, width: 1),
         ),
+        shadowColor: Colors.black.withOpacity(0.35),
       ),
 
       // --- Indicateurs de chargement ---
@@ -163,6 +167,11 @@ class AppTheme {
         color: AdColors.divider,
         thickness: 1,
         space: 1,
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: AdColors.onSurface,
+        textColor: AdColors.onSurface,
+        tileColor: AdColors.surfaceCard,
       ),
     );
   }

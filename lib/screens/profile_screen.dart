@@ -19,6 +19,7 @@ import 'package:adfoot/screens/edit_profil_screen.dart';
 import 'package:adfoot/screens/follow_list_screen.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String uid;
@@ -36,10 +37,10 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   // 🎨 Palette officielle
-  static const kPrimary = Color(0xFF214D4F);
-  static const kAccent = Color(0xFF00BFA6);
-  static const kDanger = Color(0xFFE53935);
-  static const kSurface = Color(0xFFF7FAFA);
+  static const kPrimary = AdColors.brand;
+  static const kAccent = AdColors.accent;
+  static const kDanger = AdColors.error;
+  static const kSurface = AdColors.surface;
 
   late final ProfileController _profileController;
   final AuthController _authController = Get.find<AuthController>();
@@ -207,7 +208,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               '${user.age} ans',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color: Colors.black.withValues(alpha: 0.7),
+                                color: AdColors.onSurfaceMuted,
                               ),
                             ),
                         ],
@@ -611,17 +612,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 Widget _buildAdvancedFootballSection(AppUser user) {
   // Si pas encore rempli, on montre un résumé “vide + conseil”
   if (!user.hasAdvancedProfile) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Ce profil n’a pas encore de données avancées.',
-          style: TextStyle(color: Colors.black.withValues(alpha: 0.7)),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          user.isPlayer
-              ? 'Ajoute taille, poids, pied fort, positions, stats et disponibilité.'
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Ce profil n’a pas encore de données avancées.',
+            style: const TextStyle(color: AdColors.onSurfaceMuted),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            user.isPlayer
+                ? 'Ajoute taille, poids, pied fort, positions, stats et disponibilité.'
               : user.isClub
                   ? 'Ajoute structure, catégories et besoins.'
                   : user.isRecruiter
