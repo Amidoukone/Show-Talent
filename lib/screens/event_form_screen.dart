@@ -6,6 +6,7 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:intl/intl.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 class EventFormScreen extends StatefulWidget {
   final Event? event;
@@ -62,6 +63,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
@@ -69,7 +72,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
           widget.event != null ? 'Modifier l\'événement' : 'Créer un événement',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF214D4F),
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         centerTitle: true,
       ),
       body: GestureDetector(
@@ -178,8 +182,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 child: ElevatedButton(
                   onPressed: _handleSubmit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF214D4F),
-                    foregroundColor: Colors.white,
+                    backgroundColor: AdColors.brand,
+                    foregroundColor: AdColors.brandOn,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 40, vertical: 15),
                     shape: RoundedRectangleBorder(
@@ -311,7 +315,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: AdColors.onSurface,
+      ),
     );
   }
 
@@ -331,12 +339,12 @@ class _EventFormScreenState extends State<EventFormScreen> {
       decoration: InputDecoration(
         labelText: labelText,
         hintText: hintText,
-        prefixIcon: Icon(icon, color: const Color(0xFF214D4F)),
+        prefixIcon: Icon(icon, color: AdColors.brand),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(20),
         ),
         filled: true,
-        fillColor: Colors.grey.shade100,
+        fillColor: AdColors.surfaceCard,
         contentPadding: const EdgeInsets.all(20),
       ),
     );
@@ -366,15 +374,15 @@ class _EventFormScreenState extends State<EventFormScreen> {
           lastDate: DateTime(2100),
           builder: (context, child) {
             return Theme(
-              data: ThemeData.light().copyWith(
-                colorScheme: const ColorScheme.light(
-                  primary: Color(0xFF214D4F),
-                  onPrimary: Colors.white,
-                  surface: Colors.white,
-                  onSurface: Colors.black,
+              data: ThemeData.dark().copyWith(
+                colorScheme: const ColorScheme.dark(
+                  primary: AdColors.brand,
+                  onPrimary: AdColors.brandOn,
+                  surface: AdColors.surfaceCard,
+                  onSurface: AdColors.onSurface,
                 ),
                 dialogTheme: const DialogThemeData(
-                  backgroundColor: Colors.white,
+                  backgroundColor: AdColors.surfaceCard,
                 ),
               ),
               child: child!,
@@ -388,16 +396,20 @@ class _EventFormScreenState extends State<EventFormScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFF214D4F)),
+          border: Border.all(color: AdColors.divider),
           borderRadius: BorderRadius.circular(20),
-          color: Colors.grey.shade100,
+          color: AdColors.surfaceCard,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               label,
-              style: const TextStyle(fontSize: 16, color: Colors.black54),
+              style: const TextStyle(
+                fontSize: 16,
+                color: AdColors.onSurfaceMuted,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             Text(
               date != null
@@ -405,7 +417,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                   : 'Choisir une date',
               style: const TextStyle(
                 fontSize: 16,
-                color: Color(0xFF214D4F),
+                color: AdColors.brand,
                 fontWeight: FontWeight.bold,
               ),
             ),

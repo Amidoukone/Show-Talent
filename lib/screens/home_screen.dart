@@ -9,6 +9,7 @@ import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/connectivity_controller.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 import 'package:adfoot/screens/profile_screen.dart';
 
@@ -217,8 +218,7 @@ Future<void> _onPageChanged(int index) async {
   }
 
   _disposeFarPlayers(index, urls);
-}
-
+  }
 
   void _disposeFarPlayers(int index, List<String> urls) {
     const window = 25;
@@ -243,7 +243,7 @@ Future<void> _onPageChanged(int index) async {
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AdColors.surface,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
@@ -310,7 +310,11 @@ Future<void> _onPageChanged(int index) async {
                 return const Center(
                   child: Text(
                     'Aucune vidéo disponible',
-                    style: TextStyle(color: Colors.white70, fontSize: 18),
+                    style: TextStyle(
+                      color: AdColors.onSurfaceMuted,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 );
               }
@@ -443,10 +447,10 @@ Future<void> _onPageChanged(int index) async {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.wifi_off, color: Colors.white70, size: 60),
+          Icon(Icons.wifi_off, color: AdColors.onSurfaceMuted, size: 60),
           SizedBox(height: 20),
           Text('Pas de connexion Internet',
-              style: TextStyle(color: Colors.white70, fontSize: 18)),
+              style: TextStyle(color: AdColors.onSurfaceMuted, fontSize: 18, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -509,17 +513,28 @@ class _FollowToggleButtonState extends State<_FollowToggleButton> {
             }
             _isLoading = false;
           });
-          Get.snackbar('Erreur', 'Impossible d’effectuer l’action.',
-              backgroundColor: Colors.red, colorText: Colors.white);
+          Get.snackbar(
+            'Erreur',
+            'Impossible d’effectuer l’action.',
+            backgroundColor: AdColors.error,
+            colorText: AdColors.onSurface,
+          );
         }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: const Color.fromARGB(255, 1, 35, 93),
+          color: AdColors.brand,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 1.5),
+          border: Border.all(color: AdColors.surface, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: AdColors.brand.withOpacity(0.35),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: _isLoading
             ? const SizedBox(
@@ -527,10 +542,10 @@ class _FollowToggleButtonState extends State<_FollowToggleButton> {
                 height: 14,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Colors.white,
+                  color: AdColors.brandOn,
                 ),
               )
-            : const Icon(Icons.add, size: 16, color: Colors.white),
+            : const Icon(Icons.add, size: 16, color: AdColors.brandOn),
       ),
     );
   }
