@@ -5,6 +5,7 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:intl/intl.dart';
 import 'package:adfoot/screens/offre_screen.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 class OffreFormScreen extends StatefulWidget {
   const OffreFormScreen({super.key});
@@ -245,22 +246,25 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(
-          border: Border.all(color: const Color(0xFF214D4F)),
+          border: Border.all(color: AdColors.divider),
           borderRadius: BorderRadius.circular(20),
-          color: Colors.grey.shade100,
+          color: AdColors.surfaceCard,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(label,
-                style: const TextStyle(fontSize: 16, color: Colors.black54)),
+                style: const TextStyle(
+                    fontSize: 16,
+                    color: AdColors.onSurfaceMuted,
+                    fontWeight: FontWeight.w600)),
             Text(
               date != null
                   ? DateFormat('dd MMM yyyy').format(date)
                   : 'Choisir une date',
               style: const TextStyle(
                 fontSize: 16,
-                color: Color(0xFF214D4F),
+                color: AdColors.brand,
                 fontWeight: FontWeight.bold,
               ),
             ),

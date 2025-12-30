@@ -28,7 +28,7 @@ messaging.onBackgroundMessage((payload) => {
     // Ajout optionnel de data pour une action personnalisée sur click
     data: payload?.data || {},
     // Ajout d’une couleur (optionnel, certains navigateurs l’ignorent)
-    color: "#214D4F"
+    color: "#2ED573"
   };
 
   // Affiche la notification dans le navigateur

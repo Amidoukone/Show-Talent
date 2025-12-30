@@ -302,13 +302,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFE6EEFA),
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: const Text('Vérification e-mail'),
         centerTitle: true,
-        backgroundColor: const Color(0xFF214D4F),
-        foregroundColor: Colors.white,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
 
         // ✅ Bouton retour demandé (sans casser ta structure)
         // On fait un retour "propre" : signOut + retour au Login.
@@ -329,7 +331,10 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                     Text(
                       _message ?? _defaultUxMessage(emailSent: _emailSent),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.black87),
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton.icon(
@@ -337,8 +342,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                       icon: const Icon(Icons.check_circle_outline),
                       label: Text(_finishing ? "Vérification..." : "J’ai cliqué sur le lien, continuer"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF214D4F),
-                        foregroundColor: Colors.white,
+                        backgroundColor: AdColors.brand,
+                        foregroundColor: AdColors.brandOn,
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -351,8 +356,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                       icon: const Icon(Icons.email_outlined),
                       label: const Text("Renvoyer le lien de vérification"),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey.shade300,
-                        foregroundColor: Colors.black87,
+                        backgroundColor: AdColors.surfaceCard,
+                        foregroundColor: cs.onSurface,
                         minimumSize: const Size(double.infinity, 48),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
