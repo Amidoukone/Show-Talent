@@ -208,7 +208,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               '${user.age} ans',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
-                                color: Colors.black.withValues(alpha: 0.7),
+                                color: AdColors.onSurfaceMuted,
                               ),
                             ),
                         ],
@@ -612,17 +612,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 Widget _buildAdvancedFootballSection(AppUser user) {
   // Si pas encore rempli, on montre un résumé “vide + conseil”
   if (!user.hasAdvancedProfile) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Ce profil n’a pas encore de données avancées.',
-          style: TextStyle(color: Colors.black.withValues(alpha: 0.7)),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          user.isPlayer
-              ? 'Ajoute taille, poids, pied fort, positions, stats et disponibilité.'
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Ce profil n’a pas encore de données avancées.',
+            style: const TextStyle(color: AdColors.onSurfaceMuted),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            user.isPlayer
+                ? 'Ajoute taille, poids, pied fort, positions, stats et disponibilité.'
               : user.isClub
                   ? 'Ajoute structure, catégories et besoins.'
                   : user.isRecruiter
