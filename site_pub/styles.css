@@ -21,7 +21,7 @@ body {
 h2 {
   text-align: center;
   margin-bottom: 30px;
-  color: #214D4F;
+  color: #2ED573;
 }
 
 /* Hero */
@@ -29,7 +29,7 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #214D4F;
+  background: #0E1114;
   color: white;
   padding: 60px 20px;
   flex-wrap: wrap;
@@ -47,8 +47,8 @@ h2 {
 }
 .btn-primary {
   display: inline-block;
-  background: #fff;
-  color: #214D4F;
+  background: #2ED573;
+  color: #0E1114;
   padding: 14px 28px;
   border-radius: 8px;
   text-decoration: none;
@@ -56,7 +56,7 @@ h2 {
   transition: background 0.3s;
 }
 .btn-primary:hover {
-  background-color: #e2e2e2;
+  background-color: #26C165;
 }
 .hero-image {
   flex: 1 1 300px;
@@ -114,7 +114,7 @@ h2 {
   margin-bottom: 16px;
 }
 .feature-card h3 {
-  color: #214D4F;
+  color: #2ED573;
   margin-bottom: 12px;
 }
 
@@ -138,7 +138,7 @@ h2 {
   top: 0;
   width: 36px;
   height: 36px;
-  background: #214D4F;
+  background: #2ED573;
   color: white;
   border-radius: 50%;
   display: flex;
@@ -176,20 +176,20 @@ h2 {
 /* CTA Section */
 .cta {
   text-align: center;
-  background: #214D4F;
+  background: #0E1114;
   color: white;
   padding: 40px 20px;
 }
 .cta .btn-secondary {
-  background: white;
-  color: #214D4F;
+  background: #2ED573;
+  color: #0E1114;
   padding: 14px 28px;
   border-radius: 8px;
   text-decoration: none;
   font-weight: bold;
 }
 .cta .btn-secondary:hover {
-  background-color: #e2e2e2;
+  background-color: #26C165;
 }
 
 /* Contact */
@@ -213,7 +213,7 @@ h2 {
 }
 .contact-form-container h2 {
   margin-bottom: 20px;
-  color: #214D4F;
+  color: #2ED573;
 }
 .contact input,
 .contact textarea {
@@ -225,8 +225,8 @@ h2 {
   resize: vertical;
 }
 .contact button {
-  background: #214D4F;
-  color: white;
+  background: #2ED573;
+  color: #0E1114;
   padding: 14px;
   border: none;
   border-radius: 8px;
@@ -234,7 +234,7 @@ h2 {
   font-size: 1rem;
 }
 .contact button:hover {
-  background: #1a3d3d;
+  background: #26C165;
 }
 
 /* Footer */
