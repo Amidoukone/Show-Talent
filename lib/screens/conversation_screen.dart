@@ -39,6 +39,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     });
   }
 
+  Future<void> _handleRefresh() async {
+    chatController.refreshConversations();
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -46,8 +51,38 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Conversations"),
-        centerTitle: true,
+        titleSpacing: 0,
+        title: Row(
+          children: [
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
+              ),
+              child: const Icon(Icons.messenger_outline, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Conversations",
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  "Messages sécurisés et synchronisés",
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: cs.onSurface.withValues(alpha: 0.6),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
         actions: [
           // ✅ Refresh manuel (optionnel, non destructif)
           IconButton(
@@ -57,108 +92,140 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           ),
         ],
       ),
-      body: Obx(() {
-        final currentUserId = authController.user?.uid;
-        if (currentUserId == null) {
-          return const Center(child: Text("Utilisateur non connecté."));
-        }
-
-        final conversations = chatController.conversations;
-
-        if (conversations.isEmpty) {
-          return _EmptyState(
-            onNewChat: () => Get.to(() => const SelectUserScreen()),
-          );
-        }
-
-        // ✅ Tri local
-        final sorted = List.of(conversations)
-          ..sort((a, b) => (b.lastMessageDate ?? DateTime(0))
-              .compareTo(a.lastMessageDate ?? DateTime(0)));
-
-        // ✅ Map uid -> AppUser pour accès O(1)
-        final Map<String, AppUser> usersById = {
-          for (final u in userController.userList) u.uid: u,
-        };
-
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-          itemCount: sorted.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 10),
-          itemBuilder: (context, index) {
-            final conversation = sorted[index];
-
-            final otherUserId = conversation.utilisateurIds.firstWhere(
-              (id) => id != currentUserId,
-              orElse: () => '',
-            );
-
-            if (otherUserId.isEmpty) {
-              return _InfoCard(
-                title: "Utilisateur inconnu",
-                subtitle: "Impossible d'identifier l'autre participant.",
-                icon: Icons.help_outline,
-              );
-            }
-
-            final otherUser = usersById[otherUserId];
-
-            // ✅ Placeholder stable si la liste users n’est pas encore prête
-            if (otherUser == null) {
-              return const _SkeletonConversationTile();
-            }
-
-            // ✅ On conserve la logique de filtrage
-            if (otherUser.estActif != true || otherUser.emailVerified != true) {
-              return _InfoCard(
-                title: "Utilisateur inactif ou non vérifié",
-                subtitle: "Cette conversation n’est pas disponible.",
-                icon: Icons.lock_outline,
-              );
-            }
-
-            final unreadCount = conversation.unreadMessagesCount;
-            final isUnread = unreadCount > 0;
-
-            return _ConversationCard(
-              colorScheme: cs,
-              user: otherUser,
-              lastMessage: (conversation.lastMessage != null &&
-                      conversation.lastMessage!.trim().isNotEmpty)
-                  ? conversation.lastMessage!
-                  : "Aucun message",
-              dateLabel: _formatDateOrTime(conversation.lastMessageDate),
-              isUnread: isUnread,
-              unreadCount: unreadCount,
-              onTap: () async {
-                if (unreadCount > 0) {
-                  await chatController.markMessagesAsRead(
-                    conversation.id,
-                    currentUserId,
-                  );
-                }
-
-                Get.to(() => ChatScreen(
-                      conversationId: conversation.id,
-                      otherUser: otherUser,
-                    ));
-              },
-              onLongPress: () => _confirmDelete(conversation.id),
-              // ✅ Swipe to delete (moderne) sans supprimer le long-press
-              onSwipeDelete: () => _confirmDelete(conversation.id),
-            );
-          },
-        );
-      }),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Get.to(() => const SelectUserScreen()),
-        backgroundColor: const Color.fromARGB(255, 20, 147, 4),
+        backgroundColor: cs.primary,
         icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
         label: const Text(
           "Nouveau",
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
-        elevation: 2,
+        elevation: 3,
+      ),
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              cs.surface,
+              cs.surfaceContainerHigh,
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Obx(() {
+            final currentUserId = authController.user?.uid;
+            if (currentUserId == null) {
+              return const Center(child: Text("Utilisateur non connecté."));
+            }
+
+            final conversations = chatController.conversations;
+
+            if (conversations.isEmpty) {
+              return RefreshIndicator.adaptive(
+                onRefresh: _handleRefresh,
+                color: cs.primary,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(16, 22, 16, 80),
+                  children: [
+                    _EmptyState(
+                      onNewChat: () => Get.to(() => const SelectUserScreen()),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            // ✅ Tri local
+            final sorted = List.of(conversations)
+              ..sort((a, b) => (b.lastMessageDate ?? DateTime(0))
+                  .compareTo(a.lastMessageDate ?? DateTime(0)));
+
+            // ✅ Map uid -> AppUser pour accès O(1)
+            final Map<String, AppUser> usersById = {
+              for (final u in userController.userList) u.uid: u,
+            };
+
+            return RefreshIndicator.adaptive(
+              onRefresh: _handleRefresh,
+              color: cs.primary,
+              edgeOffset: 6,
+              child: ListView.separated(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 86),
+                itemCount: sorted.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final conversation = sorted[index];
+
+                  final otherUserId = conversation.utilisateurIds.firstWhere(
+                    (id) => id != currentUserId,
+                    orElse: () => '',
+                  );
+
+                  if (otherUserId.isEmpty) {
+                    return _InfoCard(
+                      title: "Utilisateur inconnu",
+                      subtitle: "Impossible d'identifier l'autre participant.",
+                      icon: Icons.help_outline,
+                    );
+                  }
+
+                  final otherUser = usersById[otherUserId];
+
+                  // ✅ Placeholder stable si la liste users n’est pas encore prête
+                  if (otherUser == null) {
+                    return const _SkeletonConversationTile();
+                  }
+
+                  // ✅ On conserve la logique de filtrage
+                  if (otherUser.estActif != true || otherUser.emailVerified != true) {
+                    return _InfoCard(
+                      title: "Utilisateur inactif ou non vérifié",
+                      subtitle: "Cette conversation n’est pas disponible.",
+                      icon: Icons.lock_outline,
+                    );
+                  }
+
+                  final unreadCount = conversation.unreadMessagesCount;
+                  final isUnread = unreadCount > 0;
+
+                  return _ConversationCard(
+                    colorScheme: cs,
+                    user: otherUser,
+                    lastMessage: (conversation.lastMessage != null &&
+                            conversation.lastMessage!.trim().isNotEmpty)
+                        ? conversation.lastMessage!
+                        : "Aucun message",
+                    dateLabel: _formatDateOrTime(conversation.lastMessageDate),
+                    isUnread: isUnread,
+                    unreadCount: unreadCount,
+                    onTap: () async {
+                      if (unreadCount > 0) {
+                        await chatController.markMessagesAsRead(
+                          conversation.id,
+                          currentUserId,
+                        );
+                      }
+
+                      Get.to(() => ChatScreen(
+                            conversationId: conversation.id,
+                            otherUser: otherUser,
+                          ));
+                    },
+                    onLongPress: () => _confirmDelete(conversation.id),
+                    // ✅ Swipe to delete (moderne) sans supprimer le long-press
+                    onSwipeDelete: () => _confirmDelete(conversation.id),
+                  );
+                },
+              ),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -236,86 +303,100 @@ class _ConversationCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     final titleStyle = theme.textTheme.titleMedium?.copyWith(
-      fontWeight: isUnread ? FontWeight.w800 : FontWeight.w700,
-      letterSpacing: 0.1,
+      fontWeight: isUnread ? FontWeight.w900 : FontWeight.w700,
+      letterSpacing: 0.15,
     );
 
     final subtitleStyle = theme.textTheme.bodyMedium?.copyWith(
-      color: isUnread ? theme.colorScheme.onSurface : theme.colorScheme.onSurface.withValues(alpha: 0.7),
-      fontWeight: isUnread ? FontWeight.w600 : FontWeight.w500,
+      color: theme.colorScheme.onSurface.withValues(alpha: isUnread ? 0.92 : 0.68),
+      fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
+      letterSpacing: 0.05,
     );
 
     final dateStyle = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w700,
     );
 
-    final avatarBg = theme.colorScheme.surfaceContainerHighest;
+    final avatarBg = theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.9);
 
-    final card = Material(
-      color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(16),
-      elevation: 0,
-      child: InkWell(
+    final card = AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        onLongPress: onLongPress,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: theme.dividerColor.withValues(alpha: 0.6),
-              width: 1,
-            ),
+        border: Border.all(
+          color: isUnread
+              ? theme.colorScheme.primary.withValues(alpha: 0.5)
+              : theme.dividerColor.withValues(alpha: 0.8),
+          width: 1.1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.26),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-          child: Row(
-            children: [
-              _Avatar(
-                name: user.nom,
-                photoUrl: user.photoProfil,
-                background: avatarBg,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Ligne 1 : Nom + Date
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            user.nom.isNotEmpty ? user.nom : "Utilisateur",
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: titleStyle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(dateLabel, style: dateStyle),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    // Ligne 2 : Dernier message + badge
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            lastMessage,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: subtitleStyle,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        if (unreadCount > 0) _UnreadBadge(count: unreadCount),
-                      ],
-                    ),
-                  ],
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                _Avatar(
+                  name: user.nom,
+                  photoUrl: user.photoProfil,
+                  background: avatarBg,
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Ligne 1 : Nom + Date
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              user.nom.isNotEmpty ? user.nom : "Utilisateur",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: titleStyle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(dateLabel, style: dateStyle),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      // Ligne 2 : Dernier message + badge
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              lastMessage,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: subtitleStyle,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          if (unreadCount > 0) _UnreadBadge(count: unreadCount),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -333,7 +414,7 @@ class _ConversationCard extends StatelessWidget {
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 18),
         decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 0.85),
+          color: theme.colorScheme.error.withValues(alpha: 0.85),
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white),
@@ -358,19 +439,36 @@ class _Avatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final initial = (name.trim().isNotEmpty) ? name.trim().substring(0, 1).toUpperCase() : "?";
 
-    return CircleAvatar(
-      radius: 26,
-      backgroundColor: background,
-      backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-      child: photoUrl.isEmpty
-          ? Text(
-              initial,
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            )
-          : null,
+    return Stack(
+      children: [
+        CircleAvatar(
+          radius: 26,
+          backgroundColor: background,
+          backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+          child: photoUrl.isEmpty
+              ? Text(
+                  initial,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                  ),
+                )
+              : null,
+        ),
+        Positioned(
+          bottom: 2,
+          right: 2,
+          child: Container(
+            width: 11,
+            height: 11,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Theme.of(context).colorScheme.primary,
+              border: Border.all(color: Colors.black.withValues(alpha: 0.65), width: 1.5),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -382,13 +480,21 @@ class _UnreadBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final shown = count > 99 ? "99+" : "$count";
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.teal,
-        borderRadius: BorderRadius.circular(20),
+        color: theme.colorScheme.primary,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withValues(alpha: 0.4),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          )
+        ],
       ),
       child: Text(
         shown,
@@ -425,7 +531,10 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               "Aucune conversation",
-              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
@@ -433,14 +542,31 @@ class _EmptyState extends StatelessWidget {
               "Démarre une discussion avec un utilisateur pour voir tes conversations ici.",
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                fontWeight: FontWeight.w600,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 14),
-            ElevatedButton.icon(
-              onPressed: onNewChat,
-              icon: const Icon(Icons.chat_bubble_outline),
-              label: const Text("Nouveau message"),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 10,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: onNewChat,
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: const Text("Nouvelle discussion"),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onNewChat,
+                  icon: const Icon(Icons.person_add_alt_1_rounded),
+                  label: const Text("Inviter un talent"),
+                ),
+              ],
             ),
           ],
         ),
@@ -465,7 +591,7 @@ class _InfoCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Material(
-      color: theme.colorScheme.surface,
+      color: theme.colorScheme.surface.withValues(alpha: 0.92),
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(12),
