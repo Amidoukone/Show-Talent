@@ -32,7 +32,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   DateTime? _dateFin;
 
   late bool isEditing;
-  late Offre? editingOffre;
+  Offre? editingOffre;
 
   @override
   void initState() {
@@ -50,8 +50,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       _niveauController.text = editingOffre!.niveau ?? '';
       _posteController.text = editingOffre!.posteRecherche ?? '';
       _pieceJointeController.text = editingOffre!.pieceJointeUrl ?? '';
-    } else {
-      editingOffre = null;
     }
   }
 
@@ -81,10 +79,10 @@ class OffreFormScreenState extends State<OffreFormScreen> {
               children: [
                 _buildSectionTitle('Informations générales', cs),
                 const SizedBox(height: 16),
+
                 TextFormField(
                   controller: _titreController,
                   decoration: _buildInputDecoration(
-                    cs,
                     'Titre de l\'offre',
                     'Entrez le titre de l\'offre',
                     Icons.work_outline,
@@ -92,87 +90,92 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                   validator: (value) =>
                       value == null || value.isEmpty ? 'Le titre est requis' : null,
                 ),
+
                 const SizedBox(height: 20),
+
                 TextFormField(
                   controller: _descriptionController,
+                  maxLines: 5,
                   decoration: _buildInputDecoration(
-                    cs,
                     'Description',
                     'Décrivez l\'offre en détail',
                     Icons.description_outlined,
                   ),
-                  maxLines: 5,
                   validator: (value) =>
                       value == null || value.isEmpty ? 'La description est requise' : null,
                 ),
+
                 const SizedBox(height: 16),
+
                 TextFormField(
                   controller: _posteController,
                   decoration: _buildInputDecoration(
-                    cs,
                     'Poste recherché',
                     'Ex: Attaquant, Milieu',
                     Icons.sports_soccer,
                   ),
                 ),
+
                 const SizedBox(height: 16),
+
                 TextFormField(
                   controller: _niveauController,
                   decoration: _buildInputDecoration(
-                    cs,
                     'Niveau / Section',
                     'Ex: U19, Sénior, Pro',
                     Icons.leaderboard_outlined,
                   ),
                 ),
+
                 const SizedBox(height: 16),
+
                 TextFormField(
                   controller: _localisationController,
                   decoration: _buildInputDecoration(
-                    cs,
                     'Localisation',
                     'Ville, Pays ou région',
                     Icons.place_outlined,
                   ),
                 ),
+
                 const SizedBox(height: 16),
+
                 TextFormField(
                   controller: _remunerationController,
                   decoration: _buildInputDecoration(
-                    cs,
                     'Rémunération (optionnel)',
                     'Ex: 2k-3k €/mois',
                     Icons.payments_outlined,
                   ),
                 ),
+
                 const SizedBox(height: 24),
+
                 _buildSectionTitle('Période', cs),
                 const SizedBox(height: 16),
+
                 _buildDatePicker(
                   'Date de début',
                   _dateDebut,
                   (picked) => setState(() => _dateDebut = picked),
                   isStart: true,
                 ),
+
                 const SizedBox(height: 16),
+
                 _buildDatePicker(
                   'Date de fin',
                   _dateFin,
                   (picked) => setState(() => _dateFin = picked),
                 ),
+
                 const SizedBox(height: 32),
+
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
                     onPressed: _submitForm,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AdColors.brand,
-                      foregroundColor: AdColors.brandOn,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
                     child: Text(
                       isEditing ? 'Mettre à jour' : 'Publier l\'offre',
                       style: const TextStyle(
@@ -190,6 +193,10 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     );
   }
 
+  // =========================================================
+  // UI HELPERS
+  // =========================================================
+
   Widget _buildSectionTitle(String title, ColorScheme cs) {
     return Text(
       title,
@@ -202,7 +209,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   }
 
   InputDecoration _buildInputDecoration(
-    ColorScheme cs,
     String label,
     String hint,
     IconData icon,
@@ -210,14 +216,11 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, color: cs.primary),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      prefixIcon: Icon(icon, color: AdColors.brand),
       filled: true,
       fillColor: AdColors.surfaceCard,
-      labelStyle: TextStyle(color: cs.onSurface),
-      hintStyle: TextStyle(color: cs.onSurfaceMuted),
+      labelStyle: const TextStyle(color: AdColors.onSurface),
+      hintStyle: const TextStyle(color: AdColors.onSurfaceMuted),
     );
   }
 
@@ -230,17 +233,12 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     return InkWell(
       onTap: () async {
         final now = DateTime.now();
-        final firstDate = isStart
-            ? now
-            : _dateDebut != null
-                ? _dateDebut!
-                : now;
-
-        final initialDate = date ?? firstDate;
+        final firstDate =
+            isStart ? now : (_dateDebut ?? now);
 
         final pickedDate = await showDatePicker(
           context: context,
-          initialDate: initialDate,
+          initialDate: date ?? firstDate,
           firstDate: firstDate,
           lastDate: DateTime(2100),
         );
@@ -253,17 +251,20 @@ class OffreFormScreenState extends State<OffreFormScreen> {
         padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
         decoration: BoxDecoration(
           border: Border.all(color: AdColors.divider),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           color: AdColors.surfaceCard,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 16,
-                    color: AdColors.onSurfaceMuted,
-                    fontWeight: FontWeight.w600)),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 16,
+                color: AdColors.onSurfaceMuted,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             Text(
               date != null
                   ? DateFormat('dd MMM yyyy').format(date)
@@ -280,6 +281,10 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     );
   }
 
+  // =========================================================
+  // SUBMIT
+  // =========================================================
+
   void _submitForm() {
     if (!_formKey.currentState!.validate() ||
         _dateDebut == null ||
@@ -291,7 +296,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       _showSnackbar(
         'Erreur',
         'La date de début doit précéder la date de fin',
-        Colors.red,
+        AdColors.error,
       );
       return;
     }
@@ -309,16 +314,21 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       statut: 'ouverte',
       dateCreation:
           isEditing ? editingOffre!.dateCreation : DateTime.now(),
-      localisation:
-          _localisationController.text.trim().isEmpty ? null : _localisationController.text.trim(),
-      remuneration:
-          _remunerationController.text.trim().isEmpty ? null : _remunerationController.text.trim(),
-      niveau:
-          _niveauController.text.trim().isEmpty ? null : _niveauController.text.trim(),
-      posteRecherche:
-          _posteController.text.trim().isEmpty ? null : _posteController.text.trim(),
-      pieceJointeUrl:
-          _pieceJointeController.text.trim().isEmpty ? null : _pieceJointeController.text.trim(),
+      localisation: _localisationController.text.trim().isEmpty
+          ? null
+          : _localisationController.text.trim(),
+      remuneration: _remunerationController.text.trim().isEmpty
+          ? null
+          : _remunerationController.text.trim(),
+      niveau: _niveauController.text.trim().isEmpty
+          ? null
+          : _niveauController.text.trim(),
+      posteRecherche: _posteController.text.trim().isEmpty
+          ? null
+          : _posteController.text.trim(),
+      pieceJointeUrl: _pieceJointeController.text.trim().isEmpty
+          ? null
+          : _pieceJointeController.text.trim(),
     );
 
     if (isEditing) {
@@ -332,7 +342,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       isEditing
           ? 'Offre mise à jour avec succès.'
           : 'Offre publiée avec succès.',
-      Colors.green,
+      AdColors.success,
     );
 
     Get.off(() => OffreScreen());
@@ -342,8 +352,8 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     Get.snackbar(
       title,
       message,
-      backgroundColor: color.withValues(alpha: 0.2),
-      colorText: Colors.black87,
+      backgroundColor: color.withValues(alpha: 0.18),
+      colorText: AdColors.onSurface,
       snackPosition: SnackPosition.TOP,
     );
   }

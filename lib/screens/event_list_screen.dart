@@ -12,7 +12,7 @@ import 'package:intl/intl.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 
 class EventListScreen extends StatefulWidget {
-  EventListScreen({super.key});
+  const EventListScreen({super.key});
 
   @override
   State<EventListScreen> createState() => _EventListScreenState();
@@ -21,8 +21,9 @@ class EventListScreen extends StatefulWidget {
 class _EventListScreenState extends State<EventListScreen> {
   final EventController eventController = Get.put(EventController());
   final UserController userController = Get.find<UserController>();
-  final ChatController chatController =
-      Get.isRegistered<ChatController>() ? Get.find() : Get.put(ChatController());
+  final ChatController chatController = Get.isRegistered<ChatController>()
+      ? Get.find()
+      : Get.put(ChatController());
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -45,7 +46,10 @@ class _EventListScreenState extends State<EventListScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Événements'),
+        title: const Text(
+          'Événements',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
         backgroundColor: cs.surface,
         foregroundColor: cs.onSurface,
         centerTitle: true,
@@ -76,11 +80,11 @@ class _EventListScreenState extends State<EventListScreen> {
                   final isOrganisateur = organiser.uid == currentUser.uid;
 
                   return Card(
-                    elevation: 4,
+                    elevation: 5,
                     margin:
-                        const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(14),
@@ -88,21 +92,20 @@ class _EventListScreenState extends State<EventListScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildOrganiserSection(organiser),
-                          const SizedBox(height: 10),
-
+                          const SizedBox(height: 12),
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       event.titre,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 18,
-                                        fontWeight: FontWeight.bold,
+                                        fontWeight: FontWeight.w800,
+                                        color: cs.onSurface,
                                       ),
                                     ),
                                     const SizedBox(height: 6),
@@ -110,7 +113,10 @@ class _EventListScreenState extends State<EventListScreen> {
                                       event.description,
                                       maxLines: 3,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 14),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: AdColors.onSurfaceMuted,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -119,9 +125,7 @@ class _EventListScreenState extends State<EventListScreen> {
                               _StatusBadge(status: event.statut),
                             ],
                           ),
-
-                          const SizedBox(height: 10),
-
+                          const SizedBox(height: 12),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
@@ -130,8 +134,7 @@ class _EventListScreenState extends State<EventListScreen> {
                                 Icons.calendar_today,
                                 '${DateFormat('dd MMM').format(event.dateDebut)} → ${DateFormat('dd MMM').format(event.dateFin)}',
                               ),
-                              _buildChip(
-                                  Icons.place_outlined, event.lieu),
+                              _buildChip(Icons.place_outlined, event.lieu),
                               _buildChip(
                                 Icons.privacy_tip_outlined,
                                 event.estPublic ? 'Public' : 'Privé',
@@ -142,9 +145,7 @@ class _EventListScreenState extends State<EventListScreen> {
                               ),
                             ],
                           ),
-
-                          const SizedBox(height: 14),
-
+                          const SizedBox(height: 16),
                           _buildActions(
                             context: context,
                             event: event,
@@ -168,7 +169,7 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   // =========================================================
-  // 🔍 FILTRAGE / RECHERCHE
+  // 🔍 FILTRAGE
   // =========================================================
 
   List<Event> _filterEvents(List<Event> source) {
@@ -198,7 +199,6 @@ class _EventListScreenState extends State<EventListScreen> {
     }).toList()
       ..sort((a, b) => a.dateDebut.compareTo(b.dateDebut));
   }
-
   // =========================================================
   // 🧱 UI BUILDERS
   // =========================================================
@@ -214,11 +214,17 @@ class _EventListScreenState extends State<EventListScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(height: 16, width: 160, color: Colors.grey.shade300),
+              Container(height: 16, width: 160, color: AdColors.surfaceCardAlt),
               const SizedBox(height: 10),
-              Container(height: 14, width: double.infinity, color: Colors.grey.shade300),
+              Container(
+                  height: 14,
+                  width: double.infinity,
+                  color: AdColors.surfaceCardAlt),
               const SizedBox(height: 6),
-              Container(height: 14, width: double.infinity, color: Colors.grey.shade300),
+              Container(
+                  height: 14,
+                  width: double.infinity,
+                  color: AdColors.surfaceCardAlt),
             ],
           ),
         ),
@@ -236,11 +242,15 @@ class _EventListScreenState extends State<EventListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.event_busy, size: 72, color: Colors.grey),
+            const Icon(Icons.event_busy,
+                size: 72, color: AdColors.onSurfaceMuted),
             const SizedBox(height: 12),
             const Text(
               'Aucun événement disponible',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
+              style: TextStyle(
+                fontSize: 18,
+                color: AdColors.onSurfaceMuted,
+              ),
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
@@ -259,23 +269,25 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Widget _buildFilters() {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-      color: Colors.grey.shade50,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: const BoxDecoration(
+        color: AdColors.surfaceAlt,
+        border: Border(
+          bottom: BorderSide(color: AdColors.divider),
+        ),
+      ),
       child: Column(
         children: [
           TextField(
             controller: _searchController,
             onChanged: (_) => setState(() {}),
-            decoration: InputDecoration(
-              hintText: 'Rechercher (titre, lieu)...',
-              prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
+            style: TextStyle(color: cs.onSurface),
+            decoration: const InputDecoration(
+              hintText: 'Rechercher (titre, lieu)…',
+              prefixIcon: Icon(Icons.search),
             ),
           ),
           const SizedBox(height: 8),
@@ -315,16 +327,9 @@ class _EventListScreenState extends State<EventListScreen> {
                   onTap: () => setState(() => _selectedVisibility = 'prive'),
                 ),
                 _FilterChip(
-                  label: 'Tous',
-                  selected: _selectedVisibility == 'tous',
-                  onTap: () => setState(() => _selectedVisibility = 'tous'),
-                ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text('À venir'),
+                  label: 'À venir',
                   selected: _onlyUpcoming,
-                  onSelected: (_) =>
-                      setState(() => _onlyUpcoming = !_onlyUpcoming),
+                  onTap: () => setState(() => _onlyUpcoming = !_onlyUpcoming),
                 ),
               ],
             ),
@@ -344,7 +349,9 @@ class _EventListScreenState extends State<EventListScreen> {
               Get.to(() => ProfileScreen(uid: organiser.uid, isReadOnly: true)),
           child: CircleAvatar(
             radius: 22,
-            backgroundImage: hasPhoto ? NetworkImage(organiser.photoProfil) : null,
+            backgroundColor: AdColors.surfaceCardAlt,
+            backgroundImage:
+                hasPhoto ? NetworkImage(organiser.photoProfil) : null,
             child: hasPhoto
                 ? null
                 : const Icon(Icons.person, color: Colors.white70),
@@ -357,12 +364,16 @@ class _EventListScreenState extends State<EventListScreen> {
             children: [
               Text(
                 organiser.nom,
-                style:
-                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               Text(
                 organiser.role,
-                style: const TextStyle(color: Colors.grey),
+                style: const TextStyle(
+                  color: AdColors.onSurfaceMuted,
+                ),
               ),
             ],
           ),
@@ -370,6 +381,21 @@ class _EventListScreenState extends State<EventListScreen> {
       ],
     );
   }
+
+  Widget _buildChip(IconData icon, String label) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Chip(
+      avatar: Icon(icon, size: 16, color: cs.primary),
+      label: Text(label, style: TextStyle(color: cs.onSurface)),
+      backgroundColor: AdColors.surfaceCard,
+      side: const BorderSide(color: AdColors.divider),
+    );
+  }
+
+  // =========================================================
+  // 🎯 ACTIONS (⚠️ MANQUANT AVANT – CORRIGÉ ICI)
+  // =========================================================
 
   Widget _buildActions({
     required BuildContext context,
@@ -397,6 +423,7 @@ class _EventListScreenState extends State<EventListScreen> {
             ],
             onChanged: (value) async {
               if (value == null) return;
+
               final updated = Event(
                 id: event.id,
                 titre: event.titre,
@@ -418,18 +445,20 @@ class _EventListScreenState extends State<EventListScreen> {
                     value == 'archivé' ? DateTime.now() : event.archivedAt,
                 lastUpdated: DateTime.now(),
               );
+
               await eventController.updateEvent(updated, organiser);
             },
           ),
           TextButton(
-            onPressed: () =>
-                Get.to(() => EventDetailsScreen(event: event)),
+            onPressed: () => Get.to(() => EventDetailsScreen(event: event)),
             child: const Text('Détails'),
           ),
           TextButton(
             onPressed: () => _confirmDeleteEvent(context, event),
-            child: const Text('Supprimer',
-                style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Supprimer',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       );
@@ -454,24 +483,17 @@ class _EventListScreenState extends State<EventListScreen> {
             onPressed: isBusy
                 ? null
                 : () => _confirmUnregisterEvent(context, event, currentUser),
-            child: const Text('Se désinscrire',
-                style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Se désinscrire',
+              style: TextStyle(color: Colors.red),
+            ),
           )
         else
           OutlinedButton(
-            onPressed: () =>
-                Get.to(() => EventDetailsScreen(event: event)),
+            onPressed: () => Get.to(() => EventDetailsScreen(event: event)),
             child: const Text('Détails'),
           ),
       ],
-    );
-  }
-
-  Widget _buildChip(IconData icon, String label) {
-    return Chip(
-      avatar: Icon(icon, size: 16),
-      label: Text(label),
-      backgroundColor: AdColors.surfaceCardAlt,
     );
   }
 
@@ -480,6 +502,7 @@ class _EventListScreenState extends State<EventListScreen> {
       return FloatingActionButton(
         onPressed: () => Get.to(() => const EventFormScreen()),
         backgroundColor: AdColors.brand,
+        foregroundColor: AdColors.brandOn,
         child: const Icon(Icons.add),
       );
     }
@@ -490,18 +513,15 @@ class _EventListScreenState extends State<EventListScreen> {
     Get.dialog(
       AlertDialog(
         title: const Text('Supprimer'),
-        content:
-            const Text('Voulez-vous vraiment supprimer cet événement ?'),
+        content: const Text('Voulez-vous vraiment supprimer cet événement ?'),
         actions: [
           TextButton(onPressed: Get.back, child: const Text('Annuler')),
           TextButton(
             onPressed: () async {
               Navigator.of(context).pop();
-              await eventController.deleteEvent(
-                  event.id, userController.user!);
+              await eventController.deleteEvent(event.id, userController.user!);
             },
-            child:
-                const Text('Supprimer', style: TextStyle(color: Colors.red)),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -520,11 +540,9 @@ class _EventListScreenState extends State<EventListScreen> {
           TextButton(
             onPressed: () async {
               Navigator.of(context).pop();
-              await eventController.unregisterFromEvent(
-                  event.id, currentUser);
+              await eventController.unregisterFromEvent(event.id, currentUser);
             },
-            child:
-                const Text('Confirmer', style: TextStyle(color: Colors.red)),
+            child: const Text('Confirmer', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -542,26 +560,40 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color color;
+    final cs = Theme.of(context).colorScheme;
+
+    Color bg;
+    Color fg;
+
     switch (status) {
       case 'ouvert':
-        color = Colors.green.shade100;
+        bg = cs.primary.withValues(alpha: 0.15);
+        fg = cs.primary;
         break;
       case 'fermé':
-        color = Colors.red.shade100;
+        bg = AdColors.error.withValues(alpha: 0.15);
+        fg = AdColors.error;
         break;
       case 'archivé':
-        color = Colors.grey.shade300;
+        bg = AdColors.onSurfaceMuted.withValues(alpha: 0.15);
+        fg = AdColors.onSurfaceMuted;
         break;
       default:
-        color = Colors.blueGrey.shade100;
+        bg = cs.secondary.withValues(alpha: 0.15);
+        fg = cs.secondary;
     }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration:
-          BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
-      child: Text(status,
-          style: const TextStyle(fontWeight: FontWeight.bold)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: const BorderSide(color: AdColors.divider).toBorder(),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(fontWeight: FontWeight.bold, color: fg),
+      ),
     );
   }
 }
@@ -579,13 +611,26 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: ChoiceChip(
         label: Text(label),
         selected: selected,
         onSelected: (_) => onTap(),
+        selectedColor: cs.primary.withValues(alpha: 0.18),
+        backgroundColor: AdColors.surfaceCard,
+        labelStyle: TextStyle(
+          color: selected ? cs.primary : cs.onSurface,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+        ),
+        side: const BorderSide(color: AdColors.divider),
       ),
     );
   }
+}
+
+extension _BorderSideX on BorderSide {
+  Border toBorder() => Border.fromBorderSide(this);
 }

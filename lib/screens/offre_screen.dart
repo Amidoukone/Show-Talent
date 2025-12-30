@@ -9,8 +9,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
+// ✅ IMPORTANT : ajoute l’import de ta palette
+import 'package:adfoot/theme/ad_colors.dart';
+
 class OffreScreen extends StatefulWidget {
-  OffreScreen({super.key});
+  const OffreScreen({super.key});
 
   @override
   State<OffreScreen> createState() => _OffreScreenState();
@@ -19,9 +22,8 @@ class OffreScreen extends StatefulWidget {
 class _OffreScreenState extends State<OffreScreen> {
   final OffreController offreController = Get.put(OffreController());
   final UserController userController = Get.find<UserController>();
-  final ChatController chatController = Get.isRegistered<ChatController>()
-      ? Get.find()
-      : Get.put(ChatController());
+  final ChatController chatController =
+      Get.isRegistered<ChatController>() ? Get.find() : Get.put(ChatController());
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -94,8 +96,7 @@ class _OffreScreenState extends State<OffreScreen> {
                       currentUser?.role == 'joueur' && offre.statut == 'ouverte';
 
                   return Card(
-                    margin:
-                        const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -116,10 +117,10 @@ class _OffreScreenState extends State<OffreScreen> {
                                   children: [
                                     Text(
                                       offre.titre,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: Color.fromARGB(255, 12, 40, 37),
+                                        color: cs.onSurface, // ✅ plus de couleur sombre illisible
                                       ),
                                     ),
                                     const SizedBox(height: 8),
@@ -127,7 +128,10 @@ class _OffreScreenState extends State<OffreScreen> {
                                       offre.description,
                                       maxLines: 3,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 14),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: cs.onSurface,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -140,55 +144,51 @@ class _OffreScreenState extends State<OffreScreen> {
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                          children: [
-                            if (offre.posteRecherche?.isNotEmpty ?? false)
-                              _buildChip(
-                                  Icons.sports_soccer, offre.posteRecherche!),
-                            if (offre.niveau?.isNotEmpty ?? false)
-                              _buildChip(Icons.star_border, offre.niveau!),
-                            if (offre.localisation?.isNotEmpty ?? false)
-                              _buildChip(
-                                  Icons.place_outlined, offre.localisation!),
-                            if (offre.remuneration?.isNotEmpty ?? false)
-                              _buildChip(Icons.payments_outlined,
-                                  offre.remuneration!),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.event,
-                                size: 16, color: cs.onSurfaceMuted),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Valide jusqu\'au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: cs.onSurfaceMuted,
+                            children: [
+                              if (offre.posteRecherche?.isNotEmpty ?? false)
+                                _buildChip(Icons.sports_soccer, offre.posteRecherche!),
+                              if (offre.niveau?.isNotEmpty ?? false)
+                                _buildChip(Icons.star_border, offre.niveau!),
+                              if (offre.localisation?.isNotEmpty ?? false)
+                                _buildChip(Icons.place_outlined, offre.localisation!),
+                              if (offre.remuneration?.isNotEmpty ?? false)
+                                _buildChip(Icons.payments_outlined, offre.remuneration!),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.event, size: 16, color: AdColors.onSurfaceMuted),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Valide jusqu\'au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AdColors.onSurfaceMuted, // ✅ cs.onSurfaceMuted -> AdColors
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Icon(Icons.remove_red_eye_outlined,
-                                size: 16, color: cs.onSurfaceMuted),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${offre.vues ?? 0} vues',
-                              style: TextStyle(color: cs.onSurface),
-                            ),
-                            const SizedBox(width: 12),
-                            Icon(Icons.group_outlined,
-                                size: 16, color: cs.onSurfaceMuted),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${offre.candidats.length} candidatures',
-                              style: TextStyle(color: cs.onSurface),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.remove_red_eye_outlined,
+                                  size: 16, color: AdColors.onSurfaceMuted),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${offre.vues ?? 0} vues',
+                                style: TextStyle(color: cs.onSurface),
+                              ),
+                              const SizedBox(width: 12),
+                              Icon(Icons.group_outlined,
+                                  size: 16, color: AdColors.onSurfaceMuted),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${offre.candidats.length} candidatures',
+                                style: TextStyle(color: cs.onSurface),
+                              ),
+                            ],
+                          ),
                           const SizedBox(height: 8),
                           _buildActionButtons(
                             context,
@@ -225,9 +225,8 @@ class _OffreScreenState extends State<OffreScreen> {
       final matchesStatus =
           _selectedStatus == 'tous' ? true : o.statut == _selectedStatus;
 
-      final matchesRole = _selectedRole == 'tous'
-          ? true
-          : o.recruteur.role == _selectedRole;
+      final matchesRole =
+          _selectedRole == 'tous' ? true : o.recruteur.role == _selectedRole;
 
       return matchesSearch && matchesStatus && matchesRole;
     }).toList();
@@ -257,15 +256,9 @@ class _OffreScreenState extends State<OffreScreen> {
             children: [
               Container(height: 14, width: 120, color: Colors.grey.shade300),
               const SizedBox(height: 10),
-              Container(
-                  height: 16,
-                  width: double.infinity,
-                  color: Colors.grey.shade300),
+              Container(height: 16, width: double.infinity, color: Colors.grey.shade300),
               const SizedBox(height: 8),
-              Container(
-                  height: 16,
-                  width: double.infinity,
-                  color: Colors.grey.shade300),
+              Container(height: 16, width: double.infinity, color: Colors.grey.shade300),
             ],
           ),
         ),
@@ -274,8 +267,7 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   Widget _buildEmptyState(dynamic currentUser) {
-    final isPublisher =
-        currentUser?.role == 'club' || currentUser?.role == 'recruteur';
+    final isPublisher = currentUser?.role == 'club' || currentUser?.role == 'recruteur';
 
     return Center(
       child: Padding(
@@ -283,11 +275,11 @@ class _OffreScreenState extends State<OffreScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.search_off, size: 72, color: Colors.grey),
+            const Icon(Icons.search_off, size: 72, color: AdColors.onSurfaceMuted),
             const SizedBox(height: 12),
             const Text(
               'Aucune offre disponible',
-              style: TextStyle(fontSize: 18, color: Colors.grey),
+              style: TextStyle(fontSize: 18, color: AdColors.onSurfaceMuted),
             ),
             const SizedBox(height: 12),
             ElevatedButton.icon(
@@ -304,12 +296,14 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   Widget _buildFilters() {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: const Border(
-          bottom: BorderSide(color: Color(0xFFE0E0E0)),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      decoration: const BoxDecoration(
+        color: AdColors.surfaceAlt, // ✅ cohérent dark
+        border: Border(
+          bottom: BorderSide(color: AdColors.divider),
         ),
       ),
       child: Column(
@@ -317,15 +311,11 @@ class _OffreScreenState extends State<OffreScreen> {
           TextField(
             controller: _searchController,
             onChanged: (_) => setState(() {}),
+            style: TextStyle(color: cs.onSurface),
             decoration: InputDecoration(
               hintText: 'Rechercher une offre...',
               prefixIcon: const Icon(Icons.search),
-              filled: true,
-              fillColor: Colors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
+              // ✅ laisse ton InputDecorationTheme faire le job (filled, couleurs, etc.)
             ),
           ),
           const SizedBox(height: 8),
@@ -357,11 +347,11 @@ class _OffreScreenState extends State<OffreScreen> {
                 DropdownButton<String>(
                   value: _sort,
                   underline: const SizedBox.shrink(),
+                  dropdownColor: AdColors.surfaceCard,
+                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
                   items: const [
-                    DropdownMenuItem(
-                        value: 'recentes', child: Text('Plus récentes')),
-                    DropdownMenuItem(
-                        value: 'fin', child: Text('Se terminant bientôt')),
+                    DropdownMenuItem(value: 'recentes', child: Text('Plus récentes')),
+                    DropdownMenuItem(value: 'fin', child: Text('Se terminant bientôt')),
                   ],
                   onChanged: (v) {
                     if (v != null) setState(() => _sort = v);
@@ -379,11 +369,9 @@ class _OffreScreenState extends State<OffreScreen> {
     final cs = Theme.of(context).colorScheme;
     return Chip(
       avatar: Icon(icon, size: 16, color: cs.primary),
-      label: Text(
-        label,
-        style: TextStyle(color: cs.onSurface),
-      ),
+      label: Text(label, style: TextStyle(color: cs.onSurface)),
       backgroundColor: AdColors.surfaceCard,
+      side: const BorderSide(color: AdColors.divider),
     );
   }
 
@@ -394,6 +382,7 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   Widget _buildRecruteurSection(BuildContext context, Offre offre) {
+    final cs = Theme.of(context).colorScheme;
     final bool valid = _isValidPhotoUrl(offre.recruteur.photoProfil);
 
     return Row(
@@ -407,10 +396,9 @@ class _OffreScreenState extends State<OffreScreen> {
           },
           child: CircleAvatar(
             radius: 25,
-            backgroundImage:
-                valid ? NetworkImage(offre.recruteur.photoProfil) : null,
-            child:
-                valid ? null : const Icon(Icons.person, color: Colors.white70),
+            backgroundColor: AdColors.surfaceCardAlt,
+            backgroundImage: valid ? NetworkImage(offre.recruteur.photoProfil) : null,
+            child: valid ? null : const Icon(Icons.person, color: Colors.white70),
           ),
         ),
         const SizedBox(width: 10),
@@ -420,11 +408,15 @@ class _OffreScreenState extends State<OffreScreen> {
             children: [
               Text(
                 offre.recruteur.nom,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: cs.onSurface,
+                ),
               ),
               Text(
                 offre.recruteur.role,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
+                style: const TextStyle(fontSize: 14, color: AdColors.onSurfaceMuted),
               ),
             ],
           ),
@@ -433,14 +425,20 @@ class _OffreScreenState extends State<OffreScreen> {
     );
   }
 
-  Widget _buildActionButtons(BuildContext context, Offre offre, bool isOwner,
-      bool isPostulable, dynamic currentUser) {
+  Widget _buildActionButtons(
+    BuildContext context,
+    Offre offre,
+    bool isOwner,
+    bool isPostulable,
+    dynamic currentUser,
+  ) {
     if (isOwner) {
       return Wrap(
         spacing: 8,
         children: [
           DropdownButton<String>(
             value: offre.statut,
+            dropdownColor: AdColors.surfaceCard,
             items: const [
               DropdownMenuItem(value: 'brouillon', child: Text('Brouillon')),
               DropdownMenuItem(value: 'ouverte', child: Text('Ouverte')),
@@ -454,8 +452,7 @@ class _OffreScreenState extends State<OffreScreen> {
             },
           ),
           TextButton.icon(
-            onPressed: () =>
-                Get.to(() => const OffreFormScreen(), arguments: offre),
+            onPressed: () => Get.to(() => const OffreFormScreen(), arguments: offre),
             icon: const Icon(Icons.edit),
             label: const Text('Modifier'),
           ),
@@ -474,8 +471,7 @@ class _OffreScreenState extends State<OffreScreen> {
     }
 
     if (isPostulable) {
-      final bool inscrit =
-          offre.candidats.any((c) => c.uid == currentUser?.uid);
+      final bool inscrit = offre.candidats.any((c) => c.uid == currentUser?.uid);
 
       return ElevatedButton(
         onPressed: () async {
@@ -537,7 +533,7 @@ class _OffreScreenState extends State<OffreScreen> {
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: const BoxDecoration(
-            color: Colors.white,
+            color: AdColors.surfaceAlt, // ✅ dark
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: Column(
@@ -552,6 +548,7 @@ class _OffreScreenState extends State<OffreScreen> {
                   ),
                   DropdownButton<String>(
                     value: sort,
+                    dropdownColor: AdColors.surfaceCard,
                     items: const [
                       DropdownMenuItem(value: 'nom', child: Text('Par nom')),
                       DropdownMenuItem(value: 'role', child: Text('Par rôle')),
@@ -575,8 +572,8 @@ class _OffreScreenState extends State<OffreScreen> {
                     return Row(
                       children: [
                         CircleAvatar(
-                          backgroundImage:
-                              valid ? NetworkImage(candidat.photoProfil) : null,
+                          backgroundColor: AdColors.surfaceCardAlt,
+                          backgroundImage: valid ? NetworkImage(candidat.photoProfil) : null,
                           child: valid ? null : const Icon(Icons.person),
                         ),
                         const SizedBox(width: 12),
@@ -590,7 +587,7 @@ class _OffreScreenState extends State<OffreScreen> {
                               ),
                               Text(
                                 candidat.role,
-                                style: const TextStyle(color: Colors.grey),
+                                style: const TextStyle(color: AdColors.onSurfaceMuted),
                               ),
                             ],
                           ),
@@ -631,29 +628,39 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color color;
+    final cs = Theme.of(context).colorScheme;
+
+    Color bg;
+    Color fg;
+
     switch (status) {
       case 'ouverte':
-        color = Colors.green.shade100;
+        bg = cs.primary.withValues(alpha: 0.14);
+        fg = cs.primary;
         break;
       case 'fermée':
-        color = Colors.red.shade100;
+        bg = AdColors.error.withValues(alpha: 0.14);
+        fg = AdColors.error;
         break;
       case 'archivée':
-        color = Colors.grey.shade300;
+        bg = AdColors.onSurfaceMuted.withValues(alpha: 0.14);
+        fg = AdColors.onSurfaceMuted;
         break;
       default:
-        color = Colors.blueGrey.shade100;
+        bg = cs.secondary.withValues(alpha: 0.14);
+        fg = cs.secondary;
     }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color,
+        color: bg,
         borderRadius: BorderRadius.circular(12),
+        border: const BorderSide(color: AdColors.divider).toBorder(),
       ),
       child: Text(
         status,
-        style: const TextStyle(fontWeight: FontWeight.bold),
+        style: TextStyle(fontWeight: FontWeight.bold, color: fg),
       ),
     );
   }
@@ -672,13 +679,26 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: ChoiceChip(
         label: Text(label),
         selected: selected,
         onSelected: (_) => onTap(),
+        selectedColor: cs.primary.withValues(alpha: 0.18),
+        backgroundColor: AdColors.surfaceCard,
+        labelStyle: TextStyle(
+          color: selected ? cs.primary : cs.onSurface,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+        ),
+        side: const BorderSide(color: AdColors.divider),
       ),
     );
   }
+}
+
+extension _BorderSideX on BorderSide {
+  Border toBorder() => Border.fromBorderSide(this);
 }

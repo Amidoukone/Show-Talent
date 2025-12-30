@@ -12,6 +12,7 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/screens/chat_screen.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 
 class EventDetailsScreen extends StatelessWidget {
   final Event event;
@@ -25,10 +26,11 @@ class EventDetailsScreen extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: const Text(
           'Détails de l’événement',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.w800),
         ),
         backgroundColor: cs.surface,
         foregroundColor: cs.onSurface,
@@ -55,12 +57,11 @@ class EventDetailsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(),
-            const SizedBox(height: 20),
-            _buildEventDetails(),
-            const SizedBox(height: 24),
+            _buildHeader(context),
+            const SizedBox(height: 18),
+            _buildEventDetails(context),
+            const SizedBox(height: 22),
             _buildParticipantsSection(context, isOrganisateur),
-            // ✅ SECTION FOOTER SUPPRIMÉE (Partager / Calendrier)
           ],
         ),
       ),
@@ -71,7 +72,8 @@ class EventDetailsScreen extends StatelessWidget {
   // 🧑 HEADER ORGANISATEUR
   // =========================================================
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final hasPhoto = event.organisateur.photoProfil.trim().startsWith('http');
 
     return Row(
@@ -85,7 +87,7 @@ class EventDetailsScreen extends StatelessWidget {
           ),
           child: CircleAvatar(
             radius: 26,
-            backgroundColor: Colors.grey.shade200,
+            backgroundColor: AdColors.surfaceCardAlt,
             backgroundImage:
                 hasPhoto ? NetworkImage(event.organisateur.photoProfil) : null,
             child:
@@ -101,12 +103,19 @@ class EventDetailsScreen extends StatelessWidget {
                 event.organisateur.nom.isNotEmpty
                     ? event.organisateur.nom
                     : 'Organisateur',
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: cs.onSurface,
+                ),
               ),
+              const SizedBox(height: 2),
               Text(
                 event.organisateur.role,
-                style: const TextStyle(color: Colors.grey),
+                style: const TextStyle(
+                  color: AdColors.onSurfaceMuted,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -120,17 +129,25 @@ class EventDetailsScreen extends StatelessWidget {
   // 📄 DÉTAILS ÉVÉNEMENT
   // =========================================================
 
-  Widget _buildEventDetails() {
+  Widget _buildEventDetails(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           event.titre,
-          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+            height: 1.1,
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
         _buildDetailRow(
+          context: context,
           icon: Icons.calendar_today,
           label: 'Dates',
           value:
@@ -139,6 +156,7 @@ class EventDetailsScreen extends StatelessWidget {
 
         const SizedBox(height: 12),
         _buildDetailRow(
+          context: context,
           icon: Icons.place_outlined,
           label: 'Lieu',
           value: event.lieu,
@@ -146,6 +164,7 @@ class EventDetailsScreen extends StatelessWidget {
 
         const SizedBox(height: 12),
         _buildDetailRow(
+          context: context,
           icon: Icons.privacy_tip_outlined,
           label: 'Visibilité',
           value: event.estPublic ? 'Public' : 'Privé',
@@ -154,6 +173,7 @@ class EventDetailsScreen extends StatelessWidget {
         if (event.capaciteMax != null) ...[
           const SizedBox(height: 12),
           _buildDetailRow(
+            context: context,
             icon: Icons.groups,
             label: 'Capacité',
             value:
@@ -169,8 +189,15 @@ class EventDetailsScreen extends StatelessWidget {
             children: event.tags!
                 .map(
                   (tag) => Chip(
-                    label: Text(tag),
-                    backgroundColor: Colors.grey.shade200,
+                    label: Text(
+                      tag,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    backgroundColor: AdColors.surfaceCard,
+                    side: const BorderSide(color: AdColors.divider),
                   ),
                 )
                 .toList(),
@@ -178,14 +205,22 @@ class EventDetailsScreen extends StatelessWidget {
         ],
 
         const SizedBox(height: 20),
-        const Text(
+        Text(
           'Description',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: cs.onSurface,
+          ),
         ),
         const SizedBox(height: 8),
         Text(
           event.description,
-          style: const TextStyle(fontSize: 16, height: 1.5),
+          style: TextStyle(
+            fontSize: 15.5,
+            height: 1.55,
+            color: cs.onSurface,
+          ),
         ),
       ],
     );
@@ -196,19 +231,25 @@ class EventDetailsScreen extends StatelessWidget {
   // =========================================================
 
   Widget _buildParticipantsSection(BuildContext context, bool isOrganisateur) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Participants',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: cs.onSurface,
+          ),
         ),
         const SizedBox(height: 8),
 
         if (event.participants.isEmpty)
           const Text(
             'Aucun participant pour le moment.',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: AdColors.onSurfaceMuted),
           )
         else
           Column(
@@ -217,21 +258,30 @@ class EventDetailsScreen extends StatelessWidget {
               return ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
-                  backgroundColor: Colors.grey.shade200,
+                  backgroundColor: AdColors.surfaceCardAlt,
                   backgroundImage:
                       hasPhoto ? NetworkImage(p.photoProfil) : null,
                   child: hasPhoto
                       ? null
                       : const Icon(Icons.person, color: Colors.white70),
                 ),
-                title: Text(p.nom),
-                subtitle: Text(p.role),
-                onTap: () => Get.to(
-                  () => ProfileScreen(uid: p.uid, isReadOnly: true),
+                title: Text(
+                  p.nom,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                subtitle: const Text(
+                  '',
+                  style: TextStyle(height: 0),
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.chat_bubble_outline),
+                  icon: Icon(Icons.chat_bubble_outline, color: cs.primary),
                   onPressed: () => _openChatWith(p),
+                ),
+                onTap: () => Get.to(
+                  () => ProfileScreen(uid: p.uid, isReadOnly: true),
                 ),
               );
             }).toList(),
@@ -258,7 +308,7 @@ class EventDetailsScreen extends StatelessWidget {
   void _showParticipants(List<AppUser> participants) {
     showModalBottomSheet(
       context: Get.context!,
-      backgroundColor: Colors.white,
+      backgroundColor: AdColors.surfaceAlt,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -271,14 +321,17 @@ class EventDetailsScreen extends StatelessWidget {
   // =========================================================
 
   Widget _buildDetailRow({
+    required BuildContext context,
     required IconData icon,
     required String label,
     required String value,
   }) {
+    final cs = Theme.of(context).colorScheme;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: Colors.grey.shade600),
+        Icon(icon, color: AdColors.onSurfaceMuted),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -286,11 +339,21 @@ class EventDetailsScreen extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: cs.onSurface,
+                ),
               ),
               const SizedBox(height: 4),
-              Text(value, style: const TextStyle(fontSize: 16)),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 15.5,
+                  color: AdColors.onSurfaceMuted,
+                  height: 1.35,
+                ),
+              ),
             ],
           ),
         ),
@@ -317,7 +380,6 @@ class EventDetailsScreen extends StatelessWidget {
         ));
   }
 }
-
 // =========================================================
 // 🎨 BADGE STATUT
 // =========================================================
@@ -328,33 +390,46 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Color color;
+    final cs = Theme.of(context).colorScheme;
+
+    Color bg;
+    Color fg;
+
     switch (status) {
       case 'ouvert':
-        color = Colors.green.shade100;
+        bg = cs.primary.withValues(alpha: 0.15);
+        fg = cs.primary;
         break;
       case 'fermé':
-        color = Colors.red.shade100;
+        bg = AdColors.error.withValues(alpha: 0.15);
+        fg = AdColors.error;
         break;
       case 'archivé':
-        color = Colors.grey.shade300;
+        bg = AdColors.onSurfaceMuted.withValues(alpha: 0.15);
+        fg = AdColors.onSurfaceMuted;
         break;
       case 'brouillon':
-        color = Colors.orange.shade100;
+        bg = AdColors.warning.withValues(alpha: 0.18);
+        fg = AdColors.warning;
         break;
       default:
-        color = Colors.blueGrey.shade100;
+        bg = cs.secondary.withValues(alpha: 0.15);
+        fg = cs.secondary;
     }
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color,
+        color: bg,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AdColors.divider),
       ),
       child: Text(
         status,
-        style: const TextStyle(fontWeight: FontWeight.bold),
+        style: TextStyle(
+          fontWeight: FontWeight.w800,
+          color: fg,
+        ),
       ),
     );
   }
@@ -378,6 +453,8 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final sorted = [...widget.participants];
     if (sort == 'role') {
       sorted.sort((a, b) => a.role.compareTo(b.role));
@@ -385,71 +462,90 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
       sorted.sort((a, b) => a.nom.compareTo(b.nom));
     }
 
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Participants',
-                  style:
-                      TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                DropdownButton<String>(
-                  value: sort,
-                  underline: const SizedBox.shrink(),
-                  items: const [
-                    DropdownMenuItem(value: 'nom', child: Text('Par nom')),
-                    DropdownMenuItem(value: 'role', child: Text('Par rôle')),
-                  ],
-                  onChanged: (v) => setState(() => sort = v ?? 'nom'),
-                ),
-              ],
-            ),
-            const Divider(),
-            ...sorted.map((p) {
-              final hasPhoto = p.photoProfil.trim().startsWith('http');
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundColor: Colors.grey.shade200,
-                  backgroundImage:
-                      hasPhoto ? NetworkImage(p.photoProfil) : null,
-                  child: hasPhoto
-                      ? null
-                      : const Icon(Icons.person, color: Colors.white70),
-                ),
-                title: Text(p.nom),
-                subtitle: Text(p.role),
-                onTap: () => Get.to(
-                  () => ProfileScreen(uid: p.uid, isReadOnly: true),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  onPressed: () async {
-                    final chat = Get.isRegistered<ChatController>()
-                        ? Get.find<ChatController>()
-                        : Get.put(ChatController());
-                    final current = Get.find<UserController>().user;
-                    if (current == null) return;
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Participants',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  DropdownButton<String>(
+                    value: sort,
+                    underline: const SizedBox.shrink(),
+                    dropdownColor: AdColors.surfaceCard,
+                    items: const [
+                      DropdownMenuItem(value: 'nom', child: Text('Par nom')),
+                      DropdownMenuItem(value: 'role', child: Text('Par rôle')),
+                    ],
+                    onChanged: (v) => setState(() => sort = v ?? 'nom'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Divider(color: AdColors.divider),
 
-                    final convId = await chat.createOrGetConversation(
-                      currentUserId: current.uid,
-                      otherUserId: p.uid,
-                    );
+              ...sorted.map((p) {
+                final hasPhoto = p.photoProfil.trim().startsWith('http');
 
-                    Get.to(() => ChatScreen(
-                          conversationId: convId,
-                          otherUser: p,
-                        ));
-                  },
-                ),
-              );
-            }),
-          ],
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    backgroundColor: AdColors.surfaceCardAlt,
+                    backgroundImage: hasPhoto ? NetworkImage(p.photoProfil) : null,
+                    child: hasPhoto
+                        ? null
+                        : const Icon(Icons.person, color: Colors.white70),
+                  ),
+                  title: Text(
+                    p.nom,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  subtitle: Text(
+                    p.role,
+                    style: const TextStyle(color: AdColors.onSurfaceMuted),
+                  ),
+                  onTap: () => Get.to(
+                    () => ProfileScreen(uid: p.uid, isReadOnly: true),
+                  ),
+                  trailing: IconButton(
+                    icon: Icon(Icons.chat_bubble_outline, color: cs.primary),
+                    onPressed: () async {
+                      final chat = Get.isRegistered<ChatController>()
+                          ? Get.find<ChatController>()
+                          : Get.put(ChatController());
+
+                      final current = Get.find<UserController>().user;
+                      if (current == null) return;
+
+                      final convId = await chat.createOrGetConversation(
+                        currentUserId: current.uid,
+                        otherUserId: p.uid,
+                      );
+
+                      Get.to(() => ChatScreen(
+                            conversationId: convId,
+                            otherUser: p,
+                          ));
+                    },
+                  ),
+                );
+              }),
+            ],
+          ),
         ),
       ),
     );
