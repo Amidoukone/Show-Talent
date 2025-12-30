@@ -187,12 +187,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     return base.copyWith(
       filled: true,
-      fillColor: Colors.white,
+      fillColor: AdColors.surfaceCard,
       border: border,
       enabledBorder: border,
       focusedBorder: focused,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      labelStyle: const TextStyle(color: Colors.black87),
+      labelStyle: const TextStyle(color: AdColors.onSurfaceMuted),
     );
   }
 
