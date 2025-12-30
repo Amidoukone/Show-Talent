@@ -336,6 +336,16 @@ class ProfileController extends GetxController {
     }
 
     // Transverses (optionnels)
+    if (patch.containsKey('birthDate')) {
+      final v = patch['birthDate'];
+      if (v is FieldValue) {
+        u.birthDate = null;
+      } else if (v is Timestamp) {
+        u.birthDate = v.toDate();
+      } else if (v is DateTime) {
+        u.birthDate = v;
+      }
+    }
     if (patch.containsKey('country')) u.country = patch['country'] as String?;
     if (patch.containsKey('city')) u.city = patch['city'] as String?;
     if (patch.containsKey('region')) u.region = patch['region'] as String?;
