@@ -202,15 +202,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Row(
                         children: [
                           _buildProfileLevelBadge(user),
-                          const Spacer(),
-                          if (user.age != null)
-                            Text(
-                              '${user.age} ans',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: AdColors.onSurfaceMuted,
-                              ),
-                            ),
                         ],
                       ),
                     ),
@@ -587,6 +578,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (user.isPlayer || user.isCoach) {
       tiles.addAll([
+        _infoTile('Âge', user.age != null ? '${user.age} ans' : null,
+            icon: Icons.cake_outlined),
         _infoTile('Position', user.position),
         _infoTile('Club actuel', user.team),
         _infoTile('Matchs joués', user.nombreDeMatchs?.toString()),
@@ -604,14 +597,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _infoTile('Recrutements', user.nombreDeRecrutements?.toString()),
       ]);
     } else {
-      tiles.add(const ListTile(title: Text('Aucune information de base.')));
+      tiles.add(
+        _infoTile('Informations', 'Aucune information de base.'),
+      );
     }
 
     return Column(children: tiles);
   }
-Widget _buildAdvancedFootballSection(AppUser user) {
-  // Si pas encore rempli, on montre un résumé “vide + conseil”
-  if (!user.hasAdvancedProfile) {
+
+  Widget _buildAdvancedFootballSection(AppUser user) {
+    // Si pas encore rempli, on montre un résumé “vide + conseil”
+    if (!user.hasAdvancedProfile) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -623,141 +619,141 @@ Widget _buildAdvancedFootballSection(AppUser user) {
           Text(
             user.isPlayer
                 ? 'Ajoute taille, poids, pied fort, positions, stats et disponibilité.'
-              : user.isClub
-                  ? 'Ajoute structure, catégories et besoins.'
-                  : user.isRecruiter
-                      ? 'Ajoute licence et zones.'
-                      : 'Complète les informations avancées.',
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
-  }
-
-  // ======================
-  // 👤 JOUEUR
-  // ======================
-  if (user.isPlayer) {
-    final p = user.playerProfile ?? {};
-
-    // ---- Physical
-    final physical = p['physical'] as Map<String, dynamic>? ?? {};
-    final height = physical['heightCm']?.toString();
-    final weight = physical['weightKg']?.toString();
-    final foot = physical['strongFoot']?.toString();
-
-    // ---- Positions & skills
-    final positions = (p['positions'] is List)
-        ? (p['positions'] as List).join(', ')
-        : null;
-
-    final skills = (p['skills'] is List)
-        ? (p['skills'] as List).join(', ')
-        : null;
-
-    // ---- Stats
-    final stats = p['stats'] as Map<String, dynamic>? ?? {};
-    final minutes = stats['minutes']?.toString();
-
-    // ---- Availability
-    final availability = p['availability'] as Map<String, dynamic>? ?? {};
-    final open = availability.containsKey('open')
-        ? (availability['open'] == true ? 'Oui' : 'Non')
-        : null;
-
-    final regions = (availability['regions'] is List)
-        ? (availability['regions'] as List).join(', ')
-        : null;
-
-    return Column(
-      children: [
-        _infoTile('Taille (cm)', height),
-        _infoTile('Poids (kg)', weight),
-        _infoTile('Pied fort', foot),
-        _infoTile('Positions (avancé)', positions),
-        _infoTile('Compétences', skills),
-        const Divider(),
-        _infoTile('Minutes jouées', minutes),
-        const Divider(),
-        _infoTile('Disponible', open),
-        _infoTile('Régions', regions),
-        const SizedBox(height: 6),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            user.hasScoutReadyProfile
-                ? '✅ Dossier scout prêt (Élite)'
-                : '🟡 Dossier scout partiel',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: user.hasScoutReadyProfile
-                  ? const Color(0xFF2E7D32)
-                  : Colors.orange,
-            ),
+                : user.isClub
+                    ? 'Ajoute structure, catégories et besoins.'
+                    : user.isRecruiter
+                        ? 'Ajoute licence et zones.'
+                        : 'Complète les informations avancées.',
+            style: const TextStyle(fontWeight: FontWeight.w600),
           ),
-        ),
-      ],
-    );
-  }
-
-  // ======================
-  // 🏟️ CLUB
-  // ======================
-  if (user.isClub) {
-    final c = user.clubProfile ?? {};
-
-    final structureType = c['structureType']?.toString();
-    final categories = (c['categories'] is List)
-        ? (c['categories'] as List).join(', ')
-        : null;
-
-    String? needsText;
-    final needs = c['needs'];
-    if (needs is List && needs.isNotEmpty) {
-      needsText = needs
-          .map((e) {
-            if (e is Map) {
-              final pos = e['position']?.toString() ?? '';
-              final prio = e['priority']?.toString() ?? '';
-              return prio.isNotEmpty ? '$pos ($prio)' : pos;
-            }
-            return e.toString();
-          })
-          .where((s) => s.trim().isNotEmpty)
-          .join(', ');
+        ],
+      );
     }
 
-    return Column(
-      children: [
-        _infoTile('Structure', structureType),
-        _infoTile('Catégories', categories),
-        _infoTile('Besoins', needsText),
-      ],
-    );
+    // ======================
+    // 👤 JOUEUR
+    // ======================
+    if (user.isPlayer) {
+      final p = user.playerProfile ?? {};
+
+      // ---- Physical
+      final physical = p['physical'] as Map<String, dynamic>? ?? {};
+      final height = physical['heightCm']?.toString();
+      final weight = physical['weightKg']?.toString();
+      final foot = physical['strongFoot']?.toString();
+
+      // ---- Positions & skills
+      final positions = (p['positions'] is List)
+          ? (p['positions'] as List).join(', ')
+          : null;
+
+      final skills = (p['skills'] is List)
+          ? (p['skills'] as List).join(', ')
+          : null;
+
+      // ---- Stats
+      final stats = p['stats'] as Map<String, dynamic>? ?? {};
+      final minutes = stats['minutes']?.toString();
+
+      // ---- Availability
+      final availability = p['availability'] as Map<String, dynamic>? ?? {};
+      final open = availability.containsKey('open')
+          ? (availability['open'] == true ? 'Oui' : 'Non')
+          : null;
+
+      final regions = (availability['regions'] is List)
+          ? (availability['regions'] as List).join(', ')
+          : null;
+
+      return Column(
+        children: [
+          _infoTile('Taille (cm)', height),
+          _infoTile('Poids (kg)', weight),
+          _infoTile('Pied fort', foot),
+          _infoTile('Positions (avancé)', positions),
+          _infoTile('Compétences', skills),
+          const Divider(),
+          _infoTile('Minutes jouées', minutes),
+          const Divider(),
+          _infoTile('Disponible', open),
+          _infoTile('Régions', regions),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              user.hasScoutReadyProfile
+                  ? '✅ Dossier scout prêt (Élite)'
+                  : '🟡 Dossier scout partiel',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: user.hasScoutReadyProfile
+                    ? const Color(0xFF2E7D32)
+                    : Colors.orange,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // ======================
+    // 🏟️ CLUB
+    // ======================
+    if (user.isClub) {
+      final c = user.clubProfile ?? {};
+
+      final structureType = c['structureType']?.toString();
+      final categories = (c['categories'] is List)
+          ? (c['categories'] as List).join(', ')
+          : null;
+
+      String? needsText;
+      final needs = c['needs'];
+      if (needs is List && needs.isNotEmpty) {
+        needsText = needs
+            .map((e) {
+              if (e is Map) {
+                final pos = e['position']?.toString() ?? '';
+                final prio = e['priority']?.toString() ?? '';
+                return prio.isNotEmpty ? '$pos ($prio)' : pos;
+              }
+              return e.toString();
+            })
+            .where((s) => s.trim().isNotEmpty)
+            .join(', ');
+      }
+
+      return Column(
+        children: [
+          _infoTile('Structure', structureType),
+          _infoTile('Catégories', categories),
+          _infoTile('Besoins', needsText),
+        ],
+      );
+    }
+
+    // ======================
+    // 🧑‍💼 AGENT / RECRUTEUR
+    // ======================
+    if (user.isRecruiter) {
+      final a = user.agentProfile ?? {};
+
+      final license = a['licenseNumber']?.toString();
+      final country = a['licenseCountry']?.toString();
+      final zones =
+          (a['zones'] is List) ? (a['zones'] as List).join(', ') : null;
+
+      return Column(
+        children: [
+          _infoTile('Licence', license),
+          _infoTile('Pays licence', country),
+          _infoTile('Zones', zones),
+        ],
+      );
+    }
+
+    return const Text('Aucun profil avancé pour ce rôle.');
   }
-
-  // ======================
-  // 🧑‍💼 AGENT / RECRUTEUR
-  // ======================
-  if (user.isRecruiter) {
-    final a = user.agentProfile ?? {};
-
-    final license = a['licenseNumber']?.toString();
-    final country = a['licenseCountry']?.toString();
-    final zones =
-        (a['zones'] is List) ? (a['zones'] as List).join(', ') : null;
-
-    return Column(
-      children: [
-        _infoTile('Licence', license),
-        _infoTile('Pays licence', country),
-        _infoTile('Zones', zones),
-      ],
-    );
-  }
-
-  return const Text('Aucun profil avancé pour ce rôle.');
-}
 
 
   Widget _buildEvidenceSection(AppUser user) {
@@ -825,11 +821,47 @@ Widget _buildAdvancedFootballSection(AppUser user) {
     return Column(children: tiles);
   }
 
-  Widget _infoTile(String label, String? value) {
-    return ListTile(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text(value?.isNotEmpty == true ? value! : 'Non spécifié'),
+  Widget _infoTile(String label, String? value, {IconData? icon}) {
+    final hasValue = value?.isNotEmpty == true;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: AdColors.surfaceCardAlt,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AdColors.divider),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, color: AdColors.brand, size: 20),
+            const SizedBox(width: 10),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  hasValue ? value! : 'Non spécifié',
+                  style: TextStyle(
+                    color: hasValue
+                        ? AdColors.onSurface
+                        : AdColors.onSurfaceMuted,
+                    fontWeight: hasValue ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -855,28 +887,148 @@ class _HeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _SectionCard(
-      title: 'Profil',
-      icon: Icons.person_outline,
+    final location = user.city ?? user.region ?? user.country;
+    final teamLabel =
+        user.team?.isNotEmpty == true ? user.team : user.clubActuel;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            AdColors.surfaceCardAlt,
+            AdColors.surfaceCard,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AdColors.divider),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 12,
+            offset: Offset(0, 6),
+          )
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Obx(
-            () => CircleAvatar(
-              radius: 60,
-              backgroundImage: user.photoProfil.isNotEmpty
-                  ? NetworkImage(user.photoProfil)
-                  : null,
-              child: profileController.isLoadingPhoto.value
-                  ? const CircularProgressIndicator()
-                  : null,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Obx(
+                () => CircleAvatar(
+                  radius: 48,
+                  backgroundColor: AdColors.surfaceCard,
+                  backgroundImage: user.photoProfil.isNotEmpty
+                      ? NetworkImage(user.photoProfil)
+                      : null,
+                  child: profileController.isLoadingPhoto.value
+                      ? const CircularProgressIndicator()
+                      : (user.photoProfil.isEmpty
+                          ? const Icon(Icons.person, size: 32)
+                          : null),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.nom,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      user.role.toUpperCase(),
+                      style: const TextStyle(
+                        color: AdColors.onSurfaceMuted,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _InfoPill(
+                          icon: Icons.military_tech_outlined,
+                          label: user.profileLevelLabel,
+                        ),
+                        if (user.age != null)
+                          _InfoPill(
+                            icon: Icons.cake_outlined,
+                            label: '${user.age} ans',
+                          ),
+                        if (teamLabel?.isNotEmpty == true)
+                          _InfoPill(
+                            icon: Icons.flag_outlined,
+                            label: teamLabel!,
+                          ),
+                        if (location?.isNotEmpty == true)
+                          _InfoPill(
+                            icon: Icons.place_outlined,
+                            label: location!,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              if (isOwnProfile && !isReadOnly)
+                TextButton.icon(
+                  onPressed: onChangePhoto,
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: const Text('Photo'),
+                ),
+            ],
           ),
-          if (isOwnProfile && !isReadOnly)
-            TextButton.icon(
-              onPressed: onChangePhoto,
-              icon: const Icon(Icons.camera_alt),
-              label: const Text('Changer la photo'),
+          if (user.languages != null && user.languages!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: user.languages!
+                  .map(
+                    (lang) => Chip(
+                      backgroundColor:
+                          AdColors.brand.withValues(alpha: 0.16),
+                      label: Text(
+                        lang,
+                        style: const TextStyle(
+                          color: AdColors.onSurface,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                      avatar: const Icon(
+                        Icons.language,
+                        size: 16,
+                        color: AdColors.brand,
+                      ),
+                    ),
+                  )
+                  .toList(),
             ),
+          ],
+          if (user.bio?.isNotEmpty == true) ...[
+            const SizedBox(height: 14),
+            Text(
+              user.bio!,
+              style: const TextStyle(
+                color: AdColors.onSurfaceMuted,
+                height: 1.4,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -931,14 +1083,29 @@ class _StatChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      child: Column(
-        children: [
-          Text(
-            '$value',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          Text(label),
-        ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AdColors.surfaceCardAlt,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AdColors.divider),
+        ),
+        child: Column(
+          children: [
+            Text(
+              '$value',
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(color: AdColors.onSurfaceMuted),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -981,29 +1148,72 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
+    return Container(
+      decoration: BoxDecoration(
+        color: AdColors.surfaceCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AdColors.divider),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: AdColors.brand),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            child,
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  final String label;
+  final IconData icon;
+
+  const _InfoPill({
+    required this.label,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AdColors.surfaceCard,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AdColors.divider),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: AdColors.brand),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ],
       ),
     );
   }
