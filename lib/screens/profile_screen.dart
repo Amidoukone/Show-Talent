@@ -397,7 +397,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black87,
-      barrierLabel: 'Fermer la photo de profil',
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
         return GestureDetector(
