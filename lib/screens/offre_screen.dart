@@ -28,7 +28,7 @@ class _OffreScreenState extends State<OffreScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   String _selectedStatus = 'tous';
-  String _selectedRole = 'tous';
+  final String _selectedRole = 'tous';
   String _sort = 'recentes';
 
   /// ✅ Anti-spam : on ne compte qu'une vue par offre / session
