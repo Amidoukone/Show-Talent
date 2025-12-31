@@ -577,4 +577,26 @@ class ProfileController extends GetxController {
     final current = FirebaseAuth.instance.currentUser?.uid;
     return current != null && current == user?.uid;
   }
+
+  /// Met à jour localement la liste des abonnés pour un affichage immédiat.
+  /// Utilisé pour rendre l'UI réactive avant la confirmation Firestore.
+  void applyLocalFollowerChange({
+    required String currentUserId,
+    required bool shouldFollow,
+  }) {
+    if (user == null) return;
+
+    final followers = user!.followersList;
+    final alreadyFollowing = followers.contains(currentUserId);
+
+    if (shouldFollow && !alreadyFollowing) {
+      followers.add(currentUserId);
+      user!.followers = user!.followers + 1;
+    } else if (!shouldFollow && alreadyFollowing) {
+      followers.remove(currentUserId);
+      user!.followers = (user!.followers - 1).clamp(0, double.maxFinite).toInt();
+    }
+
+    update();
+  }
 }
