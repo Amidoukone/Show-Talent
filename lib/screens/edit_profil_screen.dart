@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -390,11 +391,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     return Scaffold(
       backgroundColor: kSurface,
-      appBar: AppBar(
-        title: const Text('Modifier le profil'),
-        backgroundColor: kPrimary,
-        elevation: 1,
-        centerTitle: true,
+      appBar: const AdAppBar(
+        title: 'Modifier le profil',
       ),
       body: Theme(
         data: Theme.of(context).copyWith(

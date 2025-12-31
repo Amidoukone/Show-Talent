@@ -119,11 +119,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return Scaffold(
           backgroundColor: kSurface,
           appBar: AppBar(
-            backgroundColor: kPrimary,
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            foregroundColor: Theme.of(context).colorScheme.onSurface,
+            centerTitle: true,
+            elevation: 0,
             title: Text(
               user.nom.isNotEmpty ? user.nom : 'Profil',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
             ),
-            centerTitle: true,
             actions: [
               if (isOwnProfile && !widget.isReadOnly)
                 IconButton(
@@ -643,13 +651,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final foot = physical['strongFoot']?.toString();
 
       // ---- Positions & skills
-      final positions = (p['positions'] is List)
-          ? (p['positions'] as List).join(', ')
-          : null;
+      final positions =
+          (p['positions'] is List) ? (p['positions'] as List).join(', ') : null;
 
-      final skills = (p['skills'] is List)
-          ? (p['skills'] as List).join(', ')
-          : null;
+      final skills =
+          (p['skills'] is List) ? (p['skills'] as List).join(', ') : null;
 
       // ---- Stats
       final stats = p['stats'] as Map<String, dynamic>? ?? {};
@@ -755,7 +761,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return const Text('Aucun profil avancé pour ce rôle.');
   }
 
-
   Widget _buildEvidenceSection(AppUser user) {
     final tiles = <Widget>[];
     // CV joueur
@@ -851,9 +856,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Text(
                   hasValue ? value! : 'Non spécifié',
                   style: TextStyle(
-                    color: hasValue
-                        ? AdColors.onSurface
-                        : AdColors.onSurfaceMuted,
+                    color:
+                        hasValue ? AdColors.onSurface : AdColors.onSurfaceMuted,
                     fontWeight: hasValue ? FontWeight.w600 : FontWeight.w500,
                   ),
                 ),
@@ -891,31 +895,30 @@ class _HeaderCard extends StatelessWidget {
     final teamLabel =
         user.team?.isNotEmpty == true ? user.team : user.clubActuel;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [
-            AdColors.surfaceCardAlt,
-            AdColors.surfaceCard,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AdColors.divider),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 12,
-            offset: Offset(0, 6),
-          )
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Stack(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                AdColors.surfaceCardAlt,
+                AdColors.surfaceCard,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AdColors.divider),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 12,
+                offset: Offset(0, 6),
+              )
+            ],
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Obx(
@@ -939,6 +942,8 @@ class _HeaderCard extends StatelessWidget {
                   children: [
                     Text(
                       user.nom,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
@@ -982,55 +987,23 @@ class _HeaderCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (isOwnProfile && !isReadOnly)
-                TextButton.icon(
-                  onPressed: onChangePhoto,
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('Photo'),
-                ),
             ],
           ),
-          if (user.languages != null && user.languages!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: user.languages!
-                  .map(
-                    (lang) => Chip(
-                      backgroundColor:
-                          AdColors.brand.withValues(alpha: 0.16),
-                      label: Text(
-                        lang,
-                        style: const TextStyle(
-                          color: AdColors.onSurface,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                      avatar: const Icon(
-                        Icons.language,
-                        size: 16,
-                        color: AdColors.brand,
-                      ),
-                    ),
-                  )
-                  .toList(),
+        ),
+
+        // 🎯 Bouton Photo – positionné proprement, sans overflow
+        if (isOwnProfile && !isReadOnly)
+          Positioned(
+            top: 10,
+            right: 10,
+            child: IconButton(
+              tooltip: 'Changer la photo',
+              icon: const Icon(Icons.camera_alt_outlined),
+              color: AdColors.brand,
+              onPressed: onChangePhoto,
             ),
-          ],
-          if (user.bio?.isNotEmpty == true) ...[
-            const SizedBox(height: 14),
-            Text(
-              user.bio!,
-              style: const TextStyle(
-                color: AdColors.onSurfaceMuted,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
