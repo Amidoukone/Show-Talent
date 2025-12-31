@@ -42,6 +42,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   static const kDanger = AdColors.error;
   static const kSurface = AdColors.surface;
 
+  bool _isFollowActionLoading = false;
+
   late final ProfileController _profileController;
   final AuthController _authController = Get.find<AuthController>();
   final FollowController _followController = Get.find<FollowController>();
@@ -165,6 +167,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         user: user,
                         isOwnProfile: isOwnProfile,
                         isReadOnly: widget.isReadOnly,
+                        onViewPhoto: () =>
+                            _showFullProfilePhoto(user.photoProfil, user.uid),
                         onChangePhoto: () => _changeProfilePhoto(user.uid),
                         profileController: _profileController,
                       ),
@@ -386,6 +390,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _showFullProfilePhoto(String photoUrl, String uid) {
+    if (photoUrl.isEmpty) return;
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierColor: Colors.black87,
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return GestureDetector(
+          onTap: () => Navigator.of(context).pop(),
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: Center(
+              child: Hero(
+                tag: 'profile-photo-$uid',
+                child: InteractiveViewer(
+                  minScale: 0.8,
+                  maxScale: 4,
+                  child: Image.network(
+                    photoUrl,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _changeProfilePhoto(String uid) async {
     final file = await _imagePicker.pickImage(
       source: ImageSource.gallery,
@@ -539,21 +575,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: isFollowing ? kDanger : kAccent,
             ),
-            onPressed: () async {
-              final ok = isFollowing
-                  ? await _followController.unfollowUser(
-                      currentUserId, user.uid)
-                  : await _followController.followUser(currentUserId, user.uid);
+            onPressed: _isFollowActionLoading
+                ? null
+                : () async {
+                    setState(() => _isFollowActionLoading = true);
 
-              if (!ok) {
-                Get.snackbar(
-                  'Erreur',
-                  'Action impossible.',
-                  backgroundColor: kDanger,
-                  colorText: Colors.white,
-                );
-              }
-            },
+                    // Optimiste : mise à jour immédiate du profil consulté
+                    _profileController.applyLocalFollowerChange(
+                      currentUserId: currentUserId,
+                      shouldFollow: !isFollowing,
+                    );
+
+                    final ok = isFollowing
+                        ? await _followController.unfollowUser(
+                            currentUserId, user.uid)
+                        : await _followController.followUser(
+                            currentUserId, user.uid);
+
+                    if (!ok) {
+                      // Rollback
+                      _profileController.applyLocalFollowerChange(
+                        currentUserId: currentUserId,
+                        shouldFollow: isFollowing,
+                      );
+
+                      Get.snackbar(
+                        'Erreur',
+                        'Action impossible.',
+                        backgroundColor: kDanger,
+                        colorText: Colors.white,
+                      );
+                    }
+
+                    if (mounted) {
+                      setState(() => _isFollowActionLoading = false);
+                    }
+                  },
           ),
         ),
         const SizedBox(width: 12),
@@ -878,6 +935,7 @@ class _HeaderCard extends StatelessWidget {
   final AppUser user;
   final bool isOwnProfile;
   final bool isReadOnly;
+  final VoidCallback onViewPhoto;
   final VoidCallback onChangePhoto;
   final ProfileController profileController;
 
@@ -885,6 +943,7 @@ class _HeaderCard extends StatelessWidget {
     required this.user,
     required this.isOwnProfile,
     required this.isReadOnly,
+    required this.onViewPhoto,
     required this.onChangePhoto,
     required this.profileController,
   });
@@ -922,17 +981,23 @@ class _HeaderCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Obx(
-                () => CircleAvatar(
-                  radius: 48,
-                  backgroundColor: AdColors.surfaceCard,
-                  backgroundImage: user.photoProfil.isNotEmpty
-                      ? NetworkImage(user.photoProfil)
-                      : null,
-                  child: profileController.isLoadingPhoto.value
-                      ? const CircularProgressIndicator()
-                      : (user.photoProfil.isEmpty
-                          ? const Icon(Icons.person, size: 32)
-                          : null),
+                () => GestureDetector(
+                  onTap: user.photoProfil.isNotEmpty ? onViewPhoto : null,
+                  child: Hero(
+                    tag: 'profile-photo-${user.uid}',
+                    child: CircleAvatar(
+                      radius: 48,
+                      backgroundColor: AdColors.surfaceCard,
+                      backgroundImage: user.photoProfil.isNotEmpty
+                          ? NetworkImage(user.photoProfil)
+                          : null,
+                      child: profileController.isLoadingPhoto.value
+                          ? const CircularProgressIndicator()
+                          : (user.photoProfil.isEmpty
+                              ? const Icon(Icons.person, size: 32)
+                              : null),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 14),
