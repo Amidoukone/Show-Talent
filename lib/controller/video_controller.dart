@@ -1,52 +1,113 @@
 import 'dart:async';
-import 'package:cached_video_player_plus/cached_video_player_plus.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
+import '../models/action_response.dart';
 import '../models/video.dart';
+import '../services/feature_flag_service.dart';
 import '../widgets/video_manager.dart';
+import '../screens/success_toast.dart';
+import 'user_controller.dart';
 
 class VideoController extends GetxController {
   final String contextKey;
 
   VideoController({required this.contextKey});
 
-  // Etat UI
+  // ------------------------------------------------------------------
+  //                            UI STATE
+  // ------------------------------------------------------------------
+
   final videoList = <Video>[].obs;
   final currentIndex = 0.obs;
 
-  // Pagination
+  // ------------------------------------------------------------------
+  //                          PAGINATION
+  // ------------------------------------------------------------------
+
   DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
   bool _hasMore = true;
   bool _isLoading = false;
   static const int _limit = 10;
 
-  // Accès VideoManager
-  final VideoManager _videoManager = VideoManager();
-  VideoManager get videoManager => _videoManager;
-
   bool get hasMore => _hasMore;
   bool get isLoading => _isLoading;
 
-  // Verrou de fetch
-  Completer<void>? _fetchLock;
+  // ------------------------------------------------------------------
+  //                       VIDEO MANAGER
+  // ------------------------------------------------------------------
 
-  // Ecoutes/temporisations
+  final VideoManager _videoManager = VideoManager();
+  VideoManager get videoManager => _videoManager;
+
+  // ------------------------------------------------------------------
+  //                    FEATURE FLAGS (ADAPTIVE / HLS)
+  // ------------------------------------------------------------------
+
+  bool _adaptivePlaybackEnabled = false;
+  bool _hlsPlaybackEnabled = false;
+
+  bool get adaptivePlaybackEnabled => _adaptivePlaybackEnabled;
+  bool get hlsPlaybackEnabled => _hlsPlaybackEnabled;
+
+  Future<void> _initFeatureFlags() async {
+    try {
+      final uid = Get.isRegistered<UserController>()
+          ? Get.find<UserController>().user?.uid
+          : null;
+
+      final service = FeatureFlagService();
+      await service.fetchConfig();
+
+      _adaptivePlaybackEnabled = service.isEnabledForUser(uid);
+      _hlsPlaybackEnabled = service.useHlsForUser(uid);
+
+      _videoManager.updateAdaptiveFlag(_adaptivePlaybackEnabled);
+    } catch (e) {
+      debugPrint('❌ Feature flag load error: $e');
+      _adaptivePlaybackEnabled = false;
+      _hlsPlaybackEnabled = false;
+      _videoManager.updateAdaptiveFlag(false);
+    }
+  }
+
+  // ------------------------------------------------------------------
+  //                 CLOUD FUNCTIONS / CONNECTIVITY
+  // ------------------------------------------------------------------
+
+  final FirebaseFunctions _functions =
+      FirebaseFunctions.instanceFor(region: 'europe-west1');
+  final Connectivity _connectivity = Connectivity();
+
+  // ------------------------------------------------------------------
+  //                       INTERNAL LOCKS
+  // ------------------------------------------------------------------
+
+  Completer<void>? _fetchLock;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _videoSubscription;
   Timer? _streamDebouncer;
   Timer? _indexDebouncer;
+
+  // ------------------------------------------------------------------
+  //                           LIFECYCLE
+  // ------------------------------------------------------------------
 
   @override
   void onInit() {
     super.onInit();
 
-    // Throttle sur le changement d'index
+    unawaited(_initFeatureFlags());
+
     ever<int>(currentIndex, (idx) {
       _indexDebouncer?.cancel();
-      _indexDebouncer = Timer(const Duration(milliseconds: 200), () {
-        _onCurrentIndexChangedThrottled(idx);
-      });
+      _indexDebouncer = Timer(
+        const Duration(milliseconds: 200),
+        () => _onCurrentIndexChangedThrottled(idx),
+      );
     });
 
     listenToVideos();
@@ -61,7 +122,10 @@ class VideoController extends GetxController {
     super.onClose();
   }
 
-  /// Écoute temps réel Firestore des vidéos prêtes
+  // ------------------------------------------------------------------
+  //                     FIRESTORE STREAM (LIVE)
+  // ------------------------------------------------------------------
+
   void listenToVideos() {
     _videoSubscription?.cancel();
     _videoSubscription = FirebaseFirestore.instance
@@ -74,17 +138,16 @@ class VideoController extends GetxController {
       _streamDebouncer = Timer(const Duration(milliseconds: 120), () {
         try {
           final incoming = snapshot.docs
-              .map((doc) => Video.fromDoc(doc))
+              .map(Video.fromDoc)
               .where((v) => v.videoUrl.isNotEmpty)
               .toList();
 
-          // Fusion par ID pour préserver les éléments déjà présents
           final byId = {for (final v in videoList) v.id: v};
           for (final v in incoming) {
             byId[v.id] = v;
           }
-          videoList.value = incoming.map((v) => byId[v.id]!).toList();
 
+          videoList.value = incoming.map((v) => byId[v.id]!).toList();
           _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
           _hasMore = snapshot.docs.length >= _limit;
         } catch (e) {
@@ -96,7 +159,10 @@ class VideoController extends GetxController {
     });
   }
 
-  /// Récupération paginée
+  // ------------------------------------------------------------------
+  //                        PAGINATED FETCH
+  // ------------------------------------------------------------------
+
   Future<bool> fetchPaginatedVideos({bool isRefresh = false}) async {
     if (_isLoading || !_hasMore || (_fetchLock?.isCompleted == false)) {
       return false;
@@ -124,7 +190,7 @@ class VideoController extends GetxController {
       }
 
       final fetched = snap.docs
-          .map((d) => Video.fromDoc(d))
+          .map(Video.fromDoc)
           .where((v) => v.videoUrl.isNotEmpty)
           .toList();
 
@@ -132,8 +198,9 @@ class VideoController extends GetxController {
         videoList.assignAll(fetched);
       } else {
         final currentIds = videoList.map((v) => v.id).toSet();
-        final unique = fetched.where((v) => !currentIds.contains(v.id)).toList();
-        videoList.addAll(unique);
+        videoList.addAll(
+          fetched.where((v) => !currentIds.contains(v.id)),
+        );
       }
 
       if (isRefresh && videoList.isNotEmpty) {
@@ -154,7 +221,10 @@ class VideoController extends GetxController {
     }
   }
 
-  /// Force un rechargement complet
+  // ------------------------------------------------------------------
+  //                         FULL REFRESH (RESTORED ✅)
+  // ------------------------------------------------------------------
+
   Future<bool> refreshVideos() async {
     try {
       await videoManager.disposeAllForContext(contextKey);
@@ -168,114 +238,144 @@ class VideoController extends GetxController {
     }
   }
 
-  /// Prépare la lecture de la première vidéo + précharge voisins
+  // ------------------------------------------------------------------
+  //                   INITIAL PLAYBACK SETUP
+  // ------------------------------------------------------------------
+
   Future<void> _setupInitialPlayback() async {
+    if (videoList.isEmpty) return;
+
     currentIndex.value = 0;
-    final urls = videoList.map((v) => v.videoUrl).toList();
-    final firstUrl = urls.first;
+    final videos = videoList.toList();
+    final first = videos.first;
+    final firstUrl = first.videoUrl;
 
     await videoManager.disposeAllForContext(contextKey);
 
     await videoManager.initializeController(
       contextKey,
       firstUrl,
+      sources: first.sources,
+      useHls: _hlsPlaybackEnabled && first.hasHlsSource,
       autoPlay: true,
       activeUrl: firstUrl,
     );
 
     await videoManager.pauseAllExcept(contextKey, firstUrl);
-    videoManager.preloadSurrounding(contextKey, urls, 0, activeUrl: firstUrl);
 
-    // Précharge léger (ajuste selon réseau si besoin)
-    const preloadCount = 3;
-    for (int i = 1; i < preloadCount && i < urls.length; i++) {
-      unawaited(
-        videoManager.initializeController(
-          contextKey,
-          urls[i],
-          isPreload: true,
-          activeUrl: firstUrl,
-        ),
-      );
-    }
+    videoManager.preloadSurrounding(
+      contextKey,
+      videos,
+      0,
+      activeUrl: firstUrl,
+      useHls: _hlsPlaybackEnabled,
+    );
   }
 
-  /// Throttle du changement d'index
+  // ------------------------------------------------------------------
+  //                  INDEX CHANGE (THROTTLED)
+  // ------------------------------------------------------------------
+
   Future<void> _onCurrentIndexChangedThrottled(int index) async {
-    if (index < 0 || index >= videoList.length) return;
+    final videos = videoList.toList();
+    if (index < 0 || index >= videos.length) return;
 
-    final url = videoList[index].videoUrl;
-    final urls = videoList.map((v) => v.videoUrl).toList();
-    await _processVideoPlaybackChange(urls, index, url);
+    final activeVideo = videos[index];
+    final activeUrl = activeVideo.videoUrl;
 
-    // Trigger pagination en avance
+    await videoManager.pauseAllExcept(contextKey, activeUrl);
+
+    videoManager.preloadSurrounding(
+      contextKey,
+      videos,
+      index,
+      activeUrl: activeUrl,
+      useHls: _hlsPlaybackEnabled,
+    );
+
     if (index >= videoList.length - 2 && hasMore && !_isLoading) {
       unawaited(fetchPaginatedVideos());
-    }
-  }
-
-  /// Applique la lecture pour l'URL active + préchargement
-  Future<void> _processVideoPlaybackChange(
-    List<String> urls,
-    int idx,
-    String activeUrl,
-  ) async {
-    await videoManager.pauseAllExcept(contextKey, activeUrl);
-    videoManager.preloadSurrounding(contextKey, urls, idx, activeUrl: activeUrl);
-
-    CachedVideoPlayerPlus? player =
-        videoManager.getController(contextKey, activeUrl);
-    final ctrl = player?.controller;
-
-    if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
-      try {
-        await videoManager.initializeController(
-          contextKey,
-          activeUrl,
-          autoPlay: false,
-          activeUrl: activeUrl,
-        );
-      } catch (e) {
-        debugPrint('❌ Error init controller (indexChanged): $e');
-      }
     }
   }
 
   Future<void> pauseAll() => videoManager.pauseAll(contextKey);
 
   // ------------------------------------------------------------------
-  //                        FIRESTORE MUTATIONS
+  //                  ACTIONS VIA CLOUD FUNCTIONS
   // ------------------------------------------------------------------
 
-  /// Toggle like via transaction (atomique)
-  Future<bool> likeVideo(String videoId, String userId) async {
-    try {
-      final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
-      return await FirebaseFirestore.instance.runTransaction<bool>((tx) async {
-        final snap = await tx.get(ref);
-        if (!snap.exists) return false;
+  Future<ActionResponse> likeVideo(String videoId, String userId) async {
+    final response = await _callAction(
+      'likeVideo',
+      {'videoId': videoId},
+      offlineMessage: 'Impossible de liker hors connexion.',
+    );
 
-        final data = snap.data() ?? {};
-        final List<dynamic> likesDyn = (data['likes'] ?? []) as List<dynamic>;
-        final likes = likesDyn.map((e) => e.toString()).toList();
-
-        final hasLiked = likes.contains(userId);
-        tx.update(ref, hasLiked
-            ? {'likes': FieldValue.arrayRemove([userId])}
-            : {'likes': FieldValue.arrayUnion([userId])});
-        return true;
-      });
-    } catch (e) {
-      debugPrint('❌ likeVideo error: $e');
-      return false;
+    if (response.success) {
+      final liked = response.data?['liked'] == true;
+      _applyLikeState(videoId, userId, liked);
+    } else {
+      _restoreFromStreamSoon(videoId);
+      response.showToast();
     }
+
+    return response;
   }
 
-  /// Incrémente le partage (pas besoin d’unicité)
+  Future<ActionResponse> signalerVideo(String videoId, String userId) async {
+    final response = await _callAction(
+      'reportVideo',
+      {'videoId': videoId},
+      offlineMessage: 'Connexion requise pour signaler.',
+    );
+
+    final toastLevel = response.code == 'already_reported'
+        ? ToastLevel.info
+        : (response.success ? ToastLevel.success : ToastLevel.error);
+
+    final resolved = response.copyWith(toast: toastLevel);
+
+    if (resolved.success) {
+      _applyReportState(
+        videoId,
+        userId,
+        resolved.data?['reportCount'] as int?,
+      );
+    }
+
+    resolved.showToast(includeSuccess: true);
+    return resolved;
+  }
+
+  Future<ActionResponse> deleteVideo(String videoId) async {
+    final response = await _callAction(
+      'deleteVideo',
+      {'videoId': videoId},
+      offlineMessage: 'Connexion requise pour supprimer cette vidéo.',
+    );
+
+    if (response.success) {
+      await videoManager.pauseAll(contextKey);
+      videoList.removeWhere((v) => v.id == videoId);
+      videoList.refresh();
+      showSuccessToast(response.message);
+    } else {
+      response.showToast();
+    }
+
+    return response;
+  }
+
+  // ------------------------------------------------------------------
+  //               SHARE (RESTORED – Firestore direct ✅)
+  // ------------------------------------------------------------------
+
   Future<bool> partagerVideo(String videoId) async {
     try {
-      final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
-      await ref.update({'shareCount': FieldValue.increment(1)});
+      await FirebaseFirestore.instance
+          .collection('videos')
+          .doc(videoId)
+          .update({'shareCount': FieldValue.increment(1)});
       return true;
     } catch (e) {
       debugPrint('❌ partagerVideo error: $e');
@@ -283,42 +383,90 @@ class VideoController extends GetxController {
     }
   }
 
-  /// Signaler la vidéo : n'incrémente que si l'utilisateur n'a pas déjà signalé
-  Future<bool> signalerVideo(String videoId, String userId) async {
+  // ------------------------------------------------------------------
+  //                          HELPERS
+  // ------------------------------------------------------------------
+
+  Future<ActionResponse> _callAction(
+    String functionName,
+    Map<String, dynamic> payload, {
+    String? offlineMessage,
+  }) async {
     try {
-      final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
-      return await FirebaseFirestore.instance.runTransaction<bool>((tx) async {
-        final snap = await tx.get(ref);
-        if (!snap.exists) return false;
+      if (await _isOffline()) {
+        return ActionResponse.offline(offlineMessage);
+      }
 
-        final data = snap.data() ?? {};
-        final List<dynamic> reportsDyn = (data['reports'] ?? []) as List<dynamic>;
-        final reports = reportsDyn.map((e) => e.toString()).toList();
+      final callable = _functions.httpsCallable(
+        functionName,
+        options: HttpsCallableOptions(
+          timeout: const Duration(seconds: 10),
+        ),
+      );
 
-        if (reports.contains(userId)) return false;
-
-        tx.update(ref, {
-          'reports': FieldValue.arrayUnion([userId]),
-          'reportCount': FieldValue.increment(1),
-        });
-        return true;
-      });
+      final result = await callable.call<Map<String, dynamic>>(payload);
+      return ActionResponse.fromMap(result.data);
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint('❌ $functionName error: ${e.code} ${e.message}');
+      return ActionResponse.failure(
+        message: e.message ?? 'Action impossible.',
+        code: e.code,
+        retriable: e.code == 'unavailable',
+      );
     } catch (e) {
-      debugPrint('❌ signalerVideo error: $e');
+      debugPrint('❌ $functionName unknown error: $e');
+      return ActionResponse.failure(
+        message: 'Action impossible pour le moment.',
+        retriable: true,
+      );
+    }
+  }
+
+  Future<bool> _isOffline() async {
+    try {
+      final res = await _connectivity.checkConnectivity();
+      return res.contains(ConnectivityResult.none);
+    } catch (_) {
       return false;
     }
   }
 
-  /// Supprime une vidéo
-  Future<bool> deleteVideo(String videoId) async {
-    try {
-      await videoManager.pauseAll(contextKey);
-      await FirebaseFirestore.instance.collection('videos').doc(videoId).delete();
-      videoList.removeWhere((v) => v.id == videoId);
-      return true;
-    } catch (e) {
-      debugPrint('❌ deleteVideo error: $e');
-      return false;
+  void _applyLikeState(String videoId, String userId, bool liked) {
+    final idx = videoList.indexWhere((v) => v.id == videoId);
+    if (idx == -1) return;
+
+    final video = videoList[idx];
+    video.likes.remove(userId);
+    if (liked) video.likes.add(userId);
+
+    videoList[idx] = video;
+    videoList.refresh();
+  }
+
+  void _applyReportState(
+    String videoId,
+    String userId,
+    int? reportCount,
+  ) {
+    final idx = videoList.indexWhere((v) => v.id == videoId);
+    if (idx == -1) return;
+
+    final video = videoList[idx];
+    if (!video.reports.contains(userId)) {
+      video.reports.add(userId);
     }
+    if (reportCount != null) {
+      video.reportCount = reportCount;
+    }
+
+    videoList[idx] = video;
+    videoList.refresh();
+  }
+
+  void _restoreFromStreamSoon(String videoId) {
+    Future.delayed(const Duration(milliseconds: 400), () {
+      final idx = videoList.indexWhere((v) => v.id == videoId);
+      if (idx != -1) videoList.refresh();
+    });
   }
 }
