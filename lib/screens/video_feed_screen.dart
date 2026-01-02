@@ -1,8 +1,11 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 
@@ -20,10 +23,13 @@ class VideoFeedScreen extends StatefulWidget {
   State<VideoFeedScreen> createState() => _VideoFeedScreenState();
 }
 
-class _VideoFeedScreenState extends State<VideoFeedScreen> with WidgetsBindingObserver {
+class _VideoFeedScreenState extends State<VideoFeedScreen>
+    with WidgetsBindingObserver {
   late final PageController _pageController;
   late final VideoController videoController;
+
   final VideoManager videoManager = VideoManager();
+  late final VideoFocusOrchestrator _focusOrchestrator;
 
   int _currentIndex = 0;
   bool _isActive = true;
@@ -35,15 +41,29 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> with WidgetsBindingOb
 
     _pageController = PageController(initialPage: 0);
 
+    // ✅ GetX controller (taggé par contextKey)
     if (!Get.isRegistered<VideoController>(tag: widget.contextKey)) {
-      Get.put(VideoController(contextKey: widget.contextKey), tag: widget.contextKey, permanent: true);
+      Get.put(
+        VideoController(contextKey: widget.contextKey),
+        tag: widget.contextKey,
+        permanent: true,
+      );
     }
+
     videoController = Get.find<VideoController>(tag: widget.contextKey);
     videoController.videoList.assignAll(widget.videos);
     videoController.currentIndex.value = 0;
 
+    // ✅ Orchestrateur de focus (préload/pause/dispose window)
+    _focusOrchestrator = VideoFocusOrchestrator(
+      contextKey: widget.contextKey,
+      videoManager: videoManager,
+      urls: _currentUrls,
+      disposeWindow: 20,
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _handlePageChanged(0);
+      unawaited(_handlePageChanged(0));
     });
   }
 
@@ -51,13 +71,16 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> with WidgetsBindingOb
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
-    unawaited(videoManager.disposeAllForContext(widget.contextKey));
+
+    // ✅ Un seul point de sortie (pause + dispose contexte)
+    unawaited(_focusOrchestrator.onDispose());
+
     super.dispose();
   }
 
   @override
   void deactivate() {
-    _pauseAllVideos();
+    unawaited(_pauseAllVideos());
     super.deactivate();
   }
 
@@ -67,10 +90,10 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> with WidgetsBindingOb
 
     if (_isActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _handlePageChanged(_currentIndex);
+        unawaited(_handlePageChanged(_currentIndex));
       });
     } else {
-      _pauseAllVideos();
+      unawaited(_pauseAllVideos());
     }
   }
 
@@ -84,53 +107,18 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> with WidgetsBindingOb
     final videos = videoController.videoList;
     if (index < 0 || index >= videos.length) return;
 
-    final url = videos[index].videoUrl;
+    _currentIndex = index;
     videoController.currentIndex.value = index;
 
-    final urls = videos.map((v) => v.videoUrl).toList();
-    videoManager.preloadSurrounding(widget.contextKey, urls, index, activeUrl: url);
-    await videoManager.pauseAllExcept(widget.contextKey, url);
+    // ✅ Assure que l’orchestrateur a la liste à jour
+    _focusOrchestrator.updateUrls(_currentUrls);
 
-    final player = videoManager.getController(widget.contextKey, url);
-    final ctrl = player?.controller;
-
-    if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
-      try {
-        await videoManager.initializeController(
-          widget.contextKey,
-          url,
-          autoPlay: true,
-          activeUrl: url,
-        );
-      } catch (e) {
-        debugPrint('❌ Erreur init contrôleur (video_feed): $e');
-      }
-    } else if (!ctrl.value.isPlaying) {
-      try {
-        await ctrl.play();
-      } catch (_) {}
-    }
-
-    _disposeFarPlayers(index);
+    // ✅ Orchestration centralisée (préload/pause/init/play/dispose window)
+    await _focusOrchestrator.onIndexChanged(index);
   }
 
-  Future<void> _disposeFarPlayers(int currentIndex) async {
-    const disposeWindow = 20;
-    final videos = videoController.videoList;
-    final urls = videos.map((v) => v.videoUrl).toList();
-
-    if (videos.length <= disposeWindow) return;
-
-    final start = (currentIndex - disposeWindow ~/ 2).clamp(0, videos.length);
-    final end = (start + disposeWindow).clamp(0, videos.length);
-    final keepUrls = videos.sublist(start, end).map((v) => v.videoUrl).toSet();
-    final allUrls = urls.toSet();
-    final toDispose = allUrls.difference(keepUrls).toList();
-
-    if (toDispose.isNotEmpty) {
-      await videoManager.disposeUrls(widget.contextKey, toDispose);
-    }
-  }
+  List<String> get _currentUrls =>
+      videoController.videoList.map((v) => v.videoUrl).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -144,11 +132,12 @@ class _VideoFeedScreenState extends State<VideoFeedScreen> with WidgetsBindingOb
         itemCount: videos.length,
         onPageChanged: (index) {
           _currentIndex = index;
-          _handlePageChanged(index);
+          unawaited(_handlePageChanged(index));
         },
         itemBuilder: (context, index) {
           final video = videos[index];
-          final player = videoManager.getController(widget.contextKey, video.videoUrl);
+          final player =
+              videoManager.getController(widget.contextKey, video.videoUrl);
 
           return SmartVideoPlayer(
             key: ValueKey(video.id),

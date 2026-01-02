@@ -1,19 +1,25 @@
 /* eslint-disable linebreak-style */
 /* eslint-disable max-len */
 /* eslint-disable comma-dangle */
-import {pubsub} from "firebase-functions/v1";
+
+import {onSchedule} from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
 import postmark from "postmark";
 
-// ✅ Import centralisé depuis firebase.ts
+// ✅ Import Firebase centralisé (inchangé)
 import {db, auth} from "./firebase";
 
 /**
  * Rappel d’email de vérification après 3 jours si non vérifié
  */
-export const sendVerificationReminder = pubsub
-  .schedule("every 24 hours")
-  .onRun(async () => {
+export const sendVerificationReminder = onSchedule(
+  {
+    schedule: "every 24 hours",
+    region: "europe-west1",
+    timeZone: "UTC",
+    memory: "256MiB",
+  },
+  async () => {
     const apiKey = process.env.POSTMARK_API_KEY || process.env.postmark_apikey;
 
     if (!apiKey) {
@@ -67,4 +73,5 @@ export const sendVerificationReminder = pubsub
     } catch (error) {
       logger.error("❌ Erreur lors des rappels de vérification :", error);
     }
-  });
+  }
+);

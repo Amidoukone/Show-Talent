@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:video_player/video_player.dart';
+
+import '../services/client_logger.dart';
 
 /// ============================================================================
 /// VideoTools
@@ -15,10 +16,9 @@ import 'package:video_player/video_player.dart';
 ///   sélection du MIN obtenu, re-sondage avec délais, tolérance ms.
 /// - ✅ Génération de miniature fiable, avec retry et fallback (asset local).
 /// - 🚫 Compression côté client retirée (la Cloud Function optimise).
-/// - 📝 Logging (Firestore) pour diagnostiquer en prod.
+/// - 📝 Logging centralisé via Cloud Function (ClientLogger).
 /// ============================================================================
 class VideoTools {
-  static const String _logCollection = 'video_logs';
   static const String _fallbackAssetPath = 'assets/default_thumbnail.png';
 
   // Tolérance (en ms) pour absorber les imprécisions de métadonnées
@@ -43,7 +43,10 @@ class VideoTools {
     try {
       final inputFile = File(inputPath);
       if (!await inputFile.exists()) {
-        await _logInfo("generateThumbnail", "Input not found → fallback. path=$inputPath");
+        await _logInfo(
+          "generateThumbnail",
+          "Input not found → fallback. path=$inputPath",
+        );
         return await generateFallbackThumbnail();
       }
 
@@ -75,7 +78,9 @@ class VideoTools {
     try {
       final byteData = await rootBundle.load(_fallbackAssetPath);
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/fallback_${DateTime.now().millisecondsSinceEpoch}.png');
+      final file = File(
+        '${dir.path}/fallback_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
       await file.writeAsBytes(byteData.buffer.asUint8List());
       return file;
     } catch (e) {
@@ -110,8 +115,7 @@ class VideoTools {
         return ok;
       }
 
-      // En cas d'impossibilité de lire les dimensions (certains devices ne renvoient
-      // pas les métadonnées), on ne bloque pas l'utilisateur mais on trace l'événement.
+      // Métadonnées absentes → on n’empêche pas l’upload
       await _logInfo(
         "isQualityAcceptable",
         "Missing width/height after probes → allow upload.",
@@ -124,20 +128,22 @@ class VideoTools {
   }
 
   /// Vérifie que la durée <= [maxDuration] secondes.
-  static Future<bool> isDurationValid(String videoPath, {int maxDuration = 60}) async {
+  static Future<bool> isDurationValid(
+    String videoPath, {
+    int maxDuration = 60,
+  }) async {
     try {
       final ms = await _getDurationMsRobust(videoPath);
       if (ms == null) {
-        // Certains devices ne renvoient pas de durée (problèmes de codecs/metadata).
-        // Dans ce cas, on ne bloque pas l'utilisateur mais on trace pour diagnostic.
-        await _logInfo("isDurationValid", "Missing duration after probing → allow upload.");
+        await _logInfo(
+          "isDurationValid",
+          "Missing duration after probing → allow upload.",
+        );
         return true;
       }
 
       final secondsFloor = (ms / 1000).floor();
-      if (secondsFloor <= maxDuration) {
-        return true;
-      }
+      if (secondsFloor <= maxDuration) return true;
 
       final limitMs = maxDuration * 1000 + _durationLeewayMs;
       return ms <= limitMs;
@@ -167,11 +173,15 @@ class VideoTools {
     }
   }
 
-  // --- Robust probing de la durée --------------------------------------------
+  // ---------------------------------------------------------------------------
+  // DURATION – ROBUST PROBING
+  // ---------------------------------------------------------------------------
 
   static Future<int?> _getDurationMsRobust(String videoPath) async {
     final cached = _durationCacheMs[videoPath];
-    if (cached != null && cached > 0 && cached < 30 * 60 * 1000) return cached;
+    if (cached != null && cached > 0 && cached < 30 * 60 * 1000) {
+      return cached;
+    }
 
     await Future.delayed(_settleDelay);
 
@@ -187,16 +197,15 @@ class VideoTools {
       if (vcMs != null) results.add(vcMs);
 
       results.removeWhere((v) => v < 1000 || v > 30 * 60 * 1000);
-
       if (results.isEmpty) return null;
+
       results.sort();
       return results.first;
     }
 
     bestMs = await probeOnce();
 
-    for (int attempt = 1; attempt <= 3; attempt++) {
-      if (bestMs != null) break;
+    for (int attempt = 1; attempt <= 3 && bestMs == null; attempt++) {
       await Future.delayed(Duration(milliseconds: 200 * attempt));
       try {
         await VideoCompress.deleteAllCache();
@@ -221,7 +230,6 @@ class VideoTools {
       await ctrl.initialize().timeout(_playerProbeTimeout);
 
       Duration d = ctrl.value.duration;
-
       if (d.inMilliseconds <= 0) {
         for (int i = 0; i < 5; i++) {
           await Future.delayed(_playerProbeRetryDelay);
@@ -257,22 +265,8 @@ class VideoTools {
   }
 
   // ---------------------------------------------------------------------------
-  // NETTOYAGE
+  // DIMENSIONS – ROBUST PROBING
   // ---------------------------------------------------------------------------
-
-  static Future<void> dispose() async {
-    try {
-      await VideoCompress.deleteAllCache();
-    } catch (_) {}
-  }
-
-  static Future<void> purgeCacheForVideo(String path) async {
-    try {
-      _durationCacheMs.remove(path);
-      _dimensionsCache.remove(path);
-      await VideoCompress.deleteAllCache();
-    } catch (_) {}
-  }
 
   static Future<(int, int)?> _getDimensionsRobust(String videoPath) async {
     final cached = _dimensionsCache[videoPath];
@@ -284,8 +278,7 @@ class VideoTools {
     int? bestH;
 
     void consider(int? w, int? h) {
-      if (w == null || h == null) return;
-      if (w <= 0 || h <= 0) return;
+      if (w == null || h == null || w <= 0 || h <= 0) return;
       bestW = bestW != null ? (w > bestW! ? w : bestW!) : w;
       bestH = bestH != null ? (h > bestH! ? h : bestH!) : h;
     }
@@ -295,6 +288,7 @@ class VideoTools {
       try {
         final file = File(videoPath);
         if (!await file.exists()) return;
+
         ctrl = VideoPlayerController.file(file);
         await ctrl.initialize().timeout(_playerProbeTimeout);
 
@@ -309,7 +303,6 @@ class VideoTools {
 
         consider(size.width.round(), size.height.round());
       } catch (_) {
-        // absorb, we will try other strategies
       } finally {
         await ctrl?.dispose();
       }
@@ -328,7 +321,6 @@ class VideoTools {
     await probeWithVideoCompress();
     await probeWithVideoPlayer();
 
-    // Second pass if nothing found yet (cache nettoyé + délai supplémentaire)
     if (bestW == null || bestH == null) {
       try {
         await VideoCompress.deleteAllCache();
@@ -348,31 +340,49 @@ class VideoTools {
   }
 
   // ---------------------------------------------------------------------------
-  // LOGGING
+  // NETTOYAGE
+  // ---------------------------------------------------------------------------
+
+  static Future<void> dispose() async {
+    try {
+      await VideoCompress.deleteAllCache();
+    } catch (_) {}
+  }
+
+  static Future<void> purgeCacheForVideo(String path) async {
+    try {
+      _durationCacheMs.remove(path);
+      _dimensionsCache.remove(path);
+      await VideoCompress.deleteAllCache();
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // LOGGING (CLOUD)
   // ---------------------------------------------------------------------------
 
   static Future<void> _logError(String source, String message) async {
     try {
-      await FirebaseFirestore.instance.collection(_logCollection).add({
-        'timestamp': FieldValue.serverTimestamp(),
-        'level': 'error',
-        'source': source,
-        'message': message,
-        'device': "${Platform.operatingSystem} ${Platform.version}",
-        'hash': pathHash(message),
-      });
+      await ClientLogger.instance.logError(
+        source,
+        message,
+        metadata: {
+          'device': "${Platform.operatingSystem} ${Platform.version}",
+          'hash': pathHash(message),
+        },
+      );
     } catch (_) {}
   }
 
   static Future<void> _logInfo(String source, String message) async {
     try {
-      await FirebaseFirestore.instance.collection(_logCollection).add({
-        'timestamp': FieldValue.serverTimestamp(),
-        'level': 'info',
-        'source': source,
-        'message': message,
-        'device': "${Platform.operatingSystem} ${Platform.version}",
-      });
+      await ClientLogger.instance.logInfo(
+        source,
+        message,
+        metadata: {
+          'device': "${Platform.operatingSystem} ${Platform.version}",
+        },
+      );
     } catch (_) {}
   }
 

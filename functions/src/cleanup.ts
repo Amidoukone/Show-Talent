@@ -2,20 +2,25 @@
 /* eslint-disable max-len */
 /* eslint-disable comma-dangle */
 
-import {pubsub} from "firebase-functions/v1";
+import {onSchedule} from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
 
-// ✅ Import Firebase centralisé
+// ✅ Import Firebase centralisé (inchangé)
 import {db, auth} from "./firebase";
 
 /**
  * Supprime les utilisateurs dont l'adresse email n’a pas été vérifiée après 7 jours.
- * Cette fonction est planifiée pour s'exécuter automatiquement tous les jours.
+ * Exécution quotidienne.
  */
-export const cleanupUnverifiedUsers = pubsub
-  .schedule("every 24 hours")
-  .onRun(async () => {
-    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // il y a 7 jours
+export const cleanupUnverifiedUsers = onSchedule(
+  {
+    schedule: "every 24 hours",
+    region: "europe-west1",
+    timeZone: "UTC",
+    memory: "256MiB",
+  },
+  async () => {
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     try {
       const snapshot = await db
@@ -29,7 +34,7 @@ export const cleanupUnverifiedUsers = pubsub
 
       if (total === 0) {
         logger.info("✅ Aucun utilisateur à supprimer aujourd’hui.");
-        return null;
+        return;
       }
 
       for (const doc of snapshot.docs) {
@@ -48,6 +53,5 @@ export const cleanupUnverifiedUsers = pubsub
     } catch (err) {
       logger.error("❌ Erreur globale pendant le nettoyage :", err);
     }
-
-    return null;
-  });
+  }
+);

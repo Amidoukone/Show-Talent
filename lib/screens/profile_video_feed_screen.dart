@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/controller/video_controller.dart';
+import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 
@@ -13,8 +14,7 @@ class ProfileVideoFeedScreen extends StatefulWidget {
   const ProfileVideoFeedScreen({super.key, required this.uid});
 
   @override
-  State<ProfileVideoFeedScreen> createState() =>
-      _ProfileVideoFeedScreenState();
+  State<ProfileVideoFeedScreen> createState() => _ProfileVideoFeedScreenState();
 }
 
 class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
@@ -22,7 +22,9 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
   late final ProfileController _profileController;
   late final VideoController _videoController;
   late final PageController _pageController;
+
   final VideoManager _videoManager = VideoManager();
+  late final VideoFocusOrchestrator _focusOrchestrator;
 
   int _currentIndex = 0;
   bool _isDisposed = false;
@@ -51,9 +53,16 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
     _videoController.videoList.assignAll(vids);
     _videoController.currentIndex.value = 0;
 
+    // ✅ Orchestrateur de focus (préload/pause/init/play/dispose window)
+    _focusOrchestrator = VideoFocusOrchestrator(
+      contextKey: _ctxKey,
+      videoManager: _videoManager,
+      urls: _currentUrls,
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isDisposed) {
-        _handleIndexChange(0);
+        unawaited(_handleIndexChange(0));
       }
     });
   }
@@ -64,11 +73,8 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
 
-    // Pause des vidéos avant la destruction
-    _videoManager.pauseAll(_ctxKey);
-
-    // Nettoyage complet des contrôleurs liés à ce contexte
-    unawaited(_videoManager.disposeAllForContext(_ctxKey));
+    // ✅ Un seul point de sortie (pause + dispose contexte)
+    unawaited(_focusOrchestrator.onDispose());
 
     if (Get.isRegistered<VideoController>(tag: _ctxKey)) {
       Get.delete<VideoController>(tag: _ctxKey);
@@ -83,33 +89,19 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
 
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      _videoManager.pauseAll(_ctxKey);
+      // Pause immédiate (sécurité)
+      unawaited(_videoManager.pauseAll(_ctxKey));
     } else if (state == AppLifecycleState.resumed) {
-      _resumeCurrentVideo();
+      unawaited(_resumeCurrentVideo());
     }
   }
 
   Future<void> _resumeCurrentVideo() async {
     if (_isDisposed) return;
 
-    final vids = _videoController.videoList.toList();
-    if (_currentIndex < 0 || _currentIndex >= vids.length) return;
-
-    final url = vids[_currentIndex].videoUrl;
-    final player = _videoManager.getController(_ctxKey, url);
-    final ctrl = player?.controller;
-
-    try {
-      if (ctrl != null &&
-          ctrl.value.isInitialized &&
-          !ctrl.value.hasError &&
-          !ctrl.value.isPlaying) {
-        await _videoManager.pauseAllExcept(_ctxKey, url);
-        await ctrl.play();
-      }
-    } catch (_) {
-      // Sécurité : éviter crash en cas de contrôleur déjà détruit
-    }
+    // ✅ Reprend via orchestrateur (relance preload/pauseExcept/init/play)
+    _focusOrchestrator.updateUrls(_currentUrls);
+    await _focusOrchestrator.onIndexChanged(_currentIndex);
   }
 
   Future<void> _handleIndexChange(int idx) async {
@@ -118,39 +110,16 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
     final vids = _videoController.videoList.toList();
     if (idx < 0 || idx >= vids.length) return;
 
-    final url = vids[idx].videoUrl;
     _currentIndex = idx;
     _videoController.currentIndex.value = idx;
 
-    try {
-      _videoManager.preloadSurrounding(
-        _ctxKey,
-        vids.map((v) => v.videoUrl).toList(),
-        idx,
-        activeUrl: url,
-      );
-
-      await _videoManager.pauseAllExcept(_ctxKey, url);
-
-      final player = _videoManager.getController(_ctxKey, url);
-      final ctrl = player?.controller;
-
-      if (ctrl == null ||
-          !ctrl.value.isInitialized ||
-          ctrl.value.hasError) {
-        await _videoManager.initializeController(
-          _ctxKey,
-          url,
-          autoPlay: true,
-          activeUrl: url,
-        );
-      } else if (!ctrl.value.isPlaying) {
-        await ctrl.play();
-      }
-    } catch (_) {
-      // Sécurité renforcée : aucun crash possible
-    }
+    // ✅ Orchestration centralisée
+    _focusOrchestrator.updateUrls(_currentUrls);
+    await _focusOrchestrator.onIndexChanged(idx);
   }
+
+  List<String> get _currentUrls =>
+      _videoController.videoList.map((v) => v.videoUrl).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -177,13 +146,12 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
           itemCount: videos.length,
           onPageChanged: (index) {
             if (!_isDisposed) {
-              _handleIndexChange(index);
+              unawaited(_handleIndexChange(index));
             }
           },
           itemBuilder: (context, index) {
             final vid = videos[index];
-            final player =
-                _videoManager.getController(_ctxKey, vid.videoUrl);
+            final player = _videoManager.getController(_ctxKey, vid.videoUrl);
 
             return Stack(
               fit: StackFit.expand,
@@ -227,9 +195,7 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        vid.caption.isNotEmpty
-                            ? vid.caption
-                            : 'Pas de légende',
+                        vid.caption.isNotEmpty ? vid.caption : 'Pas de légende',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 15,
