@@ -2,14 +2,15 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:adfoot/widgets/processing_dialog.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dio/dio.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:uuid/uuid.dart';
 
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/services/videos/data/upload_client.dart';
 import 'package:adfoot/utils/video_tools.dart';
 import 'package:adfoot/screens/success_toast.dart';
 
@@ -19,10 +20,10 @@ class UploadVideoController extends GetxController {
   static const Duration _optimizationOverallTimeout = Duration(minutes: 3);
   static const Duration _pollInterval = Duration(seconds: 10);
 
-  var isUploading = false.obs;
-  var isOptimizing = false.obs;
-  var uploadProgress = 0.0.obs;
-  var uploadStage = ''.obs;
+  final isUploading = false.obs;
+  final isOptimizing = false.obs;
+  final uploadProgress = 0.0.obs;
+  final uploadStage = ''.obs;
 
   File? selectedVideo;
   File? thumbnail;
@@ -33,7 +34,13 @@ class UploadVideoController extends GetxController {
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   bool _internetAvailable = true;
   bool _wasPaused = false;
+
+  final UploadClient _uploadClient = UploadClient();
+  CancelToken? _cancelToken;
+
   UploadTask? _currentUploadTask;
+  UploadSessionState? _activeSession;
+  String? _lastUploadedThumbPath;
 
   @override
   void onInit() {
@@ -60,6 +67,10 @@ class UploadVideoController extends GetxController {
       return false;
     }
   }
+
+  /* -------------------------------------------------------------------------- */
+  /* Préparation                                                               */
+  /* -------------------------------------------------------------------------- */
 
   Future<bool> prepareUpload({
     required String song,
@@ -115,6 +126,10 @@ class UploadVideoController extends GetxController {
     return null;
   }
 
+  /* -------------------------------------------------------------------------- */
+  /* Upload principal                                                          */
+  /* -------------------------------------------------------------------------- */
+
   Future<void> uploadDirectly() async {
     if (selectedVideo == null || thumbnail == null) {
       showErrorToast('Fichier manquant');
@@ -124,61 +139,40 @@ class UploadVideoController extends GetxController {
     _internetAvailable = await _checkRealInternetAccess();
     isUploading(true);
     isOptimizing(false);
-    uploadStage.value = "Téléversement...";
-    uploadProgress.value = 0.2;
 
-    final videoId = const Uuid().v4();
+    uploadStage.value = "Initialisation...";
+    uploadProgress.value = 0.18;
 
     final thumbContentType =
         VideoTools.inferImageContentTypeFromPath(thumbnail!.path);
     final thumbExt = thumbContentType == 'image/png' ? 'png' : 'jpg';
 
-    final videoPath = 'videos/$videoId.mp4';
-    final thumbPath = 'thumbnails/thumbnail_$videoId.$thumbExt';
-
-    final videoRef = FirebaseStorage.instance.ref().child(videoPath);
-    final thumbRef = FirebaseStorage.instance.ref().child(thumbPath);
-
-    final user = Get.find<UserController>().user;
-    final now = Timestamp.now();
-
-    final durationSec =
-        await VideoTools.getDurationSeconds(originalVideoPath!);
-    final (w, h) = await VideoTools.getDimensions(originalVideoPath!);
-
-    await FirebaseFirestore.instance.collection('videos').doc(videoId).set({
-      'id': videoId,
-      'videoUrl': '',
-      'thumbnail': '',
-      'songName': songName,
-      'caption': caption,
-      'likes': [],
-      'shareCount': 0,
-      'reports': [],
-      'reportCount': 0,
-      'uid': user?.uid ?? '',
-      'profilePhoto': user?.photoProfil ?? '',
-      'createdAt': now,
-      'updatedAt': now,
-      'status': 'processing',
-      'optimized': false,
-      if (durationSec != null) 'duration': durationSec,
-      if (w != null) 'width': w,
-      if (h != null) 'height': h,
-    });
-
-    bool cleanupOnFailure = false;
+    UploadSessionState session;
+    bool videoUploaded = false;
 
     try {
-      final videoUploaded = await _retryUploadFile(
-        file: selectedVideo!,
-        storageRef: videoRef,
-        onProgress: (p) => uploadProgress.value = 0.2 + (0.45 * p),
+      session = await _uploadClient.ensureSession(
+        localFilePath: selectedVideo!.path,
         contentType: 'video/mp4',
+      );
+      _activeSession = session;
+
+      uploadStage.value = "Téléversement...";
+      _cancelToken = CancelToken();
+
+      videoUploaded = await _uploadClient.uploadFile(
+        session: session,
+        file: selectedVideo!,
+        cancelToken: _cancelToken,
+        onUrlRefreshed: () {
+          uploadStage.value = "Renouvellement du lien sécurisé...";
+        },
+        onProgress: (p) {
+          uploadProgress.value = 0.2 + (0.5 * p);
+        },
       );
 
       if (!videoUploaded) {
-        cleanupOnFailure = true;
         throw 'Échec upload vidéo';
       }
 
@@ -188,65 +182,90 @@ class UploadVideoController extends GetxController {
         if (regenerated != null && await regenerated.exists()) {
           thumbnail = regenerated;
         } else {
-          cleanupOnFailure = true;
           throw 'Miniature manquante';
         }
       }
 
+      final thumbPath = session.thumbnailPath.replaceFirst(
+        RegExp(r'\.(jpe?g|png)$', caseSensitive: false),
+        '.$thumbExt',
+      );
+      _lastUploadedThumbPath = thumbPath;
+
+      final thumbRef = FirebaseStorage.instance.ref().child(thumbPath);
+
+      uploadStage.value = "Envoi de la miniature...";
       final thumbUploaded = await _retryUploadFile(
         file: thumbnail!,
         storageRef: thumbRef,
-        onProgress: (p) => uploadProgress.value = 0.65 + (0.35 * p),
+        onProgress: (p) {
+          uploadProgress.value = 0.7 + (0.25 * p);
+        },
         contentType: thumbContentType,
       );
 
       if (!thumbUploaded) {
-        cleanupOnFailure = true;
         throw 'Échec upload miniature';
       }
 
-      await FirebaseFirestore.instance.collection('videos').doc(videoId).update({
-        'storagePath': videoPath,
-        'thumbnailPath': thumbPath,
-        'updatedAt': Timestamp.now(),
-      });
+      uploadStage.value = "Finalisation...";
+      uploadProgress.value = 0.95;
+
+      final durationSec =
+          await VideoTools.getDurationSeconds(originalVideoPath!);
+      final (w, h) = await VideoTools.getDimensions(originalVideoPath!);
+
+      final user = Get.find<UserController>().user;
+
+      final finalized = await _uploadClient.finalizeUpload(
+        sessionId: session.sessionId,
+        metadata: {
+          'id': session.sessionId,
+          'uid': user?.uid ?? '',
+          'profilePhoto': user?.photoProfil ?? '',
+          'songName': songName,
+          'caption': caption,
+          'storagePath': session.videoPath,
+          'thumbnailPath': thumbPath,
+          'status': 'processing',
+          'likes': [],
+          'reports': [],
+          'reportCount': 0,
+          'shareCount': 0,
+          'optimized': false,
+          if (durationSec != null) 'duration': durationSec,
+          if (w != null) 'width': w,
+          if (h != null) 'height': h,
+        },
+      );
+
+      if (!finalized) {
+        throw 'Échec finalisation serveur';
+      }
+
+      await _uploadClient.clearPersistedSession();
+      _activeSession = null;
 
       uploadStage.value = "Optimisation en cours...";
       isUploading(false);
       isOptimizing(true);
 
-      await _waitForVideoStatusReady(videoId);
-    } catch (e) {
-      if (cleanupOnFailure) {
-        await _deletePartialUpload(videoPath, thumbPath);
-      }
-      showErrorToast(e.toString());
-    } finally {
+      await _waitForVideoStatusReady(session.sessionId);
       await _cleanupLocalFiles();
-      resetUploadState();
+    } catch (e) {
+      showErrorToast(e.toString());
+      isUploading(false);
+    } finally {
+      _cancelToken = null;
+      if (!isOptimizing.value) {
+        resetUploadState();
+      }
     }
   }
 
-  Future<void> _cleanupLocalFiles() async {
-    for (final f in [selectedVideo, thumbnail]) {
-      try {
-        if (f != null && await f.exists()) {
-          await f.delete();
-        }
-      } catch (_) {}
-    }
-  }
-
-  Future<void> _deletePartialUpload(String videoPath, String thumbPath) async {
-    try {
-      final videoRef = FirebaseStorage.instance.ref(videoPath);
-      final thumbRef = FirebaseStorage.instance.ref(thumbPath);
-      await Future.wait([
-        videoRef.delete().catchError((_) {}),
-        thumbRef.delete().catchError((_) {}),
-      ]);
-    } catch (_) {}
-  }
+  /* -------------------------------------------------------------------------- */
+  /* Firebase Storage helpers (miniature uniquement)                            */
+  /* -------------------------------------------------------------------------- */
 
   Future<bool> _safeUploadFile({
     required File file,
@@ -257,9 +276,7 @@ class UploadVideoController extends GetxController {
     try {
       final meta = SettableMetadata(
         contentType: contentType ??
-            (file.path.toLowerCase().endsWith('.mp4')
-                ? 'video/mp4'
-                : VideoTools.inferImageContentTypeFromPath(file.path)),
+            VideoTools.inferImageContentTypeFromPath(file.path),
         cacheControl: 'public,max-age=86400',
       );
 
@@ -311,7 +328,7 @@ class UploadVideoController extends GetxController {
         contentType: contentType,
       );
       if (success) return true;
-      await Future.delayed(Duration(seconds: 1 << attempt)); // backoff 1s,2s,4s
+      await Future.delayed(Duration(seconds: 1 << attempt));
     }
     return false;
   }
@@ -332,6 +349,10 @@ class UploadVideoController extends GetxController {
     }
   }
 
+  /* -------------------------------------------------------------------------- */
+  /* Attente optimisation                                                      */
+  /* -------------------------------------------------------------------------- */
+
   Future<void> _waitForVideoStatusReady(String videoId) async {
     final completer = Completer<void>();
     StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? subscription;
@@ -341,7 +362,6 @@ class UploadVideoController extends GetxController {
       Get.dialog(
         const ProcessingDialog(),
         barrierDismissible: false,
-        // 🔁 Correction de l’API dépréciée : withOpacity -> withValues(alpha: ...)
         barrierColor: Colors.black.withValues(alpha: 0.7),
       );
     }
@@ -406,10 +426,27 @@ class UploadVideoController extends GetxController {
     return completer.future;
   }
 
-  void cancelUpload() {
+  /* -------------------------------------------------------------------------- */
+  /* Cancel / reset                                                            */
+  /* -------------------------------------------------------------------------- */
+
+  Future<void> cancelUpload() async {
     if (isOptimizing.value) return;
+
+    _cancelToken?.cancel('user-cancelled');
     _currentUploadTask?.cancel();
+
+    await _uploadClient.clearPersistedSession();
+
+    if (_activeSession != null) {
+      await _deletePartialUpload(
+        _activeSession!.videoPath,
+        _lastUploadedThumbPath ?? _activeSession!.thumbnailPath,
+      );
+    }
+
     resetUploadState();
+
     if (Get.isDialogOpen == true) {
       Get.back();
     }
@@ -427,6 +464,30 @@ class UploadVideoController extends GetxController {
     caption = null;
     originalVideoPath = null;
     _currentUploadTask = null;
+    _cancelToken = null;
+    _activeSession = null;
+    _lastUploadedThumbPath = null;
     _wasPaused = false;
+  }
+
+  Future<void> _cleanupLocalFiles() async {
+    for (final f in [selectedVideo, thumbnail]) {
+      try {
+        if (f != null && await f.exists()) {
+          await f.delete();
+        }
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _deletePartialUpload(String videoPath, String thumbPath) async {
+    try {
+      final videoRef = FirebaseStorage.instance.ref(videoPath);
+      final thumbRef = FirebaseStorage.instance.ref(thumbPath);
+      await Future.wait([
+        videoRef.delete().catchError((_) {}),
+        thumbRef.delete().catchError((_) {}),
+      ]);
+    } catch (_) {}
   }
 }

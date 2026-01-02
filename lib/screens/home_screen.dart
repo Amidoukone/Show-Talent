@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:cached_video_player_plus/cached_video_player_plus.dart';
+import 'package:adfoot/screens/add_video.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -12,6 +12,8 @@ import 'package:adfoot/controller/connectivity_controller.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 
 import 'package:adfoot/screens/profile_screen.dart';
+
+import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
 
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -30,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen>
   final FollowController followController = Get.find<FollowController>();
   final PageController _pageController = PageController();
   final VideoManager videoManager = VideoManager();
+  late final VideoFocusOrchestrator _focusOrchestrator;
 
   bool _isConnected = true;
   late final AnimationController _fadeController;
@@ -37,6 +40,10 @@ class _HomeScreenState extends State<HomeScreen>
 
   StreamSubscription<bool>? _connectivitySubscription;
   bool _wakelockOn = false;
+
+  // ---------------------------------------------------------------------------
+  // Wakelock helpers
+  // ---------------------------------------------------------------------------
 
   Future<void> _setWakelock(bool enable) async {
     if (_wakelockOn == enable) return;
@@ -54,15 +61,33 @@ class _HomeScreenState extends State<HomeScreen>
       await _setWakelock(false);
       return;
     }
+
     final url = videoController.videoList[idx].videoUrl;
     final player = videoManager.getController('home', url);
     final ctrl = player?.controller;
+
     final shouldKeepAwake = ctrl != null &&
         ctrl.value.isInitialized &&
         ctrl.value.isPlaying &&
         !ctrl.value.isBuffering;
+
     await _setWakelock(shouldKeepAwake);
   }
+
+  // ---------------------------------------------------------------------------
+  // Focus orchestrator helpers
+  // ---------------------------------------------------------------------------
+
+  List<String> get _currentUrls =>
+      videoController.videoList.map((v) => v.videoUrl).toList();
+
+  void _refreshFocusUrls() {
+    _focusOrchestrator.updateUrls(_currentUrls);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
 
   @override
   void initState() {
@@ -73,6 +98,21 @@ class _HomeScreenState extends State<HomeScreen>
       VideoController(contextKey: 'home'),
       tag: 'home',
       permanent: true,
+    );
+
+    _focusOrchestrator = VideoFocusOrchestrator(
+      contextKey: 'home',
+      videoManager: videoManager,
+      urls: _currentUrls,
+      disposeWindow: 25,
+      onRequestMore: () async {
+        if (videoController.hasMore && !videoController.isLoading) {
+          final fetched = await videoController.fetchPaginatedVideos();
+          if (fetched) {
+            _refreshFocusUrls();
+          }
+        }
+      },
     );
 
     _fadeController = AnimationController(
@@ -92,15 +132,15 @@ class _HomeScreenState extends State<HomeScreen>
     _fadeController.dispose();
     _pageController.dispose();
     _connectivitySubscription?.cancel();
-    _setWakelock(false);
-    unawaited(videoManager.disposeAllForContext('home'));
+    unawaited(_setWakelock(false));
+    unawaited(_focusOrchestrator.onDispose());
     super.dispose();
   }
 
   @override
   void deactivate() {
     videoManager.pauseAll('home');
-    _setWakelock(false);
+    unawaited(_setWakelock(false));
     super.deactivate();
   }
 
@@ -109,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       videoManager.pauseAll('home');
-      _setWakelock(false);
+      unawaited(_setWakelock(false));
     } else if (state == AppLifecycleState.resumed) {
       final idx = videoController.currentIndex.value;
       if (idx >= 0 && idx < videoController.videoList.length) {
@@ -122,6 +162,10 @@ class _HomeScreenState extends State<HomeScreen>
     super.didChangeAppLifecycleState(state);
   }
 
+  // ---------------------------------------------------------------------------
+  // Connectivity & initial load
+  // ---------------------------------------------------------------------------
+
   void _initConnectivityListener() {
     _connectivitySubscription = ConnectivityService()
         .connectionStream
@@ -129,11 +173,13 @@ class _HomeScreenState extends State<HomeScreen>
         .listen((connected) async {
       if (!mounted) return;
       setState(() => _isConnected = connected);
+
       if (connected && videoController.videoList.isEmpty) {
         final ok = await videoController.fetchPaginatedVideos();
         if (ok && mounted && videoController.videoList.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             videoController.currentIndex.value = 0;
+            _refreshFocusUrls();
             unawaited(_onPageChanged(0));
             unawaited(_updateWakelockForCurrent());
           });
@@ -145,10 +191,12 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _loadInitialVideos() async {
     final connected = await ConnectivityService().checkInitialConnection();
     if (!mounted) return;
+
     setState(() => _isConnected = connected);
 
     if (connected && videoController.videoList.isEmpty) {
       await videoController.fetchPaginatedVideos();
+      _refreshFocusUrls();
     }
 
     if (mounted) _fadeController.forward();
@@ -157,86 +205,34 @@ class _HomeScreenState extends State<HomeScreen>
       final videos = videoController.videoList;
       if (videos.isNotEmpty) {
         videoController.currentIndex.value = 0;
+        _refreshFocusUrls();
         await _onPageChanged(0);
         await _updateWakelockForCurrent();
       }
     });
   }
 
-Future<void> _onPageChanged(int index) async {
-  final videos = videoController.videoList;
-  if (index < 0 || index >= videos.length) return;
+  // ---------------------------------------------------------------------------
+  // Page change / playback orchestration (via FocusOrchestrator)
+  // ---------------------------------------------------------------------------
 
-  final currentUrl = videos[index].videoUrl;
-  videoController.currentIndex.value = index;
-
-  final urls = videos.map((v) => v.videoUrl).toList();
-  videoManager.preloadSurrounding('home', urls, index, activeUrl: currentUrl);
-
-  await videoManager.pauseAllExcept('home', currentUrl);
-
-  CachedVideoPlayerPlus? player = videoManager.getController('home', currentUrl);
-  final ctrl = player?.controller;
-
-  if (ctrl == null ||
-      !ctrl.value.isInitialized ||
-      ctrl.value.hasError ||
-      !mounted) {
-    try {
-      final stopwatch = Stopwatch()..start();
-      player = await videoManager.initializeController(
-        'home',
-        currentUrl,
-        autoPlay: true,
-        activeUrl: currentUrl,
-      );
-      stopwatch.stop();
-      debugPrint("[HomeScreen] Video [$index] loaded in ${stopwatch.elapsedMilliseconds}ms");
-    } catch (e) {
-      debugPrint('❌ Erreur init contrôleur (onPageChanged): $e');
-      return;
-    }
-  }
-
-  final actualCtrl = player?.controller;
-  if (actualCtrl != null &&
-      actualCtrl.value.isInitialized &&
-      !actualCtrl.value.isPlaying &&
-      mounted) {
-    try {
-      await actualCtrl.play();
-    } catch (_) {}
-  }
-
-  await Future.delayed(const Duration(milliseconds: 50)); // petit délai de sécurité
-  await _updateWakelockForCurrent();
-
-  if (index >= videos.length - 2 &&
-      videoController.hasMore &&
-      !videoController.isLoading) {
-    unawaited(videoController.fetchPaginatedVideos());
-  }
-
-  _disposeFarPlayers(index, urls);
-  }
-
-  void _disposeFarPlayers(int index, List<String> urls) {
-    const window = 25;
+  Future<void> _onPageChanged(int index) async {
     final videos = videoController.videoList;
+    if (index < 0 || index >= videos.length) return;
 
-    if (videos.length <= window) return;
+    videoController.currentIndex.value = index;
 
-    final start = (index - window ~/ 2).clamp(0, videos.length);
-    final end = (start + window).clamp(0, videos.length);
+    _refreshFocusUrls();
+    await _focusOrchestrator.onIndexChanged(index);
 
-    final keepUrls = videos.sublist(start, end).map((v) => v.videoUrl).toSet();
-    final allUrls = urls.toSet();
-    final toDispose = allUrls.difference(keepUrls).toList();
-
-    if (toDispose.isNotEmpty) {
-      unawaited(videoManager.disposeUrls('home', toDispose));
-    }
+    // Petit délai de sécurité (contrôleur play/buffering)
+    await Future.delayed(const Duration(milliseconds: 50));
+    await _updateWakelockForCurrent();
   }
+
+  // ---------------------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -283,7 +279,10 @@ Future<void> _onPageChanged(int index) async {
                   await Get.to(
                     () => ProfileScreen(uid: user.uid, isReadOnly: false),
                   );
+                  // Re-déclenche le focus au retour (sans casser le flux)
                   videoController.currentIndex.refresh();
+                  _refreshFocusUrls();
+                  await _onPageChanged(videoController.currentIndex.value);
                   await _updateWakelockForCurrent();
                 },
                 child: Hero(
@@ -306,25 +305,51 @@ Future<void> _onPageChanged(int index) async {
           ? _buildNoInternet()
           : Obx(() {
               final videos = videoController.videoList;
-              if (videos.isEmpty) {
-                return const Center(
-                  child: Text(
-                    'Aucune vidéo disponible',
-                    style: TextStyle(
-                      color: AdColors.onSurfaceMuted,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                );
+if (videos.isEmpty) {
+  final user = userController.user;
+
+  return Stack(
+    children: [
+      const Center(
+        child: Text(
+          'Aucune vidéo disponible',
+          style: TextStyle(
+            color: AdColors.onSurfaceMuted,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+
+      if (user != null && user.role == 'joueur')
+        Positioned(
+          bottom: 32,
+          right: 24,
+          child: FloatingActionButton(
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+            onPressed: () async {
+              await videoManager.pauseAll('home');
+              await _setWakelock(false);
+              final result = await Get.to(() => const AddVideo());
+              if (result == true) {
+                await videoController.refreshVideos();
               }
+            },
+            child: const Icon(Icons.add),
+          ),
+        ),
+    ],
+  );
+}
+
 
               return PageView.builder(
                 controller: _pageController,
                 scrollDirection: Axis.vertical,
                 itemCount: videos.length,
                 physics: const ClampingScrollPhysics(),
-                onPageChanged: _onPageChanged,
+                onPageChanged: (i) => unawaited(_onPageChanged(i)),
                 itemBuilder: (context, index) {
                   final video = videos[index];
                   final player =
@@ -403,11 +428,15 @@ Future<void> _onPageChanged(int index) async {
                           onTap: () async {
                             await videoManager.pauseAll('home');
                             await _setWakelock(false);
-                            await Get.to(() => ProfileScreen(
-                                  uid: video.uid,
-                                  isReadOnly: true,
-                                ));
+                            await Get.to(
+                              () => ProfileScreen(
+                                uid: video.uid,
+                                isReadOnly: true,
+                              ),
+                            );
                             videoController.currentIndex.refresh();
+                            _refreshFocusUrls();
+                            await _onPageChanged(videoController.currentIndex.value);
                             await _updateWakelockForCurrent();
                           },
                           child: Stack(
@@ -449,15 +478,24 @@ Future<void> _onPageChanged(int index) async {
         children: [
           Icon(Icons.wifi_off, color: AdColors.onSurfaceMuted, size: 60),
           SizedBox(height: 20),
-          Text('Pas de connexion Internet',
-              style: TextStyle(color: AdColors.onSurfaceMuted, fontSize: 18, fontWeight: FontWeight.w600)),
+          Text(
+            'Pas de connexion Internet',
+            style: TextStyle(
+              color: AdColors.onSurfaceMuted,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// FollowToggleButton class remains unchanged and included below for completeness
+// ---------------------------------------------------------------------------
+// Follow toggle (inchangé)
+// ---------------------------------------------------------------------------
+
 class _FollowToggleButton extends StatefulWidget {
   final dynamic video;
   const _FollowToggleButton({required this.video});

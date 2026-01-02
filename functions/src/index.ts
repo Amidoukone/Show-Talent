@@ -15,41 +15,55 @@ import {CloudEvent} from "firebase-functions/v2";
 import {randomUUID} from "crypto";
 
 import {db, fieldValue} from "./firebase";
+import {createUploadSession, finalizeUpload} from "./upload_session";
+
+/* -------------------------------------------------------------------------- */
+/* REGION & INIT                                                               */
+/* -------------------------------------------------------------------------- */
 
 const REGION = "europe-west1";
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const gcs = new Storage();
 
+/* -------------------------------------------------------------------------- */
+/* Utils                                                                       */
+/* -------------------------------------------------------------------------- */
+
 function sleep(ms: number) {
   return new Promise((res) => setTimeout(res, ms));
 }
 
-/** Métadonnées personnalisées sur un objet GCS (seule partie utile ici). */
 type GcsUserMetadata = Record<string, string>;
 interface GcsFileMetadata {
   metadata?: GcsUserMetadata;
 }
 
-/** Sous-ensemble utile du document Firestore "videos/{id}". */
 interface VideoDoc {
   thumbnailPath?: string;
 }
 
-async function ensureDownloadToken(bucketName: string, objectPath: string): Promise<string> {
+/* -------------------------------------------------------------------------- */
+/* Download token helper                                                       */
+/* -------------------------------------------------------------------------- */
+
+async function ensureDownloadToken(
+  bucketName: string,
+  objectPath: string
+): Promise<string> {
   const file = gcs.bucket(bucketName).file(objectPath);
 
-  // getMetadata() peut échouer si l’objet vient d’être écrit → catch et retourner [null]
-  const [metaRaw] = await file.getMetadata().catch((/* _err */): [null] => [null]);
-
-  // On ne s’intéresse qu’à meta.metadata (user metadata)
+  const [metaRaw] = await file.getMetadata().catch((): [null] => [null]);
   const meta: GcsFileMetadata | null =
-    metaRaw && typeof metaRaw === "object" ? (metaRaw as unknown as GcsFileMetadata) : null;
+    metaRaw && typeof metaRaw === "object" ?
+      (metaRaw as unknown as GcsFileMetadata) :
+      null;
 
   const md: GcsUserMetadata = meta?.metadata ?? {};
-  const raw = md["firebaseStorageDownloadTokens"];
-  let token: string | undefined =
-    typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : undefined;
+  let token =
+    typeof md["firebaseStorageDownloadTokens"] === "string" ?
+      md["firebaseStorageDownloadTokens"].trim() :
+      "";
 
   if (!token) {
     token = randomUUID();
@@ -60,46 +74,61 @@ async function ensureDownloadToken(bucketName: string, objectPath: string): Prom
   return token;
 }
 
-async function robustDownload(bucketName: string, srcPath: string, destPath: string, attempts = 3): Promise<void> {
+/* -------------------------------------------------------------------------- */
+/* Robust download                                                             */
+/* -------------------------------------------------------------------------- */
+
+async function robustDownload(
+  bucketName: string,
+  srcPath: string,
+  destPath: string,
+  attempts = 3
+): Promise<void> {
   const file = gcs.bucket(bucketName).file(srcPath);
   let lastErr: unknown = null;
 
   for (let i = 1; i <= attempts; i++) {
     try {
-      console.log(`⬇️ Téléchargement (tentative ${i}/${attempts})…`, srcPath);
+      console.log(`⬇️ Téléchargement (tentative ${i}/${attempts})`, srcPath);
       await file.download({destination: destPath});
       const stat = await fsp.stat(destPath);
       if (stat.size > 0) return;
       throw new Error("Fichier téléchargé vide.");
     } catch (e) {
       lastErr = e;
-      console.warn(`⚠️ Échec download tentative ${i}:`, (e as Error).message);
+      console.warn(`⚠️ Échec tentative ${i}:`, (e as Error).message);
       await sleep(250 * i);
     }
   }
-  throw lastErr ?? new Error("Échec téléchargement inconnu.");
+  throw lastErr ?? new Error("Échec téléchargement.");
 }
 
-async function tryResolveThumbnailPath(bucketName: string, videoId: string): Promise<string | null> {
-  // 1) Firestore (champ thumbnailPath écrit côté client)
+/* -------------------------------------------------------------------------- */
+/* Thumbnail resolution                                                        */
+/* -------------------------------------------------------------------------- */
+
+async function tryResolveThumbnailPath(
+  bucketName: string,
+  videoId: string
+): Promise<string | null> {
   try {
     const snap = await db.collection("videos").doc(videoId).get();
     const data = snap.data() as VideoDoc | undefined;
     if (data?.thumbnailPath) {
       const f = gcs.bucket(bucketName).file(data.thumbnailPath);
       const [exists] = await f.exists();
-      if (exists) return String(data.thumbnailPath);
+      if (exists) return data.thumbnailPath;
     }
   } catch (e) {
-    console.warn("⚠️ Lecture Firestore pour thumbnailPath échouée:", (e as Error).message);
+    console.warn("⚠️ Firestore thumbnailPath error:", (e as Error).message);
   }
 
-  // 2) Heuristiques
   const candidates = [
     `thumbnails/thumbnail_${videoId}.jpg`,
     `thumbnails/thumbnail_${videoId}.jpeg`,
     `thumbnails/thumbnail_${videoId}.png`,
   ];
+
   for (const p of candidates) {
     const [exists] = await gcs.bucket(bucketName).file(p).exists();
     if (exists) return p;
@@ -107,13 +136,10 @@ async function tryResolveThumbnailPath(bucketName: string, videoId: string): Pro
   return null;
 }
 
-/**
- * Optimise une vidéo MP4 uploadée dans "videos/"
- * - Télécharge robuste → encode h264/aac → remplace le fichier
- * - Marque metadata.optimized="true" pour éviter les boucles
- * - Garantit un token de download (vidéo + miniature)
- * - Met à jour Firestore: videoUrl, thumbnail, status="ready", optimized=true
- */
+/* -------------------------------------------------------------------------- */
+/* MP4 Optimization                                                            */
+/* -------------------------------------------------------------------------- */
+
 export const optimizeMp4Video = onObjectFinalized(
   {
     region: REGION,
@@ -129,19 +155,21 @@ export const optimizeMp4Video = onObjectFinalized(
     const videoId = fileName.replace(/\.mp4$/i, "");
     const videoRef = db.collection("videos").doc(videoId);
 
-    console.log("🎯 Déclenchement pour :", filePath);
+    console.log("🎯 Optimize trigger:", filePath);
 
-    // Filtre strict
-    if (!filePath.startsWith("videos/") || !filePath.endsWith(".mp4") || !contentType.startsWith("video/")) {
-      console.log("⛔️ Ignoré (pas une vidéo MP4 valide)");
-      return;
+    if (
+      !filePath.startsWith("videos/") ||
+      !filePath.endsWith(".mp4") ||
+      !contentType.startsWith("video/")
+    ) {
+      console.log("⛔️ Ignoré (non MP4)");
+      return null;
     }
 
-    // Anti-boucle
     if (object.metadata?.optimized === "true") {
-      console.log("ℹ️ Déjà optimisée (metadata.optimized=true).");
+      console.log("ℹ️ Déjà optimisée (metadata)");
       await videoRef.set({optimized: true}, {merge: true});
-      return;
+      return null;
     }
 
     const bucket = gcs.bucket(bucketName);
@@ -149,12 +177,11 @@ export const optimizeMp4Video = onObjectFinalized(
     const optimizedFile = join(tmpdir(), `optimized_${fileName}`);
 
     try {
-      await robustDownload(bucketName, filePath, tempInputFile, 3);
-      await sleep(150);
+      await robustDownload(bucketName, filePath, tempInputFile);
 
-      console.log("🎬 Compression / Optimisation FFmpeg…");
+      console.log("🎬 FFmpeg optimisation…");
       await new Promise<void>((resolve, reject) => {
-        ffmpeg(tempInputFile)
+        const cmd = ffmpeg(tempInputFile)
           .outputOptions([
             "-y",
             "-c:v libx264",
@@ -170,12 +197,16 @@ export const optimizeMp4Video = onObjectFinalized(
             "-c:a aac",
             "-b:a 96k",
           ])
+          // ✅ Fix ESLint: no unused args, same behavior
           .on("end", () => resolve())
-          .on("error", (err) => reject(err))
+          .on("error", (err: unknown) => reject(err))
           .save(optimizedFile);
+
+        // (cmd est volontairement conservé pour debug éventuel)
+        void cmd;
       });
 
-      console.log("⬆️ Upload optimisé (écrasement au même chemin)...");
+      console.log("⬆️ Upload optimisé…");
       await bucket.upload(optimizedFile, {
         destination: filePath,
         metadata: {
@@ -185,27 +216,33 @@ export const optimizeMp4Video = onObjectFinalized(
         },
       });
 
-      // URLs finales (alt=media + token)
       const videoToken = await ensureDownloadToken(bucketName, filePath);
-      const videoUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
-        filePath
-      )}?alt=media&token=${videoToken}`;
+      const videoUrl =
+        `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
+          filePath
+        )}?alt=media&token=${videoToken}`;
 
-      let thumbUrl = "";
+      let thumbnail = "";
       const thumbPath = await tryResolveThumbnailPath(bucketName, videoId);
       if (thumbPath) {
         const thumbToken = await ensureDownloadToken(bucketName, thumbPath);
-        thumbUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
-          thumbPath
-        )}?alt=media&token=${thumbToken}`;
-      } else {
-        console.warn("⚠️ Aucune miniature trouvée pour", videoId);
+        thumbnail =
+          `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
+            thumbPath
+          )}?alt=media&token=${thumbToken}`;
       }
 
       await videoRef.set(
         {
           videoUrl,
-          ...(thumbUrl ? {thumbnail: thumbUrl} : {}),
+          sources: [
+            {
+              quality: 480,
+              url: videoUrl,
+              isHls: false,
+            },
+          ],
+          ...(thumbnail ? {thumbnail} : {}),
           optimized: true,
           status: "ready",
           updatedAt: fieldValue.serverTimestamp(),
@@ -213,11 +250,15 @@ export const optimizeMp4Video = onObjectFinalized(
         {merge: true}
       );
 
-      console.log("✅ Terminé : Firestore mis à jour (ready + URLs)");
+      console.log("✅ Vidéo prête");
     } catch (error) {
-      console.error("❌ Erreur :", (error as Error).message);
+      console.error("❌ Erreur optimisation:", (error as Error).message);
       await videoRef.set(
-        {status: "error", optimized: false, updatedAt: fieldValue.serverTimestamp()},
+        {
+          status: "error",
+          optimized: false,
+          updatedAt: fieldValue.serverTimestamp(),
+        },
         {merge: true}
       );
     } finally {
@@ -237,6 +278,26 @@ export const optimizeMp4Video = onObjectFinalized(
   }
 );
 
-// Fonctions existantes
+/* -------------------------------------------------------------------------- */
+/* EXISTING EXPORTS                                                            */
+/* -------------------------------------------------------------------------- */
+
 export {sendVerificationReminder} from "./reminder";
 export {cleanupUnverifiedUsers} from "./cleanup";
+
+/* -------------------------------------------------------------------------- */
+/* ACTIONS (Cloud Functions callable)                                          */
+/* -------------------------------------------------------------------------- */
+
+export {
+  likeVideo,
+  reportVideo,
+  deleteVideo,
+  logClientEvents,
+} from "./actions";
+
+/* -------------------------------------------------------------------------- */
+/* UPLOAD SESSION                                                              */
+/* -------------------------------------------------------------------------- */
+
+export {createUploadSession, finalizeUpload};
