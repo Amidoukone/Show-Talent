@@ -24,6 +24,28 @@ interface VideoDoc {
   thumbnailGuard?: ThumbnailGuard;
 }
 
+type RawMetadata = Record<string, unknown>;
+
+interface ParsedMetadata {
+  description?: string;
+  caption?: string;
+  profilePhoto?: string;
+  storagePath?: string;
+  thumbnailPath?: string;
+  thumbnailHash?: string;
+  thumbnailSize?: number;
+  thumbnailContentType?: string;
+  status?: string;
+  likes?: string[];
+  reports?: string[];
+  reportCount?: number;
+  shareCount?: number;
+  optimized?: boolean;
+  duration?: number;
+  width?: number;
+  height?: number;
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                CREATE SESSION                              */
 /* -------------------------------------------------------------------------- */
@@ -248,9 +270,91 @@ export const finalizeUpload = onCall(
 
     await validateThumbnail(doc?.thumbnailPath, doc?.thumbnailGuard);
 
+    const rawMetadata = (request.data as RawMetadata | undefined)?.metadata;
+    const safe: ParsedMetadata = {};
+
+    const asString = (value: unknown, max = 300): string | undefined => {
+      if (typeof value !== "string") return undefined;
+      const trimmed = value.trim();
+      return trimmed ? trimmed.slice(0, max) : undefined;
+    };
+
+    const asNumber = (value: unknown): number | undefined => {
+      if (typeof value !== "number") return undefined;
+      return Number.isFinite(value) ? value : undefined;
+    };
+
+    const asPositiveInt = (value: unknown): number | undefined => {
+      if (typeof value !== "number") return undefined;
+      const n = Math.round(value);
+      return n >= 0 ? n : undefined;
+    };
+
+    const asStringList = (value: unknown): string[] | undefined => {
+      if (!Array.isArray(value)) return undefined;
+      const items = value
+        .map((v) => (typeof v === "string" ? v.trim() : ""))
+        .filter((v) => v.length > 0);
+      return items.length ? items : undefined;
+    };
+
+    if (rawMetadata && typeof rawMetadata === "object") {
+      const meta = rawMetadata as RawMetadata;
+      safe.description = asString(meta.description, 500);
+      safe.caption = asString(meta.caption, 500);
+      safe.profilePhoto = asString(meta.profilePhoto, 600);
+      safe.storagePath = asString(meta.storagePath, 400);
+      safe.thumbnailPath = asString(meta.thumbnailPath, 400);
+      safe.thumbnailHash = asString(meta.thumbnailHash, 100);
+      safe.thumbnailContentType = asString(meta.thumbnailContentType, 60);
+      safe.thumbnailSize = asPositiveInt(meta.thumbnailSize);
+      safe.reportCount = asPositiveInt(meta.reportCount);
+      safe.shareCount = asPositiveInt(meta.shareCount);
+      safe.duration = asNumber(meta.duration);
+      safe.width = asPositiveInt(meta.width);
+      safe.height = asPositiveInt(meta.height);
+      safe.likes = asStringList(meta.likes);
+      safe.reports = asStringList(meta.reports);
+
+      // For backward compatibility we accept songName but store it as description.
+      if (!safe.description) {
+        safe.description = asString(meta.songName, 500);
+      }
+    }
+
+    const sanitizedMetadata: Record<string, unknown> = {};
+    const assignIfPresent = <K extends keyof ParsedMetadata>(key: K) => {
+      const value = safe[key];
+      if (value !== undefined) sanitizedMetadata[key] = value;
+    };
+
+    ([
+      "description",
+      "caption",
+      "profilePhoto",
+      "storagePath",
+      "thumbnailPath",
+      "thumbnailHash",
+      "thumbnailSize",
+      "thumbnailContentType",
+      "status",
+      "likes",
+      "reports",
+      "reportCount",
+      "shareCount",
+      "optimized",
+      "duration",
+      "width",
+      "height",
+    ] as (keyof ParsedMetadata)[]).forEach(assignIfPresent);
+
     await videoRef.set(
       {
+        uid,
         status: "processing",
+        optimized: false,
+        songName: safe.description,
+        ...sanitizedMetadata,
         updatedAt: fieldValue.serverTimestamp(),
       },
       {merge: true},
