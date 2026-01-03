@@ -49,6 +49,14 @@ class UploadVideoController extends GetxController {
     required String cap,
     required String videoPath,
   }) async {
+    final sanitizedDescription = description.trim();
+    final sanitizedCaption = cap.trim();
+
+    if (sanitizedDescription.isEmpty || sanitizedCaption.isEmpty) {
+      showErrorToast('Merci de renseigner une description et une légende.');
+      return false;
+    }
+
     try {
       uploadStage.value = "Analyse de la vidéo...";
       uploadProgress.value = 0.02;
@@ -81,8 +89,8 @@ class UploadVideoController extends GetxController {
       }
 
       uploadProgress.value = 0.15;
-      this.description = description.trim();
-      caption = cap.trim();
+      this.description = sanitizedDescription;
+      caption = sanitizedCaption;
       return true;
     } catch (e) {
       if (Get.isDialogOpen == true) Get.back();
@@ -112,6 +120,14 @@ class UploadVideoController extends GetxController {
 
     isUploading(true);
     isOptimizing(false);
+
+    final desc = (description ?? '').trim();
+    final cap = (caption ?? '').trim();
+    if (desc.isEmpty || cap.isEmpty) {
+      showErrorToast('Description ou légende manquante.');
+      isUploading(false);
+      return;
+    }
 
     uploadStage.value = "Initialisation...";
     uploadProgress.value = 0.18;
@@ -195,9 +211,9 @@ class UploadVideoController extends GetxController {
           'uid': user?.uid ?? '',
           'profilePhoto': user?.photoProfil ?? '',
           // On stocke la description et on duplique pour l’ancien champ `songName`
-          'description': description,
-          'songName': description,
-          'caption': caption,
+          'description': desc,
+          'songName': desc,
+          'caption': cap,
           'storagePath': session.videoPath,
           'thumbnailPath': thumbTicket.thumbnailPath,
           'thumbnailHash': thumbTicket.expectedHash,

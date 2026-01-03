@@ -40,6 +40,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   // Drag progress (utilisé pour l’UI du curseur / knob)
   double _localDragProgress = 0.0;
   bool _isDragging = false;
+  static const double _progressHorizontalPadding = 12.0;
 
   String? _feedbackOverlay;
   Timer? _feedbackTimer;
@@ -195,9 +196,14 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     if (_isDisposed) return;
     if (!_isControllerUsable) return;
 
-    final width = MediaQuery.of(context).size.width;
-    final dx = details.localPosition.dx.clamp(0.0, width);
-    final proportion = (width == 0) ? 0.0 : (dx / width).clamp(0.0, 1.0);
+    final box = context.findRenderObject() as RenderBox?;
+    final totalWidth = box?.size.width ?? MediaQuery.of(context).size.width;
+    final trackWidth = (totalWidth - (_progressHorizontalPadding * 2))
+        .clamp(0.0, totalWidth);
+    final dx = (details.localPosition.dx - _progressHorizontalPadding)
+        .clamp(0.0, trackWidth);
+    final proportion =
+        (trackWidth == 0) ? 0.0 : (dx / trackWidth).clamp(0.0, 1.0);
 
     _localDragProgress = proportion;
 
@@ -415,6 +421,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
 
     // Si on drag, on utilise la valeur locale (sinon valeur réelle)
     final displayed = _isDragging ? _localDragProgress : percent;
+    final clampedDisplayed = displayed.clamp(0.0, 1.0);
 
     String fmt(Duration d) {
       final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -442,10 +449,13 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
               if (box == null) return;
 
               final width = box.size.width;
-              if (width <= 0) return;
+              final trackWidth =
+                  (width - (_progressHorizontalPadding * 2)).clamp(0.0, width);
+              if (trackWidth <= 0) return;
 
-              final tapPos = details.localPosition.dx.clamp(0.0, width);
-              final proportion = (tapPos / width).clamp(0.0, 1.0);
+              final tapPos = (details.localPosition.dx - _progressHorizontalPadding)
+                  .clamp(0.0, trackWidth);
+              final proportion = (tapPos / trackWidth).clamp(0.0, 1.0);
 
               try {
                 widget.controller?.seekTo(val.duration * proportion);
@@ -455,40 +465,49 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
             },
             child: Container(
               height: 20,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Stack(
-                alignment: Alignment.centerLeft,
-                children: [
-                  Container(
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white30,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  FractionallySizedBox(
-                    widthFactor: displayed,
-                    child: Container(
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent,
-                        borderRadius: BorderRadius.circular(2),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: _progressHorizontalPadding),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final trackWidth = constraints.maxWidth;
+                  final knobLeft = (clampedDisplayed * trackWidth).clamp(0.0, trackWidth);
+
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.centerLeft,
+                    children: [
+                      Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white30,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
-                    ),
-                  ),
-                  Positioned(
-                    left: (displayed * (MediaQuery.of(context).size.width)) - 6,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.greenAccent, width: 1.5),
+                      FractionallySizedBox(
+                        widthFactor: clampedDisplayed,
+                        child: Container(
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.greenAccent,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ],
+                      Positioned(
+                        left: knobLeft - 6,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.greenAccent, width: 1.5),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
