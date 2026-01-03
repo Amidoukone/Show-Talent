@@ -69,7 +69,7 @@ class Video {
   String id;
   String videoUrl; // fallback principal (legacy)
   String thumbnailUrl;
-  String songName;
+  String description;
   String caption;
   String profilePhoto;
   String uid;
@@ -87,7 +87,7 @@ class Video {
     required this.id,
     required this.videoUrl,
     required this.thumbnailUrl,
-    required this.songName,
+    required this.description,
     required this.caption,
     required this.profilePhoto,
     required this.uid,
@@ -117,7 +117,7 @@ class Video {
       id: map['id'] ?? '',
       videoUrl: inferredUrl,
       thumbnailUrl: map['thumbnail'] ?? '',
-      songName: map['songName'] ?? '',
+      description: map['description'] ?? map['songName'] ?? '',
       caption: map['caption'] ?? '',
       profilePhoto: map['profilePhoto'] ?? '',
       uid: map['uid'] ?? '',
@@ -144,7 +144,9 @@ class Video {
       'id': id,
       'videoUrl': videoUrl,
       'thumbnail': thumbnailUrl,
-      'songName': songName,
+      // Compatibilité descendante : on duplique description pour l’ancien champ songName
+      'description': description,
+      'songName': description,
       'caption': caption,
       'profilePhoto': profilePhoto,
       'uid': uid,
