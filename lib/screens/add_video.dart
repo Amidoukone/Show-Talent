@@ -445,9 +445,6 @@ class PositionedFill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Positioned(
-      left: 0, right: 0, top: 0, bottom: 0,
-      child: SizedBox.expand(child: null),
-    );
+    return Positioned.fill(child: child);
   }
 }
