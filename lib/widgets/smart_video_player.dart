@@ -193,6 +193,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _player = p;
     _hasFirstFrame = false;
 
+        final resolved = _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl);
+    if (resolved != null &&
+        resolved.isNotEmpty &&
+        widget.video.resolvedUrl != resolved) {
+      widget.video.resolvedUrl = resolved;
+      _vc?.videoList.refresh();
+    }
+
     final ctrl = _ctrl;
     if (_isControllerValid(ctrl)) {
       ctrl!.addListener(_onTick);
@@ -581,7 +589,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       await SharePlus.instance.share(
         ShareParams(text: 'Regarde cette vidéo : ${widget.video.videoUrl}'),
       );
-      await controller.partagerVideo(widget.video.id);
+            final response = await controller.partagerVideo(widget.video.id);
+      if (response.success) {
+        widget.video.shareCount =
+            response.data?['shareCount'] as int? ?? (widget.video.shareCount + 1);
+        if (mounted && !_isDisposed) setState(() {});
+      }
     } catch (_) {
       Get.snackbar(
         'Erreur',

@@ -10,7 +10,7 @@ import 'package:adfoot/utils/video_source_selector.dart';
 import 'package:adfoot/videos/domain/network_profile.dart';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart'; // kIsWeb, debugPrint
+import 'package:flutter/foundation.dart';
 
 enum VideoLoadState { loading, ready, errorTimeout, errorSource }
 
@@ -56,7 +56,7 @@ class VideoManager {
   VideoManager._internal();
 
   // ---------------------------------------------------------------------------
-  // Core state (LRU / Futures / LoadState)
+  // Core state
   // ---------------------------------------------------------------------------
 
   final Map<String, LinkedHashMap<String, CachedVideoPlayerPlus>> _lruByContext =
@@ -65,16 +65,22 @@ class VideoManager {
       _initFuturesByContext = {};
   final Map<String, Map<String, VideoLoadState>> _loadStatesByContext = {};
 
-  /// originalUrl -> resolvedUrl (adaptive/HLS)
+  /// originalUrl -> resolvedUrl
   final Map<String, Map<String, String>> _resolvedUrlByContext = {};
 
   // ---------------------------------------------------------------------------
-  // Network profile & tuning (axe B)
+  // Network profile
   // ---------------------------------------------------------------------------
 
   final NetworkProfileService _networkProfileService = NetworkProfileService();
+
+  final ValueNotifier<NetworkProfile?> profileNotifier =
+      ValueNotifier<NetworkProfile?>(null);
+
   NetworkProfile? _networkProfile;
   Future<NetworkProfile>? _networkProfileFuture;
+
+  bool _profilePrefersHls = false;
 
   int _maxActive = 8;
   int _maxConcurrentInits = 3;
@@ -83,6 +89,11 @@ class VideoManager {
   Duration _activeTimeout = const Duration(seconds: 12);
 
   int _activeInits = 0;
+
+  NetworkProfile? get currentProfile => _networkProfile;
+
+  bool get _isHighBandwidth =>
+      _networkProfile?.tier == NetworkProfileTier.high;
 
   void setNetworkProfile(NetworkProfile profile) {
     _applyNetworkProfile(profile);
@@ -102,17 +113,20 @@ class VideoManager {
 
   void _applyNetworkProfile(NetworkProfile profile) {
     _networkProfile = profile;
-    final tuning = _tuningFor(profile.tier);
+    profileNotifier.value = profile;
 
+    final tuning = _tuningFor(profile.tier);
     _maxActive = tuning.maxActive;
     _maxConcurrentInits = tuning.maxConcurrentInits;
     _preloadRadius = tuning.preloadRadius;
     _preloadTimeout = tuning.preloadTimeout;
     _activeTimeout = tuning.activeTimeout;
 
+    _profilePrefersHls = profile.preferHls;
+
     debugPrint(
       "[VideoManager] NetworkProfile applied: $profile → "
-      "radius=$_preloadRadius, maxActive=$_maxActive, concurrent=$_maxConcurrentInits",
+      "radius=$_preloadRadius maxActive=$_maxActive concurrent=$_maxConcurrentInits",
     );
   }
 
@@ -145,25 +159,22 @@ class VideoManager {
     }
   }
 
-  bool get _isHighBandwidth =>
-      _networkProfile?.tier == NetworkProfileTier.high;
-
   // ---------------------------------------------------------------------------
-  // Adaptive sources / HLS (axe C)
+  // Adaptive sources
   // ---------------------------------------------------------------------------
 
-  /// Toggle remote pour activer l’adaptive source selection (feature flags)
   bool adaptiveSourcesEnabled = false;
 
   void updateAdaptiveFlag(bool enabled) {
     adaptiveSourcesEnabled = enabled;
   }
 
-  // ---------------------------------------------------------------------------
-  // Metrics (optionnel) -> utilisé pour éviter warnings + debug utile
+    // ---------------------------------------------------------------------------
+  // Metrics (debug / observabilité – sans impact runtime)
   // ---------------------------------------------------------------------------
 
   void Function(VideoMetricEvent event)? onMetrics;
+
   int _initCount = 0;
   int _cacheHits = 0;
   int _errorCount = 0;
@@ -180,25 +191,33 @@ class VideoManager {
         _initCount++;
         if (event.usedCache == true) _cacheHits++;
         debugPrint(
-          "[VideoManager][metrics] ${event.isPreload ? 'preload' : 'active'} "
-          "cache=${event.usedCache} cacheRate=${_cacheRateString()} errors=$_errorCount",
+          "[VideoManager][metrics] "
+          "${event.isPreload ? 'preload' : 'active'} "
+          "cache=${event.usedCache} "
+          "cacheRate=${_cacheRateString()} "
+          "errors=$_errorCount",
         );
         break;
+
       case VideoMetricType.initError:
         _errorCount++;
         debugPrint(
-          "[VideoManager][metrics] error for ${event.url} "
-          "cacheRate=${_cacheRateString()} errors=$_errorCount",
+          "[VideoManager][metrics] error url=${event.url} "
+          "cacheRate=${_cacheRateString()} "
+          "errors=$_errorCount",
         );
         break;
     }
 
     final listener = onMetrics;
-    if (listener != null) listener(event);
+    if (listener != null) {
+      listener(event);
+    }
   }
 
+
   // ---------------------------------------------------------------------------
-  // Connectivity helpers
+  // Connectivity
   // ---------------------------------------------------------------------------
 
   Future<bool> _hasConnectivity() async {
@@ -217,11 +236,14 @@ class VideoManager {
   }
 
   // ---------------------------------------------------------------------------
-  // URL mapping helpers (original -> resolved)
+  // URL helpers
   // ---------------------------------------------------------------------------
 
   String _resolveKey(String contextKey, String originalUrl) =>
       _resolvedUrlByContext[contextKey]?[originalUrl] ?? originalUrl;
+
+  String? getResolvedUrl(String contextKey, String originalUrl) =>
+      _resolvedUrlByContext[contextKey]?[originalUrl];
 
   Iterable<String> _originalUrlsForResolved(
     String contextKey,
@@ -249,184 +271,212 @@ class VideoManager {
   }) async {
     await _ensureNetworkProfile();
 
-    // 1) Choix source (adaptive + hls)
-    final selectedUrl = VideoSourceSelector.chooseUrl(
+    final preferHls = useHls || _profilePrefersHls;
+
+    final candidates = VideoSourceSelector.prioritizedSources(
       fallbackUrl: url,
       sources: sources,
       adaptiveEnabled: adaptiveSourcesEnabled,
       highBandwidth: _isHighBandwidth,
-      preferHls: useHls,
+      preferHls: preferHls,
     );
 
-    final effectiveUrl = selectedUrl.isNotEmpty ? selectedUrl : url;
-
-    if (effectiveUrl.isEmpty) {
+    if (candidates.isEmpty) {
       _loadStatesByContext.putIfAbsent(contextKey, () => {})[url] =
           VideoLoadState.errorSource;
       return Future.error(Exception("Aucune source vidéo disponible"));
     }
 
-    // 2) Map original -> resolved
-    _resolvedUrlByContext.putIfAbsent(contextKey, () => {})[url] = effectiveUrl;
-
-    // 3) États
     _loadStatesByContext.putIfAbsent(contextKey, () => {})[url] =
         VideoLoadState.loading;
     _lruByContext.putIfAbsent(contextKey, () => LinkedHashMap());
     _initFuturesByContext.putIfAbsent(contextKey, () => {});
+    _resolvedUrlByContext.putIfAbsent(contextKey, () => {});
 
     final lru = _lruByContext[contextKey]!;
     final futures = _initFuturesByContext[contextKey]!;
 
-    // NOTE: on cache par "effectiveUrl" (car c’est lui qui correspond au fichier / flux réel)
-    final cacheKey = effectiveUrl;
+    Future<CachedVideoPlayerPlus> attempt(String effectiveUrl) async {
+      final cacheKey = effectiveUrl;
 
-    // 4) LRU hit
-    if (lru.containsKey(cacheKey)) {
-      final existing = lru.remove(cacheKey)!;
-      final v = existing.controller.value;
-      if (v.isInitialized && !v.hasError) {
-        lru[cacheKey] = existing;
-        await _enforceLimit(contextKey, activeUrl: activeUrl);
-        _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
-        if (autoPlay && !v.isPlaying) {
-          await existing.controller.play().catchError((_) {});
-        }
-        return existing;
-      }
-      await safeDispose(existing);
-      lru.remove(cacheKey);
-    }
-
-    // 5) Future déjà en cours
-    if (futures.containsKey(cacheKey)) {
-      try {
-        final player = await futures[cacheKey]!;
-        final v = player.controller.value;
+      // 1) LRU hit
+      if (lru.containsKey(cacheKey)) {
+        final existing = lru.remove(cacheKey)!;
+        final v = existing.controller.value;
         if (v.isInitialized && !v.hasError) {
-          lru[cacheKey] = player;
+          lru[cacheKey] = existing;
           await _enforceLimit(contextKey, activeUrl: activeUrl);
           _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
           if (autoPlay && !v.isPlaying) {
+            await existing.controller.play().catchError((_) {});
+          }
+          return existing;
+        }
+        await safeDispose(existing);
+        lru.remove(cacheKey);
+      }
+
+      // 2) Future en cours
+      if (futures.containsKey(cacheKey)) {
+        try {
+          final player = await futures[cacheKey]!;
+          final v = player.controller.value;
+          if (v.isInitialized && !v.hasError) {
+            lru[cacheKey] = player;
+            await _enforceLimit(contextKey, activeUrl: activeUrl);
+            _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
+            if (autoPlay && !v.isPlaying) {
+              await player.controller.play().catchError((_) {});
+            }
+            return player;
+          }
+        } catch (_) {}
+        futures.remove(cacheKey);
+        lru.remove(cacheKey);
+      }
+
+      Future<CachedVideoPlayerPlus> loadVideo() async {
+        final stopwatch = Stopwatch()..start();
+        bool usedCache = false;
+        File? file;
+
+        try {
+          final timeout = isPreload ? _preloadTimeout : _activeTimeout;
+          CachedVideoPlayerPlus player;
+
+          if (kIsWeb) {
+            player =
+                CachedVideoPlayerPlus.networkUrl(Uri.parse(effectiveUrl));
+          } else {
+            file = await custom_cache.VideoCacheManager.getFileIfCached(
+              effectiveUrl,
+            );
+            usedCache = file != null && await file.exists();
+
+            if (file == null || !(await file.exists())) {
+              file = await _downloadVideo(effectiveUrl, force: true);
+            }
+
+            if (!await file.exists()) {
+              throw Exception("Fichier introuvable : $effectiveUrl");
+            }
+
+            player = CachedVideoPlayerPlus.file(file);
+          }
+
+          await player.initialize().timeout(timeout, onTimeout: () {
+            _loadStatesByContext[contextKey]![url] =
+                VideoLoadState.errorTimeout;
+            throw TimeoutException("Init timeout : $effectiveUrl");
+          });
+
+          final v = player.controller.value;
+          if (!v.isInitialized || v.hasError) {
+            if (!kIsWeb && file != null) {
+              unawaited(file.delete().catchError((_) {}));
+            }
+            throw Exception("Init error : $effectiveUrl");
+          }
+
+          player.controller.setLooping(true);
+
+          lru[cacheKey] = player;
+          await _enforceLimit(contextKey, activeUrl: activeUrl);
+
+          _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
+
+          if (autoPlay && !player.controller.value.isPlaying) {
             await player.controller.play().catchError((_) {});
           }
-          return player;
-        }
-      } catch (_) {}
-      futures.remove(cacheKey);
-      lru.remove(cacheKey);
-    }
 
-    Future<CachedVideoPlayerPlus> loadVideo() async {
-      final stopwatch = Stopwatch()..start();
-      bool usedCache = false;
-      File? file;
+          stopwatch.stop();
+
+          debugPrint(
+            "[VideoManager] Init ${isPreload ? 'preload' : 'active'} "
+            "${kIsWeb ? 'web' : (usedCache ? 'cache' : 'download')} "
+            "in ${stopwatch.elapsedMilliseconds}ms -> $effectiveUrl",
+          );
+
+          _registerMetric(
+            VideoMetricEvent(
+              type: VideoMetricType.initSuccess,
+              url: effectiveUrl,
+              isPreload: isPreload,
+              duration: stopwatch.elapsed,
+              usedCache: usedCache,
+            ),
+          );
+
+          unawaited(_checkCacheSize());
+          return player;
+        } catch (e, st) {
+          debugPrint("❌ Video init error $effectiveUrl: $e\n$st");
+
+          _loadStatesByContext[contextKey]![url] =
+              VideoLoadState.errorSource;
+          lru.remove(cacheKey);
+
+          _registerMetric(
+            VideoMetricEvent(
+              type: VideoMetricType.initError,
+              url: effectiveUrl,
+              isPreload: isPreload,
+              error: e,
+            ),
+          );
+
+          return Future.error(e);
+        }
+      }
+
+      // 3) Concurrency limit
+      while (_activeInits >= _maxConcurrentInits) {
+        await Future.delayed(const Duration(milliseconds: 80));
+      }
+
+      _activeInits++;
+      final future = loadVideo().whenComplete(() => _activeInits--);
+      futures[cacheKey] = future;
 
       try {
-        final timeout = isPreload ? _preloadTimeout : _activeTimeout;
-
-        CachedVideoPlayerPlus player;
-
-        if (kIsWeb) {
-          player = CachedVideoPlayerPlus.networkUrl(Uri.parse(effectiveUrl));
-        } else {
-          file = await custom_cache.VideoCacheManager.getFileIfCached(effectiveUrl);
-          usedCache = file != null && await file.exists();
-
-          // ignore: unnecessary_null_comparison
-          if (file == null || !(await file.exists())) {
-            file = await _downloadVideo(effectiveUrl, force: true);
-          }
-
-          if (!await file.exists()) {
-            throw Exception("Fichier introuvable : $effectiveUrl");
-          }
-
-          player = CachedVideoPlayerPlus.file(file);
-        }
-
-        await player.initialize().timeout(timeout, onTimeout: () {
-          _loadStatesByContext[contextKey]![url] = VideoLoadState.errorTimeout;
-          throw TimeoutException("Init timeout : $effectiveUrl");
-        });
-
-        final v = player.controller.value;
-        if (!v.isInitialized || v.hasError) {
-          if (!kIsWeb && file != null) {
-            unawaited(file.delete().catchError((_) {}));
-          }
-          throw Exception("Init error : $effectiveUrl");
-        }
-
-        player.controller.setLooping(true);
-
-        lru[cacheKey] = player;
-        await _enforceLimit(contextKey, activeUrl: activeUrl);
-
-        _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
-
-        if (autoPlay && !player.controller.value.isPlaying) {
-          await player.controller.play().catchError((_) {});
-        }
-
-        stopwatch.stop();
-
-        debugPrint(
-          "[VideoManager] Init ${isPreload ? 'preload' : 'active'} "
-          "${kIsWeb ? 'web' : (usedCache ? 'cache' : 'download')} "
-          "in ${stopwatch.elapsedMilliseconds}ms -> $effectiveUrl",
-        );
-
-        _registerMetric(
-          VideoMetricEvent(
-            type: VideoMetricType.initSuccess,
-            url: effectiveUrl,
-            isPreload: isPreload,
-            duration: stopwatch.elapsed,
-            usedCache: usedCache,
-          ),
-        );
-
-        unawaited(_checkCacheSize());
-
-        return player;
-      } catch (e, st) {
-        debugPrint("❌ Video init error $effectiveUrl: $e\n$st");
-
-        _loadStatesByContext[contextKey]![url] = VideoLoadState.errorSource;
+        final result = await future;
+        futures.remove(cacheKey);
+        return result;
+      } catch (e) {
+        futures.remove(cacheKey);
         lru.remove(cacheKey);
-
-        _registerMetric(
-          VideoMetricEvent(
-            type: VideoMetricType.initError,
-            url: effectiveUrl,
-            isPreload: isPreload,
-            error: e,
-          ),
-        );
-
-        return Future.error(e);
+        rethrow;
       }
     }
 
-    // 6) Concurrency limit
-    while (_activeInits >= _maxConcurrentInits) {
-      await Future.delayed(const Duration(milliseconds: 80));
+    VideoLoadState? lastErrorState;
+    Object? lastError;
+
+    for (final candidate in candidates) {
+      final effectiveUrl = candidate.url;
+      _resolvedUrlByContext[contextKey]![url] = effectiveUrl;
+
+      try {
+        final player = await attempt(effectiveUrl);
+        _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
+        return player;
+      } on TimeoutException catch (e) {
+        lastErrorState = VideoLoadState.errorTimeout;
+        lastError = e;
+        _loadStatesByContext[contextKey]![url] = VideoLoadState.loading;
+      } catch (e) {
+        lastErrorState = VideoLoadState.errorSource;
+        lastError = e;
+        _loadStatesByContext[contextKey]![url] = VideoLoadState.loading;
+      }
     }
 
-    _activeInits++;
-    final future = loadVideo().whenComplete(() => _activeInits--);
-    futures[cacheKey] = future;
+    _loadStatesByContext[contextKey]![url] =
+        lastErrorState ?? VideoLoadState.errorSource;
 
-    try {
-      final result = await future;
-      futures.remove(cacheKey);
-      return result;
-    } catch (e) {
-      futures.remove(cacheKey);
-      lru.remove(cacheKey);
-      rethrow;
-    }
+    return Future.error(
+      lastError ?? Exception("Aucune source vidéo disponible"),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -438,7 +488,8 @@ class VideoManager {
     if (!hasNet) throw Exception("No internet : $url");
 
     if (force) {
-      final cached = await custom_cache.VideoCacheManager.getFileIfCached(url);
+      final cached =
+          await custom_cache.VideoCacheManager.getFileIfCached(url);
       if (cached != null && await cached.exists()) {
         await cached.delete().catchError((_) {});
       }
@@ -453,7 +504,8 @@ class VideoManager {
 
   Future<void> _checkCacheSize() async {
     if (!kIsWeb) {
-      final size = await custom_cache.VideoCacheManager.getCacheSizeInMB();
+      final size =
+          await custom_cache.VideoCacheManager.getCacheSizeInMB();
       if (size > 300) {
         debugPrint("⚠️ Cache >300MB: ${size}MB");
       }
@@ -480,10 +532,11 @@ class VideoManager {
       final player = lru.remove(oldestKey)!;
       await safePause(player);
       await safeDispose(player);
+
       _initFuturesByContext[contextKey]?.remove(oldestKey);
 
-      // Nettoyage states pour TOUTES les urls d'origine pointant vers ce resolved
-      for (final original in _originalUrlsForResolved(contextKey, oldestKey)) {
+      for (final original
+          in _originalUrlsForResolved(contextKey, oldestKey)) {
         _loadStatesByContext[contextKey]?.remove(original);
         _resolvedUrlByContext[contextKey]?.remove(original);
       }
@@ -493,7 +546,7 @@ class VideoManager {
   }
 
   // ---------------------------------------------------------------------------
-  // Public helpers (API attendue par le reste de l’app)
+  // Public helpers
   // ---------------------------------------------------------------------------
 
   Future<void> preloadSurrounding(
@@ -504,7 +557,6 @@ class VideoManager {
     bool useHls = false,
   }) async {
     await _ensureNetworkProfile();
-
     final radius = _preloadRadius;
     if (radius <= 0) return;
 
@@ -542,10 +594,8 @@ class VideoManager {
     final resolved = _resolveKey(contextKey, url);
     final player = _lruByContext[contextKey]?[resolved];
     if (player == null) return null;
-
     final v = player.controller.value;
     if (!v.isInitialized || v.hasError) return null;
-
     return player;
   }
 
@@ -554,7 +604,8 @@ class VideoManager {
 
   Future<void> pauseAllExcept(String contextKey, String? keepUrl) async {
     final lru = _lruByContext[contextKey] ?? {};
-    final resolvedKeep = keepUrl != null ? _resolveKey(contextKey, keepUrl) : null;
+    final resolvedKeep =
+        keepUrl != null ? _resolveKey(contextKey, keepUrl) : null;
 
     for (final entry in lru.entries.toList()) {
       if (entry.key != resolvedKeep &&
@@ -595,7 +646,6 @@ class VideoManager {
       if (player != null) {
         await safePause(player);
         await safeDispose(player);
-        debugPrint("[VideoManager] Disposed URL: $url (resolved=$resolved)");
       }
 
       _initFuturesByContext[contextKey]?.remove(resolved);

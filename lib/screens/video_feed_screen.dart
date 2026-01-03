@@ -58,7 +58,7 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
     _focusOrchestrator = VideoFocusOrchestrator(
       contextKey: widget.contextKey,
       videoManager: videoManager,
-      urls: _currentUrls,
+      videos: _currentVideos,
       disposeWindow: 20,
     );
 
@@ -111,14 +111,14 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
     videoController.currentIndex.value = index;
 
     // ✅ Assure que l’orchestrateur a la liste à jour
-    _focusOrchestrator.updateUrls(_currentUrls);
+    _focusOrchestrator.updateVideos(_currentVideos);
 
     // ✅ Orchestration centralisée (préload/pause/init/play/dispose window)
     await _focusOrchestrator.onIndexChanged(index);
   }
 
-  List<String> get _currentUrls =>
-      videoController.videoList.map((v) => v.videoUrl).toList();
+  /// Copie défensive: évite les effets de bord si la RxList change pendant le scroll
+  List<Video> get _currentVideos => videoController.videoList.toList();
 
   @override
   Widget build(BuildContext context) {

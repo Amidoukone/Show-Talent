@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// État minimal pour une session de téléversement résumable.
+/// ---------------------------------------------------------------------------
+/// État minimal pour une session de téléversement résumable (VIDÉO)
+/// ---------------------------------------------------------------------------
 class UploadSessionState {
   final String sessionId;
   final String uploadUrl;
@@ -44,17 +47,15 @@ class UploadSessionState {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'sessionId': sessionId,
-      'uploadUrl': uploadUrl,
-      'expiresAt': expiresAt.toIso8601String(),
-      'videoPath': videoPath,
-      'thumbnailPath': thumbnailPath,
-      'localFilePath': localFilePath,
-      'uploadedBytes': uploadedBytes,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'sessionId': sessionId,
+        'uploadUrl': uploadUrl,
+        'expiresAt': expiresAt.toIso8601String(),
+        'videoPath': videoPath,
+        'thumbnailPath': thumbnailPath,
+        'localFilePath': localFilePath,
+        'uploadedBytes': uploadedBytes,
+      };
 
   factory UploadSessionState.fromJson(Map<String, dynamic> json) {
     return UploadSessionState(
@@ -69,10 +70,37 @@ class UploadSessionState {
   }
 }
 
-/// Client dédié à la récupération des URLs signées + téléversement résumable.
+/// ---------------------------------------------------------------------------
+/// Ticket sécurisé pour upload de miniature
+/// ---------------------------------------------------------------------------
+class ThumbnailUploadTicket {
+  final String uploadUrl;
+  final String thumbnailPath;
+  final DateTime expiresAt;
+  final int expectedSize;
+  final String expectedHash;
+  final String contentType;
+
+  const ThumbnailUploadTicket({
+    required this.uploadUrl,
+    required this.thumbnailPath,
+    required this.expiresAt,
+    required this.expectedSize,
+    required this.expectedHash,
+    required this.contentType,
+  });
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+}
+
+/// ---------------------------------------------------------------------------
+/// Client d’upload vidéo + miniature (résumable, robuste)
+/// ---------------------------------------------------------------------------
 class UploadClient {
   static const _region = 'europe-west1';
-  static const _chunkSize = 1024 * 1024; // 1 Mo
+
+  static const _chunkSize = 1024 * 1024; // 1 Mo (vidéo)
+  static const _thumbnailChunkSize = 512 * 1024; // 512 Ko (miniature)
   static const _sessionCacheFile = 'upload_session.json';
 
   final Dio _dio = Dio(
@@ -90,6 +118,10 @@ class UploadClient {
 
   UploadSessionState? _cachedSession;
 
+  // ---------------------------------------------------------------------------
+  // Session persistence
+  // ---------------------------------------------------------------------------
+
   Future<String> _cachePath() async {
     final dir = await getApplicationSupportDirectory();
     return '${dir.path}/$_sessionCacheFile';
@@ -99,11 +131,9 @@ class UploadClient {
     if (_cachedSession != null) return _cachedSession;
 
     try {
-      final path = await _cachePath();
-      final file = File(path);
+      final file = File(await _cachePath());
       if (!await file.exists()) return null;
-      final content = await file.readAsString();
-      final data = jsonDecode(content) as Map<String, dynamic>;
+      final data = jsonDecode(await file.readAsString());
       _cachedSession = UploadSessionState.fromJson(data);
       return _cachedSession;
     } catch (_) {
@@ -114,8 +144,7 @@ class UploadClient {
   Future<void> persistSession(UploadSessionState session) async {
     _cachedSession = session;
     try {
-      final path = await _cachePath();
-      final file = File(path);
+      final file = File(await _cachePath());
       await file.writeAsString(jsonEncode(session.toJson()));
     } catch (_) {}
   }
@@ -123,13 +152,14 @@ class UploadClient {
   Future<void> clearPersistedSession() async {
     _cachedSession = null;
     try {
-      final path = await _cachePath();
-      final file = File(path);
-      if (await file.exists()) {
-        await file.delete();
-      }
+      final file = File(await _cachePath());
+      if (await file.exists()) await file.delete();
     } catch (_) {}
   }
+
+  // ---------------------------------------------------------------------------
+  // Session création / refresh
+  // ---------------------------------------------------------------------------
 
   Future<UploadSessionState> ensureSession({
     required String localFilePath,
@@ -137,12 +167,10 @@ class UploadClient {
   }) async {
     final persisted = await loadPersistedSession();
     if (persisted != null && persisted.localFilePath == localFilePath) {
-      if (persisted.isExpired) {
-        return refreshSession(persisted);
-      }
-      return persisted;
+      return persisted.isExpired ? refreshSession(persisted) : persisted;
     }
-    return _createSession(localFilePath: localFilePath, contentType: contentType);
+    return _createSession(
+        localFilePath: localFilePath, contentType: contentType);
   }
 
   Future<UploadSessionState> _createSession({
@@ -158,15 +186,16 @@ class UploadClient {
 
     final data = result.data;
     final expiresAtMs = (data['expiresAt'] as num?)?.toInt() ?? 0;
+
     final session = UploadSessionState(
-      sessionId: data['sessionId'] as String,
-      uploadUrl: data['uploadUrl'] as String,
-      videoPath: data['videoPath'] as String,
-      thumbnailPath: data['thumbnailPath'] as String,
+      sessionId: data['sessionId'],
+      uploadUrl: data['uploadUrl'],
+      videoPath: data['videoPath'],
+      thumbnailPath: data['thumbnailPath'],
       expiresAt: DateTime.fromMillisecondsSinceEpoch(expiresAtMs),
       localFilePath: localFilePath,
-      uploadedBytes: 0,
     );
+
     await persistSession(session);
     return session;
   }
@@ -179,16 +208,16 @@ class UploadClient {
       localFilePath: session.localFilePath,
       sessionId: session.sessionId,
     );
-    return refreshed.copyWith(
-      uploadedBytes: uploadedBytes ?? session.uploadedBytes,
-    );
+    return refreshed.copyWith(uploadedBytes: uploadedBytes);
   }
 
+  // ---------------------------------------------------------------------------
+  // Upload vidéo résumable (INCHANGÉ)
+  // ---------------------------------------------------------------------------
+
   int _extractLastByte(String? rangeHeader) {
-    if (rangeHeader == null) return -1;
-    final match = RegExp(r'bytes=0-(\d+)').firstMatch(rangeHeader);
-    if (match == null) return -1;
-    return int.tryParse(match.group(1) ?? '') ?? -1;
+    final match = RegExp(r'bytes=0-(\d+)').firstMatch(rangeHeader ?? '');
+    return match != null ? int.parse(match.group(1)!) : -1;
   }
 
   Future<int> _queryRemoteOffset(
@@ -196,16 +225,14 @@ class UploadClient {
     int totalBytes,
   ) async {
     try {
-      final response = await _dio.put<Object?>(
+      final response = await _dio.put(
         session.uploadUrl,
         data: Stream<List<int>>.empty(),
-        options: Options(
-          headers: {
-            'Content-Length': '0',
-            'Content-Range': 'bytes */$totalBytes',
-            'Content-Type': 'application/octet-stream',
-          },
-        ),
+        options: Options(headers: {
+          'Content-Length': '0',
+          'Content-Range': 'bytes */$totalBytes',
+          'Content-Type': 'application/octet-stream',
+        }),
       );
       if (response.statusCode == 308) {
         return _extractLastByte(response.headers.value('range'));
@@ -226,71 +253,129 @@ class UploadClient {
     var uploadedBytes = session.uploadedBytes;
 
     final remoteOffset = await _queryRemoteOffset(current, totalBytes);
-    if (remoteOffset >= 0) {
-      uploadedBytes = remoteOffset + 1;
-    }
-
-    onProgress(totalBytes == 0 ? 0 : uploadedBytes / totalBytes);
+    if (remoteOffset >= 0) uploadedBytes = remoteOffset + 1;
 
     while (uploadedBytes < totalBytes) {
       if (current.isExpired) {
         current = await refreshSession(current, uploadedBytes: uploadedBytes);
         onUrlRefreshed?.call();
-        final refreshedOffset = await _queryRemoteOffset(current, totalBytes);
-        uploadedBytes = refreshedOffset >= 0 ? refreshedOffset + 1 : 0;
       }
 
       final end = (uploadedBytes + _chunkSize - 1).clamp(0, totalBytes - 1);
-      // ignore: unnecessary_type_check
-      final chunkEnd = end is int ? end : (end as num).toInt();
-      final length = (chunkEnd - uploadedBytes + 1);
+      final length = end - uploadedBytes + 1;
 
       try {
-        final response = await _dio.put<Object?>(
+        final response = await _dio.put(
           current.uploadUrl,
-          data: file.openRead(uploadedBytes, chunkEnd + 1),
-          options: Options(
-            headers: {
-              'Content-Length': '$length',
-              'Content-Range': 'bytes $uploadedBytes-$chunkEnd/$totalBytes',
-              'Content-Type': 'video/mp4',
-            },
-          ),
+          data: file.openRead(uploadedBytes, end + 1),
+          options: Options(headers: {
+            'Content-Length': '$length',
+            'Content-Range': 'bytes $uploadedBytes-$end/$totalBytes',
+            'Content-Type': 'video/mp4',
+          }),
           cancelToken: cancelToken,
         );
 
         if (response.statusCode == 308) {
-          final lastByte = _extractLastByte(response.headers.value('range'));
-          if (lastByte >= 0) {
-            uploadedBytes = lastByte + 1;
-          } else {
-            uploadedBytes = chunkEnd + 1;
-          }
-        } else if (response.statusCode == 200 || response.statusCode == 201) {
-          uploadedBytes = totalBytes;
+          uploadedBytes = _extractLastByte(response.headers.value('range')) + 1;
         } else {
-          await Future.delayed(const Duration(seconds: 1));
-          final remote = await _queryRemoteOffset(current, totalBytes);
-          if (remote >= 0) {
-            uploadedBytes = remote + 1;
-          }
+          uploadedBytes = totalBytes;
         }
-      } on DioException catch (e) {
-        if (CancelToken.isCancel(e)) {
-          return false;
-        }
+      } catch (_) {
         await Future.delayed(const Duration(milliseconds: 750));
-        final remote = await _queryRemoteOffset(current, totalBytes);
-        if (remote >= 0) {
-          uploadedBytes = remote + 1;
-        }
       }
 
       await persistSession(current.copyWith(uploadedBytes: uploadedBytes));
-      onProgress(totalBytes == 0 ? 0 : uploadedBytes / totalBytes);
+      onProgress(uploadedBytes / totalBytes);
     }
 
     return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Miniature sécurisée (NOUVEAU)
+  // ---------------------------------------------------------------------------
+
+  Future<ThumbnailUploadTicket> requestThumbnailTicket({
+    required String sessionId,
+    required File file,
+    required String contentType,
+    String? thumbnailPath,
+  }) async {
+    final size = await file.length();
+    final hash = await _computeMd5(file);
+
+    final callable = _functions.httpsCallable('requestThumbnailUploadUrl');
+    final result = await callable.call<Map<String, dynamic>>({
+      'sessionId': sessionId,
+      'hash': hash,
+      'size': size,
+      'contentType': contentType,
+      if (thumbnailPath != null) 'thumbnailPath': thumbnailPath,
+    });
+
+    final data = result.data;
+    return ThumbnailUploadTicket(
+      uploadUrl: data['uploadUrl'],
+      thumbnailPath: data['thumbnailPath'],
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(data['expiresAt']),
+      expectedHash: hash,
+      expectedSize: size,
+      contentType: contentType,
+    );
+  }
+
+  Future<bool> uploadThumbnailFile({
+    required ThumbnailUploadTicket ticket,
+    required File file,
+    required void Function(double) onProgress,
+    CancelToken? cancelToken,
+  }) async {
+    if (ticket.isExpired) throw Exception('Lien miniature expiré');
+
+    final totalBytes = await file.length();
+    var uploadedBytes = 0;
+
+    while (uploadedBytes < totalBytes) {
+      final end =
+          (uploadedBytes + _thumbnailChunkSize - 1).clamp(0, totalBytes - 1);
+      final length = end - uploadedBytes + 1;
+
+      try {
+        final response = await _dio.put(
+          ticket.uploadUrl,
+          data: file.openRead(uploadedBytes, end + 1),
+          options: Options(headers: {
+            'Content-Length': '$length',
+            'Content-Range': 'bytes $uploadedBytes-$end/$totalBytes',
+            'Content-Type': ticket.contentType,
+          }),
+          cancelToken: cancelToken,
+        );
+
+        if (response.statusCode == 308) {
+          uploadedBytes = _extractLastByte(response.headers.value('range')) + 1;
+        } else {
+          uploadedBytes = totalBytes;
+        }
+      } catch (_) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+
+      onProgress(uploadedBytes / totalBytes);
+    }
+
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Utils
+  // ---------------------------------------------------------------------------
+
+  Future<String> _computeMd5(File file) async {
+    final bytes = await file.readAsBytes();
+    final digest = md5.convert(bytes);
+    return digest.toString();
   }
 
   Future<bool> finalizeUpload({

@@ -1,9 +1,11 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/controller/video_controller.dart';
+import 'package:adfoot/models/video.dart';
 import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -57,7 +59,7 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
     _focusOrchestrator = VideoFocusOrchestrator(
       contextKey: _ctxKey,
       videoManager: _videoManager,
-      urls: _currentUrls,
+      videos: _currentVideos,
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -100,7 +102,7 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
     if (_isDisposed) return;
 
     // ✅ Reprend via orchestrateur (relance preload/pauseExcept/init/play)
-    _focusOrchestrator.updateUrls(_currentUrls);
+    _focusOrchestrator.updateVideos(_currentVideos);
     await _focusOrchestrator.onIndexChanged(_currentIndex);
   }
 
@@ -114,12 +116,12 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
     _videoController.currentIndex.value = idx;
 
     // ✅ Orchestration centralisée
-    _focusOrchestrator.updateUrls(_currentUrls);
+    _focusOrchestrator.updateVideos(_currentVideos);
     await _focusOrchestrator.onIndexChanged(idx);
   }
 
-  List<String> get _currentUrls =>
-      _videoController.videoList.map((v) => v.videoUrl).toList();
+  /// Copie défensive : évite les effets de bord si la RxList change pendant le scroll
+  List<Video> get _currentVideos => _videoController.videoList.toList();
 
   @override
   Widget build(BuildContext context) {

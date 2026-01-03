@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:adfoot/widgets/processing_dialog.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -15,8 +14,6 @@ import 'package:adfoot/utils/video_tools.dart';
 import 'package:adfoot/screens/success_toast.dart';
 
 class UploadVideoController extends GetxController {
-  // Durées centralisées (lisibilité, aucune incidence sur le comportement)
-  static const Duration _uploadTimeout = Duration(minutes: 5);
   static const Duration _optimizationOverallTimeout = Duration(minutes: 3);
   static const Duration _pollInterval = Duration(seconds: 10);
 
@@ -31,41 +28,16 @@ class UploadVideoController extends GetxController {
   String? caption;
   String? originalVideoPath;
 
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-  bool _internetAvailable = true;
-  bool _wasPaused = false;
-
   final UploadClient _uploadClient = UploadClient();
   CancelToken? _cancelToken;
 
-  UploadTask? _currentUploadTask;
   UploadSessionState? _activeSession;
   String? _lastUploadedThumbPath;
 
   @override
-  void onInit() {
-    super.onInit();
-    _connectivitySubscription =
-        Connectivity().onConnectivityChanged.listen((resultList) {
-      final result = resultList.firstOrNull;
-      _internetAvailable = result != null && result != ConnectivityResult.none;
-    });
-  }
-
-  @override
   void onClose() {
-    _connectivitySubscription?.cancel();
     VideoTools.dispose();
     super.onClose();
-  }
-
-  Future<bool> _checkRealInternetAccess() async {
-    try {
-      final result = await InternetAddress.lookup('google.com');
-      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-    } catch (_) {
-      return false;
-    }
   }
 
   /* -------------------------------------------------------------------------- */
@@ -88,9 +60,11 @@ class UploadVideoController extends GetxController {
 
       if (!isValidDuration || !isValidQuality) {
         if (Get.isDialogOpen == true) Get.back();
-        showErrorToast(!isValidDuration
-            ? 'La durée dépasse 60 secondes.'
-            : 'Qualité vidéo insuffisante (minimum 480×360).');
+        showErrorToast(
+          !isValidDuration
+              ? 'La durée dépasse 60 secondes.'
+              : 'Qualité vidéo insuffisante (minimum 480×360).',
+        );
         return false;
       }
 
@@ -136,7 +110,6 @@ class UploadVideoController extends GetxController {
       return;
     }
 
-    _internetAvailable = await _checkRealInternetAccess();
     isUploading(true);
     isOptimizing(false);
 
@@ -145,10 +118,8 @@ class UploadVideoController extends GetxController {
 
     final thumbContentType =
         VideoTools.inferImageContentTypeFromPath(thumbnail!.path);
-    final thumbExt = thumbContentType == 'image/png' ? 'png' : 'jpg';
 
     UploadSessionState session;
-    bool videoUploaded = false;
 
     try {
       session = await _uploadClient.ensureSession(
@@ -160,7 +131,7 @@ class UploadVideoController extends GetxController {
       uploadStage.value = "Téléversement...";
       _cancelToken = CancelToken();
 
-      videoUploaded = await _uploadClient.uploadFile(
+      final videoUploaded = await _uploadClient.uploadFile(
         session: session,
         file: selectedVideo!,
         cancelToken: _cancelToken,
@@ -186,22 +157,23 @@ class UploadVideoController extends GetxController {
         }
       }
 
-      final thumbPath = session.thumbnailPath.replaceFirst(
-        RegExp(r'\.(jpe?g|png)$', caseSensitive: false),
-        '.$thumbExt',
+      uploadStage.value = "Préparation miniature sécurisée...";
+      final thumbTicket = await _uploadClient.requestThumbnailTicket(
+        sessionId: session.sessionId,
+        file: thumbnail!,
+        contentType: thumbContentType,
+        thumbnailPath: session.thumbnailPath,
       );
-      _lastUploadedThumbPath = thumbPath;
-
-      final thumbRef = FirebaseStorage.instance.ref().child(thumbPath);
+      _lastUploadedThumbPath = thumbTicket.thumbnailPath;
 
       uploadStage.value = "Envoi de la miniature...";
-      final thumbUploaded = await _retryUploadFile(
+      final thumbUploaded = await _uploadClient.uploadThumbnailFile(
+        ticket: thumbTicket,
         file: thumbnail!,
-        storageRef: thumbRef,
+        cancelToken: _cancelToken,
         onProgress: (p) {
           uploadProgress.value = 0.7 + (0.25 * p);
         },
-        contentType: thumbContentType,
       );
 
       if (!thumbUploaded) {
@@ -214,7 +186,6 @@ class UploadVideoController extends GetxController {
       final durationSec =
           await VideoTools.getDurationSeconds(originalVideoPath!);
       final (w, h) = await VideoTools.getDimensions(originalVideoPath!);
-
       final user = Get.find<UserController>().user;
 
       final finalized = await _uploadClient.finalizeUpload(
@@ -226,7 +197,10 @@ class UploadVideoController extends GetxController {
           'songName': songName,
           'caption': caption,
           'storagePath': session.videoPath,
-          'thumbnailPath': thumbPath,
+          'thumbnailPath': thumbTicket.thumbnailPath,
+          'thumbnailHash': thumbTicket.expectedHash,
+          'thumbnailSize': thumbTicket.expectedSize,
+          'thumbnailContentType': thumbTicket.contentType,
           'status': 'processing',
           'likes': [],
           'reports': [],
@@ -260,92 +234,6 @@ class UploadVideoController extends GetxController {
       if (!isOptimizing.value) {
         resetUploadState();
       }
-    }
-  }
-
-  /* -------------------------------------------------------------------------- */
-  /* Firebase Storage helpers (miniature uniquement)                            */
-  /* -------------------------------------------------------------------------- */
-
-  Future<bool> _safeUploadFile({
-    required File file,
-    required Reference storageRef,
-    required Function(double) onProgress,
-    String? contentType,
-  }) async {
-    try {
-      final meta = SettableMetadata(
-        contentType: contentType ??
-            VideoTools.inferImageContentTypeFromPath(file.path),
-        cacheControl: 'public,max-age=86400',
-      );
-
-      final uploadTask = storageRef.putFile(file, meta);
-      _currentUploadTask = uploadTask;
-
-      final completer = Completer<bool>();
-
-      uploadTask.snapshotEvents.listen((snapshot) async {
-        switch (snapshot.state) {
-          case TaskState.running:
-            final total = snapshot.totalBytes;
-            final sent = snapshot.bytesTransferred;
-            final progress = total > 0 ? sent / total : 0.0;
-            onProgress(progress);
-            _handleNetworkLossDuringUpload();
-            break;
-          case TaskState.success:
-            completer.complete(true);
-            break;
-          case TaskState.error:
-          case TaskState.canceled:
-            completer.complete(false);
-            break;
-          default:
-            break;
-        }
-      }, onError: (_) => completer.complete(false));
-
-      return await completer.future
-          .timeout(_uploadTimeout, onTimeout: () => false);
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<bool> _retryUploadFile({
-    required File file,
-    required Reference storageRef,
-    required Function(double) onProgress,
-    String? contentType,
-    int maxRetries = 3,
-  }) async {
-    for (int attempt = 0; attempt < maxRetries; attempt++) {
-      final success = await _safeUploadFile(
-        file: file,
-        storageRef: storageRef,
-        onProgress: onProgress,
-        contentType: contentType,
-      );
-      if (success) return true;
-      await Future.delayed(Duration(seconds: 1 << attempt));
-    }
-    return false;
-  }
-
-  void _handleNetworkLossDuringUpload() async {
-    if (!_internetAvailable &&
-        _currentUploadTask != null &&
-        _currentUploadTask!.snapshot.state == TaskState.running) {
-      await _currentUploadTask!.pause();
-      _wasPaused = true;
-      showInfoToast('Connexion perdue, upload en pause.');
-    } else if (_wasPaused &&
-        _internetAvailable &&
-        _currentUploadTask?.snapshot.state == TaskState.paused) {
-      await _currentUploadTask!.resume();
-      _wasPaused = false;
-      showInfoToast('Connexion rétablie, upload repris.');
     }
   }
 
@@ -415,7 +303,8 @@ class UploadVideoController extends GetxController {
         isOptimizing(false);
 
         showInfoToast(
-            'Votre vidéo est en cours d’optimisation. Elle sera visible sous peu.');
+          'Votre vidéo est en cours d’optimisation. Elle sera visible sous peu.',
+        );
         await Future.delayed(const Duration(milliseconds: 200));
         Get.offAllNamed('/main', arguments: {'tab': 0, 'refresh': true});
 
@@ -434,8 +323,6 @@ class UploadVideoController extends GetxController {
     if (isOptimizing.value) return;
 
     _cancelToken?.cancel('user-cancelled');
-    _currentUploadTask?.cancel();
-
     await _uploadClient.clearPersistedSession();
 
     if (_activeSession != null) {
@@ -463,11 +350,9 @@ class UploadVideoController extends GetxController {
     songName = null;
     caption = null;
     originalVideoPath = null;
-    _currentUploadTask = null;
     _cancelToken = null;
     _activeSession = null;
     _lastUploadedThumbPath = null;
-    _wasPaused = false;
   }
 
   Future<void> _cleanupLocalFiles() async {

@@ -9,12 +9,11 @@ import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/connectivity_controller.dart';
+import 'package:adfoot/models/video.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 
 import 'package:adfoot/screens/profile_screen.dart';
-
 import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
-
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 
@@ -78,11 +77,11 @@ class _HomeScreenState extends State<HomeScreen>
   // Focus orchestrator helpers
   // ---------------------------------------------------------------------------
 
-  List<String> get _currentUrls =>
-      videoController.videoList.map((v) => v.videoUrl).toList();
+  List<Video> get _currentVideos =>
+      videoController.videoList.toList();
 
-  void _refreshFocusUrls() {
-    _focusOrchestrator.updateUrls(_currentUrls);
+  void _refreshFocusVideos() {
+    _focusOrchestrator.updateVideos(_currentVideos);
   }
 
   // ---------------------------------------------------------------------------
@@ -103,13 +102,13 @@ class _HomeScreenState extends State<HomeScreen>
     _focusOrchestrator = VideoFocusOrchestrator(
       contextKey: 'home',
       videoManager: videoManager,
-      urls: _currentUrls,
+      videos: _currentVideos,
       disposeWindow: 25,
       onRequestMore: () async {
         if (videoController.hasMore && !videoController.isLoading) {
           final fetched = await videoController.fetchPaginatedVideos();
           if (fetched) {
-            _refreshFocusUrls();
+            _refreshFocusVideos();
           }
         }
       },
@@ -179,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen>
         if (ok && mounted && videoController.videoList.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             videoController.currentIndex.value = 0;
-            _refreshFocusUrls();
+            _refreshFocusVideos();
             unawaited(_onPageChanged(0));
             unawaited(_updateWakelockForCurrent());
           });
@@ -196,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     if (connected && videoController.videoList.isEmpty) {
       await videoController.fetchPaginatedVideos();
-      _refreshFocusUrls();
+      _refreshFocusVideos();
     }
 
     if (mounted) _fadeController.forward();
@@ -205,7 +204,7 @@ class _HomeScreenState extends State<HomeScreen>
       final videos = videoController.videoList;
       if (videos.isNotEmpty) {
         videoController.currentIndex.value = 0;
-        _refreshFocusUrls();
+        _refreshFocusVideos();
         await _onPageChanged(0);
         await _updateWakelockForCurrent();
       }
@@ -213,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ---------------------------------------------------------------------------
-  // Page change / playback orchestration (via FocusOrchestrator)
+  // Page change / playback orchestration
   // ---------------------------------------------------------------------------
 
   Future<void> _onPageChanged(int index) async {
@@ -222,10 +221,9 @@ class _HomeScreenState extends State<HomeScreen>
 
     videoController.currentIndex.value = index;
 
-    _refreshFocusUrls();
+    _refreshFocusVideos();
     await _focusOrchestrator.onIndexChanged(index);
 
-    // Petit délai de sécurité (contrôleur play/buffering)
     await Future.delayed(const Duration(milliseconds: 50));
     await _updateWakelockForCurrent();
   }
@@ -279,9 +277,8 @@ class _HomeScreenState extends State<HomeScreen>
                   await Get.to(
                     () => ProfileScreen(uid: user.uid, isReadOnly: false),
                   );
-                  // Re-déclenche le focus au retour (sans casser le flux)
                   videoController.currentIndex.refresh();
-                  _refreshFocusUrls();
+                  _refreshFocusVideos();
                   await _onPageChanged(videoController.currentIndex.value);
                   await _updateWakelockForCurrent();
                 },
@@ -305,44 +302,43 @@ class _HomeScreenState extends State<HomeScreen>
           ? _buildNoInternet()
           : Obx(() {
               final videos = videoController.videoList;
-if (videos.isEmpty) {
-  final user = userController.user;
 
-  return Stack(
-    children: [
-      const Center(
-        child: Text(
-          'Aucune vidéo disponible',
-          style: TextStyle(
-            color: AdColors.onSurfaceMuted,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-
-      if (user != null && user.role == 'joueur')
-        Positioned(
-          bottom: 32,
-          right: 24,
-          child: FloatingActionButton(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
-            onPressed: () async {
-              await videoManager.pauseAll('home');
-              await _setWakelock(false);
-              final result = await Get.to(() => const AddVideo());
-              if (result == true) {
-                await videoController.refreshVideos();
+              if (videos.isEmpty) {
+                final user = userController.user;
+                return Stack(
+                  children: [
+                    const Center(
+                      child: Text(
+                        'Aucune vidéo disponible',
+                        style: TextStyle(
+                          color: AdColors.onSurfaceMuted,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (user != null && user.role == 'joueur')
+                      Positioned(
+                        bottom: 32,
+                        right: 24,
+                        child: FloatingActionButton(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          onPressed: () async {
+                            await videoManager.pauseAll('home');
+                            await _setWakelock(false);
+                            final result =
+                                await Get.to(() => const AddVideo());
+                            if (result == true) {
+                              await videoController.refreshVideos();
+                            }
+                          },
+                          child: const Icon(Icons.add),
+                        ),
+                      ),
+                  ],
+                );
               }
-            },
-            child: const Icon(Icons.add),
-          ),
-        ),
-    ],
-  );
-}
-
 
               return PageView.builder(
                 controller: _pageController,
@@ -388,13 +384,6 @@ if (videos.isEmpty) {
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 15,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black54,
-                                      offset: Offset(1, 1),
-                                      blurRadius: 2,
-                                    ),
-                                  ],
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -406,59 +395,10 @@ if (videos.isEmpty) {
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 14,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black54,
-                                      offset: Offset(1, 1),
-                                      blurRadius: 2,
-                                    ),
-                                  ],
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: screenHeight * 0.12,
-                        right: 16,
-                        child: GestureDetector(
-                          onTap: () async {
-                            await videoManager.pauseAll('home');
-                            await _setWakelock(false);
-                            await Get.to(
-                              () => ProfileScreen(
-                                uid: video.uid,
-                                isReadOnly: true,
-                              ),
-                            );
-                            videoController.currentIndex.refresh();
-                            _refreshFocusUrls();
-                            await _onPageChanged(videoController.currentIndex.value);
-                            await _updateWakelockForCurrent();
-                          },
-                          child: Stack(
-                            alignment: Alignment.bottomCenter,
-                            clipBehavior: Clip.none,
-                            children: [
-                              CircleAvatar(
-                                backgroundImage: NetworkImage(
-                                  video.profilePhoto.isNotEmpty
-                                      ? video.profilePhoto
-                                      : 'https://via.placeholder.com/150',
-                                ),
-                                radius: 28,
-                              ),
-                              if (userController.user?.uid != video.uid &&
-                                  !(userController.user?.followingsList
-                                          .contains(video.uid) ??
-                                      false))
-                                Positioned(
-                                  bottom: -6,
-                                  child: _FollowToggleButton(video: video),
-                                ),
                             ],
                           ),
                         ),
@@ -487,103 +427,6 @@ if (videos.isEmpty) {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Follow toggle (inchangé)
-// ---------------------------------------------------------------------------
-
-class _FollowToggleButton extends StatefulWidget {
-  final dynamic video;
-  const _FollowToggleButton({required this.video});
-
-  @override
-  State<_FollowToggleButton> createState() => _FollowToggleButtonState();
-}
-
-class _FollowToggleButtonState extends State<_FollowToggleButton> {
-  bool _isLoading = false;
-  bool _hidden = false;
-
-  @override
-  Widget build(BuildContext context) {
-    if (_hidden) return const SizedBox.shrink();
-
-    final userCtrl = Get.find<UserController>();
-    final followCtrl = Get.find<FollowController>();
-    final currUser = userCtrl.user;
-    final targetUid = widget.video.uid;
-
-    return GestureDetector(
-      onTap: () async {
-        if (_isLoading || currUser == null || currUser.uid == targetUid) return;
-
-        final already = currUser.followingsList.contains(targetUid);
-
-        setState(() {
-          _isLoading = true;
-          _hidden = true;
-          if (already) {
-            currUser.followingsList.remove(targetUid);
-            currUser.followings--;
-          } else {
-            currUser.followingsList.add(targetUid);
-            currUser.followings++;
-          }
-        });
-
-        final ok = already
-            ? await followCtrl.unfollowUser(currUser.uid, targetUid)
-            : await followCtrl.followUser(currUser.uid, targetUid);
-
-        if (!ok && mounted) {
-          setState(() {
-            _hidden = false;
-            if (already) {
-              currUser.followingsList.add(targetUid);
-              currUser.followings++;
-            } else {
-              currUser.followingsList.remove(targetUid);
-              currUser.followings--;
-            }
-            _isLoading = false;
-          });
-          Get.snackbar(
-            'Erreur',
-            'Impossible d’effectuer l’action.',
-            backgroundColor: AdColors.error,
-            colorText: AdColors.onSurface,
-          );
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: AdColors.brand,
-          shape: BoxShape.circle,
-          border: Border.all(color: AdColors.surface, width: 1.5),
-          boxShadow: [
-            BoxShadow(
-              color: AdColors.brand.withOpacity(0.35),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: _isLoading
-            ? const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AdColors.brandOn,
-                ),
-              )
-            : const Icon(Icons.add, size: 16, color: AdColors.brandOn),
       ),
     );
   }

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -23,14 +24,14 @@ class ProfileVideoScrollView extends StatefulWidget {
   });
 
   @override
-  State<ProfileVideoScrollView> createState() =>
-      _ProfileVideoScrollViewState();
+  State<ProfileVideoScrollView> createState() => _ProfileVideoScrollViewState();
 }
 
 class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     with WidgetsBindingObserver {
   late final PageController _pageController;
   late final VideoController _vc;
+
   final VideoManager _videoManager = VideoManager();
   late final VideoFocusOrchestrator _focusOrchestrator;
 
@@ -60,16 +61,17 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
             permanent: true,
           );
 
+    // ✅ Orchestrateur (préload/pause/init/play/dispose window)
     _focusOrchestrator = VideoFocusOrchestrator(
       contextKey: widget.contextKey,
       videoManager: _videoManager,
-      urls: _currentUrls,
+      videos: _currentVideos,
       disposeWindow: _videoSlidingWindowLimit,
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_isDisposed && !_isExiting) {
-        _handleIndexChange(_currentIndex);
+        unawaited(_handleIndexChange(_currentIndex));
       }
     });
   }
@@ -95,8 +97,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_isDisposed || _isExiting) return;
 
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       unawaited(_videoManager.pauseAll(widget.contextKey));
     }
   }
@@ -135,14 +136,17 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     _currentIndex = idx;
     _vc.currentIndex.value = idx;
 
-    _focusOrchestrator.updateUrls(_currentUrls);
+    // ✅ Assure que l’orchestrateur a la liste à jour
+    _focusOrchestrator.updateVideos(_currentVideos);
+
+    // ✅ Orchestration centralisée (préload/pause/init/play/dispose window)
     await _focusOrchestrator.onIndexChanged(idx);
 
     if (mounted) setState(() {});
   }
 
-  List<String> get _currentUrls =>
-      widget.videos.map((v) => v.videoUrl).toList();
+  /// Copie défensive : évite les effets de bord si la liste change en amont
+  List<Video> get _currentVideos => List.of(widget.videos);
 
   // ---------------------------------------------------------------------------
   // UI
