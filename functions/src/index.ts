@@ -15,7 +15,11 @@ import {CloudEvent} from "firebase-functions/v2";
 import {randomUUID} from "crypto";
 
 import {db, fieldValue} from "./firebase";
-import {createUploadSession, finalizeUpload} from "./upload_session";
+import {
+  createUploadSession,
+  finalizeUpload,
+  requestThumbnailUploadUrl,
+} from "./upload_session";
 
 /* -------------------------------------------------------------------------- */
 /* REGION & INIT                                                               */
@@ -294,10 +298,12 @@ export {
   reportVideo,
   deleteVideo,
   logClientEvents,
+  shareVideo,
+  videoActionLog,
 } from "./actions";
 
 /* -------------------------------------------------------------------------- */
 /* UPLOAD SESSION                                                              */
 /* -------------------------------------------------------------------------- */
 
-export {createUploadSession, finalizeUpload};
+export {createUploadSession, finalizeUpload, requestThumbnailUploadUrl};

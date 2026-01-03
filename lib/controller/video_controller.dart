@@ -19,14 +19,14 @@ class VideoController extends GetxController {
   VideoController({required this.contextKey});
 
   // ------------------------------------------------------------------
-  //                            UI STATE
+  // UI STATE
   // ------------------------------------------------------------------
 
   final videoList = <Video>[].obs;
   final currentIndex = 0.obs;
 
   // ------------------------------------------------------------------
-  //                          PAGINATION
+  // PAGINATION
   // ------------------------------------------------------------------
 
   DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
@@ -38,14 +38,14 @@ class VideoController extends GetxController {
   bool get isLoading => _isLoading;
 
   // ------------------------------------------------------------------
-  //                       VIDEO MANAGER
+  // VIDEO MANAGER
   // ------------------------------------------------------------------
 
   final VideoManager _videoManager = VideoManager();
   VideoManager get videoManager => _videoManager;
 
   // ------------------------------------------------------------------
-  //                    FEATURE FLAGS (ADAPTIVE / HLS)
+  // FEATURE FLAGS (ADAPTIVE / HLS)
   // ------------------------------------------------------------------
 
   bool _adaptivePlaybackEnabled = false;
@@ -76,7 +76,7 @@ class VideoController extends GetxController {
   }
 
   // ------------------------------------------------------------------
-  //                 CLOUD FUNCTIONS / CONNECTIVITY
+  // CLOUD FUNCTIONS / CONNECTIVITY
   // ------------------------------------------------------------------
 
   final FirebaseFunctions _functions =
@@ -84,7 +84,7 @@ class VideoController extends GetxController {
   final Connectivity _connectivity = Connectivity();
 
   // ------------------------------------------------------------------
-  //                       INTERNAL LOCKS
+  // INTERNAL LOCKS
   // ------------------------------------------------------------------
 
   Completer<void>? _fetchLock;
@@ -93,7 +93,7 @@ class VideoController extends GetxController {
   Timer? _indexDebouncer;
 
   // ------------------------------------------------------------------
-  //                           LIFECYCLE
+  // LIFECYCLE
   // ------------------------------------------------------------------
 
   @override
@@ -123,7 +123,7 @@ class VideoController extends GetxController {
   }
 
   // ------------------------------------------------------------------
-  //                     FIRESTORE STREAM (LIVE)
+  // FIRESTORE STREAM (LIVE)
   // ------------------------------------------------------------------
 
   void listenToVideos() {
@@ -160,7 +160,7 @@ class VideoController extends GetxController {
   }
 
   // ------------------------------------------------------------------
-  //                        PAGINATED FETCH
+  // PAGINATED FETCH
   // ------------------------------------------------------------------
 
   Future<bool> fetchPaginatedVideos({bool isRefresh = false}) async {
@@ -222,7 +222,7 @@ class VideoController extends GetxController {
   }
 
   // ------------------------------------------------------------------
-  //                         FULL REFRESH (RESTORED ✅)
+  // FULL REFRESH
   // ------------------------------------------------------------------
 
   Future<bool> refreshVideos() async {
@@ -239,7 +239,7 @@ class VideoController extends GetxController {
   }
 
   // ------------------------------------------------------------------
-  //                   INITIAL PLAYBACK SETUP
+  // INITIAL PLAYBACK SETUP
   // ------------------------------------------------------------------
 
   Future<void> _setupInitialPlayback() async {
@@ -261,6 +261,12 @@ class VideoController extends GetxController {
       activeUrl: firstUrl,
     );
 
+    final resolved = videoManager.getResolvedUrl(contextKey, firstUrl);
+    if (resolved != null && resolved.isNotEmpty && first.resolvedUrl != resolved) {
+      first.resolvedUrl = resolved;
+      videoList[0] = first;
+      videoList.refresh();
+    }
     await videoManager.pauseAllExcept(contextKey, firstUrl);
 
     videoManager.preloadSurrounding(
@@ -273,7 +279,7 @@ class VideoController extends GetxController {
   }
 
   // ------------------------------------------------------------------
-  //                  INDEX CHANGE (THROTTLED)
+  // INDEX CHANGE (THROTTLED)
   // ------------------------------------------------------------------
 
   Future<void> _onCurrentIndexChangedThrottled(int index) async {
@@ -301,7 +307,7 @@ class VideoController extends GetxController {
   Future<void> pauseAll() => videoManager.pauseAll(contextKey);
 
   // ------------------------------------------------------------------
-  //                  ACTIONS VIA CLOUD FUNCTIONS
+  // ACTIONS VIA CLOUD FUNCTIONS
   // ------------------------------------------------------------------
 
   Future<ActionResponse> likeVideo(String videoId, String userId) async {
@@ -315,6 +321,12 @@ class VideoController extends GetxController {
       final liked = response.data?['liked'] == true;
       _applyLikeState(videoId, userId, liked);
     } else {
+      unawaited(_logActionFailure(
+        'likeVideo',
+        videoId: videoId,
+        code: response.code,
+        message: response.message,
+      ));
       _restoreFromStreamSoon(videoId);
       response.showToast();
     }
@@ -341,6 +353,13 @@ class VideoController extends GetxController {
         userId,
         resolved.data?['reportCount'] as int?,
       );
+    } else {
+      unawaited(_logActionFailure(
+        'reportVideo',
+        videoId: videoId,
+        code: resolved.code,
+        message: resolved.message,
+      ));
     }
 
     resolved.showToast(includeSuccess: true);
@@ -360,6 +379,12 @@ class VideoController extends GetxController {
       videoList.refresh();
       showSuccessToast(response.message);
     } else {
+      unawaited(_logActionFailure(
+        'deleteVideo',
+        videoId: videoId,
+        code: response.code,
+        message: response.message,
+      ));
       response.showToast();
     }
 
@@ -367,24 +392,36 @@ class VideoController extends GetxController {
   }
 
   // ------------------------------------------------------------------
-  //               SHARE (RESTORED – Firestore direct ✅)
+  // SHARE (Function + anti-spam)
   // ------------------------------------------------------------------
 
-  Future<bool> partagerVideo(String videoId) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('videos')
-          .doc(videoId)
-          .update({'shareCount': FieldValue.increment(1)});
-      return true;
-    } catch (e) {
-      debugPrint('❌ partagerVideo error: $e');
-      return false;
+  Future<ActionResponse> partagerVideo(String videoId) async {
+    final response = await _callAction(
+      'shareVideo',
+      {'videoId': videoId},
+      offlineMessage: 'Connexion requise pour partager.',
+    );
+
+    if (response.success) {
+      _applyShareState(
+        videoId,
+        response.data?['shareCount'] as int?,
+      );
+    } else {
+      unawaited(_logActionFailure(
+        'shareVideo',
+        videoId: videoId,
+        code: response.code,
+        message: response.message,
+      ));
     }
+
+    response.showToast();
+    return response;
   }
 
   // ------------------------------------------------------------------
-  //                          HELPERS
+  // HELPERS
   // ------------------------------------------------------------------
 
   Future<ActionResponse> _callAction(
@@ -407,14 +444,12 @@ class VideoController extends GetxController {
       final result = await callable.call<Map<String, dynamic>>(payload);
       return ActionResponse.fromMap(result.data);
     } on FirebaseFunctionsException catch (e) {
-      debugPrint('❌ $functionName error: ${e.code} ${e.message}');
       return ActionResponse.failure(
         message: e.message ?? 'Action impossible.',
         code: e.code,
         retriable: e.code == 'unavailable',
       );
     } catch (e) {
-      debugPrint('❌ $functionName unknown error: $e');
       return ActionResponse.failure(
         message: 'Action impossible pour le moment.',
         retriable: true,
@@ -425,6 +460,9 @@ class VideoController extends GetxController {
   Future<bool> _isOffline() async {
     try {
       final res = await _connectivity.checkConnectivity();
+      if (res is ConnectivityResult) {
+        return res == ConnectivityResult.none;
+      }
       return res.contains(ConnectivityResult.none);
     } catch (_) {
       return false;
@@ -463,10 +501,49 @@ class VideoController extends GetxController {
     videoList.refresh();
   }
 
+  void _applyShareState(String videoId, int? shareCount) {
+    final idx = videoList.indexWhere((v) => v.id == videoId);
+    if (idx == -1) return;
+
+    final video = videoList[idx];
+    video.shareCount = shareCount ?? (video.shareCount + 1);
+
+    videoList[idx] = video;
+    videoList.refresh();
+  }
+
   void _restoreFromStreamSoon(String videoId) {
     Future.delayed(const Duration(milliseconds: 400), () {
       final idx = videoList.indexWhere((v) => v.id == videoId);
       if (idx != -1) videoList.refresh();
     });
+  }
+
+  Future<void> _logActionFailure(
+    String action, {
+    String? videoId,
+    String? code,
+    String? message,
+    Map<String, dynamic>? extra,
+  }) async {
+    try {
+      if (await _isOffline()) return;
+
+      final callable = _functions.httpsCallable(
+        'videoActionLog',
+        options: HttpsCallableOptions(
+          timeout: const Duration(seconds: 6),
+        ),
+      );
+
+      await callable.call({
+        'action': action,
+        'videoId': videoId,
+        'code': code,
+        'message': message,
+        'extra': extra ?? {},
+        'platform': kIsWeb ? 'web' : 'mobile',
+      });
+    } catch (_) {}
   }
 }

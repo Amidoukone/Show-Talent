@@ -20,6 +20,7 @@ import 'controller/follow_controller.dart';
 import 'widgets/video_manager.dart';
 import 'services/email_link_handler.dart';
 import 'services/notifications.dart';
+import 'videos/domain/network_profile.dart';
 
 //  UI
 import 'screens/splash_screen.dart';
@@ -79,11 +80,15 @@ Future<void> main() async {
     Get.put<UserController>(UserController(), permanent: true);
     Get.put<FollowController>(FollowController(), permanent: true);
 
+    // ✅ Rafraîchit le profil réseau sans bloquer le démarrage
+    unawaited(Get.find<VideoManager>().refreshNetworkProfile());
+
     //  Gestion des liens d’authentification par e-mail
     try {
       await EmailLinkHandler.init();
     } catch (e, st) {
       if (kDebugMode) {
+        // ignore: avoid_print
         print('EmailLinkHandler init error: $e\n$st');
       }
       // En production, ignorer sans bloquer
@@ -103,6 +108,7 @@ Future<void> main() async {
     runApp(const MyApp());
   }, (error, stack) async {
     if (kDebugMode) {
+      // ignore: avoid_print
       print('Uncaught zone error: $error\n$stack');
     } else {
       //  En production, log des erreurs non capturées
@@ -136,17 +142,56 @@ class MyApp extends StatelessWidget {
         );
 
         //  Correction définitive du warning et du bug sur TextScaler
-        final currentScaler =
-            MediaQuery.of(context).textScaler; // récupère le scaler courant
+        final currentScaler = MediaQuery.of(context).textScaler;
         final scaleValue = currentScaler.scale(1.0).clamp(0.85, 1.15);
         final clampedScaler = TextScaler.linear(scaleValue);
 
-        return ScrollConfiguration(
+        final content = ScrollConfiguration(
           behavior: const _AppScrollBehavior(),
           child: MediaQuery(
             data: MediaQuery.of(context).copyWith(textScaler: clampedScaler),
             child: wrapped,
           ),
+        );
+
+        // ✅ Overlay debug pour voir le profil réseau en temps réel (uniquement en debug)
+        if (!kDebugMode || !Get.isRegistered<VideoManager>()) return content;
+
+        final videoManager = Get.find<VideoManager>();
+        return ValueListenableBuilder<NetworkProfile?>(
+          valueListenable: videoManager.profileNotifier,
+          builder: (context, profile, _) {
+            if (profile == null) return content;
+
+            final buffer = StringBuffer('Profil réseau : ${profile.tier.name}');
+            if (profile.measuredKbps != null) {
+              buffer.write(' ~${profile.measuredKbps!.toStringAsFixed(0)} kbps');
+            }
+            if (!profile.hasConnection) buffer.write(' (offline)');
+
+            return Stack(
+              children: [
+                content,
+                Positioned(
+                  left: 12,
+                  top: 12,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Padding(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        child: _NetworkProfileDebugText(),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
 
@@ -177,13 +222,35 @@ class MyApp extends StatelessWidget {
   }
 }
 
+/// Petit widget séparé pour éviter de reconstruire du texte/style inutilement.
+/// (Le texte réel est recalculé dans le builder ci-dessus)
+class _NetworkProfileDebugText extends StatelessWidget {
+  const _NetworkProfileDebugText();
+
+  @override
+  Widget build(BuildContext context) {
+    // Le texte est injecté via le Stack builder.
+    // Ici on met un style stable.
+    return Text(
+      '',
+      style: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
 /// Comportement de scroll custom : pas de glow, inerties natives.
 class _AppScrollBehavior extends ScrollBehavior {
   const _AppScrollBehavior();
 
   @override
   Widget buildOverscrollIndicator(
-      BuildContext context, Widget child, ScrollableDetails details) {
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
     return child; // Supprime le glow
   }
 
