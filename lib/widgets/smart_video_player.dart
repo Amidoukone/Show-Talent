@@ -235,9 +235,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     if (_isDisposed) return;
 
     final c = _ctrl;
-    if (!_isControllerValid(c)) return;
-
-    final v = c!.value;
+    VideoPlayerValue? v;
+    try {
+      if (!_isControllerValid(c)) return;
+      v = c!.value;
+    } catch (_) {
+      _bindPlayer(null);
+      return;
+    }
     if (v.hasError) {
       _becomePassive();
       return;

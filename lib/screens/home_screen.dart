@@ -377,8 +377,8 @@ class _HomeScreenState extends State<HomeScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                video.description.isNotEmpty
-                                    ? video.description
+                                video.description.trim().isNotEmpty
+                                    ? video.description.trim()
                                     : 'Pas de description',
                                 style: const TextStyle(
                                   color: Colors.white,
@@ -389,8 +389,8 @@ class _HomeScreenState extends State<HomeScreen>
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                video.caption.isNotEmpty
-                                    ? video.caption
+                                video.caption.trim().isNotEmpty
+                                    ? video.caption.trim()
                                     : 'Pas de légende',
                                 style: const TextStyle(
                                   color: Colors.white,
