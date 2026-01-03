@@ -594,9 +594,13 @@ class VideoManager {
     final resolved = _resolveKey(contextKey, url);
     final player = _lruByContext[contextKey]?[resolved];
     if (player == null) return null;
-    final v = player.controller.value;
-    if (!v.isInitialized || v.hasError) return null;
-    return player;
+    try {
+      final v = player.controller.value;
+      if (!v.isInitialized || v.hasError) return null;
+      return player;
+    } catch (_) {
+      return null;
+    }
   }
 
   VideoLoadState? getLoadState(String contextKey, String url) =>
