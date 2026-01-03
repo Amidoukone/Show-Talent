@@ -179,8 +179,8 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        vid.description.isNotEmpty
-                            ? vid.description
+                        vid.description.trim().isNotEmpty
+                            ? vid.description.trim()
                             : 'Pas de description',
                         style: const TextStyle(
                           color: Colors.white,
@@ -197,7 +197,9 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        vid.caption.isNotEmpty ? vid.caption : 'Pas de légende',
+                        vid.caption.trim().isNotEmpty
+                            ? vid.caption.trim()
+                            : 'Pas de légende',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 15,
