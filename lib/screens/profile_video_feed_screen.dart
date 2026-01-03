@@ -179,9 +179,9 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        vid.songName.isNotEmpty
-                            ? vid.songName
-                            : 'Musique inconnue',
+                        vid.description.isNotEmpty
+                            ? vid.description
+                            : 'Pas de description',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,

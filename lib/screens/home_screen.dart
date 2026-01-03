@@ -377,9 +377,9 @@ class _HomeScreenState extends State<HomeScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                video.songName.isNotEmpty
-                                    ? ' ${video.songName}'
-                                    : 'Musique inconnue',
+                                video.description.isNotEmpty
+                                    ? video.description
+                                    : 'Pas de description',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
