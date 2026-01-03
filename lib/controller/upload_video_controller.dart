@@ -24,7 +24,7 @@ class UploadVideoController extends GetxController {
 
   File? selectedVideo;
   File? thumbnail;
-  String? songName;
+  String? description;
   String? caption;
   String? originalVideoPath;
 
@@ -45,7 +45,7 @@ class UploadVideoController extends GetxController {
   /* -------------------------------------------------------------------------- */
 
   Future<bool> prepareUpload({
-    required String song,
+    required String description,
     required String cap,
     required String videoPath,
   }) async {
@@ -81,7 +81,7 @@ class UploadVideoController extends GetxController {
       }
 
       uploadProgress.value = 0.15;
-      songName = song.trim();
+      this.description = description.trim();
       caption = cap.trim();
       return true;
     } catch (e) {
@@ -194,7 +194,9 @@ class UploadVideoController extends GetxController {
           'id': session.sessionId,
           'uid': user?.uid ?? '',
           'profilePhoto': user?.photoProfil ?? '',
-          'songName': songName,
+          // On stocke la description et on duplique pour l’ancien champ `songName`
+          'description': description,
+          'songName': description,
           'caption': caption,
           'storagePath': session.videoPath,
           'thumbnailPath': thumbTicket.thumbnailPath,
@@ -347,7 +349,7 @@ class UploadVideoController extends GetxController {
     uploadStage.value = '';
     selectedVideo = null;
     thumbnail = null;
-    songName = null;
+    description = null;
     caption = null;
     originalVideoPath = null;
     _cancelToken = null;

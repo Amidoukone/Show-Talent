@@ -27,9 +27,9 @@ class _UploadFormState extends State<UploadForm> {
       Get.find<UploadVideoController>();
 
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController songController = TextEditingController();
+  final TextEditingController descriptionController = TextEditingController();
   final TextEditingController captionController = TextEditingController();
-  final FocusNode _songFocus = FocusNode();
+  final FocusNode _descriptionFocus = FocusNode();
   final FocusNode _captionFocus = FocusNode();
 
   late VideoPlayerController _videoPlayerController;
@@ -54,9 +54,9 @@ class _UploadFormState extends State<UploadForm> {
   void dispose() {
     _videoPlayerController.pause();
     _videoPlayerController.dispose();
-    songController.dispose();
+    descriptionController.dispose();
     captionController.dispose();
-    _songFocus.dispose();
+    _descriptionFocus.dispose();
     _captionFocus.dispose();
     super.dispose();
   }
@@ -95,7 +95,7 @@ class _UploadFormState extends State<UploadForm> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     // Fermer les claviers avant d’ouvrir le loader
-    _songFocus.unfocus();
+    _descriptionFocus.unfocus();
     _captionFocus.unfocus();
 
     Get.dialog(
@@ -105,7 +105,7 @@ class _UploadFormState extends State<UploadForm> {
 
     try {
       final isReady = await uploadVideoController.prepareUpload(
-        song: songController.text.trim(),
+        description: descriptionController.text.trim(),
         cap: captionController.text.trim(),
         videoPath: widget.videoPath,
       );
@@ -156,7 +156,7 @@ class _UploadFormState extends State<UploadForm> {
         return GestureDetector(
           onTap: () {
             // Ferme le clavier si on tape ailleurs
-            _songFocus.unfocus();
+            _descriptionFocus.unfocus();
             _captionFocus.unfocus();
           },
           child: SingleChildScrollView(
@@ -227,15 +227,16 @@ class _UploadFormState extends State<UploadForm> {
                   child: Column(
                     children: [
                       TextFormField(
-                        focusNode: _songFocus,
-                        controller: songController,
+                        focusNode: _descriptionFocus,
+                        controller: descriptionController,
                         textInputAction: TextInputAction.next,
                         maxLength: 80,
+                        style: const TextStyle(color: AdColors.onSurface),
                         decoration: const InputDecoration(
                           labelText: 'Description (obligatoire)',
                           counterText: '',
                           filled: true,
-                          fillColor: Color(0xFFEFEFEF),
+                          fillColor: AdColors.surfaceCard,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(10)),
                           ),
@@ -262,6 +263,7 @@ class _UploadFormState extends State<UploadForm> {
                         textInputAction: TextInputAction.done,
                         maxLines: 2,
                         maxLength: 140,
+                        style: const TextStyle(color: AdColors.onSurface),
                         decoration: InputDecoration(
                           labelText: 'Légende (obligatoire)',
                           counterText: '',
