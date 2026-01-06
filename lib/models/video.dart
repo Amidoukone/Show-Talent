@@ -101,7 +101,7 @@ class Video {
   });
 
   factory Video.fromMap(Map<String, dynamic> map) {
-    String _readString(dynamic value) =>
+    String readString(dynamic value) =>
         value == null ? '' : value.toString().trim();
 
     final rawSources = (map['sources'] as List?)
@@ -119,15 +119,22 @@ class Video {
     return Video(
       id: map['id'] ?? '',
       videoUrl: inferredUrl,
-      thumbnailUrl: _readString(
+      thumbnailUrl: readString(
         map['thumbnail'] ?? map['thumbnailUrl'] ?? map['thumbnailPath'],
       ),
-      description: _readString(
+      description: readString(
         map['description'] ?? map['songName'] ?? map['title'],
       ),
-      caption: _readString(map['caption'] ?? map['captionText'] ?? map['legend']),
-      profilePhoto: _readString(map['profilePhoto']),
-      uid: _readString(map['uid']),
+      caption: readString(
+  map['caption'] ??
+  map['captionText'] ??
+  map['legend'] ??
+  map['legende'] ??
+  map['légende'],
+),
+
+      profilePhoto: readString(map['profilePhoto']),
+      uid: readString(map['uid']),
       likes: List<String>.from(map['likes'] ?? []),
       shareCount: map['shareCount'] ?? 0,
       reports: List<String>.from(map['reports'] ?? []),
