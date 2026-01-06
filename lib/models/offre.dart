@@ -19,6 +19,7 @@ class Offre {
   String? posteRecherche;
   String? pieceJointeUrl;
   int? vues;
+  List<String>? viewedBy;
   DateTime? archivedAt;
   DateTime? lastUpdated;
 
@@ -38,6 +39,7 @@ class Offre {
     this.posteRecherche,
     this.pieceJointeUrl,
     this.vues,
+    this.viewedBy,
     this.archivedAt,
     this.lastUpdated,
   });
@@ -61,6 +63,7 @@ class Offre {
       'posteRecherche': posteRecherche,
       'pieceJointeUrl': pieceJointeUrl,
       'vues': vues,
+      'viewedBy': viewedBy,
       'archivedAt': archivedAt,
       'lastUpdated': lastUpdated,
     };
@@ -89,6 +92,11 @@ class Offre {
       posteRecherche: map['posteRecherche'] as String?,
       pieceJointeUrl: map['pieceJointeUrl'] as String?,
       vues: (map['vues'] as num?)?.toInt(),
+      viewedBy: map['viewedBy'] is List
+          ? (map['viewedBy'] as List)
+              .map((id) => id.toString())
+              .toList()
+          : null,
       archivedAt: (map['archivedAt'] as Timestamp?)?.toDate(),
       lastUpdated: (map['lastUpdated'] as Timestamp?)?.toDate(),
     );

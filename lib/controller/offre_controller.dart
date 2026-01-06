@@ -63,6 +63,7 @@ class OffreController extends GetxController {
               posteRecherche: offre.posteRecherche,
               pieceJointeUrl: offre.pieceJointeUrl,
               vues: offre.vues,
+              viewedBy: offre.viewedBy,
               archivedAt: offre.archivedAt,
               lastUpdated: DateTime.now(),
             );
@@ -107,9 +108,33 @@ class OffreController extends GetxController {
     if (viewer.uid == offre.recruteur.uid) return;
 
     try {
-      await _firestore.collection('offres').doc(offre.id).update({
-        'vues': FieldValue.increment(1),
-        'lastUpdated': FieldValue.serverTimestamp(),
+      final docRef = _firestore.collection('offres').doc(offre.id);
+
+      await _firestore.runTransaction((txn) async {
+        final snap = await txn.get(docRef);
+        final data = snap.data();
+        if (data == null) return;
+
+        final rawRecruteur = data['recruteur'];
+        final recruteurMap =
+            rawRecruteur is Map ? Map<String, dynamic>.from(rawRecruteur) : null;
+        final recruteurId = recruteurMap?['uid']?.toString();
+
+        // 🛡️ Sécurité anti-double comptage
+        final viewedByRaw = data['viewedBy'];
+        final viewedBy = viewedByRaw is List
+            ? viewedByRaw.map((e) => e.toString()).toList()
+            : <String>[];
+
+        if (viewer.uid == recruteurId || viewedBy.contains(viewer.uid)) {
+          return;
+        }
+
+        txn.update(docRef, {
+          'vues': FieldValue.increment(1),
+          'viewedBy': FieldValue.arrayUnion([viewer.uid]),
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
       });
     } catch (e, st) {
       developer.log(
