@@ -317,15 +317,18 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       return const SizedBox.shrink();
     }
 
-    final double w = (val.size.width > 0) ? val.size.width.toDouble() : 9.0;
-    final double h = (val.size.height > 0) ? val.size.height.toDouble() : 16.0;
+    final double videoW = val.size.width > 0 ? val.size.width : 9.0;
+    final double videoH = val.size.height > 0 ? val.size.height : 16.0;
 
-    return FittedBox(
-      fit: BoxFit.cover,
-      child: SizedBox(
-        width: w,
-        height: h,
-        child: VideoPlayer(ctrl),
+    return Positioned.fill(
+      child: FittedBox(
+        fit: BoxFit.cover,
+        alignment: Alignment.center,
+        child: SizedBox(
+          width: videoW,
+          height: videoH,
+          child: VideoPlayer(ctrl),
+        ),
       ),
     );
   }

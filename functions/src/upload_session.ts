@@ -10,6 +10,10 @@ import {db, fieldValue, storage} from "./firebase";
 const REGION = "europe-west1";
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 
+/* -------------------------------------------------------------------------- */
+/* TYPES                                                                       */
+/* -------------------------------------------------------------------------- */
+
 interface ThumbnailGuard {
   hash?: string;
   size?: number;
@@ -25,6 +29,47 @@ interface VideoDoc {
 }
 
 type RawMetadata = Record<string, unknown>;
+
+/**
+ * Métadonnées upload (robustes) : on déclare explicitement les clés possibles
+ * pour éviter tout `any` et rester ESLint-safe.
+ */
+type UploadMetadata = RawMetadata & {
+  // Canonique (nouveau)
+  description?: unknown;
+  caption?: unknown;
+
+  // Legacy / alias possibles
+  songName?: unknown;
+  title?: unknown;
+  desc?: unknown;
+
+  captionText?: unknown;
+  legend?: unknown;
+  legende?: unknown;
+  "légende"?: unknown;
+
+  // Champs déjà utilisés
+  profilePhoto?: unknown;
+  storagePath?: unknown;
+  thumbnailPath?: unknown;
+  thumbnailHash?: unknown;
+  thumbnailSize?: unknown;
+  thumbnailContentType?: unknown;
+
+  // Stats
+  status?: unknown;
+  likes?: unknown;
+  reports?: unknown;
+  reportCount?: unknown;
+  shareCount?: unknown;
+  optimized?: unknown;
+
+  // Media
+  duration?: unknown;
+  width?: unknown;
+  height?: unknown;
+};
 
 interface ParsedMetadata {
   description?: string;
@@ -47,7 +92,91 @@ interface ParsedMetadata {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                CREATE SESSION                              */
+/* HELPERS                                                                     */
+/* -------------------------------------------------------------------------- */
+
+function parseImageContentType(raw: unknown): string {
+  const value = typeof raw === "string" ? raw.trim().toLowerCase() : "image/jpeg";
+  // NB: on conserve ton comportement existant
+  if (!ALLOWED_IMAGE_TYPES.includes(value as any)) {
+    throw new HttpsError("invalid-argument", "Type d'image non supporté.");
+  }
+  return value;
+}
+
+function sanitizeThumbnailPath(
+  sessionId: string,
+  contentType: string,
+  provided?: string,
+): string {
+  const ext = contentType === "image/png" ? "png" : "jpg";
+  const fallback = `thumbnails/thumbnail_${sessionId}.${ext}`;
+  if (!provided) return fallback;
+
+  const safe = provided
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_./-]/g, "");
+
+  return safe.endsWith(`.${ext}`) ? safe : fallback;
+}
+
+async function validateThumbnail(
+  path: string | undefined,
+  guard: ThumbnailGuard | undefined,
+): Promise<void> {
+  if (!path || !guard) return;
+
+  if (guard.expiresAt && guard.expiresAt < Date.now()) {
+    throw new HttpsError("deadline-exceeded", "URL miniature expirée.");
+  }
+
+  const file = storage.bucket().file(path);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError("not-found", "Miniature introuvable.");
+
+  const [meta] = await file.getMetadata();
+  const actualSize = Number(meta.size ?? 0);
+
+  if (guard.size && actualSize !== guard.size) {
+    throw new HttpsError("failed-precondition", "Taille miniature invalide.");
+  }
+
+  const [buffer] = await file.download();
+  const computedHash = createHash("md5").update(buffer).digest("hex");
+
+  if (guard.hash && computedHash !== guard.hash) {
+    throw new HttpsError("failed-precondition", "Hash miniature invalide.");
+  }
+}
+
+const asString = (value: unknown, max = 300): string | undefined => {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, max) : undefined;
+};
+
+const asNumber = (value: unknown): number | undefined => {
+  if (typeof value !== "number") return undefined;
+  return Number.isFinite(value) ? value : undefined;
+};
+
+const asPositiveInt = (value: unknown): number | undefined => {
+  if (typeof value !== "number") return undefined;
+  const n = Math.round(value);
+  return n >= 0 ? n : undefined;
+};
+
+const asStringList = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const items = value
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .filter((v) => v.length > 0);
+  return items.length ? items : undefined;
+};
+
+/* -------------------------------------------------------------------------- */
+/* CREATE SESSION                                                              */
 /* -------------------------------------------------------------------------- */
 
 export const createUploadSession = onCall(
@@ -116,37 +245,7 @@ export const createUploadSession = onCall(
 );
 
 /* -------------------------------------------------------------------------- */
-/*                         THUMBNAIL HELPERS                                   */
-/* -------------------------------------------------------------------------- */
-
-function parseImageContentType(raw: unknown): string {
-  const value =
-    typeof raw === "string" ? raw.trim().toLowerCase() : "image/jpeg";
-  if (!ALLOWED_IMAGE_TYPES.includes(value as any)) {
-    throw new HttpsError("invalid-argument", "Type d'image non supporté.");
-  }
-  return value;
-}
-
-function sanitizeThumbnailPath(
-  sessionId: string,
-  contentType: string,
-  provided?: string,
-): string {
-  const ext = contentType === "image/png" ? "png" : "jpg";
-  const fallback = `thumbnails/thumbnail_${sessionId}.${ext}`;
-  if (!provided) return fallback;
-
-  const safe = provided
-    .trim()
-    .replace(/\s+/g, "_")
-    .replace(/[^a-zA-Z0-9_./-]/g, "");
-
-  return safe.endsWith(`.${ext}`) ? safe : fallback;
-}
-
-/* -------------------------------------------------------------------------- */
-/*                       REQUEST THUMBNAIL URL                                 */
+/* REQUEST THUMBNAIL URL                                                       */
 /* -------------------------------------------------------------------------- */
 
 export const requestThumbnailUploadUrl = onCall(
@@ -217,37 +316,8 @@ export const requestThumbnailUploadUrl = onCall(
 );
 
 /* -------------------------------------------------------------------------- */
-/*                              FINALIZE UPLOAD                                */
+/* FINALIZE UPLOAD                                                             */
 /* -------------------------------------------------------------------------- */
-
-async function validateThumbnail(
-  path: string | undefined,
-  guard: ThumbnailGuard | undefined,
-): Promise<void> {
-  if (!path || !guard) return;
-
-  if (guard.expiresAt && guard.expiresAt < Date.now()) {
-    throw new HttpsError("deadline-exceeded", "URL miniature expirée.");
-  }
-
-  const file = storage.bucket().file(path);
-  const [exists] = await file.exists();
-  if (!exists) throw new HttpsError("not-found", "Miniature introuvable.");
-
-  const [meta] = await file.getMetadata();
-  const actualSize = Number(meta.size ?? 0);
-
-  if (guard.size && actualSize !== guard.size) {
-    throw new HttpsError("failed-precondition", "Taille miniature invalide.");
-  }
-
-  const [buffer] = await file.download();
-  const computedHash = createHash("md5").update(buffer).digest("hex");
-
-  if (guard.hash && computedHash !== guard.hash) {
-    throw new HttpsError("failed-precondition", "Hash miniature invalide.");
-  }
-}
 
 export const finalizeUpload = onCall(
   {region: REGION},
@@ -270,58 +340,48 @@ export const finalizeUpload = onCall(
 
     await validateThumbnail(doc?.thumbnailPath, doc?.thumbnailGuard);
 
-    const rawMetadata = (request.data as RawMetadata | undefined)?.metadata;
+    const rawMetadata = (request.data as { metadata?: UploadMetadata } | undefined)?.metadata;
     const safe: ParsedMetadata = {};
 
-    const asString = (value: unknown, max = 300): string | undefined => {
-      if (typeof value !== "string") return undefined;
-      const trimmed = value.trim();
-      return trimmed ? trimmed.slice(0, max) : undefined;
-    };
-
-    const asNumber = (value: unknown): number | undefined => {
-      if (typeof value !== "number") return undefined;
-      return Number.isFinite(value) ? value : undefined;
-    };
-
-    const asPositiveInt = (value: unknown): number | undefined => {
-      if (typeof value !== "number") return undefined;
-      const n = Math.round(value);
-      return n >= 0 ? n : undefined;
-    };
-
-    const asStringList = (value: unknown): string[] | undefined => {
-      if (!Array.isArray(value)) return undefined;
-      const items = value
-        .map((v) => (typeof v === "string" ? v.trim() : ""))
-        .filter((v) => v.length > 0);
-      return items.length ? items : undefined;
-    };
-
     if (rawMetadata && typeof rawMetadata === "object") {
-      const meta = rawMetadata as RawMetadata;
-      safe.description = asString(meta.description, 500);
-      safe.caption = asString(meta.caption, 500);
-      safe.profilePhoto = asString(meta.profilePhoto, 600);
-      safe.storagePath = asString(meta.storagePath, 400);
-      safe.thumbnailPath = asString(meta.thumbnailPath, 400);
-      safe.thumbnailHash = asString(meta.thumbnailHash, 100);
-      safe.thumbnailContentType = asString(meta.thumbnailContentType, 60);
-      safe.thumbnailSize = asPositiveInt(meta.thumbnailSize);
-      safe.reportCount = asPositiveInt(meta.reportCount);
-      safe.shareCount = asPositiveInt(meta.shareCount);
-      safe.duration = asNumber(meta.duration);
-      safe.width = asPositiveInt(meta.width);
-      safe.height = asPositiveInt(meta.height);
-      safe.likes = asStringList(meta.likes);
-      safe.reports = asStringList(meta.reports);
+      // ✅ Description : canonique + fallbacks legacy
+      safe.description =
+        asString(rawMetadata.description, 500) ??
+        asString(rawMetadata.songName, 500) ??
+        asString(rawMetadata.title, 500) ??
+        asString(rawMetadata.desc, 500);
 
-      // For backward compatibility we accept songName but store it as description.
-      if (!safe.description) {
-        safe.description = asString(meta.songName, 500);
-      }
+      // ✅ Caption : canonique + fallbacks legacy FR/EN
+      safe.caption =
+        asString(rawMetadata.caption, 500) ??
+        asString(rawMetadata.captionText, 500) ??
+        asString(rawMetadata.legend, 500) ??
+        asString(rawMetadata.legende, 500) ??
+        asString(rawMetadata["légende"], 500);
+
+      safe.profilePhoto = asString(rawMetadata.profilePhoto, 600);
+      safe.storagePath = asString(rawMetadata.storagePath, 400);
+      safe.thumbnailPath = asString(rawMetadata.thumbnailPath, 400);
+      safe.thumbnailHash = asString(rawMetadata.thumbnailHash, 100);
+      safe.thumbnailContentType = asString(rawMetadata.thumbnailContentType, 60);
+      safe.thumbnailSize = asPositiveInt(rawMetadata.thumbnailSize);
+
+      safe.reportCount = asPositiveInt(rawMetadata.reportCount);
+      safe.shareCount = asPositiveInt(rawMetadata.shareCount);
+
+      safe.duration = asNumber(rawMetadata.duration);
+      safe.width = asPositiveInt(rawMetadata.width);
+      safe.height = asPositiveInt(rawMetadata.height);
+
+      safe.likes = asStringList(rawMetadata.likes);
+      safe.reports = asStringList(rawMetadata.reports);
+
+      // NB: status/optimized ne doivent pas être trust côté client.
+      // On garde ton comportement existant: on force status=processing, optimized=false.
+      // (Si tu veux quand même accepter, il faut whitelister et valider.)
     }
 
+    // On n’écrit que les valeurs présentes dans safe
     const sanitizedMetadata: Record<string, unknown> = {};
     const assignIfPresent = <K extends keyof ParsedMetadata>(key: K) => {
       const value = safe[key];
@@ -337,12 +397,10 @@ export const finalizeUpload = onCall(
       "thumbnailHash",
       "thumbnailSize",
       "thumbnailContentType",
-      "status",
       "likes",
       "reports",
       "reportCount",
       "shareCount",
-      "optimized",
       "duration",
       "width",
       "height",
@@ -353,8 +411,18 @@ export const finalizeUpload = onCall(
         uid,
         status: "processing",
         optimized: false,
-        songName: safe.description,
+
+        // ✅ CANONIQUE (nouveau standard)
+        ...(safe.description ? {description: safe.description} : {}),
+        ...(safe.caption ? {caption: safe.caption} : {}),
+
+        // ✅ LEGACY / COMPAT (pour anciens écrans/lectures)
+        ...(safe.description ? {songName: safe.description, title: safe.description} : {}),
+        ...(safe.caption ? {legend: safe.caption, legende: safe.caption, captionText: safe.caption} : {}),
+
+        // ✅ le reste
         ...sanitizedMetadata,
+
         updatedAt: fieldValue.serverTimestamp(),
       },
       {merge: true},
