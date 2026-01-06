@@ -329,6 +329,8 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       pieceJointeUrl: _pieceJointeController.text.trim().isEmpty
           ? null
           : _pieceJointeController.text.trim(),
+      vues: isEditing ? (editingOffre!.vues ?? 0) : 0,
+      viewedBy: isEditing ? (editingOffre!.viewedBy ?? <String>[]) : <String>[],
     );
 
     if (isEditing) {
