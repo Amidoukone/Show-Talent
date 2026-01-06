@@ -1,4 +1,4 @@
-// lib/controller/user_controller.dart
+import 'dart:async';
 
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/login_screen.dart';
@@ -11,28 +11,49 @@ import 'package:get/get.dart';
 
 /// UserController
 /// - Source de vérité pour l’état utilisateur, navigation (Login / Verify / Main)
-/// - Hydrate AppUser, écoute FirebaseAuth et Firestore.
-/// - Ne perd pas les fonctionnalités existantes, tout en ajoutant robustesse.
+/// - Hydrate AppUser
+/// - Écoute FirebaseAuth + Firestore
+/// - 🔥 Ajoute un cache réactif par UID pour les vidéos
 class UserController extends GetxController {
   static UserController instance = Get.find();
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  /// ---------------------------------------------------------------------------
+  /// UTILISATEUR CONNECTÉ
+  /// ---------------------------------------------------------------------------
+
   final Rx<AppUser?> _user = Rx<AppUser?>(null);
   AppUser? get user => _user.value;
+
+  /// ---------------------------------------------------------------------------
+  /// LISTE USERS (fonctionnalité existante conservée)
+  /// ---------------------------------------------------------------------------
 
   final Rx<List<AppUser>> _userList = Rx<List<AppUser>>([]);
   List<AppUser> get userList => _userList.value;
 
+  /// ---------------------------------------------------------------------------
+  /// 🔥 CACHE GLOBAL RÉACTIF PAR UID (NOUVEAU)
+  /// ---------------------------------------------------------------------------
+
+  final RxMap<String, AppUser> usersCache = <String, AppUser>{}.obs;
+
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _usersSub;
+
   bool _navigating = false;
   bool _navScheduled = false;
+
+  // ---------------------------------------------------------------------------
+  // INIT
+  // ---------------------------------------------------------------------------
 
   @override
   void onInit() {
     super.onInit();
 
-    // écoute les changements d’auth (login / logout / refresh)
+    /// Auth listener
     _auth.idTokenChanges().listen(
       (User? firebaseUser) async {
         await _routeFromAuth(firebaseUser);
@@ -40,9 +61,9 @@ class UserController extends GetxController {
       onError: (e) => debugPrint('UserController idTokenChanges error: $e'),
     );
 
+    /// 🔥 Écoute globale des users (1 seule fois)
     _listenAllUsers();
 
-    // Le trigger initial après le premier frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       kickstart();
     });
@@ -52,6 +73,10 @@ class UserController extends GetxController {
   void kickstart() {
     _routeFromAuth(_auth.currentUser);
   }
+
+  // ---------------------------------------------------------------------------
+  // ROUTING AUTH
+  // ---------------------------------------------------------------------------
 
   Future<void> _routeFromAuth(User? firebaseUser) async {
     try {
@@ -71,24 +96,28 @@ class UserController extends GetxController {
 
       final uid = refreshed.uid;
 
-      // Cas : email non vérifié → accéder à vérification
+      /// Email non vérifié
       if (!refreshed.emailVerified) {
         try {
           final doc = await _firestore.collection('users').doc(uid).get();
           if (doc.exists) {
-            _user.value = AppUser.fromMap(doc.data()!);
+            final u = AppUser.fromMap(doc.data()!);
+            _user.value = u;
+            usersCache[u.uid] = u;
           }
-        } catch (_) {
-          // ignore
-        }
+        } catch (_) {}
         await _safeOffAll(const VerifyEmailScreen());
         return;
       }
 
-      // Cas : email vérifié → s’assurer que document utilisateur existe
-      var doc = await _waitUserDoc(uid, attempts: 20, delay: const Duration(milliseconds: 250));
+      /// S’assurer que le document utilisateur existe
+      var doc = await _waitUserDoc(
+        uid,
+        attempts: 20,
+        delay: const Duration(milliseconds: 250),
+      );
+
       if (doc == null || !doc.exists) {
-        // création minimale du profil si absent
         await _firestore.collection('users').doc(uid).set({
           'uid': uid,
           'email': refreshed.email,
@@ -98,20 +127,21 @@ class UserController extends GetxController {
           'estActif': true,
           'emailVerified': true,
           'emailVerifiedAt': FieldValue.serverTimestamp(),
-          // initialiser les listes vides pour éviter null
           'followersList': <String>[],
           'followingsList': <String>[],
         }, SetOptions(merge: true));
 
         doc = await _firestore.collection('users').doc(uid).get();
-        if (!doc.exists) {
-          await _safeOffAll(const MainScreen());
-          return;
-        }
+      }
+
+      if (!doc.exists) {
+        await _safeOffAll(const MainScreen());
+        return;
       }
 
       final userData = AppUser.fromMap(doc.data()!);
       _user.value = userData;
+      usersCache[userData.uid] = userData;
 
       await _safeOffAll(const MainScreen());
     } catch (e) {
@@ -135,26 +165,59 @@ class UserController extends GetxController {
     return doc;
   }
 
+  // ---------------------------------------------------------------------------
+  // 🔥 LISTENER USERS GLOBAL (CACHE + userList)
+  // ---------------------------------------------------------------------------
+
   Future<void> _listenAllUsers() async {
-    _firestore.collection('users').snapshots().listen(
+    _usersSub?.cancel();
+    _usersSub = _firestore.collection('users').snapshots().listen(
       (snapshot) {
-        _userList.value = snapshot.docs
-            .map((d) => AppUser.fromMap(d.data()))
-            .where((u) => (u.nom).trim().isNotEmpty)
-            .toList();
-        update();
+        final List<AppUser> list = [];
+
+        for (final d in snapshot.docs) {
+          final user = AppUser.fromMap(d.data());
+
+          /// cache global par uid
+          usersCache[user.uid] = user;
+
+          /// user connecté
+          if (_user.value?.uid == user.uid) {
+            _user.value = user;
+          }
+
+          if (user.nom.trim().isNotEmpty) {
+            list.add(user);
+          }
+        }
+
+        _userList.value = list;
+        update(); // compatibilité écrans existants
       },
       onError: (e) => debugPrint("Erreur fetch users : $e"),
     );
   }
 
-  /// Rafraîchit les données de l’utilisateur connecté depuis Firestore
+  // ---------------------------------------------------------------------------
+  // 🔥 ACCÈS USER PAR UID (VIDÉOS)
+  // ---------------------------------------------------------------------------
+
+  AppUser? getUserById(String uid) {
+    return usersCache[uid];
+  }
+
+  // ---------------------------------------------------------------------------
+  // REFRESH / SIGNOUT
+  // ---------------------------------------------------------------------------
+
   Future<void> refreshUser() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
     final doc = await _firestore.collection('users').doc(uid).get();
     if (doc.exists) {
-      _user.value = AppUser.fromMap(doc.data()!);
+      final u = AppUser.fromMap(doc.data()!);
+      _user.value = u;
+      usersCache[u.uid] = u;
       update();
     }
   }
@@ -163,7 +226,6 @@ class UserController extends GetxController {
     try {
       await _auth.signOut();
       _user.value = null;
-      // idTokenChanges déclenchera la redirection vers Login
     } catch (e) {
       Get.snackbar(
         'Erreur',
@@ -175,6 +237,10 @@ class UserController extends GetxController {
       );
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // SAFE NAV
+  // ---------------------------------------------------------------------------
 
   Future<void> _safeOffAll(Widget page) async {
     if (Get.key.currentState == null) {
@@ -205,5 +271,11 @@ class UserController extends GetxController {
     if (page is MainScreen) return '/main';
     if (page is VerifyEmailScreen) return '/verify';
     return null;
+  }
+
+  @override
+  void onClose() {
+    _usersSub?.cancel();
+    super.onClose();
   }
 }
