@@ -193,7 +193,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _player = p;
     _hasFirstFrame = false;
 
-        final resolved = _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl);
+    final resolved =
+        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl);
     if (resolved != null &&
         resolved.isNotEmpty &&
         widget.video.resolvedUrl != resolved) {
@@ -442,34 +443,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   // ACTIONS
   // ---------------------------------------------------------------------------
 
-  Widget _animatedActionButton({
-    required IconData icon,
-    required Color color,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 32),
-          const SizedBox(height: 4),
-          Text(label,
-              style: const TextStyle(color: Colors.white, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildActions(
     BuildContext context,
     VideoController videoController,
     UserController userController,
   ) {
-    final user = userController.user;
-    if (user == null) return const SizedBox();
+    /// 🔥 utilisateur connecté (actions)
+    final currentUser = userController.user;
+    if (currentUser == null) return const SizedBox();
 
-    final isOwner = widget.video.uid == user.uid;
+    final isOwner = widget.video.uid == currentUser.uid;
+
     final screenHeight = MediaQuery.of(context).size.height;
     double bottomOffset = screenHeight * 0.22;
     if (bottomOffset < 120) bottomOffset = 120;
@@ -490,11 +474,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           if (isOwner) const SizedBox(height: 24),
           _animatedActionButton(
             icon: Icons.favorite,
-            color: widget.video.likes.contains(user.uid)
+            color: widget.video.likes.contains(currentUser.uid)
                 ? Colors.red
                 : Colors.white,
             label: '${widget.video.likes.length}',
-            onTap: () => _toggleLike(videoController, user.uid),
+            onTap: () =>
+                _toggleLike(videoController, currentUser.uid),
           ),
           const SizedBox(height: 24),
           _animatedActionButton(
@@ -509,10 +494,13 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             color: Colors.white,
             label: '${widget.video.reportCount}',
             onTap: () async =>
-                videoController.signalerVideo(widget.video.id, user.uid),
+                videoController.signalerVideo(
+                  widget.video.id,
+                  currentUser.uid,
+                ),
           ),
           const SizedBox(height: 28),
-          if (user.role == 'joueur')
+          if (currentUser.role == 'joueur')
             Column(
               children: [
                 FloatingActionButton(
@@ -524,7 +512,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                   onPressed: () async {
                     await _videoManager.pauseAll(widget.contextKey);
                     await _setWakelock(false);
-                    final result = await Get.to(() => const AddVideo());
+                    final result =
+                        await Get.to(() => const AddVideo());
                     if (result == true) {
                       await videoController.refreshVideos();
                     } else {
@@ -534,9 +523,11 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                   child: const Icon(Icons.add),
                 ),
                 const SizedBox(height: 4),
-                const Text('Vidéo',
-                    style:
-                        TextStyle(color: Colors.white, fontSize: 12)),
+                const Text(
+                  'Vidéo',
+                  style:
+                      TextStyle(color: Colors.white, fontSize: 12),
+                ),
               ],
             ),
         ],
@@ -545,10 +536,31 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   // ---------------------------------------------------------------------------
-  // LIKE / DELETE / SHARE
+  // LIKE / DELETE / SHARE / RELOAD / WAKELOCK
   // ---------------------------------------------------------------------------
 
-  Future<void> _toggleLike(VideoController controller, String userId) async {
+  Widget _animatedActionButton({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 32),
+          const SizedBox(height: 4),
+          Text(label,
+              style:
+                  const TextStyle(color: Colors.white, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  // (le reste du fichier est IDENTIQUE : like, delete, share, reload, wakelock)
+   Future<void> _toggleLike(VideoController controller, String userId) async {
     final wasLiked = widget.video.likes.contains(userId);
 
     if (wasLiked) {
