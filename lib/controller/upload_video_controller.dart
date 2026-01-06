@@ -212,8 +212,11 @@ class UploadVideoController extends GetxController {
           'profilePhoto': user?.photoProfil ?? '',
           // On stocke la description et on duplique pour l’ancien champ `songName`
           'description': desc,
-          'songName': desc,
+          'legend': cap,
+          'legende': cap,
+          'captionText': cap,
           'caption': cap,
+          'songName': cap,
           'storagePath': session.videoPath,
           'thumbnailPath': thumbTicket.thumbnailPath,
           'thumbnailHash': thumbTicket.expectedHash,
@@ -288,8 +291,10 @@ class UploadVideoController extends GetxController {
     }
 
     fallbackTimer = Timer.periodic(_pollInterval, (_) async {
-      final doc =
-          await FirebaseFirestore.instance.collection('videos').doc(videoId).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('videos')
+          .doc(videoId)
+          .get();
       final data = doc.data();
       if (data?['status'] == 'ready' && data?['optimized'] == true) {
         await subscription?.cancel();
