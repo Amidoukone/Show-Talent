@@ -296,7 +296,13 @@ class VideoManager {
     final lru = _lruByContext[contextKey]!;
     final futures = _initFuturesByContext[contextKey]!;
 
-    Future<CachedVideoPlayerPlus> attempt(String effectiveUrl) async {
+    bool isHlsSource(VideoSource source) =>
+        source.isHls ||
+        source.url.toLowerCase().trim().contains('.m3u8');
+
+    Future<CachedVideoPlayerPlus> attempt(VideoSource candidate) async {
+      final effectiveUrl = candidate.url;
+      final isHls = isHlsSource(candidate);
       final cacheKey = effectiveUrl;
 
       // 1) LRU hit
@@ -344,9 +350,10 @@ class VideoManager {
           final timeout = isPreload ? _preloadTimeout : _activeTimeout;
           CachedVideoPlayerPlus player;
 
-          if (kIsWeb) {
-            player =
-                CachedVideoPlayerPlus.networkUrl(Uri.parse(effectiveUrl));
+          if (kIsWeb || isHls) {
+            player = CachedVideoPlayerPlus.networkUrl(
+              Uri.parse(effectiveUrl),
+            );
           } else {
             file = await custom_cache.VideoCacheManager.getFileIfCached(
               effectiveUrl,
@@ -457,7 +464,7 @@ class VideoManager {
       _resolvedUrlByContext[contextKey]![url] = effectiveUrl;
 
       try {
-        final player = await attempt(effectiveUrl);
+        final player = await attempt(candidate);
         _loadStatesByContext[contextKey]![url] = VideoLoadState.ready;
         return player;
       } on TimeoutException catch (e) {
