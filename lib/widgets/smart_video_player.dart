@@ -672,7 +672,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         ),
         const SizedBox(height: 6),
         const Text(
-          'Profil',
+          'Profil Joueur ',
           style: TextStyle(color: Colors.white, fontSize: 12),
         ),
       ],
