@@ -2,7 +2,6 @@
 
 import 'dart:async';
 
-import 'package:adfoot/screens/add_video.dart';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
@@ -11,6 +10,9 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'package:adfoot/controller/follow_controller.dart';
+import 'package:adfoot/screens/add_video.dart';
+import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/utils/video_cache_manager.dart' as custom_cache;
 import 'package:adfoot/widgets/tiktok_video_player.dart';
 import 'package:adfoot/models/video.dart';
@@ -66,6 +68,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   bool _isTryingToPlay = false;
   bool _wakelockOn = false;
   bool _isDisposed = false;
+  bool _isFollowActionLoading = false;
 
   bool get _preferHls =>
       (_vc?.hlsPlaybackEnabled ?? false) && widget.video.hasHlsSource;
@@ -453,6 +456,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     if (currentUser == null) return const SizedBox();
 
     final isOwner = widget.video.uid == currentUser.uid;
+    final isFollowing =
+        currentUser.followingsList.contains(widget.video.uid);
 
     final screenHeight = MediaQuery.of(context).size.height;
     double bottomOffset = screenHeight * 0.22;
@@ -530,6 +535,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 ),
               ],
             ),
+          const SizedBox(height: 24),
+          _buildProfileAction(
+            context: context,
+            currentUserId: currentUser.uid,
+            isOwner: isOwner,
+            isFollowing: isFollowing,
+            userController: userController,
+          ),
         ],
       ),
     );
@@ -559,8 +572,115 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     );
   }
 
+  Widget _buildProfileAction({
+    required BuildContext context,
+    required String currentUserId,
+    required bool isOwner,
+    required bool isFollowing,
+    required UserController userController,
+  }) {
+    final followCtrl = Get.find<FollowController>();
+    final publisher =
+        userController.usersCache[widget.video.uid];
+    final photoUrl = (publisher?.photoProfil ??
+            widget.video.profilePhoto)
+        .trim();
+
+    Future<void> openProfile() async {
+      await _videoManager.pauseAll(widget.contextKey);
+      await _setWakelock(false);
+      await Get.to(
+        () => ProfileScreen(
+          uid: widget.video.uid,
+          isReadOnly: !isOwner,
+        ),
+      );
+      if (mounted && !_isDisposed) {
+        _scheduleMaybePlay();
+      }
+    }
+
+    Future<void> follow() async {
+      if (_isFollowActionLoading || isOwner || isFollowing) return;
+      setState(() => _isFollowActionLoading = true);
+      final success =
+          await followCtrl.followUser(currentUserId, widget.video.uid);
+      if (!success && mounted && !_isDisposed) {
+        Get.snackbar(
+          'Erreur',
+          'Impossible de s\'abonner pour le moment',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      }
+      if (mounted && !_isDisposed) {
+        setState(() => _isFollowActionLoading = false);
+      }
+    }
+
+    return Column(
+      children: [
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            GestureDetector(
+              onTap: openProfile,
+              child: CircleAvatar(
+                radius: 26,
+                backgroundColor: Colors.white,
+                backgroundImage:
+                    photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                child: photoUrl.isEmpty
+                    ? const Icon(Icons.person, color: Colors.black)
+                    : null,
+              ),
+            ),
+            if (!isOwner && !isFollowing)
+              Positioned(
+                bottom: -6,
+                right: -6,
+                child: GestureDetector(
+                  onTap: () async {
+                    await follow();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: _isFollowActionLoading
+                        ? const SizedBox(
+                            height: 14,
+                            width: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation(Colors.white),
+                            ),
+                          )
+                        : const Icon(
+                            Icons.add,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Profil',
+          style: TextStyle(color: Colors.white, fontSize: 12),
+        ),
+      ],
+    );
+  }
+
   // (le reste du fichier est IDENTIQUE : like, delete, share, reload, wakelock)
-   Future<void> _toggleLike(VideoController controller, String userId) async {
+  Future<void> _toggleLike(VideoController controller, String userId) async {
     final wasLiked = widget.video.likes.contains(userId);
 
     if (wasLiked) {
@@ -606,7 +726,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       await SharePlus.instance.share(
         ShareParams(text: 'Regarde cette vidéo : ${widget.video.videoUrl}'),
       );
-            final response = await controller.partagerVideo(widget.video.id);
+      final response = await controller.partagerVideo(widget.video.id);
       if (response.success) {
         widget.video.shareCount =
             response.data?['shareCount'] as int? ?? (widget.video.shareCount + 1);
