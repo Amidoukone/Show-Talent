@@ -24,6 +24,10 @@ class VideoMetricEvent {
     this.duration,
     this.usedCache,
     this.error,
+    this.initCount,
+    this.cacheHits,
+    this.errorCount,
+    this.cacheHitRate,
   });
 
   final VideoMetricType type;
@@ -32,6 +36,30 @@ class VideoMetricEvent {
   final Duration? duration;
   final bool? usedCache;
   final Object? error;
+  final int? initCount;
+  final int? cacheHits;
+  final int? errorCount;
+  final double? cacheHitRate;
+
+  VideoMetricEvent copyWith({
+    int? initCount,
+    int? cacheHits,
+    int? errorCount,
+    double? cacheHitRate,
+  }) {
+    return VideoMetricEvent(
+      type: type,
+      url: url,
+      isPreload: isPreload,
+      duration: duration,
+      usedCache: usedCache,
+      error: error,
+      initCount: initCount ?? this.initCount,
+      cacheHits: cacheHits ?? this.cacheHits,
+      errorCount: errorCount ?? this.errorCount,
+      cacheHitRate: cacheHitRate ?? this.cacheHitRate,
+    );
+  }
 }
 
 class _VideoNetworkTuning {
@@ -209,9 +237,17 @@ class VideoManager {
         break;
     }
 
+    final cacheHitRate = _initCount == 0 ? 0.0 : _cacheHits / _initCount;
+    final enrichedEvent = event.copyWith(
+      initCount: _initCount,
+      cacheHits: _cacheHits,
+      errorCount: _errorCount,
+      cacheHitRate: cacheHitRate,
+    );
+
     final listener = onMetrics;
     if (listener != null) {
-      listener(event);
+      listener(enrichedEvent);
     }
   }
 

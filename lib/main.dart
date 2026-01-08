@@ -20,6 +20,7 @@ import 'controller/follow_controller.dart';
 import 'widgets/video_manager.dart';
 import 'services/email_link_handler.dart';
 import 'services/notifications.dart';
+import 'services/video_metrics_observer.dart';
 
 // UI
 import 'screens/splash_screen.dart';
@@ -72,7 +73,10 @@ Future<void> main() async {
     NotificationService.listenForeground();
 
     // Injection GetX (ordre critique)
-    Get.put<VideoManager>(VideoManager(), permanent: true);
+    final videoManager =
+        Get.put<VideoManager>(VideoManager(), permanent: true);
+    videoManager.onMetrics =
+        VideoMetricsObserver(videoManager: videoManager).handle;
     Get.put<AuthController>(AuthController(), permanent: true);
     Get.put<OffreController>(OffreController(), permanent: true);
     Get.put<UserController>(UserController(), permanent: true);
