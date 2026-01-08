@@ -40,8 +40,12 @@ class NetworkProfileService {
     http.Client? client,
     SharedPreferences? preferences,
     this.downloadUri =
-        'https://speed.cloudflare.com/__down?bytes=8000', // ~8KB probe
+        'https://speed.cloudflare.com/__down?bytes=8000',
     this.probeUri = 'https://speed.cloudflare.com/__down?bytes=1',
+    this.internalDownloadUri,
+    this.internalProbeUri,
+    this.externalProbesAllowed = true,
+    this.softProbeFallback = false,
     this.measureTimeout = const Duration(seconds: 2),
     this.cacheTtl = const Duration(minutes: 10),
   })  : _connectivity = connectivity ?? Connectivity(),
@@ -56,13 +60,17 @@ class NetworkProfileService {
 
   final String downloadUri;
   final String probeUri;
+  final String? internalDownloadUri;
+  final String? internalProbeUri;
+  final bool externalProbesAllowed;
+  final bool softProbeFallback;
   final Duration measureTimeout;
   final Duration cacheTtl;
 
   static const _cacheKey = 'networkProfile:last';
 
   /* -------------------------------------------------------------------------- */
-  /* Public API                                                                */
+  /* Public API                                                                 */
   /* -------------------------------------------------------------------------- */
 
   Future<NetworkProfile> detectProfile() async {
@@ -76,11 +84,12 @@ class NetworkProfileService {
         now.difference(cached.timestamp) <= cacheTtl &&
         cached.transport == transport;
 
-    // CDN probe = vérité terrain (plus fiable que Connectivity seul)
-    final cdnReachable = await _probeCdn();
-    if (!cdnReachable) {
+    final probeUriResolved = _resolveProbeUri();
+
+    if (connectivityResult == ConnectivityResult.none &&
+        probeUriResolved == null) {
       debugPrint(
-        '[NetworkProfile] CDN probe failed → offline (transport=$transport)',
+        '[NetworkProfile] Connectivity=none and probe disabled → offline',
       );
 
       final offline = NetworkProfile(
@@ -91,6 +100,33 @@ class NetworkProfileService {
 
       await _saveCachedProfile(offline, transport, now);
       return offline;
+    }
+
+    if (probeUriResolved != null) {
+      final cdnReachable = await _probeCdn(probeUriResolved);
+
+      if (!cdnReachable && !softProbeFallback) {
+        debugPrint(
+          '[NetworkProfile] CDN probe failed → offline (transport=$transport)',
+        );
+
+        final offline = NetworkProfile(
+          tier: _baselineTier(connectivityResult),
+          hasConnection: false,
+          preferHls: false,
+        );
+
+        await _saveCachedProfile(offline, transport, now);
+        return offline;
+      }
+
+      if (!cdnReachable && softProbeFallback) {
+        debugPrint(
+          '[NetworkProfile] CDN probe failed → soft fallback (transport=$transport)',
+        );
+      }
+    } else {
+      debugPrint('[NetworkProfile] Probe disabled by policy → soft fallback');
     }
 
     if (isCacheFresh) {
@@ -130,7 +166,7 @@ class NetworkProfileService {
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Connectivity helpers                                                      */
+  /* Connectivity helpers                                                       */
   /* -------------------------------------------------------------------------- */
 
   Future<ConnectivityResult> _safeConnectivity() async {
@@ -175,13 +211,33 @@ class NetworkProfileService {
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Probing / measurement                                                      */
+  /* Probing / measurement                                                       */
   /* -------------------------------------------------------------------------- */
 
-  Future<bool> _probeCdn() async {
+  Uri? _resolveProbeUri() {
+    if (internalProbeUri != null && internalProbeUri!.isNotEmpty) {
+      return Uri.parse(internalProbeUri!);
+    }
+    if (externalProbesAllowed) {
+      return Uri.parse(probeUri);
+    }
+    return null;
+  }
+
+  Uri? _resolveDownloadUri() {
+    if (internalDownloadUri != null && internalDownloadUri!.isNotEmpty) {
+      return Uri.parse(internalDownloadUri!);
+    }
+    if (externalProbesAllowed) {
+      return Uri.parse(downloadUri);
+    }
+    return null;
+  }
+
+  Future<bool> _probeCdn(Uri uri) async {
     try {
       final response = await _client
-          .head(Uri.parse(probeUri))
+          .head(uri)
           .timeout(
             measureTimeout,
             onTimeout: () => http.Response.bytes([], 408),
@@ -200,9 +256,17 @@ class NetworkProfileService {
 
   Future<double?> _measureThroughput() async {
     try {
+      final uri = _resolveDownloadUri();
+      if (uri == null) {
+        debugPrint(
+          '[NetworkProfile] Throughput probe disabled by policy → skip',
+        );
+        return null;
+      }
+
       final stopwatch = Stopwatch()..start();
       final response = await _client
-          .get(Uri.parse(downloadUri))
+          .get(uri)
           .timeout(
             measureTimeout,
             onTimeout: () => http.Response.bytes([], 408),
@@ -215,14 +279,14 @@ class NetworkProfileService {
       stopwatch.stop();
       final durationMs = max(stopwatch.elapsedMilliseconds, 1);
       final kbps = (response.bodyBytes.length * 8) / durationMs;
-      return kbps * 1000; // kb/s
+      return kbps * 1000;
     } catch (_) {
       return null;
     }
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Cache (SharedPreferences)                                                  */
+  /* Cache (SharedPreferences)                                                   */
   /* -------------------------------------------------------------------------- */
 
   Future<_CachedProfile?> _loadCachedProfile() async {
