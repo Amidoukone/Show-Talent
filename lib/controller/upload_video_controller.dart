@@ -266,6 +266,7 @@ class UploadVideoController extends GetxController {
     final completer = Completer<void>();
     StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? subscription;
     Timer? fallbackTimer;
+    const failureStatuses = {'error', 'failed', 'failure'};
 
     if (!(Get.isDialogOpen ?? false)) {
       Get.dialog(
@@ -290,12 +291,34 @@ class UploadVideoController extends GetxController {
       completer.complete();
     }
 
+    Future<void> finalizeFailureFlow(String status) async {
+      if (completer.isCompleted) return;
+
+      isOptimizing(false);
+      if (Get.isDialogOpen ?? false) Get.back();
+
+      showErrorToast(
+        "Échec d’optimisation vidéo (statut: $status). Merci de réessayer.",
+      );
+
+      await Future.delayed(const Duration(milliseconds: 200));
+      Get.offAllNamed('/main', arguments: {'tab': 0, 'refresh': true});
+
+      completer.complete();
+    }
+
     fallbackTimer = Timer.periodic(_pollInterval, (_) async {
       final doc = await FirebaseFirestore.instance
           .collection('videos')
           .doc(videoId)
           .get();
       final data = doc.data();
+      final status = data?['status'];
+      if (status is String && failureStatuses.contains(status)) {
+        await subscription?.cancel();
+        fallbackTimer?.cancel();
+        await finalizeFailureFlow(status);
+      }
       if (data?['status'] == 'ready' && data?['optimized'] == true) {
         await subscription?.cancel();
         fallbackTimer?.cancel();
@@ -311,6 +334,11 @@ class UploadVideoController extends GetxController {
       final status = doc.data()?['status'];
       final optimized = doc.data()?['optimized'] ?? false;
 
+      if (status is String && failureStatuses.contains(status)) {
+        await subscription?.cancel();
+        fallbackTimer?.cancel();
+        await finalizeFailureFlow(status);
+      }
       if (status == 'ready' && optimized == true) {
         await subscription?.cancel();
         fallbackTimer?.cancel();
