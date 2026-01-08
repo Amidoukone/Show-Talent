@@ -747,11 +747,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   // ---------------------------------------------------------------------------
 
   Future<void> _purgeAndReloadController() async {
+    final resolvedUrl = _videoManager.getResolvedUrl(
+          widget.contextKey,
+          widget.videoUrl,
+        ) ??
+        widget.video.resolvedUrl;
+    await _videoManager.disposeUrls(widget.contextKey, [widget.videoUrl]);
     if (!kIsWeb) {
       try {
         final file =
             await custom_cache.VideoCacheManager.getFileIfCached(
-          widget.videoUrl,
+          resolvedUrl ?? widget.videoUrl,
         );
         if (file != null && await file.exists()) {
           await file.delete();
