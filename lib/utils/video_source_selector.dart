@@ -9,7 +9,18 @@ class VideoSourceSelector {
     bool preferHls = false,
   }) {
     final sanitizedSources = sources.where((s) => s.url.isNotEmpty).toList();
+
+    // ✅ Même si l’adaptatif est désactivé, on peut privilégier HLS si demandé.
     if (!adaptiveEnabled || sanitizedSources.isEmpty) {
+      if (preferHls && sanitizedSources.isNotEmpty) {
+        final hlsSources = sanitizedSources.where((s) => s.isHls).toList()
+          ..sort((a, b) => (b.height ?? 0).compareTo(a.height ?? 0));
+        if (hlsSources.isNotEmpty) {
+          return hlsSources.first.url;
+        }
+      }
+
+      // Sinon fallback classique : fallbackUrl puis première source disponible.
       if (fallbackUrl.isNotEmpty) return fallbackUrl;
       return sanitizedSources.isNotEmpty ? sanitizedSources.first.url : '';
     }
@@ -29,15 +40,16 @@ class VideoSourceSelector {
       return (sorted.lastWhere(
         (s) => (s.height ?? 720) >= 600,
         orElse: () => sorted.last,
-      )).url;
+      ))
+          .url;
     }
 
     return (sorted.firstWhere(
       (s) => (s.height ?? 480) <= 540,
       orElse: () => sorted.first,
-    )).url;
+    ))
+        .url;
   }
-
   /// Retourne une liste de sources classées par priorité, utile pour :
   /// - fallback automatique (si une URL ne marche pas)
   /// - préchargement / orchestrateur
@@ -57,9 +69,19 @@ class VideoSourceSelector {
   }) {
     final sanitizedSources = sources.where((s) => s.url.isNotEmpty).toList();
 
-    // Si pas d’adaptatif, on renvoie juste quelque chose de stable + fallback.
+    // ✅ Si pas d’adaptatif : on renvoie une source stable + fallback
+    // mais si preferHls=true, on essaie d’abord HLS.
     if (!adaptiveEnabled || sanitizedSources.isEmpty) {
-      final primary = sanitizedSources.isNotEmpty ? sanitizedSources.first : null;
+      VideoSource? primary;
+
+      if (preferHls) {
+        final hlsSources = sanitizedSources.where((s) => s.isHls).toList()
+          ..sort((a, b) => (b.height ?? 0).compareTo(a.height ?? 0));
+        primary = hlsSources.isNotEmpty ? hlsSources.first : null;
+      }
+
+      primary ??= sanitizedSources.isNotEmpty ? sanitizedSources.first : null;
+
       return _dedupe([
         if (primary != null) primary,
         if (fallbackUrl.isNotEmpty) VideoSource(url: fallbackUrl),
