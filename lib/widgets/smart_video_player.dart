@@ -472,7 +472,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         children: [
           if (isOwner)
             _animatedActionButton(
-              icon: Icons.delete_outline_rounded,
+              icon: Icons.delete_forever_rounded,
               color: Colors.redAccent,
               label: 'Supprimer',
               onTap: () => _confirmDelete(context, videoController),
@@ -491,14 +491,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           ),
           const SizedBox(height: 24),
           _animatedActionButton(
-            icon: Icons.send_rounded,
+            icon: Icons.reply_rounded,
             color: Colors.white,
             label: '${widget.video.shareCount}',
             onTap: () => _shareVideo(videoController),
           ),
           const SizedBox(height: 24),
           _animatedActionButton(
-            icon: Icons.report_outlined,
+            icon: Icons.flag_rounded,
             color: Colors.white,
             label: '${widget.video.reportCount}',
             onTap: () async =>
@@ -569,26 +569,33 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.35),
+              color: Colors.black.withOpacity(0.18),
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withOpacity(0.2),
-                width: 1,
+                color: Colors.white.withOpacity(0.12),
+                width: 0.8,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.35),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+                  color: Colors.black.withOpacity(0.45),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
             child: Icon(
               icon,
               color: color,
-              size: emphasized ? 30 : 28,
+              size: emphasized ? 32 : 30,
+              shadows: [
+                Shadow(
+                  color: Colors.black.withOpacity(0.45),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 6),
@@ -598,7 +605,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
               vertical: 2,
             ),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.35),
+              color: Colors.black.withOpacity(0.25),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
