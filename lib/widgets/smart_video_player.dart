@@ -464,8 +464,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         currentUser.followingsList.contains(widget.video.uid);
 
     final screenHeight = MediaQuery.of(context).size.height;
-    double bottomOffset = screenHeight * 0.22;
-    if (bottomOffset < 120) bottomOffset = 120;
+    double bottomOffset = screenHeight * 0.12;
+    if (bottomOffset < 80) bottomOffset = 80;
     final isLiked = widget.video.likes.contains(currentUser.uid);
 
     return Positioned(
