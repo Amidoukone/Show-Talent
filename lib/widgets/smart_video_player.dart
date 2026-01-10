@@ -31,6 +31,8 @@ class SmartVideoPlayer extends StatefulWidget {
   final bool autoPlay;
   final bool showControls;
   final bool showProgressBar;
+  final bool showDeleteAction;
+  final bool showProfileAction;
 
   const SmartVideoPlayer({
     super.key,
@@ -44,6 +46,8 @@ class SmartVideoPlayer extends StatefulWidget {
     required this.autoPlay,
     required this.showControls,
     this.showProgressBar = false,
+    this.showDeleteAction = true,
+    this.showProfileAction = true,
   });
 
   @override
@@ -470,7 +474,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (isOwner)
+          if (widget.showDeleteAction && isOwner)
             _animatedActionButton(
               icon: Icons.delete_forever_rounded,
               color: Colors.redAccent,
@@ -478,7 +482,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
               onTap: () => _confirmDelete(context, videoController),
               emphasized: true,
             ),
-          if (isOwner) const SizedBox(height: 24),
+          if (widget.showDeleteAction && isOwner)
+            const SizedBox(height: 24),
           _animatedActionButton(
             icon: isLiked
                 ? Icons.favorite_rounded
@@ -538,14 +543,16 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 ),
               ],
             ),
-          const SizedBox(height: 24),
-          _buildProfileAction(
-            context: context,
-            currentUserId: currentUser.uid,
-            isOwner: isOwner,
-            isFollowing: isFollowing,
-            userController: userController,
-          ),
+          if (widget.showProfileAction) ...[
+            const SizedBox(height: 24),
+            _buildProfileAction(
+              context: context,
+              currentUserId: currentUser.uid,
+              isOwner: isOwner,
+              isFollowing: isFollowing,
+              userController: userController,
+            ),
+          ],
         ],
       ),
     );
