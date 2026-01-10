@@ -117,7 +117,7 @@ class _MainScreenState extends State<MainScreen> {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Icon(icon),
+        _NavIconShell(active: active, child: Icon(icon)),
         if (!_isOnline)
           const Positioned(
             right: -2,
@@ -226,12 +226,12 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                       const BottomNavigationBarItem(
                         icon: Icon(Icons.local_offer_outlined),
-                        activeIcon: Icon(Icons.local_offer),
+                        activeIcon: Icon(Icons.local_offer_rounded),
                         label: 'Offres',
                       ),
                       const BottomNavigationBarItem(
                         icon: Icon(Icons.event_outlined),
-                        activeIcon: Icon(Icons.event),
+                        activeIcon: Icon(Icons.event_available_rounded),
                         label: 'Events',
                       ),
                       BottomNavigationBarItem(
@@ -247,7 +247,7 @@ class _MainScreenState extends State<MainScreen> {
                       ),
                       const BottomNavigationBarItem(
                         icon: Icon(Icons.settings_outlined),
-                        activeIcon: Icon(Icons.settings),
+                        activeIcon: Icon(Icons.settings_rounded),
                         label: 'Outils',
                       ),
                     ],
@@ -307,7 +307,7 @@ class _ChatIconWithBadge extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Icon(baseIcon),
+        _NavIconShell(active: active, child: Icon(baseIcon)),
         if (unread > 0)
           Positioned(
             right: -6,
@@ -338,6 +338,42 @@ class _ChatIconWithBadge extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _NavIconShell extends StatelessWidget {
+  final Widget child;
+  final bool active;
+
+  const _NavIconShell({
+    required this.child,
+    required this.active,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: active ? AdColors.brand.withOpacity(0.18) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: active ? AdColors.brand.withOpacity(0.35) : Colors.transparent,
+          width: 1,
+        ),
+        boxShadow: active
+            ? [
+                BoxShadow(
+                  color: AdColors.brand.withOpacity(0.25),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : [],
+      ),
+      child: child,
     );
   }
 }
