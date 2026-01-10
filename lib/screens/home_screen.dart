@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:adfoot/screens/add_video.dart';
 import 'package:flutter/material.dart';
@@ -242,6 +243,23 @@ class _HomeScreenState extends State<HomeScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        flexibleSpace: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withOpacity(0.6),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
         centerTitle: true,
         title: const Text(
           'AD.FOOT',
@@ -368,38 +386,90 @@ class _HomeScreenState extends State<HomeScreen>
                         player: player,
                       ),
                       Positioned(
-                        bottom: screenHeight * 0.15,
-                        left: 12,
-                        right: 80,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: IgnorePointer(
+                          child: Container(
+                            height: screenHeight * 0.4,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withOpacity(0.5),
+                                  Colors.black.withOpacity(0.8),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: screenHeight * 0.14,
+                        left: 16,
+                        right: 96,
                         child: FadeTransition(
                           opacity: _fadeAnimation,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                video.description.trim().isNotEmpty
-                                    ? video.description.trim()
-                                    : 'Pas de description',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
                                 ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                video.caption.trim().isNotEmpty
-                                    ? video.caption.trim()
-                                    : 'Pas de légende',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.35),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.12),
+                                  ),
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.play_circle_fill_rounded,
+                                          size: 18,
+                                          color: Colors.white,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                          child: Text(
+                                            video.description.trim().isNotEmpty
+                                                ? video.description.trim()
+                                                : 'Pas de description',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 15,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      video.caption.trim().isNotEmpty
+                                          ? video.caption.trim()
+                                          : 'Pas de légende',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 13,
+                                        height: 1.3,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -416,7 +486,15 @@ class _HomeScreenState extends State<HomeScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.wifi_off, color: AdColors.onSurfaceMuted, size: 60),
+          CircleAvatar(
+            radius: 34,
+            backgroundColor: AdColors.surfaceAlt,
+            child: Icon(
+              Icons.wifi_off_rounded,
+              color: AdColors.onSurfaceMuted,
+              size: 36,
+            ),
+          ),
           SizedBox(height: 20),
           Text(
             'Pas de connexion Internet',
