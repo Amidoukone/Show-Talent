@@ -192,6 +192,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
                     autoPlay: true,
                     showControls: true,
                     showProgressBar: true,
+                    showProfileAction: false,
                     player: player,
                   );
                 },
