@@ -462,6 +462,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     final screenHeight = MediaQuery.of(context).size.height;
     double bottomOffset = screenHeight * 0.22;
     if (bottomOffset < 120) bottomOffset = 120;
+    final isLiked = widget.video.likes.contains(currentUser.uid);
 
     return Positioned(
       right: 10,
@@ -471,31 +472,33 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         children: [
           if (isOwner)
             _animatedActionButton(
-              icon: Icons.delete,
-              color: Colors.red,
+              icon: Icons.delete_outline_rounded,
+              color: Colors.redAccent,
               label: 'Supprimer',
               onTap: () => _confirmDelete(context, videoController),
+              emphasized: true,
             ),
           if (isOwner) const SizedBox(height: 24),
           _animatedActionButton(
-            icon: Icons.favorite,
-            color: widget.video.likes.contains(currentUser.uid)
-                ? Colors.red
-                : Colors.white,
+            icon: isLiked
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
+            color: isLiked ? Colors.redAccent : Colors.white,
             label: '${widget.video.likes.length}',
             onTap: () =>
                 _toggleLike(videoController, currentUser.uid),
+            emphasized: isLiked,
           ),
           const SizedBox(height: 24),
           _animatedActionButton(
-            icon: Icons.share,
+            icon: Icons.send_rounded,
             color: Colors.white,
             label: '${widget.video.shareCount}',
             onTap: () => _shareVideo(videoController),
           ),
           const SizedBox(height: 24),
           _animatedActionButton(
-            icon: Icons.flag,
+            icon: Icons.report_outlined,
             color: Colors.white,
             label: '${widget.video.reportCount}',
             onTap: () async =>
@@ -557,16 +560,56 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     required Color color,
     required String label,
     required VoidCallback onTap,
+    bool emphasized = false,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Column(
         children: [
-          Icon(icon, color: color, size: 32),
-          const SizedBox(height: 4),
-          Text(label,
-              style:
-                  const TextStyle(color: Colors.white, fontSize: 12)),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.35),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withOpacity(0.2),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.35),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: emphasized ? 30 : 28,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 2,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.35),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );
