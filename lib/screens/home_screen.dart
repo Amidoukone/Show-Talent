@@ -78,8 +78,7 @@ class _HomeScreenState extends State<HomeScreen>
   // Focus orchestrator helpers
   // ---------------------------------------------------------------------------
 
-  List<Video> get _currentVideos =>
-      videoController.videoList.toList();
+  List<Video> get _currentVideos => videoController.videoList.toList();
 
   void _refreshFocusVideos() {
     _focusOrchestrator.updateVideos(_currentVideos);
@@ -237,6 +236,15 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
 
+    // ✅ Ombre ultra légère (TikTok-like) : lisibilité sans masquer la vidéo
+    const textShadow = <Shadow>[
+      Shadow(
+        offset: Offset(0, 1),
+        blurRadius: 2,
+        color: Color(0x55000000), // très léger
+      ),
+    ];
+
     return Scaffold(
       backgroundColor: AdColors.surface,
       extendBodyBehindAppBar: true,
@@ -345,8 +353,7 @@ class _HomeScreenState extends State<HomeScreen>
                           onPressed: () async {
                             await videoManager.pauseAll('home');
                             await _setWakelock(false);
-                            final result =
-                                await Get.to(() => const AddVideo());
+                            final result = await Get.to(() => const AddVideo());
                             if (result == true) {
                               await videoController.refreshVideos();
                             }
@@ -385,91 +392,54 @@ class _HomeScreenState extends State<HomeScreen>
                         showProgressBar: true,
                         player: player,
                       ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: IgnorePointer(
-                          child: Container(
-                            height: screenHeight * 0.4,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black.withOpacity(0.5),
-                                  Colors.black.withOpacity(0.8),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+
+                      // ✅ Texte "TikTok-like": sans background, sans gradient masquant la vidéo
                       Positioned(
                         bottom: screenHeight * 0.14,
                         left: 16,
                         right: 96,
                         child: FadeTransition(
                           opacity: _fadeAnimation,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(16),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 12,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.35),
-                                  border: Border.all(
-                                    color: Colors.white.withOpacity(0.12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.play_circle_fill_rounded,
+                                    size: 18,
+                                    color: Colors.white,
                                   ),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(
-                                          Icons.play_circle_fill_rounded,
-                                          size: 18,
-                                          color: Colors.white,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: Text(
-                                            video.description.trim().isNotEmpty
-                                                ? video.description.trim()
-                                                : 'Pas de description',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 15,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      video.caption.trim().isNotEmpty
-                                          ? video.caption.trim()
-                                          : 'Pas de légende',
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      video.description.trim().isNotEmpty
+                                          ? video.description.trim()
+                                          : 'Pas de description',
                                       style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 13,
-                                        height: 1.3,
-                                      ),
-                                      maxLines: 2,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                      ).copyWith(shadows: textShadow),
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                            ),
+                              const SizedBox(height: 6),
+                              Text(
+                                video.caption.trim().isNotEmpty
+                                    ? video.caption.trim()
+                                    : 'Pas de légende',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                  height: 1.3,
+                                ).copyWith(shadows: textShadow),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
                       ),
