@@ -390,6 +390,7 @@ class _HomeScreenState extends State<HomeScreen>
                         autoPlay: true,
                         showControls: true,
                         showProgressBar: true,
+                        showDeleteAction: false,
                         player: player,
                       ),
 
