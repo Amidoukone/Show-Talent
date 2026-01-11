@@ -164,6 +164,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(height: 32),
 
           // =====================================================
+          // 🤝 CONSEILS & SÉCURITÉ
+          // =====================================================
+          _sectionTitle("Conseils & sécurité"),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Card(
+              elevation: 0,
+              color: cs.surfaceVariant,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Protégez-vous et passez par l'agence",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Si un club, un agent ou un recruteur vous propose une "
+                      "opportunité, contactez-nous avant toute décision. "
+                      "Nous vous accompagnons pour vérifier la fiabilité des "
+                      "personnes, sécuriser les démarches et éviter les pièges.",
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      "ADFOOT met en relation les acteurs du football, mais "
+                      "nous ne pouvons pas contrôler chaque individu. "
+                      "C'est pourquoi nous avons créé une agence pour traiter "
+                      "les opportunités de manière professionnelle et sûre.",
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Icon(Icons.support_agent, color: cs.primary),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            "Besoin d'aide ? Contactez notre équipe via "
+                            "l'agence ADFOOT.",
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const Divider(height: 32),
+
+          // =====================================================
           // ❌ ZONE DANGEREUSE
           // =====================================================
           _sectionTitle("Zone dangereuse"),
