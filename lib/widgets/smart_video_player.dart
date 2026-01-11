@@ -316,7 +316,15 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       await _videoManager.pauseAllExcept(widget.contextKey, widget.videoUrl);
 
       if (!(c?.value.isPlaying ?? false)) {
-        await c?.play();
+        try {
+          await c?.play();
+        } catch (e) {
+          debugPrint('[SmartVideoPlayer] play error: $e');
+          if (mounted && !_isDisposed) {
+            await _purgeAndReloadController();
+          }
+          return;
+        }
       }
 
       _updateWakelock();
