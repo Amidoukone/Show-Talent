@@ -21,10 +21,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isDeleting = false;
   bool _loadingRole = true;
 
-  // 🔑 rôle utilisateur
   String _role = 'fan';
 
-  // 🔐 états confidentialité (frontend-only)
   bool _profilePublic = true;
   bool _allowMessages = true;
 
@@ -39,13 +37,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (user == null) return;
 
     try {
-      final doc =
-          await _firestore.collection('users').doc(user.uid).get();
+      final doc = await _firestore.collection('users').doc(user.uid).get();
       final data = doc.data();
       if (data != null && data['role'] != null) {
         _role = data['role'];
       }
     } catch (_) {}
+
     setState(() => _loadingRole = false);
   }
 
@@ -66,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         foregroundColor: cs.onSurface,
       ),
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: const EdgeInsets.only(bottom: 32),
         children: [
           // =====================================================
           // 👤 COMPTE
@@ -102,7 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(height: 32),
 
           // =====================================================
-          // 🔐 CONFIDENTIALITÉ (MULTI-RÔLES)
+          // 🔐 CONFIDENTIALITÉ
           // =====================================================
           _sectionTitle("Confidentialité"),
 
@@ -164,60 +162,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Divider(height: 32),
 
           // =====================================================
-          // 🤝 CONSEILS & SÉCURITÉ
+          // 🛡️ SÉCURITÉ & OPPORTUNITÉS PROFESSIONNELLES
           // =====================================================
-          _sectionTitle("Conseils & sécurité"),
+          _sectionTitle("Sécurité & opportunités"),
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Card(
-              elevation: 0,
-              color: cs.surfaceVariant,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "Protégez-vous et passez par l'agence",
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Si un club, un agent ou un recruteur vous propose une "
-                      "opportunité, contactez-nous avant toute décision. "
-                      "Nous vous accompagnons pour vérifier la fiabilité des "
-                      "personnes, sécuriser les démarches et éviter les pièges.",
-                      style: TextStyle(color: cs.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      "ADFOOT met en relation les acteurs du football, mais "
-                      "nous ne pouvons pas contrôler chaque individu. "
-                      "C'est pourquoi nous avons créé une agence pour traiter "
-                      "les opportunités de manière professionnelle et sûre.",
-                      style: TextStyle(color: cs.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Icon(Icons.support_agent, color: cs.primary),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            "Besoin d'aide ? Contactez notre équipe via "
-                            "l'agence ADFOOT.",
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+          _securityIntroCard(cs),
+          const SizedBox(height: 12),
+          _riskAwarenessCard(cs),
+          const SizedBox(height: 12),
+          _officialRuleCard(cs),
+          const SizedBox(height: 8),
+
+          ListTile(
+            leading: Icon(Icons.support_agent, color: cs.primary),
+            title: const Text("Contacter l'agence ADFOOT"),
+            subtitle: const Text(
+              "Vérification d'opportunités et accompagnement sécurisé",
             ),
+            onTap: () {
+              Get.snackbar(
+                "Agence ADFOOT",
+                "Avant toute décision, contactez-nous.\n\n"
+                "🌐 adfoot.org\n📞 WhatsApp : +223 70 66 83 64",
+                duration: const Duration(seconds: 6),
+              );
+            },
           ),
 
           const Divider(height: 32),
@@ -245,8 +214,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // =========================================================
+  // 🛡️ SECURITY UI BLOCKS
+  // =========================================================
+
+  Widget _securityIntroCard(ColorScheme cs) {
+    return Card(
+      elevation: 0,
+      color: cs.surfaceVariant,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.primary.withOpacity(0.15)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.shield, color: cs.primary),
+                const SizedBox(width: 8),
+                const Text(
+                  "Votre sécurité avant tout",
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "ADFOOT facilite la mise en relation entre joueurs, clubs, "
+              "agents et recruteurs. Cependant, nous ne pouvons pas contrôler "
+              "chaque individu présent sur la plateforme.",
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _riskAwarenessCard(ColorScheme cs) {
+    return Card(
+      elevation: 0,
+      color: cs.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              "⚠️ Risques fréquents",
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            SizedBox(height: 8),
+            Text("• Faux agents demandant de l'argent"),
+            Text("• Promesses de contrats sans documents officiels"),
+            Text("• Voyages non encadrés ou dangereux"),
+            Text("• Exploitation de jeunes joueurs"),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _officialRuleCard(ColorScheme cs) {
+    return Card(
+      elevation: 0,
+      color: cs.primary.withOpacity(0.08),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            Text(
+              "Règle officielle ADFOOT",
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: 8),
+            Text(
+              "Si un club, un agent ou un recruteur vous propose une opportunité, "
+              "contactez ADFOOT AVANT toute décision.\n\n"
+              "Notre agence vérifie la fiabilité, sécurise les démarches "
+              "et vous accompagne de manière professionnelle.",
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
   // 🔥 SUPPRESSION COMPTE
   // =========================================================
+
   Future<void> _confirmDeleteAccount(BuildContext context) async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -300,14 +363,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // =========================================================
-  // 🧩 Helpers
+  // 🧩 HELPERS
   // =========================================================
+
   String _profileVisibilityLabel() {
     switch (_role) {
       case 'joueur':
         return 'Visible par les clubs et recruteurs.';
       case 'recruteur':
-        return 'Visible par les joueurs.';
       case 'club':
         return 'Visible par les joueurs.';
       default:
