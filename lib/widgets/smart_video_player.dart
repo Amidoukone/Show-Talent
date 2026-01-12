@@ -235,6 +235,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     } catch (_) {}
   }
 
+  VideoPlayerValue? _safeValue(VideoPlayerController? ctrl) {
+    try {
+      return ctrl?.value;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // TICK / PLAYBACK
   // ---------------------------------------------------------------------------
@@ -405,6 +413,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     final userController = Get.find<UserController>();
 
     final ctrl = _ctrl;
+    final value = _safeValue(ctrl);
     final loadState =
         _videoManager.getLoadState(widget.contextKey, widget.videoUrl);
 
@@ -416,11 +425,11 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           builder: (_, showIcon, __) {
             return TiktokVideoPlayer(
               controller: ctrl,
-              isPlaying: ctrl?.value.isPlaying ?? false,
+              isPlaying: value?.isPlaying ?? false,
               hidePlayPauseIcon: !showIcon,
               showControls: widget.showControls,
               showProgressBar: widget.showProgressBar,
-              isBuffering: ctrl?.value.isBuffering ?? false,
+              isBuffering: value?.isBuffering ?? false,
               isLoading: loadState == VideoLoadState.loading,
               errorMessage: _getErrorMessage(loadState),
               thumbnailUrl: widget.video.thumbnailUrl,
