@@ -64,6 +64,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final ScrollController _listScroll = ScrollController();
 
   late final Stream<List<Message>> _messagesStream;
+  late AppUser _otherUser;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _otherUserSub;
 
   Timer? _heartbeatTimer;
   DateTime? _lastTouchAt;
@@ -79,6 +81,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     _messagesStream = chatController.getMessages(widget.conversationId);
+    _otherUser = widget.otherUser;
+    _startOtherUserListener();
 
     _inputFocus.addListener(() {
       if (_inputFocus.hasFocus) {
@@ -98,6 +102,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _stopHeartbeat();
     _leaveActiveConversation();
+    _otherUserSub?.cancel();
     _inputFocus.dispose();
     _listScroll.dispose();
     messageController.dispose();
@@ -133,7 +138,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
     }
 
-    final otherUser = widget.otherUser;
+    final otherUser = _otherUser;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final canMessage = currentUser.allowMessages && otherUser.allowMessages;
@@ -355,6 +360,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         ),
       ),
+    );
+  }
+
+  void _startOtherUserListener() {
+    _otherUserSub?.cancel();
+    if (widget.otherUser.uid.isEmpty) return;
+    _otherUserSub = FirebaseFirestore.instance
+        .collection('users')
+        .doc(widget.otherUser.uid)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        if (!snapshot.exists) return;
+        final data = snapshot.data();
+        if (data == null || !mounted) return;
+        setState(() => _otherUser = AppUser.fromMap(data));
+      },
+      onError: (error, stackTrace) {
+        debugPrint('❌ chat otherUser listener error: $error\n$stackTrace');
+      },
     );
   }
 
