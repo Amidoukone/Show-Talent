@@ -116,7 +116,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final user = controller.user!;
         final currentUid = _authController.currentUid;
         final isOwnProfile = currentUid != null && currentUid == user.uid;
+        final canMessage = _canSendMessage(user);
+        final canViewProfile = isOwnProfile || user.profilePublic;
         final visibleVideos = _getVisibleVideos(controller.videoList);
+
+        if (!canViewProfile) {
+          return _buildPrivateProfile(
+            user,
+            isOwnProfile: isOwnProfile,
+            canMessage: canMessage,
+          );
+        }
 
         return Scaffold(
           backgroundColor: kSurface,
@@ -148,7 +158,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               else if (!isOwnProfile && currentUid != null)
                 IconButton(
                   icon: const Icon(Icons.message),
-                  onPressed: () => _handleSendMessage(user),
+                  onPressed: canMessage ? () => _handleSendMessage(user) : null,
                 ),
             ],
           ),
@@ -187,7 +197,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
-                        child: _buildFollowMessageRow(user),
+                        child: _buildFollowMessageRow(
+                          user,
+                          canMessage: canMessage,
+                        ),
                       ),
                     ),
 
@@ -371,9 +384,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // Actions
   // =======================
 
+  bool _canSendMessage(AppUser user) {
+    final currentUser = _authController.user;
+    if (currentUser == null) return false;
+    return currentUser.allowMessages && user.allowMessages;
+  }
+
+  void _showMessagingDisabledNotice(AppUser user) {
+    final currentUser = _authController.user;
+    if (currentUser == null) return;
+
+    final isSenderDisabled = !currentUser.allowMessages;
+    final isRecipientDisabled = !user.allowMessages;
+
+    String message;
+    if (isSenderDisabled && isRecipientDisabled) {
+      message = 'Les messages sont désactivés pour vous deux.';
+    } else if (isSenderDisabled) {
+      message = 'Vous avez désactivé l’envoi de messages.';
+    } else {
+      message = 'Cet utilisateur a désactivé les messages.';
+    }
+
+    Get.snackbar(
+      'Messages indisponibles',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+      backgroundColor: Colors.grey.shade800,
+      colorText: Colors.white,
+    );
+  }
+
   Future<void> _handleSendMessage(AppUser user) async {
     final currentUserId = _authController.currentUid;
     if (currentUserId == null) return;
+    if (!_canSendMessage(user)) {
+      _showMessagingDisabledNotice(user);
+      return;
+    }
 
     final conversationId = await _chatController.createOrGetConversation(
       currentUserId: currentUserId,
@@ -388,6 +436,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
     }
+  }
+
+  Widget _buildPrivateProfile(
+    AppUser user, {
+    required bool isOwnProfile,
+    required bool canMessage,
+  }) {
+    return Scaffold(
+      backgroundColor: kSurface,
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        centerTitle: true,
+        elevation: 0,
+        title: Text(
+          user.nom.isNotEmpty ? user.nom : 'Profil',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+        actions: [
+          if (!isOwnProfile && _authController.currentUid != null)
+            IconButton(
+              icon: const Icon(Icons.message),
+              onPressed: canMessage ? () => _handleSendMessage(user) : null,
+            ),
+        ],
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.lock_outline, size: 48, color: kPrimary),
+              const SizedBox(height: 12),
+              const Text(
+                'Profil privé',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Ce profil n'est pas visible pour le moment.",
+                style: TextStyle(color: AdColors.onSurfaceMuted),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              if (canMessage)
+                ElevatedButton.icon(
+                  onPressed: () => _handleSendMessage(user),
+                  icon: const Icon(Icons.message_outlined),
+                  label: const Text('Envoyer un message'),
+                )
+              else
+                Text(
+                  'La messagerie est désactivée pour cet utilisateur.',
+                  style: TextStyle(color: AdColors.onSurfaceMuted),
+                  textAlign: TextAlign.center,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
 void _showFullProfilePhoto(String photoUrl, String uid) {
@@ -571,7 +687,7 @@ void _showFullProfilePhoto(String photoUrl, String uid) {
     );
   }
 
-  Widget _buildFollowMessageRow(AppUser user) {
+  Widget _buildFollowMessageRow(AppUser user, {required bool canMessage}) {
     final currentUserId = _authController.currentUid;
     if (currentUserId == null) {
       return const SizedBox.shrink();
@@ -635,7 +751,7 @@ void _showFullProfilePhoto(String photoUrl, String uid) {
           child: ElevatedButton.icon(
             icon: const Icon(Icons.message_outlined),
             label: const Text('Message'),
-            onPressed: () => _handleSendMessage(user),
+            onPressed: canMessage ? () => _handleSendMessage(user) : null,
           ),
         ),
       ],
