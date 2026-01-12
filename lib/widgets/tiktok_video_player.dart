@@ -247,6 +247,14 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   // UI
   // ---------------------------------------------------------------------------
 
+  VideoPlayerValue? _safeValue() {
+    try {
+      return widget.controller?.value;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // ✅ Si le controller devient invalide (ex: retour => dispose), on retourne une UI safe.
@@ -267,7 +275,18 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
    /// ✅ garantit progression active dès que le player est prêt
     _ensureProgressUpdaterRunning();
 
-    final value = widget.controller!.value;
+    final value = _safeValue();
+    if (value == null) {
+      _stopAllTimers();
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(widget.thumbnailUrl, fit: BoxFit.cover),
+          if (widget.isLoading || widget.isBuffering)
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
+        ],
+      );
+    }
     final bool hasError = value.hasError || widget.errorMessage != null;
     final bool showLoader = widget.isLoading || widget.isBuffering || !value.isInitialized;
 
