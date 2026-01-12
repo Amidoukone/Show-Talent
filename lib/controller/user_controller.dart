@@ -129,6 +129,8 @@ class UserController extends GetxController {
           'emailVerifiedAt': FieldValue.serverTimestamp(),
           'followersList': <String>[],
           'followingsList': <String>[],
+          'profilePublic': true,
+          'allowMessages': true,
         }, SetOptions(merge: true));
 
         doc = await _firestore.collection('users').doc(uid).get();

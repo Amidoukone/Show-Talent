@@ -368,6 +368,16 @@ class EventDetailsScreen extends StatelessWidget {
 
     final current = Get.find<UserController>().user;
     if (current == null) return;
+    if (!current.allowMessages || !other.allowMessages) {
+      Get.snackbar(
+        'Messages indisponibles',
+        !current.allowMessages
+            ? 'Vous avez désactivé les messages.'
+            : 'Cet utilisateur a désactivé les messages.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
 
     final convId = await chat.createOrGetConversation(
       currentUserId: current.uid,
@@ -530,6 +540,16 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
 
                       final current = Get.find<UserController>().user;
                       if (current == null) return;
+                      if (!current.allowMessages || !p.allowMessages) {
+                        Get.snackbar(
+                          'Messages indisponibles',
+                          !current.allowMessages
+                              ? 'Vous avez désactivé les messages.'
+                              : 'Cet utilisateur a désactivé les messages.',
+                          snackPosition: SnackPosition.BOTTOM,
+                        );
+                        return;
+                      }
 
                       final convId = await chat.createOrGetConversation(
                         currentUserId: current.uid,

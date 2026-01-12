@@ -356,6 +356,12 @@ class ProfileController extends GetxController {
     if (patch.containsKey('openToOpportunities')) {
       u.openToOpportunities = patch['openToOpportunities'] as bool?;
     }
+    if (patch.containsKey('profilePublic')) {
+      u.profilePublic = patch['profilePublic'] as bool;
+    }
+    if (patch.containsKey('allowMessages')) {
+      u.allowMessages = patch['allowMessages'] as bool;
+    }
 
     // Avancés (maps)
     void applyMap(String key, void Function(Map<String, dynamic>) setter) {
