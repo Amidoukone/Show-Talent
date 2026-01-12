@@ -130,6 +130,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
         cvUrl: null,
         followersList: const [],
         followingsList: const [],
+        profilePublic: true,
+        allowMessages: true,
       );
 
       await FirebaseFirestore.instance

@@ -234,8 +234,24 @@ class ChatController extends GetxController {
     required String senderId,
     required String recipientId,
     required String content,
+    bool skipPermissionCheck = false,
   }) async {
     try {
+      if (!skipPermissionCheck) {
+        final canSend = await canSendMessage(
+          senderId: senderId,
+          recipientId: recipientId,
+        );
+        if (!canSend) {
+          Get.snackbar(
+            'Messages indisponibles',
+            'L’envoi de messages est désactivé pour cette conversation.',
+            snackPosition: SnackPosition.BOTTOM,
+          );
+          return;
+        }
+      }
+
       final messageRef = _firestore
           .collection('conversations')
           .doc(conversationId)
@@ -295,6 +311,26 @@ class ChatController extends GetxController {
       }
     } catch (e) {
       print("Erreur envoi message : $e");
+    }
+  }
+
+  Future<bool> canSendMessage({
+    required String senderId,
+    required String recipientId,
+  }) async {
+    try {
+      final senderDoc = await _firestore.collection('users').doc(senderId).get();
+      final recipientDoc =
+          await _firestore.collection('users').doc(recipientId).get();
+
+      final senderAllow =
+          senderDoc.data()?['allowMessages'] as bool? ?? true;
+      final recipientAllow =
+          recipientDoc.data()?['allowMessages'] as bool? ?? true;
+
+      return senderAllow && recipientAllow;
+    } catch (_) {
+      return true;
     }
   }
 
