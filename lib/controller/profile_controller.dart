@@ -17,6 +17,8 @@ class ProfileController extends GetxController {
   final VideoManager _videoManager = VideoManager();
 
   AppUser? user;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _userSubscription;
 
   // UI / State
   final isLoadingPhoto = false.obs;
@@ -41,6 +43,7 @@ class ProfileController extends GetxController {
   void onClose() async {
     final ctx = 'profile:${user?.uid ?? ''}';
     await _videoManager.disposeAllForContext(ctx);
+    await _userSubscription?.cancel();
     super.onClose();
   }
 
@@ -76,6 +79,7 @@ class ProfileController extends GetxController {
       user = AppUser.fromMap(doc.data()!);
       update();
 
+      _startUserListener(uid);
       await fetchUserVideos(uid, isRefresh: true);
     } catch (e, st) {
       debugPrint('❌ updateUserId: $e\n$st');
@@ -86,6 +90,26 @@ class ProfileController extends GetxController {
         colorText: Colors.white,
       );
     }
+  }
+
+  void _startUserListener(String uid) {
+    _userSubscription?.cancel();
+    _userSubscription = _firestore
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .listen(
+      (snapshot) {
+        if (!snapshot.exists) return;
+        final data = snapshot.data();
+        if (data == null) return;
+        user = AppUser.fromMap(data);
+        update();
+      },
+      onError: (error, stackTrace) {
+        debugPrint('❌ profile user listener error: $error\n$stackTrace');
+      },
+    );
   }
 
   // =========================
