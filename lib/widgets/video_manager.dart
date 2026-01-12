@@ -655,8 +655,14 @@ class VideoManager {
         keepUrl != null ? _resolveKey(contextKey, keepUrl) : null;
 
     for (final entry in lru.entries.toList()) {
-      if (entry.key != resolvedKeep &&
-          entry.value.controller.value.isInitialized) {
+      if (entry.key == resolvedKeep) continue;
+      bool isInitialized = false;
+      try {
+        isInitialized = entry.value.controller.value.isInitialized;
+      } catch (_) {
+        isInitialized = false;
+      }
+      if (isInitialized) {
         await safePause(entry.value);
       }
     }
