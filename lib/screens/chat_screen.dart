@@ -136,6 +136,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final otherUser = widget.otherUser;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final canMessage = currentUser.allowMessages && otherUser.allowMessages;
+    final disabledHint = (!currentUser.allowMessages && !otherUser.allowMessages)
+        ? 'Les messages sont désactivés pour vous deux.'
+        : currentUser.allowMessages
+            ? 'Cet utilisateur a désactivé les messages.'
+            : 'Vous avez désactivé les messages.';
 
     return PopScope(
       canPop: false,
@@ -308,12 +314,41 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 ),
 
+                if (!canMessage)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: ChatUi.pagePad,
+                      vertical: 6,
+                    ),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest.withValues(alpha: 0.8),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: cs.outline.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        disabledHint,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.75),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+
                 // ✅ Input bar modernisée + cohérente avec ConversationsScreen
                 MessageInputBar(
                   controller: messageController,
                   focusNode: _inputFocus,
                   onSend: () => _sendMessage(currentUser.uid, otherUser.uid),
                   onUserActivity: _throttledTouchActiveAt,
+                  enabled: canMessage,
+                  disabledHint: disabledHint,
                 ),
               ],
             ),
@@ -432,15 +467,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // ------------------------------
   // Send + scroll - logique existante conservée
   // ------------------------------
-  void _sendMessage(String senderId, String recipientId) {
+  Future<void> _sendMessage(String senderId, String recipientId) async {
     final content = messageController.text.trim();
     if (content.isEmpty) return;
 
-    chatController.sendMessage(
+    final canSend = await chatController.canSendMessage(
+      senderId: senderId,
+      recipientId: recipientId,
+    );
+    if (!canSend) {
+      Get.snackbar(
+        'Messages indisponibles',
+        'L’envoi de messages est désactivé pour cette conversation.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    await chatController.sendMessage(
       conversationId: widget.conversationId,
       senderId: senderId,
       recipientId: recipientId,
       content: content,
+      skipPermissionCheck: true,
     );
 
     messageController.clear();
@@ -731,6 +780,8 @@ class MessageInputBar extends StatelessWidget {
   final FocusNode focusNode;
   final VoidCallback onSend;
   final VoidCallback onUserActivity;
+  final bool enabled;
+  final String? disabledHint;
 
   const MessageInputBar({
     super.key,
@@ -738,6 +789,8 @@ class MessageInputBar extends StatelessWidget {
     required this.focusNode,
     required this.onSend,
     required this.onUserActivity,
+    required this.enabled,
+    this.disabledHint,
   });
 
   @override
@@ -786,6 +839,7 @@ class MessageInputBar extends StatelessWidget {
                       return TextField(
                         controller: controller,
                         focusNode: focusNode,
+                        enabled: enabled,
                         keyboardType: TextInputType.multiline,
                         textInputAction: TextInputAction.newline,
                         minLines: 1,
@@ -797,7 +851,8 @@ class MessageInputBar extends StatelessWidget {
                         onChanged: (_) => onUserActivity(),
                         onTap: onUserActivity,
                         decoration: InputDecoration(
-                          hintText: "Tapez un message…",
+                          hintText:
+                              enabled ? "Tapez un message…" : disabledHint,
                           hintStyle: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.55),
                             fontWeight: FontWeight.w600,
@@ -820,7 +875,7 @@ class MessageInputBar extends StatelessWidget {
             ValueListenableBuilder<TextEditingValue>(
               valueListenable: controller,
               builder: (context, value, _) {
-                final canSend = value.text.trim().isNotEmpty;
+                final canSend = enabled && value.text.trim().isNotEmpty;
 
                 return AnimatedScale(
                   duration: const Duration(milliseconds: 120),

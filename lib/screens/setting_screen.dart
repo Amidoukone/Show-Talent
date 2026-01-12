@@ -29,22 +29,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUserRole();
+    _loadUserSettings();
   }
 
-  Future<void> _loadUserRole() async {
+  Future<void> _loadUserSettings() async {
     final user = _auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      setState(() => _loadingRole = false);
+      return;
+    }
 
     try {
       final doc = await _firestore.collection('users').doc(user.uid).get();
       final data = doc.data();
-      if (data != null && data['role'] != null) {
-        _role = data['role'];
+      if (data != null) {
+        _role = data['role'] ?? _role;
+        _profilePublic = data['profilePublic'] ?? true;
+        _allowMessages = data['allowMessages'] ?? true;
       }
     } catch (_) {}
 
-    setState(() => _loadingRole = false);
+    if (mounted) {
+      setState(() => _loadingRole = false);
+    }
+  }
+
+  Future<bool> _updatePrivacySetting({
+    bool? profilePublic,
+    bool? allowMessages,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    final patch = <String, dynamic>{};
+    if (profilePublic != null) patch['profilePublic'] = profilePublic;
+    if (allowMessages != null) patch['allowMessages'] = allowMessages;
+    if (patch.isEmpty) return true;
+
+    try {
+      await _firestore.collection('users').doc(user.uid).update(patch);
+      return true;
+    } catch (e) {
+      Get.snackbar(
+        'Erreur',
+        'Impossible de sauvegarder les paramètres.',
+      );
+      return false;
+    }
   }
 
   @override
@@ -112,8 +143,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: _profilePublic,
               onChanged: _isDeleting
                   ? null
-                  : (value) {
+                  : (value) async {
+                      final previous = _profilePublic;
                       setState(() => _profilePublic = value);
+
+                      final ok = await _updatePrivacySetting(
+                        profilePublic: value,
+                      );
+                      if (!ok && mounted) {
+                        setState(() => _profilePublic = previous);
+                        return;
+                      }
+
                       Get.snackbar(
                         'Confidentialité',
                         value
@@ -131,8 +172,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: _allowMessages,
               onChanged: _isDeleting
                   ? null
-                  : (value) {
+                  : (value) async {
+                      final previous = _allowMessages;
                       setState(() => _allowMessages = value);
+
+                      final ok = await _updatePrivacySetting(
+                        allowMessages: value,
+                      );
+                      if (!ok && mounted) {
+                        setState(() => _allowMessages = previous);
+                        return;
+                      }
+
                       Get.snackbar(
                         'Messages',
                         value

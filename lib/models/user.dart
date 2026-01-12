@@ -115,6 +115,8 @@ class AppUser {
   List<Video>? videosLikees;
   List<String> followersList;
   List<String> followingsList;
+  bool profilePublic;
+  bool allowMessages;
 
   // =========================
   // 📄 Documents
@@ -179,6 +181,8 @@ class AppUser {
 
     // Docs
     this.cvUrl,
+    this.profilePublic = true,
+    this.allowMessages = true,
   });
 
   // =========================
@@ -301,6 +305,8 @@ class AppUser {
 
       // Docs
       cvUrl: map['cvUrl']?.toString(),
+      profilePublic: map['profilePublic'] as bool? ?? true,
+      allowMessages: map['allowMessages'] as bool? ?? true,
     );
   }
 
@@ -367,6 +373,8 @@ class AppUser {
 
       // Docs
       'cvUrl': cvUrl,
+      'profilePublic': profilePublic,
+      'allowMessages': allowMessages,
     };
   }
 
