@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -9,6 +10,7 @@ import 'package:adfoot/models/video.dart';
 import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
+import 'package:adfoot/widgets/video_page_scroll_physics.dart';
 
 class ProfileVideoFeedScreen extends StatefulWidget {
   final String uid;
@@ -145,6 +147,9 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
         body: PageView.builder(
           controller: _pageController,
           scrollDirection: Axis.vertical,
+          physics: const VideoPageScrollPhysics(),
+          dragStartBehavior: DragStartBehavior.down,
+          allowImplicitScrolling: true,
           itemCount: videos.length,
           onPageChanged: (index) {
             if (!_isDisposed) {

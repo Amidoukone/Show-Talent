@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:adfoot/screens/add_video.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -17,6 +18,7 @@ import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
+import 'package:adfoot/widgets/video_page_scroll_physics.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -369,7 +371,9 @@ class _HomeScreenState extends State<HomeScreen>
                 controller: _pageController,
                 scrollDirection: Axis.vertical,
                 itemCount: videos.length,
-                physics: const ClampingScrollPhysics(),
+                physics: const VideoPageScrollPhysics(),
+                dragStartBehavior: DragStartBehavior.down,
+                allowImplicitScrolling: true,
                 onPageChanged: (i) => unawaited(_onPageChanged(i)),
                 itemBuilder: (context, index) {
                   final video = videos[index];
