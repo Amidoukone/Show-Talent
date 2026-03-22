@@ -274,13 +274,14 @@ class VideoTools {
 
     await Future.delayed(_settleDelay);
 
-    int? bestW;
-    int? bestH;
+    (int, int)? playerDimensions;
+    (int, int)? compressDimensions;
 
-    void consider(int? w, int? h) {
-      if (w == null || h == null || w <= 0 || h <= 0) return;
-      bestW = bestW != null ? (w > bestW! ? w : bestW!) : w;
-      bestH = bestH != null ? (h > bestH! ? h : bestH!) : h;
+    (int, int)? normalizeDimensions(int? w, int? h) {
+      if (w == null || h == null || w <= 0 || h <= 0) {
+        return null;
+      }
+      return (w, h);
     }
 
     Future<void> probeWithVideoPlayer() async {
@@ -301,7 +302,10 @@ class VideoTools {
           }
         }
 
-        consider(size.width.round(), size.height.round());
+        playerDimensions = normalizeDimensions(
+          size.width.round(),
+          size.height.round(),
+        );
       } catch (_) {
       } finally {
         await ctrl?.dispose();
@@ -311,7 +315,7 @@ class VideoTools {
     Future<void> probeWithVideoCompress() async {
       try {
         final info = await VideoCompress.getMediaInfo(videoPath);
-        consider(
+        compressDimensions = normalizeDimensions(
           (info.width is num) ? (info.width as num).round() : null,
           (info.height is num) ? (info.height as num).round() : null,
         );
@@ -321,7 +325,7 @@ class VideoTools {
     await probeWithVideoCompress();
     await probeWithVideoPlayer();
 
-    if (bestW == null || bestH == null) {
+    if (playerDimensions == null && compressDimensions == null) {
       try {
         await VideoCompress.deleteAllCache();
       } catch (_) {}
@@ -330,8 +334,9 @@ class VideoTools {
       await probeWithVideoPlayer();
     }
 
-    if (bestW != null && bestH != null) {
-      final tuple = (bestW!, bestH!);
+    final preferred = playerDimensions ?? compressDimensions;
+    if (preferred != null) {
+      final tuple = preferred;
       _dimensionsCache[videoPath] = tuple;
       return tuple;
     }

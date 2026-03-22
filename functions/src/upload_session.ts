@@ -9,6 +9,9 @@ import {db, fieldValue, storage} from "./firebase";
 
 const REGION = "europe-west1";
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
+type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
+// Safe rollout: keep App Check optional until mobile clients are fully configured.
+const ENFORCE_APP_CHECK = process.env.ENFORCE_APPCHECK === "true";
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                       */
@@ -98,7 +101,7 @@ interface ParsedMetadata {
 function parseImageContentType(raw: unknown): string {
   const value = typeof raw === "string" ? raw.trim().toLowerCase() : "image/jpeg";
   // NB: on conserve ton comportement existant
-  if (!ALLOWED_IMAGE_TYPES.includes(value as any)) {
+  if (!ALLOWED_IMAGE_TYPES.includes(value as AllowedImageType)) {
     throw new HttpsError("invalid-argument", "Type d'image non supporté.");
   }
   return value;
@@ -180,7 +183,7 @@ const asStringList = (value: unknown): string[] | undefined => {
 /* -------------------------------------------------------------------------- */
 
 export const createUploadSession = onCall(
-  {region: REGION},
+  {region: REGION, enforceAppCheck: ENFORCE_APP_CHECK},
   async (request): Promise<Record<string, unknown>> => {
     const uid = request.auth?.uid;
     if (!uid) {
@@ -249,7 +252,7 @@ export const createUploadSession = onCall(
 /* -------------------------------------------------------------------------- */
 
 export const requestThumbnailUploadUrl = onCall(
-  {region: REGION},
+  {region: REGION, enforceAppCheck: ENFORCE_APP_CHECK},
   async (request): Promise<Record<string, unknown>> => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Authentification requise.");
@@ -320,7 +323,7 @@ export const requestThumbnailUploadUrl = onCall(
 /* -------------------------------------------------------------------------- */
 
 export const finalizeUpload = onCall(
-  {region: REGION},
+  {region: REGION, enforceAppCheck: ENFORCE_APP_CHECK},
   async (request): Promise<Record<string, unknown>> => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Authentification requise.");

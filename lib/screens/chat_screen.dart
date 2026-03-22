@@ -71,6 +71,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   DateTime? _lastTouchAt;
   static const Duration _heartbeatPeriod = Duration(seconds: 12);
   static const Duration _touchThrottle = Duration(seconds: 3);
+  DateTime? _lastReadSyncAt;
+  bool _readSyncInFlight = false;
+  static const Duration _readSyncThrottle = Duration(seconds: 2);
 
   // ✅ Petit cache UI : regroupe l'affichage des dates
   String? _lastDateHeaderKey;
@@ -142,11 +145,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final canMessage = currentUser.allowMessages && otherUser.allowMessages;
-    final disabledHint = (!currentUser.allowMessages && !otherUser.allowMessages)
-        ? 'Les messages sont désactivés pour vous deux.'
-        : currentUser.allowMessages
-            ? 'Cet utilisateur a désactivé les messages.'
-            : 'Vous avez désactivé les messages.';
+    final disabledHint =
+        (!currentUser.allowMessages && !otherUser.allowMessages)
+            ? 'Les messages sont désactivés pour vous deux.'
+            : currentUser.allowMessages
+                ? 'Cet utilisateur a désactivé les messages.'
+                : 'Vous avez désactivé les messages.';
 
     return PopScope(
       canPop: false,
@@ -329,7 +333,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest.withValues(alpha: 0.8),
+                        color:
+                            cs.surfaceContainerHighest.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: cs.outline.withValues(alpha: 0.3),
@@ -534,14 +539,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _markMessagesAsRead(List<Message> messages, String currentUserId) {
-    for (var message in messages) {
-      if (!message.estLu && message.destinataireId == currentUserId) {
-        chatController.markMessageAsRead(
-          conversationId: widget.conversationId,
-          messageId: message.id,
-        );
-      }
+    if (_readSyncInFlight) return;
+
+    final hasUnreadForCurrentUser =
+        messages.any((m) => !m.estLu && m.destinataireId == currentUserId);
+    if (!hasUnreadForCurrentUser) return;
+
+    final now = DateTime.now();
+    if (_lastReadSyncAt != null &&
+        now.difference(_lastReadSyncAt!) < _readSyncThrottle) {
+      return;
     }
+
+    _lastReadSyncAt = now;
+    _readSyncInFlight = true;
+    chatController
+        .markMessagesAsRead(widget.conversationId, currentUserId)
+        .whenComplete(() => _readSyncInFlight = false);
   }
 
   // ------------------------------
@@ -838,7 +852,8 @@ class MessageInputBar extends StatelessWidget {
           children: [
             Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(18),

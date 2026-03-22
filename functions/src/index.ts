@@ -4,9 +4,10 @@
 /* eslint-disable max-len */
 
 import {tmpdir} from "os";
-import {join, relative, sep, posix} from "path";
+import {join} from "path";
 import {existsSync, unlinkSync} from "node:fs";
 import * as fsp from "node:fs/promises";
+import {spawn} from "node:child_process";
 import {Storage} from "@google-cloud/storage";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
@@ -26,8 +27,34 @@ import {
 /* -------------------------------------------------------------------------- */
 
 const REGION = "europe-west1";
-const HLS_SEGMENT_TIME_SECONDS = 6;
-
+const STORAGE_BUCKET =
+  process.env.STORAGE_BUCKET || "show-talent-5987d.appspot.com";
+const MP4_RENDITION_PRESETS: readonly Mp4RenditionPreset[] = [
+  {
+    label: "360p",
+    height: 360,
+    videoBitrate: 450000,
+    maxRate: 600000,
+    bufSize: 900000,
+    audioBitrate: 64000,
+  },
+  {
+    label: "480p",
+    height: 480,
+    videoBitrate: 900000,
+    maxRate: 1100000,
+    bufSize: 1650000,
+    audioBitrate: 96000,
+  },
+  {
+    label: "720p",
+    height: 720,
+    videoBitrate: 1800000,
+    maxRate: 2200000,
+    bufSize: 3300000,
+    audioBitrate: 128000,
+  },
+];
 ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const gcs = new Storage();
 
@@ -46,25 +73,45 @@ interface GcsFileMetadata {
 
 interface VideoDoc {
   thumbnailPath?: string;
+  width?: number;
+  height?: number;
 }
 
-function toPosixPath(p: string): string {
-  return p.split(sep).join("/");
+interface PlaybackSource {
+  url: string;
+  path: string;
+  type: "mp4" | "hls";
+  quality: string;
+  height: number;
+  bitrate?: number;
 }
 
-async function listFilesRecursively(dir: string): Promise<string[]> {
-  const entries = await fsp.readdir(dir, {withFileTypes: true});
-  const files: string[] = [];
+interface PlaybackContract {
+  version: number;
+  mode: string;
+  sources: PlaybackSource[];
+  sourceAsset: PlaybackSource;
+  fallback: PlaybackSource;
+}
 
-  for (const entry of entries) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await listFilesRecursively(full));
-    } else if (entry.isFile()) {
-      files.push(full);
-    }
-  }
-  return files;
+interface Mp4RenditionPreset {
+  label: string;
+  height: number;
+  videoBitrate: number;
+  maxRate: number;
+  bufSize: number;
+  audioBitrate: number;
+}
+
+interface Mp4Rendition extends Mp4RenditionPreset {
+  actualHeight: number;
+  scaleDimension: "width" | "height";
+  outputFileName: string;
+}
+
+interface VideoDimensions {
+  width: number;
+  height: number;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -97,6 +144,188 @@ async function ensureDownloadToken(
   }
 
   return token;
+}
+
+function buildStorageDownloadUrl(
+  bucketName: string,
+  objectPath: string,
+  token: string
+): string {
+  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${
+    encodeURIComponent(objectPath)
+  }?alt=media&token=${token}`;
+}
+
+function buildMp4PlaybackSource(
+  url: string,
+  objectPath: string,
+  rendition: Pick<Mp4Rendition, "label" | "actualHeight" | "videoBitrate">
+): PlaybackSource {
+  return {
+    url,
+    path: objectPath,
+    type: "mp4",
+    quality: rendition.label,
+    height: rendition.actualHeight,
+    bitrate: rendition.videoBitrate,
+  };
+}
+
+function buildPlaybackContract(
+  mp4Sources: readonly PlaybackSource[],
+  fallbackSource: PlaybackSource
+): PlaybackContract {
+  return {
+    version: 2,
+    mode: "mp4_only",
+    sources: [...mp4Sources],
+    sourceAsset: fallbackSource,
+    fallback: fallbackSource,
+  };
+}
+
+function toKbps(bitsPerSecond: number): string {
+  return `${Math.round(bitsPerSecond / 1000)}k`;
+}
+
+function toEven(value: number): number {
+  const rounded = Math.max(2, Math.round(value));
+  return rounded % 2 === 0 ? rounded : rounded - 1;
+}
+
+function asPositiveInt(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return Math.round(value);
+}
+
+function buildSingleMp4Rendition(
+  sourceWidth: number | null,
+  sourceHeight: number | null
+): Mp4Rendition {
+  const normalizedWidth = asPositiveInt(sourceWidth);
+  const normalizedHeight = asPositiveInt(sourceHeight);
+  const shortEdge =
+    normalizedWidth && normalizedHeight ?
+      Math.min(normalizedWidth, normalizedHeight) :
+      normalizedHeight ?? normalizedWidth;
+
+  let preset =
+    shortEdge ?
+      [...MP4_RENDITION_PRESETS]
+        .reverse()
+        .find((candidate) => candidate.height <= shortEdge) :
+      undefined;
+
+  if (!preset) {
+    const smallestPreset = MP4_RENDITION_PRESETS[0];
+    const fallbackHeight = toEven(shortEdge ?? smallestPreset.height);
+    preset = {
+      ...smallestPreset,
+      label: `${fallbackHeight}p`,
+      height: fallbackHeight,
+    };
+  }
+
+  const actualHeight = shortEdge ?
+    toEven(Math.min(preset.height, shortEdge)) :
+    preset.height;
+  const scaleDimension =
+    normalizedWidth && normalizedHeight && normalizedWidth <= normalizedHeight ?
+      "width" :
+      "height";
+
+  return {
+    ...preset,
+    actualHeight,
+    scaleDimension,
+    outputFileName: `${preset.label}.mp4`,
+  };
+}
+
+async function transcodeMp4Rendition(
+  inputPath: string,
+  outputPath: string,
+  rendition: Mp4Rendition
+): Promise<void> {
+  const scaleFilter =
+    rendition.scaleDimension === "width" ?
+      `scale='min(${rendition.actualHeight},trunc(iw/2)*2)':-2` :
+      `scale=-2:'min(${rendition.actualHeight},trunc(ih/2)*2)'`;
+
+  await new Promise<void>((resolve, reject) => {
+    const cmd = ffmpeg(inputPath)
+      .outputOptions([
+        "-y",
+        "-c:v libx264",
+        "-profile:v main",
+        "-preset veryfast",
+        "-pix_fmt yuv420p",
+        "-movflags +faststart",
+        `-vf ${scaleFilter}`,
+        "-g 30",
+        "-keyint_min 30",
+        `-b:v ${toKbps(rendition.videoBitrate)}`,
+        `-maxrate ${toKbps(rendition.maxRate)}`,
+        `-bufsize ${toKbps(rendition.bufSize)}`,
+        "-c:a aac",
+        `-b:a ${toKbps(rendition.audioBitrate)}`,
+        "-ar 48000",
+        "-ac 2",
+      ])
+      .on("end", () => resolve())
+      .on("error", (err: unknown) => reject(err))
+      .save(outputPath);
+
+    void cmd;
+  });
+}
+
+function parseVideoDimensionsFromFfmpegLog(
+  logOutput: string
+): VideoDimensions | null {
+  for (const rawLine of logOutput.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line.includes("Video:")) {
+      continue;
+    }
+
+    const match = /(?:^|[ ,])(\d{2,5})x(\d{2,5})(?:[ ,]|$)/.exec(line);
+    if (!match) {
+      continue;
+    }
+
+    const width = asPositiveInt(Number.parseInt(match[1], 10));
+    const height = asPositiveInt(Number.parseInt(match[2], 10));
+    if (width && height) {
+      return {width, height};
+    }
+  }
+
+  return null;
+}
+
+async function probeVideoDimensions(
+  inputPath: string
+): Promise<VideoDimensions | null> {
+  return new Promise((resolve) => {
+    const proc = spawn(ffmpegInstaller.path, ["-i", inputPath], {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+
+    let stderr = "";
+
+    proc.stderr.on("data", (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+      if (stderr.length > 32768) {
+        stderr = stderr.slice(-32768);
+      }
+    });
+
+    proc.on("error", () => resolve(null));
+    proc.on("close", () => resolve(parseVideoDimensionsFromFfmpegLog(stderr)));
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -165,12 +394,13 @@ async function tryResolveThumbnailPath(
 }
 
 /* -------------------------------------------------------------------------- */
-/* MP4 + HLS Optimization                                                      */
+/* MP4 Optimization                                                            */
 /* -------------------------------------------------------------------------- */
 
 export const optimizeMp4Video = onObjectFinalized(
   {
     region: REGION,
+    bucket: STORAGE_BUCKET,
     memory: "2GiB",
     timeoutSeconds: 540,
   },
@@ -210,35 +440,52 @@ export const optimizeMp4Video = onObjectFinalized(
     const bucket = gcs.bucket(bucketName);
     const tempInput = join(tmpdir(), fileName);
     const optimizedFile = join(tmpdir(), `optimized_${fileName}`);
-    const hlsDir = join(tmpdir(), `hls_${videoId}_${Date.now()}`);
 
     try {
       await robustDownload(bucketName, filePath, tempInput);
+      const videoSnap = await videoRef.get();
+      const videoDoc = videoSnap.data() as VideoDoc | undefined;
+      const persistedWidth = asPositiveInt(videoDoc?.width) ?? null;
+      const persistedHeight = asPositiveInt(videoDoc?.height) ?? null;
+      const probedDimensions = await probeVideoDimensions(tempInput);
+      const sourceWidth = probedDimensions?.width ?? persistedWidth;
+      const sourceHeight = probedDimensions?.height ?? persistedHeight;
+
+      if (probedDimensions) {
+        await videoRef.set(
+          {
+            width: sourceWidth,
+            height: sourceHeight,
+          },
+          {merge: true}
+        );
+
+        console.log(
+          `Playback source probed from media: ${sourceWidth}x${sourceHeight}`,
+        );
+      } else if (sourceWidth && sourceHeight) {
+        console.log(
+          `Playback source reused from metadata: ${sourceWidth}x${sourceHeight}`,
+        );
+      }
+
+      const fallbackMp4Rendition = buildSingleMp4Rendition(
+        sourceWidth,
+        sourceHeight,
+      );
+
+      if (sourceWidth && sourceHeight) {
+        console.log(
+          `Single MP4 output selected: ${sourceWidth}x${sourceHeight} -> ${fallbackMp4Rendition.label}`,
+        );
+      } else {
+        console.log(
+          `Single MP4 fallback (missing source dimensions) -> ${fallbackMp4Rendition.label}`,
+        );
+      }
 
       console.log("🎬 FFmpeg optimisation…");
-      await new Promise<void>((resolve, reject) => {
-        const cmd = ffmpeg(tempInput)
-          .outputOptions([
-            "-y",
-            "-c:v libx264",
-            "-profile:v main",
-            "-preset veryfast",
-            "-crf 23",
-            "-movflags +faststart",
-            "-vf scale='min(854,iw)':'-2'",
-            "-g 30",
-            "-keyint_min 30",
-            "-maxrate 1M",
-            "-bufsize 2M",
-            "-c:a aac",
-            "-b:a 96k",
-          ])
-          .on("end", () => resolve())
-          .on("error", (err: unknown) => reject(err))
-          .save(optimizedFile);
-
-        void cmd;
-      });
+      await transcodeMp4Rendition(tempInput, optimizedFile, fallbackMp4Rendition);
 
       console.log("⬆️ Upload optimisé…");
       await bucket.upload(optimizedFile, {
@@ -250,135 +497,19 @@ export const optimizeMp4Video = onObjectFinalized(
         },
       });
 
-      /* ---------------------- HLS generation ---------------------- */
-
-      console.log("🎞️ Génération HLS…");
-      const renditionDir = join(hlsDir, "480p");
-      await fsp.mkdir(renditionDir, {recursive: true});
-
-      await new Promise<void>((resolve, reject) => {
-        const cmd = ffmpeg(optimizedFile)
-          .outputOptions([
-            "-y",
-            "-c:v libx264",
-            "-profile:v main",
-            "-preset veryfast",
-            "-crf 23",
-            "-vf scale=-2:480",
-            "-g 30",
-            "-keyint_min 30",
-            "-maxrate 1M",
-            "-bufsize 2M",
-            "-c:a aac",
-            "-b:a 96k",
-            `-hls_time ${HLS_SEGMENT_TIME_SECONDS}`,
-            "-hls_playlist_type vod",
-            `-hls_segment_filename ${join(renditionDir, "seg_%03d.ts")}`,
-          ])
-          .on("end", () => resolve())
-          .on("error", (err: unknown) => reject(err))
-          .save(join(renditionDir, "480p.m3u8"));
-
-        void cmd;
-      });
-
-      const masterPath = join(hlsDir, "master.m3u8");
-      const masterPlaylist = [
-        "#EXTM3U",
-        "#EXT-X-VERSION:3",
-        "#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=854x480",
-        "480p/480p.m3u8",
-        "",
-      ].join("\n");
-
-      await fsp.writeFile(masterPath, masterPlaylist, "utf8");
-
-      /* ---------------------- Upload HLS files ---------------------- */
-
-      const hlsPrefix = `hls/${videoId}`;
-      const hlsFiles = await listFilesRecursively(hlsDir);
-
-      const urlMap = new Map<string, string>();// relPath -> URL tokenisée
-      const tokenMap = new Map<string, string>(); // relPath -> token
-
-      // 1) upload tous les fichiers
-      for (const file of hlsFiles) {
-        const rel = toPosixPath(relative(hlsDir, file));
-        const dest = `${hlsPrefix}/${rel}`;
-        const isPlaylist = rel.endsWith(".m3u8");
-
-        await bucket.upload(file, {
-          destination: dest,
-          metadata: {
-            contentType: isPlaylist ?
-              "application/vnd.apple.mpegurl" :
-              "video/MP2T",
-            cacheControl: "public,max-age=86400",
-          },
-        });
-      }
-
-      // 2) assurer token + construire les URLs
-      for (const file of hlsFiles) {
-        const rel = toPosixPath(relative(hlsDir, file));
-        const dest = `${hlsPrefix}/${rel}`;
-
-        const token = await ensureDownloadToken(bucketName, dest);
-        tokenMap.set(rel, token);
-
-        const url =
-          `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
-            dest
-          )}?alt=media&token=${token}`;
-
-        urlMap.set(rel, url);
-      }
-
-      // 3) réécrire les playlists pour pointer sur URLs tokenisées
-      for (const rel of urlMap.keys()) {
-        if (!rel.endsWith(".m3u8")) continue;
-
-        const playlistLocalPath = join(hlsDir, rel);
-        const original = await fsp.readFile(playlistLocalPath, "utf8");
-
-        const rewritten = original
-          .split(/\r?\n/)
-          .map((line) => {
-            if (!line || line.startsWith("#")) return line;
-
-            const resolved = posix.normalize(
-              posix.join(posix.dirname(rel), line)
-            );
-
-            return urlMap.get(resolved) ?? line;
-          })
-          .join("\n");
-
-        const dest = `${hlsPrefix}/${rel}`;
-        const token = tokenMap.get(rel) ?? "";
-
-        // ✅ save écrase le fichier dans GCS en conservant le token
-        await bucket.file(dest).save(rewritten, {
-          metadata: {
-            contentType: "application/vnd.apple.mpegurl",
-            cacheControl: "public,max-age=86400",
-            ...(token ? {metadata: {firebaseStorageDownloadTokens: token}} : {}),
-          },
-        });
-      } // ✅ fermeture boucle playlists
-
-      /* ---------------------- Build MP4 URL ---------------------- */
-
+      console.log("Uploading canonical MP4 contract...");
       const videoToken = await ensureDownloadToken(bucketName, filePath);
-      const videoUrl =
-        `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
-          filePath
-        )}?alt=media&token=${videoToken}`;
-
-      const hlsUrl = urlMap.get("master.m3u8") ?? "";
-      if (!hlsUrl) {
-        console.warn("⚠️ HLS master introuvable, fallback MP4 only.");
-      }
+      const videoUrl = buildStorageDownloadUrl(bucketName, filePath, videoToken);
+      const fallbackSource = buildMp4PlaybackSource(
+        videoUrl,
+        filePath,
+        fallbackMp4Rendition,
+      );
+      const mp4Sources: PlaybackSource[] = [fallbackSource];
+      const playback = buildPlaybackContract(
+        mp4Sources,
+        fallbackSource,
+      );
 
       /* ---------------------- Thumbnail URL ---------------------- */
 
@@ -386,10 +517,7 @@ export const optimizeMp4Video = onObjectFinalized(
       const thumbPath = await tryResolveThumbnailPath(bucketName, videoId);
       if (thumbPath) {
         const thumbToken = await ensureDownloadToken(bucketName, thumbPath);
-        thumbnail =
-          `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(
-            thumbPath
-          )}?alt=media&token=${thumbToken}`;
+        thumbnail = buildStorageDownloadUrl(bucketName, thumbPath, thumbToken);
       }
 
       /* ---------------------- Firestore write ---------------------- */
@@ -397,24 +525,8 @@ export const optimizeMp4Video = onObjectFinalized(
       await videoRef.set(
         {
           videoUrl,
-          sources: [
-            {
-              url: videoUrl,
-              type: "mp4",
-              quality: "480p",
-              height: 480,
-            },
-            ...(hlsUrl ?
-              [
-                {
-                  url: hlsUrl,
-                  type: "hls",
-                  quality: "auto",
-                  height: 480,
-                },
-              ] :
-              []),
-          ],
+          playback,
+          sources: [...mp4Sources],
           ...(thumbnail ? {thumbnail} : {}),
           optimized: true,
           status: "ready",
@@ -445,15 +557,6 @@ export const optimizeMp4Video = onObjectFinalized(
           }
         }
       }
-
-      if (existsSync(hlsDir)) {
-        try {
-          await fsp.rm(hlsDir, {recursive: true, force: true});
-          console.log("🧹 Dossier HLS supprimé :", hlsDir);
-        } catch (e) {
-          console.warn("⚠️ Erreur suppression HLS :", (e as Error).message);
-        }
-      }
     }
 
     return null;
@@ -475,6 +578,9 @@ export {
   likeVideo,
   reportVideo,
   deleteVideo,
+  sendUserPush,
+  sendOfferFanout,
+  sendEventFanout,
   logClientEvents,
   shareVideo,
   videoActionLog,

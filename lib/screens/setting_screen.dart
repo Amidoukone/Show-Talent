@@ -271,7 +271,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _securityIntroCard(ColorScheme cs) {
     return Card(
       elevation: 0,
-      color: cs.surfaceVariant,
+      color: cs.surfaceContainerHighest,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: cs.primary.withOpacity(0.15)),

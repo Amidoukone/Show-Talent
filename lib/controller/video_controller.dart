@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:get/get.dart';
 
 import '../models/action_response.dart';
@@ -15,8 +16,14 @@ import 'user_controller.dart';
 
 class VideoController extends GetxController {
   final String contextKey;
+  final bool enableLiveStream;
+  final bool enableFeedFetch;
 
-  VideoController({required this.contextKey});
+  VideoController({
+    required this.contextKey,
+    this.enableLiveStream = true,
+    bool? enableFeedFetch,
+  }) : enableFeedFetch = enableFeedFetch ?? enableLiveStream;
 
   // ------------------------------------------------------------------
   // UI STATE
@@ -33,6 +40,8 @@ class VideoController extends GetxController {
   bool _hasMore = true;
   bool _isLoading = false;
   static const int _limit = 10;
+  static const int _liveWindowLimit = 30;
+  static const int _thumbnailPrefetchRadius = 2;
 
   bool get hasMore => _hasMore;
   bool get isLoading => _isLoading;
@@ -50,9 +59,11 @@ class VideoController extends GetxController {
 
   bool _adaptivePlaybackEnabled = false;
   bool _hlsPlaybackEnabled = false;
+  bool _preferHlsPlayback = false;
 
   bool get adaptivePlaybackEnabled => _adaptivePlaybackEnabled;
   bool get hlsPlaybackEnabled => _hlsPlaybackEnabled;
+  bool get preferHlsPlayback => _preferHlsPlayback;
 
   Future<void> _initFeatureFlags() async {
     try {
@@ -63,15 +74,19 @@ class VideoController extends GetxController {
       final service = FeatureFlagService();
       await service.fetchConfig();
 
-      _adaptivePlaybackEnabled = service.isEnabledForUser(uid);
-      _hlsPlaybackEnabled = service.useHlsForUser(uid);
+      _adaptivePlaybackEnabled = service.isAdaptiveEnabledForUser(uid);
+      _hlsPlaybackEnabled = service.isHlsPlaybackEnabledForUser(uid);
+      _preferHlsPlayback = service.shouldPreferHlsForUser(uid);
 
       _videoManager.updateAdaptiveFlag(_adaptivePlaybackEnabled);
+      _videoManager.updateHlsStrategyFlag(_preferHlsPlayback);
     } catch (e) {
       debugPrint('❌ Feature flag load error: $e');
       _adaptivePlaybackEnabled = false;
       _hlsPlaybackEnabled = false;
+      _preferHlsPlayback = false;
       _videoManager.updateAdaptiveFlag(false);
+      _videoManager.updateHlsStrategyFlag(false);
     }
   }
 
@@ -90,7 +105,7 @@ class VideoController extends GetxController {
   Completer<void>? _fetchLock;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _videoSubscription;
   Timer? _streamDebouncer;
-  Timer? _indexDebouncer;
+  final Set<String> _thumbnailPrefetchInFlight = <String>{};
 
   // ------------------------------------------------------------------
   // LIFECYCLE
@@ -100,24 +115,18 @@ class VideoController extends GetxController {
   void onInit() {
     super.onInit();
 
+    _videoManager.updateAdaptiveFlag(false);
     unawaited(_initFeatureFlags());
 
-    ever<int>(currentIndex, (idx) {
-      _indexDebouncer?.cancel();
-      _indexDebouncer = Timer(
-        const Duration(milliseconds: 200),
-        () => _onCurrentIndexChangedThrottled(idx),
-      );
-    });
-
-    listenToVideos();
+    if (enableLiveStream) {
+      listenToVideos();
+    }
   }
 
   @override
   void onClose() {
     _streamDebouncer?.cancel();
     _videoSubscription?.cancel();
-    _indexDebouncer?.cancel();
     unawaited(videoManager.disposeAllForContext(contextKey));
     super.onClose();
   }
@@ -132,6 +141,7 @@ class VideoController extends GetxController {
         .collection('videos')
         .where('status', isEqualTo: 'ready')
         .orderBy('updatedAt', descending: true)
+        .limit(_liveWindowLimit)
         .snapshots()
         .listen((snapshot) {
       _streamDebouncer?.cancel();
@@ -142,14 +152,18 @@ class VideoController extends GetxController {
               .where((v) => v.videoUrl.isNotEmpty)
               .toList();
 
-          final byId = {for (final v in videoList) v.id: v};
-          for (final v in incoming) {
-            byId[v.id] = v;
+          if (incoming.isEmpty) return;
+
+          final merged = _mergeLiveWindow(incoming);
+          videoList.assignAll(merged);
+
+          if (_lastDoc == null && snapshot.docs.isNotEmpty) {
+            _lastDoc = snapshot.docs.last;
           }
 
-          videoList.value = incoming.map((v) => byId[v.id]!).toList();
-          _lastDoc = snapshot.docs.isNotEmpty ? snapshot.docs.last : null;
-          _hasMore = snapshot.docs.length >= _limit;
+          final safeIndex =
+              currentIndex.value.clamp(0, merged.length - 1).toInt();
+          _prefetchThumbnailsAround(safeIndex);
         } catch (e) {
           debugPrint('❌ listenToVideos merge error: $e');
         }
@@ -164,7 +178,13 @@ class VideoController extends GetxController {
   // ------------------------------------------------------------------
 
   Future<bool> fetchPaginatedVideos({bool isRefresh = false}) async {
-    if (_isLoading || !_hasMore || (_fetchLock?.isCompleted == false)) {
+    if (!enableFeedFetch) {
+      return false;
+    }
+    if (_isLoading || (_fetchLock?.isCompleted == false)) {
+      return false;
+    }
+    if (!isRefresh && !_hasMore) {
       return false;
     }
 
@@ -203,8 +223,10 @@ class VideoController extends GetxController {
         );
       }
 
-      if (isRefresh && videoList.isNotEmpty) {
-        await _setupInitialPlayback();
+      if (videoList.isNotEmpty) {
+        _prefetchThumbnailsAround(
+          currentIndex.value.clamp(0, videoList.length - 1).toInt(),
+        );
       }
 
       _lastDoc = snap.docs.last;
@@ -226,10 +248,14 @@ class VideoController extends GetxController {
   // ------------------------------------------------------------------
 
   Future<bool> refreshVideos() async {
+    if (!enableFeedFetch) {
+      return false;
+    }
     try {
       await videoManager.disposeAllForContext(contextKey);
       _lastDoc = null;
       _hasMore = true;
+      currentIndex.value = -1;
       videoList.clear();
       return await fetchPaginatedVideos(isRefresh: true);
     } catch (e) {
@@ -238,73 +264,31 @@ class VideoController extends GetxController {
     }
   }
 
-  // ------------------------------------------------------------------
-  // INITIAL PLAYBACK SETUP
-  // ------------------------------------------------------------------
-
-  Future<void> _setupInitialPlayback() async {
-    if (videoList.isEmpty) return;
-
-    currentIndex.value = 0;
-    final videos = videoList.toList();
-    final first = videos.first;
-    final firstUrl = first.videoUrl;
-
-    await videoManager.disposeAllForContext(contextKey);
-
-    await videoManager.initializeController(
-      contextKey,
-      firstUrl,
-      sources: first.sources,
-      useHls: _hlsPlaybackEnabled && first.hasHlsSource,
-      autoPlay: true,
-      activeUrl: firstUrl,
-    );
-
-    final resolved = videoManager.getResolvedUrl(contextKey, firstUrl);
-    if (resolved != null && resolved.isNotEmpty && first.resolvedUrl != resolved) {
-      first.resolvedUrl = resolved;
-      videoList[0] = first;
-      videoList.refresh();
-    }
-    await videoManager.pauseAllExcept(contextKey, firstUrl);
-
-    videoManager.preloadSurrounding(
-      contextKey,
-      videos,
-      0,
-      activeUrl: firstUrl,
-      useHls: _hlsPlaybackEnabled,
-    );
-  }
-
-  // ------------------------------------------------------------------
-  // INDEX CHANGE (THROTTLED)
-  // ------------------------------------------------------------------
-
-  Future<void> _onCurrentIndexChangedThrottled(int index) async {
-    final videos = videoList.toList();
-    if (index < 0 || index >= videos.length) return;
-
-    final activeVideo = videos[index];
-    final activeUrl = activeVideo.videoUrl;
-
-    await videoManager.pauseAllExcept(contextKey, activeUrl);
-
-    videoManager.preloadSurrounding(
-      contextKey,
-      videos,
-      index,
-      activeUrl: activeUrl,
-      useHls: _hlsPlaybackEnabled,
-    );
-
-    if (index >= videoList.length - 2 && hasMore && !_isLoading) {
-      unawaited(fetchPaginatedVideos());
-    }
-  }
-
   Future<void> pauseAll() => videoManager.pauseAll(contextKey);
+
+  void prefetchThumbnailsAroundIndex(int index) {
+    if (videoList.isEmpty) return;
+    if (index < 0 || index >= videoList.length) return;
+    _prefetchThumbnailsAround(index);
+  }
+
+  void replaceVideos(
+    List<Video> videos, {
+    int? selectedIndex,
+  }) {
+    videoList.assignAll(videos);
+
+    if (videos.isEmpty) {
+      currentIndex.value = -1;
+      return;
+    }
+
+    final nextIndex = (selectedIndex ?? currentIndex.value)
+        .clamp(0, videos.length - 1)
+        .toInt();
+    currentIndex.value = nextIndex;
+    _prefetchThumbnailsAround(nextIndex);
+  }
 
   // ------------------------------------------------------------------
   // ACTIONS VIA CLOUD FUNCTIONS
@@ -459,11 +443,14 @@ class VideoController extends GetxController {
 
   Future<bool> _isOffline() async {
     try {
-      final res = await _connectivity.checkConnectivity();
+      final dynamic res = await _connectivity.checkConnectivity();
       if (res is ConnectivityResult) {
         return res == ConnectivityResult.none;
       }
-      return res.contains(ConnectivityResult.none);
+      if (res is List<ConnectivityResult>) {
+        return res.every((r) => r == ConnectivityResult.none);
+      }
+      return false;
     } catch (_) {
       return false;
     }
@@ -545,5 +532,65 @@ class VideoController extends GetxController {
         'platform': kIsWeb ? 'web' : 'mobile',
       });
     } catch (_) {}
+  }
+
+  List<Video> _mergeLiveWindow(List<Video> incoming) {
+    final existing = videoList.toList();
+    if (existing.isEmpty) return incoming;
+
+    final byId = {for (final v in existing) v.id: v};
+    for (final v in incoming) {
+      byId[v.id] = v;
+    }
+
+    final merged = <Video>[];
+    final seen = <String>{};
+
+    for (final v in incoming) {
+      final next = byId[v.id];
+      if (next != null && seen.add(v.id)) {
+        merged.add(next);
+      }
+    }
+
+    for (final v in existing) {
+      final next = byId[v.id];
+      if (next != null && seen.add(v.id)) {
+        merged.add(next);
+      }
+    }
+
+    return merged;
+  }
+
+  void _prefetchThumbnailsAround(int centerIndex) {
+    if (videoList.isEmpty) return;
+
+    final start = (centerIndex - _thumbnailPrefetchRadius)
+        .clamp(0, videoList.length - 1)
+        .toInt();
+    final end = (centerIndex + _thumbnailPrefetchRadius)
+        .clamp(0, videoList.length - 1)
+        .toInt();
+
+    for (int i = start; i <= end; i++) {
+      final thumbUrl = videoList[i].thumbnailUrl.trim();
+      if (thumbUrl.isEmpty || _thumbnailPrefetchInFlight.contains(thumbUrl)) {
+        continue;
+      }
+
+      _thumbnailPrefetchInFlight.add(thumbUrl);
+      unawaited(_prefetchThumbnail(thumbUrl));
+    }
+  }
+
+  Future<void> _prefetchThumbnail(String thumbUrl) async {
+    try {
+      await DefaultCacheManager().downloadFile(thumbUrl);
+    } catch (_) {
+      // Best-effort only.
+    } finally {
+      _thumbnailPrefetchInFlight.remove(thumbUrl);
+    }
   }
 }

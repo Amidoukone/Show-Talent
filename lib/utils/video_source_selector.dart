@@ -1,6 +1,107 @@
 import 'package:adfoot/models/video.dart';
 
 class VideoSourceSelector {
+  static List<VideoSource> _sanitize(List<VideoSource> sources) =>
+      sources.where((source) => source.url.isNotEmpty).toList();
+
+  static List<VideoSource> _nonHlsSources(List<VideoSource> sources) =>
+      sources.where((source) => !source.isHls).toList();
+
+  static List<VideoSource> _sortedByHeight(List<VideoSource> sources) =>
+      [...sources]..sort((a, b) => (a.height ?? 0).compareTo(b.height ?? 0));
+
+  static VideoSource? _bestAtLeast(List<VideoSource> list, int minHeight) {
+    for (final source in list) {
+      if ((source.height ?? 0) >= minHeight) {
+        return source;
+      }
+    }
+    return list.isNotEmpty ? list.last : null;
+  }
+
+  static VideoSource? _bestAtMost(List<VideoSource> list, int maxHeight) {
+    for (final source in list.reversed) {
+      if ((source.height ?? 0) <= maxHeight) {
+        return source;
+      }
+    }
+    return list.isNotEmpty ? list.first : null;
+  }
+
+  static VideoSource? _preferredSingleRenditionSource(
+    List<VideoSource> sources,
+  ) {
+    final sorted = _sortedByHeight(sources);
+    return sorted.isNotEmpty ? sorted.last : null;
+  }
+
+  static VideoSource? _fallbackSource({
+    required String fallbackUrl,
+    required List<VideoSource> candidateSources,
+  }) {
+    final canonicalSource = _preferredSingleRenditionSource(candidateSources);
+
+    if (fallbackUrl.isEmpty) {
+      return canonicalSource;
+    }
+
+    for (final source in candidateSources) {
+      if (source.url == fallbackUrl) {
+        return source;
+      }
+    }
+
+    return canonicalSource ?? VideoSource(url: fallbackUrl);
+  }
+
+  static VideoSource? preferredSource({
+    required String fallbackUrl,
+    required List<VideoSource> sources,
+    required bool adaptiveEnabled,
+    required bool highBandwidth,
+    bool preferHls = false,
+  }) {
+    final sanitizedSources = _sanitize(sources);
+    final nonHlsSources = _nonHlsSources(sanitizedSources);
+    final candidateSources =
+        nonHlsSources.isNotEmpty ? nonHlsSources : sanitizedSources;
+
+    // MP4-first baseline: HLS is only kept as a last-resort legacy fallback
+    // when no MP4 rendition or fallback URL is available.
+    if (!adaptiveEnabled || candidateSources.isEmpty) {
+      return _fallbackSource(
+        fallbackUrl: fallbackUrl,
+        candidateSources: candidateSources,
+      );
+    }
+
+    final sorted = _sortedByHeight(candidateSources);
+
+    if (highBandwidth) {
+      return _bestAtLeast(sorted, 700) ?? sorted.last;
+    }
+
+    return _bestAtMost(sorted, 540) ?? sorted.first;
+  }
+
+  static VideoSource? sourceForUrl({
+    required String url,
+    required List<VideoSource> sources,
+  }) {
+    if (url.isEmpty) {
+      return null;
+    }
+
+    final sanitizedSources = _sanitize(sources);
+    for (final source in sanitizedSources) {
+      if (source.url == url) {
+        return source;
+      }
+    }
+
+    return null;
+  }
+
   static String chooseUrl({
     required String fallbackUrl,
     required List<VideoSource> sources,
@@ -8,58 +109,18 @@ class VideoSourceSelector {
     required bool highBandwidth,
     bool preferHls = false,
   }) {
-    final sanitizedSources = sources.where((s) => s.url.isNotEmpty).toList();
-
-    // ✅ Même si l’adaptatif est désactivé, on peut privilégier HLS si demandé.
-    if (!adaptiveEnabled || sanitizedSources.isEmpty) {
-      if (preferHls && sanitizedSources.isNotEmpty) {
-        final hlsSources = sanitizedSources.where((s) => s.isHls).toList()
-          ..sort((a, b) => (b.height ?? 0).compareTo(a.height ?? 0));
-        if (hlsSources.isNotEmpty) {
-          return hlsSources.first.url;
-        }
-      }
-
-      // Sinon fallback classique : fallbackUrl puis première source disponible.
-      if (fallbackUrl.isNotEmpty) return fallbackUrl;
-      return sanitizedSources.isNotEmpty ? sanitizedSources.first.url : '';
-    }
-
-    if (preferHls) {
-      final hlsSources = sanitizedSources.where((s) => s.isHls).toList()
-        ..sort((a, b) => (b.height ?? 0).compareTo(a.height ?? 0));
-      if (hlsSources.isNotEmpty) {
-        return hlsSources.first.url;
-      }
-    }
-
-    final sorted = [...sanitizedSources]
-      ..sort((a, b) => (a.height ?? 0).compareTo(b.height ?? 0));
-
-    if (highBandwidth) {
-      return (sorted.lastWhere(
-        (s) => (s.height ?? 720) >= 600,
-        orElse: () => sorted.last,
-      ))
-          .url;
-    }
-
-    return (sorted.firstWhere(
-      (s) => (s.height ?? 480) <= 540,
-      orElse: () => sorted.first,
-    ))
-        .url;
+    return preferredSource(
+          fallbackUrl: fallbackUrl,
+          sources: sources,
+          adaptiveEnabled: adaptiveEnabled,
+          highBandwidth: highBandwidth,
+          preferHls: preferHls,
+        )?.url ??
+        '';
   }
-  /// Retourne une liste de sources classées par priorité, utile pour :
-  /// - fallback automatique (si une URL ne marche pas)
-  /// - préchargement / orchestrateur
-  /// - stratégie adaptative plus robuste que "une seule URL"
-  ///
-  /// Ordre typique :
-  /// - (optionnel) HLS préféré (si preferHls = true)
-  /// - MP4 "haute" (>= ~720) si dispo
-  /// - MP4 "moyenne/basse" (<= ~480/520) si dispo
-  /// - fallbackUrl (si fourni)
+
+  /// Returns sources ordered by priority for playback and fallback.
+  /// HLS is only kept as a legacy last resort when no MP4 source exists.
   static List<VideoSource> prioritizedSources({
     required String fallbackUrl,
     required List<VideoSource> sources,
@@ -67,74 +128,50 @@ class VideoSourceSelector {
     required bool highBandwidth,
     bool preferHls = false,
   }) {
-    final sanitizedSources = sources.where((s) => s.url.isNotEmpty).toList();
+    final sanitizedSources = _sanitize(sources);
+    final nonHlsSources = _nonHlsSources(sanitizedSources);
+    final candidateSources =
+        nonHlsSources.isNotEmpty ? nonHlsSources : sanitizedSources;
 
-    // ✅ Si pas d’adaptatif : on renvoie une source stable + fallback
-    // mais si preferHls=true, on essaie d’abord HLS.
-    if (!adaptiveEnabled || sanitizedSources.isEmpty) {
-      VideoSource? primary;
-
-      if (preferHls) {
-        final hlsSources = sanitizedSources.where((s) => s.isHls).toList()
-          ..sort((a, b) => (b.height ?? 0).compareTo(a.height ?? 0));
-        primary = hlsSources.isNotEmpty ? hlsSources.first : null;
-      }
-
-      primary ??= sanitizedSources.isNotEmpty ? sanitizedSources.first : null;
+    if (!adaptiveEnabled || candidateSources.isEmpty) {
+      final primary = preferredSource(
+        fallbackUrl: fallbackUrl,
+        sources: sources,
+        adaptiveEnabled: adaptiveEnabled,
+        highBandwidth: highBandwidth,
+        preferHls: preferHls,
+      );
 
       return _dedupe([
         if (primary != null) primary,
-        if (fallbackUrl.isNotEmpty) VideoSource(url: fallbackUrl),
       ]);
     }
 
-    // Sépare HLS vs MP4 (ou non-HLS), puis trie décroissant par résolution.
-    final hlsSources = sanitizedSources.where((s) => s.isHls).toList()
-      ..sort((a, b) => (b.height ?? 0).compareTo(a.height ?? 0));
+    final mp4Sources = _sortedByHeight(
+      candidateSources.where((source) => !source.isHls).toList(),
+    );
 
-    final mp4Sources = sanitizedSources.where((s) => !s.isHls).toList()
-      ..sort((a, b) => (b.height ?? 0).compareTo(a.height ?? 0));
-
-    // Choisit la "meilleure" source dont la hauteur est >= minHeight.
-    VideoSource? bestAtLeast(List<VideoSource> list, int minHeight) {
-      for (final s in list) {
-        if ((s.height ?? 0) >= minHeight) return s;
-      }
-      return list.isNotEmpty ? list.first : null;
-    }
-
-    // Choisit la "meilleure" source dont la hauteur est <= maxHeight.
-    VideoSource? bestAtMost(List<VideoSource> list, int maxHeight) {
-      for (final s in list.reversed) {
-        if ((s.height ?? 0) <= maxHeight) return s;
-      }
-      return list.isNotEmpty ? list.last : null;
-    }
-
-    // HLS : si demandé, on met un HLS en premier.
-    // - En highBandwidth, on prend le plus "haut" (first)
-    // - Sinon, le plus "bas" (last) pour limiter la bande passante
-    final preferredHls = preferHls
-        ? (hlsSources.isNotEmpty
-            ? (highBandwidth ? hlsSources.first : hlsSources.last)
-            : null)
-        : null;
-
-    // MP4 : une "haute" + une "basse" (si elles existent)
-    final preferred720 = bestAtLeast(mp4Sources, 700);
-    final preferred480 = bestAtMost(mp4Sources, 520);
+    final preferred720 = _bestAtLeast(mp4Sources, 700);
+    final preferred480 = _bestAtMost(mp4Sources, 540);
+    final preferred360 = _bestAtMost(mp4Sources, 400);
 
     final ordered = <VideoSource>[
-      if (preferredHls != null) preferredHls,
-      if (preferred720 != null) preferred720,
-      if (preferred480 != null) preferred480,
+      if (highBandwidth) ...[
+        if (preferred720 != null) preferred720,
+        if (preferred480 != null) preferred480,
+        ...mp4Sources.reversed,
+      ] else ...[
+        if (preferred480 != null) preferred480,
+        if (preferred360 != null) preferred360,
+        ...mp4Sources,
+        ...mp4Sources.reversed,
+      ],
       if (fallbackUrl.isNotEmpty) VideoSource(url: fallbackUrl),
     ];
 
     return _dedupe(ordered);
   }
 
-  /// Supprime les doublons par URL (garde le premier rencontré)
   static List<VideoSource> _dedupe(List<VideoSource> list) {
     final seen = <String>{};
     final result = <VideoSource>[];

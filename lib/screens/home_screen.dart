@@ -42,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   StreamSubscription<bool>? _connectivitySubscription;
   bool _wakelockOn = false;
+  bool _hasHandledRouteRefresh = false;
 
   // ---------------------------------------------------------------------------
   // Wakelock helpers
@@ -86,6 +87,40 @@ class _HomeScreenState extends State<HomeScreen>
     _focusOrchestrator.updateVideos(_currentVideos);
   }
 
+  Future<bool> _activateHomeIndex(
+    int index, {
+    bool alignPageView = false,
+  }) async {
+    final videos = videoController.videoList;
+    if (index < 0 || index >= videos.length) {
+      await _setWakelock(false);
+      return false;
+    }
+
+    if (alignPageView && _pageController.hasClients) {
+      final currentPage = (_pageController.page ?? 0).round();
+      if (currentPage != index) {
+        _pageController.jumpToPage(index);
+        return true;
+      }
+    }
+
+    await _onPageChanged(index);
+    return true;
+  }
+
+  Future<bool> _refreshHomeFeed({bool alignPageView = true}) async {
+    final refreshed = await videoController.refreshVideos();
+    if (!mounted) return refreshed;
+
+    if (!refreshed || videoController.videoList.isEmpty) {
+      await _setWakelock(false);
+      return false;
+    }
+
+    return _activateHomeIndex(0, alignPageView: alignPageView);
+  }
+
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
@@ -96,7 +131,11 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addObserver(this);
 
     videoController = Get.put(
-      VideoController(contextKey: 'home'),
+      VideoController(
+        contextKey: 'home',
+        enableLiveStream: true,
+        enableFeedFetch: true,
+      ),
       tag: 'home',
       permanent: true,
     );
@@ -105,6 +144,8 @@ class _HomeScreenState extends State<HomeScreen>
       contextKey: 'home',
       videoManager: videoManager,
       videos: _currentVideos,
+      useHlsForVideo: (video) =>
+          videoController.preferHlsPlayback && video.hasAdaptiveHlsSource,
       disposeWindow: 25,
       onRequestMore: () async {
         if (videoController.hasMore && !videoController.isLoading) {
@@ -125,6 +166,24 @@ class _HomeScreenState extends State<HomeScreen>
 
     _initConnectivityListener();
     _loadInitialVideos();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_hasHandledRouteRefresh) return;
+    _hasHandledRouteRefresh = true;
+
+    final args = Get.arguments;
+    if (args is Map &&
+        args['refresh'] == true &&
+        videoController.videoList.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_refreshHomeFeed());
+      });
+    }
   }
 
   @override
@@ -179,10 +238,8 @@ class _HomeScreenState extends State<HomeScreen>
         final ok = await videoController.fetchPaginatedVideos();
         if (ok && mounted && videoController.videoList.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            videoController.currentIndex.value = 0;
             _refreshFocusVideos();
-            unawaited(_onPageChanged(0));
-            unawaited(_updateWakelockForCurrent());
+            unawaited(_activateHomeIndex(0, alignPageView: true));
           });
         }
       }
@@ -205,10 +262,8 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final videos = videoController.videoList;
       if (videos.isNotEmpty) {
-        videoController.currentIndex.value = 0;
         _refreshFocusVideos();
-        await _onPageChanged(0);
-        await _updateWakelockForCurrent();
+        await _activateHomeIndex(0, alignPageView: true);
       }
     });
   }
@@ -222,6 +277,7 @@ class _HomeScreenState extends State<HomeScreen>
     if (index < 0 || index >= videos.length) return;
 
     videoController.currentIndex.value = index;
+    videoController.prefetchThumbnailsAroundIndex(index);
 
     _refreshFocusVideos();
     await _focusOrchestrator.onIndexChanged(index);
@@ -262,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.6),
+                    Colors.black.withValues(alpha: 0.6),
                     Colors.transparent,
                   ],
                 ),
@@ -357,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen>
                             await _setWakelock(false);
                             final result = await Get.to(() => const AddVideo());
                             if (result == true) {
-                              await videoController.refreshVideos();
+                              await _refreshHomeFeed();
                             }
                           },
                           child: const Icon(Icons.add),
@@ -395,6 +451,7 @@ class _HomeScreenState extends State<HomeScreen>
                         showControls: true,
                         showProgressBar: true,
                         showDeleteAction: false,
+                        onRefreshRequested: _refreshHomeFeed,
                         player: player,
                       ),
 

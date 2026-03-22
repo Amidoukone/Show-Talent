@@ -21,6 +21,7 @@ import 'widgets/video_manager.dart';
 import 'services/email_link_handler.dart';
 import 'services/notifications.dart';
 import 'services/video_metrics_observer.dart';
+import 'services/app_check_service.dart';
 
 // UI
 import 'screens/splash_screen.dart';
@@ -56,6 +57,7 @@ Future<void> main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    await AppCheckService.initialize();
     FirebaseAuth.instance.setLanguageCode('fr');
 
     // FCM Web
@@ -73,8 +75,7 @@ Future<void> main() async {
     NotificationService.listenForeground();
 
     // Injection GetX (ordre critique)
-    final videoManager =
-        Get.put<VideoManager>(VideoManager(), permanent: true);
+    final videoManager = Get.put<VideoManager>(VideoManager(), permanent: true);
     videoManager.onMetrics =
         VideoMetricsObserver(videoManager: videoManager).handle;
     Get.put<AuthController>(AuthController(), permanent: true);
@@ -82,8 +83,8 @@ Future<void> main() async {
     Get.put<UserController>(UserController(), permanent: true);
     Get.put<FollowController>(FollowController(), permanent: true);
 
-    // Rafraîchit le profil réseau (silencieux)
-    unawaited(Get.find<VideoManager>().refreshNetworkProfile());
+    // Démarre la détection réseau en arrière-plan, sans bloquer le bootstrap.
+    unawaited(Get.find<VideoManager>().warmNetworkProfile());
 
     // Email link handler
     try {
@@ -141,8 +142,7 @@ class MyApp extends StatelessWidget {
         // MediaQuery SAFE (FIX du trait noir)
         final mq = MediaQuery.of(context);
 
-        final scaleValue =
-            mq.textScaler.scale(1.0).clamp(0.85, 1.15);
+        final scaleValue = mq.textScaler.scale(1.0).clamp(0.85, 1.15);
 
         final mediaWrapped = MediaQuery(
           data: mq.copyWith(
@@ -199,8 +199,7 @@ class _AppScrollBehavior extends ScrollBehavior {
   @override
   ScrollPhysics getScrollPhysics(BuildContext context) {
     final platform = Theme.of(context).platform;
-    if (platform == TargetPlatform.iOS ||
-        platform == TargetPlatform.macOS) {
+    if (platform == TargetPlatform.iOS || platform == TargetPlatform.macOS) {
       return const BouncingScrollPhysics();
     }
     return const ClampingScrollPhysics();

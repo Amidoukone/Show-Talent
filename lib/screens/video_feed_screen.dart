@@ -46,21 +46,26 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
     // ✅ GetX controller (taggé par contextKey)
     if (!Get.isRegistered<VideoController>(tag: widget.contextKey)) {
       Get.put(
-        VideoController(contextKey: widget.contextKey),
+        VideoController(
+          contextKey: widget.contextKey,
+          enableLiveStream: false,
+          enableFeedFetch: false,
+        ),
         tag: widget.contextKey,
         permanent: true,
       );
     }
 
     videoController = Get.find<VideoController>(tag: widget.contextKey);
-    videoController.videoList.assignAll(widget.videos);
-    videoController.currentIndex.value = 0;
+    videoController.replaceVideos(widget.videos, selectedIndex: 0);
 
     // ✅ Orchestrateur de focus (préload/pause/dispose window)
     _focusOrchestrator = VideoFocusOrchestrator(
       contextKey: widget.contextKey,
       videoManager: videoManager,
       videos: _currentVideos,
+      useHlsForVideo: (video) =>
+          videoController.preferHlsPlayback && video.hasAdaptiveHlsSource,
       disposeWindow: 20,
     );
 

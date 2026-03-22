@@ -4,7 +4,7 @@
 
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
-import postmark from "postmark";
+import {ServerClient} from "postmark";
 
 // ✅ Import Firebase centralisé (inchangé)
 import {db, auth} from "./firebase";
@@ -29,7 +29,7 @@ export const sendVerificationReminder = onSchedule(
       return;
     }
 
-    const client = new postmark.ServerClient(apiKey);
+    const client = new ServerClient(apiKey);
     const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 3 jours
 
     try {

@@ -32,7 +32,8 @@ class EventController extends GetxController {
         Event event = Event.fromMap(doc.data());
 
         // Vérifie si la date de fin est dépassée -> fermeture automatique
-        if (event.dateFin.isBefore(DateTime.now()) && event.statut == 'ouvert') {
+        if (event.dateFin.isBefore(DateTime.now()) &&
+            event.statut == 'ouvert') {
           await _firestore.collection('events').doc(event.id).update({
             'statut': 'fermé',
             'lastUpdated': FieldValue.serverTimestamp(),
@@ -66,7 +67,8 @@ class EventController extends GetxController {
         updatedEvents.add(event);
       }
 
-      _events.value = updatedEvents..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _events.value = updatedEvents
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
       update(); // Met à jour l'interface utilisateur
       _isLoading.value = false;
     }, onError: (e) {
@@ -82,7 +84,8 @@ class EventController extends GetxController {
 
     try {
       await _firestore.collection('events').doc(event.id).set(event.toMap());
-      _showSuccessSnackbar('Événement créé', 'Votre événement a été créé avec succès.');
+      _showSuccessSnackbar(
+          'Événement créé', 'Votre événement a été créé avec succès.');
 
       await _notifyPlayersOfNewEvent(event, utilisateur);
 
@@ -100,7 +103,8 @@ class EventController extends GetxController {
 
     try {
       await _firestore.collection('events').doc(event.id).update(event.toMap());
-      _showSuccessSnackbar('Événement mis à jour', 'Les modifications ont été enregistrées.');
+      _showSuccessSnackbar(
+          'Événement mis à jour', 'Les modifications ont été enregistrées.');
 
       fetchEvents(); // Rafraîchir la liste
       Get.back(); // Fermer le dialogue
@@ -116,7 +120,8 @@ class EventController extends GetxController {
 
     try {
       await _firestore.collection('events').doc(eventId).delete();
-      _showSuccessSnackbar('Événement supprimé', 'L\'événement a été supprimé.');
+      _showSuccessSnackbar(
+          'Événement supprimé', 'L\'événement a été supprimé.');
 
       fetchEvents(); // Rafraîchir la liste
       Get.back(); // Fermer la boîte de dialogue
@@ -129,12 +134,14 @@ class EventController extends GetxController {
   /// Inscrire un joueur à un événement
   Future<void> registerToEvent(String eventId, AppUser participant) async {
     if (participant.role != 'joueur') {
-      _showErrorSnackbar('Accès refusé', 'Seuls les joueurs peuvent s\'inscrire à un événement.');
+      _showErrorSnackbar('Accès refusé',
+          'Seuls les joueurs peuvent s\'inscrire à un événement.');
       return;
     }
 
     try {
-      DocumentSnapshot eventDoc = await _firestore.collection('events').doc(eventId).get();
+      DocumentSnapshot eventDoc =
+          await _firestore.collection('events').doc(eventId).get();
 
       if (!eventDoc.exists) {
         _showErrorSnackbar('Erreur', 'L\'événement n\'existe pas.');
@@ -144,7 +151,8 @@ class EventController extends GetxController {
       Event event = Event.fromMap(eventDoc.data() as Map<String, dynamic>);
 
       if (event.statut == 'fermé' || event.statut == 'archivé') {
-        _showErrorSnackbar('Inscription impossible', 'L\'événement n\'est pas ouvert.');
+        _showErrorSnackbar(
+            'Inscription impossible', 'L\'événement n\'est pas ouvert.');
         return;
       }
 
@@ -169,7 +177,8 @@ class EventController extends GetxController {
         'lastUpdated': FieldValue.serverTimestamp(),
       });
 
-      _showSuccessSnackbar('Inscription réussie', 'Vous êtes inscrit à l\'événement.');
+      _showSuccessSnackbar(
+          'Inscription réussie', 'Vous êtes inscrit à l\'événement.');
     } catch (e) {
       _showErrorSnackbar('Erreur', 'Échec de l\'inscription.');
       debugPrint('Erreur lors de l\'inscription : $e');
@@ -187,7 +196,8 @@ class EventController extends GetxController {
     }
 
     try {
-      DocumentSnapshot eventDoc = await _firestore.collection('events').doc(eventId).get();
+      DocumentSnapshot eventDoc =
+          await _firestore.collection('events').doc(eventId).get();
 
       if (!eventDoc.exists) {
         _showErrorSnackbar('Erreur', 'L\'événement n\'existe pas.');
@@ -197,12 +207,14 @@ class EventController extends GetxController {
       Event event = Event.fromMap(eventDoc.data() as Map<String, dynamic>);
 
       if (event.statut == 'fermé' || event.statut == 'archivé') {
-        _showErrorSnackbar('Action impossible', 'L\'événement n\'est plus ouvert.');
+        _showErrorSnackbar(
+            'Action impossible', 'L\'événement n\'est plus ouvert.');
         return;
       }
 
       if (!_isAlreadyRegistered(event, participant)) {
-        _showErrorSnackbar('Erreur', 'Vous n\'êtes pas inscrit à cet événement.');
+        _showErrorSnackbar(
+            'Erreur', 'Vous n\'êtes pas inscrit à cet événement.');
         return;
       }
 
@@ -215,13 +227,15 @@ class EventController extends GetxController {
       }
 
       // ✅ write Firestore
-      final updated = event.participants.where((p) => p.uid != participant.uid).toList();
+      final updated =
+          event.participants.where((p) => p.uid != participant.uid).toList();
       await _firestore.collection('events').doc(eventId).update({
         'participants': updated.map((p) => p.toMap()).toList(),
         'lastUpdated': FieldValue.serverTimestamp(),
       });
 
-      _showSuccessSnackbar('Désinscription réussie', 'Vous êtes désinscrit de l\'événement.');
+      _showSuccessSnackbar(
+          'Désinscription réussie', 'Vous êtes désinscrit de l\'événement.');
     } catch (e) {
       _showErrorSnackbar('Erreur', 'Échec de la désinscription.');
       debugPrint('Erreur lors de la désinscription : $e');
@@ -246,25 +260,14 @@ class EventController extends GetxController {
   }
 
   /// Notifier les joueurs d'un nouvel événement
-  Future<void> _notifyPlayersOfNewEvent(Event event, AppUser utilisateur) async {
+  Future<void> _notifyPlayersOfNewEvent(
+      Event event, AppUser utilisateur) async {
     try {
-      final joueursSnapshot =
-          await _firestore.collection('users').where('role', isEqualTo: 'joueur').get();
-
-      for (var joueurDoc in joueursSnapshot.docs) {
-        final joueurData = joueurDoc.data();
-        final fcmToken = joueurData['fcmToken'];
-
-        if (fcmToken != null && fcmToken.isNotEmpty) {
-          await PushNotificationService.sendNotification(
-            title: 'Nouvel Événement',
-            body: '${utilisateur.nom} a créé un nouvel événement : ${event.titre}',
-            token: fcmToken,
-            contextType: 'event',
-            contextData: event.id,
-          );
-        }
-      }
+      await PushNotificationService.sendEventFanout(
+        eventId: event.id,
+        title: 'Nouvel evenement',
+        body: '${utilisateur.nom} a cree un nouvel evenement : ${event.titre}',
+      );
     } catch (e) {
       debugPrint('Erreur lors de la notification des joueurs : $e');
     }

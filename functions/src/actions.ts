@@ -5,7 +5,7 @@
 
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
-import {db, fieldValue} from "./firebase";
+import {admin, db, fieldValue} from "./firebase";
 
 const REGION = "europe-west1";
 
@@ -24,6 +24,7 @@ type ErrorResponse = {
 };
 
 type ActionResponse<T> = SuccessResponse<T> | ErrorResponse;
+type FanoutStats = {targeted: number; sent: number; failed: number};
 
 const ok = <T>(code: string, message: string, data?: T): SuccessResponse<T> => ({
   success: true,
@@ -49,6 +50,19 @@ function getString(data: unknown, key: string): string {
   if (typeof data !== "object" || data === null) return "";
   const value = (data as Record<string, unknown>)[key];
   return typeof value === "string" ? value.trim() : "";
+}
+
+function getNestedString(data: unknown, path: string): string {
+  if (typeof data !== "object" || data === null) return "";
+  const parts = path.split(".").filter(Boolean);
+  let current: unknown = data;
+
+  for (const part of parts) {
+    if (typeof current !== "object" || current === null) return "";
+    current = (current as Record<string, unknown>)[part];
+  }
+
+  return typeof current === "string" ? current.trim() : "";
 }
 
 function sanitizeStringArray(raw: unknown): string[] {
@@ -79,6 +93,34 @@ function safeJson(value: unknown): Record<string, unknown> {
     logger.warn("⚠️ safeJson fallback:", (e as Error).message);
     return {};
   }
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function clampSampleRate(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (parsed <= 0) return 0;
+  if (parsed >= 1) return 1;
+  return parsed;
+}
+
+const videoManagerInfoLogSampleRate = clampSampleRate(
+  process.env.VIDEO_MANAGER_INFO_LOG_SAMPLE_RATE,
+  0,
+);
+
+function shouldPersistClientLog(entry: {level: string; source: string}): boolean {
+  if (entry.source !== "video_manager") return true;
+  if (entry.level === "error") return true;
+  return Math.random() < videoManagerInfoLogSampleRate;
 }
 
 /**
@@ -297,9 +339,295 @@ export const shareVideo = onCall(
 /**
  * Réception batch des logs client
  */
+/**
+ * @param {string} senderUid UID de l'expéditeur
+ * @param {string} recipientUid UID du destinataire
+ * @param {string} contextType Type de contexte (message/offre/event)
+ * @param {string} contextData ID du contexte
+ * @return {Promise<void>}
+ */
+async function assertPushPermission(
+  senderUid: string,
+  recipientUid: string,
+  contextType: string,
+  contextData: string
+): Promise<void> {
+  if (recipientUid === senderUid) {
+    throw new HttpsError("invalid-argument", "recipientUid invalide.");
+  }
+
+  if (contextType === "message") {
+    const convSnap = await db.collection("conversations").doc(contextData).get();
+    if (!convSnap.exists) {
+      throw new HttpsError("not-found", "Conversation introuvable.");
+    }
+
+    const ids = sanitizeStringArray(convSnap.data()?.utilisateurIds);
+    if (!ids.includes(senderUid) || !ids.includes(recipientUid)) {
+      throw new HttpsError(
+        "permission-denied",
+        "Envoi interdit pour cette conversation."
+      );
+    }
+    return;
+  }
+
+  if (contextType === "offre") {
+    await assertOfferOwner(senderUid, contextData);
+    return;
+  }
+
+  if (contextType === "event") {
+    await assertEventOwner(senderUid, contextData);
+    return;
+  }
+
+  throw new HttpsError("invalid-argument", "contextType invalide.");
+}
+
+async function assertOfferOwner(senderUid: string, offerId: string): Promise<void> {
+  const offerSnap = await db.collection("offres").doc(offerId).get();
+  if (!offerSnap.exists) {
+    throw new HttpsError("not-found", "Offre introuvable.");
+  }
+
+  const ownerId = getNestedString(offerSnap.data(), "recruteur.uid");
+  if (ownerId !== senderUid) {
+    throw new HttpsError(
+      "permission-denied",
+      "Seul le recruteur de l'offre peut notifier."
+    );
+  }
+}
+
+async function assertEventOwner(senderUid: string, eventId: string): Promise<void> {
+  const eventSnap = await db.collection("events").doc(eventId).get();
+  if (!eventSnap.exists) {
+    throw new HttpsError("not-found", "Evenement introuvable.");
+  }
+
+  const ownerId = getNestedString(eventSnap.data(), "organisateur.uid");
+  if (ownerId !== senderUid) {
+    throw new HttpsError(
+      "permission-denied",
+      "Seul l'organisateur peut notifier."
+    );
+  }
+}
+
+async function listPlayerTokens(excludedUid: string): Promise<string[]> {
+  const usersSnap = await db
+    .collection("users")
+    .where("role", "==", "joueur")
+    .select("fcmToken")
+    .get();
+
+  const uniqueTokens = new Set<string>();
+  for (const doc of usersSnap.docs) {
+    if (doc.id === excludedUid) continue;
+    const token = getString(doc.data(), "fcmToken");
+    if (token) uniqueTokens.add(token);
+  }
+
+  return Array.from(uniqueTokens);
+}
+
+async function sendFanoutToPlayers(params: {
+  senderUid: string;
+  title: string;
+  body: string;
+  contextType: "offre" | "event";
+  contextData: string;
+}): Promise<FanoutStats> {
+  const tokens = await listPlayerTokens(params.senderUid);
+  if (!tokens.length) {
+    return {targeted: 0, sent: 0, failed: 0};
+  }
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const tokenChunk of chunkArray(tokens, 500)) {
+    const response = await admin.messaging().sendEachForMulticast({
+      tokens: tokenChunk,
+      notification: {
+        title: params.title,
+        body: params.body,
+      },
+      data: {
+        type: params.contextType,
+        id: params.contextData,
+        senderId: params.senderUid,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "high_importance_channel",
+          sound: "default",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+          },
+        },
+      },
+    });
+
+    sent += response.successCount;
+    failed += response.failureCount;
+  }
+
+  return {
+    targeted: tokens.length,
+    sent,
+    failed,
+  };
+}
+
+/**
+ * Envoi push securise via backend (plus de cle privee cote client)
+ */
+export const sendUserPush = onCall(
+  {region: REGION},
+  async (request): Promise<ActionResponse<{sent: boolean}>> => {
+    const uid = request.auth?.uid;
+    assertAuth(uid);
+
+    const recipientUid = getString(request.data, "recipientUid");
+    const contextType = getString(request.data, "contextType");
+    const contextData = getString(request.data, "contextData");
+    const title = getString(request.data, "title").slice(0, 120);
+    const body = getString(request.data, "body").slice(0, 300);
+
+    if (!recipientUid || !contextType || !contextData || !title || !body) {
+      throw new HttpsError("invalid-argument", "Paramètres push invalides.");
+    }
+
+    await assertPushPermission(uid, recipientUid, contextType, contextData);
+
+    const userSnap = await db.collection("users").doc(recipientUid).get();
+    if (!userSnap.exists) {
+      throw new HttpsError("not-found", "Destinataire introuvable.");
+    }
+
+    const token = getString(userSnap.data(), "fcmToken");
+    if (!token) {
+      return err("token_missing", "Destinataire sans token FCM.");
+    }
+
+    try {
+      await admin.messaging().send({
+        token,
+        notification: {title, body},
+        data: {
+          type: contextType,
+          id: contextData,
+          senderId: uid,
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "high_importance_channel",
+            sound: "default",
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+            },
+          },
+        },
+      });
+
+      return ok("sent", "Notification envoyée.", {sent: true});
+    } catch (error) {
+      logger.error("❌ sendUserPush error", error);
+      return err("push_failed", "Échec envoi notification.", true);
+    }
+  }
+);
+
+export const sendOfferFanout = onCall(
+  {region: REGION},
+  async (request): Promise<ActionResponse<FanoutStats>> => {
+    const uid = request.auth?.uid;
+    assertAuth(uid);
+
+    const offerId = getString(request.data, "offerId");
+    if (!offerId) {
+      throw new HttpsError("invalid-argument", "offerId manquant.");
+    }
+
+    await assertOfferOwner(uid, offerId);
+
+    const title =
+      getString(request.data, "title").slice(0, 120) ||
+      "Nouvelle offre disponible";
+    const body =
+      getString(request.data, "body").slice(0, 300) ||
+      "Une nouvelle offre a ete publiee.";
+
+    try {
+      const stats = await sendFanoutToPlayers({
+        senderUid: uid,
+        title,
+        body,
+        contextType: "offre",
+        contextData: offerId,
+      });
+      return ok("fanout_sent", "Notifications offre envoyees.", stats);
+    } catch (error) {
+      logger.error("❌ sendOfferFanout error", error);
+      return err("fanout_failed", "Echec fanout offre.", true);
+    }
+  }
+);
+
+export const sendEventFanout = onCall(
+  {region: REGION},
+  async (request): Promise<ActionResponse<FanoutStats>> => {
+    const uid = request.auth?.uid;
+    assertAuth(uid);
+
+    const eventId = getString(request.data, "eventId");
+    if (!eventId) {
+      throw new HttpsError("invalid-argument", "eventId manquant.");
+    }
+
+    await assertEventOwner(uid, eventId);
+
+    const title =
+      getString(request.data, "title").slice(0, 120) ||
+      "Nouvel evenement";
+    const body =
+      getString(request.data, "body").slice(0, 300) ||
+      "Un nouvel evenement est disponible.";
+
+    try {
+      const stats = await sendFanoutToPlayers({
+        senderUid: uid,
+        title,
+        body,
+        contextType: "event",
+        contextData: eventId,
+      });
+      return ok("fanout_sent", "Notifications evenement envoyees.", stats);
+    } catch (error) {
+      logger.error("❌ sendEventFanout error", error);
+      return err("fanout_failed", "Echec fanout evenement.", true);
+    }
+  }
+);
+
 export const logClientEvents = onCall(
   {region: REGION},
   async (request): Promise<ActionResponse<{count: number}>> => {
+    const uid = request.auth?.uid;
+    assertAuth(uid);
+
     const entries = Array.isArray(request.data?.entries) ?
       request.data.entries :
       [];
@@ -332,12 +660,17 @@ export const logClientEvents = onCall(
       return ok("noop", "Aucun log exploitable.");
     }
 
+    const persisted = sanitized.filter(shouldPersistClientLog);
+    if (!persisted.length) {
+      return ok("noop", "Tous les logs ont ete echantillonnes.");
+    }
+
     const batch = db.batch();
-    for (const entry of sanitized) {
+    for (const entry of persisted) {
       const ref = db.collection("client_logs").doc();
       batch.set(ref, {
         ...entry,
-        userId: request.auth?.uid || null,
+        userId: uid,
         receivedAt: fieldValue.serverTimestamp(),
         context: request.data?.context || {},
       });
@@ -345,8 +678,8 @@ export const logClientEvents = onCall(
 
     try {
       await batch.commit();
-      return ok("logged", `${sanitized.length} log(s) enregistré(s).`, {
-        count: sanitized.length,
+      return ok("logged", `${persisted.length} log(s) enregistré(s).`, {
+        count: persisted.length,
       });
     } catch (error) {
       logger.error("❌ logClientEvents error", error);
@@ -361,6 +694,9 @@ export const logClientEvents = onCall(
 export const videoActionLog = onCall(
   {region: REGION},
   async (request): Promise<ActionResponse<{logged: boolean}>> => {
+    const uid = request.auth?.uid;
+    assertAuth(uid);
+
     const action = getString(request.data, "action");
     if (!action) {
       throw new HttpsError("invalid-argument", "action manquant.");
@@ -374,7 +710,7 @@ export const videoActionLog = onCall(
       message: getString(request.data, "message").slice(0, 500),
       extra: safeJson(request.data?.extra),
       platform: getString(request.data, "platform") || "client",
-      userId: request.auth?.uid || null,
+      userId: uid,
       createdAt: fieldValue.serverTimestamp(),
     };
 

@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/screens/add_video.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/services/feed_playback_metrics_service.dart';
 import 'package:adfoot/utils/video_cache_manager.dart' as custom_cache;
 import 'package:adfoot/widgets/tiktok_video_player.dart';
 import 'package:adfoot/models/video.dart';
@@ -33,6 +34,7 @@ class SmartVideoPlayer extends StatefulWidget {
   final bool showProgressBar;
   final bool showDeleteAction;
   final bool showProfileAction;
+  final Future<bool> Function()? onRefreshRequested;
 
   const SmartVideoPlayer({
     super.key,
@@ -48,6 +50,7 @@ class SmartVideoPlayer extends StatefulWidget {
     this.showProgressBar = false,
     this.showDeleteAction = true,
     this.showProfileAction = true,
+    this.onRefreshRequested,
   });
 
   @override
@@ -75,16 +78,25 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   bool _isFollowActionLoading = false;
 
   bool get _preferHls =>
-      (_vc?.hlsPlaybackEnabled ?? false) && widget.video.hasHlsSource;
+      (_vc?.preferHlsPlayback ?? false) && widget.video.hasAdaptiveHlsSource;
 
   Timer? _playDebounceTimer;
   static const Duration _playDebounce = Duration(milliseconds: 120);
 
   Timer? _stallTimer;
+  Timer? _firstFrameTimer;
   Duration _lastKnownPos = Duration.zero;
   int _stallStrikes = 0;
+  int _bufferingStrikes = 0;
   static const Duration _stallCheckInterval = Duration(milliseconds: 700);
   static const int _stallMaxStrikesBeforeReload = 4;
+  static const int _bufferingMaxStrikesBeforeReload = 8;
+  static const Duration _firstFrameTimeout = Duration(seconds: 6);
+
+  bool _forceMp4Fallback = false;
+  bool _isRecovering = false;
+  late final FeedPlaybackMetricsLogger _playbackMetricsLogger;
+  FeedPlaybackSessionTracker? _playbackSession;
 
   // ---------------------------------------------------------------------------
   // LIFECYCLE
@@ -96,12 +108,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     WidgetsBinding.instance.addObserver(this);
 
     _videoManager = VideoManager();
+    _playbackMetricsLogger = FeedPlaybackMetricsLogger();
     _showPlayIcon = ValueNotifier<bool>(true);
 
     _vc = Get.isRegistered<VideoController>(tag: widget.contextKey)
         ? Get.find<VideoController>(tag: widget.contextKey)
         : Get.put(
-            VideoController(contextKey: widget.contextKey),
+            VideoController(
+              contextKey: widget.contextKey,
+              enableLiveStream: false,
+              enableFeedFetch: false,
+            ),
             tag: widget.contextKey,
             permanent: true,
           );
@@ -120,6 +137,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
   @override
   void dispose() {
+    _finishPlaybackSession(endReason: 'dispose');
     _isDisposed = true;
     WidgetsBinding.instance.removeObserver(this);
 
@@ -130,6 +148,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _detachListener(_ctrl);
     _showPlayIcon.dispose();
     _playDebounceTimer?.cancel();
+    _stopFirstFrameWatchdog();
     _stopStallWatchdog();
     unawaited(_setWakelock(false));
 
@@ -138,9 +157,44 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
   @override
   void deactivate() {
+    _finishPlaybackSession(endReason: 'deactivate');
     _becomePassive();
     unawaited(_setWakelock(false));
     super.deactivate();
+  }
+
+  @override
+  void didUpdateWidget(covariant SmartVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final videoChanged = oldWidget.videoUrl != widget.videoUrl ||
+        oldWidget.video.id != widget.video.id;
+    final incomingPlayerChanged = !identical(oldWidget.player, widget.player);
+
+    if (videoChanged) {
+      _finishPlaybackSession(endReason: 'video_changed');
+      _detachListener(_ctrl);
+      _player = null;
+      _hasFirstFrame = false;
+      _forceMp4Fallback = false;
+      _stopFirstFrameWatchdog();
+      _stopStallWatchdog();
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isDisposed) return;
+        unawaited(_attachOrInitialize(reuse: widget.player));
+      });
+      return;
+    }
+
+    if (incomingPlayerChanged &&
+        widget.player != null &&
+        !identical(widget.player, _player)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _isDisposed) return;
+        _bindPlayer(widget.player);
+      });
+    }
   }
 
   @override
@@ -163,11 +217,33 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   // PLAYER ATTACH / INIT
   // ---------------------------------------------------------------------------
 
-  Future<void> _attachOrInitialize({CachedVideoPlayerPlus? reuse}) async {
+  Future<void> _attachOrInitialize({
+    CachedVideoPlayerPlus? reuse,
+    bool preferDownloadedFile = false,
+    String? recoveryReason,
+  }) async {
     final localToken = ++_attachToken;
+    final useHls = _forceMp4Fallback ? false : _preferHls;
+    final resolvedUrl =
+        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl);
+    final canReuseExisting = _videoManager.shouldReuseControllerForRequest(
+      originalUrl: widget.videoUrl,
+      resolvedUrl: resolvedUrl,
+      sources: widget.video.sources,
+      requestedHls: useHls,
+      isPreload: false,
+    );
 
-    CachedVideoPlayerPlus? p =
-        reuse ?? _videoManager.getController(widget.contextKey, widget.videoUrl);
+    CachedVideoPlayerPlus? p;
+    if (canReuseExisting) {
+      p = reuse ??
+          _videoManager.getController(widget.contextKey, widget.videoUrl);
+    } else {
+      debugPrint(
+        '[SmartVideoPlayer] skipping reused controller to refresh active source '
+        'for ${widget.video.id} (resolved=${resolvedUrl ?? widget.videoUrl})',
+      );
+    }
 
     if (p == null) {
       try {
@@ -175,9 +251,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           widget.contextKey,
           widget.videoUrl,
           sources: widget.video.sources,
-          useHls: _preferHls,
+          useHls: useHls,
+          forceMp4Fallback: _forceMp4Fallback,
+          preferDownloadedFile: preferDownloadedFile,
           autoPlay: false,
           activeUrl: widget.videoUrl,
+          recoveryFallbackFromSourceType:
+              _forceMp4Fallback && _preferHls ? 'hls' : null,
+          recoveryReason: recoveryReason,
         );
       } catch (e) {
         debugPrint('[SmartVideoPlayer] init error: $e');
@@ -209,12 +290,23 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _vc?.videoList.refresh();
     }
 
+    _updatePlaybackSessionSource();
+
     final ctrl = _ctrl;
     if (_isControllerValid(ctrl)) {
-      ctrl!.addListener(_onTick);
-      _showPlayIcon.value = !ctrl.value.isPlaying;
+      final value = ctrl!.value;
+      ctrl.addListener(_onTick);
+      _showPlayIcon.value = !value.isPlaying;
+      if (_didRenderFirstFrame(value)) {
+        _hasFirstFrame = true;
+        _playbackSession?.markFirstFrameRendered();
+        _stopFirstFrameWatchdog();
+      } else {
+        _startFirstFrameWatchdog();
+      }
     } else {
       _showPlayIcon.value = true;
+      _stopFirstFrameWatchdog();
     }
 
     if (mounted && !_isDisposed) setState(() {});
@@ -243,6 +335,105 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     }
   }
 
+  bool _didRenderFirstFrame(VideoPlayerValue v) {
+    final hasPosition = v.position > Duration.zero;
+    final hasVideoSize = v.size.width > 0 && v.size.height > 0;
+    return hasPosition || (v.isPlaying && hasVideoSize);
+  }
+
+  VideoSource? _currentPlaybackSource() {
+    final resolvedUrl = _videoManager.getResolvedUrl(
+          widget.contextKey,
+          widget.videoUrl,
+        ) ??
+        widget.video.resolvedUrl ??
+        widget.video.videoUrl;
+
+    for (final source in widget.video.sources) {
+      if (source.url == resolvedUrl) {
+        return source;
+      }
+    }
+
+    final fallbackSource = widget.video.playback?.fallbackSource;
+    if (fallbackSource?.url == resolvedUrl) {
+      return fallbackSource;
+    }
+
+    final sourceAsset = widget.video.playback?.sourceAsset;
+    if (sourceAsset?.url == resolvedUrl) {
+      return sourceAsset;
+    }
+
+    if (resolvedUrl.isEmpty) {
+      return null;
+    }
+
+    return VideoSource(url: resolvedUrl);
+  }
+
+  void _ensurePlaybackSession() {
+    final resolvedUrl = _videoManager.getResolvedUrl(
+          widget.contextKey,
+          widget.videoUrl,
+        ) ??
+        widget.video.resolvedUrl ??
+        widget.video.videoUrl;
+    final source = _currentPlaybackSource();
+
+    final currentSession = _playbackSession;
+    if (currentSession != null) {
+      currentSession.updateSource(
+        resolvedUrl: resolvedUrl,
+        source: source,
+      );
+      return;
+    }
+
+    _playbackSession = FeedPlaybackSessionTracker(
+      videoId: widget.video.id,
+      entryContext: widget.contextKey,
+      now: DateTime.now,
+      playbackMode: widget.video.playback?.mode,
+      hasMultipleMp4Sources: widget.video.hasMultipleMp4Sources &&
+          _videoManager.adaptiveSourcesEnabled,
+      networkTier: _videoManager.currentProfile?.tier.name,
+      preferHlsRequested: _preferHls,
+      resolvedUrl: resolvedUrl,
+      source: source,
+    );
+    if (_hasFirstFrame) {
+      _playbackSession?.markFirstFrameRendered();
+    }
+  }
+
+  void _updatePlaybackSessionSource() {
+    final currentSession = _playbackSession;
+    if (currentSession == null) {
+      return;
+    }
+    currentSession.updateSource(
+      resolvedUrl: _videoManager.getResolvedUrl(
+            widget.contextKey,
+            widget.videoUrl,
+          ) ??
+          widget.video.resolvedUrl ??
+          widget.video.videoUrl,
+      source: _currentPlaybackSource(),
+    );
+  }
+
+  void _finishPlaybackSession({required String endReason}) {
+    final currentSession = _playbackSession;
+    if (currentSession == null) {
+      return;
+    }
+
+    _playbackSession = null;
+    final summary = currentSession.finish(endReason: endReason);
+    unawaited(_playbackMetricsLogger.logSession(summary));
+  }
+
   // ---------------------------------------------------------------------------
   // TICK / PLAYBACK
   // ---------------------------------------------------------------------------
@@ -264,15 +455,24 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       return;
     }
 
-    if (!_hasFirstFrame && v.position > Duration.zero && !v.isBuffering) {
+    if (!_hasFirstFrame && _didRenderFirstFrame(v)) {
       _hasFirstFrame = true;
+      _bufferingStrikes = 0;
+      _playbackSession?.markFirstFrameRendered();
+      _stopFirstFrameWatchdog();
+      if (mounted && !_isDisposed) setState(() {});
     }
+
+    _playbackSession?.recordPlaybackSample(
+      position: v.position,
+      duration: v.duration,
+      isBuffering: v.isBuffering,
+    );
 
     _showPlayIcon.value = !v.isPlaying;
 
-    final shouldBePlaying =
-        (_vc?.currentIndex.value == widget.currentIndex) &&
-            _isActuallyVisible();
+    final shouldBePlaying = (_vc?.currentIndex.value == widget.currentIndex) &&
+        _isActuallyVisible();
 
     if (!shouldBePlaying && v.isPlaying) {
       try {
@@ -290,10 +490,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       unawaited(_setWakelock(false));
       return;
     }
+    final value = _safeValue(ctrl);
+    if (value == null) {
+      unawaited(_setWakelock(false));
+      return;
+    }
 
     final shouldKeepAwake =
-        ctrl!.value.isPlaying &&
-            (_vc?.currentIndex.value == widget.currentIndex);
+        value.isPlaying && (_vc?.currentIndex.value == widget.currentIndex);
 
     unawaited(_setWakelock(shouldKeepAwake));
   }
@@ -318,24 +522,53 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _isTryingToPlay = true;
 
     try {
-      final c = _ctrl;
+      var c = _ctrl;
       if (!_isControllerValid(c) || !_isActuallyVisible()) return;
+      final token = _attachToken;
+      final resolvedUrl =
+          _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
+              widget.video.resolvedUrl;
+      final shouldReuseCurrent = _videoManager.shouldReuseControllerForRequest(
+        originalUrl: widget.videoUrl,
+        resolvedUrl: resolvedUrl,
+        sources: widget.video.sources,
+        requestedHls: _forceMp4Fallback ? false : _preferHls,
+        isPreload: false,
+      );
+
+      if (!shouldReuseCurrent) {
+        await _purgeAndReloadController(
+          recoveryReason: 'adaptive_quality_upgrade',
+        );
+        return;
+      }
 
       await _videoManager.pauseAllExcept(widget.contextKey, widget.videoUrl);
+      if (_isDisposed || token != _attachToken || !_isActuallyVisible()) return;
+      c = _ctrl;
+      if (!_isControllerValid(c)) return;
+      final value = _safeValue(c);
+      if (value == null) return;
 
-      if (!(c?.value.isPlaying ?? false)) {
+      _ensurePlaybackSession();
+
+      if (!value.isPlaying) {
         try {
-          await c?.play();
+          await c!.play();
         } catch (e) {
           debugPrint('[SmartVideoPlayer] play error: $e');
           if (mounted && !_isDisposed) {
-            await _purgeAndReloadController();
+            await _recoverPlayback(
+              forceMp4: _preferHls,
+              reason: 'play_error',
+            );
           }
           return;
         }
       }
 
       _updateWakelock();
+      _startFirstFrameWatchdog();
       _kickStallWatchdog(forceRestart: true);
     } finally {
       _isTryingToPlay = false;
@@ -343,13 +576,16 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   void _becomePassive() {
+    _finishPlaybackSession(endReason: 'passive');
     final c = _ctrl;
-    if (_isControllerValid(c) && (c?.value.isPlaying ?? false)) {
+    final value = _safeValue(c);
+    if (_isControllerValid(c) && (value?.isPlaying ?? false)) {
       try {
         c?.pause();
       } catch (_) {}
     }
     unawaited(_setWakelock(false));
+    _stopFirstFrameWatchdog();
     _stopStallWatchdog();
   }
 
@@ -359,34 +595,59 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
   void _kickStallWatchdog({bool forceRestart = false}) {
     final c = _ctrl;
+    final token = _attachToken;
     if (!_isControllerValid(c)) return;
-    if (!c!.value.isPlaying) return;
+    final currentValue = _safeValue(c);
+    if (currentValue == null || !currentValue.isPlaying) return;
     if (_stallTimer != null && !forceRestart) return;
 
     _stallTimer?.cancel();
-    _lastKnownPos = c.value.position;
+    _lastKnownPos = currentValue.position;
     _stallStrikes = 0;
+    _bufferingStrikes = 0;
 
     _stallTimer = Timer.periodic(_stallCheckInterval, (_) async {
-      if (_isDisposed) return _stopStallWatchdog();
+      if (_isDisposed || token != _attachToken) {
+        _stopStallWatchdog();
+        return;
+      }
+      final liveCtrl = _ctrl;
+      if (liveCtrl == null || liveCtrl != c) {
+        _stopStallWatchdog();
+        return;
+      }
 
-      final v = c.value;
-      if (!v.isInitialized || v.hasError || !v.isPlaying) {
+      final v = _safeValue(liveCtrl);
+      if (v == null || !v.isInitialized || v.hasError || !v.isPlaying) {
         _stopStallWatchdog();
         return;
       }
 
       if (v.isBuffering) {
+        if (!_hasFirstFrame) {
+          _bufferingStrikes++;
+          if (_bufferingStrikes >= _bufferingMaxStrikesBeforeReload) {
+            _bufferingStrikes = 0;
+            await _recoverPlayback(
+              forceMp4: _preferHls,
+              reason: 'buffering_watchdog',
+            );
+            return;
+          }
+        }
         _lastKnownPos = v.position;
-        _stallStrikes = 0;
         return;
       }
+      _bufferingStrikes = 0;
 
       if (v.position <= _lastKnownPos) {
         _stallStrikes++;
         if (_stallStrikes >= _stallMaxStrikesBeforeReload) {
           _stallStrikes = 0;
-          await _purgeAndReloadController();
+          await _recoverPlayback(
+            forceMp4: _preferHls,
+            reason: 'stall_watchdog',
+          );
         }
       } else {
         _stallStrikes = 0;
@@ -400,7 +661,56 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _stallTimer?.cancel();
     _stallTimer = null;
     _stallStrikes = 0;
+    _bufferingStrikes = 0;
     _lastKnownPos = Duration.zero;
+  }
+
+  void _startFirstFrameWatchdog() {
+    _stopFirstFrameWatchdog();
+    final c = _ctrl;
+    final token = _attachToken;
+    if (!_isControllerValid(c) || _hasFirstFrame) return;
+
+    _firstFrameTimer = Timer(_firstFrameTimeout, () async {
+      if (_isDisposed || _hasFirstFrame || !_isActuallyVisible()) return;
+      if (token != _attachToken || c != _ctrl) return;
+      await _recoverPlayback(
+        forceMp4: _preferHls,
+        reason: 'first_frame_timeout',
+      );
+    });
+  }
+
+  void _stopFirstFrameWatchdog() {
+    _firstFrameTimer?.cancel();
+    _firstFrameTimer = null;
+  }
+
+  Future<void> _recoverPlayback({
+    required bool forceMp4,
+    required String reason,
+  }) async {
+    if (_isDisposed || _isRecovering) return;
+    _isRecovering = true;
+    try {
+      _playbackSession?.recordRecoveryAttempt(reason);
+      final resolvedUrl = _videoManager.getResolvedUrl(
+            widget.contextKey,
+            widget.videoUrl,
+          ) ??
+          widget.video.resolvedUrl ??
+          widget.video.effectiveUrl;
+      final prefersDownloadedRecovery =
+          !resolvedUrl.toLowerCase().contains('.m3u8');
+
+      await _purgeAndReloadController(
+        forceMp4: forceMp4,
+        preferDownloadedFile: prefersDownloadedRecovery,
+        recoveryReason: reason,
+      );
+    } finally {
+      _isRecovering = false;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -412,43 +722,65 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     final videoController = _vc;
     final userController = Get.find<UserController>();
 
-    final ctrl = _ctrl;
-    final value = _safeValue(ctrl);
-    final loadState =
-        _videoManager.getLoadState(widget.contextKey, widget.videoUrl);
+    return ValueListenableBuilder<int>(
+      valueListenable: _videoManager.uiRevision,
+      builder: (_, __, ___) {
+        final ctrl = _ctrl;
+        final managedPlayer =
+            _videoManager.getController(widget.contextKey, widget.videoUrl);
+        final managedCtrl = managedPlayer?.controller;
+        final shouldDetachStaleCtrl = ctrl != null &&
+            (managedCtrl == null || !identical(ctrl, managedCtrl));
+        if (shouldDetachStaleCtrl) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _isDisposed) return;
+            if (!identical(_ctrl, ctrl)) return;
+            _bindPlayer(managedPlayer);
+          });
+        }
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ValueListenableBuilder<bool>(
-          valueListenable: _showPlayIcon,
-          builder: (_, showIcon, __) {
-            return TiktokVideoPlayer(
-              controller: ctrl,
-              isPlaying: value?.isPlaying ?? false,
-              hidePlayPauseIcon: !showIcon,
-              showControls: widget.showControls,
-              showProgressBar: widget.showProgressBar,
-              isBuffering: value?.isBuffering ?? false,
-              isLoading: loadState == VideoLoadState.loading,
-              errorMessage: _getErrorMessage(loadState),
-              thumbnailUrl: widget.video.thumbnailUrl,
-              hasFirstFrame: _hasFirstFrame,
-              onTogglePlayPause: () {
-                if (!widget.enableTapToPlay) return;
-                if (_isControllerValid(ctrl)) {
-                  (ctrl?.value.isPlaying ?? false)
-                      ? _becomePassive()
-                      : _scheduleMaybePlay();
-                }
+        final effectiveCtrl = shouldDetachStaleCtrl ? managedCtrl : ctrl;
+        final value = _safeValue(effectiveCtrl);
+        final loadState =
+            _videoManager.getLoadState(widget.contextKey, widget.videoUrl);
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            ValueListenableBuilder<bool>(
+              valueListenable: _showPlayIcon,
+              builder: (_, showIcon, __) {
+                return TiktokVideoPlayer(
+                  controller: effectiveCtrl,
+                  isPlaying: value?.isPlaying ?? false,
+                  hidePlayPauseIcon: !showIcon,
+                  showControls: widget.showControls,
+                  showProgressBar: widget.showProgressBar,
+                  isBuffering: value?.isBuffering ?? false,
+                  isLoading: loadState == VideoLoadState.loading,
+                  errorMessage: _getErrorMessage(loadState),
+                  thumbnailUrl: widget.video.thumbnailUrl,
+                  hasFirstFrame: _hasFirstFrame,
+                  onTogglePlayPause: () {
+                    if (!widget.enableTapToPlay) return;
+                    if (_isControllerValid(effectiveCtrl)) {
+                      (effectiveCtrl?.value.isPlaying ?? false)
+                          ? _becomePassive()
+                          : _scheduleMaybePlay();
+                    }
+                  },
+                  onRetry: () => _purgeAndReloadController(
+                    purgeCachedFile: true,
+                    recoveryReason: 'manual_retry',
+                  ),
+                );
               },
-              onRetry: _purgeAndReloadController,
-            );
-          },
-        ),
-        if (widget.showControls && videoController != null)
-          _buildActions(context, videoController, userController),
-      ],
+            ),
+            if (widget.showControls && videoController != null)
+              _buildActions(context, videoController, userController),
+          ],
+        );
+      },
     );
   }
 
@@ -477,8 +809,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     if (currentUser == null) return const SizedBox();
 
     final isOwner = widget.video.uid == currentUser.uid;
-    final isFollowing =
-        currentUser.followingsList.contains(widget.video.uid);
+    final isFollowing = currentUser.followingsList.contains(widget.video.uid);
 
     final screenHeight = MediaQuery.of(context).size.height;
     double bottomOffset = screenHeight * 0.12;
@@ -499,16 +830,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
               onTap: () => _confirmDelete(context, videoController),
               emphasized: true,
             ),
-          if (widget.showDeleteAction && isOwner)
-            const SizedBox(height: 24),
+          if (widget.showDeleteAction && isOwner) const SizedBox(height: 24),
           _animatedActionButton(
             icon: isLiked
                 ? Icons.favorite_rounded
                 : Icons.favorite_border_rounded,
             color: isLiked ? Colors.redAccent : Colors.white,
             label: '${widget.video.likes.length}',
-            onTap: () =>
-                _toggleLike(videoController, currentUser.uid),
+            onTap: () => _toggleLike(videoController, currentUser.uid),
             emphasized: isLiked,
           ),
           const SizedBox(height: 24),
@@ -523,11 +852,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             icon: Icons.flag_rounded,
             color: Colors.white,
             label: '${widget.video.reportCount}',
-            onTap: () async =>
-                videoController.signalerVideo(
-                  widget.video.id,
-                  currentUser.uid,
-                ),
+            onTap: () async => videoController.signalerVideo(
+              widget.video.id,
+              currentUser.uid,
+            ),
           ),
           const SizedBox(height: 28),
           if (currentUser.role == 'joueur')
@@ -542,10 +870,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                   onPressed: () async {
                     await _videoManager.pauseAll(widget.contextKey);
                     await _setWakelock(false);
-                    final result =
-                        await Get.to(() => const AddVideo());
+                    final result = await Get.to(() => const AddVideo());
                     if (result == true) {
-                      await videoController.refreshVideos();
+                      final refreshed = widget.onRefreshRequested != null
+                          ? await widget.onRefreshRequested!()
+                          : await videoController.refreshVideos();
+                      if (!refreshed) {
+                        _scheduleMaybePlay();
+                      }
                     } else {
                       _scheduleMaybePlay();
                     }
@@ -555,8 +887,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 const SizedBox(height: 4),
                 const Text(
                   'Vidéo',
-                  style:
-                      TextStyle(color: Colors.white, fontSize: 12),
+                  style: TextStyle(color: Colors.white, fontSize: 12),
                 ),
               ],
             ),
@@ -595,15 +926,15 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             curve: Curves.easeOut,
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.18),
+              color: Colors.black.withValues(alpha: 0.18),
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withOpacity(0.12),
+                color: Colors.white.withValues(alpha: 0.12),
                 width: 0.8,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.45),
+                  color: Colors.black.withValues(alpha: 0.45),
                   blurRadius: 12,
                   offset: const Offset(0, 6),
                 ),
@@ -615,7 +946,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
               size: emphasized ? 32 : 30,
               shadows: [
                 Shadow(
-                  color: Colors.black.withOpacity(0.45),
+                  color: Colors.black.withValues(alpha: 0.45),
                   blurRadius: 12,
                   offset: const Offset(0, 3),
                 ),
@@ -629,7 +960,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
               vertical: 2,
             ),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.25),
+              color: Colors.black.withValues(alpha: 0.25),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
@@ -654,11 +985,9 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     required UserController userController,
   }) {
     final followCtrl = Get.find<FollowController>();
-    final publisher =
-        userController.usersCache[widget.video.uid];
-    final photoUrl = (publisher?.photoProfil ??
-            widget.video.profilePhoto)
-        .trim();
+    final publisher = userController.usersCache[widget.video.uid];
+    final photoUrl =
+        (publisher?.photoProfil ?? widget.video.profilePhoto).trim();
 
     Future<void> openProfile() async {
       await _videoManager.pauseAll(widget.contextKey);
@@ -730,8 +1059,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                             width: 14,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation(Colors.white),
+                              valueColor: AlwaysStoppedAnimation(Colors.white),
                             ),
                           )
                         : const Icon(
@@ -787,8 +1115,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
               Get.back();
               await controller.deleteVideo(widget.video.id);
             },
-            child:
-                const Text('Supprimer', style: TextStyle(color: Colors.red)),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -802,8 +1129,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       );
       final response = await controller.partagerVideo(widget.video.id);
       if (response.success) {
-        widget.video.shareCount =
-            response.data?['shareCount'] as int? ?? (widget.video.shareCount + 1);
+        widget.video.shareCount = response.data?['shareCount'] as int? ??
+            (widget.video.shareCount + 1);
         if (mounted && !_isDisposed) setState(() {});
       }
     } catch (_) {
@@ -820,28 +1147,54 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   // RELOAD
   // ---------------------------------------------------------------------------
 
-  Future<void> _purgeAndReloadController() async {
+  Future<void> _purgeAndReloadController({
+    bool forceMp4 = false,
+    bool purgeCachedFile = false,
+    bool preferDownloadedFile = false,
+    String? recoveryReason,
+  }) async {
+    if (_isDisposed) return;
+    if (forceMp4) {
+      _forceMp4Fallback = true;
+    }
+
+    // Detach from UI before manager-level dispose to avoid rendering
+    // a controller whose native player ID no longer exists.
+    _bindPlayer(null);
+
     final resolvedUrl = _videoManager.getResolvedUrl(
           widget.contextKey,
           widget.videoUrl,
         ) ??
         widget.video.resolvedUrl;
     await _videoManager.disposeUrls(widget.contextKey, [widget.videoUrl]);
-    if (!kIsWeb) {
+    if (!kIsWeb && purgeCachedFile) {
       try {
-        final file =
-            await custom_cache.VideoCacheManager.getFileIfCached(
-          resolvedUrl ?? widget.videoUrl,
-        );
-        if (file != null && await file.exists()) {
-          await file.delete();
+        final cacheUrl = resolvedUrl ?? widget.videoUrl;
+        if (cacheUrl.toLowerCase().contains('.m3u8')) {
+          await CachedVideoPlayerPlus.removeFileFromCache(Uri.parse(cacheUrl));
+          await custom_cache.VideoCacheManager.removeCachedFile(cacheUrl);
+        } else {
+          final file = await custom_cache.VideoCacheManager.getFileIfCached(
+            cacheUrl,
+          );
+          if (file != null && await file.exists()) {
+            await file.delete();
+          }
         }
       } catch (_) {}
     }
     _hasFirstFrame = false;
+    _stopFirstFrameWatchdog();
     _stopStallWatchdog();
     if (mounted && !_isDisposed) setState(() {});
-    unawaited(_attachOrInitialize(reuse: null));
+    unawaited(
+      _attachOrInitialize(
+        reuse: null,
+        preferDownloadedFile: preferDownloadedFile,
+        recoveryReason: recoveryReason,
+      ),
+    );
   }
 
   Future<void> _setWakelock(bool enable) async {

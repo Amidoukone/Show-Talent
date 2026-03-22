@@ -321,7 +321,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   tag: contextKey,
                                 )) {
                                   Get.put(
-                                    VideoController(contextKey: contextKey),
+                                    VideoController(
+                                      contextKey: contextKey,
+                                      enableLiveStream: false,
+                                      enableFeedFetch: false,
+                                    ),
                                     tag: contextKey,
                                     permanent: true,
                                   );
@@ -330,8 +334,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 await _profileController.pauseAll();
 
                                 Get.find<VideoController>(tag: contextKey)
-                                    .currentIndex
-                                    .value = index;
+                                    .replaceVideos(
+                                  visibleVideos,
+                                  selectedIndex: index,
+                                );
 
                                 await Get.to(
                                   () => ProfileVideoScrollView(
@@ -506,54 +512,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-void _showFullProfilePhoto(String photoUrl, String uid) {
-  if (photoUrl.isEmpty) return;
+  void _showFullProfilePhoto(String photoUrl, String uid) {
+    if (photoUrl.isEmpty) return;
 
-  showGeneralDialog(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: 'Fermer la photo de profil', // ✅ OBLIGATOIRE
-    barrierColor: Colors.black87,
-    transitionDuration: const Duration(milliseconds: 200),
-    pageBuilder: (context, animation, secondaryAnimation) {
-      return GestureDetector(
-        onTap: () => Navigator.of(context).pop(),
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: SafeArea(
-            child: Center(
-              child: Hero(
-                tag: 'profile-photo-$uid',
-                child: InteractiveViewer(
-                  minScale: 0.8,
-                  maxScale: 4,
-                  child: Image.network(
-                    photoUrl,
-                    fit: BoxFit.contain,
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
-                      return const Center(
-                        child: CircularProgressIndicator(),
-                      );
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
-                        Icons.broken_image_outlined,
-                        color: Colors.white,
-                        size: 64,
-                      );
-                    },
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Fermer la photo de profil', // ✅ OBLIGATOIRE
+      barrierColor: Colors.black87,
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return GestureDetector(
+          onTap: () => Navigator.of(context).pop(),
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: SafeArea(
+              child: Center(
+                child: Hero(
+                  tag: 'profile-photo-$uid',
+                  child: InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 4,
+                    child: Image.network(
+                      photoUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(
+                          Icons.broken_image_outlined,
+                          color: Colors.white,
+                          size: 64,
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
-}
-
+        );
+      },
+    );
+  }
 
   Future<void> _changeProfilePhoto(String uid) async {
     final file = await _imagePicker.pickImage(

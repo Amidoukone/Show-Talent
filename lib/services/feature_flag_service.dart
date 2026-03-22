@@ -4,20 +4,56 @@ import 'package:flutter/foundation.dart';
 class FeatureFlagConfig {
   final bool adaptiveEnabled;
   final int rolloutPercent;
-  final bool useHls;
+  final bool hlsPlaybackEnabled;
+  final bool preferHlsPlayback;
 
   const FeatureFlagConfig({
     this.adaptiveEnabled = false,
     this.rolloutPercent = 0,
-    this.useHls = false,
+    this.hlsPlaybackEnabled = false,
+    this.preferHlsPlayback = false,
   });
 
   factory FeatureFlagConfig.fromData(Map<String, dynamic> data) {
     return FeatureFlagConfig(
-      adaptiveEnabled: (data['adaptiveEnabled'] as bool?) ?? false,
-      rolloutPercent: ((data['rolloutPercent'] as num?) ?? 0).clamp(0, 100).toInt(),
-      useHls: (data['useHls'] as bool?) ?? false,
+      // Single-rendition MP4 baseline: adaptive and HLS flags remain readable
+      // in Firestore for backward compatibility, but they no longer drive
+      // runtime playback in the mobile app.
+      adaptiveEnabled: false,
+      rolloutPercent: 0,
+      hlsPlaybackEnabled: false,
+      preferHlsPlayback: false,
     );
+  }
+
+  bool isAdaptiveEnabledForUser(String? uid) {
+    if (!adaptiveEnabled) {
+      return false;
+    }
+    return _isUserInRollout(uid, rolloutPercent);
+  }
+
+  bool isHlsPlaybackEnabledForUser(String? uid) {
+    if (!hlsPlaybackEnabled) {
+      return false;
+    }
+    return _isUserInRollout(uid, rolloutPercent);
+  }
+
+  bool shouldPreferHlsForUser(String? uid) {
+    return isHlsPlaybackEnabledForUser(uid) && preferHlsPlayback;
+  }
+
+  bool _isUserInRollout(String? uid, int percent) {
+    final safePercent = percent.clamp(0, 100);
+    if (safePercent <= 0) {
+      return false;
+    }
+    if (safePercent >= 100) {
+      return true;
+    }
+    final bucket = (uid ?? 'anonymous').hashCode.abs() % 100;
+    return bucket < safePercent;
   }
 }
 
@@ -44,21 +80,29 @@ class FeatureFlagService {
       _cached = FeatureFlagConfig.fromData(data);
       _lastFetch = now;
     } catch (e) {
-      debugPrint('❌ FeatureFlagService fetch error: $e');
+      debugPrint('FeatureFlagService fetch error: $e');
     }
 
     return _cached;
   }
 
   bool isEnabledForUser(String? uid) {
-    if (!_cached.adaptiveEnabled) return false;
-    final percent = _cached.rolloutPercent.clamp(0, 100);
-    if (percent >= 100) return true;
-    final bucket = (uid ?? 'anonymous').hashCode.abs() % 100;
-    return bucket < percent;
+    return _cached.isAdaptiveEnabledForUser(uid);
+  }
+
+  bool isAdaptiveEnabledForUser(String? uid) {
+    return _cached.isAdaptiveEnabledForUser(uid);
+  }
+
+  bool isHlsPlaybackEnabledForUser(String? uid) {
+    return _cached.isHlsPlaybackEnabledForUser(uid);
+  }
+
+  bool shouldPreferHlsForUser(String? uid) {
+    return _cached.shouldPreferHlsForUser(uid);
   }
 
   bool useHlsForUser(String? uid) {
-    return isEnabledForUser(uid) && _cached.useHls;
+    return shouldPreferHlsForUser(uid);
   }
 }

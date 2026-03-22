@@ -10,17 +10,21 @@ class VideoFocusOrchestrator {
     required this.videoManager,
     required List<Video> videos,
     this.onRequestMore,
+    this.useHlsForVideo,
     this.disposeWindow = 25,
   }) : _videos = List.of(videos);
 
   final String contextKey;
   final VideoManager videoManager;
   final Future<void> Function()? onRequestMore;
+  final bool Function(Video video)? useHlsForVideo;
   final int disposeWindow;
 
   List<Video> _videos;
   bool _isDisposed = false;
   int _requestToken = 0;
+
+  bool _useHls(Video video) => useHlsForVideo?.call(video) ?? false;
 
   /// Met à jour la liste des vidéos (pagination / refresh)
   void updateVideos(List<Video> videos) {
@@ -35,6 +39,7 @@ class VideoFocusOrchestrator {
     final localToken = ++_requestToken;
     final currentVideo = _videos[index];
     final currentUrl = currentVideo.videoUrl;
+    final requestHls = _useHls(currentVideo);
 
     /// Préchargement intelligent autour de l’index
     videoManager.preloadSurrounding(
@@ -42,7 +47,7 @@ class VideoFocusOrchestrator {
       _videos,
       index,
       activeUrl: currentUrl,
-      useHls: currentVideo.hasHlsSource,
+      useHls: requestHls,
     );
 
     /// Pause de tous les autres players du contexte
@@ -50,16 +55,33 @@ class VideoFocusOrchestrator {
     if (_isStale(localToken)) return null;
 
     /// Récupération ou initialisation du player courant
-    var player = videoManager.getController(contextKey, currentUrl);
+    final resolvedUrl = videoManager.getResolvedUrl(contextKey, currentUrl);
+    final canReuseExisting = videoManager.shouldReuseControllerForRequest(
+      originalUrl: currentUrl,
+      resolvedUrl: resolvedUrl,
+      sources: currentVideo.sources,
+      requestedHls: requestHls,
+      isPreload: false,
+    );
+    var player = canReuseExisting
+        ? videoManager.getController(contextKey, currentUrl)
+        : null;
     final ctrl = player?.controller;
+    bool ctrlReady = false;
+    try {
+      ctrlReady =
+          ctrl != null && ctrl.value.isInitialized && !ctrl.value.hasError;
+    } catch (_) {
+      ctrlReady = false;
+    }
 
-    if (ctrl == null || !ctrl.value.isInitialized || ctrl.value.hasError) {
+    if (!ctrlReady) {
       try {
         player = await videoManager.initializeController(
           contextKey,
           currentUrl,
           sources: currentVideo.sources,
-          useHls: currentVideo.hasHlsSource,
+          useHls: requestHls,
           autoPlay: true,
           activeUrl: currentUrl,
         );
@@ -72,12 +94,18 @@ class VideoFocusOrchestrator {
 
     /// Lecture effective
     final actualCtrl = player?.controller;
-    if (actualCtrl != null &&
-        actualCtrl.value.isInitialized &&
-        !actualCtrl.value.hasError &&
-        !actualCtrl.value.isPlaying) {
+    bool shouldPlay = false;
+    try {
+      shouldPlay = actualCtrl != null &&
+          actualCtrl.value.isInitialized &&
+          !actualCtrl.value.hasError &&
+          !actualCtrl.value.isPlaying;
+    } catch (_) {
+      shouldPlay = false;
+    }
+    if (shouldPlay) {
       try {
-        await actualCtrl.play();
+        await actualCtrl!.play();
       } catch (_) {}
     }
 
@@ -87,9 +115,7 @@ class VideoFocusOrchestrator {
     }
 
     /// Pagination anticipée
-    if (!_isDisposed &&
-        onRequestMore != null &&
-        index >= _videos.length - 2) {
+    if (!_isDisposed && onRequestMore != null && index >= _videos.length - 2) {
       await onRequestMore!();
     }
 
@@ -110,20 +136,13 @@ class VideoFocusOrchestrator {
   Future<void> _disposeFarPlayers(int index, int token) async {
     if (_videos.length <= disposeWindow || _isStale(token)) return;
 
-    final start =
-        (index - disposeWindow ~/ 2).clamp(0, _videos.length).toInt();
+    final start = (index - disposeWindow ~/ 2).clamp(0, _videos.length).toInt();
     final end = (start + disposeWindow).clamp(0, _videos.length).toInt();
 
-    final keepUrls = _videos
-        .sublist(start, end)
-        .map((v) => v.videoUrl)
-        .toSet();
+    final keepUrls = _videos.sublist(start, end).map((v) => v.videoUrl).toSet();
 
-    final toDispose = _videos
-        .map((v) => v.videoUrl)
-        .toSet()
-        .difference(keepUrls)
-        .toList();
+    final toDispose =
+        _videos.map((v) => v.videoUrl).toSet().difference(keepUrls).toList();
 
     if (toDispose.isEmpty || _isStale(token)) return;
 

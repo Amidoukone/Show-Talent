@@ -1,7 +1,6 @@
-// ============================================================================
-// Module-level build.gradle (android/app)
-// Compatible avec Flutter 3.32.7 / AGP 8.3.0 / Kotlin 1.8.22
-// ============================================================================
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id "com.android.application"
     // START: FlutterFire Configuration
@@ -9,6 +8,12 @@ plugins {
     // END: FlutterFire Configuration
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
+}
+
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -22,8 +27,6 @@ android {
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        // Firebase + plugins = >64K méthodes
         multiDexEnabled true
     }
 
@@ -37,13 +40,24 @@ android {
         jvmTarget = "1.8"
     }
 
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+                storeFile keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null
+                storePassword keystoreProperties["storePassword"]
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.debug
-            // Pour production, activer les options ci-dessous
-            // minifyEnabled true
-            // shrinkResources true
-            // proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // For CI/local validation without key.properties, fallback remains debug-signed.
+            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
         debug {
             // Debug standard
@@ -56,9 +70,6 @@ flutter {
 }
 
 dependencies {
-    // Java 8+ API support
-    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
-
-    // Multidex runtime pour >64K méthodes
-    implementation 'androidx.multidex:multidex:2.0.1'
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
+    implementation "androidx.multidex:multidex:2.0.1"
 }

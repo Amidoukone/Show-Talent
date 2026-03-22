@@ -11,7 +11,14 @@ import '../controller/user_controller.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({
+    super.key,
+    this.fallbackInitializationDelay = const Duration(milliseconds: 600),
+    this.fallbackRouteBuilder,
+  });
+
+  final Duration fallbackInitializationDelay;
+  final Future<Widget?> Function()? fallbackRouteBuilder;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -44,7 +51,15 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _initializeFallback() async {
     // Petit délai pour laisser Firebase s'initialiser correctement
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future.delayed(widget.fallbackInitializationDelay);
+
+    if (widget.fallbackRouteBuilder != null) {
+      final fallbackPage = await widget.fallbackRouteBuilder!.call();
+      if (fallbackPage != null) {
+        return _safeOffAll(fallbackPage);
+      }
+      return;
+    }
 
     try {
       final currentUser = _auth.currentUser;

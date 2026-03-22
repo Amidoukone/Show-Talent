@@ -116,8 +116,9 @@ class OffreController extends GetxController {
         if (data == null) return;
 
         final rawRecruteur = data['recruteur'];
-        final recruteurMap =
-            rawRecruteur is Map ? Map<String, dynamic>.from(rawRecruteur) : null;
+        final recruteurMap = rawRecruteur is Map
+            ? Map<String, dynamic>.from(rawRecruteur)
+            : null;
         final recruteurId = recruteurMap?['uid']?.toString();
 
         // 🛡️ Sécurité anti-double comptage
@@ -175,25 +176,11 @@ class OffreController extends GetxController {
   /// 🔔 Notifier les joueurs (future version : ciblage par poste / niveau)
   Future<void> _notifierJoueurs(Offre offre, AppUser recruteur) async {
     try {
-      final joueursSnapshot = await _firestore
-          .collection('users')
-          .where('role', isEqualTo: 'joueur')
-          .get();
-
-      for (var joueurDoc in joueursSnapshot.docs) {
-        final joueurData = joueurDoc.data();
-        final fcmToken = joueurData['fcmToken'];
-
-        if (fcmToken != null && fcmToken.isNotEmpty) {
-          await PushNotificationService.sendNotification(
-            title: 'Nouvelle offre disponible',
-            body: 'Une nouvelle offre a été publiée par ${recruteur.nom}.',
-            token: fcmToken,
-            contextType: 'offre',
-            contextData: offre.id,
-          );
-        }
-      }
+      await PushNotificationService.sendOfferFanout(
+        offerId: offre.id,
+        title: 'Nouvelle offre disponible',
+        body: 'Une nouvelle offre a ete publiee par ${recruteur.nom}.',
+      );
     } catch (e, st) {
       developer.log(
         'Erreur lors de l\'envoi des notifications : $e',

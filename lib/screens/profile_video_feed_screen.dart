@@ -45,7 +45,11 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
     _videoController = Get.isRegistered<VideoController>(tag: _ctxKey)
         ? Get.find<VideoController>(tag: _ctxKey)
         : Get.put(
-            VideoController(contextKey: _ctxKey),
+            VideoController(
+              contextKey: _ctxKey,
+              enableLiveStream: false,
+              enableFeedFetch: false,
+            ),
             tag: _ctxKey,
             permanent: true,
           );
@@ -54,14 +58,15 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
 
     // Initialisation de la liste des vidéos depuis le profil
     final vids = _profileController.videoList.toList();
-    _videoController.videoList.assignAll(vids);
-    _videoController.currentIndex.value = 0;
+    _videoController.replaceVideos(vids, selectedIndex: 0);
 
     // ✅ Orchestrateur de focus (préload/pause/init/play/dispose window)
     _focusOrchestrator = VideoFocusOrchestrator(
       contextKey: _ctxKey,
       videoManager: _videoManager,
       videos: _currentVideos,
+      useHlsForVideo: (video) =>
+          _videoController.preferHlsPlayback && video.hasAdaptiveHlsSource,
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {

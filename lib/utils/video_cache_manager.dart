@@ -42,7 +42,8 @@ class VideoCacheManager extends CacheManager {
 
     if (!await videoCacheDir.exists()) {
       await videoCacheDir.create(recursive: true);
-      debugPrint('[VideoCacheManager] Created directory at ${videoCacheDir.path}');
+      debugPrint(
+          '[VideoCacheManager] Created directory at ${videoCacheDir.path}');
     }
     return videoCacheDir.path;
   }
@@ -75,7 +76,8 @@ class VideoCacheManager extends CacheManager {
     bool force = false,
     String? key,
   }) async {
-    final fileInfo = await super.downloadFile(url, authHeaders: authHeaders, force: force, key: key);
+    final fileInfo = await super
+        .downloadFile(url, authHeaders: authHeaders, force: force, key: key);
     debugPrint('[VideoCacheManager] Cached: $url');
     unawaited(_autoPurgeIfNeeded());
     return fileInfo;
@@ -94,6 +96,17 @@ class VideoCacheManager extends CacheManager {
       debugPrint('[VideoCacheManager] getFileIfCached error: $e');
     }
     return null;
+  }
+
+  /// Supprime explicitement un artefact de cache pour une URL donnée.
+  static Future<void> removeCachedFile(String url) async {
+    try {
+      final manager = await getInstance();
+      await manager.removeFile(url);
+      debugPrint('[VideoCacheManager] Removed cached file: $url');
+    } catch (e) {
+      debugPrint('[VideoCacheManager] removeCachedFile error: $e');
+    }
   }
 
   /// Taille actuelle du cache
@@ -158,7 +171,7 @@ class VideoCacheManager extends CacheManager {
       const toFreeBytes = purgeBlockSizeMB * 1024 * 1024;
       for (final e in sorted) {
         try {
-          await e.key.delete().catchError((_) => null);
+          await e.key.delete();
           freed += e.value;
           if (freed >= toFreeBytes) break;
         } catch (_) {}

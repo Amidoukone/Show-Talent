@@ -114,7 +114,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     });
   }
 
-/// ✅ NOUVEAU : garantit que le timer est actif quand le player est utilisable
+  /// ✅ NOUVEAU : garantit que le timer est actif quand le player est utilisable
   void _ensureProgressUpdaterRunning() {
     if (_progressTimer == null || !(_progressTimer?.isActive ?? false)) {
       _startProgressUpdater();
@@ -176,7 +176,9 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       if (dur == Duration.zero) return;
 
       final isRight = details.localPosition.dx > width / 2;
-      final raw = isRight ? pos + const Duration(seconds: 10) : pos - const Duration(seconds: 10);
+      final raw = isRight
+          ? pos + const Duration(seconds: 10)
+          : pos - const Duration(seconds: 10);
       final clamped = _clampDuration(raw, Duration.zero, dur);
 
       ctrl.seekTo(clamped);
@@ -198,8 +200,8 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
 
     final box = context.findRenderObject() as RenderBox?;
     final totalWidth = box?.size.width ?? MediaQuery.of(context).size.width;
-    final trackWidth = (totalWidth - (_progressHorizontalPadding * 2))
-        .clamp(0.0, totalWidth);
+    final trackWidth =
+        (totalWidth - (_progressHorizontalPadding * 2)).clamp(0.0, totalWidth);
     final dx = (details.localPosition.dx - _progressHorizontalPadding)
         .clamp(0.0, trackWidth);
     final proportion =
@@ -263,16 +265,17 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       return Stack(
         fit: StackFit.expand,
         children: [
-          Image.network(widget.thumbnailUrl, fit: BoxFit.cover),
+          _buildThumbnailImage(),
           if (widget.isLoading || widget.isBuffering)
             const Center(child: CircularProgressIndicator(color: Colors.white)),
         ],
       );
     }
- if (_progressTimer == null || !(_progressTimer?.isActive ?? false)) {
+    if (_progressTimer == null || !(_progressTimer?.isActive ?? false)) {
       _startProgressUpdater();
     }
-   /// ✅ garantit progression active dès que le player est prêt
+
+    /// ✅ garantit progression active dès que le player est prêt
     _ensureProgressUpdaterRunning();
 
     final value = _safeValue();
@@ -281,14 +284,17 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       return Stack(
         fit: StackFit.expand,
         children: [
-          Image.network(widget.thumbnailUrl, fit: BoxFit.cover),
+          _buildThumbnailImage(),
           if (widget.isLoading || widget.isBuffering)
             const Center(child: CircularProgressIndicator(color: Colors.white)),
         ],
       );
     }
     final bool hasError = value.hasError || widget.errorMessage != null;
-    final bool showLoader = widget.isLoading || widget.isBuffering || !value.isInitialized;
+    final bool hasRenderableFrame =
+        _didRenderFrame(value) || widget.hasFirstFrame;
+    final bool showLoader = !hasRenderableFrame &&
+        (widget.isLoading || value.isBuffering || !value.isInitialized);
 
     return GestureDetector(
       onTap: _onTap,
@@ -303,13 +309,17 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     );
   }
 
-  Widget _buildContentLayer(VideoPlayerValue value, bool hasError, bool showLoader) {
+  Widget _buildContentLayer(
+      VideoPlayerValue value, bool hasError, bool showLoader) {
     if (hasError) return _buildErrorOverlay();
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        _buildThumbnail(fadeOut: value.isInitialized && widget.hasFirstFrame),
+        _buildThumbnail(
+          fadeOut: value.isInitialized &&
+              (_didRenderFrame(value) || widget.hasFirstFrame),
+        ),
         if (value.isInitialized) _buildVideo(),
         if (showLoader)
           const Center(child: CircularProgressIndicator(color: Colors.white)),
@@ -317,11 +327,43 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     );
   }
 
+  bool _didRenderFrame(VideoPlayerValue value) {
+    final hasPosition = value.position > Duration.zero;
+    final hasVideoSize = value.size.width > 0 && value.size.height > 0;
+    return hasPosition || (value.isPlaying && hasVideoSize);
+  }
+
   Widget _buildThumbnail({required bool fadeOut}) {
     return AnimatedOpacity(
       opacity: fadeOut ? 0.0 : 1.0,
       duration: const Duration(milliseconds: 300),
-      child: Image.network(widget.thumbnailUrl, fit: BoxFit.cover),
+      child: _buildThumbnailImage(),
+    );
+  }
+
+  Widget _buildThumbnailImage() {
+    final thumb = widget.thumbnailUrl.trim();
+    if (thumb.isEmpty) {
+      return _buildThumbnailFallback();
+    }
+
+    return Image.network(
+      thumb,
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.low,
+      errorBuilder: (_, __, ___) => _buildThumbnailFallback(),
+    );
+  }
+
+  Widget _buildThumbnailFallback() {
+    return Container(
+      color: Colors.black,
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.videocam_off_rounded,
+        color: Colors.white54,
+        size: 36,
+      ),
     );
   }
 
@@ -357,7 +399,8 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       fit: StackFit.expand,
       children: [
         if (_feedbackOverlay != null) _buildFeedbackOverlay(),
-        if (_showControlOverlay && widget.showControls) _buildFloatingControls(val),
+        if (_showControlOverlay && widget.showControls)
+          _buildFloatingControls(val),
         if (widget.showProgressBar) _buildProgressBar(val),
       ],
     );
@@ -397,7 +440,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
           }),
           const SizedBox(width: 16),
           _iconButton(
-            widget.isPlaying ? Icons.pause : Icons.play_arrow,
+            val.isPlaying ? Icons.pause : Icons.play_arrow,
             () {
               widget.onTogglePlayPause?.call();
               _toggleOverlay();
@@ -439,7 +482,8 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   Widget _buildProgressBar(VideoPlayerValue val) {
     final durationMs = val.duration.inMilliseconds;
     final posMs = val.position.inMilliseconds.clamp(0, durationMs);
-    final percent = durationMs == 0 ? 0.0 : (posMs / durationMs).clamp(0.0, 1.0);
+    final percent =
+        durationMs == 0 ? 0.0 : (posMs / durationMs).clamp(0.0, 1.0);
 
     // Si on drag, on utilise la valeur locale (sinon valeur réelle)
     final displayed = _isDragging ? _localDragProgress : percent;
@@ -475,8 +519,9 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
                   (width - (_progressHorizontalPadding * 2)).clamp(0.0, width);
               if (trackWidth <= 0) return;
 
-              final tapPos = (details.localPosition.dx - _progressHorizontalPadding)
-                  .clamp(0.0, trackWidth);
+              final tapPos =
+                  (details.localPosition.dx - _progressHorizontalPadding)
+                      .clamp(0.0, trackWidth);
               final proportion = (tapPos / trackWidth).clamp(0.0, 1.0);
 
               try {
@@ -492,7 +537,8 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final trackWidth = constraints.maxWidth;
-                  final knobLeft = (clampedDisplayed * trackWidth).clamp(0.0, trackWidth);
+                  final knobLeft =
+                      (clampedDisplayed * trackWidth).clamp(0.0, trackWidth);
 
                   return Stack(
                     clipBehavior: Clip.none,
@@ -523,7 +569,8 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.greenAccent, width: 1.5),
+                            border: Border.all(
+                                color: Colors.greenAccent, width: 1.5),
                           ),
                         ),
                       ),
@@ -539,9 +586,11 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(fmt(current),
-                    style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 11)),
                 Text(fmt(total),
-                    style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 11)),
               ],
             ),
           ),

@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:get/get.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/push_notification.dart';
 import 'package:adfoot/models/message_converstion.dart';
-import 'package:adfoot/controller/auth_controller.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:get/get.dart';
 
 class ChatController extends GetxController {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -22,7 +22,6 @@ class ChatController extends GetxController {
   StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _convSub;
 
-  // ✅ protège contre les mises à jour async “en retard”
   int _bindEpoch = 0;
   String? _boundUid;
 
@@ -30,8 +29,6 @@ class ChatController extends GetxController {
   void onInit() {
     super.onInit();
 
-    // ✅ IMPORTANT : on aligne sur le même flux que UserController/AuthController
-    // idTokenChanges couvre login/logout + reload/refresh/token updates.
     _authSub = _auth.idTokenChanges().listen(
       (user) {
         if (user == null) {
@@ -45,7 +42,6 @@ class ChatController extends GetxController {
       onError: (e) => print("ChatController auth listen error: $e"),
     );
 
-    // ✅ Cold start : si déjà connecté
     final uid = AuthController.instance.currentUid ?? _auth.currentUser?.uid;
     if (uid != null) {
       _bindConversationsFor(uid);
@@ -59,7 +55,6 @@ class ChatController extends GetxController {
     super.onClose();
   }
 
-  /// Utilisable depuis l’UI (ex: ConversationsScreen initState)
   void refreshConversations() {
     final uid = AuthController.instance.currentUid ?? _auth.currentUser?.uid;
     if (uid == null) {
@@ -69,8 +64,6 @@ class ChatController extends GetxController {
       return;
     }
 
-    // ✅ si déjà bind sur le même uid, on peut juste “forcer” l’UI
-    // mais on rebinde quand même si le sub est null.
     if (_boundUid == uid && _convSub != null) {
       _conversations.refresh();
       update();
@@ -88,53 +81,37 @@ class ChatController extends GetxController {
   }
 
   void _bindConversationsFor(String userId) {
-    // ✅ évite rebinding inutile
     if (_boundUid == userId && _convSub != null) return;
 
     _boundUid = userId;
-
-    // ✅ annule l’ancien bind
     _unbindConversations();
 
-    // ✅ incrémente epoch : toutes les tâches async précédentes deviennent “stale”
     final int myEpoch = ++_bindEpoch;
 
     _convSub = _firestore
         .collection('conversations')
         .where('utilisateurIds', arrayContains: userId)
-        // ✅ Optionnel: si tu as un index, tu peux décommenter pour un ordre stable
-        // .orderBy('lastMessageDate', descending: true)
         .snapshots()
         .listen(
-      (snapshot) async {
+      (snapshot) {
         try {
-          // Si un nouveau bind a eu lieu pendant qu'on attendait, on stop.
           if (myEpoch != _bindEpoch) return;
 
-          // ⚠️ On conserve ta logique : unreadMessagesCount calculé côté controller
-          // (l’UI ne doit pas refaire un StreamBuilder par conversation)
-          final items = await Future.wait(
-            snapshot.docs.map((doc) async {
-              final data = doc.data();
-              data['id'] = doc.id;
+          final items = snapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
 
-              final conv = Conversation.fromMap(data);
+            final conv = Conversation.fromMap(data);
+            final unread = _extractUnreadCount(data, userId);
+            conv.unreadMessagesCount = unread;
+            conv.unreadCountByUser[userId] = unread;
+            return conv;
+          }).toList();
 
-              // unread count
-              conv.unreadMessagesCount =
-                  await _getUnreadMessageCount(doc.id, userId);
-
-              return conv;
-            }).toList(),
-          );
-
-          // Si stale après les awaits
           if (myEpoch != _bindEpoch) return;
 
           _conversations.value = items;
           _recalculateTotalUnread();
-
-          // ✅ Très important : forcer le refresh UI (Obx + parfois GetBuilder ailleurs)
           _conversations.refresh();
           update();
         } catch (e) {
@@ -150,7 +127,14 @@ class ChatController extends GetxController {
     _convSub = null;
   }
 
-  /// 🔄 recalcul du total non-lu
+  int _extractUnreadCount(Map<String, dynamic> data, String userId) {
+    final raw = data['unreadCountByUser'];
+    if (raw is! Map) return 0;
+    final dynamic value = raw[userId];
+    if (value is int) return value;
+    return int.tryParse('$value') ?? 0;
+  }
+
   void _recalculateTotalUnread() {
     final total = _conversations.value.fold<int>(
       0,
@@ -159,48 +143,43 @@ class ChatController extends GetxController {
     _totalUnread.value = total;
   }
 
-  Future<int> _getUnreadMessageCount(String conversationId, String userId) async {
-    try {
-      final snapshot = await _firestore
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages')
-          .where('destinataireId', isEqualTo: userId)
-          .where('estLu', isEqualTo: false)
-          .get();
-      return snapshot.docs.length;
-    } catch (e) {
-      print("Erreur lors du comptage des messages non lus : $e");
-      return 0;
-    }
+  static String _conversationIdFor(String uid1, String uid2) {
+    final pair = [uid1, uid2]..sort();
+    return "${pair.first}__${pair.last}";
   }
 
   Future<String> createOrGetConversation({
     required String currentUserId,
     required String otherUserId,
   }) async {
+    if (currentUserId == otherUserId) {
+      throw Exception("Impossible de créer une conversation avec soi-même.");
+    }
+
     try {
-      final query = await _firestore
-          .collection('conversations')
-          .where('utilisateurIds', arrayContains: currentUserId)
-          .get();
+      final ids = [currentUserId, otherUserId]..sort();
+      final conversationId = _conversationIdFor(currentUserId, otherUserId);
+      final conversationRef =
+          _firestore.collection('conversations').doc(conversationId);
 
-      for (var doc in query.docs) {
-        final ids = List<String>.from(doc['utilisateurIds'] ?? []);
-        if (ids.contains(otherUserId)) {
-          return doc.id;
-        }
-      }
+      await _firestore.runTransaction((txn) async {
+        final snap = await txn.get(conversationRef);
+        if (snap.exists) return;
 
-      final conversationRef = _firestore.collection('conversations').doc();
-      final newConversation = Conversation(
-        id: conversationRef.id,
-        utilisateur1Id: currentUserId,
-        utilisateur2Id: otherUserId,
-        utilisateurIds: [currentUserId, otherUserId],
-      );
+        final newConversation = Conversation(
+          id: conversationRef.id,
+          utilisateur1Id: ids[0],
+          utilisateur2Id: ids[1],
+          utilisateurIds: ids,
+          unreadCountByUser: {
+            ids[0]: 0,
+            ids[1]: 0,
+          },
+        );
 
-      await conversationRef.set(newConversation.toMap());
+        txn.set(conversationRef, newConversation.toMap());
+      });
+
       return conversationRef.id;
     } catch (e) {
       print("Erreur création conversation : $e");
@@ -267,23 +246,33 @@ class ChatController extends GetxController {
         estLu: false,
       );
 
+      final conversationRef =
+          _firestore.collection('conversations').doc(conversationId);
       final batch = _firestore.batch();
       batch.set(messageRef, message.toMap());
-      batch.update(
-        _firestore.collection('conversations').doc(conversationId),
+      batch.set(
+        conversationRef,
         {
           'lastMessage': content,
           'lastMessageDate': Timestamp.now(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'unreadCountByUser.$recipientId': FieldValue.increment(1),
+          'unreadCountByUser.$senderId': 0,
         },
+        SetOptions(merge: true),
       );
       await batch.commit();
 
-      // ✅ Optionnel : refresh local rapide (sans attendre le prochain snapshot)
-      // utile si réseau lent → la liste se met à jour sans délai
-      final idx = _conversations.value.indexWhere((c) => c.id == conversationId);
+      final idx =
+          _conversations.value.indexWhere((c) => c.id == conversationId);
       if (idx != -1) {
         _conversations.value[idx].lastMessage = content;
         _conversations.value[idx].lastMessageDate = DateTime.now();
+        _conversations.value[idx].unreadCountByUser[senderId] = 0;
+        _conversations.value[idx].unreadMessagesCount = _conversations
+                .value[idx].unreadCountByUser[_boundUid ?? senderId] ??
+            0;
+        _recalculateTotalUnread();
         _conversations.refresh();
         update();
       }
@@ -295,20 +284,13 @@ class ChatController extends GetxController {
 
       if (!shouldNotify) return;
 
-      final recipientDoc =
-          await _firestore.collection('users').doc(recipientId).get();
-      final recipientData = recipientDoc.data();
-
-      if (recipientData != null && recipientData['fcmToken'] != null) {
-        final fcmToken = recipientData['fcmToken'];
-        await PushNotificationService.sendNotification(
-          title: 'Nouveau message',
-          body: content,
-          token: fcmToken,
-          contextType: 'message',
-          contextData: conversationId,
-        );
-      }
+      await PushNotificationService.sendNotification(
+        title: 'Nouveau message',
+        body: content,
+        recipientUid: recipientId,
+        contextType: 'message',
+        contextData: conversationId,
+      );
     } catch (e) {
       print("Erreur envoi message : $e");
     }
@@ -319,12 +301,12 @@ class ChatController extends GetxController {
     required String recipientId,
   }) async {
     try {
-      final senderDoc = await _firestore.collection('users').doc(senderId).get();
+      final senderDoc =
+          await _firestore.collection('users').doc(senderId).get();
       final recipientDoc =
           await _firestore.collection('users').doc(recipientId).get();
 
-      final senderAllow =
-          senderDoc.data()?['allowMessages'] as bool? ?? true;
+      final senderAllow = senderDoc.data()?['allowMessages'] as bool? ?? true;
       final recipientAllow =
           recipientDoc.data()?['allowMessages'] as bool? ?? true;
 
@@ -370,9 +352,22 @@ class ChatController extends GetxController {
           .collection('messages')
           .doc(messageId)
           .update({'estLu': true});
+
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        await _setConversationUnreadToZero(conversationId, userId);
+      }
     } catch (e) {
       print("Erreur mise à jour message lu : $e");
     }
+  }
+
+  Future<void> _setConversationUnreadToZero(
+      String conversationId, String userId) async {
+    await _firestore.collection('conversations').doc(conversationId).set(
+      {'unreadCountByUser.$userId': 0},
+      SetOptions(merge: true),
+    );
   }
 
   Future<void> markMessagesAsRead(String conversationId, String userId) async {
@@ -385,29 +380,21 @@ class ChatController extends GetxController {
           .where('estLu', isEqualTo: false)
           .get();
 
-      if (unreadMessages.docs.isEmpty) {
-        // ✅ rien à faire mais on sécurise l’état local
-        final index =
-            _conversations.value.indexWhere((c) => c.id == conversationId);
-        if (index != -1) {
-          _conversations.value[index].unreadMessagesCount = 0;
-          _recalculateTotalUnread();
-          _conversations.refresh();
-          update();
-        }
-        return;
-      }
-
       final batch = _firestore.batch();
-      for (var doc in unreadMessages.docs) {
+      for (final doc in unreadMessages.docs) {
         batch.update(doc.reference, {'estLu': true});
       }
+      batch.set(
+        _firestore.collection('conversations').doc(conversationId),
+        {'unreadCountByUser.$userId': 0},
+        SetOptions(merge: true),
+      );
       await batch.commit();
 
-      // ✅ MAJ locale immédiate (comme ton code, mais avec refresh/UI)
       final index =
           _conversations.value.indexWhere((c) => c.id == conversationId);
       if (index != -1) {
+        _conversations.value[index].unreadCountByUser[userId] = 0;
         _conversations.value[index].unreadMessagesCount = 0;
         _recalculateTotalUnread();
         _conversations.refresh();
@@ -418,25 +405,26 @@ class ChatController extends GetxController {
     }
   }
 
-  /// ✅ marque toutes les conversations comme lues instantanément côté local
   void markAllAsReadLocal() {
-    for (var conv in _conversations.value) {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+
+    for (final conv in _conversations.value) {
+      conv.unreadCountByUser[uid] = 0;
       conv.unreadMessagesCount = 0;
     }
     _recalculateTotalUnread();
     _conversations.refresh();
     update();
 
-    // Optionnel : sync serveur
     Future.microtask(() => markAllAsReadOnServer());
   }
 
-  /// ✅ synchronise toutes les conversations côté serveur
   Future<void> markAllAsReadOnServer() async {
     final userId = _auth.currentUser?.uid;
     if (userId == null) return;
 
-    for (var conv in _conversations.value) {
+    for (final conv in _conversations.value) {
       try {
         final unreadMessages = await _firestore
             .collection('conversations')
@@ -446,16 +434,38 @@ class ChatController extends GetxController {
             .where('estLu', isEqualTo: false)
             .get();
 
-        if (unreadMessages.docs.isEmpty) continue;
-
         final batch = _firestore.batch();
-        for (var doc in unreadMessages.docs) {
+        for (final doc in unreadMessages.docs) {
           batch.update(doc.reference, {'estLu': true});
         }
+        batch.set(
+          _firestore.collection('conversations').doc(conv.id),
+          {'unreadCountByUser.$userId': 0},
+          SetOptions(merge: true),
+        );
         await batch.commit();
       } catch (e) {
         print("Erreur markAllAsReadOnServer conv ${conv.id} : $e");
       }
+    }
+  }
+
+  Future<void> _syncUnreadFromConversation(
+      String conversationId, String userId) async {
+    final convDoc =
+        await _firestore.collection('conversations').doc(conversationId).get();
+    if (!convDoc.exists) return;
+
+    final data = convDoc.data() ?? <String, dynamic>{};
+    final unread = _extractUnreadCount(data, userId);
+    final index =
+        _conversations.value.indexWhere((c) => c.id == conversationId);
+    if (index != -1) {
+      _conversations.value[index].unreadCountByUser[userId] = unread;
+      _conversations.value[index].unreadMessagesCount = unread;
+      _recalculateTotalUnread();
+      _conversations.refresh();
+      update();
     }
   }
 
@@ -470,15 +480,7 @@ class ChatController extends GetxController {
 
       final currentUid = _auth.currentUser?.uid;
       if (currentUid != null) {
-        final remaining = await _getUnreadMessageCount(conversationId, currentUid);
-        final index =
-            _conversations.value.indexWhere((c) => c.id == conversationId);
-        if (index != -1) {
-          _conversations.value[index].unreadMessagesCount = remaining;
-          _recalculateTotalUnread();
-          _conversations.refresh();
-          update();
-        }
+        await _syncUnreadFromConversation(conversationId, currentUid);
       }
     } catch (e) {
       print("Erreur suppression message : $e");
@@ -494,14 +496,13 @@ class ChatController extends GetxController {
           .get();
 
       final batch = _firestore.batch();
-      for (var doc in snapshot.docs) {
+      for (final doc in snapshot.docs) {
         batch.delete(doc.reference);
       }
 
       batch.delete(_firestore.collection('conversations').doc(conversationId));
       await batch.commit();
 
-      // ✅ MAJ locale immédiate pour UI (sinon attendre snapshot)
       _conversations.value.removeWhere((c) => c.id == conversationId);
       _recalculateTotalUnread();
       _conversations.refresh();

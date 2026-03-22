@@ -58,16 +58,23 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     _vc = Get.isRegistered<VideoController>(tag: widget.contextKey)
         ? Get.find<VideoController>(tag: widget.contextKey)
         : Get.put(
-            VideoController(contextKey: widget.contextKey),
+            VideoController(
+              contextKey: widget.contextKey,
+              enableLiveStream: false,
+              enableFeedFetch: false,
+            ),
             tag: widget.contextKey,
             permanent: true,
           );
+    _vc.replaceVideos(widget.videos, selectedIndex: _currentIndex);
 
     // ✅ Orchestrateur (préload/pause/init/play/dispose window)
     _focusOrchestrator = VideoFocusOrchestrator(
       contextKey: widget.contextKey,
       videoManager: _videoManager,
       videos: _currentVideos,
+      useHlsForVideo: (video) =>
+          _vc.preferHlsPlayback && video.hasAdaptiveHlsSource,
       disposeWindow: _videoSlidingWindowLimit,
     );
 
@@ -99,7 +106,8 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_isDisposed || _isExiting) return;
 
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       unawaited(_videoManager.pauseAll(widget.contextKey));
     }
   }
