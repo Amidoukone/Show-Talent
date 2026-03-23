@@ -3,7 +3,8 @@
 import 'dart:async';
 
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/foundation.dart'
+    show ValueListenable, debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -61,6 +62,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     with WidgetsBindingObserver {
   late final VideoManager _videoManager;
   late final ValueNotifier<bool> _showPlayIcon;
+  late ValueListenable<int> _videoUiSignal;
 
   CachedVideoPlayerPlus? _player;
   VideoPlayerController? get _ctrl => _player?.controller;
@@ -110,6 +112,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _videoManager = VideoManager();
     _playbackMetricsLogger = FeedPlaybackMetricsLogger();
     _showPlayIcon = ValueNotifier<bool>(true);
+    _videoUiSignal =
+        _videoManager.watchVideoUi(widget.contextKey, widget.videoUrl);
 
     _vc = Get.isRegistered<VideoController>(tag: widget.contextKey)
         ? Get.find<VideoController>(tag: widget.contextKey)
@@ -126,13 +130,18 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _indexWorker = ever<int>(_vc!.currentIndex, (i) {
       if (!mounted || _isDisposed) return;
       if (i == widget.currentIndex) {
+        _bindManagedPlayerIfAvailable();
         _scheduleMaybePlay();
       } else {
         _becomePassive();
       }
     });
 
-    _attachOrInitialize(reuse: widget.player);
+    if (widget.player != null) {
+      _bindPlayer(widget.player);
+    } else if (_vc?.currentIndex.value == widget.currentIndex) {
+      unawaited(_attachOrInitialize());
+    }
   }
 
   @override
@@ -145,6 +154,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _indexWorker?.dispose();
     } catch (_) {}
 
+    _videoManager.unwatchVideoUi(widget.contextKey, widget.videoUrl);
     _detachListener(_ctrl);
     _showPlayIcon.dispose();
     _playDebounceTimer?.cancel();
@@ -167,6 +177,13 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   void didUpdateWidget(covariant SmartVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    if (oldWidget.contextKey != widget.contextKey ||
+        oldWidget.videoUrl != widget.videoUrl) {
+      _videoManager.unwatchVideoUi(oldWidget.contextKey, oldWidget.videoUrl);
+      _videoUiSignal =
+          _videoManager.watchVideoUi(widget.contextKey, widget.videoUrl);
+    }
+
     final videoChanged = oldWidget.videoUrl != widget.videoUrl ||
         oldWidget.video.id != widget.video.id;
     final incomingPlayerChanged = !identical(oldWidget.player, widget.player);
@@ -182,7 +199,13 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _isDisposed) return;
-        unawaited(_attachOrInitialize(reuse: widget.player));
+        if (widget.player != null) {
+          _bindPlayer(widget.player);
+          return;
+        }
+        if (_vc?.currentIndex.value == widget.currentIndex) {
+          unawaited(_attachOrInitialize());
+        }
       });
       return;
     }
@@ -276,6 +299,15 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     }
   }
 
+  void _bindManagedPlayerIfAvailable() {
+    final managedPlayer =
+        _videoManager.getController(widget.contextKey, widget.videoUrl);
+    if (managedPlayer == null || identical(managedPlayer, _player)) {
+      return;
+    }
+    _bindPlayer(managedPlayer);
+  }
+
   void _bindPlayer(CachedVideoPlayerPlus? p) {
     _detachListener(_ctrl);
     _player = p;
@@ -287,7 +319,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         resolved.isNotEmpty &&
         widget.video.resolvedUrl != resolved) {
       widget.video.resolvedUrl = resolved;
-      _vc?.videoList.refresh();
     }
 
     _updatePlaybackSessionSource();
@@ -523,6 +554,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
     try {
       var c = _ctrl;
+      if (!_isControllerValid(c)) {
+        _bindManagedPlayerIfAvailable();
+        c = _ctrl;
+      }
       if (!_isControllerValid(c) || !_isActuallyVisible()) return;
       final token = _attachToken;
       final resolvedUrl =
@@ -723,7 +758,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     final userController = Get.find<UserController>();
 
     return ValueListenableBuilder<int>(
-      valueListenable: _videoManager.uiRevision,
+      valueListenable: _videoUiSignal,
       builder: (_, __, ___) {
         final ctrl = _ctrl;
         final managedPlayer =

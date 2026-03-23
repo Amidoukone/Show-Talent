@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -110,6 +111,9 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       if (_isDisposed) return;
       if (!_isControllerUsable) return;
       if (_isDragging) return;
+      final value = _safeValue();
+      if (value == null) return;
+      if (!value.isPlaying && !value.isBuffering) return;
       _safeSetState(() {});
     });
   }
@@ -347,11 +351,14 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       return _buildThumbnailFallback();
     }
 
-    return Image.network(
-      thumb,
+    return CachedNetworkImage(
+      imageUrl: thumb,
       fit: BoxFit.cover,
       filterQuality: FilterQuality.low,
-      errorBuilder: (_, __, ___) => _buildThumbnailFallback(),
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      placeholder: (_, __) => _buildThumbnailFallback(),
+      errorWidget: (_, __, ___) => _buildThumbnailFallback(),
     );
   }
 

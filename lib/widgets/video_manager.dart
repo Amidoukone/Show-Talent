@@ -179,6 +179,13 @@ class _VideoNetworkTuning {
   final Duration activeTimeout;
 }
 
+class _VideoUiWatchEntry {
+  _VideoUiWatchEntry() : notifier = ValueNotifier<int>(0);
+
+  final ValueNotifier<int> notifier;
+  int watcherCount = 0;
+}
+
 class VideoManager {
   static final VideoManager _instance = VideoManager._internal();
   factory VideoManager() => _instance;
@@ -232,6 +239,7 @@ class VideoManager {
   final ValueNotifier<NetworkProfile?> profileNotifier =
       ValueNotifier<NetworkProfile?>(null);
   final ValueNotifier<int> uiRevision = ValueNotifier<int>(0);
+  final Map<String, Map<String, _VideoUiWatchEntry>> _uiWatchersByContext = {};
 
   NetworkProfile? _networkProfile;
   Future<NetworkProfile>? _networkProfileFuture;
@@ -254,27 +262,45 @@ class VideoManager {
 
   bool get _isHighBandwidth => _networkProfile?.tier == NetworkProfileTier.high;
 
-  void _notifyUiStateChanged() {
-    final next = uiRevision.value + 1;
-    uiRevision.value = next > 1000000 ? 0 : next;
+  void _bumpRevision(ValueNotifier<int> notifier) {
+    final next = notifier.value + 1;
+    notifier.value = next > 1000000 ? 0 : next;
+  }
+
+  void _notifyUiStateChanged({
+    String? contextKey,
+    String? url,
+  }) {
+    _bumpRevision(uiRevision);
+
+    if (contextKey == null || url == null) {
+      return;
+    }
+
+    final entry = _uiWatchersByContext[contextKey]?[url];
+    if (entry == null) {
+      return;
+    }
+
+    _bumpRevision(entry.notifier);
   }
 
   void _setLoadState(String contextKey, String url, VideoLoadState state) {
     _loadStatesByContext.putIfAbsent(contextKey, () => {})[url] = state;
-    _notifyUiStateChanged();
+    _notifyUiStateChanged(contextKey: contextKey, url: url);
   }
 
   void _setResolvedUrl(
       String contextKey, String originalUrl, String resolvedUrl) {
     _resolvedUrlByContext.putIfAbsent(contextKey, () => {})[originalUrl] =
         resolvedUrl;
-    _notifyUiStateChanged();
+    _notifyUiStateChanged(contextKey: contextKey, url: originalUrl);
   }
 
   void _removeUiTracking(String contextKey, String url) {
     _loadStatesByContext[contextKey]?.remove(url);
     _resolvedUrlByContext[contextKey]?.remove(url);
-    _notifyUiStateChanged();
+    _notifyUiStateChanged(contextKey: contextKey, url: url);
   }
 
   bool _isContextActive(
@@ -350,6 +376,11 @@ class VideoManager {
     hlsStrategyEnabled = false;
     _purgedHlsCacheUrls.clear();
     uiRevision.value = 0;
+    for (final byUrl in _uiWatchersByContext.values) {
+      for (final entry in byUrl.values) {
+        entry.notifier.value = 0;
+      }
+    }
     _applyNetworkProfile(profile, reason: 'test-reset');
   }
 
@@ -1522,39 +1553,69 @@ class VideoManager {
     int index, {
     String? activeUrl,
     bool useHls = false,
+    bool preferForward = true,
   }) async {
     _ensureNetworkProfileWarm();
     final radius = _preloadRadius;
     if (radius <= 0) return;
 
-    for (int i = 1; i <= radius; i++) {
-      if (index - i >= 0) {
-        final v = videos[index - i];
-        unawaited(
-          initializeController(
-            contextKey,
-            v.videoUrl,
-            sources: v.sources,
-            useHls: useHls && v.hasAdaptiveHlsSource,
-            isPreload: true,
-            activeUrl: activeUrl,
-          ),
-        );
-      }
-      if (index + i < videos.length) {
-        final v = videos[index + i];
-        unawaited(
-          initializeController(
-            contextKey,
-            v.videoUrl,
-            sources: v.sources,
-            useHls: useHls && v.hasAdaptiveHlsSource,
-            isPreload: true,
-            activeUrl: activeUrl,
-          ),
-        );
+    for (final candidateIndex in preloadOrderForTests(
+      totalVideos: videos.length,
+      index: index,
+      radius: radius,
+      preferForward: preferForward,
+    )) {
+      final v = videos[candidateIndex];
+      unawaited(
+        initializeController(
+          contextKey,
+          v.videoUrl,
+          sources: v.sources,
+          useHls: useHls && v.hasAdaptiveHlsSource,
+          isPreload: true,
+          activeUrl: activeUrl,
+        ),
+      );
+    }
+  }
+
+  @visibleForTesting
+  List<int> preloadOrderForTests({
+    required int totalVideos,
+    required int index,
+    required int radius,
+    bool preferForward = true,
+  }) {
+    if (totalVideos <= 0 || radius <= 0) {
+      return const [];
+    }
+    if (index < 0 || index >= totalVideos) {
+      return const [];
+    }
+
+    final ordered = <int>[];
+    for (int distance = 1; distance <= radius; distance++) {
+      final previousIndex = index - distance;
+      final nextIndex = index + distance;
+
+      if (preferForward) {
+        if (nextIndex < totalVideos) {
+          ordered.add(nextIndex);
+        }
+        if (previousIndex >= 0) {
+          ordered.add(previousIndex);
+        }
+      } else {
+        if (previousIndex >= 0) {
+          ordered.add(previousIndex);
+        }
+        if (nextIndex < totalVideos) {
+          ordered.add(nextIndex);
+        }
       }
     }
+
+    return ordered;
   }
 
   CachedVideoPlayerPlus? getController(String contextKey, String url) {
@@ -1572,6 +1633,46 @@ class VideoManager {
 
   VideoLoadState? getLoadState(String contextKey, String url) =>
       _loadStatesByContext[contextKey]?[url];
+
+  ValueListenable<int> watchVideoUi(String contextKey, String url) {
+    final byUrl = _uiWatchersByContext.putIfAbsent(contextKey, () => {});
+    final entry = byUrl.putIfAbsent(url, _VideoUiWatchEntry.new);
+    entry.watcherCount++;
+    return entry.notifier;
+  }
+
+  void unwatchVideoUi(String contextKey, String url) {
+    final byUrl = _uiWatchersByContext[contextKey];
+    final entry = byUrl?[url];
+    if (entry == null) {
+      return;
+    }
+
+    entry.watcherCount--;
+    if (entry.watcherCount > 0) {
+      return;
+    }
+
+    entry.notifier.dispose();
+    byUrl?.remove(url);
+    if (byUrl != null && byUrl.isEmpty) {
+      _uiWatchersByContext.remove(contextKey);
+    }
+  }
+
+  List<String> activeOriginalUrlsForContext(String contextKey) {
+    final lru = _lruByContext[contextKey];
+    final resolvedByOriginal = _resolvedUrlByContext[contextKey];
+    if (lru == null || lru.isEmpty || resolvedByOriginal == null) {
+      return const [];
+    }
+
+    final activeResolvedUrls = lru.keys.toSet();
+    return resolvedByOriginal.entries
+        .where((entry) => activeResolvedUrls.contains(entry.value))
+        .map((entry) => entry.key)
+        .toList(growable: false);
+  }
 
   Future<void> pauseAllExcept(String contextKey, String? keepUrl) async {
     final lru = _lruByContext[contextKey] ?? {};

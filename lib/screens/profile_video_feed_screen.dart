@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/profile_controller.dart';
@@ -127,6 +128,10 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
     await _focusOrchestrator.onIndexChanged(idx);
   }
 
+  void _triggerPageChangeHaptic() {
+    unawaited(HapticFeedback.selectionClick().catchError((_) {}));
+  }
+
   /// Copie défensive : évite les effets de bord si la RxList change pendant le scroll
   List<Video> get _currentVideos => _videoController.videoList.toList();
 
@@ -154,10 +159,13 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
           scrollDirection: Axis.vertical,
           physics: const VideoPageScrollPhysics(),
           dragStartBehavior: DragStartBehavior.down,
-          allowImplicitScrolling: true,
+          allowImplicitScrolling: false,
           itemCount: videos.length,
           onPageChanged: (index) {
             if (!_isDisposed) {
+              if (index != _currentIndex) {
+                _triggerPageChangeHaptic();
+              }
               unawaited(_handleIndexChange(index));
             }
           },

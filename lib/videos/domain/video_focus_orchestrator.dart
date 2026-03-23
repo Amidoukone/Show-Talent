@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:adfoot/models/video.dart';
-import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:adfoot/widgets/video_manager.dart';
+import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 
 class VideoFocusOrchestrator {
   VideoFocusOrchestrator({
@@ -23,15 +23,14 @@ class VideoFocusOrchestrator {
   List<Video> _videos;
   bool _isDisposed = false;
   int _requestToken = 0;
+  int? _lastFocusedIndex;
 
   bool _useHls(Video video) => useHlsForVideo?.call(video) ?? false;
 
-  /// Met à jour la liste des vidéos (pagination / refresh)
   void updateVideos(List<Video> videos) {
     _videos = List.of(videos);
   }
 
-  /// Appelé lors du changement de focus (scroll, swipe, etc.)
   Future<CachedVideoPlayerPlus?> onIndexChanged(int index) async {
     if (_isDisposed) return null;
     if (index < 0 || index >= _videos.length) return null;
@@ -40,21 +39,13 @@ class VideoFocusOrchestrator {
     final currentVideo = _videos[index];
     final currentUrl = currentVideo.videoUrl;
     final requestHls = _useHls(currentVideo);
+    final preferForwardPreload =
+        _lastFocusedIndex == null ? true : index >= _lastFocusedIndex!;
+    _lastFocusedIndex = index;
 
-    /// Préchargement intelligent autour de l’index
-    videoManager.preloadSurrounding(
-      contextKey,
-      _videos,
-      index,
-      activeUrl: currentUrl,
-      useHls: requestHls,
-    );
-
-    /// Pause de tous les autres players du contexte
     await videoManager.pauseAllExcept(contextKey, currentUrl);
     if (_isStale(localToken)) return null;
 
-    /// Récupération ou initialisation du player courant
     final resolvedUrl = videoManager.getResolvedUrl(contextKey, currentUrl);
     final canReuseExisting = videoManager.shouldReuseControllerForRequest(
       originalUrl: currentUrl,
@@ -63,6 +54,7 @@ class VideoFocusOrchestrator {
       requestedHls: requestHls,
       isPreload: false,
     );
+
     var player = canReuseExisting
         ? videoManager.getController(contextKey, currentUrl)
         : null;
@@ -92,7 +84,6 @@ class VideoFocusOrchestrator {
 
     if (_isStale(localToken)) return player;
 
-    /// Lecture effective
     final actualCtrl = player?.controller;
     bool shouldPlay = false;
     try {
@@ -109,12 +100,25 @@ class VideoFocusOrchestrator {
       } catch (_) {}
     }
 
-    /// Nettoyage mémoire (disposeWindow)
+    if (!_isStale(localToken)) {
+      // Keep the visible item on the critical path. Preload only after the
+      // active controller is attached so background work cannot delay startup.
+      unawaited(
+        videoManager.preloadSurrounding(
+          contextKey,
+          _videos,
+          index,
+          activeUrl: currentUrl,
+          useHls: requestHls,
+          preferForward: preferForwardPreload,
+        ),
+      );
+    }
+
     if (!_isStale(localToken)) {
       await _disposeFarPlayers(index, localToken);
     }
 
-    /// Pagination anticipée
     if (!_isDisposed && onRequestMore != null && index >= _videos.length - 2) {
       await onRequestMore!();
     }
@@ -122,7 +126,6 @@ class VideoFocusOrchestrator {
     return player;
   }
 
-  /// Libération complète du contexte
   Future<void> onDispose() async {
     _isDisposed = true;
     _requestToken++;
@@ -132,7 +135,6 @@ class VideoFocusOrchestrator {
 
   bool _isStale(int token) => _isDisposed || token != _requestToken;
 
-  /// Dispose les players trop éloignés de l’index courant
   Future<void> _disposeFarPlayers(int index, int token) async {
     if (_videos.length <= disposeWindow || _isStale(token)) return;
 
@@ -140,9 +142,12 @@ class VideoFocusOrchestrator {
     final end = (start + disposeWindow).clamp(0, _videos.length).toInt();
 
     final keepUrls = _videos.sublist(start, end).map((v) => v.videoUrl).toSet();
+    final activeUrls = videoManager.activeOriginalUrlsForContext(contextKey);
+    if (activeUrls.isEmpty) return;
 
-    final toDispose =
-        _videos.map((v) => v.videoUrl).toSet().difference(keepUrls).toList();
+    final toDispose = activeUrls
+        .where((url) => !keepUrls.contains(url))
+        .toList(growable: false);
 
     if (toDispose.isEmpty || _isStale(token)) return;
 

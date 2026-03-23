@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/video_controller.dart';
@@ -108,6 +109,10 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
     await videoManager.pauseAll(widget.contextKey);
   }
 
+  void _triggerPageChangeHaptic() {
+    unawaited(HapticFeedback.selectionClick().catchError((_) {}));
+  }
+
   Future<void> _handlePageChanged(int index) async {
     if (!mounted || !_isActive) return;
 
@@ -138,9 +143,12 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
         scrollDirection: Axis.vertical,
         physics: const VideoPageScrollPhysics(),
         dragStartBehavior: DragStartBehavior.down,
-        allowImplicitScrolling: true,
+        allowImplicitScrolling: false,
         itemCount: videos.length,
         onPageChanged: (index) {
+          if (index != _currentIndex) {
+            _triggerPageChangeHaptic();
+          }
           _currentIndex = index;
           unawaited(_handlePageChanged(index));
         },

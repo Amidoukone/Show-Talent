@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/models/video.dart';
@@ -155,6 +156,10 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     if (mounted) setState(() {});
   }
 
+  void _triggerPageChangeHaptic() {
+    unawaited(HapticFeedback.selectionClick().catchError((_) {}));
+  }
+
   /// Copie défensive : évite les effets de bord si la liste change en amont
   List<Video> get _currentVideos => List.of(widget.videos);
 
@@ -184,9 +189,14 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
                 scrollDirection: Axis.vertical,
                 physics: const VideoPageScrollPhysics(),
                 dragStartBehavior: DragStartBehavior.down,
-                allowImplicitScrolling: true,
+                allowImplicitScrolling: false,
                 itemCount: widget.videos.length,
-                onPageChanged: _handleIndexChange,
+                onPageChanged: (idx) {
+                  if (idx != _currentIndex) {
+                    _triggerPageChangeHaptic();
+                  }
+                  unawaited(_handleIndexChange(idx));
+                },
                 itemBuilder: (_, idx) {
                   final video = widget.videos[idx];
                   final player = _videoManager.getController(

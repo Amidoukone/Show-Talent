@@ -151,6 +151,29 @@ void main() {
     expect(manager.uiRevision.value, greaterThan(initialRevision));
   });
 
+  test('scoped UI watchers only tick for the matching video URL', () async {
+    final watched = manager.watchVideoUi('test-context', '');
+    final other = manager.watchVideoUi('test-context', 'other');
+
+    final watchedInitial = watched.value;
+    final otherInitial = other.value;
+
+    await expectLater(
+      manager.initializeController(
+        'test-context',
+        '',
+        sources: const [],
+      ),
+      throwsException,
+    );
+
+    expect(watched.value, greaterThan(watchedInitial));
+    expect(other.value, otherInitial);
+
+    manager.unwatchVideoUi('test-context', '');
+    manager.unwatchVideoUi('test-context', 'other');
+  });
+
   test('enforceLimit ignores missing contexts after disposal', () async {
     await manager.disposeAllForContext('gone-context');
 

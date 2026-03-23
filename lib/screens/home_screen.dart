@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:adfoot/screens/add_video.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -43,6 +44,7 @@ class _HomeScreenState extends State<HomeScreen>
   StreamSubscription<bool>? _connectivitySubscription;
   bool _wakelockOn = false;
   bool _hasHandledRouteRefresh = false;
+  int? _silencedPageChangeIndex;
 
   // ---------------------------------------------------------------------------
   // Wakelock helpers
@@ -100,8 +102,7 @@ class _HomeScreenState extends State<HomeScreen>
     if (alignPageView && _pageController.hasClients) {
       final currentPage = (_pageController.page ?? 0).round();
       if (currentPage != index) {
-        _pageController.jumpToPage(index);
-        return true;
+        _jumpToPageSilently(index);
       }
     }
 
@@ -110,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<bool> _refreshHomeFeed({bool alignPageView = true}) async {
-    final refreshed = await videoController.refreshVideos();
+    final refreshed = await videoController.refreshVideosKeepingFeed();
     if (!mounted) return refreshed;
 
     if (!refreshed || videoController.videoList.isEmpty) {
@@ -118,7 +119,43 @@ class _HomeScreenState extends State<HomeScreen>
       return false;
     }
 
+    _refreshFocusVideos();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return false;
+
     return _activateHomeIndex(0, alignPageView: alignPageView);
+  }
+
+  Future<void> _openPendingLiveVideos() async {
+    final inserted = videoController.applyBufferedLiveVideos(moveToTop: true);
+    if (!mounted || inserted == 0) return;
+
+    _refreshFocusVideos();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+
+    if (_pageController.hasClients) {
+      _jumpToPageSilently(0);
+    }
+
+    await _onPageChanged(0);
+  }
+
+  void _jumpToPageSilently(int index) {
+    if (!_pageController.hasClients) {
+      return;
+    }
+    final currentPage = (_pageController.page ?? 0).round();
+    if (currentPage == index) {
+      _silencedPageChangeIndex = null;
+      return;
+    }
+    _silencedPageChangeIndex = index;
+    _pageController.jumpToPage(index);
+  }
+
+  void _triggerPageChangeHaptic() {
+    unawaited(HapticFeedback.selectionClick().catchError((_) {}));
   }
 
   // ---------------------------------------------------------------------------
@@ -276,7 +313,16 @@ class _HomeScreenState extends State<HomeScreen>
     final videos = videoController.videoList;
     if (index < 0 || index >= videos.length) return;
 
-    videoController.currentIndex.value = index;
+    final shouldApplyPendingLiveOnTop =
+        videoController.updateCurrentIndex(index);
+    if (shouldApplyPendingLiveOnTop) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(_openPendingLiveVideos());
+      });
+      return;
+    }
+
     videoController.prefetchThumbnailsAroundIndex(index);
 
     _refreshFocusVideos();
@@ -429,8 +475,17 @@ class _HomeScreenState extends State<HomeScreen>
                 itemCount: videos.length,
                 physics: const VideoPageScrollPhysics(),
                 dragStartBehavior: DragStartBehavior.down,
-                allowImplicitScrolling: true,
-                onPageChanged: (i) => unawaited(_onPageChanged(i)),
+                allowImplicitScrolling: false,
+                onPageChanged: (i) {
+                  if (_silencedPageChangeIndex == i) {
+                    _silencedPageChangeIndex = null;
+                    return;
+                  }
+                  if (i != videoController.currentIndex.value) {
+                    _triggerPageChangeHaptic();
+                  }
+                  unawaited(_onPageChanged(i));
+                },
                 itemBuilder: (context, index) {
                   final video = videos[index];
                   final player =
@@ -510,6 +565,68 @@ class _HomeScreenState extends State<HomeScreen>
                 },
               );
             }),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerTop,
+      floatingActionButton: Obx(() {
+        final pending = videoController.pendingLiveCount.value;
+        if (pending <= 0 || !_isConnected) {
+          return const SizedBox.shrink();
+        }
+
+        final label =
+            pending > 1 ? '$pending nouvelles vidéos' : '1 nouvelle vidéo';
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () => unawaited(_openPendingLiveVideos()),
+                child: Ink(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.72),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.28),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.fiber_new_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
     );
   }
 

@@ -111,6 +111,7 @@ void main() {
         hasConnection: true,
       ),
     );
+    manager.updateAdaptiveFlag(true);
 
     expect(
       manager.shouldReuseControllerForRequest(
@@ -131,6 +132,7 @@ void main() {
         hasConnection: true,
       ),
     );
+    manager.updateAdaptiveFlag(true);
 
     expect(
       manager.shouldReuseControllerForRequest(

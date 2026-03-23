@@ -31,6 +31,7 @@ class VideoController extends GetxController {
 
   final videoList = <Video>[].obs;
   final currentIndex = 0.obs;
+  final pendingLiveCount = 0.obs;
 
   // ------------------------------------------------------------------
   // PAGINATION
@@ -41,10 +42,13 @@ class VideoController extends GetxController {
   bool _isLoading = false;
   static const int _limit = 10;
   static const int _liveWindowLimit = 30;
+  static const int _liveHeadBufferLimit = 12;
+  static const int _pendingLiveThumbnailWarmupLimit = 4;
   static const int _thumbnailPrefetchRadius = 2;
 
   bool get hasMore => _hasMore;
   bool get isLoading => _isLoading;
+  bool get hasPendingLiveVideos => pendingLiveCount.value > 0;
 
   // ------------------------------------------------------------------
   // VIDEO MANAGER
@@ -106,6 +110,9 @@ class VideoController extends GetxController {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _videoSubscription;
   Timer? _streamDebouncer;
   final Set<String> _thumbnailPrefetchInFlight = <String>{};
+  final Set<String> _thumbnailPrefetched = <String>{};
+  final List<Video> _pendingLiveHead = <Video>[];
+  Future<void> Function(String thumbUrl)? _thumbnailPrefetchOverride;
 
   // ------------------------------------------------------------------
   // LIFECYCLE
@@ -154,8 +161,8 @@ class VideoController extends GetxController {
 
           if (incoming.isEmpty) return;
 
-          final merged = _mergeLiveWindow(incoming);
-          videoList.assignAll(merged);
+          final merged = _applyLiveWindow(incoming);
+          if (merged.isEmpty) return;
 
           if (_lastDoc == null && snapshot.docs.isNotEmpty) {
             _lastDoc = snapshot.docs.last;
@@ -192,17 +199,9 @@ class VideoController extends GetxController {
     _fetchLock = Completer<void>();
 
     try {
-      Query<Map<String, dynamic>> query = FirebaseFirestore.instance
-          .collection('videos')
-          .where('status', isEqualTo: 'ready')
-          .orderBy('updatedAt', descending: true)
-          .limit(_limit);
-
-      if (!isRefresh && _lastDoc != null) {
-        query = query.startAfterDocument(_lastDoc!);
-      }
-
-      final snap = await query.get();
+      final snap = await _loadReadyVideosPage(
+        startAfter: !isRefresh ? _lastDoc : null,
+      );
       if (snap.docs.isEmpty) {
         _hasMore = false;
         _fetchLock?.complete();
@@ -215,6 +214,7 @@ class VideoController extends GetxController {
           .toList();
 
       if (isRefresh) {
+        _clearPendingLiveHead();
         videoList.assignAll(fetched);
       } else {
         final currentIds = videoList.map((v) => v.id).toSet();
@@ -253,6 +253,7 @@ class VideoController extends GetxController {
     }
     try {
       await videoManager.disposeAllForContext(contextKey);
+      _clearPendingLiveHead();
       _lastDoc = null;
       _hasMore = true;
       currentIndex.value = -1;
@@ -264,7 +265,91 @@ class VideoController extends GetxController {
     }
   }
 
+  Future<bool> refreshVideosKeepingFeed() async {
+    if (!enableFeedFetch) {
+      return false;
+    }
+    if (_isLoading || (_fetchLock?.isCompleted == false)) {
+      return false;
+    }
+
+    _isLoading = true;
+    _fetchLock = Completer<void>();
+
+    try {
+      final snap = await _loadReadyVideosPage();
+      final fetched = snap.docs
+          .map(Video.fromDoc)
+          .where((v) => v.videoUrl.isNotEmpty)
+          .toList();
+
+      await videoManager.disposeAllForContext(contextKey);
+      _clearPendingLiveHead();
+      _lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+      _hasMore = fetched.length >= _limit;
+
+      if (fetched.isEmpty) {
+        currentIndex.value = -1;
+        videoList.clear();
+        _fetchLock?.complete();
+        return false;
+      }
+
+      videoList.assignAll(fetched);
+      currentIndex.value = 0;
+      _prefetchThumbnailsAround(0);
+      _fetchLock?.complete();
+      return true;
+    } catch (e) {
+      debugPrint('refreshVideosKeepingFeed error: $e');
+      _fetchLock?.completeError(e);
+      return false;
+    } finally {
+      _isLoading = false;
+    }
+  }
+
   Future<void> pauseAll() => videoManager.pauseAll(contextKey);
+
+  bool updateCurrentIndex(int index) {
+    final previousIndex = currentIndex.value;
+    currentIndex.value = index;
+
+    return enableLiveStream &&
+        previousIndex > 0 &&
+        index == 0 &&
+        hasPendingLiveVideos;
+  }
+
+  int applyBufferedLiveVideos({bool moveToTop = false}) {
+    if (_pendingLiveHead.isEmpty) {
+      if (moveToTop && videoList.isNotEmpty) {
+        currentIndex.value = 0;
+      }
+      return 0;
+    }
+
+    final nextFeed = _prependUnique(_pendingLiveHead, videoList);
+    final insertedCount = nextFeed.length - videoList.length;
+    videoList.assignAll(nextFeed);
+    _clearPendingLiveHead();
+
+    if (nextFeed.isEmpty) {
+      currentIndex.value = -1;
+      return insertedCount;
+    }
+
+    if (moveToTop) {
+      currentIndex.value = 0;
+      _prefetchThumbnailsAround(0);
+    } else {
+      final safeIndex =
+          currentIndex.value.clamp(0, nextFeed.length - 1).toInt();
+      _prefetchThumbnailsAround(safeIndex);
+    }
+
+    return insertedCount;
+  }
 
   void prefetchThumbnailsAroundIndex(int index) {
     if (videoList.isEmpty) return;
@@ -276,6 +361,7 @@ class VideoController extends GetxController {
     List<Video> videos, {
     int? selectedIndex,
   }) {
+    _clearPendingLiveHead();
     videoList.assignAll(videos);
 
     if (videos.isEmpty) {
@@ -534,33 +620,139 @@ class VideoController extends GetxController {
     } catch (_) {}
   }
 
-  List<Video> _mergeLiveWindow(List<Video> incoming) {
-    final existing = videoList.toList();
-    if (existing.isEmpty) return incoming;
+  Future<QuerySnapshot<Map<String, dynamic>>> _loadReadyVideosPage({
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+  }) {
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('videos')
+        .where('status', isEqualTo: 'ready')
+        .orderBy('updatedAt', descending: true)
+        .limit(_limit);
 
-    final byId = {for (final v in existing) v.id: v};
-    for (final v in incoming) {
-      byId[v.id] = v;
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
     }
 
-    final merged = <Video>[];
+    return query.get();
+  }
+
+  List<Video> _applyLiveWindow(List<Video> incoming) {
+    final existing = videoList.toList();
+    if (existing.isEmpty) {
+      _clearPendingLiveHead();
+      videoList.assignAll(incoming);
+      return incoming;
+    }
+
+    final existingIds = existing.map((video) => video.id).toSet();
+    final incomingById = {for (final video in incoming) video.id: video};
+
+    final stableFeed = [
+      for (final video in existing) incomingById[video.id] ?? video,
+    ];
+
+    final nextPendingHead = _buildPendingLiveHead(
+      incoming: incoming,
+      existingIds: existingIds,
+    );
+
+    _replacePendingLiveHead(nextPendingHead);
+    videoList.assignAll(stableFeed);
+    return stableFeed;
+  }
+
+  List<Video> _buildPendingLiveHead({
+    required List<Video> incoming,
+    required Set<String> existingIds,
+  }) {
+    if (incoming.isEmpty && _pendingLiveHead.isEmpty) {
+      return const [];
+    }
+
+    final bufferedById = {
+      for (final video in _pendingLiveHead)
+        if (!existingIds.contains(video.id)) video.id: video,
+    };
+
+    for (final video in incoming) {
+      if (existingIds.contains(video.id)) continue;
+      bufferedById[video.id] = video;
+    }
+
+    final ordered = <Video>[];
     final seen = <String>{};
 
-    for (final v in incoming) {
-      final next = byId[v.id];
-      if (next != null && seen.add(v.id)) {
-        merged.add(next);
+    void append(Video video) {
+      if (existingIds.contains(video.id)) return;
+      final buffered = bufferedById[video.id];
+      if (buffered == null || !seen.add(video.id)) return;
+      ordered.add(buffered);
+    }
+
+    for (final video in incoming) {
+      append(video);
+      if (ordered.length >= _liveHeadBufferLimit) {
+        return ordered;
       }
     }
 
-    for (final v in existing) {
-      final next = byId[v.id];
-      if (next != null && seen.add(v.id)) {
-        merged.add(next);
+    for (final video in _pendingLiveHead) {
+      append(video);
+      if (ordered.length >= _liveHeadBufferLimit) {
+        break;
+      }
+    }
+
+    return ordered;
+  }
+
+  List<Video> _prependUnique(Iterable<Video> head, Iterable<Video> tail) {
+    final merged = <Video>[];
+    final seen = <String>{};
+
+    for (final video in head) {
+      if (seen.add(video.id)) {
+        merged.add(video);
+      }
+    }
+
+    for (final video in tail) {
+      if (seen.add(video.id)) {
+        merged.add(video);
       }
     }
 
     return merged;
+  }
+
+  void _replacePendingLiveHead(List<Video> videos) {
+    _pendingLiveHead
+      ..clear()
+      ..addAll(videos);
+    pendingLiveCount.value = _pendingLiveHead.length;
+    _warmPendingLiveHeadThumbnails(videos);
+  }
+
+  void _clearPendingLiveHead() {
+    if (_pendingLiveHead.isEmpty && pendingLiveCount.value == 0) {
+      return;
+    }
+    _pendingLiveHead.clear();
+    pendingLiveCount.value = 0;
+  }
+
+  @visibleForTesting
+  List<Video> applyLiveWindowForTests(List<Video> incoming) {
+    return _applyLiveWindow(incoming);
+  }
+
+  @visibleForTesting
+  void setThumbnailPrefetcherForTests(
+    Future<void> Function(String thumbUrl)? prefetcher,
+  ) {
+    _thumbnailPrefetchOverride = prefetcher;
+    _thumbnailPrefetchInFlight.clear();
+    _thumbnailPrefetched.clear();
   }
 
   void _prefetchThumbnailsAround(int centerIndex) {
@@ -575,7 +767,7 @@ class VideoController extends GetxController {
 
     for (int i = start; i <= end; i++) {
       final thumbUrl = videoList[i].thumbnailUrl.trim();
-      if (thumbUrl.isEmpty || _thumbnailPrefetchInFlight.contains(thumbUrl)) {
+      if (_shouldSkipThumbnailPrefetch(thumbUrl)) {
         continue;
       }
 
@@ -584,9 +776,33 @@ class VideoController extends GetxController {
     }
   }
 
+  void _warmPendingLiveHeadThumbnails(List<Video> videos) {
+    for (final video in videos.take(_pendingLiveThumbnailWarmupLimit)) {
+      final thumbUrl = video.thumbnailUrl.trim();
+      if (_shouldSkipThumbnailPrefetch(thumbUrl)) {
+        continue;
+      }
+
+      _thumbnailPrefetchInFlight.add(thumbUrl);
+      unawaited(_prefetchThumbnail(thumbUrl));
+    }
+  }
+
+  bool _shouldSkipThumbnailPrefetch(String thumbUrl) {
+    return thumbUrl.isEmpty ||
+        _thumbnailPrefetched.contains(thumbUrl) ||
+        _thumbnailPrefetchInFlight.contains(thumbUrl);
+  }
+
   Future<void> _prefetchThumbnail(String thumbUrl) async {
     try {
-      await DefaultCacheManager().downloadFile(thumbUrl);
+      final prefetcher = _thumbnailPrefetchOverride;
+      if (prefetcher != null) {
+        await prefetcher(thumbUrl);
+      } else {
+        await DefaultCacheManager().downloadFile(thumbUrl);
+      }
+      _thumbnailPrefetched.add(thumbUrl);
     } catch (_) {
       // Best-effort only.
     } finally {
