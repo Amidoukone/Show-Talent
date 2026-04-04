@@ -1,7 +1,7 @@
 ﻿param(
   [string]$ProjectId = "show-talent-5987d",
   [string]$Region = "europe-west1",
-  [string]$ApiKey = "firebase-api-key-placeholder",
+  [string]$ApiKey = $env:FIREBASE_WEB_API_KEY,
   [string]$FfmpegPath = "..\functions\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe",
   [int]$OptimizeTimeoutSec = 90,
   [switch]$SkipOptimizeLogCheck,
@@ -94,6 +94,10 @@ $idToken = $null
 $tmpVideo = $null
 
 try {
+  if ([string]::IsNullOrWhiteSpace($ApiKey)) {
+    throw "ApiKey manquante. Passe -ApiKey ou definis FIREBASE_WEB_API_KEY."
+  }
+
   $base = "https://$Region-$ProjectId.cloudfunctions.net"
 
   if (-not [System.IO.Path]::IsPathRooted($FfmpegPath)) {
