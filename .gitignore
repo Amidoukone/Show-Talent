@@ -56,6 +56,7 @@ service-account*.json
 !/config/mobile/*.example.json
 !/config/mobile/README.md
 # Sensitive Firebase config files (keep local, never commit)
+/android/app/google-services.json
 /android/app/src/local/google-services.json
 /android/app/src/staging/google-services.json
 /android/app/src/production/google-services.json

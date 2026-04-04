@@ -108,6 +108,12 @@ if ($RequireConfig -and $null -eq $configDefines) {
     exit 1
 }
 
+if ($null -eq $configDefines -and $Environment -ne "local") {
+    Write-Error "Missing mobile config file for '$Environment': $resolvedConfigPath"
+    Write-Error "Create it from config/mobile/$Environment.example.json before running this environment."
+    exit 1
+}
+
 if (
     $null -ne $configDefines -and
     $configDefines.Contains("APP_ENV") -and
@@ -161,7 +167,7 @@ Write-Host $commandPreview
 if ($null -ne $configDefines) {
     Write-Host "Mobile config file: $resolvedConfigPath"
 } else {
-    Write-Host "Mobile config file: <none> (fallback to compiled defaults and active native files)"
+    Write-Host "Mobile config file: <none> (local placeholder defaults; real backend access may be unavailable)"
 }
 
 if ($PrintOnly) {

@@ -12,7 +12,7 @@ class WebMessagingHelper {
   /// 🔑 Clé publique VAPID (Firebase Console ▸ Project settings ▸ Cloud Messaging ▸ Web configuration)
   /// C’est une clé **publique** embarquable côté client.
   static const String _vapidKey =
-      'BLngrlSTZrTe-mexPQOdiYul_qFP1bRZnrv7UCHwVA9vXkuYUJ1oJ3tUnD5B5QDyk6d1eSVRFG18ECIEBAazUho';
+      String.fromEnvironment('FIREBASE_WEB_VAPID_KEY');
 
   static String? _cachedToken;
   static DateTime? _cachedAt;
@@ -74,6 +74,9 @@ class WebMessagingHelper {
     String? token;
     for (int attempt = 0; attempt <= retries && token == null; attempt++) {
       try {
+        if (_vapidKey.isEmpty) {
+          return null;
+        }
         token = await FirebaseMessaging.instance.getToken(vapidKey: _vapidKey);
         _cachedToken = token;
         _cachedAt = DateTime.now();

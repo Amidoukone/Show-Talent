@@ -115,7 +115,7 @@ $errors = New-Object System.Collections.Generic.List[string]
 $config = Read-MobileConfig -Path $resolvedConfigPath
 if ($null -eq $config) {
     $warnings.Add("Missing mobile config file: $resolvedConfigPath")
-    $warnings.Add("The run script will fall back to lib/firebase_options.dart and the currently active native Firebase files.")
+    $warnings.Add("Committed Firebase options/native files are sanitized placeholders. Real runs should use local non-committed config files.")
     if ($RequireConfig) {
         $errors.Add("Mobile config is required for environment '$Environment'.")
     }
@@ -135,6 +135,19 @@ if ($null -eq $config) {
         $rawValue = if ($config.Contains($key)) { [string]$config[$key] } else { "" }
         if ([string]::IsNullOrWhiteSpace($rawValue)) {
             $errors.Add("Missing required mobile config key: $key")
+        }
+    }
+
+    $optionalWebKeys = @(
+        "FIREBASE_WEB_API_KEY",
+        "FIREBASE_WEB_APP_ID",
+        "FIREBASE_WEB_AUTH_DOMAIN",
+        "FIREBASE_WEB_VAPID_KEY"
+    )
+    foreach ($key in $optionalWebKeys) {
+        $rawValue = if ($config.Contains($key)) { [string]$config[$key] } else { "" }
+        if ([string]::IsNullOrWhiteSpace($rawValue)) {
+            $warnings.Add("Missing optional web key in mobile config: $key (required for full web FCM behavior).")
         }
     }
 

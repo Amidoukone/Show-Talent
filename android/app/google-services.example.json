@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "firebase-api-key-placeholder"
+          "current_key": "REDACTED_ANDROID_API_KEY"
         }
       ],
       "services": {
@@ -34,7 +34,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "firebase-api-key-placeholder"
+          "current_key": "REDACTED_ANDROID_API_KEY"
         }
       ],
       "services": {

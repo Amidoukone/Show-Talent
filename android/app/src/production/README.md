@@ -2,9 +2,11 @@
 
 This directory is intentionally a scaffold only.
 
-Keep the currently active production Android Firebase file in
-`android/app/google-services.json` until the new production Firebase project is
-created and native flavors are activated.
+Production native Firebase config should live here locally once activated:
+
+- `android/app/src/production/google-services.json`
+
+Do not commit real Firebase keys in git.
 
 Planned Android publication IDs:
 
