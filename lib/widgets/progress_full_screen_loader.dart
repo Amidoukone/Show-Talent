@@ -4,12 +4,15 @@ import 'package:adfoot/controller/upload_video_controller.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 
 class ProgressFullScreenLoader extends StatelessWidget {
-  const ProgressFullScreenLoader({super.key});
+  const ProgressFullScreenLoader({
+    super.key,
+    required this.uploadController,
+  });
+
+  final UploadVideoController uploadController;
 
   @override
   Widget build(BuildContext context) {
-    final UploadVideoController uploadController = Get.find<UploadVideoController>();
-
     return Scaffold(
       // ✅ Remplacement de withOpacity par withValues(alpha: ...)
       backgroundColor: Colors.black.withValues(alpha: 0.7),
@@ -23,7 +26,7 @@ class ProgressFullScreenLoader extends StatelessWidget {
             border: Border.all(color: AdColors.divider),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.35),
+                color: Colors.black.withValues(alpha: 0.35),
                 blurRadius: 14,
                 offset: const Offset(0, 8),
               ),
@@ -67,7 +70,6 @@ class ProgressFullScreenLoader extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 20),
-
                 if (!isOptimizing) ...[
                   LinearProgressIndicator(
                     value: progress.clamp(0.0, 1.0),
@@ -88,7 +90,8 @@ class ProgressFullScreenLoader extends StatelessWidget {
                     onPressed: uploadController.cancelUpload,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 14),
                     ),
                     icon: const Icon(Icons.cancel, color: Colors.white),
                     label: const Text(

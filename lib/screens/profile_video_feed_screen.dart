@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/profile_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
@@ -27,6 +30,8 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
   late final ProfileController _profileController;
   late final VideoController _videoController;
   late final PageController _pageController;
+  final UserController _userController = Get.find<UserController>();
+  final FollowController _followController = Get.find<FollowController>();
 
   final VideoManager _videoManager = VideoManager();
   late final VideoFocusOrchestrator _focusOrchestrator;
@@ -43,17 +48,12 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
 
     _profileController = Get.find<ProfileController>(tag: widget.uid);
 
-    _videoController = Get.isRegistered<VideoController>(tag: _ctxKey)
-        ? Get.find<VideoController>(tag: _ctxKey)
-        : Get.put(
-            VideoController(
-              contextKey: _ctxKey,
-              enableLiveStream: false,
-              enableFeedFetch: false,
-            ),
-            tag: _ctxKey,
-            permanent: true,
-          );
+    _videoController = FeatureControllerRegistry.ensureVideoController(
+      contextKey: _ctxKey,
+      enableLiveStream: false,
+      enableFeedFetch: false,
+      permanent: true,
+    );
 
     _pageController = PageController(initialPage: _currentIndex);
 
@@ -86,9 +86,7 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
     // ✅ Un seul point de sortie (pause + dispose contexte)
     unawaited(_focusOrchestrator.onDispose());
 
-    if (Get.isRegistered<VideoController>(tag: _ctxKey)) {
-      Get.delete<VideoController>(tag: _ctxKey);
-    }
+    FeatureControllerRegistry.releaseVideoController(_ctxKey);
 
     super.dispose();
   }
@@ -178,10 +176,13 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
               children: [
                 SmartVideoPlayer(
                   key: ValueKey(vid.id),
+                  player: player,
+                  videoController: _videoController,
+                  userController: _userController,
+                  followController: _followController,
                   contextKey: _ctxKey,
                   videoUrl: vid.videoUrl,
                   video: vid,
-                  player: player,
                   currentIndex: index,
                   videoList: videos,
                   autoPlay: true,

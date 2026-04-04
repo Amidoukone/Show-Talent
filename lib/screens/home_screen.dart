@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:adfoot/screens/add_video.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -167,13 +168,10 @@ class _HomeScreenState extends State<HomeScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    videoController = Get.put(
-      VideoController(
-        contextKey: 'home',
-        enableLiveStream: true,
-        enableFeedFetch: true,
-      ),
-      tag: 'home',
+    videoController = FeatureControllerRegistry.ensureVideoController(
+      contextKey: 'home',
+      enableLiveStream: true,
+      enableFeedFetch: true,
       permanent: true,
     );
 
@@ -374,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen>
         ),
         centerTitle: true,
         title: const Text(
-          'AD.FOOT',
+          'Adfoot',
           style: TextStyle(
             fontSize: 22,
             fontWeight: FontWeight.bold,
@@ -496,6 +494,10 @@ class _HomeScreenState extends State<HomeScreen>
                     children: [
                       SmartVideoPlayer(
                         key: ValueKey(video.id),
+                        player: player,
+                        videoController: videoController,
+                        userController: userController,
+                        followController: followController,
                         contextKey: 'home',
                         videoUrl: video.videoUrl,
                         video: video,
@@ -507,7 +509,6 @@ class _HomeScreenState extends State<HomeScreen>
                         showProgressBar: true,
                         showDeleteAction: false,
                         onRefreshRequested: _refreshHomeFeed,
-                        player: player,
                       ),
 
                       // ✅ Texte "TikTok-like": sans background, sans gradient masquant la vidéo

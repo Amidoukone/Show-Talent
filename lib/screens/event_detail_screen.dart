@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
+import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
@@ -13,6 +14,7 @@ import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
 
 class EventDetailsScreen extends StatelessWidget {
   final Event event;
@@ -45,7 +47,7 @@ class EventDetailsScreen extends StatelessWidget {
                         await Get.to(() => EventFormScreen(event: event));
                     if (updated == true) {
                       Get.find<EventController>().fetchEvents();
-                      Get.offAllNamed('/main', arguments: 2);
+                      Get.offAllNamed(AppRoutes.main, arguments: 2);
                     }
                   },
                 ),
@@ -90,8 +92,9 @@ class EventDetailsScreen extends StatelessWidget {
             backgroundColor: AdColors.surfaceCardAlt,
             backgroundImage:
                 hasPhoto ? NetworkImage(event.organisateur.photoProfil) : null,
-            child:
-                hasPhoto ? null : const Icon(Icons.person, color: Colors.white70),
+            child: hasPhoto
+                ? null
+                : const Icon(Icons.person, color: Colors.white70),
           ),
         ),
         const SizedBox(width: 12),
@@ -145,7 +148,6 @@ class EventDetailsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-
         _buildDetailRow(
           context: context,
           icon: Icons.calendar_today,
@@ -153,7 +155,6 @@ class EventDetailsScreen extends StatelessWidget {
           value:
               'Du ${DateFormat('dd MMM yyyy').format(event.dateDebut)} au ${DateFormat('dd MMM yyyy').format(event.dateFin)}',
         ),
-
         const SizedBox(height: 12),
         _buildDetailRow(
           context: context,
@@ -161,7 +162,6 @@ class EventDetailsScreen extends StatelessWidget {
           label: 'Lieu',
           value: event.lieu,
         ),
-
         const SizedBox(height: 12),
         _buildDetailRow(
           context: context,
@@ -169,7 +169,6 @@ class EventDetailsScreen extends StatelessWidget {
           label: 'Visibilité',
           value: event.estPublic ? 'Public' : 'Privé',
         ),
-
         if (event.capaciteMax != null) ...[
           const SizedBox(height: 12),
           _buildDetailRow(
@@ -180,7 +179,6 @@ class EventDetailsScreen extends StatelessWidget {
                 '${event.participants.length} / ${event.capaciteMax} participants',
           ),
         ],
-
         if (event.tags != null && event.tags!.isNotEmpty) ...[
           const SizedBox(height: 16),
           Wrap(
@@ -203,7 +201,6 @@ class EventDetailsScreen extends StatelessWidget {
                 .toList(),
           ),
         ],
-
         const SizedBox(height: 20),
         Text(
           'Description',
@@ -245,7 +242,6 @@ class EventDetailsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-
         if (event.participants.isEmpty)
           const Text(
             'Aucun participant pour le moment.',
@@ -286,7 +282,6 @@ class EventDetailsScreen extends StatelessWidget {
               );
             }).toList(),
           ),
-
         if (event.participants.length > 3)
           TextButton(
             onPressed: () => _showParticipants(event.participants),
@@ -362,19 +357,16 @@ class EventDetailsScreen extends StatelessWidget {
   }
 
   void _openChatWith(AppUser other) async {
-    final chat = Get.isRegistered<ChatController>()
-        ? Get.find<ChatController>()
-        : Get.put(ChatController());
+    final chat = Get.find<ChatController>();
 
     final current = Get.find<UserController>().user;
     if (current == null) return;
     if (!current.allowMessages || !other.allowMessages) {
-      Get.snackbar(
+      AdFeedback.warning(
         'Messages indisponibles',
         !current.allowMessages
-            ? 'Vous avez désactivé les messages.'
-            : 'Cet utilisateur a désactivé les messages.',
-        snackPosition: SnackPosition.BOTTOM,
+            ? 'Vous avez desactive les messages.'
+            : 'Cet utilisateur a desactive les messages.',
       );
       return;
     }
@@ -504,7 +496,6 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
               ),
               const SizedBox(height: 8),
               const Divider(color: AdColors.divider),
-
               ...sorted.map((p) {
                 final hasPhoto = p.photoProfil.trim().startsWith('http');
 
@@ -512,7 +503,8 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                   contentPadding: EdgeInsets.zero,
                   leading: CircleAvatar(
                     backgroundColor: AdColors.surfaceCardAlt,
-                    backgroundImage: hasPhoto ? NetworkImage(p.photoProfil) : null,
+                    backgroundImage:
+                        hasPhoto ? NetworkImage(p.photoProfil) : null,
                     child: hasPhoto
                         ? null
                         : const Icon(Icons.person, color: Colors.white70),
@@ -534,19 +526,16 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                   trailing: IconButton(
                     icon: Icon(Icons.chat_bubble_outline, color: cs.primary),
                     onPressed: () async {
-                      final chat = Get.isRegistered<ChatController>()
-                          ? Get.find<ChatController>()
-                          : Get.put(ChatController());
+                      final chat = Get.find<ChatController>();
 
                       final current = Get.find<UserController>().user;
                       if (current == null) return;
                       if (!current.allowMessages || !p.allowMessages) {
-                        Get.snackbar(
+                        AdFeedback.warning(
                           'Messages indisponibles',
                           !current.allowMessages
-                              ? 'Vous avez désactivé les messages.'
-                              : 'Cet utilisateur a désactivé les messages.',
-                          snackPosition: SnackPosition.BOTTOM,
+                              ? 'Vous avez desactive les messages.'
+                              : 'Cet utilisateur a desactive les messages.',
                         );
                         return;
                       }

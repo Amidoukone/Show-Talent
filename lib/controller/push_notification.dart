@@ -1,9 +1,12 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
+import '../config/app_environment.dart';
+
 class PushNotificationService {
-  static final FirebaseFunctions _functions =
-      FirebaseFunctions.instanceFor(region: 'europe-west1');
+  static final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+    region: AppEnvironmentConfig.functionsRegion,
+  );
 
   static Future<void> _invoke(
     String functionName,

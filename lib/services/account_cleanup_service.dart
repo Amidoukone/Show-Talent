@@ -3,7 +3,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
-/// Gère la suppression en cascade des données liées à un utilisateur.
+class AccountCleanupException implements Exception {
+  const AccountCleanupException({
+    required this.message,
+    this.requiresRecentLogin = false,
+  });
+
+  final String message;
+  final bool requiresRecentLogin;
+
+  @override
+  String toString() => message;
+}
+
+/// Handles cascading cleanup for a user account.
 class AccountCleanupService {
   AccountCleanupService({
     FirebaseFirestore? firestore,
@@ -17,12 +30,17 @@ class AccountCleanupService {
   final FirebaseStorage _storage;
   final FirebaseAuth _auth;
 
-  /// Supprime les contenus et références du [uid], puis le document utilisateur.
-  /// Peut aussi supprimer le compte Firebase Auth associé.
+  static const Duration _maxDeleteAuthSessionAge = Duration(minutes: 20);
+
+  /// Deletes user-owned data and user document, then optionally deletes Auth user.
   Future<void> deleteAccountAndData({
     required String uid,
     bool deleteAuthUser = false,
   }) async {
+    if (deleteAuthUser) {
+      _assertCanDeleteCurrentAuthUser(uid);
+    }
+
     await _deleteVideos(uid);
     await _deleteOffres(uid);
     await _deleteEvents(uid);
@@ -31,18 +49,66 @@ class AccountCleanupService {
 
     await _firestore.collection('users').doc(uid).delete();
 
-    if (deleteAuthUser) {
-      final current = _auth.currentUser;
-      if (current != null && current.uid == uid) {
-        await current.delete();
+    if (!deleteAuthUser) {
+      return;
+    }
+
+    final current = _auth.currentUser;
+    if (current == null || current.uid != uid) {
+      return;
+    }
+
+    try {
+      await current.delete();
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'requires-recent-login') {
+        throw const AccountCleanupException(
+          message:
+              'Verification de securite requise. Merci de vous reconnecter puis de relancer la suppression.',
+          requiresRecentLogin: true,
+        );
       }
+
+      throw AccountCleanupException(
+        message:
+            'Suppression du compte d\'authentification impossible (${error.code}).',
+      );
+    }
+  }
+
+  void _assertCanDeleteCurrentAuthUser(String uid) {
+    final current = _auth.currentUser;
+    if (current == null || current.uid != uid) {
+      throw const AccountCleanupException(
+        message: 'Session invalide. Veuillez vous reconnecter.',
+      );
+    }
+
+    final lastSignIn = current.metadata.lastSignInTime;
+    if (lastSignIn == null) {
+      throw const AccountCleanupException(
+        message:
+            'Verification de securite requise. Merci de vous reconnecter puis de relancer la suppression.',
+        requiresRecentLogin: true,
+      );
+    }
+
+    final age = DateTime.now().difference(lastSignIn);
+    if (age > _maxDeleteAuthSessionAge) {
+      throw const AccountCleanupException(
+        message:
+            'Session de securite expiree. Merci de vous reconnecter puis de relancer la suppression.',
+        requiresRecentLogin: true,
+      );
     }
   }
 
   Future<void> _deleteVideos(String uid) async {
     try {
-      final snapshot =
-          await _firestore.collection('videos').where('uid', isEqualTo: uid).get();
+      final snapshot = await _firestore
+          .collection('videos')
+          .where('uid', isEqualTo: uid)
+          .get();
 
       for (final doc in snapshot.docs) {
         final data = doc.data();
@@ -57,8 +123,8 @@ class AccountCleanupService {
 
         await doc.reference.delete();
       }
-    } catch (e) {
-      debugPrint('❌ _deleteVideos error: $e');
+    } catch (error) {
+      debugPrint('AccountCleanup _deleteVideos error: $error');
     }
   }
 
@@ -72,8 +138,8 @@ class AccountCleanupService {
       for (final doc in offres.docs) {
         await doc.reference.delete();
       }
-    } catch (e) {
-      debugPrint('❌ _deleteOffres error: $e');
+    } catch (error) {
+      debugPrint('AccountCleanup _deleteOffres error: $error');
     }
   }
 
@@ -87,8 +153,8 @@ class AccountCleanupService {
       for (final doc in events.docs) {
         await doc.reference.delete();
       }
-    } catch (e) {
-      debugPrint('❌ _deleteEvents error: $e');
+    } catch (error) {
+      debugPrint('AccountCleanup _deleteEvents error: $error');
     }
   }
 
@@ -101,11 +167,12 @@ class AccountCleanupService {
 
       for (final doc in conversations.docs) {
         final messages = await doc.reference.collection('messages').get();
-        await _deleteDocsInChunks(messages.docs.map((m) => m.reference).toList());
+        await _deleteDocsInChunks(
+            messages.docs.map((m) => m.reference).toList());
         await doc.reference.delete();
       }
-    } catch (e) {
-      debugPrint('❌ _deleteConversations error: $e');
+    } catch (error) {
+      debugPrint('AccountCleanup _deleteConversations error: $error');
     }
   }
 
@@ -130,8 +197,8 @@ class AccountCleanupService {
           'followingsList': FieldValue.arrayRemove([uid]),
         });
       }
-    } catch (e) {
-      debugPrint('❌ _cleanupFollowReferences error: $e');
+    } catch (error) {
+      debugPrint('AccountCleanup _cleanupFollowReferences error: $error');
     }
   }
 
@@ -154,12 +221,12 @@ class AccountCleanupService {
         await _storage.refFromURL(fallbackUrl).delete();
       }
     } catch (_) {
-      // Les assets peuvent déjà être supprimés : on ignore silencieusement.
+      // Best-effort: assets can already be deleted.
     }
   }
 
   Future<void> _deleteDocsInChunks(List<DocumentReference> refs) async {
-    const int chunkSize = 400; // en dessous de la limite de 500 writes/batch
+    const int chunkSize = 400; // Below 500 writes / batch limit.
     for (int i = 0; i < refs.length; i += chunkSize) {
       final chunk = refs.sublist(
         i,

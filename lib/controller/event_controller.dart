@@ -1,267 +1,279 @@
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:async';
+
 import 'package:adfoot/controller/push_notification.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/events/event_repository.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 class EventController extends GetxController {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final EventRepository _eventRepository = EventRepository();
 
-  /// Liste observable des événements
+  /// Liste observable des evenements
   final Rx<List<Event>> _events = Rx<List<Event>>([]);
   List<Event> get events => _events.value;
 
   final RxBool _isLoading = true.obs;
   bool get isLoading => _isLoading.value;
 
+  StreamSubscription<List<Event>>? _eventsSub;
+
   @override
   void onInit() {
     super.onInit();
-    fetchEvents(); // Charger les événements au démarrage
+    fetchEvents();
   }
 
-  /// Charger les événements depuis Firestore et mettre à jour le statut si expiré
-  void fetchEvents() async {
+  /// Charge les evenements depuis Firestore et met a jour le statut si expire
+  Future<void> fetchEvents() async {
     _isLoading.value = true;
+    await _eventsSub?.cancel();
 
-    _firestore.collection('events').snapshots().listen((snapshot) async {
-      List<Event> updatedEvents = [];
+    _eventsSub = _eventRepository.watchEvents().listen(
+      (fetchedEvents) async {
+        final List<Event> updatedEvents = [];
 
-      for (var doc in snapshot.docs) {
-        Event event = Event.fromMap(doc.data());
+        for (final fetched in fetchedEvents) {
+          var event = fetched;
 
-        // Vérifie si la date de fin est dépassée -> fermeture automatique
-        if (event.dateFin.isBefore(DateTime.now()) &&
-            event.statut == 'ouvert') {
-          await _firestore.collection('events').doc(event.id).update({
-            'statut': 'fermé',
-            'lastUpdated': FieldValue.serverTimestamp(),
-          });
+          if (event.dateFin.isBefore(DateTime.now()) &&
+              event.statut == 'ouvert') {
+            await _eventRepository.updateEventStatus(
+              eventId: event.id,
+              status: 'ferm\u00e9',
+            );
 
-          // Reconstruction (pas de copyWith)
-          event = Event(
-            id: event.id,
-            titre: event.titre,
-            description: event.description,
-            dateDebut: event.dateDebut,
-            dateFin: event.dateFin,
-            organisateur: event.organisateur,
-            participants: event.participants,
-            statut: 'fermé',
-            lieu: event.lieu,
-            estPublic: event.estPublic,
-            createdAt: event.createdAt,
+            event = Event(
+              id: event.id,
+              titre: event.titre,
+              description: event.description,
+              dateDebut: event.dateDebut,
+              dateFin: event.dateFin,
+              organisateur: event.organisateur,
+              participants: event.participants,
+              statut: 'ferm\u00e9',
+              lieu: event.lieu,
+              estPublic: event.estPublic,
+              createdAt: event.createdAt,
+              capaciteMax: event.capaciteMax,
+              tags: event.tags,
+              streamingUrl: event.streamingUrl,
+              flyerUrl: event.flyerUrl,
+              views: event.views,
+              archivedAt: event.archivedAt,
+              lastUpdated: DateTime.now(),
+            );
+          }
 
-            // Champs optionnels enrichis
-            capaciteMax: event.capaciteMax,
-            tags: event.tags,
-            streamingUrl: event.streamingUrl,
-            flyerUrl: event.flyerUrl,
-            views: event.views,
-            archivedAt: event.archivedAt,
-            lastUpdated: DateTime.now(),
-          );
+          updatedEvents.add(event);
         }
 
-        updatedEvents.add(event);
-      }
-
-      _events.value = updatedEvents
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      update(); // Met à jour l'interface utilisateur
-      _isLoading.value = false;
-    }, onError: (e) {
-      // en cas d'erreur stream : on coupe le loader
-      _isLoading.value = false;
-      debugPrint('Erreur écoute Firestore events : $e');
-    });
+        _events.value = updatedEvents
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        update();
+        _isLoading.value = false;
+      },
+      onError: (error) {
+        _isLoading.value = false;
+        debugPrint('Erreur ecoute Firestore events : $error');
+      },
+    );
   }
 
-  /// Créer un nouvel événement
-  Future<void> createEvent(Event event, AppUser utilisateur) async {
-    if (!_isAuthorized(utilisateur)) return;
+  @override
+  void onClose() {
+    _eventsSub?.cancel();
+    super.onClose();
+  }
+
+  String newEventId() => _eventRepository.newEventId();
+
+  Future<bool> createEvent(Event event, AppUser utilisateur) async {
+    if (!_isAuthorized(utilisateur)) return false;
 
     try {
-      await _firestore.collection('events').doc(event.id).set(event.toMap());
+      await _eventRepository.createEvent(event);
       _showSuccessSnackbar(
-          'Événement créé', 'Votre événement a été créé avec succès.');
+        'Evenement cree',
+        'Votre evenement a ete cree avec succes.',
+      );
 
       await _notifyPlayersOfNewEvent(event, utilisateur);
-
-      fetchEvents(); // Mettre à jour la liste
-      Get.back(); // Fermer l'écran de création
+      return true;
     } catch (e) {
-      _showErrorSnackbar('Erreur', 'Échec de la création de l\'événement.');
-      debugPrint('Erreur lors de la création de l\'événement : $e');
+      _showErrorSnackbar('Erreur', 'Echec de la creation de l\'evenement.');
+      debugPrint('Erreur lors de la creation de l\'evenement : $e');
+      return false;
     }
   }
 
-  /// Mettre à jour un événement existant
-  Future<void> updateEvent(Event event, AppUser utilisateur) async {
-    if (!_isAuthorized(utilisateur)) return;
+  Future<bool> updateEvent(Event event, AppUser utilisateur) async {
+    if (!_isAuthorized(utilisateur)) return false;
 
     try {
-      await _firestore.collection('events').doc(event.id).update(event.toMap());
+      await _eventRepository.updateEvent(event);
       _showSuccessSnackbar(
-          'Événement mis à jour', 'Les modifications ont été enregistrées.');
+        'Evenement mis a jour',
+        'Les modifications ont ete enregistrees.',
+      );
 
-      fetchEvents(); // Rafraîchir la liste
-      Get.back(); // Fermer le dialogue
+      return true;
     } catch (e) {
-      _showErrorSnackbar('Erreur', 'Échec de la mise à jour de l\'événement.');
-      debugPrint('Erreur lors de la mise à jour de l\'événement : $e');
+      _showErrorSnackbar('Erreur', 'Echec de la mise a jour de l\'evenement.');
+      debugPrint('Erreur lors de la mise a jour de l\'evenement : $e');
+      return false;
     }
   }
 
-  /// Supprimer un événement
-  Future<void> deleteEvent(String eventId, AppUser utilisateur) async {
-    if (!_isAuthorized(utilisateur)) return;
+  Future<bool> deleteEvent(String eventId, AppUser utilisateur) async {
+    if (!_isAuthorized(utilisateur)) return false;
 
     try {
-      await _firestore.collection('events').doc(eventId).delete();
+      await _eventRepository.deleteEvent(eventId);
       _showSuccessSnackbar(
-          'Événement supprimé', 'L\'événement a été supprimé.');
+        'Evenement supprime',
+        'L\'evenement a ete supprime.',
+      );
 
-      fetchEvents(); // Rafraîchir la liste
-      Get.back(); // Fermer la boîte de dialogue
+      return true;
     } catch (e) {
-      _showErrorSnackbar('Erreur', 'Échec de la suppression de l\'événement.');
-      debugPrint('Erreur lors de la suppression de l\'événement : $e');
+      _showErrorSnackbar('Erreur', 'Echec de la suppression de l\'evenement.');
+      debugPrint('Erreur lors de la suppression de l\'evenement : $e');
+      return false;
     }
   }
 
-  /// Inscrire un joueur à un événement
   Future<void> registerToEvent(String eventId, AppUser participant) async {
     if (participant.role != 'joueur') {
-      _showErrorSnackbar('Accès refusé',
-          'Seuls les joueurs peuvent s\'inscrire à un événement.');
+      _showErrorSnackbar(
+        'Acces refuse',
+        'Seuls les joueurs peuvent s\'inscrire a un evenement.',
+      );
       return;
     }
 
     try {
-      DocumentSnapshot eventDoc =
-          await _firestore.collection('events').doc(eventId).get();
-
-      if (!eventDoc.exists) {
-        _showErrorSnackbar('Erreur', 'L\'événement n\'existe pas.');
+      final event = await _eventRepository.fetchEventById(eventId);
+      if (event == null) {
+        _showErrorSnackbar('Erreur', 'L\'evenement n\'existe pas.');
         return;
       }
 
-      Event event = Event.fromMap(eventDoc.data() as Map<String, dynamic>);
-
-      if (event.statut == 'fermé' || event.statut == 'archivé') {
+      if (event.statut == 'ferm\u00e9' || event.statut == 'archiv\u00e9') {
         _showErrorSnackbar(
-            'Inscription impossible', 'L\'événement n\'est pas ouvert.');
+          'Inscription impossible',
+          'L\'evenement n\'est pas ouvert.',
+        );
         return;
       }
 
       if (_isAlreadyRegistered(event, participant)) {
-        _showErrorSnackbar('Erreur', 'Vous êtes déjà inscrit à cet événement.');
+        _showErrorSnackbar(
+          'Erreur',
+          'Vous etes deja inscrit a cet evenement.',
+        );
         return;
       }
 
-      // ✅ update optimiste local (si l’UI s’appuie sur la liste observée)
-      // Note: on ne connaît pas forcément l’instance référencée dans _events, donc on patch par id.
-      final int idx = _events.value.indexWhere((e) => e.id == eventId);
+      final idx = _events.value.indexWhere((e) => e.id == eventId);
       if (idx != -1) {
         final local = _events.value[idx];
         local.participants.add(participant);
         _events.refresh();
       }
 
-      // ✅ write Firestore
       final updated = [...event.participants, participant];
-      await _firestore.collection('events').doc(eventId).update({
-        'participants': updated.map((p) => p.toMap()).toList(),
-        'lastUpdated': FieldValue.serverTimestamp(),
-      });
+      await _eventRepository.updateParticipants(
+        eventId: eventId,
+        participants: updated,
+      );
 
       _showSuccessSnackbar(
-          'Inscription réussie', 'Vous êtes inscrit à l\'événement.');
+        'Inscription reussie',
+        'Vous etes inscrit a l\'evenement.',
+      );
     } catch (e) {
-      _showErrorSnackbar('Erreur', 'Échec de l\'inscription.');
+      _showErrorSnackbar('Erreur', 'Echec de l\'inscription.');
       debugPrint('Erreur lors de l\'inscription : $e');
     }
   }
 
-  /// Désinscrire un joueur d'un événement
   Future<void> unregisterFromEvent(String eventId, AppUser participant) async {
     if (participant.role != 'joueur') {
       _showErrorSnackbar(
-        'Accès refusé',
-        'Seuls les joueurs peuvent se désinscrire d\'un événement.',
+        'Acces refuse',
+        'Seuls les joueurs peuvent se desinscrire d\'un evenement.',
       );
       return;
     }
 
     try {
-      DocumentSnapshot eventDoc =
-          await _firestore.collection('events').doc(eventId).get();
-
-      if (!eventDoc.exists) {
-        _showErrorSnackbar('Erreur', 'L\'événement n\'existe pas.');
+      final event = await _eventRepository.fetchEventById(eventId);
+      if (event == null) {
+        _showErrorSnackbar('Erreur', 'L\'evenement n\'existe pas.');
         return;
       }
 
-      Event event = Event.fromMap(eventDoc.data() as Map<String, dynamic>);
-
-      if (event.statut == 'fermé' || event.statut == 'archivé') {
+      if (event.statut == 'ferm\u00e9' || event.statut == 'archiv\u00e9') {
         _showErrorSnackbar(
-            'Action impossible', 'L\'événement n\'est plus ouvert.');
+          'Action impossible',
+          'L\'evenement n\'est plus ouvert.',
+        );
         return;
       }
 
       if (!_isAlreadyRegistered(event, participant)) {
         _showErrorSnackbar(
-            'Erreur', 'Vous n\'êtes pas inscrit à cet événement.');
+          'Erreur',
+          'Vous n\'etes pas inscrit a cet evenement.',
+        );
         return;
       }
 
-      // ✅ update optimiste local
-      final int idx = _events.value.indexWhere((e) => e.id == eventId);
+      final idx = _events.value.indexWhere((e) => e.id == eventId);
       if (idx != -1) {
         final local = _events.value[idx];
         local.participants.removeWhere((p) => p.uid == participant.uid);
         _events.refresh();
       }
 
-      // ✅ write Firestore
       final updated =
           event.participants.where((p) => p.uid != participant.uid).toList();
-      await _firestore.collection('events').doc(eventId).update({
-        'participants': updated.map((p) => p.toMap()).toList(),
-        'lastUpdated': FieldValue.serverTimestamp(),
-      });
+      await _eventRepository.updateParticipants(
+        eventId: eventId,
+        participants: updated,
+      );
 
       _showSuccessSnackbar(
-          'Désinscription réussie', 'Vous êtes désinscrit de l\'événement.');
+        'Desinscription reussie',
+        'Vous etes desinscrit de l\'evenement.',
+      );
     } catch (e) {
-      _showErrorSnackbar('Erreur', 'Échec de la désinscription.');
-      debugPrint('Erreur lors de la désinscription : $e');
+      _showErrorSnackbar('Erreur', 'Echec de la desinscription.');
+      debugPrint('Erreur lors de la desinscription : $e');
     }
   }
 
-  /// Vérifier si un utilisateur est autorisé
   bool _isAuthorized(AppUser utilisateur) {
-    if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
+    if (!utilisateur.canPublishOpportunities) {
       _showErrorSnackbar(
-        'Accès refusé',
-        'Seuls les clubs ou recruteurs peuvent effectuer cette action.',
+        'Acces refuse',
+        'Seuls les clubs, recruteurs ou agents peuvent effectuer cette action.',
       );
       return false;
     }
     return true;
   }
 
-  /// Vérifier si un joueur est déjà inscrit
   bool _isAlreadyRegistered(Event event, AppUser participant) {
     return event.participants.any((p) => p.uid == participant.uid);
   }
 
-  /// Notifier les joueurs d'un nouvel événement
   Future<void> _notifyPlayersOfNewEvent(
-      Event event, AppUser utilisateur) async {
+    Event event,
+    AppUser utilisateur,
+  ) async {
     try {
       await PushNotificationService.sendEventFanout(
         eventId: event.id,
@@ -273,7 +285,6 @@ class EventController extends GetxController {
     }
   }
 
-  /// Afficher une notification de succès
   void _showSuccessSnackbar(String title, String message) {
     Get.snackbar(
       title,
@@ -285,7 +296,6 @@ class EventController extends GetxController {
     );
   }
 
-  /// Afficher une notification d'erreur
   void _showErrorSnackbar(String title, String message) {
     Get.snackbar(
       title,

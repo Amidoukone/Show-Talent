@@ -1,12 +1,12 @@
 import 'dart:io';
 
 import 'package:adfoot/widgets/ad_app_bar.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
 
 import '../models/user.dart';
 import 'profile_screen.dart';
@@ -140,6 +140,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (min != null && x < min) x = min;
     if (max != null && x > max) x = max;
     return x;
+  }
+
+  String? _validateOptionalNonNegativeInt(
+    String? value, {
+    int max = 9999,
+  }) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    final number = int.tryParse(text);
+    if (number == null) {
+      return 'Veuillez saisir un nombre valide.';
+    }
+    if (number < 0) {
+      return 'La valeur doit etre positive.';
+    }
+    if (number > max) {
+      return 'La valeur maximale est $max.';
+    }
+    return null;
   }
 
   Map<String, double>? _parsePerformances(String raw) {
@@ -294,7 +315,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   bool get _isPlayer => user.role == 'joueur' || user.role == 'coach';
   bool get _isClub => user.role == 'club';
-  bool get _isRecruiter => user.role == 'recruteur';
+  bool get _isRecruiter => user.isRecruiter;
 
   Future<void> _save() async {
     FocusScope.of(context).unfocus();
@@ -311,74 +332,146 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       // Base commune
       // =====================
       patch['nom'] = _trimOrEmpty(_nomController.text);
-      patch['phone'] = _trimOrNull(_phoneController.text);
-      patch['languages'] = _languagesController.text
+      final phone = _trimOrNull(_phoneController.text);
+      if (phone != null) {
+        patch['phone'] = phone;
+      } else if ((user.phone?.isNotEmpty ?? false)) {
+        patch['phone'] = ProfileController.deleteField;
+      }
+
+      final languages = _languagesController.text
           .split(',')
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
+      if (languages.isNotEmpty) {
+        patch['languages'] = languages;
+      } else if (user.languages?.isNotEmpty == true) {
+        patch['languages'] = ProfileController.deleteField;
+      }
 
-      patch['bio'] = _trimOrNull(_bioController.text);
+      final bio = _trimOrNull(_bioController.text);
+      if (bio != null) {
+        patch['bio'] = bio;
+      } else if ((user.bio?.isNotEmpty ?? false)) {
+        patch['bio'] = ProfileController.deleteField;
+      }
 
       // =====================
       // Joueur / Coach (MVP)
       // =====================
       if (_isPlayer) {
         if (_selectedBirthDate != null) {
-          patch['birthDate'] = Timestamp.fromDate(_selectedBirthDate!);
+          patch['birthDate'] = _selectedBirthDate;
         } else if (user.birthDate != null) {
-          patch['birthDate'] = FieldValue.delete();
+          patch['birthDate'] = ProfileController.deleteField;
         }
 
-        patch['position'] = _trimOrNull(_positionController.text);
-        patch['team'] = _trimOrNull(_teamController.text);
-        patch['nombreDeMatchs'] =
-            _intOrNullClamped(_nombreMatchsController.text, min: 0, max: 9999);
-        patch['buts'] =
-            _intOrNullClamped(_butsController.text, min: 0, max: 9999);
-        patch['assistances'] =
-            _intOrNullClamped(_assistancesController.text, min: 0, max: 9999);
+        final position = _trimOrNull(_positionController.text);
+        if (position != null) {
+          patch['position'] = position;
+        } else if ((user.position?.isNotEmpty ?? false)) {
+          patch['position'] = ProfileController.deleteField;
+        }
 
-        patch['performances'] =
-            _parsePerformances(_performancesController.text);
+        final team = _trimOrNull(_teamController.text);
+        if (team != null) {
+          patch['team'] = team;
+        } else if ((user.team?.isNotEmpty ?? false)) {
+          patch['team'] = ProfileController.deleteField;
+        }
+
+        final matches =
+            _intOrNullClamped(_nombreMatchsController.text, min: 0, max: 9999);
+        if (matches != null) {
+          patch['nombreDeMatchs'] = matches;
+        } else if (user.nombreDeMatchs != null) {
+          patch['nombreDeMatchs'] = ProfileController.deleteField;
+        }
+
+        final goals =
+            _intOrNullClamped(_butsController.text, min: 0, max: 9999);
+        if (goals != null) {
+          patch['buts'] = goals;
+        } else if (user.buts != null) {
+          patch['buts'] = ProfileController.deleteField;
+        }
+
+        final assists =
+            _intOrNullClamped(_assistancesController.text, min: 0, max: 9999);
+        if (assists != null) {
+          patch['assistances'] = assists;
+        } else if (user.assistances != null) {
+          patch['assistances'] = ProfileController.deleteField;
+        }
+
+        final performances = _parsePerformances(_performancesController.text);
+        if (performances != null) {
+          patch['performances'] = performances;
+        } else if (user.performances?.isNotEmpty == true) {
+          patch['performances'] = ProfileController.deleteField;
+        }
       }
 
       // =====================
       // Club (MVP)
       // =====================
       if (_isClub) {
-        patch['nomClub'] = _trimOrNull(_clubNameController.text);
-        patch['ligue'] = _trimOrNull(_ligueController.text);
+        final clubName = _trimOrNull(_clubNameController.text);
+        if (clubName != null) {
+          patch['nomClub'] = clubName;
+        } else if ((user.nomClub?.isNotEmpty ?? false)) {
+          patch['nomClub'] = ProfileController.deleteField;
+        }
+
+        final ligue = _trimOrNull(_ligueController.text);
+        if (ligue != null) {
+          patch['ligue'] = ligue;
+        } else if ((user.ligue?.isNotEmpty ?? false)) {
+          patch['ligue'] = ProfileController.deleteField;
+        }
       }
 
       // =====================
-      // Recruteur (MVP)
+      // Recruteur / Agent (MVP)
       // =====================
       if (_isRecruiter) {
-        patch['entreprise'] = _trimOrNull(_entrepriseController.text);
-        patch['nombreDeRecrutements'] = _intOrNullClamped(
+        final entreprise = _trimOrNull(_entrepriseController.text);
+        if (entreprise != null) {
+          patch['entreprise'] = entreprise;
+        } else if ((user.entreprise?.isNotEmpty ?? false)) {
+          patch['entreprise'] = ProfileController.deleteField;
+        }
+
+        final recruitments = _intOrNullClamped(
           _nombreRecrutementsController.text,
           min: 0,
           max: 9999,
         );
+        if (recruitments != null) {
+          patch['nombreDeRecrutements'] = recruitments;
+        } else if (user.nombreDeRecrutements != null) {
+          patch['nombreDeRecrutements'] = ProfileController.deleteField;
+        }
       }
 
       // 🔥 PATCH SAFE
       await profileController.updateProfilePatch(user.uid, patch);
 
-      Get.off(() => ProfileScreen(uid: user.uid));
-      Get.snackbar(
-        'Succès',
-        'Profil mis à jour',
-        backgroundColor: kAccent,
-        colorText: Colors.white,
+      if (Get.key.currentState?.canPop() ?? false) {
+        Get.back<void>();
+      } else {
+        Get.off(() => ProfileScreen(uid: user.uid));
+      }
+      AdFeedback.success(
+        'Succes',
+        'Profil mis a jour.',
       );
     } catch (e) {
-      Get.snackbar(
+      debugPrint('EditProfile _save error: $e');
+      AdFeedback.error(
         'Erreur',
-        'Impossible de sauvegarder : $e',
-        backgroundColor: kDanger,
-        colorText: Colors.white,
+        'Impossible de sauvegarder les modifications.',
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -513,6 +606,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                         label: 'Matchs',
                                         icon: Icons.scoreboard_outlined,
                                         keyboardType: TextInputType.number,
+                                        validator:
+                                            _validateOptionalNonNegativeInt,
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -522,6 +617,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                         label: 'Buts',
                                         icon: Icons.sports_soccer,
                                         keyboardType: TextInputType.number,
+                                        validator:
+                                            _validateOptionalNonNegativeInt,
                                       ),
                                     ),
                                   ],
@@ -532,6 +629,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   label: 'Passes décisives',
                                   icon: Icons.group_add_outlined,
                                   keyboardType: TextInputType.number,
+                                  validator: _validateOptionalNonNegativeInt,
                                 ),
                                 const SizedBox(height: 12),
 
@@ -571,7 +669,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           )
                         else if (_isRecruiter)
                           _SectionCard(
-                            title: 'Informations recruteur',
+                            title: 'Informations recruteur / agent',
                             icon: Icons.search_rounded,
                             child: Column(
                               children: [
@@ -586,6 +684,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   label: 'Nombre de recrutements',
                                   icon: Icons.how_to_reg_outlined,
                                   keyboardType: TextInputType.number,
+                                  validator: _validateOptionalNonNegativeInt,
                                 ),
                               ],
                             ),

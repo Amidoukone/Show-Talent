@@ -8,3 +8,13 @@ typings/
 # Node.js dependency directory
 node_modules/
 *.local
+.env.local
+.env.production
+.env.prod
+.env.staging
+.env.dev
+.env.*
+!.env.example
+!.env.local.example
+!.env.production.example
+!.env.staging.example

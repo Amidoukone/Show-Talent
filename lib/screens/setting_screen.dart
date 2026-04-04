@@ -1,10 +1,13 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:get/get.dart';
-
+import 'package:adfoot/config/app_routes.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/services/users/user_repository.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/services/account_cleanup_service.dart';
+import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/widgets/ad_dialogs.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -14,8 +17,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final AuthSessionService _authSessionService = AuthSessionService();
+  final UserRepository _userRepository = UserRepository();
   final AccountCleanupService _cleanupService = AccountCleanupService();
 
   bool _isDeleting = false;
@@ -33,19 +36,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadUserSettings() async {
-    final user = _auth.currentUser;
-    if (user == null) {
+    final uid = _authSessionService.currentUser?.uid;
+    if (uid == null) {
       setState(() => _loadingRole = false);
       return;
     }
 
     try {
-      final doc = await _firestore.collection('users').doc(user.uid).get();
-      final data = doc.data();
-      if (data != null) {
-        _role = data['role'] ?? _role;
-        _profilePublic = data['profilePublic'] ?? true;
-        _allowMessages = data['allowMessages'] ?? true;
+      final settings = await _userRepository.fetchUserSettings(uid);
+      if (settings != null) {
+        _role = settings.role;
+        _profilePublic = settings.profilePublic;
+        _allowMessages = settings.allowMessages;
       }
     } catch (_) {}
 
@@ -58,21 +60,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     bool? profilePublic,
     bool? allowMessages,
   }) async {
-    final user = _auth.currentUser;
-    if (user == null) return false;
-
-    final patch = <String, dynamic>{};
-    if (profilePublic != null) patch['profilePublic'] = profilePublic;
-    if (allowMessages != null) patch['allowMessages'] = allowMessages;
-    if (patch.isEmpty) return true;
+    final uid = _authSessionService.currentUser?.uid;
+    if (uid == null) return false;
 
     try {
-      await _firestore.collection('users').doc(user.uid).update(patch);
+      await _userRepository.updatePrivacySettings(
+        uid,
+        profilePublic: profilePublic,
+        allowMessages: allowMessages,
+      );
       return true;
     } catch (e) {
-      Get.snackbar(
+      AdFeedback.error(
         'Erreur',
-        'Impossible de sauvegarder les paramètres.',
+        'Impossible de sauvegarder les parametres.',
       );
       return false;
     }
@@ -107,12 +108,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Voir le profil'),
             enabled: !_isDeleting,
             onTap: () {
-              final user = _auth.currentUser;
-              if (user == null) return;
+              final uid = _authSessionService.currentUser?.uid;
+              if (uid == null) return;
 
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => ProfileScreen(uid: user.uid),
+                  builder: (_) => ProfileScreen(uid: uid),
                 ),
               );
             },
@@ -123,8 +124,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Se déconnecter'),
             enabled: !_isDeleting,
             onTap: () async {
-              await _auth.signOut();
-              Get.offAllNamed('/login');
+              await _authSessionService.signOut();
+              Get.offAllNamed(AppRoutes.login);
             },
           ),
 
@@ -155,16 +156,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         return;
                       }
 
-                      Get.snackbar(
-                        'Confidentialité',
+                      AdFeedback.info(
+                        'Confidentialite',
                         value
                             ? 'Votre profil est maintenant visible.'
-                            : 'Votre profil est désormais restreint.',
+                            : 'Votre profil est desormais restreint.',
                       );
                     },
             ),
 
-          if (_role == 'joueur' || _role == 'club')
+          if (_role == 'joueur' || isOpportunityPublisherRole(_role))
             SwitchListTile(
               secondary: const Icon(Icons.message),
               title: const Text('Autoriser les messages'),
@@ -184,11 +185,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         return;
                       }
 
-                      Get.snackbar(
+                      AdFeedback.info(
                         'Messages',
                         value
                             ? 'Les messages sont autorisés.'
-                            : 'Les messages sont désactivés.',
+                            : 'Les messages sont desactives.',
                       );
                     },
             ),
@@ -201,11 +202,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'du scouting et de la mise en relation.',
             ),
             onTap: () {
-              Get.snackbar(
-                'Données personnelles',
-                'ADFOOT ne vend jamais vos données.\n'
-                'Elles servent uniquement à connecter les talents '
-                'aux opportunités sportives.',
+              AdFeedback.info(
+                'Donnees personnelles',
+                "Adfoot ne vend jamais vos donnees.\n"
+                    'Elles servent uniquement a connecter les talents '
+                    'aux opportunites sportives.',
+                duration: const Duration(seconds: 5),
               );
             },
           ),
@@ -226,15 +228,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           ListTile(
             leading: Icon(Icons.support_agent, color: cs.primary),
-            title: const Text("Contacter l'agence ADFOOT"),
+            title: const Text("Contacter l'équipe Adfoot"),
             subtitle: const Text(
               "Vérification d'opportunités et accompagnement sécurisé",
             ),
             onTap: () {
-              Get.snackbar(
-                "Agence ADFOOT",
-                "Avant toute décision, contactez-nous.\n\n"
-                "🌐 adfoot.org\n📞 WhatsApp : +223 70 66 83 64",
+              AdFeedback.info(
+                'Equipe Adfoot',
+                "Avant toute decision, contactez-nous.\n\n"
+                    "adfoot.org\nWhatsApp : +223 70 66 83 64",
                 duration: const Duration(seconds: 6),
               );
             },
@@ -257,7 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Suppression définitive du compte et de toutes les données.',
             ),
             enabled: !_isDeleting,
-            onTap: _isDeleting ? null : () => _confirmDeleteAccount(context),
+            onTap: _isDeleting ? null : _confirmDeleteAccount,
           ),
         ],
       ),
@@ -274,7 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       color: cs.surfaceContainerHighest,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.primary.withOpacity(0.15)),
+        side: BorderSide(color: cs.primary.withValues(alpha: 0.15)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -296,7 +298,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              "ADFOOT facilite la mise en relation entre joueurs, clubs, "
+              "Adfoot facilite la mise en relation entre joueurs, clubs, "
               "agents et recruteurs. Cependant, nous ne pouvons pas contrôler "
               "chaque individu présent sur la plateforme.",
               style: TextStyle(color: cs.onSurfaceVariant),
@@ -334,20 +336,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _officialRuleCard(ColorScheme cs) {
     return Card(
       elevation: 0,
-      color: cs.primary.withOpacity(0.08),
+      color: cs.primary.withValues(alpha: 0.08),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
             Text(
-              "Règle officielle ADFOOT",
+              "Règle officielle Adfoot",
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
             SizedBox(height: 8),
             Text(
               "Si un club, un agent ou un recruteur vous propose une opportunité, "
-              "contactez ADFOOT AVANT toute décision.\n\n"
+              "contactez Adfoot avant toute décision.\n\n"
               "Notre agence vérifie la fiabilité, sécurise les démarches "
               "et vous accompagne de manière professionnelle.",
             ),
@@ -361,55 +363,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // 🔥 SUPPRESSION COMPTE
   // =========================================================
 
-  Future<void> _confirmDeleteAccount(BuildContext context) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+  Future<void> _confirmDeleteAccount() async {
+    final uid = _authSessionService.currentUser?.uid;
+    if (uid == null) return;
 
-    final confirmed = await showDialog<bool>(
+    final confirmed = await AdDialogs.confirm(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer mon compte'),
-        content: const Text(
-          'Cette action supprimera définitivement votre compte et '
-          'toutes vos données.\n\nVoulez-vous continuer ?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text(
-              'Supprimer',
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
+      title: 'Supprimer mon compte',
+      message: 'Cette action supprimera definitivement votre compte et '
+          'toutes vos donnees. Voulez-vous continuer ?',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      danger: true,
     );
-
-    if (confirmed != true) return;
+    if (!confirmed) return;
+    if (!mounted) return;
 
     setState(() => _isDeleting = true);
 
-    Get.dialog(
-      const Center(child: CircularProgressIndicator()),
-      barrierDismissible: false,
+    final blockingDialog = AdDialogs.showLoading(
+      context: context,
+      title: 'Suppression du compte',
+      message: 'Suppression en cours, veuillez patienter.',
     );
+    var dialogOpen = true;
+    void closeBlockingDialog() {
+      if (!dialogOpen) return;
+      dialogOpen = false;
+      blockingDialog.close();
+    }
 
-    await _cleanupService.deleteAccountAndData(
-      uid: user.uid,
-      deleteAuthUser: true,
-    );
+    try {
+      await _cleanupService.deleteAccountAndData(
+        uid: uid,
+        deleteAuthUser: true,
+      );
 
-    if (Get.isDialogOpen ?? false) Get.back();
+      closeBlockingDialog();
+      if (!mounted) return;
+
+      Get.offAllNamed(AppRoutes.login);
+      AdFeedback.success(
+        'Compte supprime',
+        'Votre compte a ete supprime avec succes.',
+      );
+    } on AccountCleanupException catch (error) {
+      closeBlockingDialog();
+
+      if (error.requiresRecentLogin) {
+        await _promptReauthenticationForDeletion(error.message);
+        return;
+      }
+
+      AdFeedback.error(
+        'Suppression impossible',
+        error.message,
+      );
+    } catch (e) {
+      closeBlockingDialog();
+      AdFeedback.error(
+        'Suppression impossible',
+        "Une erreur est survenue pendant la suppression : $e",
+      );
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  Future<void> _promptReauthenticationForDeletion(String message) async {
     if (!mounted) return;
 
-    Get.offAllNamed('/login');
-    Get.snackbar(
-      'Compte supprimé',
-      'Votre compte a été supprimé avec succès.',
+    final reconnectNow = await AdDialogs.confirm(
+      context: context,
+      title: 'Verification de securite requise',
+      message: '$message\n\nReconnectez-vous puis relancez la suppression.',
+      confirmLabel: 'Me reconnecter',
+      cancelLabel: 'Plus tard',
+      danger: false,
+    );
+
+    if (!reconnectNow) return;
+
+    try {
+      await _authSessionService.signOut();
+    } catch (_) {}
+
+    if (!mounted) return;
+    Get.offAllNamed(AppRoutes.login);
+    AdFeedback.info(
+      'Reconnexion',
+      'Connectez-vous de nouveau puis relancez la suppression du compte.',
+      duration: const Duration(seconds: 5),
     );
   }
 
@@ -420,8 +464,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _profileVisibilityLabel() {
     switch (_role) {
       case 'joueur':
-        return 'Visible par les clubs et recruteurs.';
+        return 'Visible par les clubs, recruteurs et agents.';
       case 'recruteur':
+      case 'agent':
       case 'club':
         return 'Visible par les joueurs.';
       default:

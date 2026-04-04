@@ -1,16 +1,16 @@
-// lib/screens/signup_screen.dart
-import 'package:adfoot/models/user.dart';
-import 'package:adfoot/screens/verify_email_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:adfoot/config/app_environment.dart';
+import 'package:adfoot/config/app_routes.dart';
+import 'package:adfoot/controller/auth_controller.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/services/verify_email_throttle.dart';
+import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/utils/auth_error_mapper.dart';
+import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_text_field.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-import '../services/verify_email_throttle.dart';
-import '../utils/auth_error_mapper.dart';
-import '../theme/ad_colors.dart';
-import '../widgets/ad_text_field.dart';
-import '../widgets/ad_button.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -20,22 +20,21 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  // Controllers
+  final AuthSessionService _authSessionService = AuthSessionService();
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  // State
   final _formKey = GlobalKey<FormState>();
   String _selectedRole = 'joueur';
   bool _isLoading = false;
 
-  static const _roles = ['joueur', 'club', 'recruteur', 'fan'];
+  static const _roles = publicSelfSignupRoles;
 
   static final ActionCodeSettings _acs = ActionCodeSettings(
-    // 👉 route /verify (main.dart) -> VerifyEmailScreen
-    url: 'https://adfoot.org/verify',
+    url: AppEnvironmentConfig.emailVerificationActionUrl,
     handleCodeInApp: false,
   );
 
@@ -48,150 +47,72 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
-  void _showSnackbar(String title, String msg, Color color) {
-    Get.snackbar(
-      title,
-      msg,
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: color,
-      colorText: Colors.white,
-      duration: const Duration(seconds: 3),
-      margin: const EdgeInsets.all(12),
-      borderRadius: 12,
-    );
-  }
-
   Future<void> _signUp() async {
-    // Ferme le clavier
     FocusScope.of(context).unfocus();
-
-    // Validation
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
-      final email = _emailController.text.trim();
-      final password = _passwordController.text;
-      final nom = _nameController.text.trim();
-      final phone = _phoneController.text.trim();
-
-      // 1) Création Auth
-      final userCred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      final user = userCred.user;
-      if (user == null) {
-        _showSnackbar('Erreur', 'Impossible de créer le compte.', AdColors.error);
-        return;
-      }
-
-      // 2) Affichage du nom (Auth)
-      if (nom.isNotEmpty) {
-        await user.updateDisplayName(nom);
-      }
-
-      // 3) Création/merge du profil Firestore (idempotent)
-      final now = DateTime.now();
-      final appUser = AppUser(
-        uid: user.uid,
-        nom: nom,
-        email: email,
+      final result = await _authSessionService.signUpPublicAccount(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        nom: _nameController.text.trim(),
         role: _selectedRole,
-        photoProfil: '',
-        estActif: false,
-        estBloque: false,
-        emailVerified: false,
-        followers: 0,
-        followings: 0,
-        dateInscription: now,
-        dernierLogin: now,
-        phone: phone.isNotEmpty ? phone : null,
-        emailVerifiedAt: null,
-        bio: null,
-        position: null,
-        clubActuel: null,
-        nombreDeMatchs: null,
-        buts: null,
-        assistances: null,
-        videosPubliees: const [],
-        performances: const {},
-        nomClub: null,
-        ligue: null,
-        offrePubliees: const [],
-        eventPublies: const [],
-        entreprise: null,
-        nombreDeRecrutements: null,
-        team: null,
-        joueursSuivis: const [],
-        clubsSuivis: const [],
-        videosLikees: const [],
-        cvUrl: null,
-        followersList: const [],
-        followingsList: const [],
-        profilePublic: true,
-        allowMessages: true,
+        phone: _phoneController.text.trim(),
+        emailVerificationSettings: _acs,
       );
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .set(appUser.toMap(), SetOptions(merge: true));
+      await Get.find<AuthController>()
+          .handleAuthState(result.session.firebaseUser);
 
-      // 4) Email de vérification (avec seed du throttle)
-      bool sent = false;
-      int? sentAtMs;
-      try {
-        await user.sendEmailVerification(_acs);
-        sent = true;
-        sentAtMs = DateTime.now().millisecondsSinceEpoch;
-        // Seed + start throttle pour éviter un renvoi immédiat
-        VerifyEmailThrottle.lastSentAt = DateTime.fromMillisecondsSinceEpoch(sentAtMs);
+      if (result.emailDelivery.sent && result.emailDelivery.sentAtMs != null) {
+        VerifyEmailThrottle.lastSentAt =
+            DateTime.fromMillisecondsSinceEpoch(result.emailDelivery.sentAtMs!);
         VerifyEmailThrottle.markSentNow();
-      } on FirebaseAuthException catch (e) {
-        // Infos seulement; on n’empêche pas d’aller à l’écran de vérif
-        debugPrint('sendEmailVerification error: ${e.code} - ${e.message}');
-        _showSnackbar(
+      } else if (result.emailDelivery.errorMessage != null) {
+        AdFeedback.warning(
           'Attention',
-          'E-mail non envoyé. Tu pourras le renvoyer sur l’écran suivant.',
-          AdColors.warning,
+          'E-mail non envoyé. Vous pourrez le renvoyer depuis l\'écran suivant.',
         );
       }
 
-      // 5) Refresh Auth (sécurité)
-      await FirebaseAuth.instance.currentUser?.reload();
+      if (!mounted) {
+        return;
+      }
 
-      if (!mounted) return;
-
-      // 6) Info utilisateur
-      _showSnackbar(
+      AdFeedback.success(
         'Compte créé',
-        sent
-            ? 'Vérifie ton adresse e-mail pour activer ton compte.'
-            : 'Compte créé. Renvoyez le lien depuis l’écran suivant.',
-        AdColors.success,
+        result.emailDelivery.sent
+            ? 'Vérifiez votre adresse e-mail pour activer votre compte.'
+            : 'Compte créé. Vous pourrez renvoyer le lien depuis l\'écran suivant.',
       );
 
-      // 7) Navigation vers VerifyEmailScreen (unifiée), avec arguments de cooldown
-      Get.offAll(
-        () => const VerifyEmailScreen(),
+      await Get.offAllNamed(
+        AppRoutes.verifyEmail,
         arguments: {
-          'emailSent': sent,
-          'sentAt': sentAtMs,
+          'emailSent': result.emailDelivery.sent,
+          'sentAt': result.emailDelivery.sentAtMs,
         },
       );
-    } on FirebaseAuthException catch (e) {
-      _showSnackbar('Erreur', AuthErrorMapper.toMessage(e), AdColors.error);
-    } catch (e) {
-      _showSnackbar('Erreur', 'Une erreur inattendue s’est produite. Réessayez.', AdColors.error);
-      debugPrint('SignUp unexpected error: $e');
+    } on FirebaseAuthException catch (error) {
+      AdFeedback.error('Erreur', AuthErrorMapper.toMessage(error));
+    } on AuthFlowException catch (error) {
+      AdFeedback.error('Accès refusé', error.message);
+    } catch (error) {
+      AdFeedback.error(
+        'Erreur',
+        'Une erreur inattendue s\'est produite. Réessayez.',
+      );
+      debugPrint('SignUp unexpected error: $error');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
-
-  // --- UI ---
 
   @override
   Widget build(BuildContext context) {
@@ -206,16 +127,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
             constraints: const BoxConstraints(maxWidth: 520),
             child: Card(
               elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                 child: Form(
                   key: _formKey,
                   autovalidateMode: AutovalidateMode.disabled,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Logo + titre
                       Align(
                         alignment: Alignment.center,
                         child: ClipRRect(
@@ -238,17 +161,49 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Rejoins la communauté AD.FOOT',
+                        'Rejoignez la communauté Adfoot',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              // ⬇️ Remplacement withOpacity(...) -> withValues(alpha: ...)
                               color: cs.onSurface.withValues(alpha: 0.7),
                               fontWeight: FontWeight.w600,
                             ),
                         textAlign: TextAlign.center,
                       ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: cs.primary.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: cs.primary.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.verified_user_outlined,
+                              color: cs.primary,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'L’inscription publique est réservée aux joueurs et aux fans. '
+                                'Les comptes club, recruteur et agent sont créés '
+                                'par l’équipe Adfoot.',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(
+                                      color: cs.onSurface,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 24),
-
-                      // Nom
                       AdTextField(
                         controller: _nameController,
                         label: 'Nom complet',
@@ -256,8 +211,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         validator: _validateName,
                       ),
                       const SizedBox(height: 16),
-
-                      // Email
                       AdTextField(
                         controller: _emailController,
                         label: 'Adresse e-mail',
@@ -266,8 +219,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         validator: _validateEmail,
                       ),
                       const SizedBox(height: 16),
-
-                      // Téléphone (optionnel)
                       AdTextField(
                         controller: _phoneController,
                         label: 'Numéro de téléphone (optionnel)',
@@ -275,18 +226,16 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         prefixIcon: const Icon(Icons.phone_outlined),
                       ),
                       const SizedBox(height: 16),
-
-                      // Mot de passe
                       AdTextField(
                         controller: _passwordController,
                         label: 'Mot de passe',
                         isPassword: true,
                         prefixIcon: const Icon(Icons.lock_outline),
-                        validator: (val) => (val?.length ?? 0) < 6 ? 'Minimum 6 caractères' : null,
+                        validator: (val) => (val?.length ?? 0) < 6
+                            ? 'Minimum 6 caractères'
+                            : null,
                       ),
                       const SizedBox(height: 16),
-
-                      // Rôle (dropdown)
                       DropdownButtonFormField<String>(
                         value: _selectedRole,
                         decoration: const InputDecoration(
@@ -294,16 +243,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           prefixIcon: Icon(Icons.account_circle_outlined),
                         ),
                         items: _roles
-                            .map((r) => DropdownMenuItem(
-                                  value: r,
-                                  child: Text(r.capitalizeFirst!),
-                                ))
+                            .map(
+                              (role) => DropdownMenuItem(
+                                value: role,
+                                child: Text(role.capitalizeFirst!),
+                              ),
+                            )
                             .toList(),
-                        onChanged: (v) => setState(() => _selectedRole = v ?? 'joueur'),
+                        onChanged: (value) {
+                          setState(() => _selectedRole = value ?? 'joueur');
+                        },
                       ),
                       const SizedBox(height: 24),
-
-                      // CTA
                       AdButton(
                         label: 'S’inscrire',
                         onPressed: _isLoading ? null : _signUp,
@@ -311,10 +262,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         leading: Icons.person_add_alt_1_rounded,
                         kind: AdButtonKind.primary,
                       ),
-
                       const SizedBox(height: 8),
-
-                      // Lien vers login
                       TextButton(
                         onPressed: _isLoading ? null : () => Get.back(),
                         child: const Text('Déjà un compte ? Se connecter'),
@@ -330,20 +278,25 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  // --- Validators ---
-
-  String? _validateName(String? v) {
-    final value = v?.trim() ?? '';
-    if (value.isEmpty) return 'Le nom est requis';
-    // Autorise lettres avec accents, espaces, apostrophes et tirets
-    if (!RegExp(r"^[A-Za-zÀ-ÿ\s'’-]+$").hasMatch(value)) return 'Nom invalide';
+  String? _validateName(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return 'Le nom est requis';
+    }
+    if (!RegExp(r"^[A-Za-zÀ-ÿ\s'’-]+$").hasMatch(normalized)) {
+      return 'Nom invalide';
+    }
     return null;
   }
 
-  String? _validateEmail(String? v) {
-    final value = v?.trim() ?? '';
-    if (value.isEmpty) return 'Email requis';
-    if (!RegExp(r'^[\w\.\-+]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(value)) return 'Email invalide';
+  String? _validateEmail(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return 'Email requis';
+    }
+    if (!RegExp(r'^[\w\.\-+]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(normalized)) {
+      return 'Email invalide';
+    }
     return null;
   }
 }

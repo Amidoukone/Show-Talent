@@ -1,4 +1,4 @@
-# Miscellaneous
+﻿# Miscellaneous
 *.class
 *.log
 *.pyc
@@ -50,3 +50,17 @@ node_modules
 .credentials/
 service-account*.json
 *service-account*.json
+
+# Local mobile Firebase config
+/config/mobile/*.json
+!/config/mobile/*.example.json
+!/config/mobile/README.md
+# Sensitive Firebase config files (keep local, never commit)
+/android/app/src/local/google-services.json
+/android/app/src/staging/google-services.json
+/android/app/src/production/google-services.json
+/ios/Firebase/local/GoogleService-Info.plist
+/ios/Firebase/staging/GoogleService-Info.plist
+/ios/Firebase/production/GoogleService-Info.plist
+/web/firebase-messaging-config.js
+

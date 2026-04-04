@@ -1,5 +1,11 @@
 {
   "projects": {
-    "default": "show-talent-5987d"
-  }
+    "default": "show-talent-5987d",
+    "production": "show-talent-5987d",
+    "prod": "show-talent-5987d",
+    "staging": "adfoot-staging",
+    "production-next": "adfoot-production"
+  },
+  "targets": {},
+  "etags": {}
 }

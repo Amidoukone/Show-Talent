@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 
 import '../models/action_response.dart';
 import '../models/video.dart';
+import '../config/app_environment.dart';
 import '../services/feature_flag_service.dart';
 import '../widgets/video_manager.dart';
 import '../screens/success_toast.dart';
@@ -98,8 +99,9 @@ class VideoController extends GetxController {
   // CLOUD FUNCTIONS / CONNECTIVITY
   // ------------------------------------------------------------------
 
-  final FirebaseFunctions _functions =
-      FirebaseFunctions.instanceFor(region: 'europe-west1');
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+    region: AppEnvironmentConfig.functionsRegion,
+  );
   final Connectivity _connectivity = Connectivity();
 
   // ------------------------------------------------------------------

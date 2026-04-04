@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -8,6 +7,9 @@ import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/models/message_converstion.dart';
 import '../controller/chat_controller.dart';
 import '../models/user.dart';
+import '../widgets/ad_dialogs.dart';
+import '../widgets/ad_feedback.dart';
+import '../widgets/ad_state_panel.dart';
 
 /// ------------------------------
 /// Mini design system Chat (simple, moderne, safe)
@@ -65,7 +67,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   late final Stream<List<Message>> _messagesStream;
   late AppUser _otherUser;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _otherUserSub;
+  StreamSubscription<AppUser?>? _otherUserSub;
 
   Timer? _heartbeatTimer;
   DateTime? _lastTouchAt;
@@ -74,6 +76,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   DateTime? _lastReadSyncAt;
   bool _readSyncInFlight = false;
   static const Duration _readSyncThrottle = Duration(seconds: 2);
+  bool _isSendingMessage = false;
 
   // ✅ Petit cache UI : regroupe l'affichage des dates
   String? _lastDateHeaderKey;
@@ -136,8 +139,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final currentUser = AuthController.instance.user;
     if (currentUser == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text("Erreur")),
-        body: const Center(child: Text("Utilisateur non connecté.")),
+        appBar: AppBar(title: const Text('Erreur')),
+        body: const Center(
+          child: AdStatePanel.error(
+            title: 'Session invalide',
+            message: 'Utilisateur non connecte.',
+          ),
+        ),
       );
     }
 
@@ -252,13 +260,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     stream: _messagesStream,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: AdStatePanel.loading(
+                            title: 'Chargement des messages',
+                            message: 'Synchronisation de la conversation.',
+                          ),
+                        );
                       }
 
                       final messages = snapshot.data ?? const <Message>[];
 
                       if (messages.isEmpty) {
-                        return _EmptyChatState(
+                        return _emptyChatState(
                           otherUserName: otherUser.nom,
                         );
                       }
@@ -303,7 +317,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           return Column(
                             children: [
                               if (showDateHeader)
-                                _DatePill(
+                                _datePill(
                                     label: _formatDayLabel(message.dateEnvoi)),
                               _MessageBubble(
                                 cs: cs,
@@ -358,6 +372,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   onSend: () => _sendMessage(currentUser.uid, otherUser.uid),
                   onUserActivity: _throttledTouchActiveAt,
                   enabled: canMessage,
+                  isSending: _isSendingMessage,
                   disabledHint: disabledHint,
                 ),
               ],
@@ -371,16 +386,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _startOtherUserListener() {
     _otherUserSub?.cancel();
     if (widget.otherUser.uid.isEmpty) return;
-    _otherUserSub = FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.otherUser.uid)
-        .snapshots()
-        .listen(
-      (snapshot) {
-        if (!snapshot.exists) return;
-        final data = snapshot.data();
-        if (data == null || !mounted) return;
-        setState(() => _otherUser = AppUser.fromMap(data));
+    _otherUserSub = chatController.watchUserById(widget.otherUser.uid).listen(
+      (user) {
+        if (user == null || !mounted) return;
+        setState(() => _otherUser = user);
       },
       onError: (error, stackTrace) {
         debugPrint('❌ chat otherUser listener error: $error\n$stackTrace');
@@ -391,45 +400,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // ------------------------------
   // Delete message
   // ------------------------------
-  void _confirmDeleteMessage(Message message) {
-    showDialog(
+  Future<void> _confirmDeleteMessage(Message message) async {
+    final confirmed = await AdDialogs.confirm(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Supprimer ce message"),
-        content: const Text("Voulez-vous vraiment supprimer ce message ?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Annuler"),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              try {
-                await chatController.deleteMessage(
-                    widget.conversationId, message.id);
-                Get.snackbar(
-                  "Message supprimé",
-                  "",
-                  snackPosition: SnackPosition.BOTTOM,
-                  backgroundColor: Colors.grey.shade800,
-                  colorText: Colors.white,
-                );
-              } catch (e) {
-                Get.snackbar(
-                  "Erreur",
-                  "Échec de la suppression du message : $e",
-                  snackPosition: SnackPosition.BOTTOM,
-                  backgroundColor: Colors.red,
-                  colorText: Colors.white,
-                );
-              }
-            },
-            child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: 'Supprimer ce message',
+      message: 'Voulez-vous vraiment supprimer ce message ?',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      danger: true,
     );
+    if (!confirmed) return;
+
+    try {
+      await chatController.deleteMessage(widget.conversationId, message.id);
+      AdFeedback.success(
+        'Message supprime',
+        'Le message a ete supprime avec succes.',
+      );
+    } catch (e) {
+      AdFeedback.error(
+        'Erreur',
+        'Echec de la suppression du message : $e',
+      );
+    }
   }
 
   // ------------------------------
@@ -439,13 +432,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final user = AuthController.instance.user;
     if (user == null) return;
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-        'activeConversationId': widget.conversationId,
-        'activeAt': FieldValue.serverTimestamp(),
-      });
+      await chatController.setActiveConversation(
+        uid: user.uid,
+        conversationId: widget.conversationId,
+      );
       _lastTouchAt = DateTime.now();
     } catch (_) {}
   }
@@ -454,13 +444,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final user = AuthController.instance.user;
     if (user == null) return;
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
-        'activeConversationId': null,
-        'activeAt': FieldValue.serverTimestamp(),
-      });
+      await chatController.setActiveConversation(
+        uid: user.uid,
+        conversationId: null,
+      );
     } catch (_) {}
   }
 
@@ -487,10 +474,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final user = AuthController.instance.user;
     if (user == null) return;
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({'activeAt': FieldValue.serverTimestamp()});
+      await chatController.touchActiveConversation(user.uid);
     } catch (_) {}
   }
 
@@ -499,32 +483,49 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // ------------------------------
   Future<void> _sendMessage(String senderId, String recipientId) async {
     final content = messageController.text.trim();
-    if (content.isEmpty) return;
+    if (content.isEmpty || _isSendingMessage) return;
 
     final canSend = await chatController.canSendMessage(
       senderId: senderId,
       recipientId: recipientId,
     );
     if (!canSend) {
-      Get.snackbar(
+      AdFeedback.warning(
         'Messages indisponibles',
-        'L’envoi de messages est désactivé pour cette conversation.',
-        snackPosition: SnackPosition.BOTTOM,
+        "L'envoi de messages est desactive pour cette conversation.",
       );
       return;
     }
 
-    await chatController.sendMessage(
-      conversationId: widget.conversationId,
-      senderId: senderId,
-      recipientId: recipientId,
-      content: content,
-      skipPermissionCheck: true,
-    );
+    setState(() => _isSendingMessage = true);
 
-    messageController.clear();
-    _scrollToBottom(delay: const Duration(milliseconds: 110));
-    _throttledTouchActiveAt();
+    try {
+      await chatController.sendMessage(
+        conversationId: widget.conversationId,
+        senderId: senderId,
+        recipientId: recipientId,
+        content: content,
+        skipPermissionCheck: true,
+      );
+
+      messageController.clear();
+      _scrollToBottom(delay: const Duration(milliseconds: 110));
+      _throttledTouchActiveAt();
+    } on ChatFlowException catch (error) {
+      AdFeedback.error(
+        'Envoi impossible',
+        error.message,
+      );
+    } catch (_) {
+      AdFeedback.error(
+        'Envoi impossible',
+        'Le message n\'a pas pu etre envoye. Merci de reessayer.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingMessage = false);
+      }
+    }
   }
 
   void _scrollToBottom({Duration delay = Duration.zero}) {
@@ -583,7 +584,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // UI components
   // ------------------------------
 
-  Widget _DatePill({required String label}) {
+  Widget _datePill({required String label}) {
     final cs = Theme.of(context).colorScheme;
 
     return Padding(
@@ -607,40 +608,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _EmptyChatState({required String otherUserName}) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
+  Widget _emptyChatState({required String otherUserName}) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 56,
-              color: cs.onSurface.withValues(alpha: 0.35),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "Aucun message",
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              "Commence la discussion avec $otherUserName.",
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onSurface.withValues(alpha: 0.65),
-                fontWeight: FontWeight.w700,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: AdStatePanel(
+          icon: Icons.chat_bubble_outline,
+          title: 'Aucun message',
+          message: 'Commence la discussion avec $otherUserName.',
         ),
       ),
     );
@@ -820,6 +795,7 @@ class MessageInputBar extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onUserActivity;
   final bool enabled;
+  final bool isSending;
   final String? disabledHint;
 
   const MessageInputBar({
@@ -829,6 +805,7 @@ class MessageInputBar extends StatelessWidget {
     required this.onSend,
     required this.onUserActivity,
     required this.enabled,
+    required this.isSending,
     this.disabledHint,
   });
 
@@ -879,7 +856,7 @@ class MessageInputBar extends StatelessWidget {
                       return TextField(
                         controller: controller,
                         focusNode: focusNode,
-                        enabled: enabled,
+                        enabled: enabled && !isSending,
                         keyboardType: TextInputType.multiline,
                         textInputAction: TextInputAction.newline,
                         minLines: 1,
@@ -916,14 +893,15 @@ class MessageInputBar extends StatelessWidget {
               valueListenable: controller,
               builder: (context, value, _) {
                 final canSend = enabled && value.text.trim().isNotEmpty;
+                final canPress = canSend && !isSending;
 
                 return AnimatedScale(
                   duration: const Duration(milliseconds: 120),
-                  scale: canSend ? 1.0 : 0.98,
+                  scale: canPress ? 1.0 : 0.98,
                   child: Ink(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      gradient: canSend
+                      gradient: canPress
                           ? LinearGradient(
                               colors: [
                                 cs.primary,
@@ -937,7 +915,7 @@ class MessageInputBar extends StatelessWidget {
                               ],
                             ),
                       boxShadow: [
-                        if (canSend)
+                        if (canPress)
                           BoxShadow(
                             color: cs.primary.withValues(alpha: 0.35),
                             blurRadius: 12,
@@ -947,12 +925,25 @@ class MessageInputBar extends StatelessWidget {
                     ),
                     child: InkWell(
                       customBorder: const CircleBorder(),
-                      onTap: canSend ? onSend : null,
-                      child: const SizedBox(
+                      onTap: canPress ? onSend : null,
+                      child: SizedBox(
                         width: 46,
                         height: 46,
-                        child: Icon(Icons.send_rounded,
-                            color: Colors.white, size: 20),
+                        child: isSending
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                            : const Icon(
+                                Icons.send_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                       ),
                     ),
                   ),

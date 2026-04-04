@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/event_controller.dart';
@@ -7,6 +6,7 @@ import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:intl/intl.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
 
 class EventFormScreen extends StatefulWidget {
   final Event? event;
@@ -18,7 +18,7 @@ class EventFormScreen extends StatefulWidget {
 }
 
 class _EventFormScreenState extends State<EventFormScreen> {
-  final EventController eventController = Get.put(EventController());
+  final EventController eventController = Get.find<EventController>();
 
   final TextEditingController titleController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
@@ -86,7 +86,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
             children: [
               _buildSectionTitle('Informations générales'),
               const SizedBox(height: 20),
-
               _buildTextField(
                 controller: titleController,
                 labelText: 'Titre',
@@ -94,7 +93,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 icon: Icons.title,
               ),
               const SizedBox(height: 20),
-
               _buildTextField(
                 controller: descriptionController,
                 labelText: 'Description',
@@ -103,7 +101,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 maxLines: 3,
               ),
               const SizedBox(height: 20),
-
               _buildTextField(
                 controller: locationController,
                 labelText: 'Lieu',
@@ -111,7 +108,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 icon: Icons.location_on,
               ),
               const SizedBox(height: 20),
-
               _buildTextField(
                 controller: capacityController,
                 labelText: 'Capacité maximale (optionnel)',
@@ -120,7 +116,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 20),
-
               _buildTextField(
                 controller: tagsController,
                 labelText: 'Tags / Catégories (séparés par des virgules)',
@@ -128,7 +123,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 icon: Icons.sell_outlined,
               ),
               const SizedBox(height: 20),
-
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Événement public'),
@@ -138,7 +132,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 onChanged: (v) => setState(() => estPublic = v),
               ),
               const SizedBox(height: 12),
-
               DropdownButtonFormField<String>(
                 value: statut,
                 decoration: const InputDecoration(
@@ -154,11 +147,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 ],
                 onChanged: (v) => setState(() => statut = v ?? 'ouvert'),
               ),
-
               const SizedBox(height: 20),
               _buildSectionTitle('Dates'),
               const SizedBox(height: 10),
-
               _buildDatePicker('Date de début', startDate, (newDate) {
                 setState(() {
                   startDate = newDate;
@@ -167,17 +158,13 @@ class _EventFormScreenState extends State<EventFormScreen> {
                   }
                 });
               }, isStart: true),
-
               const SizedBox(height: 10),
-
               _buildDatePicker('Date de fin', endDate, (newDate) {
                 setState(() {
                   endDate = newDate;
                 });
               }),
-
               const SizedBox(height: 40),
-
               Center(
                 child: ElevatedButton(
                   onPressed: _handleSubmit,
@@ -200,37 +187,31 @@ class _EventFormScreenState extends State<EventFormScreen> {
     );
   }
 
-  void _handleSubmit() {
+  Future<void> _handleSubmit() async {
     if (titleController.text.trim().isEmpty ||
         descriptionController.text.trim().isEmpty ||
         locationController.text.trim().isEmpty ||
         startDate == null ||
         endDate == null) {
-      Get.snackbar(
+      AdFeedback.error(
         'Erreur',
-        'Veuillez remplir tous les champs obligatoires',
-        backgroundColor: Colors.red.shade100,
-        colorText: Colors.red,
+        'Veuillez remplir tous les champs obligatoires.',
       );
       return;
     }
 
     if (titleController.text.length > 120) {
-      Get.snackbar(
+      AdFeedback.warning(
         'Titre trop long',
-        'Limitez le titre à 120 caractères',
-        backgroundColor: Colors.red.shade100,
-        colorText: Colors.red,
+        'Limitez le titre a 120 caracteres.',
       );
       return;
     }
 
     if (endDate!.isBefore(startDate!)) {
-      Get.snackbar(
+      AdFeedback.error(
         'Erreur date',
-        'La date de fin doit être après la date de début',
-        backgroundColor: Colors.red.shade100,
-        colorText: Colors.red,
+        'La date de fin doit etre apres la date de debut.',
       );
       return;
     }
@@ -239,11 +220,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
     if (capacityController.text.trim().isNotEmpty) {
       capacite = int.tryParse(capacityController.text.trim());
       if (capacite == null || capacite <= 0) {
-        Get.snackbar(
-          'Capacité invalide',
-          'Entrez un nombre positif',
-          backgroundColor: Colors.red.shade100,
-          colorText: Colors.red,
+        AdFeedback.error(
+          'Capacite invalide',
+          'Entrez un nombre positif.',
         );
         return;
       }
@@ -281,10 +260,13 @@ class _EventFormScreenState extends State<EventFormScreen> {
         // views / archivedAt / lastUpdated gérés côté controller si besoin
       );
 
-      eventController.updateEvent(updatedEvent, currentUser);
+      final ok = await eventController.updateEvent(updatedEvent, currentUser);
+      if (ok && mounted) {
+        Navigator.pop(context, true);
+      }
     } else {
       Event newEvent = Event(
-        id: FirebaseFirestore.instance.collection('events').doc().id,
+        id: eventController.newEventId(),
         titre: titleController.text.trim(),
         description: descriptionController.text.trim(),
         dateDebut: startDate!,
@@ -306,10 +288,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
         views: 0, // ✅ init safe
       );
 
-      eventController.createEvent(newEvent, currentUser);
+      final ok = await eventController.createEvent(newEvent, currentUser);
+      if (ok && mounted) {
+        Navigator.pop(context, true);
+      }
     }
-
-    Navigator.pop(context, true);
   }
 
   Widget _buildSectionTitle(String title) {

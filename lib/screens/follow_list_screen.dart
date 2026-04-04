@@ -3,7 +3,8 @@ import 'package:get/get.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/screens/profile_screen.dart';
-import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_state_panel.dart';
 
 class FollowListScreen extends StatefulWidget {
   final String uid;
@@ -61,9 +62,12 @@ class _FollowListScreenState extends State<FollowListScreen> {
 
           if (snapshot.hasError) {
             return const Center(
-              child: Text(
-                'Une erreur est survenue. Veuillez réessayer.',
-                style: TextStyle(fontSize: 16, color: Colors.red),
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: AdStatePanel.error(
+                  title: 'Chargement impossible',
+                  message: 'Une erreur est survenue. Veuillez reessayer.',
+                ),
               ),
             );
           }
@@ -71,14 +75,16 @@ class _FollowListScreenState extends State<FollowListScreen> {
           final list = snapshot.data;
           if (list == null || list.isEmpty) {
             return Center(
-              child: Text(
-                widget.listType == 'followers'
-                    ? 'Aucun abonné pour l’instant.'
-                    : 'Aucun abonnement pour l’instant.',
-                style: const TextStyle(
-                    fontSize: 16,
-                    color: AdColors.onSurfaceMuted,
-                    fontWeight: FontWeight.w600),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: AdStatePanel.empty(
+                  title: widget.listType == 'followers'
+                      ? 'Aucun abonne'
+                      : 'Aucun abonnement',
+                  message: widget.listType == 'followers'
+                      ? "Aucun abonne pour l'instant."
+                      : "Aucun abonnement pour l'instant.",
+                ),
               ),
             );
           }
@@ -166,8 +172,7 @@ class _FollowListButtonState extends State<_FollowListButton> {
         if (!success) {
           // rollback si erreur
           widget.u.isFollowing = isFollowing;
-          Get.snackbar('Erreur', 'Impossible d’effectuer l’action.',
-              backgroundColor: Colors.red, colorText: Colors.white);
+          AdFeedback.error('Erreur', "Impossible d'effectuer l'action.");
         }
 
         if (mounted) {
@@ -177,7 +182,9 @@ class _FollowListButtonState extends State<_FollowListButton> {
         }
       },
       style: ElevatedButton.styleFrom(
-        backgroundColor: widget.u.isFollowing ? const Color.fromARGB(255, 158, 50, 42) : const Color.fromARGB(255, 7, 99, 79),
+        backgroundColor: widget.u.isFollowing
+            ? const Color.fromARGB(255, 158, 50, 42)
+            : const Color.fromARGB(255, 7, 99, 79),
         padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       ),
       child: _isLoading
@@ -196,7 +203,6 @@ class _FollowListButtonState extends State<_FollowListButton> {
     );
   }
 }
-
 
 /// Modèle local pour la ligne utilisateur dans la liste Follow
 class FollowUserItem {

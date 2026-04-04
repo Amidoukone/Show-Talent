@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../theme/ad_tokens.dart';
+
 class AdTextField extends StatefulWidget {
   final TextEditingController controller;
   final String label;
   final TextInputType keyboardType;
   final bool isPassword;
+  final bool enabled;
   final String? hint;
+  final String? helper;
+  final int maxLines;
   final TextInputAction textInputAction;
   final FormFieldValidator<String>? validator;
   final Widget? prefixIcon;
@@ -18,7 +23,10 @@ class AdTextField extends StatefulWidget {
     required this.label,
     this.keyboardType = TextInputType.text,
     this.isPassword = false,
+    this.enabled = true,
     this.hint,
+    this.helper,
+    this.maxLines = 1,
     this.textInputAction = TextInputAction.next,
     this.validator,
     this.prefixIcon,
@@ -39,14 +47,17 @@ class _AdTextFieldState extends State<AdTextField> {
 
     return TextFormField(
       controller: widget.controller,
+      enabled: widget.enabled,
       keyboardType: widget.keyboardType,
       textInputAction: widget.textInputAction,
+      maxLines: widget.isPassword ? 1 : widget.maxLines,
       obscureText: widget.isPassword ? _obscure : false,
       validator: widget.validator,
       onFieldSubmitted: (_) => widget.onSubmitted?.call(),
       decoration: InputDecoration(
         labelText: widget.label,
         hintText: widget.hint,
+        helperText: widget.helper,
         prefixIcon: widget.prefixIcon,
         suffixIcon: widget.isPassword
             ? IconButton(
@@ -57,6 +68,11 @@ class _AdTextFieldState extends State<AdTextField> {
                 ),
               )
             : widget.suffix,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AdSpacing.md,
+          vertical: AdSpacing.sm,
+        ),
       ),
     );
   }

@@ -5,6 +5,8 @@ import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'chat_screen.dart';
 
 class SelectUserScreen extends StatefulWidget {
@@ -16,18 +18,15 @@ class SelectUserScreen extends StatefulWidget {
 
 class _SelectUserScreenState extends State<SelectUserScreen> {
   // ✅ Réutilise les controllers existants
-  final UserController userController = Get.isRegistered<UserController>()
-      ? Get.find<UserController>()
-      : Get.put(UserController(), permanent: true);
+  final UserController userController = Get.find<UserController>();
 
-  final ChatController chatController = Get.isRegistered<ChatController>()
-      ? Get.find<ChatController>()
-      : Get.put(ChatController(), permanent: true);
+  final ChatController chatController = Get.find<ChatController>();
 
   final AuthController authController = Get.find<AuthController>();
 
   final TextEditingController searchController = TextEditingController();
   final RxString searchTerm = ''.obs;
+  String? _busyConversationUserId;
 
   @override
   void dispose() {
@@ -47,7 +46,15 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
         centerTitle: true,
       ),
       body: currentUid == null
-          ? const Center(child: Text("Utilisateur non connecté."))
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: AdStatePanel.error(
+                  title: 'Session invalide',
+                  message: 'Utilisateur non connecte.',
+                ),
+              ),
+            )
           : Column(
               children: [
                 // 🔍 Barre de recherche moderne
@@ -63,7 +70,8 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     ),
                     child: TextField(
                       controller: searchController,
-                      onChanged: (value) => searchTerm.value = value.toLowerCase(),
+                      onChanged: (value) =>
+                          searchTerm.value = value.toLowerCase(),
                       decoration: InputDecoration(
                         hintText: 'Rechercher un utilisateur…',
                         prefixIcon: Icon(
@@ -93,11 +101,10 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     }).toList();
 
                     if (users.isEmpty) {
-                      return _EmptyState(
-                        icon: Icons.group_off_outlined,
+                      return const AdStatePanel.empty(
                         title: "Aucun utilisateur disponible",
-                        subtitle:
-                            "Il n’y a actuellement aucun utilisateur avec qui discuter.",
+                        message:
+                            "Il n'y a actuellement aucun utilisateur avec qui discuter.",
                       );
                     }
 
@@ -106,10 +113,10 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     }).toList();
 
                     if (filteredUsers.isEmpty) {
-                      return _EmptyState(
-                        icon: Icons.search_off,
+                      return const AdStatePanel.empty(
                         title: "Aucun résultat",
-                        subtitle: "Aucun utilisateur ne correspond à ta recherche.",
+                        message:
+                            "Aucun utilisateur ne correspond à votre recherche.",
                       );
                     }
 
@@ -122,7 +129,13 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
 
                         return _UserCard(
                           user: user,
+                          isLoading: _busyConversationUserId == user.uid,
                           onTap: () async {
+                            if (_busyConversationUserId != null) {
+                              return;
+                            }
+
+                            setState(() => _busyConversationUserId = user.uid);
                             try {
                               final conversationId =
                                   await chatController.createOrGetConversation(
@@ -130,18 +143,28 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                                 otherUserId: user.uid,
                               );
 
-                              Get.to(() => ChatScreen(
+                              if (conversationId.trim().isEmpty) {
+                                AdFeedback.error(
+                                  'Erreur',
+                                  'Conversation indisponible pour le moment.',
+                                );
+                                return;
+                              }
+
+                              if (!mounted) return;
+                              await Get.to(() => ChatScreen(
                                     conversationId: conversationId,
                                     otherUser: user,
                                   ));
                             } catch (e) {
-                              Get.snackbar(
+                              AdFeedback.error(
                                 'Erreur',
-                                'Impossible de démarrer la conversation : $e',
-                                backgroundColor: Colors.red,
-                                colorText: Colors.white,
-                                snackPosition: SnackPosition.BOTTOM,
+                                'Impossible de demarrer la conversation.',
                               );
+                            } finally {
+                              if (mounted) {
+                                setState(() => _busyConversationUserId = null);
+                              }
                             }
                           },
                         );
@@ -161,11 +184,13 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
 
 class _UserCard extends StatelessWidget {
   final AppUser user;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isLoading;
 
   const _UserCard({
     required this.user,
     required this.onTap,
+    this.isLoading = false,
   });
 
   @override
@@ -195,8 +220,9 @@ class _UserCard extends StatelessWidget {
               CircleAvatar(
                 radius: 26,
                 backgroundColor: cs.surfaceContainerHighest,
-                backgroundImage:
-                    user.photoProfil.isNotEmpty ? NetworkImage(user.photoProfil) : null,
+                backgroundImage: user.photoProfil.isNotEmpty
+                    ? NetworkImage(user.photoProfil)
+                    : null,
                 child: user.photoProfil.isEmpty
                     ? Text(
                         initial,
@@ -234,62 +260,13 @@ class _UserCard extends StatelessWidget {
                 ),
               ),
               Icon(
-                Icons.chevron_right,
-                color: cs.onSurface.withValues(alpha: 0.5),
+                isLoading ? Icons.hourglass_top : Icons.chevron_right,
+                color: isLoading
+                    ? cs.primary
+                    : cs.onSurface.withValues(alpha: 0.5),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  const _EmptyState({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 56,
-              color: cs.onSurface.withValues(alpha: 0.4),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: cs.onSurface.withValues(alpha: 0.65),
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
         ),
       ),
     );

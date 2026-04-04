@@ -17,17 +17,35 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.adfoot"
+    namespace = "org.adfoot.app"
     compileSdk = 35
     ndkVersion = "29.0.13599879"
 
     defaultConfig {
-        applicationId = "com.example.adfoot"
+        applicationId = "org.adfoot.app"
         minSdk = 24
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled true
+    }
+
+    flavorDimensions += "environment"
+    productFlavors {
+        local {
+            dimension "environment"
+            applicationIdSuffix ".local"
+            resValue "string", "app_name", "Adfoot Local"
+        }
+        staging {
+            dimension "environment"
+            applicationIdSuffix ".staging"
+            resValue "string", "app_name", "Adfoot Staging"
+        }
+        production {
+            dimension "environment"
+            resValue "string", "app_name", "Adfoot"
+        }
     }
 
     compileOptions {

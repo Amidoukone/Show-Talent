@@ -25,6 +25,9 @@ import 'package:adfoot/widgets/video_manager.dart';
 class SmartVideoPlayer extends StatefulWidget {
   final CachedVideoPlayerPlus? player;
   final Video video;
+  final VideoController videoController;
+  final UserController userController;
+  final FollowController followController;
   final String contextKey;
   final String videoUrl;
   final int currentIndex;
@@ -41,6 +44,9 @@ class SmartVideoPlayer extends StatefulWidget {
     super.key,
     required this.player,
     required this.video,
+    required this.videoController,
+    required this.userController,
+    required this.followController,
     required this.contextKey,
     required this.videoUrl,
     required this.currentIndex,
@@ -70,7 +76,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   bool _hasFirstFrame = false;
   int _attachToken = 0;
 
-  VideoController? _vc;
+  late VideoController _vc;
   Worker? _indexWorker;
 
   AppLifecycleState _appState = AppLifecycleState.resumed;
@@ -80,7 +86,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   bool _isFollowActionLoading = false;
 
   bool get _preferHls =>
-      (_vc?.preferHlsPlayback ?? false) && widget.video.hasAdaptiveHlsSource;
+      _vc.preferHlsPlayback && widget.video.hasAdaptiveHlsSource;
 
   Timer? _playDebounceTimer;
   static const Duration _playDebounce = Duration(milliseconds: 120);
@@ -115,31 +121,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _videoUiSignal =
         _videoManager.watchVideoUi(widget.contextKey, widget.videoUrl);
 
-    _vc = Get.isRegistered<VideoController>(tag: widget.contextKey)
-        ? Get.find<VideoController>(tag: widget.contextKey)
-        : Get.put(
-            VideoController(
-              contextKey: widget.contextKey,
-              enableLiveStream: false,
-              enableFeedFetch: false,
-            ),
-            tag: widget.contextKey,
-            permanent: true,
-          );
-
-    _indexWorker = ever<int>(_vc!.currentIndex, (i) {
-      if (!mounted || _isDisposed) return;
-      if (i == widget.currentIndex) {
-        _bindManagedPlayerIfAvailable();
-        _scheduleMaybePlay();
-      } else {
-        _becomePassive();
-      }
-    });
+    _vc = widget.videoController;
+    _bindIndexWorker();
 
     if (widget.player != null) {
       _bindPlayer(widget.player);
-    } else if (_vc?.currentIndex.value == widget.currentIndex) {
+    } else if (_vc.currentIndex.value == widget.currentIndex) {
       unawaited(_attachOrInitialize());
     }
   }
@@ -177,6 +164,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   void didUpdateWidget(covariant SmartVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    if (!identical(oldWidget.videoController, widget.videoController)) {
+      _vc = widget.videoController;
+      _indexWorker?.dispose();
+      _bindIndexWorker();
+    }
+
     if (oldWidget.contextKey != widget.contextKey ||
         oldWidget.videoUrl != widget.videoUrl) {
       _videoManager.unwatchVideoUi(oldWidget.contextKey, oldWidget.videoUrl);
@@ -203,7 +196,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           _bindPlayer(widget.player);
           return;
         }
-        if (_vc?.currentIndex.value == widget.currentIndex) {
+        if (_vc.currentIndex.value == widget.currentIndex) {
           unawaited(_attachOrInitialize());
         }
       });
@@ -230,7 +223,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _becomePassive();
     } else if (state == AppLifecycleState.resumed) {
       if (_isActuallyVisible() &&
-          (_vc?.currentIndex.value == widget.currentIndex)) {
+          (_vc.currentIndex.value == widget.currentIndex)) {
         _scheduleMaybePlay();
       }
     }
@@ -293,7 +286,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _bindPlayer(p);
 
     if (widget.autoPlay &&
-        (_vc?.currentIndex.value == widget.currentIndex) &&
+        (_vc.currentIndex.value == widget.currentIndex) &&
         _isActuallyVisible()) {
       _scheduleMaybePlay();
     }
@@ -306,6 +299,18 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       return;
     }
     _bindPlayer(managedPlayer);
+  }
+
+  void _bindIndexWorker() {
+    _indexWorker = ever<int>(_vc.currentIndex, (i) {
+      if (!mounted || _isDisposed) return;
+      if (i == widget.currentIndex) {
+        _bindManagedPlayerIfAvailable();
+        _scheduleMaybePlay();
+      } else {
+        _becomePassive();
+      }
+    });
   }
 
   void _bindPlayer(CachedVideoPlayerPlus? p) {
@@ -502,8 +507,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
     _showPlayIcon.value = !v.isPlaying;
 
-    final shouldBePlaying = (_vc?.currentIndex.value == widget.currentIndex) &&
-        _isActuallyVisible();
+    final shouldBePlaying =
+        (_vc.currentIndex.value == widget.currentIndex) && _isActuallyVisible();
 
     if (!shouldBePlaying && v.isPlaying) {
       try {
@@ -528,7 +533,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     }
 
     final shouldKeepAwake =
-        value.isPlaying && (_vc?.currentIndex.value == widget.currentIndex);
+        value.isPlaying && (_vc.currentIndex.value == widget.currentIndex);
 
     unawaited(_setWakelock(shouldKeepAwake));
   }
@@ -540,7 +545,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     final route = ModalRoute.of(context);
     if (route != null && !route.isCurrent) return false;
 
-    return (_vc?.currentIndex.value == widget.currentIndex);
+    return _vc.currentIndex.value == widget.currentIndex;
   }
 
   void _scheduleMaybePlay() {
@@ -755,7 +760,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   @override
   Widget build(BuildContext context) {
     final videoController = _vc;
-    final userController = Get.find<UserController>();
+    final userController = widget.userController;
 
     return ValueListenableBuilder<int>(
       valueListenable: _videoUiSignal,
@@ -811,7 +816,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 );
               },
             ),
-            if (widget.showControls && videoController != null)
+            if (widget.showControls)
               _buildActions(context, videoController, userController),
           ],
         );
@@ -1019,7 +1024,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     required bool isFollowing,
     required UserController userController,
   }) {
-    final followCtrl = Get.find<FollowController>();
+    final followCtrl = widget.followController;
     final publisher = userController.usersCache[widget.video.uid];
     final photoUrl =
         (publisher?.photoProfil ?? widget.video.profilePhoto).trim();

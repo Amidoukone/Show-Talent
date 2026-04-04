@@ -19,6 +19,7 @@ class AdColors {
   // Accents secondaires
   static const accent = Color(0xFFB6F04A);
   static const accentDark = Color(0xFF8BC23A);
+  static const info = Color(0xFF4EA8FF);
   static const warning = Color(0xFFE6C75A);
   static const error = Color(0xFFE53935);
   static const success = Color(0xFF26C165);
@@ -26,6 +27,7 @@ class AdColors {
   // States
   static const disabled = Color(0xFF5F6A75);
   static const divider = Color(0xFF202632);
+  static const overlay = Color(0xC40E1114);
 
   // Shades
   static const white = Colors.white;

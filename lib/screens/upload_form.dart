@@ -7,6 +7,7 @@ import 'package:adfoot/controller/upload_video_controller.dart';
 import 'package:adfoot/widgets/progress_full_screen_loader.dart';
 import 'package:video_player/video_player.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
 
 class UploadForm extends StatefulWidget {
   final File videoFile;
@@ -85,8 +86,9 @@ class _UploadFormState extends State<UploadForm> {
   }
 
   Future<void> _handleUpload() async {
-    // Évite double-clic pendant un état actif
-    if (uploadVideoController.isUploading.value ||
+    // Evite double clic pendant un etat actif
+    if (uploadVideoController.isPreparing.value ||
+        uploadVideoController.isUploading.value ||
         uploadVideoController.isOptimizing.value) {
       return;
     }
@@ -94,14 +96,9 @@ class _UploadFormState extends State<UploadForm> {
     // Validation formulaire
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    // Fermer les claviers avant d’ouvrir le loader
+    // Ferme les claviers avant de lancer la preparation
     _descriptionFocus.unfocus();
     _captionFocus.unfocus();
-
-    Get.dialog(
-      const ProgressFullScreenLoader(),
-      barrierDismissible: false,
-    );
 
     try {
       final isReady = await uploadVideoController.prepareUpload(
@@ -110,22 +107,13 @@ class _UploadFormState extends State<UploadForm> {
         videoPath: widget.videoPath,
       );
 
-      if (isReady) {
-        await uploadVideoController.uploadDirectly();
-      } else {
-        if (Get.isDialogOpen == true) {
-          Get.back(); // Fermer si échec préparation
-        }
-      }
+      if (!isReady) return;
+
+      await uploadVideoController.uploadDirectly();
     } catch (e) {
-      if (Get.isDialogOpen == true) {
-        Get.back(); // Toujours fermer en cas d'erreur
-      }
-      Get.snackbar(
+      AdFeedback.error(
         'Erreur',
         'Erreur inattendue : $e',
-        backgroundColor: Colors.redAccent,
-        colorText: Colors.white,
       );
     }
   }
@@ -142,17 +130,24 @@ class _UploadFormState extends State<UploadForm> {
         foregroundColor: cs.onSurface,
       ),
       body: Obx(() {
-        if (uploadVideoController.isOptimizing.value) {
+        final isPreparing = uploadVideoController.isPreparing.value;
+        final isUploading = uploadVideoController.isUploading.value;
+        final isOptimizing = uploadVideoController.isOptimizing.value;
+        final isBusy = isPreparing || isUploading || isOptimizing;
+
+        if (isOptimizing) {
           // Affiche "Optimisation en cours..."
           return const ProcessingDialog();
         }
 
-        if (uploadVideoController.isUploading.value) {
-          // Affiche progression d'upload (étapes + barre)
-          return const ProgressFullScreenLoader();
+        if (isPreparing || isUploading) {
+          // Affiche progression d'upload (etapes + barre)
+          return ProgressFullScreenLoader(
+            uploadController: uploadVideoController,
+          );
         }
 
-        // Formulaire de saisie + prévisualisation
+        // Formulaire de saisie + previsualisation
         return GestureDetector(
           onTap: () {
             // Ferme le clavier si on tape ailleurs
@@ -199,8 +194,8 @@ class _UploadFormState extends State<UploadForm> {
                               top: 8,
                               right: 8,
                               child: Container(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: Colors.black54,
                                   borderRadius: BorderRadius.circular(12),
@@ -290,7 +285,7 @@ class _UploadFormState extends State<UploadForm> {
 
                 // Bouton d’upload
                 ElevatedButton.icon(
-                  onPressed: _handleUpload,
+                  onPressed: isBusy ? null : _handleUpload,
                   icon: const Icon(Icons.cloud_upload, color: Colors.white),
                   label: const Text(
                     'Téléverser la vidéo',
@@ -310,7 +305,8 @@ class _UploadFormState extends State<UploadForm> {
                 Text(
                   'Rappel : durée max 60s • qualité conseillée ≥ 480×360',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7), fontSize: 12),
+                  style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.7), fontSize: 12),
                 ),
               ],
             ),

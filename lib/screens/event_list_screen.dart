@@ -1,4 +1,5 @@
 import 'package:adfoot/controller/chat_controller.dart';
+import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/event.dart';
@@ -6,6 +7,11 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/event_detail_screen.dart';
 import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_dialogs.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -19,11 +25,9 @@ class EventListScreen extends StatefulWidget {
 }
 
 class _EventListScreenState extends State<EventListScreen> {
-  final EventController eventController = Get.put(EventController());
+  final EventController eventController = Get.find<EventController>();
   final UserController userController = Get.find<UserController>();
-  final ChatController chatController = Get.isRegistered<ChatController>()
-      ? Get.find()
-      : Get.put(ChatController());
+  final ChatController chatController = Get.find<ChatController>();
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -233,36 +237,33 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Widget _buildEmptyState(AppUser currentUser) {
-    final isOrganizer =
-        currentUser.role == 'club' || currentUser.role == 'recruteur';
+    final isOrganizer = isOpportunityPublisherRole(currentUser.role);
+    final actionLabel = isOrganizer ? 'Creer un evenement' : 'Voir les clubs';
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.event_busy,
-                size: 72, color: AdColors.onSurfaceMuted),
-            const SizedBox(height: 12),
-            const Text(
-              'Aucun événement disponible',
-              style: TextStyle(
-                fontSize: 18,
-                color: AdColors.onSurfaceMuted,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: isOrganizer
-                  ? () => Get.to(() => const EventFormScreen())
-                  : () => Get.offAllNamed('/main', arguments: {'tab': 2}),
-              icon: Icon(isOrganizer ? Icons.add : Icons.groups),
-              label: Text(
-                isOrganizer ? 'Créer un événement' : 'Voir les clubs',
-              ),
-            ),
-          ],
+        padding: const EdgeInsets.all(16),
+        child: AdStatePanel(
+          icon: Icons.event_busy,
+          title: 'Aucun evenement disponible',
+          message: isOrganizer
+              ? 'Vous pouvez publier votre premier evenement.'
+              : 'Aucun evenement ne correspond a vos filtres.',
+          action: AdButton(
+            expanded: false,
+            label: actionLabel,
+            onPressed: () {
+              if (isOrganizer) {
+                Get.to(() => const EventFormScreen());
+                return;
+              }
+
+              Get.offAllNamed(
+                AppRoutes.main,
+                arguments: {'tab': 2},
+              );
+            },
+          ),
         ),
       ),
     );
@@ -286,7 +287,7 @@ class _EventListScreenState extends State<EventListScreen> {
             onChanged: (_) => setState(() {}),
             style: TextStyle(color: cs.onSurface),
             decoration: const InputDecoration(
-              hintText: 'Rechercher (titre, lieu)…',
+              hintText: 'Rechercher (titre, lieu)...',
               prefixIcon: Icon(Icons.search),
             ),
           ),
@@ -498,7 +499,7 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   FloatingActionButton? _buildFloatingActionButton(AppUser currentUser) {
-    if (currentUser.role == 'club' || currentUser.role == 'recruteur') {
+    if (isOpportunityPublisherRole(currentUser.role)) {
       return FloatingActionButton(
         onPressed: () => Get.to(() => const EventFormScreen()),
         backgroundColor: AdColors.brand,
@@ -509,44 +510,58 @@ class _EventListScreenState extends State<EventListScreen> {
     return null;
   }
 
-  void _confirmDeleteEvent(BuildContext context, Event event) {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Supprimer'),
-        content: const Text('Voulez-vous vraiment supprimer cet événement ?'),
-        actions: [
-          TextButton(onPressed: Get.back, child: const Text('Annuler')),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await eventController.deleteEvent(event.id, userController.user!);
-            },
-            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _confirmDeleteEvent(BuildContext context, Event event) async {
+    final confirmed = await AdDialogs.confirm(
+      context: context,
+      title: 'Supprimer',
+      message: 'Voulez-vous vraiment supprimer cet evenement ?',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      danger: true,
     );
+    if (!confirmed) return;
+
+    try {
+      await eventController.deleteEvent(event.id, userController.user!);
+      AdFeedback.success(
+        'Evenement supprime',
+        "L'evenement a ete supprime avec succes.",
+      );
+    } catch (e) {
+      AdFeedback.error(
+        'Erreur',
+        "La suppression de l'evenement a echoue : $e",
+      );
+    }
   }
 
-  void _confirmUnregisterEvent(
-      BuildContext context, Event event, AppUser currentUser) {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Se désinscrire'),
-        content: const Text(
-            'Voulez-vous vraiment vous désinscrire de cet événement ?'),
-        actions: [
-          TextButton(onPressed: Get.back, child: const Text('Annuler')),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await eventController.unregisterFromEvent(event.id, currentUser);
-            },
-            child: const Text('Confirmer', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _confirmUnregisterEvent(
+    BuildContext context,
+    Event event,
+    AppUser currentUser,
+  ) async {
+    final confirmed = await AdDialogs.confirm(
+      context: context,
+      title: 'Se desinscrire',
+      message: 'Voulez-vous vraiment vous desinscrire de cet evenement ?',
+      confirmLabel: 'Confirmer',
+      cancelLabel: 'Annuler',
+      danger: true,
     );
+    if (!confirmed) return;
+
+    try {
+      await eventController.unregisterFromEvent(event.id, currentUser);
+      AdFeedback.info(
+        'Participation mise a jour',
+        'Vous etes desinscrit de cet evenement.',
+      );
+    } catch (e) {
+      AdFeedback.error(
+        'Erreur',
+        "Impossible de finaliser la desinscription : $e",
+      );
+    }
   }
 }
 

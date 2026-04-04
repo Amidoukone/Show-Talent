@@ -1,12 +1,12 @@
 {
-  "name": "AD.FOOT",
-  "short_name": "AD.FOOT",
+  "name": "Adfoot",
+  "short_name": "Adfoot",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0E1114",
   "theme_color": "#2ED573",
-  "description": "Promotion des jeunes talents de football.",
+  "description": "Adfoot met en avant les jeunes talents du football.",
   "orientation": "portrait-primary",
   "prefer_related_applications": false,
   "icons": [

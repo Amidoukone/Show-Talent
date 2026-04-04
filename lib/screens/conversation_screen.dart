@@ -6,6 +6,9 @@ import '../controller/auth_controller.dart';
 import '../controller/chat_controller.dart';
 import '../controller/user_controller.dart';
 import '../models/user.dart';
+import '../widgets/ad_dialogs.dart';
+import '../widgets/ad_feedback.dart';
+import '../widgets/ad_state_panel.dart';
 import 'chat_screen.dart';
 import 'select_user_screen.dart';
 
@@ -18,17 +21,15 @@ class ConversationsScreen extends StatefulWidget {
 
 class _ConversationsScreenState extends State<ConversationsScreen> {
   // ✅ Réutilise le ChatController existant, sinon l’instancie (comme ta structure)
-  final ChatController chatController = Get.isRegistered<ChatController>()
-      ? Get.find<ChatController>()
-      : Get.put(ChatController(), permanent: true);
+  final ChatController chatController = Get.find<ChatController>();
 
   // ✅ Réutilise AuthController existant
   final AuthController authController = Get.find<AuthController>();
 
   // ✅ On s’appuie sur UserController.userList pour éviter FutureBuilder par item
-  final UserController userController = Get.isRegistered<UserController>()
-      ? Get.find<UserController>()
-      : Get.put(UserController(), permanent: true);
+  final UserController userController = Get.find<UserController>();
+  bool _isOpeningConversation = false;
+  final Set<String> _deletingConversationIds = <String>{};
 
   @override
   void initState() {
@@ -60,7 +61,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               decoration: BoxDecoration(
                 color: cs.surfaceContainerHighest.withValues(alpha: 0.7),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
+                border: Border.all(
+                    color: theme.dividerColor.withValues(alpha: 0.6)),
               ),
               child: const Icon(Icons.messenger_outline, size: 22),
             ),
@@ -70,7 +72,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               children: [
                 Text(
                   "Conversations",
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                  style: theme.textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
                 ),
                 Text(
                   "Messages sécurisés et synchronisés",
@@ -117,7 +120,15 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
           child: Obx(() {
             final currentUserId = authController.user?.uid;
             if (currentUserId == null) {
-              return const Center(child: Text("Utilisateur non connecté."));
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: AdStatePanel.error(
+                    title: 'Session invalide',
+                    message: 'Utilisateur non connecte.',
+                  ),
+                ),
+              );
             }
 
             final conversations = chatController.conversations;
@@ -183,7 +194,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   }
 
                   // ✅ On conserve la logique de filtrage
-                  if (otherUser.estActif != true || otherUser.emailVerified != true) {
+                  if (otherUser.estActif != true ||
+                      otherUser.emailVerified != true) {
                     return _InfoCard(
                       title: "Utilisateur inactif ou non vérifié",
                       subtitle: "Cette conversation n’est pas disponible.",
@@ -205,17 +217,28 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     isUnread: isUnread,
                     unreadCount: unreadCount,
                     onTap: () async {
-                      if (unreadCount > 0) {
-                        await chatController.markMessagesAsRead(
-                          conversation.id,
-                          currentUserId,
-                        );
+                      if (_isOpeningConversation) {
+                        return;
                       }
 
-                      Get.to(() => ChatScreen(
-                            conversationId: conversation.id,
-                            otherUser: otherUser,
-                          ));
+                      setState(() => _isOpeningConversation = true);
+                      try {
+                        if (unreadCount > 0) {
+                          await chatController.markMessagesAsRead(
+                            conversation.id,
+                            currentUserId,
+                          );
+                        }
+
+                        await Get.to(() => ChatScreen(
+                              conversationId: conversation.id,
+                              otherUser: otherUser,
+                            ));
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isOpeningConversation = false);
+                        }
+                      }
                     },
                     onLongPress: () => _confirmDelete(conversation.id),
                     // ✅ Swipe to delete (moderne) sans supprimer le long-press
@@ -230,40 +253,47 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     );
   }
 
-  void _confirmDelete(String conversationId) {
-    showDialog(
+  Future<void> _confirmDelete(String conversationId) async {
+    if (_deletingConversationIds.contains(conversationId)) {
+      return;
+    }
+
+    final confirmed = await AdDialogs.confirm(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Supprimer la conversation"),
-        content: const Text("Voulez-vous vraiment supprimer cette conversation ?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Annuler"),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await chatController.deleteConversation(conversationId);
-              Get.snackbar(
-                'Conversation supprimée',
-                '',
-                snackPosition: SnackPosition.BOTTOM,
-              );
-            },
-            child: const Text("Supprimer", style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: 'Supprimer la conversation',
+      message: 'Voulez-vous vraiment supprimer cette conversation ?',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      danger: true,
     );
+    if (!confirmed) return;
+
+    setState(() => _deletingConversationIds.add(conversationId));
+    try {
+      await chatController.deleteConversation(conversationId);
+      AdFeedback.success(
+        'Conversation supprimee',
+        'La conversation a ete supprimee avec succes.',
+      );
+    } catch (e) {
+      AdFeedback.error(
+        'Erreur',
+        'Impossible de supprimer la conversation : $e',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _deletingConversationIds.remove(conversationId));
+      }
+    }
   }
 
   String _formatDateOrTime(DateTime? dateTime) {
     if (dateTime == null) return "Inconnue";
 
     final now = DateTime.now();
-    final isToday =
-        now.day == dateTime.day && now.month == dateTime.month && now.year == dateTime.year;
+    final isToday = now.day == dateTime.day &&
+        now.month == dateTime.month &&
+        now.year == dateTime.year;
 
     return isToday
         ? DateFormat('HH:mm').format(dateTime)
@@ -308,7 +338,8 @@ class _ConversationCard extends StatelessWidget {
     );
 
     final subtitleStyle = theme.textTheme.bodyMedium?.copyWith(
-      color: theme.colorScheme.onSurface.withValues(alpha: isUnread ? 0.92 : 0.68),
+      color:
+          theme.colorScheme.onSurface.withValues(alpha: isUnread ? 0.92 : 0.68),
       fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
       letterSpacing: 0.05,
     );
@@ -318,7 +349,8 @@ class _ConversationCard extends StatelessWidget {
       fontWeight: FontWeight.w700,
     );
 
-    final avatarBg = theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.9);
+    final avatarBg =
+        theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.9);
 
     final card = AnimatedContainer(
       duration: const Duration(milliseconds: 180),
@@ -404,7 +436,8 @@ class _ConversationCard extends StatelessWidget {
 
     // ✅ Swipe-to-delete moderne (sans supprimer long-press)
     return Dismissible(
-      key: ValueKey("conv_${user.uid}_${dateLabel}_${unreadCount}_${lastMessage.hashCode}"),
+      key: ValueKey(
+          "conv_${user.uid}_${dateLabel}_${unreadCount}_${lastMessage.hashCode}"),
       direction: DismissDirection.endToStart,
       confirmDismiss: (_) async {
         onSwipeDelete();
@@ -437,7 +470,9 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initial = (name.trim().isNotEmpty) ? name.trim().substring(0, 1).toUpperCase() : "?";
+    final initial = (name.trim().isNotEmpty)
+        ? name.trim().substring(0, 1).toUpperCase()
+        : "?";
 
     return Stack(
       children: [
@@ -464,7 +499,8 @@ class _Avatar extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: Theme.of(context).colorScheme.primary,
-              border: Border.all(color: Colors.black.withValues(alpha: 0.65), width: 1.5),
+              border: Border.all(
+                  color: Colors.black.withValues(alpha: 0.65), width: 1.5),
             ),
           ),
         ),
@@ -515,60 +551,18 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.forum_outlined,
-              size: 56,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              "Aucune conversation",
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              "Démarre une discussion avec un utilisateur pour voir tes conversations ici.",
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 10,
-              runSpacing: 8,
-              children: [
-                FilledButton.icon(
-                  onPressed: onNewChat,
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  label: const Text("Nouvelle discussion"),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onNewChat,
-                  icon: const Icon(Icons.person_add_alt_1_rounded),
-                  label: const Text("Inviter un talent"),
-                ),
-              ],
-            ),
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: AdStatePanel.empty(
+          title: 'Aucune conversation',
+          message:
+              'Demarre une discussion avec un utilisateur pour voir tes conversations ici.',
+          action: FilledButton.icon(
+            onPressed: onNewChat,
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: const Text('Nouvelle discussion'),
+          ),
         ),
       ),
     );
@@ -604,7 +598,8 @@ class _InfoCard extends StatelessWidget {
             CircleAvatar(
               radius: 22,
               backgroundColor: theme.colorScheme.surfaceContainerHighest,
-              child: Icon(icon, color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+              child: Icon(icon,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -613,7 +608,8 @@ class _InfoCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -644,7 +640,8 @@ class _SkeletonConversationTile extends StatelessWidget {
           width: w,
           height: h,
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+            color: theme.colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(10),
           ),
         );

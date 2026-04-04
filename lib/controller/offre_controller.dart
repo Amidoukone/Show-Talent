@@ -149,10 +149,10 @@ class OffreController extends GetxController {
 
   /// 📨 Publier une offre et notifier les joueurs
   Future<void> publierOffre(Offre offre, AppUser utilisateur) async {
-    if (utilisateur.role != 'recruteur' && utilisateur.role != 'club') {
+    if (!utilisateur.canPublishOpportunities) {
       Get.snackbar(
         'Accès refusé',
-        'Seuls les clubs ou recruteurs peuvent publier des offres.',
+        'Seuls les clubs, recruteurs ou agents peuvent publier des offres.',
       );
       return;
     }

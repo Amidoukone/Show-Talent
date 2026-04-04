@@ -1,10 +1,16 @@
 import 'package:adfoot/controller/chat_controller.dart';
+import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/offre_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/offres_form.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_dialogs.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -20,10 +26,9 @@ class OffreScreen extends StatefulWidget {
 }
 
 class _OffreScreenState extends State<OffreScreen> {
-  final OffreController offreController = Get.put(OffreController());
+  final OffreController offreController = Get.find<OffreController>();
   final UserController userController = Get.find<UserController>();
-  final ChatController chatController =
-      Get.isRegistered<ChatController>() ? Get.find() : Get.put(ChatController());
+  final ChatController chatController = Get.find<ChatController>();
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -92,11 +97,12 @@ class _OffreScreenState extends State<OffreScreen> {
                   }
 
                   final isOwner = currentUser?.uid == offre.recruteur.uid;
-                  final isPostulable =
-                      currentUser?.role == 'joueur' && offre.statut == 'ouverte';
+                  final isPostulable = currentUser?.role == 'joueur' &&
+                      offre.statut == 'ouverte';
 
                   return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                    margin:
+                        const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -120,7 +126,8 @@ class _OffreScreenState extends State<OffreScreen> {
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: cs.onSurface, // ✅ plus de couleur sombre illisible
+                                        color: cs
+                                            .onSurface, // ✅ plus de couleur sombre illisible
                                       ),
                                     ),
                                     const SizedBox(height: 8),
@@ -146,25 +153,30 @@ class _OffreScreenState extends State<OffreScreen> {
                             runSpacing: 8,
                             children: [
                               if (offre.posteRecherche?.isNotEmpty ?? false)
-                                _buildChip(Icons.sports_soccer, offre.posteRecherche!),
+                                _buildChip(
+                                    Icons.sports_soccer, offre.posteRecherche!),
                               if (offre.niveau?.isNotEmpty ?? false)
                                 _buildChip(Icons.star_border, offre.niveau!),
                               if (offre.localisation?.isNotEmpty ?? false)
-                                _buildChip(Icons.place_outlined, offre.localisation!),
+                                _buildChip(
+                                    Icons.place_outlined, offre.localisation!),
                               if (offre.remuneration?.isNotEmpty ?? false)
-                                _buildChip(Icons.payments_outlined, offre.remuneration!),
+                                _buildChip(Icons.payments_outlined,
+                                    offre.remuneration!),
                             ],
                           ),
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              Icon(Icons.event, size: 16, color: AdColors.onSurfaceMuted),
+                              Icon(Icons.event,
+                                  size: 16, color: AdColors.onSurfaceMuted),
                               const SizedBox(width: 4),
                               Text(
                                 'Valide jusqu\'au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)}',
                                 style: const TextStyle(
                                   fontSize: 14,
-                                  color: AdColors.onSurfaceMuted, // ✅ cs.onSurfaceMuted -> AdColors
+                                  color: AdColors
+                                      .onSurfaceMuted, // ✅ cs.onSurfaceMuted -> AdColors
                                 ),
                               ),
                             ],
@@ -256,9 +268,15 @@ class _OffreScreenState extends State<OffreScreen> {
             children: [
               Container(height: 14, width: 120, color: Colors.grey.shade300),
               const SizedBox(height: 10),
-              Container(height: 16, width: double.infinity, color: Colors.grey.shade300),
+              Container(
+                  height: 16,
+                  width: double.infinity,
+                  color: Colors.grey.shade300),
               const SizedBox(height: 8),
-              Container(height: 16, width: double.infinity, color: Colors.grey.shade300),
+              Container(
+                  height: 16,
+                  width: double.infinity,
+                  color: Colors.grey.shade300),
             ],
           ),
         ),
@@ -267,29 +285,33 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   Widget _buildEmptyState(dynamic currentUser) {
-    final isPublisher = currentUser?.role == 'club' || currentUser?.role == 'recruteur';
+    final isPublisher = isOpportunityPublisherRole(currentUser?.role);
+    final actionLabel = isPublisher ? 'Creer une offre' : 'Voir les clubs';
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.search_off, size: 72, color: AdColors.onSurfaceMuted),
-            const SizedBox(height: 12),
-            const Text(
-              'Aucune offre disponible',
-              style: TextStyle(fontSize: 18, color: AdColors.onSurfaceMuted),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: isPublisher
-                  ? () => Get.to(() => const OffreFormScreen())
-                  : () => Get.offAllNamed('/main', arguments: {'tab': 2}),
-              icon: Icon(isPublisher ? Icons.add : Icons.groups),
-              label: Text(isPublisher ? 'Créer une offre' : 'Voir les clubs'),
-            ),
-          ],
+        padding: const EdgeInsets.all(16),
+        child: AdStatePanel(
+          icon: Icons.search_off,
+          title: 'Aucune offre disponible',
+          message: isPublisher
+              ? 'Publiez votre premiere offre pour demarrer.'
+              : 'Aucune offre ne correspond aux filtres actuels.',
+          action: AdButton(
+            expanded: false,
+            label: actionLabel,
+            onPressed: () {
+              if (isPublisher) {
+                Get.to(() => const OffreFormScreen());
+                return;
+              }
+
+              Get.offAllNamed(
+                AppRoutes.main,
+                arguments: {'tab': 2},
+              );
+            },
+          ),
         ),
       ),
     );
@@ -348,10 +370,13 @@ class _OffreScreenState extends State<OffreScreen> {
                   value: _sort,
                   underline: const SizedBox.shrink(),
                   dropdownColor: AdColors.surfaceCard,
-                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                      color: cs.onSurface, fontWeight: FontWeight.w600),
                   items: const [
-                    DropdownMenuItem(value: 'recentes', child: Text('Plus récentes')),
-                    DropdownMenuItem(value: 'fin', child: Text('Se terminant bientôt')),
+                    DropdownMenuItem(
+                        value: 'recentes', child: Text('Plus récentes')),
+                    DropdownMenuItem(
+                        value: 'fin', child: Text('Se terminant bientôt')),
                   ],
                   onChanged: (v) {
                     if (v != null) setState(() => _sort = v);
@@ -378,7 +403,8 @@ class _OffreScreenState extends State<OffreScreen> {
   bool _isValidPhotoUrl(String? url) {
     if (url == null) return false;
     final t = url.trim();
-    return t.isNotEmpty && (t.startsWith('http://') || t.startsWith('https://'));
+    return t.isNotEmpty &&
+        (t.startsWith('http://') || t.startsWith('https://'));
   }
 
   Widget _buildRecruteurSection(BuildContext context, Offre offre) {
@@ -397,8 +423,10 @@ class _OffreScreenState extends State<OffreScreen> {
           child: CircleAvatar(
             radius: 25,
             backgroundColor: AdColors.surfaceCardAlt,
-            backgroundImage: valid ? NetworkImage(offre.recruteur.photoProfil) : null,
-            child: valid ? null : const Icon(Icons.person, color: Colors.white70),
+            backgroundImage:
+                valid ? NetworkImage(offre.recruteur.photoProfil) : null,
+            child:
+                valid ? null : const Icon(Icons.person, color: Colors.white70),
           ),
         ),
         const SizedBox(width: 10),
@@ -416,7 +444,8 @@ class _OffreScreenState extends State<OffreScreen> {
               ),
               Text(
                 offre.recruteur.role,
-                style: const TextStyle(fontSize: 14, color: AdColors.onSurfaceMuted),
+                style: const TextStyle(
+                    fontSize: 14, color: AdColors.onSurfaceMuted),
               ),
             ],
           ),
@@ -452,7 +481,8 @@ class _OffreScreenState extends State<OffreScreen> {
             },
           ),
           TextButton.icon(
-            onPressed: () => Get.to(() => const OffreFormScreen(), arguments: offre),
+            onPressed: () =>
+                Get.to(() => const OffreFormScreen(), arguments: offre),
             icon: const Icon(Icons.edit),
             label: const Text('Modifier'),
           ),
@@ -471,7 +501,8 @@ class _OffreScreenState extends State<OffreScreen> {
     }
 
     if (isPostulable) {
-      final bool inscrit = offre.candidats.any((c) => c.uid == currentUser?.uid);
+      final bool inscrit =
+          offre.candidats.any((c) => c.uid == currentUser?.uid);
 
       return ElevatedButton(
         onPressed: () async {
@@ -490,7 +521,7 @@ class _OffreScreenState extends State<OffreScreen> {
 
   Widget _buildFloatingButton() {
     final currentUser = userController.user;
-    if (currentUser?.role == 'club' || currentUser?.role == 'recruteur') {
+    if (isOpportunityPublisherRole(currentUser?.role)) {
       return FloatingActionButton(
         onPressed: () => Get.to(() => const OffreFormScreen()),
         child: const Icon(Icons.add),
@@ -499,23 +530,33 @@ class _OffreScreenState extends State<OffreScreen> {
     return const SizedBox.shrink();
   }
 
-  void _confirmDelete(BuildContext context, Offre offre) {
-    Get.dialog(
-      AlertDialog(
-        title: const Text('Confirmation'),
-        content: const Text('Voulez-vous vraiment supprimer cette offre ?'),
-        actions: [
-          TextButton(onPressed: Get.back, child: const Text('Annuler')),
-          TextButton(
-            onPressed: () async {
-              await offreController.supprimerOffre(offre.id, userController.user!, offre);
-              if (Get.isDialogOpen == true) Get.back();
-            },
-            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+  Future<void> _confirmDelete(BuildContext context, Offre offre) async {
+    final confirmed = await AdDialogs.confirm(
+      context: context,
+      title: 'Supprimer cette offre',
+      message: 'Voulez-vous vraiment supprimer cette offre ?',
+      confirmLabel: 'Supprimer',
+      cancelLabel: 'Annuler',
+      danger: true,
     );
+    if (!confirmed) return;
+
+    try {
+      await offreController.supprimerOffre(
+        offre.id,
+        userController.user!,
+        offre,
+      );
+      AdFeedback.success(
+        'Offre supprimee',
+        "L'offre a ete supprimee avec succes.",
+      );
+    } catch (e) {
+      AdFeedback.error(
+        'Erreur',
+        "La suppression de l'offre a echoue : $e",
+      );
+    }
   }
 
   void _showCandidats(BuildContext context, Offre offre) {
@@ -573,7 +614,8 @@ class _OffreScreenState extends State<OffreScreen> {
                       children: [
                         CircleAvatar(
                           backgroundColor: AdColors.surfaceCardAlt,
-                          backgroundImage: valid ? NetworkImage(candidat.photoProfil) : null,
+                          backgroundImage:
+                              valid ? NetworkImage(candidat.photoProfil) : null,
                           child: valid ? null : const Icon(Icons.person),
                         ),
                         const SizedBox(width: 12),
@@ -583,11 +625,13 @@ class _OffreScreenState extends State<OffreScreen> {
                             children: [
                               Text(
                                 candidat.nom,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                               Text(
                                 candidat.role,
-                                style: const TextStyle(color: AdColors.onSurfaceMuted),
+                                style: const TextStyle(
+                                    color: AdColors.onSurfaceMuted),
                               ),
                             ],
                           ),

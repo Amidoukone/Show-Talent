@@ -1,0 +1,4 @@
+#include "Debug.xcconfig"
+
+APP_ENV=local
+PRODUCT_BUNDLE_IDENTIFIER=org.adfoot.app.local

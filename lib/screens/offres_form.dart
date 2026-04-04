@@ -6,6 +6,7 @@ import 'package:adfoot/models/offre.dart';
 import 'package:intl/intl.dart';
 import 'package:adfoot/screens/offre_screen.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
 
 class OffreFormScreen extends StatefulWidget {
   const OffreFormScreen({super.key});
@@ -79,7 +80,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
               children: [
                 _buildSectionTitle('Informations générales', cs),
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _titreController,
                   decoration: _buildInputDecoration(
@@ -87,12 +87,11 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                     'Entrez le titre de l\'offre',
                     Icons.work_outline,
                   ),
-                  validator: (value) =>
-                      value == null || value.isEmpty ? 'Le titre est requis' : null,
+                  validator: (value) => value == null || value.isEmpty
+                      ? 'Le titre est requis'
+                      : null,
                 ),
-
                 const SizedBox(height: 20),
-
                 TextFormField(
                   controller: _descriptionController,
                   maxLines: 5,
@@ -101,12 +100,11 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                     'Décrivez l\'offre en détail',
                     Icons.description_outlined,
                   ),
-                  validator: (value) =>
-                      value == null || value.isEmpty ? 'La description est requise' : null,
+                  validator: (value) => value == null || value.isEmpty
+                      ? 'La description est requise'
+                      : null,
                 ),
-
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _posteController,
                   decoration: _buildInputDecoration(
@@ -115,9 +113,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                     Icons.sports_soccer,
                   ),
                 ),
-
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _niveauController,
                   decoration: _buildInputDecoration(
@@ -126,9 +122,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                     Icons.leaderboard_outlined,
                   ),
                 ),
-
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _localisationController,
                   decoration: _buildInputDecoration(
@@ -137,9 +131,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                     Icons.place_outlined,
                   ),
                 ),
-
                 const SizedBox(height: 16),
-
                 TextFormField(
                   controller: _remunerationController,
                   decoration: _buildInputDecoration(
@@ -148,29 +140,22 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                     Icons.payments_outlined,
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
                 _buildSectionTitle('Période', cs),
                 const SizedBox(height: 16),
-
                 _buildDatePicker(
                   'Date de début',
                   _dateDebut,
                   (picked) => setState(() => _dateDebut = picked),
                   isStart: true,
                 ),
-
                 const SizedBox(height: 16),
-
                 _buildDatePicker(
                   'Date de fin',
                   _dateFin,
                   (picked) => setState(() => _dateFin = picked),
                 ),
-
                 const SizedBox(height: 32),
-
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -233,8 +218,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     return InkWell(
       onTap: () async {
         final now = DateTime.now();
-        final firstDate =
-            isStart ? now : (_dateDebut ?? now);
+        final firstDate = isStart ? now : (_dateDebut ?? now);
 
         final pickedDate = await showDatePicker(
           context: context,
@@ -293,10 +277,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     }
 
     if (_dateDebut!.isAfter(_dateFin!)) {
-      _showSnackbar(
+      AdFeedback.error(
         'Erreur',
-        'La date de début doit précéder la date de fin',
-        AdColors.error,
+        'La date de debut doit preceder la date de fin.',
       );
       return;
     }
@@ -312,8 +295,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       recruteur: currentUser,
       candidats: isEditing ? editingOffre!.candidats : [],
       statut: 'ouverte',
-      dateCreation:
-          isEditing ? editingOffre!.dateCreation : DateTime.now(),
+      dateCreation: isEditing ? editingOffre!.dateCreation : DateTime.now(),
       localisation: _localisationController.text.trim().isEmpty
           ? null
           : _localisationController.text.trim(),
@@ -339,25 +321,14 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       offreController.publierOffre(offre, currentUser);
     }
 
-    _showSnackbar(
-      'Succès',
+    AdFeedback.success(
+      'Succes',
       isEditing
-          ? 'Offre mise à jour avec succès.'
-          : 'Offre publiée avec succès.',
-      AdColors.success,
+          ? 'Offre mise a jour avec succes.'
+          : 'Offre publiee avec succes.',
     );
 
     Get.off(() => OffreScreen());
-  }
-
-  void _showSnackbar(String title, String message, Color color) {
-    Get.snackbar(
-      title,
-      message,
-      backgroundColor: color.withValues(alpha: 0.18),
-      colorText: AdColors.onSurface,
-      snackPosition: SnackPosition.TOP,
-    );
   }
 
   @override

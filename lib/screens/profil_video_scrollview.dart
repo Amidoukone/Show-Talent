@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
+import 'package:adfoot/controller/follow_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -34,6 +37,8 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     with WidgetsBindingObserver {
   late final PageController _pageController;
   late final VideoController _vc;
+  final UserController _userController = Get.find<UserController>();
+  final FollowController _followController = Get.find<FollowController>();
 
   final VideoManager _videoManager = VideoManager();
   late final VideoFocusOrchestrator _focusOrchestrator;
@@ -56,17 +61,12 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: _currentIndex);
 
-    _vc = Get.isRegistered<VideoController>(tag: widget.contextKey)
-        ? Get.find<VideoController>(tag: widget.contextKey)
-        : Get.put(
-            VideoController(
-              contextKey: widget.contextKey,
-              enableLiveStream: false,
-              enableFeedFetch: false,
-            ),
-            tag: widget.contextKey,
-            permanent: true,
-          );
+    _vc = FeatureControllerRegistry.ensureVideoController(
+      contextKey: widget.contextKey,
+      enableLiveStream: false,
+      enableFeedFetch: false,
+      permanent: true,
+    );
     _vc.replaceVideos(widget.videos, selectedIndex: _currentIndex);
 
     // ✅ Orchestrateur (préload/pause/init/play/dispose window)
@@ -96,9 +96,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     // Nettoyage centralisé (pause + dispose contexte)
     unawaited(_focusOrchestrator.onDispose());
 
-    if (Get.isRegistered<VideoController>(tag: widget.contextKey)) {
-      Get.delete<VideoController>(tag: widget.contextKey);
-    }
+    FeatureControllerRegistry.releaseVideoController(widget.contextKey);
 
     super.dispose();
   }
@@ -169,10 +167,11 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        await _safeExit();
-        return false;
+    return PopScope<void>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        unawaited(_safeExit());
       },
       child: Scaffold(
         backgroundColor: Colors.black,
@@ -206,6 +205,10 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
 
                   return SmartVideoPlayer(
                     key: ValueKey(video.id),
+                    player: player,
+                    videoController: _vc,
+                    userController: _userController,
+                    followController: _followController,
                     contextKey: widget.contextKey,
                     videoUrl: video.videoUrl,
                     video: video,
@@ -216,7 +219,6 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
                     showControls: true,
                     showProgressBar: true,
                     showProfileAction: false,
-                    player: player,
                   );
                 },
               ),

@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -10,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:adfoot/controller/upload_video_controller.dart';
 import 'upload_form.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
 
 /// 🎨 Couleurs de marque centralisées (évite les doublons + warnings)
 const Color kBrand = Color(0xFF2ED573); // vert lumineux (action)
@@ -24,7 +26,7 @@ class AddVideo extends StatefulWidget {
 
 class _AddVideoState extends State<AddVideo> {
   final UploadVideoController uploadVideoController =
-      Get.put(UploadVideoController(), permanent: false);
+      FeatureControllerRegistry.ensureUploadVideoController();
 
   final ImagePicker _picker = ImagePicker();
   final RxBool isLoading = false.obs;
@@ -39,11 +41,9 @@ class _AddVideoState extends State<AddVideo> {
       isLoading.value = false;
 
       if (pickedFile == null) {
-        Get.snackbar(
+        AdFeedback.info(
           'Info',
-          'Aucune vidéo sélectionnée',
-          backgroundColor: Colors.blueGrey.shade700,
-          colorText: Colors.white,
+          'Aucune video selectionnee.',
         );
         return;
       }
@@ -54,20 +54,16 @@ class _AddVideoState extends State<AddVideo> {
     } on PlatformException catch (e) {
       isLoading.value = false;
       // Gestion permission/refus galerie
-      Get.snackbar(
+      AdFeedback.warning(
         'Autorisation requise',
-        "Veuillez autoriser l'accès à la galerie pour sélectionner une vidéo.\n($e)",
-        backgroundColor: Colors.redAccent,
-        colorText: Colors.white,
+        "Veuillez autoriser l'acces a la galerie pour selectionner une video.\n($e)",
         duration: const Duration(seconds: 5),
       );
     } catch (e) {
       isLoading.value = false;
-      Get.snackbar(
+      AdFeedback.error(
         'Erreur',
-        'Échec lors de la sélection : $e',
-        backgroundColor: Colors.redAccent,
-        colorText: Colors.white,
+        'Echec lors de la selection : $e',
       );
     }
   }
@@ -89,8 +85,9 @@ class _AddVideoState extends State<AddVideo> {
         scrolledUnderElevation: 0,
         systemOverlayStyle: const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.light, // ✅ icônes de statut en clair
-          statusBarBrightness: Brightness.dark,      // iOS
+          statusBarIconBrightness:
+              Brightness.light, // ✅ icônes de statut en clair
+          statusBarBrightness: Brightness.dark, // iOS
         ),
       ),
       body: Container(
@@ -144,7 +141,8 @@ class _AddVideoState extends State<AddVideo> {
                 ),
 
                 if (showOverlay)
-                  _ProgressOverlay(controller: uploadVideoController, waiting: loading),
+                  _ProgressOverlay(
+                      controller: uploadVideoController, waiting: loading),
               ],
             );
           }),
@@ -248,7 +246,8 @@ class _BodyCard extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
               child: const Center(
-                child: Icon(Icons.video_library_rounded, size: 42, color: kBrand),
+                child:
+                    Icon(Icons.video_library_rounded, size: 42, color: kBrand),
               ),
             ),
             const SizedBox(height: 16),
@@ -267,9 +266,9 @@ class _BodyCard extends StatelessWidget {
               'Durée maximale 60s • Qualité conseillée 480×360+',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 13,
-                color: AdColors.onSurfaceMuted,
-              ),
+                    fontSize: 13,
+                    color: AdColors.onSurfaceMuted,
+                  ),
             ),
             const SizedBox(height: 22),
 
@@ -278,18 +277,23 @@ class _BodyCard extends StatelessWidget {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: onPick,
-                icon: const Icon(Icons.photo_library_rounded, color: Colors.white),
+                icon: const Icon(Icons.photo_library_rounded,
+                    color: Colors.white),
                 label: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text(
                     'Choisir depuis la galerie',
-                    style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: kBrand,
                   elevation: 3,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                 ),
               ),
             ),
@@ -304,7 +308,9 @@ class _BodyCard extends StatelessWidget {
               children: [
                 _TipChip(icon: Icons.timer_rounded, label: '≤ 60 secondes'),
                 _TipChip(icon: Icons.hd_rounded, label: '≥ 480×360'),
-                _TipChip(icon: Icons.data_saver_on_rounded, label: 'Compression auto'),
+                _TipChip(
+                    icon: Icons.data_saver_on_rounded,
+                    label: 'Compression auto'),
               ],
             ),
           ],
@@ -362,10 +368,12 @@ class _ProgressOverlay extends StatelessWidget {
 
     if (waiting) {
       title = 'Chargement…';
-      progressWidget = const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
+      progressWidget =
+          const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
     } else if (optimizing) {
       title = 'Optimisation en cours…';
-      progressWidget = const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
+      progressWidget =
+          const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
     } else if (uploading) {
       title = 'Téléversement en cours';
       subtitle = '${(progress * 100).toInt()}%';
@@ -376,7 +384,8 @@ class _ProgressOverlay extends StatelessWidget {
       );
     } else {
       title = 'Veuillez patienter…';
-      progressWidget = const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
+      progressWidget =
+          const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
     }
 
     return PositionedFill(
@@ -390,7 +399,7 @@ class _ProgressOverlay extends StatelessWidget {
               width: 320,
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 22),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: .55), 
+                color: Colors.black.withValues(alpha: .55),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: Colors.white.withValues(alpha: .08)),
               ),
@@ -414,7 +423,7 @@ class _ProgressOverlay extends StatelessWidget {
                     Text(
                       subtitle,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: .9), 
+                        color: Colors.white.withValues(alpha: .9),
                         fontSize: 13.5,
                       ),
                     ),

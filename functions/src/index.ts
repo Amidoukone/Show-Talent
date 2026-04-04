@@ -27,8 +27,17 @@ import {
 /* -------------------------------------------------------------------------- */
 
 const REGION = "europe-west1";
+const OPTIMIZE_TRIGGER_REGION =
+  process.env.OPTIMIZE_TRIGGER_REGION || REGION;
+const FIREBASE_CONFIG = parseFirebaseConfig(process.env.FIREBASE_CONFIG);
 const STORAGE_BUCKET =
-  process.env.STORAGE_BUCKET || "show-talent-5987d.appspot.com";
+  process.env.STORAGE_BUCKET ||
+  FIREBASE_CONFIG?.storageBucket ||
+  defaultStorageBucket(process.env.GCLOUD_PROJECT);
+const MAX_OPTIMIZE_FILE_SIZE_BYTES = parsePositiveIntEnv(
+  process.env.MAX_OPTIMIZE_FILE_SIZE_BYTES,
+  120 * 1024 * 1024,
+);
 const MP4_RENDITION_PRESETS: readonly Mp4RenditionPreset[] = [
   {
     label: "360p",
@@ -64,6 +73,38 @@ const gcs = new Storage();
 
 function sleep(ms: number) {
   return new Promise((res) => setTimeout(res, ms));
+}
+
+function parseFirebaseConfig(
+  rawValue: string | undefined,
+): {storageBucket?: string} | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawValue) as {storageBucket?: string};
+  } catch {
+    return null;
+  }
+}
+
+function defaultStorageBucket(projectId: string | undefined): string {
+  if (!projectId) {
+    throw new Error("Missing STORAGE_BUCKET and GCLOUD_PROJECT.");
+  }
+  return `${projectId}.appspot.com`;
+}
+
+function parsePositiveIntEnv(
+  rawValue: string | undefined,
+  fallback: number,
+): number {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return Math.round(parsed);
 }
 
 type GcsUserMetadata = Record<string, string>;
@@ -399,10 +440,11 @@ async function tryResolveThumbnailPath(
 
 export const optimizeMp4Video = onObjectFinalized(
   {
-    region: REGION,
+    region: OPTIMIZE_TRIGGER_REGION,
     bucket: STORAGE_BUCKET,
     memory: "2GiB",
     timeoutSeconds: 540,
+    maxInstances: 1,
   },
   async (event: CloudEvent<StorageObjectData>) => {
     const object = event.data;
@@ -429,6 +471,29 @@ export const optimizeMp4Video = onObjectFinalized(
 
     const videoId = fileName.replace(/\.mp4$/i, "");
     const videoRef = db.collection("videos").doc(videoId);
+    const objectSize = Number.parseInt(String(object.size ?? "0"), 10);
+
+    if (
+      Number.isFinite(objectSize) &&
+      objectSize > MAX_OPTIMIZE_FILE_SIZE_BYTES
+    ) {
+      console.warn(
+        `⛔ File too large for optimization (${objectSize} bytes): ${filePath}`,
+      );
+      await videoRef.set(
+        {
+          status: "error",
+          optimized: false,
+          optimizationError: "file_too_large",
+          updatedAt: fieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+      await gcs.bucket(bucketName).file(filePath).delete().catch((error) => {
+        console.warn("⚠️ Oversized file deletion skipped:", (error as Error).message);
+      });
+      return null;
+    }
 
     // ✅ garder le comportement existant : si déjà optimisée via metadata, on marque Firestore
     if (object.metadata?.optimized === "true") {
@@ -567,7 +632,6 @@ export const optimizeMp4Video = onObjectFinalized(
 /* EXISTING EXPORTS                                                            */
 /* -------------------------------------------------------------------------- */
 
-export {sendVerificationReminder} from "./reminder";
 export {cleanupUnverifiedUsers} from "./cleanup";
 
 /* -------------------------------------------------------------------------- */
@@ -585,6 +649,18 @@ export {
   shareVideo,
   videoActionLog,
 } from "./actions";
+
+export {provisionManagedAccount} from "./managed_accounts";
+export {
+  blockManagedAccount,
+  unblockManagedAccount,
+  deleteManagedAccount,
+  changeManagedAccountRole,
+  resendManagedAccountInvite,
+  disableManagedAccountAuth,
+  enableManagedAccountAuth,
+  updateManagedAccountProfile,
+} from "./admin_account_actions";
 
 /* -------------------------------------------------------------------------- */
 /* UPLOAD SESSION                                                              */

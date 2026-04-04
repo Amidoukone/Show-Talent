@@ -1,0 +1,11 @@
+{
+  "APP_ENV": "staging",
+  "FIREBASE_PROJECT_ID": "your-staging-project-id",
+  "FIREBASE_MESSAGING_SENDER_ID": "1234567890",
+  "FIREBASE_STORAGE_BUCKET": "your-staging-storage-bucket",
+  "FIREBASE_ANDROID_API_KEY": "your-staging-android-api-key",
+  "FIREBASE_ANDROID_APP_ID": "1:1234567890:android:replace-me",
+  "FIREBASE_IOS_API_KEY": "your-staging-ios-api-key",
+  "FIREBASE_IOS_APP_ID": "1:1234567890:ios:replace-me",
+  "FIREBASE_IOS_BUNDLE_ID": "org.adfoot.app.staging"
+}

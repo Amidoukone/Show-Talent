@@ -12,6 +12,16 @@ const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
 // Safe rollout: keep App Check optional until mobile clients are fully configured.
 const ENFORCE_APP_CHECK = process.env.ENFORCE_APPCHECK === "true";
+const VIDEO_UPLOADS_ENABLED = process.env.VIDEO_UPLOADS_ENABLED !== "false";
+const MAX_VIDEO_UPLOADS_PER_DAY = parsePositiveIntEnv(
+  process.env.MAX_VIDEO_UPLOADS_PER_DAY,
+  10,
+);
+const MAX_CONCURRENT_VIDEO_UPLOADS = parsePositiveIntEnv(
+  process.env.MAX_CONCURRENT_VIDEO_UPLOADS,
+  2,
+);
+const VIDEO_UPLOAD_ROLE = "joueur";
 
 /* -------------------------------------------------------------------------- */
 /* TYPES                                                                       */
@@ -29,6 +39,16 @@ interface VideoDoc {
   storagePath?: string;
   thumbnailPath?: string;
   thumbnailGuard?: ThumbnailGuard;
+  status?: string;
+  createdAt?: unknown;
+}
+
+interface CallerProfile {
+  role?: string;
+  estBloque?: boolean;
+  authDisabled?: boolean;
+  estActif?: boolean;
+  emailVerified?: boolean;
 }
 
 type RawMetadata = Record<string, unknown>;
@@ -97,6 +117,111 @@ interface ParsedMetadata {
 /* -------------------------------------------------------------------------- */
 /* HELPERS                                                                     */
 /* -------------------------------------------------------------------------- */
+
+function parsePositiveIntEnv(
+  rawValue: string | undefined,
+  fallback: number,
+): number {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return Math.round(parsed);
+}
+
+function timestampToMillis(value: unknown): number {
+  if (!value || typeof value !== "object") return 0;
+  const candidate = value as {toMillis?: () => number};
+  return typeof candidate.toMillis === "function" ? candidate.toMillis() : 0;
+}
+
+async function assertUploadCallerEligible(
+  uid: string,
+  authToken: Record<string, unknown> | undefined,
+): Promise<void> {
+  if (!VIDEO_UPLOADS_ENABLED) {
+    throw new HttpsError(
+      "resource-exhausted",
+      "Les uploads video sont temporairement desactives.",
+    );
+  }
+
+  const userSnap = await db.collection("users").doc(uid).get();
+  if (!userSnap.exists) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Profil utilisateur introuvable.",
+    );
+  }
+
+  const userData = (userSnap.data() ?? {}) as CallerProfile;
+  if (userData.role !== VIDEO_UPLOAD_ROLE) {
+    throw new HttpsError(
+      "permission-denied",
+      "Upload reserve aux comptes joueur.",
+    );
+  }
+
+  if (
+    userData.estBloque === true ||
+    userData.authDisabled === true ||
+    userData.estActif === false
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "Compte inactif pour l upload video.",
+    );
+  }
+
+  const emailVerified =
+    authToken?.["email_verified"] === true || userData.emailVerified === true;
+  if (!emailVerified) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Email verifie requis avant upload video.",
+    );
+  }
+}
+
+async function assertUploadRateLimits(
+  uid: string,
+  currentSessionId: string,
+): Promise<void> {
+  const snapshot = await db.collection("videos").where("uid", "==", uid).get();
+  const cutoffMs = Date.now() - 24 * 60 * 60 * 1000;
+
+  let recentUploads = 0;
+  let concurrentUploads = 0;
+
+  for (const doc of snapshot.docs) {
+    if (doc.id === currentSessionId) {
+      continue;
+    }
+
+    const data = (doc.data() ?? {}) as VideoDoc;
+    if (data.status === "processing") {
+      concurrentUploads += 1;
+    }
+
+    if (timestampToMillis(data.createdAt) >= cutoffMs) {
+      recentUploads += 1;
+    }
+  }
+
+  if (concurrentUploads >= MAX_CONCURRENT_VIDEO_UPLOADS) {
+    throw new HttpsError(
+      "resource-exhausted",
+      "Trop d uploads video en cours pour ce compte.",
+    );
+  }
+
+  if (recentUploads >= MAX_VIDEO_UPLOADS_PER_DAY) {
+    throw new HttpsError(
+      "resource-exhausted",
+      "Quota journalier d upload video atteint.",
+    );
+  }
+}
 
 function parseImageContentType(raw: unknown): string {
   const value = typeof raw === "string" ? raw.trim().toLowerCase() : "image/jpeg";
@@ -189,6 +314,10 @@ export const createUploadSession = onCall(
     if (!uid) {
       throw new HttpsError("unauthenticated", "Authentification requise.");
     }
+    await assertUploadCallerEligible(
+      uid,
+      request.auth?.token as Record<string, unknown> | undefined,
+    );
 
     const data = (request.data as Record<string, unknown>) ?? {};
     const providedSessionId =
@@ -198,6 +327,13 @@ export const createUploadSession = onCall(
       typeof data.contentType === "string" && data.contentType.trim() ?
         data.contentType.trim() :
         "video/mp4";
+
+    if (contentType !== "video/mp4") {
+      throw new HttpsError(
+        "invalid-argument",
+        "Seuls les uploads video/mp4 sont autorises.",
+      );
+    }
 
     const sessionId = providedSessionId || randomUUID();
     const videoRef = db.collection("videos").doc(sessionId);
@@ -214,6 +350,8 @@ export const createUploadSession = onCall(
       storagePath = doc?.storagePath ?? storagePath;
       thumbnailPath = doc?.thumbnailPath ?? thumbnailPath;
     }
+
+    await assertUploadRateLimits(uid, sessionId);
 
     await videoRef.set(
       {
@@ -256,6 +394,10 @@ export const requestThumbnailUploadUrl = onCall(
   async (request): Promise<Record<string, unknown>> => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Authentification requise.");
+    await assertUploadCallerEligible(
+      uid,
+      request.auth?.token as Record<string, unknown> | undefined,
+    );
 
     const data = (request.data as Record<string, unknown>) ?? {};
     const sessionId = typeof data.sessionId === "string" ? data.sessionId.trim() : "";
@@ -327,6 +469,10 @@ export const finalizeUpload = onCall(
   async (request): Promise<Record<string, unknown>> => {
     const uid = request.auth?.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Authentification requise.");
+    await assertUploadCallerEligible(
+      uid,
+      request.auth?.token as Record<string, unknown> | undefined,
+    );
 
     const data = (request.data as Record<string, unknown>) ?? {};
     const sessionId = typeof data.sessionId === "string" ? data.sessionId.trim() : "";

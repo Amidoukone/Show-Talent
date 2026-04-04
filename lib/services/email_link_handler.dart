@@ -1,29 +1,25 @@
-// lib/services/email_link_handler.dart
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'package:app_links/app_links.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart'; // ✅ Ajout pour navigation GetX (reset password)
-import '../screens/reset_password_screen.dart'; // ✅ pour redirection locale
+import 'package:get/get.dart';
 
-/// Gère les liens de vérification Firebase (mode=verifyEmail & oobCode=...)
-/// et désormais la réinitialisation de mot de passe (mode=resetPassword)
-/// via App/Universal Links (package:app_links) — pas de Firebase Dynamic Links.
-/// - Mobile: écoute des liens d'app.
-/// - Web: no-op (géré dans VerifyEmailScreen).
+import '../config/app_routes.dart';
+import '../config/app_environment.dart';
+
+/// Handles Firebase email verification links and password reset links.
+/// Mobile listens to incoming app links. Web is handled elsewhere.
 class EmailLinkHandler {
+  static final AuthSessionService _authSessionService = AuthSessionService();
   static AppLinks? _appLinks;
   static StreamSubscription<Uri?>? _sub;
-
-  // Empêche les ré-initialisations multiples.
   static bool _initialized = false;
-
-  // Anti double-traitement (ex: même lien reçu plusieurs fois).
+  static bool _isInitializing = false;
   static final Set<String> _handledOobCodes = <String>{};
 
-  // Flux "email vérifié" pour notifier l'UI (VerifyEmailScreen).
   static StreamController<void>? _verifiedCtrl;
   static Stream<void> get onEmailVerified {
     _verifiedCtrl ??= StreamController<void>.broadcast();
@@ -36,25 +32,24 @@ class EmailLinkHandler {
     } catch (_) {}
   }
 
-  /// Hôtes autorisés pour les liens de vérification.
-  /// - adfoot.org (Custom action URL)
-  /// - show-talent-5987d.web.app & .firebaseapp.com (liens Firebase natifs)
-  static const Set<String> _allowedHosts = {
-    'adfoot.org',
-    'show-talent-5987d.web.app',
-    'show-talent-5987d.firebaseapp.com',
-  };
+  static Set<String> get _allowedHosts =>
+      AppEnvironmentConfig.emailLinkAllowedHosts;
 
-  /// Initialise l'écoute des liens d'application (cold + warm).
+  static void _logDebug(String message) {
+    if (kDebugMode) {
+      debugPrint(message);
+    }
+  }
+
   static Future<void> init() async {
-    if (kIsWeb) return; // sur Web, géré directement par VerifyEmailScreen
-    if (_initialized) return;
-    _initialized = true;
+    if (kIsWeb || Get.testMode || _initialized || _isInitializing) {
+      return;
+    }
+    _isInitializing = true;
 
     try {
-      _appLinks ??= AppLinks(); // singleton
+      _appLinks ??= AppLinks();
 
-      // Cold start — lien ayant lancé l’app
       try {
         final initialUri = await _appLinks!
             .getInitialLink()
@@ -63,31 +58,29 @@ class EmailLinkHandler {
           await _handle(initialUri);
         }
       } on PlatformException catch (e) {
-        if (kDebugMode) {
-          print("EmailLinkHandler.getInitialLink PlatformException: $e");
-        }
+        _logDebug('EmailLinkHandler.getInitialLink PlatformException: $e');
       } catch (e) {
-        if (kDebugMode) {
-          print("EmailLinkHandler.getInitialLink unexpected: $e");
-        }
+        _logDebug('EmailLinkHandler.getInitialLink unexpected: $e');
       }
 
-      // Warm/Hot links — quand l’app est déjà ouverte
       await _sub?.cancel();
       _sub = _appLinks!.uriLinkStream.listen(
         (Uri? uri) {
           if (uri != null) {
-            // ignore: discarded_futures
-            _handle(uri);
+            unawaited(_handle(uri));
           }
         },
         onError: (e) {
-          if (kDebugMode) print("EmailLinkHandler stream error: $e");
+          _logDebug('EmailLinkHandler stream error: $e');
         },
         cancelOnError: false,
       );
-    } catch (e) {
-      if (kDebugMode) print("EmailLinkHandler.init failed: $e");
+      _initialized = true;
+    } catch (e, stack) {
+      _logDebug('EmailLinkHandler.init failed: $e\n$stack');
+      _initialized = false;
+    } finally {
+      _isInitializing = false;
     }
   }
 
@@ -101,13 +94,9 @@ class EmailLinkHandler {
     return params;
   }
 
-  /// Traite un lien entrant. Retourne true si un traitement a été effectué.
   static Future<bool> _handle(Uri link) async {
-    // Sécurité: HTTPS + hôte autorisé
     if (link.scheme != 'https' || !_allowedHosts.contains(link.host)) {
-      if (kDebugMode) {
-        print('EmailLinkHandler: lien ignoré (host non autorisé): $link');
-      }
+      _logDebug('EmailLinkHandler ignored link with unsupported host: $link');
       return false;
     }
 
@@ -115,106 +104,89 @@ class EmailLinkHandler {
     final mode = params['mode'];
     final oob = params['oobCode'];
 
-    // 🔹 Nouvelle gestion du reset password
     if (mode == 'resetPassword' && oob != null && oob.isNotEmpty) {
-      if (kDebugMode) {
-        print('EmailLinkHandler: lien resetPassword détecté → redirection.');
-      }
+      _logDebug('EmailLinkHandler detected resetPassword link.');
 
-      // Anti double-traitement pour ce code de réinitialisation
       if (_handledOobCodes.contains(oob)) {
-        if (kDebugMode) print('EmailLinkHandler: oobCode reset déjà traité, on ignore.');
+        _logDebug('EmailLinkHandler ignored duplicate resetPassword oobCode.');
         return false;
       }
       _handledOobCodes.add(oob);
 
       try {
-        // Vérifie que le code est valide
         await FirebaseAuth.instance.verifyPasswordResetCode(oob);
 
-        // Redirige l'utilisateur vers l'écran ResetPasswordScreen
-        // Utilise la navigation GetX cohérente avec ta structure
-        if (Get.isRegistered<GetMaterialApp>() || Get.key.currentState != null) {
-          Get.to(() => ResetPasswordScreen(oobCode: oob));
+        if (Get.isRegistered<GetMaterialApp>() ||
+            Get.key.currentState != null) {
+          Get.toNamed(
+            AppRoutes.resetPassword,
+            arguments: {'oobCode': oob},
+          );
         } else {
-          // fallback si Get non prêt
           Future.delayed(const Duration(milliseconds: 300), () {
-            Get.to(() => ResetPasswordScreen(oobCode: oob));
+            Get.toNamed(
+              AppRoutes.resetPassword,
+              arguments: {'oobCode': oob},
+            );
           });
         }
 
         return true;
       } on FirebaseAuthException catch (e) {
-        if (kDebugMode) {
-          print("EmailLinkHandler resetPassword FirebaseAuthException: ${e.code} ${e.message}");
-        }
+        _logDebug(
+          'EmailLinkHandler resetPassword FirebaseAuthException: '
+          '${e.code} ${e.message}',
+        );
         return false;
       } catch (e) {
-        if (kDebugMode) print("EmailLinkHandler resetPassword unexpected: $e");
+        _logDebug('EmailLinkHandler resetPassword unexpected: $e');
         return false;
       }
     }
 
-    // 🔹 Gestion existante : vérification d’e-mail
     if (mode != 'verifyEmail' || oob == null || oob.isEmpty) {
-      if (kDebugMode) {
-        print('EmailLinkHandler: lien non pertinent (mode/oobCode manquant): $link');
-      }
+      _logDebug('EmailLinkHandler ignored unrelated link: $link');
       return false;
     }
 
-    // Anti double-traitement
     if (_handledOobCodes.contains(oob)) {
-      if (kDebugMode) {
-        print('EmailLinkHandler: oobCode déjà traité, on ignore.');
-      }
+      _logDebug('EmailLinkHandler ignored duplicate verifyEmail oobCode.');
       return false;
     }
     _handledOobCodes.add(oob);
 
     try {
-      await FirebaseAuth.instance.checkActionCode(oob);
-      await FirebaseAuth.instance.applyActionCode(oob);
+      await _authSessionService.applyEmailVerificationCode(oob);
 
-      // Recharge l’utilisateur (emailVerified doit passer à true s'il est connecté)
-      await FirebaseAuth.instance.currentUser?.reload();
-      final user = FirebaseAuth.instance.currentUser;
-
-      if (user != null) {
-        // Mise à jour Firestore idempotente
-        final userRef =
-            FirebaseFirestore.instance.collection('users').doc(user.uid);
-        await userRef.set({
-          'emailVerified': true,
-          'estActif': true,
-          'emailVerifiedAt': FieldValue.serverTimestamp(),
-          'dernierLogin': DateTime.now(),
-        }, SetOptions(merge: true));
+      final user = _authSessionService.currentUser;
+      if (user != null && user.emailVerified) {
+        await _authSessionService.finalizeCurrentVerifiedSession(
+          updateLastLogin: true,
+          signOutOnInvalid: true,
+        );
       }
 
-      // Notifie l'UI (VerifyEmailScreen) qu'une vérification a eu lieu
       _emitVerified();
-      if (kDebugMode) {
-        print('EmailLinkHandler: Vérification appliquée et Firestore mis à jour.');
-      }
+      _logDebug('EmailLinkHandler applied verifyEmail action successfully.');
       return true;
     } on FirebaseAuthException catch (e) {
-      if (kDebugMode) {
-        print("EmailLinkHandler FirebaseAuthException: ${e.code} ${e.message}");
-      }
+      _logDebug(
+        'EmailLinkHandler verifyEmail FirebaseAuthException: '
+        '${e.code} ${e.message}',
+      );
       return false;
     } catch (e) {
-      if (kDebugMode) print("EmailLinkHandler unexpected: $e");
+      _logDebug('EmailLinkHandler verifyEmail unexpected: $e');
       return false;
     }
   }
 
-  /// Libère les ressources (utile si tu veux stopper l’écoute au logout, etc.)
   static Future<void> dispose() async {
     await _sub?.cancel();
     _sub = null;
     _appLinks = null;
     _initialized = false;
+    _isInitializing = false;
     _handledOobCodes.clear();
     await _verifiedCtrl?.close();
     _verifiedCtrl = null;

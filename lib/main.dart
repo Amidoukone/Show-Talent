@@ -1,147 +1,47 @@
-// lib/main.dart
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
-
-import 'firebase_options.dart';
-
-// Controllers & services
-import 'controller/auth_controller.dart';
-import 'controller/offre_controller.dart';
-import 'controller/user_controller.dart';
-import 'controller/follow_controller.dart';
-import 'widgets/video_manager.dart';
-import 'services/email_link_handler.dart';
-import 'services/notifications.dart';
-import 'services/video_metrics_observer.dart';
-import 'services/app_check_service.dart';
-
-// UI
-import 'screens/splash_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/main_screen.dart';
-import 'screens/verify_email_screen.dart';
-import 'screens/reset_password_screen.dart';
-
-// Theme
-import 'theme/app_theme.dart';
+import 'config/app_bootstrap.dart';
+import 'config/app_routes.dart';
 import 'theme/ad_colors.dart';
-
-/// Notifications en arrière-plan (isolate)
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  // ⚠️ Pas d’await long ici
-}
+import 'theme/app_theme.dart';
 
 Future<void> main() async {
   runZonedGuarded(() async {
-    WidgetsFlutterBinding.ensureInitialized();
-
-    // Barre de statut
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      statusBarBrightness: Brightness.dark,
-    ));
-
-    // Firebase
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    await AppCheckService.initialize();
-    FirebaseAuth.instance.setLanguageCode('fr');
-
-    // FCM Web
-    if (kIsWeb) {
-      await FirebaseMessaging.instance.setAutoInitEnabled(false);
-    }
-
-    // Notifications
-    await NotificationService.initLocal();
-    if (!kIsWeb) {
-      FirebaseMessaging.onBackgroundMessage(
-        _firebaseMessagingBackgroundHandler,
-      );
-    }
-    NotificationService.listenForeground();
-
-    // Injection GetX (ordre critique)
-    final videoManager = Get.put<VideoManager>(VideoManager(), permanent: true);
-    videoManager.onMetrics =
-        VideoMetricsObserver(videoManager: videoManager).handle;
-    Get.put<AuthController>(AuthController(), permanent: true);
-    Get.put<OffreController>(OffreController(), permanent: true);
-    Get.put<UserController>(UserController(), permanent: true);
-    Get.put<FollowController>(FollowController(), permanent: true);
-
-    // Démarre la détection réseau en arrière-plan, sans bloquer le bootstrap.
-    unawaited(Get.find<VideoManager>().warmNetworkProfile());
-
-    // Email link handler
-    try {
-      await EmailLinkHandler.init();
-    } catch (e, st) {
-      if (kDebugMode) {
-        // ignore: avoid_print
-        print('EmailLinkHandler init error: $e\n$st');
-      }
-    }
-
-    // Flutter error handling
-    FlutterError.onError = (FlutterErrorDetails details) {
-      if (kDebugMode) {
-        FlutterError.dumpErrorToConsole(details);
-      }
-    };
-
+    await AppBootstrap.initialize();
     runApp(const MyApp());
-  }, (error, stack) {
-    if (kDebugMode) {
-      // ignore: avoid_print
-      print('Uncaught zone error: $error\n$stack');
-    }
-  });
+  }, AppBootstrap.reportZoneError);
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class AdfootApp extends StatelessWidget {
+  const AdfootApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'AD.FOOT',
+      title: 'Adfoot',
       debugShowCheckedModeBanner: false,
       navigatorKey: Get.key,
       theme: AppTheme.light(),
       defaultTransition: Transition.fadeIn,
       color: AdColors.brand,
-
-      /// Wrapper global SAFE
       builder: (context, child) {
         final Widget safeChild = child ?? const SizedBox.shrink();
 
-        // Fermer clavier au tap
         final wrapped = GestureDetector(
           behavior: HitTestBehavior.deferToChild,
           onTap: () {
             final focus = FocusManager.instance.primaryFocus;
-            if (focus?.hasFocus == true) focus?.unfocus();
+            if (focus?.hasFocus == true) {
+              focus?.unfocus();
+            }
           },
           child: safeChild,
         );
 
-        // MediaQuery SAFE (FIX du trait noir)
         final mq = MediaQuery.of(context);
-
         final scaleValue = mq.textScaler.scale(1.0).clamp(0.85, 1.15);
 
         final mediaWrapped = MediaQuery(
@@ -160,30 +60,16 @@ class MyApp extends StatelessWidget {
           child: mediaWrapped,
         );
       },
-
-      // Page initiale
-      home: const SplashScreen(),
-
-      // Routes GetX
-      getPages: [
-        GetPage(name: '/', page: () => const SplashScreen()),
-        GetPage(name: '/login', page: () => const LoginScreen()),
-        GetPage(name: '/main', page: () => const MainScreen()),
-        GetPage(name: '/verify', page: () => const VerifyEmailScreen()),
-        GetPage(
-          name: '/reset',
-          page: () {
-            final args = Get.arguments as Map<String, dynamic>?;
-            final oobCode = args?['oobCode'] ?? '';
-            return ResetPasswordScreen(oobCode: oobCode);
-          },
-        ),
-      ],
+      initialRoute: AppRoutes.splash,
+      getPages: AppRoutes.pages,
     );
   }
 }
 
-/// Scroll behavior custom
+class MyApp extends AdfootApp {
+  const MyApp({super.key});
+}
+
 class _AppScrollBehavior extends ScrollBehavior {
   const _AppScrollBehavior();
 

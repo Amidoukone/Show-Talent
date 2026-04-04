@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
+import '../config/app_environment.dart';
+
 class ClientLogEntry {
   final String level;
   final String source;
@@ -35,15 +37,20 @@ class ClientLogger {
   Timer? _flushTimer;
   bool _flushing = false;
 
-  final FirebaseFunctions _functions =
-      FirebaseFunctions.instanceFor(region: 'europe-west1');
+  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+    region: AppEnvironmentConfig.functionsRegion,
+  );
 
-  Future<void> logInfo(String source, String message, {Map<String, dynamic>? metadata}) async {
-    _enqueue(ClientLogEntry(level: 'info', source: source, message: message, metadata: metadata));
+  Future<void> logInfo(String source, String message,
+      {Map<String, dynamic>? metadata}) async {
+    _enqueue(ClientLogEntry(
+        level: 'info', source: source, message: message, metadata: metadata));
   }
 
-  Future<void> logError(String source, String message, {Map<String, dynamic>? metadata}) async {
-    _enqueue(ClientLogEntry(level: 'error', source: source, message: message, metadata: metadata));
+  Future<void> logError(String source, String message,
+      {Map<String, dynamic>? metadata}) async {
+    _enqueue(ClientLogEntry(
+        level: 'error', source: source, message: message, metadata: metadata));
   }
 
   void _enqueue(ClientLogEntry entry) {

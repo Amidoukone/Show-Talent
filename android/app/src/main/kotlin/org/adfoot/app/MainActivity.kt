@@ -1,4 +1,4 @@
-package com.example.adfoot
+package org.adfoot.app
 
 import io.flutter.embedding.android.FlutterActivity
 

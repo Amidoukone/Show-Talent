@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
-import '../theme/ad_colors.dart';
 
-enum AdButtonKind { primary, tonal, danger }
+import '../theme/ad_colors.dart';
+import '../theme/ad_tokens.dart';
+
+enum AdButtonKind { primary, tonal, danger, outline }
+
+enum AdButtonSize { regular, compact }
 
 class AdButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final AdButtonKind kind;
+  final AdButtonSize size;
   final bool loading;
   final IconData? leading;
   final bool expanded;
@@ -16,6 +21,7 @@ class AdButton extends StatelessWidget {
     required this.label,
     this.onPressed,
     this.kind = AdButtonKind.primary,
+    this.size = AdButtonSize.regular,
     this.loading = false,
     this.leading,
     this.expanded = true,
@@ -23,32 +29,55 @@ class AdButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final button = ElevatedButton.icon(
-      onPressed: loading ? null : onPressed,
-      icon: loading
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AdColors.brandOn,
-              ),
-            )
-          : (leading != null ? Icon(leading, size: 20) : const SizedBox.shrink()),
-      label: Text(label),
-      style: _styleFor(context),
-    );
-
+    final button = _buildButton(context);
     if (!expanded) return button;
-
     return SizedBox(width: double.infinity, child: button);
   }
 
-  ButtonStyle _styleFor(BuildContext context) {
+  Widget _buildButton(BuildContext context) {
+    final icon = loading
+        ? SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: _progressColorFor(kind),
+            ),
+          )
+        : (leading != null ? Icon(leading, size: 19) : null);
+
+    if (kind == AdButtonKind.outline) {
+      return OutlinedButton.icon(
+        onPressed: loading ? null : onPressed,
+        icon: icon ?? const SizedBox.shrink(),
+        label: Text(label),
+        style: _outlinedStyle(context),
+      );
+    }
+
+    return ElevatedButton.icon(
+      onPressed: loading ? null : onPressed,
+      icon: icon ?? const SizedBox.shrink(),
+      label: Text(label),
+      style: _elevatedStyle(context),
+    );
+  }
+
+  ButtonStyle _elevatedStyle(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final vertical = size == AdButtonSize.regular ? AdSpacing.sm : AdSpacing.xs;
+
     final base = ElevatedButton.styleFrom(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      minimumSize: Size.fromHeight(size == AdButtonSize.regular ? 50 : 44),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AdRadius.md),
+      ),
+      padding:
+          EdgeInsets.symmetric(vertical: vertical, horizontal: AdSpacing.md),
+      textStyle: TextStyle(
+        fontSize: size == AdButtonSize.regular ? 16 : 14,
+        fontWeight: FontWeight.w700,
+      ),
       elevation: 0,
     );
 
@@ -59,7 +88,6 @@ class AdButton extends StatelessWidget {
           foregroundColor: const WidgetStatePropertyAll(AdColors.brandOn),
         );
       case AdButtonKind.tonal:
-        // ✅ Remplacement withOpacity(.12) -> withValues(alpha: 0.12) pour éviter la dépréciation
         return base.copyWith(
           backgroundColor:
               WidgetStatePropertyAll(AdColors.brand.withValues(alpha: 0.14)),
@@ -70,6 +98,41 @@ class AdButton extends StatelessWidget {
           backgroundColor: const WidgetStatePropertyAll(AdColors.error),
           foregroundColor: const WidgetStatePropertyAll(Colors.white),
         );
+      case AdButtonKind.outline:
+        return base.copyWith(
+          backgroundColor: WidgetStatePropertyAll(cs.surface),
+          foregroundColor: const WidgetStatePropertyAll(AdColors.brand),
+        );
+    }
+  }
+
+  ButtonStyle _outlinedStyle(BuildContext context) {
+    final vertical = size == AdButtonSize.regular ? AdSpacing.sm : AdSpacing.xs;
+    return OutlinedButton.styleFrom(
+      minimumSize: Size.fromHeight(size == AdButtonSize.regular ? 50 : 44),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AdRadius.md),
+      ),
+      side: const BorderSide(color: AdColors.brand, width: 1.2),
+      padding:
+          EdgeInsets.symmetric(vertical: vertical, horizontal: AdSpacing.md),
+      textStyle: TextStyle(
+        fontSize: size == AdButtonSize.regular ? 15 : 13,
+        fontWeight: FontWeight.w700,
+      ),
+      foregroundColor: AdColors.brand,
+    );
+  }
+
+  Color _progressColorFor(AdButtonKind kind) {
+    switch (kind) {
+      case AdButtonKind.primary:
+        return AdColors.brandOn;
+      case AdButtonKind.tonal:
+      case AdButtonKind.outline:
+        return AdColors.brand;
+      case AdButtonKind.danger:
+        return Colors.white;
     }
   }
 }

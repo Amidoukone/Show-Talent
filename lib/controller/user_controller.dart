@@ -1,67 +1,48 @@
 import 'dart:async';
 
+import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/models/user.dart';
-import 'package:adfoot/screens/login_screen.dart';
-import 'package:adfoot/screens/main_screen.dart';
-import 'package:adfoot/screens/verify_email_screen.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/services/users/user_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 /// UserController
-/// - Source de vérité pour l’état utilisateur, navigation (Login / Verify / Main)
-/// - Hydrate AppUser
-/// - Écoute FirebaseAuth + Firestore
-/// - 🔥 Ajoute un cache réactif par UID pour les vidéos
+/// - Source de verite pour l'etat utilisateur et la navigation auth.
+/// - Hydrate AppUser pour l'UI.
+/// - Ajoute un cache reactif par UID pour les videos.
 class UserController extends GetxController {
   static UserController instance = Get.find();
 
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  /// ---------------------------------------------------------------------------
-  /// UTILISATEUR CONNECTÉ
-  /// ---------------------------------------------------------------------------
+  final AuthSessionService _authSessionService = AuthSessionService();
+  final UserRepository _userRepository = UserRepository();
 
   final Rx<AppUser?> _user = Rx<AppUser?>(null);
   AppUser? get user => _user.value;
 
-  /// ---------------------------------------------------------------------------
-  /// LISTE USERS (fonctionnalité existante conservée)
-  /// ---------------------------------------------------------------------------
-
   final Rx<List<AppUser>> _userList = Rx<List<AppUser>>([]);
   List<AppUser> get userList => _userList.value;
 
-  /// ---------------------------------------------------------------------------
-  /// 🔥 CACHE GLOBAL RÉACTIF PAR UID (NOUVEAU)
-  /// ---------------------------------------------------------------------------
-
   final RxMap<String, AppUser> usersCache = <String, AppUser>{}.obs;
 
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _usersSub;
+  StreamSubscription<List<AppUser>>? _usersSub;
 
   bool _navigating = false;
   bool _navScheduled = false;
-
-  // ---------------------------------------------------------------------------
-  // INIT
-  // ---------------------------------------------------------------------------
 
   @override
   void onInit() {
     super.onInit();
 
-    /// Auth listener
-    _auth.idTokenChanges().listen(
+    _authSessionService.idTokenChanges().listen(
       (User? firebaseUser) async {
         await _routeFromAuth(firebaseUser);
       },
-      onError: (e) => debugPrint('UserController idTokenChanges error: $e'),
+      onError: (error) =>
+          debugPrint('UserController idTokenChanges error: $error'),
     );
 
-    /// 🔥 Écoute globale des users (1 seule fois)
     _listenAllUsers();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -69,121 +50,51 @@ class UserController extends GetxController {
     });
   }
 
-  /// Lance le routage selon l’état utilisateur actuel
   void kickstart() {
-    _routeFromAuth(_auth.currentUser);
+    _routeFromAuth(_authSessionService.currentUser);
   }
-
-  // ---------------------------------------------------------------------------
-  // ROUTING AUTH
-  // ---------------------------------------------------------------------------
 
   Future<void> _routeFromAuth(User? firebaseUser) async {
     try {
-      if (firebaseUser == null) {
-        _user.value = null;
-        await _safeOffAll(const LoginScreen());
-        return;
-      }
-
-      await firebaseUser.reload();
-      final refreshed = _auth.currentUser;
-      if (refreshed == null) {
-        _user.value = null;
-        await _safeOffAll(const LoginScreen());
-        return;
-      }
-
-      final uid = refreshed.uid;
-
-      /// Email non vérifié
-      if (!refreshed.emailVerified) {
-        try {
-          final doc = await _firestore.collection('users').doc(uid).get();
-          if (doc.exists) {
-            final u = AppUser.fromMap(doc.data()!);
-            _user.value = u;
-            usersCache[u.uid] = u;
-          }
-        } catch (_) {}
-        await _safeOffAll(const VerifyEmailScreen());
-        return;
-      }
-
-      /// S’assurer que le document utilisateur existe
-      var doc = await _waitUserDoc(
-        uid,
-        attempts: 20,
-        delay: const Duration(milliseconds: 250),
+      final snapshot = await _authSessionService.resolveSession(
+        firebaseUser,
+        waitForVerifiedUserDocument: true,
+        syncVerifiedUserRecord: false,
+        signOutOnInvalid: true,
       );
 
-      if (doc == null || !doc.exists) {
-        await _firestore.collection('users').doc(uid).set({
-          'uid': uid,
-          'email': refreshed.email,
-          'nom': refreshed.displayName ?? '',
-          'photoProfil': refreshed.photoURL ?? '',
-          'dateInscription': FieldValue.serverTimestamp(),
-          'estActif': true,
-          'emailVerified': true,
-          'emailVerifiedAt': FieldValue.serverTimestamp(),
-          'followersList': <String>[],
-          'followingsList': <String>[],
-          'profilePublic': true,
-          'allowMessages': true,
-        }, SetOptions(merge: true));
-
-        doc = await _firestore.collection('users').doc(uid).get();
+      _user.value = snapshot.appUser;
+      if (snapshot.appUser != null) {
+        usersCache[snapshot.appUser!.uid] = snapshot.appUser!;
       }
 
-      if (!doc.exists) {
-        await _safeOffAll(const MainScreen());
-        return;
+      switch (snapshot.destination) {
+        case AuthSessionDestination.login:
+          await _safeOffAllNamed(AppRoutes.login);
+          return;
+        case AuthSessionDestination.verifyEmail:
+          await _safeOffAllNamed(AppRoutes.verifyEmail);
+          return;
+        case AuthSessionDestination.main:
+          await _safeOffAllNamed(AppRoutes.main);
+          return;
       }
-
-      final userData = AppUser.fromMap(doc.data()!);
-      _user.value = userData;
-      usersCache[userData.uid] = userData;
-
-      await _safeOffAll(const MainScreen());
-    } catch (e) {
-      debugPrint('UserController _routeFromAuth error: $e');
+    } catch (error) {
+      debugPrint('UserController _routeFromAuth error: $error');
       _user.value = null;
-      await _safeOffAll(const LoginScreen());
+      await _safeOffAllNamed(AppRoutes.login);
     }
   }
-
-  Future<DocumentSnapshot<Map<String, dynamic>>?> _waitUserDoc(
-    String uid, {
-    int attempts = 20,
-    Duration delay = const Duration(milliseconds: 250),
-  }) async {
-    DocumentSnapshot<Map<String, dynamic>>? doc;
-    for (int i = 0; i < attempts; i++) {
-      doc = await _firestore.collection('users').doc(uid).get();
-      if (doc.exists) return doc;
-      await Future.delayed(delay);
-    }
-    return doc;
-  }
-
-  // ---------------------------------------------------------------------------
-  // 🔥 LISTENER USERS GLOBAL (CACHE + userList)
-  // ---------------------------------------------------------------------------
 
   Future<void> _listenAllUsers() async {
     _usersSub?.cancel();
-    _usersSub = _firestore.collection('users').snapshots().listen(
-      (snapshot) {
-        final List<AppUser> list = [];
+    _usersSub = _userRepository.watchAllUsers().listen(
+      (users) {
+        final list = <AppUser>[];
 
-        for (final d in snapshot.docs) {
-          final user = AppUser.fromMap(d.data());
-
-          /// cache global par uid
+        for (final user in users) {
           usersCache[user.uid] = user;
 
-          /// user connecté
           if (_user.value?.uid == user.uid) {
             _user.value = user;
           }
@@ -194,44 +105,38 @@ class UserController extends GetxController {
         }
 
         _userList.value = list;
-        update(); // compatibilité écrans existants
+        update();
       },
-      onError: (e) => debugPrint("Erreur fetch users : $e"),
+      onError: (error) => debugPrint('Erreur fetch users : $error'),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // 🔥 ACCÈS USER PAR UID (VIDÉOS)
-  // ---------------------------------------------------------------------------
 
   AppUser? getUserById(String uid) {
     return usersCache[uid];
   }
 
-  // ---------------------------------------------------------------------------
-  // REFRESH / SIGNOUT
-  // ---------------------------------------------------------------------------
-
   Future<void> refreshUser() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return;
-    final doc = await _firestore.collection('users').doc(uid).get();
-    if (doc.exists) {
-      final u = AppUser.fromMap(doc.data()!);
-      _user.value = u;
-      usersCache[u.uid] = u;
+    final uid = _authSessionService.currentUser?.uid;
+    if (uid == null) {
+      return;
+    }
+
+    final refreshedUser = await _userRepository.fetchUserById(uid);
+    if (refreshedUser != null) {
+      _user.value = refreshedUser;
+      usersCache[refreshedUser.uid] = refreshedUser;
       update();
     }
   }
 
   Future<void> signOut() async {
     try {
-      await _auth.signOut();
+      await _authSessionService.signOut();
       _user.value = null;
-    } catch (e) {
+    } catch (error) {
       Get.snackbar(
         'Erreur',
-        'Échec de déconnexion : $e',
+        'Echec de deconnexion : $error',
         backgroundColor: Colors.red,
         colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,
@@ -240,39 +145,35 @@ class UserController extends GetxController {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // SAFE NAV
-  // ---------------------------------------------------------------------------
-
-  Future<void> _safeOffAll(Widget page) async {
+  Future<void> _safeOffAllNamed(String route, {dynamic arguments}) async {
     if (Get.key.currentState == null) {
-      if (_navScheduled) return;
+      if (_navScheduled) {
+        return;
+      }
+
       _navScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         _navScheduled = false;
-        await _safeOffAll(page);
+        await _safeOffAllNamed(route, arguments: arguments);
       });
       return;
     }
 
-    if (_navigating) return;
+    if (_navigating) {
+      return;
+    }
+
     _navigating = true;
     try {
-      final String current = Get.currentRoute;
-      final String? target = _namedRouteFor(page);
-      if (target != null && current == target) return;
+      final current = Get.currentRoute;
+      if (current == route) {
+        return;
+      }
 
-      await Get.offAll(() => page);
+      await Get.offAllNamed(route, arguments: arguments);
     } finally {
       _navigating = false;
     }
-  }
-
-  String? _namedRouteFor(Widget page) {
-    if (page is LoginScreen) return '/login';
-    if (page is MainScreen) return '/main';
-    if (page is VerifyEmailScreen) return '/verify';
-    return null;
   }
 
   @override

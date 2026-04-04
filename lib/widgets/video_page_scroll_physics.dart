@@ -1,7 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/physics.dart';
 import 'package:flutter/widgets.dart';
 
 class VideoPageScrollPhysics extends PageScrollPhysics {
@@ -103,14 +101,13 @@ class VideoPageScrollPhysics extends PageScrollPhysics {
     required double velocity,
     Tolerance? tolerance,
   }) {
-    final resolvedTolerance = tolerance ?? toleranceFor(position);
     final currentPage = _getPage(position);
     final floorPage = currentPage.floorToDouble();
     final ceilPage = currentPage.ceilToDouble();
     final pageFraction = currentPage - floorPage;
     final absVelocity = velocity.abs();
 
-    if (absVelocity >= resolvedTolerance.velocity) {
+    if (absVelocity >= minFlingVelocity) {
       return velocity > 0.0 ? ceilPage : floorPage;
     }
 

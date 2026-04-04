@@ -1,4 +1,4 @@
-# IAM Safe Configuration Runbook (Adfoot / Show-Talent)
+# IAM Safe Configuration Runbook (Adfoot)
 
 Objectif: corriger et stabiliser IAM pour Functions Gen2 (dont `sendVerificationReminder`) sans interrompre le reste.
 

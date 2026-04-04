@@ -7,6 +7,8 @@ import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../config/app_environment.dart';
+
 class UploadSessionState {
   final String sessionId;
   final String uploadUrl;
@@ -138,7 +140,6 @@ class DioUploadHttpClient implements UploadHttpClient {
 }
 
 class UploadClient {
-  static const _region = 'europe-west1';
   static const _chunkSize = 1024 * 1024;
   static const _thumbnailChunkSize = 512 * 1024;
   static const _sessionCacheFile = 'upload_session.json';
@@ -166,8 +167,10 @@ class UploadClient {
   final Duration _thumbnailRetryDelay;
   final int _maxChunkRetries;
 
-  late final FirebaseFunctions _functions =
-      _functionsOverride ?? FirebaseFunctions.instanceFor(region: _region);
+  late final FirebaseFunctions _functions = _functionsOverride ??
+      FirebaseFunctions.instanceFor(
+        region: AppEnvironmentConfig.functionsRegion,
+      );
 
   UploadSessionState? _cachedSession;
 
@@ -355,6 +358,22 @@ class UploadClient {
     return -1;
   }
 
+  Future<int> _readValidFileLength({
+    required File file,
+    required String label,
+  }) async {
+    if (!await file.exists()) {
+      throw UploadClientException('Fichier $label introuvable.');
+    }
+
+    final totalBytes = await file.length();
+    if (totalBytes <= 0) {
+      throw UploadClientException('Fichier $label vide.');
+    }
+
+    return totalBytes;
+  }
+
   Future<bool> uploadFile({
     required UploadSessionState session,
     required File file,
@@ -363,7 +382,10 @@ class UploadClient {
     void Function()? onUrlRefreshed,
   }) async {
     var current = session;
-    final totalBytes = await file.length();
+    final totalBytes = await _readValidFileLength(
+      file: file,
+      label: 'video',
+    );
     var uploadedBytes = session.uploadedBytes;
 
     final remoteOffset = await _queryRemoteOffset(current, totalBytes);
@@ -451,7 +473,10 @@ class UploadClient {
       throw const UploadClientException('Lien miniature expire.');
     }
 
-    final totalBytes = await file.length();
+    final totalBytes = await _readValidFileLength(
+      file: file,
+      label: 'miniature',
+    );
     var uploadedBytes = 0;
 
     while (uploadedBytes < totalBytes) {

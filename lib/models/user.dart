@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/utils/account_role_policy.dart';
 
 class AppUser {
   // =========================
@@ -15,6 +16,7 @@ class AppUser {
   bool estActif;
   bool estBloque;
   bool emailVerified;
+  bool createdByAdmin;
   int followers;
   int followings;
   DateTime dateInscription;
@@ -132,6 +134,7 @@ class AppUser {
     required this.estActif,
     required this.estBloque,
     required this.emailVerified,
+    this.createdByAdmin = false,
     required this.followers,
     required this.followings,
     required this.dateInscription,
@@ -208,6 +211,7 @@ class AppUser {
       estActif: map['estActif'] ?? false,
       estBloque: map['estBloque'] ?? false,
       emailVerified: map['emailVerified'] ?? false,
+      createdByAdmin: map['createdByAdmin'] as bool? ?? false,
       emailVerifiedAt: (map['emailVerifiedAt'] as Timestamp?)?.toDate(),
       followers: (map['followers'] as num?)?.toInt() ?? 0,
       followings: (map['followings'] as num?)?.toInt() ?? 0,
@@ -223,7 +227,8 @@ class AppUser {
       city: map['city']?.toString(),
       region: map['region']?.toString(),
       languages: map['languages'] != null
-          ? List<String>.from((map['languages'] as List).map((e) => e.toString()))
+          ? List<String>.from(
+              (map['languages'] as List).map((e) => e.toString()))
           : null,
       openToOpportunities: map['openToOpportunities'] as bool?,
 
@@ -323,6 +328,7 @@ class AppUser {
       'estActif': estActif,
       'estBloque': estBloque,
       'emailVerified': emailVerified,
+      'createdByAdmin': createdByAdmin,
       'emailVerifiedAt':
           emailVerifiedAt != null ? Timestamp.fromDate(emailVerifiedAt!) : null,
       'followers': followers,
@@ -393,19 +399,21 @@ class AppUser {
   }
 
   // =========================
-  // 🧠 GETTERS UI (MVP / AVANCÉ)
+  // UI GETTERS (MVP / AVANCE)
   // =========================
 
   /// Rôle helpers
   bool get isPlayer => role == 'joueur';
   bool get isClub => role == 'club';
-  bool get isRecruiter => role == 'recruteur';
+  bool get isAgent => role == 'agent';
+  bool get isRecruiter => role == 'recruteur' || role == 'agent';
   bool get isCoach => role == 'coach';
   bool get isFan => role == 'fan';
+  bool get canPublishOpportunities => isOpportunityPublisherRole(role);
 
   /// -------------------------
-  /// MVP – Profil de base complété ?
-  /// (ADFOOT Connect – gratuit)
+  /// MVP - Profil de base complete ?
+  /// Utilise pour les parcours essentiels du profil.
   /// -------------------------
   bool get isMvpProfileComplete {
     switch (role) {
@@ -420,6 +428,7 @@ class AppUser {
             (ligue?.isNotEmpty ?? false);
 
       case 'recruteur':
+      case 'agent':
         return nom.isNotEmpty && (entreprise?.isNotEmpty ?? false);
 
       default:
@@ -428,8 +437,8 @@ class AppUser {
   }
 
   /// -------------------------
-  /// AVANCÉ – Présence de données pro
-  /// (ADFOOT Pro / Dossier scout)
+  /// Profil avance - Presence de donnees professionnelles
+  /// Utilise pour les vues enrichies et le dossier scout.
   /// -------------------------
   bool get hasAdvancedProfile {
     switch (role) {
@@ -440,6 +449,7 @@ class AppUser {
         return clubProfile != null && clubProfile!.isNotEmpty;
 
       case 'recruteur':
+      case 'agent':
         return agentProfile != null && agentProfile!.isNotEmpty;
 
       default:
@@ -448,8 +458,8 @@ class AppUser {
   }
 
   /// -------------------------
-  /// Joueur – Dossier scout exploitable ?
-  /// (utilisé par recruteurs / ADFOOT Pro)
+  /// Joueur - Dossier scout exploitable ?
+  /// Utilise par les recruteurs et les parcours avances.
   /// -------------------------
   bool get hasScoutReadyProfile {
     if (!isPlayer || playerProfile == null) return false;

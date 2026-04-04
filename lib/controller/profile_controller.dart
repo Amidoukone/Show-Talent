@@ -1,5 +1,9 @@
 import 'dart:async';
 import 'dart:io';
+
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/user.dart';
+import 'package:adfoot/models/video.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,20 +11,20 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import 'package:adfoot/models/user.dart';
-import 'package:adfoot/models/video.dart';
-import 'package:adfoot/controller/user_controller.dart';
+class ProfileFieldDelete {
+  const ProfileFieldDelete._();
+}
 
 class ProfileController extends GetxController {
+  static const ProfileFieldDelete deleteField = ProfileFieldDelete._();
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final VideoManager _videoManager = VideoManager();
 
   AppUser? user;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _userSubscription;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userSubscription;
 
-  // UI / State
   final isLoadingPhoto = false.obs;
   final videoList = <Video>[].obs;
 
@@ -35,10 +39,6 @@ class ProfileController extends GetxController {
   bool get hasMoreVideos => _hasMoreVideos;
   bool get isLoadingVideos => _isLoadingVideos;
 
-  // =========================
-  // Lifecycle
-  // =========================
-
   @override
   void onClose() async {
     final ctx = 'profile:${user?.uid ?? ''}';
@@ -46,10 +46,6 @@ class ProfileController extends GetxController {
     await _userSubscription?.cancel();
     super.onClose();
   }
-
-  // =========================
-  // Firestore safe fetch
-  // =========================
 
   Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(
     DocumentReference<Map<String, dynamic>> ref,
@@ -60,21 +56,21 @@ class ProfileController extends GetxController {
         return await ref.get();
       } catch (_) {
         attempt++;
-        if (attempt >= 3) rethrow;
+        if (attempt >= 3) {
+          rethrow;
+        }
         await Future.delayed(Duration(milliseconds: 300 * attempt));
       }
     }
     throw Exception('Firestore retry failed');
   }
 
-  // =========================
-  // Profil loading
-  // =========================
-
   Future<void> updateUserId(String uid) async {
     try {
       final doc = await _getWithRetry(_firestore.collection('users').doc(uid));
-      if (!doc.exists) throw 'Profil introuvable';
+      if (!doc.exists) {
+        throw 'Profil introuvable';
+      }
 
       user = AppUser.fromMap(doc.data()!);
       update();
@@ -82,7 +78,7 @@ class ProfileController extends GetxController {
       _startUserListener(uid);
       await fetchUserVideos(uid, isRefresh: true);
     } catch (e, st) {
-      debugPrint('❌ updateUserId: $e\n$st');
+      debugPrint('updateUserId error: $e\n$st');
       Get.snackbar(
         'Erreur',
         'Chargement du profil impossible.',
@@ -94,29 +90,25 @@ class ProfileController extends GetxController {
 
   void _startUserListener(String uid) {
     _userSubscription?.cancel();
-    _userSubscription = _firestore
-        .collection('users')
-        .doc(uid)
-        .snapshots()
-        .listen(
+    _userSubscription =
+        _firestore.collection('users').doc(uid).snapshots().listen(
       (snapshot) {
-        if (!snapshot.exists) return;
+        if (!snapshot.exists) {
+          return;
+        }
         final data = snapshot.data();
-        if (data == null) return;
+        if (data == null) {
+          return;
+        }
         user = AppUser.fromMap(data);
         update();
       },
       onError: (error, stackTrace) {
-        debugPrint('❌ profile user listener error: $error\n$stackTrace');
+        debugPrint('profile user listener error: $error\n$stackTrace');
       },
     );
   }
 
-  // =========================
-  // 🔥 MÉTHODE MAÎTRESSE
-  // =========================
-
-  /// ✅ Mise à jour complète du profil (tous rôles confondus)
   Future<void> updateUserProfile(AppUser updatedUser) async {
     try {
       await _firestore
@@ -127,15 +119,14 @@ class ProfileController extends GetxController {
       user = updatedUser;
       update();
 
-      // Synchronisation globale
       if (Get.isRegistered<UserController>()) {
         await Get.find<UserController>().refreshUser();
       }
     } catch (e, st) {
-      debugPrint('❌ updateUserProfile: $e\n$st');
+      debugPrint('updateUserProfile error: $e\n$st');
       Get.snackbar(
         'Erreur',
-        'Impossible de mettre à jour le profil.',
+        'Impossible de mettre a jour le profil.',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
@@ -143,14 +134,6 @@ class ProfileController extends GetxController {
     }
   }
 
-  // =========================
-  // ✅ PATCH UPDATE (anti-régression)
-  // =========================
-  /// Mise à jour partielle ultra-safe :
-  /// - n’écrase pas les champs non concernés
-  /// - supprime les null/"" inutiles par défaut
-  /// - permet FieldValue.delete() si explicitement fourni
-  /// - deep-merge sur les maps avancées (playerProfile/clubProfile/agentProfile)
   Future<void> updateProfilePatch(
     String uid,
     Map<String, dynamic> patch, {
@@ -158,15 +141,15 @@ class ProfileController extends GetxController {
     bool alsoUpdateLocalUser = true,
   }) async {
     try {
-      if (patch.isEmpty) return;
+      if (patch.isEmpty) {
+        return;
+      }
 
-      // 1) Nettoyage du patch (évite null/"" qui effacent)
       final sanitized = _sanitizePatch(patch);
+      if (sanitized.isEmpty) {
+        return;
+      }
 
-      if (sanitized.isEmpty) return;
-
-      // 2) Cas particulier : maps avancées => deep merge
-      //    Pour éviter d’écraser tout playerProfile quand on change un champ.
       final advancedKeys = <String>{
         'playerProfile',
         'clubProfile',
@@ -174,59 +157,54 @@ class ProfileController extends GetxController {
         'eventOrganizerProfile',
       };
 
-      final Map<String, dynamic> finalPatch =
-          Map<String, dynamic>.from(sanitized);
-
-      // Fetch doc uniquement si on doit deep-merge au lieu d’écraser
+      final finalPatch = Map<String, dynamic>.from(sanitized);
       final needsDeepMerge = finalPatch.keys.any(advancedKeys.contains);
+
       if (needsDeepMerge) {
         final doc =
             await _getWithRetry(_firestore.collection('users').doc(uid));
-        final existing = doc.data() ?? {};
+        final existing = doc.data() ?? <String, dynamic>{};
 
         for (final key in advancedKeys) {
-          if (!finalPatch.containsKey(key)) continue;
+          if (!finalPatch.containsKey(key)) {
+            continue;
+          }
 
           final incoming = finalPatch[key];
-
-          // Si l’appelant a explicitement mis FieldValue.delete(), on respecte.
-          if (incoming is FieldValue) continue;
-
-          // Si incoming n’est pas une Map, on laisse tel quel (cas rare)
-          if (incoming is! Map) continue;
+          if (incoming is FieldValue) {
+            continue;
+          }
+          if (incoming is! Map) {
+            continue;
+          }
 
           final old = existing[key];
           if (old is Map) {
-            final merged = _deepMergeMap(
+            finalPatch[key] = _deepMergeMap(
               Map<String, dynamic>.from(old),
               Map<String, dynamic>.from(incoming),
             );
-            finalPatch[key] = merged;
           } else {
-            // Rien avant : on pose la map
             finalPatch[key] = Map<String, dynamic>.from(incoming);
           }
         }
       }
 
-      // 3) Update Firestore
       await _firestore.collection('users').doc(uid).update(finalPatch);
 
-      // 4) Mise à jour locale (pour refresh UI immédiat)
       if (alsoUpdateLocalUser && user != null && user!.uid == uid) {
         _applyPatchToLocalUser(finalPatch);
         update();
       }
 
-      // 5) Sync globale (UserController) pour le reste de l’app
       if (refreshGlobalUser && Get.isRegistered<UserController>()) {
         await Get.find<UserController>().refreshUser();
       }
     } catch (e, st) {
-      debugPrint('❌ updateProfilePatch: $e\n$st');
+      debugPrint('updateProfilePatch error: $e\n$st');
       Get.snackbar(
         'Erreur',
-        'Impossible de mettre à jour le profil.',
+        'Impossible de mettre a jour le profil.',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
@@ -234,42 +212,45 @@ class ProfileController extends GetxController {
     }
   }
 
-  // =========================
-  // Helpers SAFE
-  // =========================
-
-  /// Enlève les null et Strings vides par défaut.
-  /// ⚠️ Conserve FieldValue.delete() si explicitement fourni.
   Map<String, dynamic> _sanitizePatch(Map<String, dynamic> patch) {
     final out = <String, dynamic>{};
 
     void addIfValid(String key, dynamic value) {
-      if (value == null) return;
+      if (value == null) {
+        return;
+      }
 
-      // Autoriser delete explicitement
+      if (value is ProfileFieldDelete) {
+        out[key] = FieldValue.delete();
+        return;
+      }
+
       if (value is FieldValue) {
         out[key] = value;
         return;
       }
 
-      // string vide -> on ignore (évite d’écraser)
       if (value is String) {
-        final t = value.trim();
-        if (t.isEmpty) return;
-        out[key] = t;
+        final trimmed = value.trim();
+        if (trimmed.isEmpty) {
+          return;
+        }
+        out[key] = trimmed;
         return;
       }
 
-      // liste vide -> on ignore (évite d’écraser) sauf si tu veux explicitement vider
       if (value is List) {
-        if (value.isEmpty) return;
+        if (value.isEmpty) {
+          return;
+        }
         out[key] = value;
         return;
       }
 
-      // map vide -> on ignore
       if (value is Map) {
-        if (value.isEmpty) return;
+        if (value.isEmpty) {
+          return;
+        }
         out[key] = value;
         return;
       }
@@ -281,102 +262,131 @@ class ProfileController extends GetxController {
     return out;
   }
 
-  /// Deep merge récursif pour Map<String,dynamic>
-  /// - merge les maps imbriquées
-  /// - écrase les scalaires/listes
   Map<String, dynamic> _deepMergeMap(
     Map<String, dynamic> base,
     Map<String, dynamic> incoming,
   ) {
     final result = Map<String, dynamic>.from(base);
 
-    incoming.forEach((k, v) {
-      if (v == null) return; // ignore null
-      final old = result[k];
-
-      if (old is Map && v is Map) {
-        result[k] = _deepMergeMap(
+    incoming.forEach((key, value) {
+      if (value == null) {
+        return;
+      }
+      final old = result[key];
+      if (old is Map && value is Map) {
+        result[key] = _deepMergeMap(
           Map<String, dynamic>.from(old),
-          Map<String, dynamic>.from(v),
+          Map<String, dynamic>.from(value),
         );
       } else {
-        result[k] = v;
+        result[key] = value;
       }
     });
 
     return result;
   }
 
-  /// Applique un patch localement sur `user` pour éviter un refetch complet.
-  /// Ici on gère les champs principaux + maps avancées.
   void _applyPatchToLocalUser(Map<String, dynamic> patch) {
     final u = user;
-    if (u == null) return;
+    if (u == null) {
+      return;
+    }
 
-    // Identité
-    if (patch.containsKey('nom')) u.nom = patch['nom'] as String;
+    if (patch.containsKey('nom')) {
+      u.nom = patch['nom'] as String;
+    }
     if (patch.containsKey('photoProfil')) {
-      u.photoProfil = patch['photoProfil'] as String;
+      final value = patch['photoProfil'];
+      if (value is! FieldValue) {
+        u.photoProfil = value as String;
+      }
     }
 
-    // Champs simples (si présents)
-    if (patch.containsKey('phone')) u.phone = patch['phone'] as String?;
-    if (patch.containsKey('bio')) u.bio = patch['bio'] as String?;
-    if (patch.containsKey('position')) {
-      u.position = patch['position'] as String?;
-    }
-    if (patch.containsKey('team')) u.team = patch['team'] as String?;
-    if (patch.containsKey('clubActuel')) {
-      u.clubActuel = patch['clubActuel'] as String?;
-    }
-
-    if (patch.containsKey('nombreDeMatchs')) {
-      u.nombreDeMatchs = patch['nombreDeMatchs'] as int?;
-    }
-    if (patch.containsKey('buts')) u.buts = patch['buts'] as int?;
-    if (patch.containsKey('assistances')) {
-      u.assistances = patch['assistances'] as int?;
+    void applyNullableString(String key, void Function(String?) setter) {
+      if (!patch.containsKey(key)) {
+        return;
+      }
+      final value = patch[key];
+      if (value is FieldValue) {
+        setter(null);
+      } else {
+        setter(value as String?);
+      }
     }
 
-    if (patch.containsKey('nomClub')) u.nomClub = patch['nomClub'] as String?;
-    if (patch.containsKey('ligue')) u.ligue = patch['ligue'] as String?;
-
-    if (patch.containsKey('entreprise')) {
-      u.entreprise = patch['entreprise'] as String?;
+    void applyNullableInt(String key, void Function(int?) setter) {
+      if (!patch.containsKey(key)) {
+        return;
+      }
+      final value = patch[key];
+      if (value is FieldValue) {
+        setter(null);
+        return;
+      }
+      if (value is num) {
+        setter(value.toInt());
+        return;
+      }
+      setter(value as int?);
     }
-    if (patch.containsKey('nombreDeRecrutements')) {
-      u.nombreDeRecrutements = patch['nombreDeRecrutements'] as int?;
+
+    applyNullableString('phone', (v) => u.phone = v);
+    applyNullableString('bio', (v) => u.bio = v);
+    applyNullableString('position', (v) => u.position = v);
+    applyNullableString('team', (v) => u.team = v);
+    applyNullableString('clubActuel', (v) => u.clubActuel = v);
+    applyNullableString('nomClub', (v) => u.nomClub = v);
+    applyNullableString('ligue', (v) => u.ligue = v);
+    applyNullableString('entreprise', (v) => u.entreprise = v);
+    applyNullableString('country', (v) => u.country = v);
+    applyNullableString('city', (v) => u.city = v);
+    applyNullableString('region', (v) => u.region = v);
+
+    applyNullableInt('nombreDeMatchs', (v) => u.nombreDeMatchs = v);
+    applyNullableInt('buts', (v) => u.buts = v);
+    applyNullableInt('assistances', (v) => u.assistances = v);
+    applyNullableInt('nombreDeRecrutements', (v) => u.nombreDeRecrutements = v);
+
+    if (patch.containsKey('performances')) {
+      final value = patch['performances'];
+      if (value is FieldValue) {
+        u.performances = null;
+      } else if (value is Map) {
+        u.performances = Map<String, double>.from(
+          value.map((k, v) => MapEntry(k.toString(), (v as num).toDouble())),
+        );
+      }
     }
 
-    // Docs
     if (patch.containsKey('cvUrl')) {
-      final v = patch['cvUrl'];
-      if (v is FieldValue) {
-        // delete
+      final value = patch['cvUrl'];
+      if (value is FieldValue) {
         u.cvUrl = null;
       } else {
-        u.cvUrl = v as String?;
+        u.cvUrl = value as String?;
       }
     }
 
-    // Transverses (optionnels)
     if (patch.containsKey('birthDate')) {
-      final v = patch['birthDate'];
-      if (v is FieldValue) {
+      final value = patch['birthDate'];
+      if (value is FieldValue) {
         u.birthDate = null;
-      } else if (v is Timestamp) {
-        u.birthDate = v.toDate();
-      } else if (v is DateTime) {
-        u.birthDate = v;
+      } else if (value is Timestamp) {
+        u.birthDate = value.toDate();
+      } else if (value is DateTime) {
+        u.birthDate = value;
       }
     }
-    if (patch.containsKey('country')) u.country = patch['country'] as String?;
-    if (patch.containsKey('city')) u.city = patch['city'] as String?;
-    if (patch.containsKey('region')) u.region = patch['region'] as String?;
+
     if (patch.containsKey('languages')) {
-      u.languages =
-          (patch['languages'] as List).map((e) => e.toString()).toList();
+      final value = patch['languages'];
+      if (value is FieldValue) {
+        u.languages = null;
+      } else if (value is List) {
+        u.languages = value.map((e) => e.toString()).toList();
+      }
     }
+
     if (patch.containsKey('openToOpportunities')) {
       u.openToOpportunities = patch['openToOpportunities'] as bool?;
     }
@@ -387,26 +397,24 @@ class ProfileController extends GetxController {
       u.allowMessages = patch['allowMessages'] as bool;
     }
 
-    // Avancés (maps)
     void applyMap(String key, void Function(Map<String, dynamic>) setter) {
-      if (!patch.containsKey(key)) return;
-      final v = patch[key];
-      if (v is FieldValue) {
-        // delete -> null
+      if (!patch.containsKey(key)) {
+        return;
+      }
+      final value = patch[key];
+      if (value is FieldValue) {
         setter(<String, dynamic>{});
         return;
       }
-      if (v is Map) setter(Map<String, dynamic>.from(v));
+      if (value is Map) {
+        setter(Map<String, dynamic>.from(value));
+      }
     }
 
     applyMap('playerProfile', (m) => u.playerProfile = m);
     applyMap('clubProfile', (m) => u.clubProfile = m);
     applyMap('agentProfile', (m) => u.agentProfile = m);
   }
-
-  // =========================
-  // Photo de profil
-  // =========================
 
   Future<void> updateProfilePhoto(String uid, String photoPath) async {
     isLoadingPhoto.value = true;
@@ -428,16 +436,16 @@ class ProfileController extends GetxController {
       await Get.find<UserController>().refreshUser();
 
       Get.snackbar(
-        'Succès',
-        'Photo mise à jour.',
+        'Succes',
+        'Photo mise a jour.',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
     } catch (e, st) {
-      debugPrint('❌ updateProfilePhoto: $e\n$st');
+      debugPrint('updateProfilePhoto error: $e\n$st');
       Get.snackbar(
         'Erreur',
-        'Impossible de mettre à jour la photo.',
+        'Impossible de mettre a jour la photo.',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
@@ -446,13 +454,12 @@ class ProfileController extends GetxController {
     }
   }
 
-  // =========================
-  // Vidéos (inchangé)
-  // =========================
-
   Future<void> fetchUserVideos(String uid, {bool isRefresh = false}) async {
-    if (_loadingCompleter != null) return _loadingCompleter!.future;
-    _loadingCompleter = Completer();
+    if (_loadingCompleter != null) {
+      return _loadingCompleter!.future;
+    }
+
+    _loadingCompleter = Completer<void>();
     _isLoadingVideos = true;
     update();
 
@@ -466,9 +473,11 @@ class ProfileController extends GetxController {
         _hasMoreVideos = true;
       }
 
-      if (!_hasMoreVideos) return;
+      if (!_hasMoreVideos) {
+        return;
+      }
 
-      Query<Map<String, dynamic>> q = _firestore
+      Query<Map<String, dynamic>> query = _firestore
           .collection('videos')
           .where('uid', isEqualTo: uid)
           .where('status', isEqualTo: 'ready')
@@ -476,10 +485,10 @@ class ProfileController extends GetxController {
           .limit(_videoFetchLimit);
 
       if (!isRefresh && _lastVideoDoc != null) {
-        q = q.startAfter([_lastVideoDoc!.get('updatedAt')]);
+        query = query.startAfter([_lastVideoDoc!.get('updatedAt')]);
       }
 
-      final snap = await q.get();
+      final snap = await query.get();
       if (snap.docs.isEmpty) {
         _hasMoreVideos = false;
       } else {
@@ -488,8 +497,9 @@ class ProfileController extends GetxController {
             .where((v) => v.videoUrl.isNotEmpty)
             .toList();
 
-        final ids = videoList.map((v) => v.id).toSet();
-        final unique = newVideos.where((v) => !ids.contains(v.id)).toList();
+        final existingIds = videoList.map((v) => v.id).toSet();
+        final unique =
+            newVideos.where((v) => !existingIds.contains(v.id)).toList();
 
         videoList.addAll(unique);
         _lastVideoDoc = snap.docs.last;
@@ -509,11 +519,11 @@ class ProfileController extends GetxController {
         }
       }
     } catch (e, st) {
-      debugPrint('❌ fetchUserVideos: $e\n$st');
+      debugPrint('fetchUserVideos error: $e\n$st');
       if (videoList.isEmpty) {
         Get.snackbar(
           'Erreur',
-          'Chargement des vidéos impossible.',
+          'Chargement des videos impossible.',
           backgroundColor: Colors.red,
           colorText: Colors.white,
         );
@@ -527,13 +537,11 @@ class ProfileController extends GetxController {
   }
 
   Future<void> refreshProfileVideos() async {
-    if (user == null) return;
+    if (user == null) {
+      return;
+    }
     await fetchUserVideos(user!.uid, isRefresh: true);
   }
-
-  // =========================
-  // CV
-  // =========================
 
   Future<void> uploadCvPdf(String uid, File pdfFile) async {
     try {
@@ -548,16 +556,16 @@ class ProfileController extends GetxController {
       update();
 
       Get.snackbar(
-        'Succès',
-        'CV ajouté ou mis à jour.',
+        'Succes',
+        'CV ajoute ou mis a jour.',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
     } catch (e) {
-      debugPrint('❌ uploadCvPdf: $e');
+      debugPrint('uploadCvPdf error: $e');
       Get.snackbar(
         'Erreur',
-        'Impossible d’ajouter le CV.',
+        'Impossible d\'ajouter le CV.',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
@@ -578,13 +586,13 @@ class ProfileController extends GetxController {
       update();
 
       Get.snackbar(
-        'Succès',
-        'CV supprimé.',
+        'Succes',
+        'CV supprime.',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
     } catch (e) {
-      debugPrint('❌ deleteCv: $e');
+      debugPrint('deleteCv error: $e');
       Get.snackbar(
         'Erreur',
         'Impossible de supprimer le CV.',
@@ -593,10 +601,6 @@ class ProfileController extends GetxController {
       );
     }
   }
-
-  // =========================
-  // Utils
-  // =========================
 
   Future<void> pauseAll() async {
     final ctx = 'profile:${user?.uid ?? ''}';
@@ -608,13 +612,13 @@ class ProfileController extends GetxController {
     return current != null && current == user?.uid;
   }
 
-  /// Met à jour localement la liste des abonnés pour un affichage immédiat.
-  /// Utilisé pour rendre l'UI réactive avant la confirmation Firestore.
   void applyLocalFollowerChange({
     required String currentUserId,
     required bool shouldFollow,
   }) {
-    if (user == null) return;
+    if (user == null) {
+      return;
+    }
 
     final followers = user!.followersList;
     final alreadyFollowing = followers.contains(currentUserId);
@@ -624,7 +628,7 @@ class ProfileController extends GetxController {
       user!.followers = user!.followers + 1;
     } else if (!shouldFollow && alreadyFollowing) {
       followers.remove(currentUserId);
-      user!.followers = (user!.followers - 1).clamp(0, double.maxFinite).toInt();
+      user!.followers = (user!.followers - 1).clamp(0, 1 << 30).toInt();
     }
 
     update();
