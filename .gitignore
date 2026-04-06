@@ -65,3 +65,6 @@ service-account*.json
 /ios/Firebase/production/GoogleService-Info.plist
 /web/firebase-messaging-config.js
 
+# Generated smoke-test reports
+/docs/smoke-managed-account-auth-*.json
+

@@ -1,12 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
-import 'package:intl/intl.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
 class EventFormScreen extends StatefulWidget {
   final Event? event;
@@ -23,8 +23,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
   final TextEditingController titleController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
-
-  // ✅ Champs enrichis
   final TextEditingController capacityController = TextEditingController();
   final TextEditingController tagsController = TextEditingController();
   final TextEditingController streamingController = TextEditingController();
@@ -35,6 +33,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
 
   bool estPublic = true;
   String statut = 'ouvert';
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -44,20 +43,16 @@ class _EventFormScreenState extends State<EventFormScreen> {
       titleController.text = widget.event!.titre;
       descriptionController.text = widget.event!.description;
       locationController.text = widget.event!.lieu;
-
       capacityController.text = widget.event!.capaciteMax != null
           ? widget.event!.capaciteMax.toString()
           : '';
-
       tagsController.text = widget.event!.tags?.join(', ') ?? '';
       streamingController.text = widget.event!.streamingUrl ?? '';
       flyerController.text = widget.event!.flyerUrl ?? '';
-
       startDate = widget.event!.dateDebut;
       endDate = widget.event!.dateFin;
-
       estPublic = widget.event!.estPublic;
-      statut = widget.event!.statut;
+      statut = Event.normalizeStatus(widget.event!.statut);
     }
   }
 
@@ -69,7 +64,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Text(
-          widget.event != null ? 'Modifier l\'événement' : 'Créer un événement',
+          widget.event != null ? 'Modifier l\'evenement' : 'Creer un evenement',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: cs.surface,
@@ -80,23 +75,23 @@ class _EventFormScreenState extends State<EventFormScreen> {
         onTap: () => FocusScope.of(context).unfocus(),
         child: SingleChildScrollView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionTitle('Informations générales'),
+              _buildSectionTitle('Informations generales'),
               const SizedBox(height: 20),
               _buildTextField(
                 controller: titleController,
                 labelText: 'Titre',
-                hintText: 'Saisissez le titre de l\'événement',
+                hintText: 'Saisissez le titre de l\'evenement',
                 icon: Icons.title,
               ),
               const SizedBox(height: 20),
               _buildTextField(
                 controller: descriptionController,
                 labelText: 'Description',
-                hintText: 'Décrivez l\'événement',
+                hintText: 'Decrivez l\'evenement',
                 icon: Icons.description,
                 maxLines: 3,
               ),
@@ -110,7 +105,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
               const SizedBox(height: 20),
               _buildTextField(
                 controller: capacityController,
-                labelText: 'Capacité maximale (optionnel)',
+                labelText: 'Capacite maximale (optionnel)',
                 hintText: 'Ex: 50',
                 icon: Icons.groups,
                 keyboardType: TextInputType.number,
@@ -118,16 +113,16 @@ class _EventFormScreenState extends State<EventFormScreen> {
               const SizedBox(height: 20),
               _buildTextField(
                 controller: tagsController,
-                labelText: 'Tags / Catégories (séparés par des virgules)',
-                hintText: 'Ex: U19, Détection, Futsal',
+                labelText: 'Tags / Categories (separes par des virgules)',
+                hintText: 'Ex: U19, Detection, Futsal',
                 icon: Icons.sell_outlined,
               ),
               const SizedBox(height: 20),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Événement public'),
+                title: const Text('Evenement public'),
                 subtitle:
-                    const Text('Désactivez pour rendre l\'événement privé'),
+                    const Text('Desactivez pour rendre l\'evenement prive'),
                 value: estPublic,
                 onChanged: (v) => setState(() => estPublic = v),
               ),
@@ -142,15 +137,15 @@ class _EventFormScreenState extends State<EventFormScreen> {
                   DropdownMenuItem(
                       value: 'brouillon', child: Text('Brouillon')),
                   DropdownMenuItem(value: 'ouvert', child: Text('Ouvert')),
-                  DropdownMenuItem(value: 'fermé', child: Text('Fermé')),
-                  DropdownMenuItem(value: 'archivé', child: Text('Archivé')),
+                  DropdownMenuItem(value: 'ferme', child: Text('Ferme')),
+                  DropdownMenuItem(value: 'archive', child: Text('Archive')),
                 ],
                 onChanged: (v) => setState(() => statut = v ?? 'ouvert'),
               ),
               const SizedBox(height: 20),
               _buildSectionTitle('Dates'),
               const SizedBox(height: 10),
-              _buildDatePicker('Date de début', startDate, (newDate) {
+              _buildDatePicker('Date de debut', startDate, (newDate) {
                 setState(() {
                   startDate = newDate;
                   if (endDate != null && endDate!.isBefore(startDate!)) {
@@ -167,7 +162,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
               const SizedBox(height: 40),
               Center(
                 child: ElevatedButton(
-                  onPressed: _handleSubmit,
+                  onPressed: _isSubmitting ? null : _handleSubmit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AdColors.brand,
                     foregroundColor: AdColors.brandOn,
@@ -177,7 +172,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  child: Text(widget.event != null ? 'Modifier' : 'Créer'),
+                  child: Text(widget.event != null ? 'Modifier' : 'Creer'),
                 ),
               ),
             ],
@@ -188,6 +183,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
   }
 
   Future<void> _handleSubmit() async {
+    if (_isSubmitting) return;
+
     if (titleController.text.trim().isEmpty ||
         descriptionController.text.trim().isEmpty ||
         locationController.text.trim().isEmpty ||
@@ -200,7 +197,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
       return;
     }
 
-    if (titleController.text.length > 120) {
+    if (titleController.text.trim().length > 120) {
       AdFeedback.warning(
         'Titre trop long',
         'Limitez le titre a 120 caracteres.',
@@ -232,65 +229,92 @@ class _EventFormScreenState extends State<EventFormScreen> {
         .split(',')
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
-        .toList();
+        .toList(growable: false);
 
-    AppUser currentUser = Get.find<UserController>().user!;
-
-    if (widget.event != null) {
-      Event updatedEvent = Event(
-        id: widget.event!.id,
-        titre: titleController.text.trim(),
-        description: descriptionController.text.trim(),
-        dateDebut: startDate!,
-        dateFin: endDate!,
-        organisateur: widget.event!.organisateur,
-        participants: widget.event!.participants,
-        statut: statut,
-        lieu: locationController.text.trim(),
-        estPublic: estPublic,
-        createdAt: widget.event!.createdAt,
-        capaciteMax: capacite,
-        tags: tags.isEmpty ? null : tags,
-        streamingUrl: streamingController.text.trim().isEmpty
-            ? null
-            : streamingController.text.trim(),
-        flyerUrl: flyerController.text.trim().isEmpty
-            ? null
-            : flyerController.text.trim(),
-        // views / archivedAt / lastUpdated gérés côté controller si besoin
+    final AppUser? currentUser = Get.find<UserController>().user;
+    if (currentUser == null) {
+      AdFeedback.error(
+        'Erreur',
+        'Utilisateur introuvable. Merci de vous reconnecter.',
       );
+      return;
+    }
 
-      final ok = await eventController.updateEvent(updatedEvent, currentUser);
-      if (ok && mounted) {
+    setState(() => _isSubmitting = true);
+    try {
+      if (widget.event != null) {
+        final updatedEvent = Event(
+          id: widget.event!.id,
+          titre: titleController.text.trim(),
+          description: descriptionController.text.trim(),
+          dateDebut: startDate!,
+          dateFin: endDate!,
+          organisateur: widget.event!.organisateur,
+          participants: widget.event!.participants,
+          statut: Event.normalizeStatus(statut),
+          lieu: locationController.text.trim(),
+          estPublic: estPublic,
+          createdAt: widget.event!.createdAt,
+          capaciteMax: capacite,
+          tags: tags.isEmpty ? null : tags,
+          streamingUrl: streamingController.text.trim().isEmpty
+              ? null
+              : streamingController.text.trim(),
+          flyerUrl: flyerController.text.trim().isEmpty
+              ? null
+              : flyerController.text.trim(),
+        );
+
+        final response =
+            await eventController.updateEvent(updatedEvent, currentUser);
+        if (!mounted) return;
+
+        if (!response.success) {
+          AdFeedback.error('Erreur', response.message);
+          return;
+        }
+
+        AdFeedback.success('Succes', response.message);
+        Navigator.pop(context, true);
+      } else {
+        final newEvent = Event(
+          id: eventController.newEventId(),
+          titre: titleController.text.trim(),
+          description: descriptionController.text.trim(),
+          dateDebut: startDate!,
+          dateFin: endDate!,
+          organisateur: currentUser,
+          participants: const [],
+          statut: Event.normalizeStatus(statut),
+          lieu: locationController.text.trim(),
+          estPublic: estPublic,
+          createdAt: DateTime.now(),
+          capaciteMax: capacite,
+          tags: tags.isEmpty ? null : tags,
+          streamingUrl: streamingController.text.trim().isEmpty
+              ? null
+              : streamingController.text.trim(),
+          flyerUrl: flyerController.text.trim().isEmpty
+              ? null
+              : flyerController.text.trim(),
+          views: 0,
+        );
+
+        final response =
+            await eventController.createEvent(newEvent, currentUser);
+        if (!mounted) return;
+
+        if (!response.success) {
+          AdFeedback.error('Erreur', response.message);
+          return;
+        }
+
+        AdFeedback.success('Succes', response.message);
         Navigator.pop(context, true);
       }
-    } else {
-      Event newEvent = Event(
-        id: eventController.newEventId(),
-        titre: titleController.text.trim(),
-        description: descriptionController.text.trim(),
-        dateDebut: startDate!,
-        dateFin: endDate!,
-        organisateur: currentUser,
-        participants: [],
-        statut: statut,
-        lieu: locationController.text.trim(),
-        estPublic: estPublic,
-        createdAt: DateTime.now(),
-        capaciteMax: capacite,
-        tags: tags.isEmpty ? null : tags,
-        streamingUrl: streamingController.text.trim().isEmpty
-            ? null
-            : streamingController.text.trim(),
-        flyerUrl: flyerController.text.trim().isEmpty
-            ? null
-            : flyerController.text.trim(),
-        views: 0, // ✅ init safe
-      );
-
-      final ok = await eventController.createEvent(newEvent, currentUser);
-      if (ok && mounted) {
-        Navigator.pop(context, true);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
       }
     }
   }
@@ -336,7 +360,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   Widget _buildDatePicker(
     String label,
     DateTime? date,
-    Function(DateTime) onDateSelected, {
+    ValueChanged<DateTime> onDateSelected, {
     bool isStart = false,
   }) {
     return InkWell(
@@ -348,11 +372,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 ? startDate!
                 : now;
 
-        final initial = date ?? firstDate;
-
+        final initialDate = date ?? firstDate;
         final pickedDate = await showDatePicker(
           context: context,
-          initialDate: initial,
+          initialDate: initialDate,
           firstDate: firstDate,
           lastDate: DateTime(2100),
           builder: (context, child) {

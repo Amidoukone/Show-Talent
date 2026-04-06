@@ -2,13 +2,14 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/app_environment.dart';
+import '../models/action_response.dart';
 
 class PushNotificationService {
   static final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
     region: AppEnvironmentConfig.functionsRegion,
   );
 
-  static Future<void> _invoke(
+  static Future<Map<String, dynamic>?> _invoke(
     String functionName,
     Map<String, dynamic> payload,
   ) async {
@@ -19,7 +20,8 @@ class PushNotificationService {
       ),
     );
 
-    await callable.call<Map<String, dynamic>>(payload);
+    final result = await callable.call<Map<String, dynamic>>(payload);
+    return result.data;
   }
 
   static Future<void> sendNotification({
@@ -50,47 +52,73 @@ class PushNotificationService {
     }
   }
 
-  static Future<void> sendOfferFanout({
+  static Future<ActionResponse> sendOfferFanout({
     required String offerId,
     required String title,
     required String body,
   }) async {
     try {
-      await _invoke('sendOfferFanout', {
+      final response = await _invoke('sendOfferFanout', {
         'offerId': offerId,
         'title': title,
         'body': body,
       });
+      return ActionResponse.fromMap(response, toastOverride: ToastLevel.none);
     } on FirebaseFunctionsException catch (e) {
       if (kDebugMode) {
         debugPrint('sendOfferFanout error ${e.code}: ${e.message}');
       }
+      return ActionResponse.failure(
+        message: e.message ?? 'Envoi des notifications indisponible.',
+        code: e.code,
+        toast: ToastLevel.none,
+        retriable: e.code == 'unavailable',
+      );
     } catch (e) {
       if (kDebugMode) {
         debugPrint('sendOfferFanout unexpected error: $e');
       }
+      return ActionResponse.failure(
+        message: 'Envoi des notifications indisponible.',
+        code: 'fanout_unavailable',
+        toast: ToastLevel.none,
+        retriable: true,
+      );
     }
   }
 
-  static Future<void> sendEventFanout({
+  static Future<ActionResponse> sendEventFanout({
     required String eventId,
     required String title,
     required String body,
   }) async {
     try {
-      await _invoke('sendEventFanout', {
+      final response = await _invoke('sendEventFanout', {
         'eventId': eventId,
         'title': title,
         'body': body,
       });
+      return ActionResponse.fromMap(response, toastOverride: ToastLevel.none);
     } on FirebaseFunctionsException catch (e) {
       if (kDebugMode) {
         debugPrint('sendEventFanout error ${e.code}: ${e.message}');
       }
+      return ActionResponse.failure(
+        message: e.message ?? 'Envoi des notifications indisponible.',
+        code: e.code,
+        toast: ToastLevel.none,
+        retriable: e.code == 'unavailable',
+      );
     } catch (e) {
       if (kDebugMode) {
         debugPrint('sendEventFanout unexpected error: $e');
       }
+      return ActionResponse.failure(
+        message: 'Envoi des notifications indisponible.',
+        code: 'fanout_unavailable',
+        toast: ToastLevel.none,
+        retriable: true,
+      );
     }
   }
 }

@@ -98,11 +98,6 @@ interface ParsedMetadata {
   description?: string;
   caption?: string;
   profilePhoto?: string;
-  storagePath?: string;
-  thumbnailPath?: string;
-  thumbnailHash?: string;
-  thumbnailSize?: number;
-  thumbnailContentType?: string;
   status?: string;
   likes?: string[];
   reports?: string[];
@@ -247,6 +242,43 @@ function sanitizeThumbnailPath(
     .replace(/[^a-zA-Z0-9_./-]/g, "");
 
   return safe.endsWith(`.${ext}`) ? safe : fallback;
+}
+
+function normalizeVideoStoragePath(sessionId: string, provided?: string): string {
+  const fallback = `videos/${sessionId}.mp4`;
+  if (!provided) return fallback;
+
+  const normalized = provided
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\s+/g, "_");
+
+  if (!normalized.startsWith("videos/")) return fallback;
+  if (!normalized.endsWith(".mp4")) return fallback;
+  if (!normalized.includes(sessionId)) return fallback;
+  if (normalized.includes("..")) return fallback;
+
+  return normalized;
+}
+
+function normalizeThumbnailStoragePath(
+  sessionId: string,
+  provided?: string,
+): string {
+  const fallback = `thumbnails/thumbnail_${sessionId}.jpg`;
+  if (!provided) return fallback;
+
+  const normalized = provided
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\s+/g, "_");
+
+  if (!normalized.startsWith("thumbnails/")) return fallback;
+  if (!/\.(jpg|jpeg|png)$/i.test(normalized)) return fallback;
+  if (!normalized.includes(sessionId)) return fallback;
+  if (normalized.includes("..")) return fallback;
+
+  return normalized;
 }
 
 async function validateThumbnail(
@@ -487,6 +519,16 @@ export const finalizeUpload = onCall(
       throw new HttpsError("permission-denied", "Session appartenant à un autre utilisateur.");
     }
 
+    const persistedStoragePath = normalizeVideoStoragePath(
+      sessionId,
+      doc?.storagePath,
+    );
+    const persistedThumbnailPath = normalizeThumbnailStoragePath(
+      sessionId,
+      doc?.thumbnailPath,
+    );
+    const persistedThumbnailGuard = doc?.thumbnailGuard;
+
     await validateThumbnail(doc?.thumbnailPath, doc?.thumbnailGuard);
 
     const rawMetadata = (request.data as { metadata?: UploadMetadata } | undefined)?.metadata;
@@ -509,11 +551,6 @@ export const finalizeUpload = onCall(
         asString(rawMetadata["légende"], 500);
 
       safe.profilePhoto = asString(rawMetadata.profilePhoto, 600);
-      safe.storagePath = asString(rawMetadata.storagePath, 400);
-      safe.thumbnailPath = asString(rawMetadata.thumbnailPath, 400);
-      safe.thumbnailHash = asString(rawMetadata.thumbnailHash, 100);
-      safe.thumbnailContentType = asString(rawMetadata.thumbnailContentType, 60);
-      safe.thumbnailSize = asPositiveInt(rawMetadata.thumbnailSize);
 
       safe.reportCount = asPositiveInt(rawMetadata.reportCount);
       safe.shareCount = asPositiveInt(rawMetadata.shareCount);
@@ -541,11 +578,6 @@ export const finalizeUpload = onCall(
       "description",
       "caption",
       "profilePhoto",
-      "storagePath",
-      "thumbnailPath",
-      "thumbnailHash",
-      "thumbnailSize",
-      "thumbnailContentType",
       "likes",
       "reports",
       "reportCount",
@@ -570,6 +602,12 @@ export const finalizeUpload = onCall(
         ...(safe.caption ? {legend: safe.caption, legende: safe.caption, captionText: safe.caption} : {}),
 
         // ✅ le reste
+        storagePath: persistedStoragePath,
+        thumbnailPath: persistedThumbnailPath,
+        ...(persistedThumbnailGuard?.hash ? {thumbnailHash: persistedThumbnailGuard.hash} : {}),
+        ...(persistedThumbnailGuard?.size !== undefined ? {thumbnailSize: persistedThumbnailGuard.size} : {}),
+        ...(persistedThumbnailGuard?.contentType ? {thumbnailContentType: persistedThumbnailGuard.contentType} : {}),
+
         ...sanitizedMetadata,
 
         updatedAt: fieldValue.serverTimestamp(),

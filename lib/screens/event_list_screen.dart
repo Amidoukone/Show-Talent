@@ -1,12 +1,13 @@
-import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/event_detail_screen.dart';
 import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
@@ -15,7 +16,6 @@ import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-import 'package:adfoot/theme/ad_colors.dart';
 
 class EventListScreen extends StatefulWidget {
   const EventListScreen({super.key});
@@ -27,7 +27,6 @@ class EventListScreen extends StatefulWidget {
 class _EventListScreenState extends State<EventListScreen> {
   final EventController eventController = Get.find<EventController>();
   final UserController userController = Get.find<UserController>();
-  final ChatController chatController = Get.find<ChatController>();
 
   final TextEditingController _searchController = TextEditingController();
 
@@ -37,6 +36,15 @@ class _EventListScreenState extends State<EventListScreen> {
 
   final Map<String, bool> _pendingInscription = {};
 
+  String _normalizeStatus(String rawStatus) {
+    return Event.normalizeStatus(rawStatus);
+  }
+
+  bool _isClosedStatus(String rawStatus) {
+    final status = _normalizeStatus(rawStatus);
+    return status == 'ferme' || status == 'archive';
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -45,13 +53,12 @@ class _EventListScreenState extends State<EventListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final AppUser currentUser = userController.user!;
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Événements',
+          'Evenements',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         backgroundColor: cs.surface,
@@ -59,6 +66,11 @@ class _EventListScreenState extends State<EventListScreen> {
         centerTitle: true,
       ),
       body: Obx(() {
+        final currentUser = userController.user;
+        if (currentUser == null) {
+          return _buildMissingUserState();
+        }
+
         if (eventController.isLoading) {
           return _buildSkeletons();
         }
@@ -136,12 +148,12 @@ class _EventListScreenState extends State<EventListScreen> {
                             children: [
                               _buildChip(
                                 Icons.calendar_today,
-                                '${DateFormat('dd MMM').format(event.dateDebut)} → ${DateFormat('dd MMM').format(event.dateFin)}',
+                                '${DateFormat('dd MMM').format(event.dateDebut)} -> ${DateFormat('dd MMM').format(event.dateFin)}',
                               ),
                               _buildChip(Icons.place_outlined, event.lieu),
                               _buildChip(
                                 Icons.privacy_tip_outlined,
-                                event.estPublic ? 'Public' : 'Privé',
+                                event.estPublic ? 'Public' : 'Prive',
                               ),
                               _buildChip(
                                 Icons.group_outlined,
@@ -153,7 +165,6 @@ class _EventListScreenState extends State<EventListScreen> {
                           _buildActions(
                             context: context,
                             event: event,
-                            organiser: organiser,
                             currentUser: currentUser,
                             isParticipant: isParticipant,
                             isOrganisateur: isOrganisateur,
@@ -168,13 +179,9 @@ class _EventListScreenState extends State<EventListScreen> {
           ],
         );
       }),
-      floatingActionButton: _buildFloatingActionButton(currentUser),
+      floatingActionButton: _buildFloatingActionButton(userController.user),
     );
   }
-
-  // =========================================================
-  // 🔍 FILTRAGE
-  // =========================================================
 
   List<Event> _filterEvents(List<Event> source) {
     final query = _searchController.text.toLowerCase().trim();
@@ -184,8 +191,9 @@ class _EventListScreenState extends State<EventListScreen> {
           event.titre.toLowerCase().contains(query) ||
           event.lieu.toLowerCase().contains(query);
 
-      final matchesStatus =
-          _selectedStatus == 'tous' ? true : event.statut == _selectedStatus;
+      final matchesStatus = _selectedStatus == 'tous'
+          ? true
+          : _normalizeStatus(event.statut) == _selectedStatus;
 
       final matchesVisibility = _selectedVisibility == 'tous'
           ? true
@@ -194,7 +202,7 @@ class _EventListScreenState extends State<EventListScreen> {
               : !event.estPublic);
 
       final matchesUpcoming =
-          !_onlyUpcoming ? true : event.dateFin.isAfter(DateTime.now());
+          !_onlyUpcoming || event.dateFin.isAfter(DateTime.now());
 
       return matchesSearch &&
           matchesStatus &&
@@ -203,9 +211,26 @@ class _EventListScreenState extends State<EventListScreen> {
     }).toList()
       ..sort((a, b) => a.dateDebut.compareTo(b.dateDebut));
   }
-  // =========================================================
-  // 🧱 UI BUILDERS
-  // =========================================================
+
+  Widget _buildMissingUserState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: AdStatePanel(
+          icon: Icons.person_off,
+          title: 'Session indisponible',
+          message: 'Impossible de charger le profil utilisateur.',
+          action: AdButton(
+            expanded: false,
+            label: 'Revenir a l accueil',
+            onPressed: () {
+              Get.offAllNamed(AppRoutes.main, arguments: {'tab': 0});
+            },
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildSkeletons() {
     return ListView.builder(
@@ -221,14 +246,16 @@ class _EventListScreenState extends State<EventListScreen> {
               Container(height: 16, width: 160, color: AdColors.surfaceCardAlt),
               const SizedBox(height: 10),
               Container(
-                  height: 14,
-                  width: double.infinity,
-                  color: AdColors.surfaceCardAlt),
+                height: 14,
+                width: double.infinity,
+                color: AdColors.surfaceCardAlt,
+              ),
               const SizedBox(height: 6),
               Container(
-                  height: 14,
-                  width: double.infinity,
-                  color: AdColors.surfaceCardAlt),
+                height: 14,
+                width: double.infinity,
+                color: AdColors.surfaceCardAlt,
+              ),
             ],
           ),
         ),
@@ -307,14 +334,14 @@ class _EventListScreenState extends State<EventListScreen> {
                   onTap: () => setState(() => _selectedStatus = 'ouvert'),
                 ),
                 _FilterChip(
-                  label: 'Fermés',
-                  selected: _selectedStatus == 'fermé',
-                  onTap: () => setState(() => _selectedStatus = 'fermé'),
+                  label: 'Fermes',
+                  selected: _selectedStatus == 'ferme',
+                  onTap: () => setState(() => _selectedStatus = 'ferme'),
                 ),
                 _FilterChip(
-                  label: 'Archivés',
-                  selected: _selectedStatus == 'archivé',
-                  onTap: () => setState(() => _selectedStatus = 'archivé'),
+                  label: 'Archives',
+                  selected: _selectedStatus == 'archive',
+                  onTap: () => setState(() => _selectedStatus = 'archive'),
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
@@ -323,12 +350,12 @@ class _EventListScreenState extends State<EventListScreen> {
                   onTap: () => setState(() => _selectedVisibility = 'public'),
                 ),
                 _FilterChip(
-                  label: 'Privé',
+                  label: 'Prive',
                   selected: _selectedVisibility == 'prive',
                   onTap: () => setState(() => _selectedVisibility = 'prive'),
                 ),
                 _FilterChip(
-                  label: 'À venir',
+                  label: 'A venir',
                   selected: _onlyUpcoming,
                   onTap: () => setState(() => _onlyUpcoming = !_onlyUpcoming),
                 ),
@@ -394,33 +421,30 @@ class _EventListScreenState extends State<EventListScreen> {
     );
   }
 
-  // =========================================================
-  // 🎯 ACTIONS (⚠️ MANQUANT AVANT – CORRIGÉ ICI)
-  // =========================================================
-
   Widget _buildActions({
     required BuildContext context,
     required Event event,
-    required AppUser organiser,
     required AppUser currentUser,
     required bool isParticipant,
     required bool isOrganisateur,
   }) {
-    final isClosed = event.statut == 'fermé' || event.statut == 'archivé';
+    final isClosed = _isClosedStatus(event.statut);
     final isBusy = _pendingInscription[event.id] == true;
 
     if (isOrganisateur) {
+      final statusValue = _normalizeStatus(event.statut);
+
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           DropdownButton<String>(
-            value: event.statut,
+            value: statusValue,
             underline: const SizedBox.shrink(),
             items: const [
               DropdownMenuItem(value: 'brouillon', child: Text('Brouillon')),
               DropdownMenuItem(value: 'ouvert', child: Text('Ouvert')),
-              DropdownMenuItem(value: 'fermé', child: Text('Fermé')),
-              DropdownMenuItem(value: 'archivé', child: Text('Archivé')),
+              DropdownMenuItem(value: 'ferme', child: Text('Ferme')),
+              DropdownMenuItem(value: 'archive', child: Text('Archive')),
             ],
             onChanged: (value) async {
               if (value == null) return;
@@ -443,16 +467,18 @@ class _EventListScreenState extends State<EventListScreen> {
                 flyerUrl: event.flyerUrl,
                 views: event.views,
                 archivedAt:
-                    value == 'archivé' ? DateTime.now() : event.archivedAt,
+                    value == 'archive' ? DateTime.now() : event.archivedAt,
                 lastUpdated: DateTime.now(),
               );
 
-              await eventController.updateEvent(updated, organiser);
+              final response =
+                  await eventController.updateEvent(updated, currentUser);
+              _showResponse(response);
             },
           ),
           TextButton(
             onPressed: () => Get.to(() => EventDetailsScreen(event: event)),
-            child: const Text('Détails'),
+            child: const Text('Details'),
           ),
           TextButton(
             onPressed: () => _confirmDeleteEvent(context, event),
@@ -472,12 +498,16 @@ class _EventListScreenState extends State<EventListScreen> {
           onPressed: (!isParticipant && !isClosed && !isBusy)
               ? () async {
                   setState(() => _pendingInscription[event.id] = true);
-                  await eventController.registerToEvent(event.id, currentUser);
-                  setState(() => _pendingInscription[event.id] = false);
+                  final response = await eventController.registerToEvent(
+                      event.id, currentUser);
+                  if (mounted) {
+                    setState(() => _pendingInscription[event.id] = false);
+                  }
+                  _showResponse(response);
                 }
               : null,
           icon: const Icon(Icons.event_available),
-          label: const Text('S’inscrire'),
+          label: const Text('S inscrire'),
         ),
         if (isParticipant && !isClosed)
           OutlinedButton(
@@ -485,21 +515,21 @@ class _EventListScreenState extends State<EventListScreen> {
                 ? null
                 : () => _confirmUnregisterEvent(context, event, currentUser),
             child: const Text(
-              'Se désinscrire',
+              'Se desinscrire',
               style: TextStyle(color: Colors.red),
             ),
           )
         else
           OutlinedButton(
             onPressed: () => Get.to(() => EventDetailsScreen(event: event)),
-            child: const Text('Détails'),
+            child: const Text('Details'),
           ),
       ],
     );
   }
 
-  FloatingActionButton? _buildFloatingActionButton(AppUser currentUser) {
-    if (isOpportunityPublisherRole(currentUser.role)) {
+  FloatingActionButton? _buildFloatingActionButton(AppUser? currentUser) {
+    if (currentUser != null && isOpportunityPublisherRole(currentUser.role)) {
       return FloatingActionButton(
         onPressed: () => Get.to(() => const EventFormScreen()),
         backgroundColor: AdColors.brand,
@@ -521,18 +551,14 @@ class _EventListScreenState extends State<EventListScreen> {
     );
     if (!confirmed) return;
 
-    try {
-      await eventController.deleteEvent(event.id, userController.user!);
-      AdFeedback.success(
-        'Evenement supprime',
-        "L'evenement a ete supprime avec succes.",
-      );
-    } catch (e) {
-      AdFeedback.error(
-        'Erreur',
-        "La suppression de l'evenement a echoue : $e",
-      );
+    final currentUser = userController.user;
+    if (currentUser == null) {
+      AdFeedback.error('Erreur', 'Utilisateur introuvable.');
+      return;
     }
+
+    final response = await eventController.deleteEvent(event.id, currentUser);
+    _showResponse(response);
   }
 
   Future<void> _confirmUnregisterEvent(
@@ -550,24 +576,29 @@ class _EventListScreenState extends State<EventListScreen> {
     );
     if (!confirmed) return;
 
-    try {
-      await eventController.unregisterFromEvent(event.id, currentUser);
-      AdFeedback.info(
-        'Participation mise a jour',
-        'Vous etes desinscrit de cet evenement.',
-      );
-    } catch (e) {
-      AdFeedback.error(
-        'Erreur',
-        "Impossible de finaliser la desinscription : $e",
-      );
+    setState(() => _pendingInscription[event.id] = true);
+    final response =
+        await eventController.unregisterFromEvent(event.id, currentUser);
+    if (mounted) {
+      setState(() => _pendingInscription[event.id] = false);
     }
+    _showResponse(response);
+  }
+
+  void _showResponse(ActionResponse response) {
+    if (response.success) {
+      AdFeedback.success('Succes', response.message);
+      return;
+    }
+
+    if (response.toast == ToastLevel.info) {
+      AdFeedback.info('Information', response.message);
+      return;
+    }
+
+    AdFeedback.error('Erreur', response.message);
   }
 }
-
-// =========================================================
-// 🎨 WIDGETS UTILITAIRES
-// =========================================================
 
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
@@ -580,16 +611,18 @@ class _StatusBadge extends StatelessWidget {
     Color bg;
     Color fg;
 
-    switch (status) {
+    final normalized = Event.normalizeStatus(status);
+
+    switch (normalized) {
       case 'ouvert':
         bg = cs.primary.withValues(alpha: 0.15);
         fg = cs.primary;
         break;
-      case 'fermé':
+      case 'ferme':
         bg = AdColors.error.withValues(alpha: 0.15);
         fg = AdColors.error;
         break;
-      case 'archivé':
+      case 'archive':
         bg = AdColors.onSurfaceMuted.withValues(alpha: 0.15);
         fg = AdColors.onSurfaceMuted;
         break;
@@ -606,7 +639,7 @@ class _StatusBadge extends StatelessWidget {
         border: const BorderSide(color: AdColors.divider).toBorder(),
       ),
       child: Text(
-        status,
+        normalized,
         style: TextStyle(fontWeight: FontWeight.bold, color: fg),
       ),
     );

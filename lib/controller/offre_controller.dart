@@ -1,10 +1,25 @@
+import 'dart:async';
 import 'dart:developer' as developer;
-import 'package:get/get.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:get/get.dart';
 
 import 'package:adfoot/controller/push_notification.dart';
+import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
+
+class _OffreFlowException implements Exception {
+  const _OffreFlowException({
+    required this.code,
+    required this.message,
+    this.toast = ToastLevel.error,
+  });
+
+  final String code;
+  final String message;
+  final ToastLevel toast;
+}
 
 class OffreController extends GetxController {
   static OffreController instance = Get.find();
@@ -17,64 +32,87 @@ class OffreController extends GetxController {
   final RxBool _isLoading = true.obs;
   bool get isLoading => _isLoading.value;
 
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _offresSubscription;
+
   @override
   void onInit() {
     super.onInit();
     _fetchOffres();
   }
 
-  /// 🔁 Récupère les offres depuis Firestore et met à jour automatiquement leur statut.
+  @override
+  void onClose() {
+    _offresSubscription?.cancel();
+    super.onClose();
+  }
+
+  String _normalizeStatus(String rawStatus) {
+    final value = rawStatus.trim().toLowerCase();
+    switch (value) {
+      case 'ouverte':
+        return 'ouverte';
+      case 'fermee':
+      case 'fermée':
+        return 'fermee';
+      case 'archivee':
+      case 'archivée':
+        return 'archivee';
+      case 'brouillon':
+        return 'brouillon';
+      default:
+        return value;
+    }
+  }
+
+  bool _isOpenStatus(String status) => _normalizeStatus(status) == 'ouverte';
+
+  List<Map<String, dynamic>> _extractCandidateMaps(dynamic raw) {
+    if (raw is! List) {
+      return <Map<String, dynamic>>[];
+    }
+
+    return raw
+        .whereType<Map>()
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList();
+  }
+
   void _fetchOffres() {
     _isLoading.value = true;
+    _offresSubscription?.cancel();
 
-    _firestore
+    _offresSubscription = _firestore
         .collection('offres')
         .orderBy('dateCreation', descending: true)
         .snapshots()
-        .listen((snapshot) async {
+        .listen((snapshot) {
+      final now = DateTime.now();
       final List<Offre> fetched = [];
 
-      for (var doc in snapshot.docs) {
-        var offre = Offre.fromMap(doc.data());
+      for (final doc in snapshot.docs) {
+        final offre = Offre.fromDoc(doc);
+        final normalizedStatus = _normalizeStatus(offre.statut);
+        if (offre.statut != normalizedStatus) {
+          offre.statut = normalizedStatus;
+        }
 
-        // ✅ Mise à jour automatique si la date de fin est dépassée
-        if (offre.dateFin.isBefore(DateTime.now()) &&
-            offre.statut == 'ouverte') {
-          try {
-            await _firestore.collection('offres').doc(offre.id).update({
-              'statut': 'fermée',
+        if (offre.dateFin.isBefore(now) && _isOpenStatus(offre.statut)) {
+          unawaited(
+            doc.reference.update({
+              'statut': 'fermee',
               'lastUpdated': FieldValue.serverTimestamp(),
-            });
+            }).catchError((error, stackTrace) {
+              developer.log(
+                'Erreur lors de la mise a jour auto du statut offre: $error',
+                name: 'OffreController._fetchOffres',
+                error: error,
+                stackTrace: stackTrace,
+              );
+            }),
+          );
 
-            // Reconstruction manuelle (pas de copyWith)
-            offre = Offre(
-              id: offre.id,
-              titre: offre.titre,
-              description: offre.description,
-              dateDebut: offre.dateDebut,
-              dateFin: offre.dateFin,
-              recruteur: offre.recruteur,
-              candidats: offre.candidats,
-              statut: 'fermée',
-              dateCreation: offre.dateCreation,
-              localisation: offre.localisation,
-              remuneration: offre.remuneration,
-              niveau: offre.niveau,
-              posteRecherche: offre.posteRecherche,
-              pieceJointeUrl: offre.pieceJointeUrl,
-              vues: offre.vues,
-              viewedBy: offre.viewedBy,
-              archivedAt: offre.archivedAt,
-              lastUpdated: DateTime.now(),
-            );
-          } catch (e, st) {
-            developer.log(
-              'Erreur lors de la mise à jour du statut d\'offre : $e',
-              name: 'OffreController._fetchOffres',
-              error: e,
-              stackTrace: st,
-            );
-          }
+          offre.statut = 'fermee';
+          offre.lastUpdated = now;
         }
 
         fetched.add(offre);
@@ -85,7 +123,7 @@ class OffreController extends GetxController {
       _isLoading.value = false;
     }, onError: (error, stackTrace) {
       developer.log(
-        'Erreur écoute Firestore pour les offres : $error',
+        'Erreur ecoute Firestore pour les offres: $error',
         name: 'OffreController._fetchOffres',
         error: error,
         stackTrace: stackTrace,
@@ -94,17 +132,10 @@ class OffreController extends GetxController {
     });
   }
 
-  // =========================================================
-  // 👁️ VUES : incrémentation atomique (correction)
-  // =========================================================
-  /// 👁️ Incrémenter les vues d'une offre (safe / atomique)
-  /// - Ne compte pas le propriétaire
-  /// - Utilise FieldValue.increment(1) pour éviter les conflits
   Future<void> incrementVues({
     required Offre offre,
     required AppUser viewer,
   }) async {
-    // ❌ Ne pas compter le propriétaire
     if (viewer.uid == offre.recruteur.uid) return;
 
     try {
@@ -121,7 +152,6 @@ class OffreController extends GetxController {
             : null;
         final recruteurId = recruteurMap?['uid']?.toString();
 
-        // 🛡️ Sécurité anti-double comptage
         final viewedByRaw = data['viewedBy'];
         final viewedBy = viewedByRaw is List
             ? viewedByRaw.map((e) => e.toString()).toList()
@@ -139,7 +169,7 @@ class OffreController extends GetxController {
       });
     } catch (e, st) {
       developer.log(
-        'Erreur incrémentation vues : $e',
+        'Erreur incrementation vues: $e',
         name: 'OffreController.incrementVues',
         error: e,
         stackTrace: st,
@@ -147,213 +177,344 @@ class OffreController extends GetxController {
     }
   }
 
-  /// 📨 Publier une offre et notifier les joueurs
-  Future<void> publierOffre(Offre offre, AppUser utilisateur) async {
+  Future<ActionResponse> publierOffre(Offre offre, AppUser utilisateur) async {
     if (!utilisateur.canPublishOpportunities) {
-      Get.snackbar(
-        'Accès refusé',
-        'Seuls les clubs, recruteurs ou agents peuvent publier des offres.',
+      return ActionResponse.failure(
+        code: 'permission-denied',
+        message:
+            'Seuls les clubs, recruteurs ou agents peuvent publier des offres.',
+        toast: ToastLevel.info,
       );
-      return;
     }
 
     try {
-      await _firestore.collection('offres').doc(offre.id).set(offre.toMap());
-      Get.snackbar('Succès', 'Offre publiée avec succès.');
+      final payload = offre.toMap();
+      payload['statut'] = _normalizeStatus(offre.statut);
+      payload['lastUpdated'] = FieldValue.serverTimestamp();
 
-      await _notifierJoueurs(offre, utilisateur);
+      await _firestore.collection('offres').doc(offre.id).set(payload);
+
+      final fanoutResult = await _notifierJoueurs(offre, utilisateur);
+      if (!fanoutResult.success) {
+        return ActionResponse(
+          success: true,
+          message:
+              'Offre publiee avec succes, mais les notifications sont temporairement indisponibles.',
+          code: 'published_notification_failed',
+          toast: ToastLevel.info,
+        );
+      }
+
+      return const ActionResponse(
+        success: true,
+        code: 'published',
+        message: 'Offre publiee avec succes.',
+        toast: ToastLevel.success,
+      );
     } catch (e, st) {
       developer.log(
-        'Erreur lors de la publication de l\'offre : $e',
+        'Erreur lors de la publication de l offre: $e',
         name: 'OffreController.publierOffre',
         error: e,
         stackTrace: st,
       );
-      Get.snackbar('Erreur', 'Impossible de publier l\'offre : $e');
+      return ActionResponse.failure(
+        code: 'publish_failed',
+        message: 'Impossible de publier l offre pour le moment.',
+      );
     }
   }
 
-  /// 🔔 Notifier les joueurs (future version : ciblage par poste / niveau)
-  Future<void> _notifierJoueurs(Offre offre, AppUser recruteur) async {
-    try {
-      await PushNotificationService.sendOfferFanout(
-        offerId: offre.id,
-        title: 'Nouvelle offre disponible',
-        body: 'Une nouvelle offre a ete publiee par ${recruteur.nom}.',
-      );
-    } catch (e, st) {
+  Future<ActionResponse> _notifierJoueurs(
+      Offre offre, AppUser recruteur) async {
+    final response = await PushNotificationService.sendOfferFanout(
+      offerId: offre.id,
+      title: 'Nouvelle offre disponible',
+      body: 'Une nouvelle offre a ete publiee par ${recruteur.nom}.',
+    );
+
+    if (!response.success) {
       developer.log(
-        'Erreur lors de l\'envoi des notifications : $e',
+        'Erreur lors de l envoi des notifications offre: ${response.message}',
         name: 'OffreController._notifierJoueurs',
-        error: e,
-        stackTrace: st,
       );
     }
+
+    return response;
   }
 
-  /// ✏️ Modifier une offre existante
-  Future<void> modifierOffre(Offre offre, AppUser utilisateur) async {
+  Future<ActionResponse> modifierOffre(Offre offre, AppUser utilisateur) async {
     if (utilisateur.uid != offre.recruteur.uid) {
-      Get.snackbar(
-        'Accès refusé',
-        'Vous ne pouvez modifier que vos propres offres.',
+      return ActionResponse.failure(
+        code: 'permission-denied',
+        message: 'Vous ne pouvez modifier que vos propres offres.',
+        toast: ToastLevel.info,
       );
-      return;
     }
 
     try {
-      await _firestore.collection('offres').doc(offre.id).update(offre.toMap());
-      Get.snackbar('Succès', 'Offre modifiée avec succès.');
+      final payload = offre.toMap();
+      payload['statut'] = _normalizeStatus(offre.statut);
+      payload['lastUpdated'] = FieldValue.serverTimestamp();
+
+      await _firestore.collection('offres').doc(offre.id).update(payload);
+      return const ActionResponse(
+        success: true,
+        code: 'updated',
+        message: 'Offre modifiee avec succes.',
+        toast: ToastLevel.success,
+      );
     } catch (e, st) {
       developer.log(
-        'Erreur lors de la modification de l\'offre : $e',
+        'Erreur lors de la modification de l offre: $e',
         name: 'OffreController.modifierOffre',
         error: e,
         stackTrace: st,
       );
-      Get.snackbar('Erreur', 'Impossible de modifier l\'offre : $e');
+
+      return ActionResponse.failure(
+        code: 'update_failed',
+        message: 'Impossible de modifier l offre pour le moment.',
+      );
     }
   }
 
-  /// 🔄 Changer le statut d’une offre (ouverte / fermée / archivée)
-  Future<void> changerStatut(Offre offre, String nouveauStatut) async {
+  Future<ActionResponse> changerStatut(
+    Offre offre,
+    String nouveauStatut,
+    AppUser utilisateur,
+  ) async {
+    if (utilisateur.uid != offre.recruteur.uid) {
+      return ActionResponse.failure(
+        code: 'permission-denied',
+        message: 'Vous ne pouvez modifier que vos propres offres.',
+        toast: ToastLevel.info,
+      );
+    }
+
+    final normalized = _normalizeStatus(nouveauStatut);
+    const allowed = <String>{'brouillon', 'ouverte', 'fermee', 'archivee'};
+    if (!allowed.contains(normalized)) {
+      return ActionResponse.failure(
+        code: 'invalid-argument',
+        message: 'Statut invalide.',
+        toast: ToastLevel.info,
+      );
+    }
+
     try {
       await _firestore.collection('offres').doc(offre.id).update({
-        'statut': nouveauStatut,
+        'statut': normalized,
         'lastUpdated': FieldValue.serverTimestamp(),
-        if (nouveauStatut == 'archivée')
-          'archivedAt': FieldValue.serverTimestamp(),
+        if (normalized == 'archivee')
+          'archivedAt': FieldValue.serverTimestamp()
+        else
+          'archivedAt': FieldValue.delete(),
       });
 
-      Get.snackbar(
-        'Statut mis à jour',
-        'Le statut est maintenant "$nouveauStatut".',
+      return ActionResponse(
+        success: true,
+        code: 'status_updated',
+        message: 'Le statut est maintenant "$normalized".',
+        toast: ToastLevel.success,
       );
     } catch (e, st) {
       developer.log(
-        'Erreur lors du changement de statut : $e',
+        'Erreur lors du changement de statut offre: $e',
         name: 'OffreController.changerStatut',
         error: e,
         stackTrace: st,
       );
-      Get.snackbar('Erreur', 'Impossible de modifier le statut : $e');
+
+      return ActionResponse.failure(
+        code: 'status_update_failed',
+        message: 'Impossible de modifier le statut pour le moment.',
+      );
     }
   }
 
-  /// ❌ Supprimer une offre (à terme : remplacer par archivage)
-  Future<void> supprimerOffre(
+  Future<ActionResponse> supprimerOffre(
     String offreId,
     AppUser utilisateur,
     Offre offre,
   ) async {
     if (utilisateur.uid != offre.recruteur.uid) {
-      Get.snackbar(
-        'Accès refusé',
-        'Vous ne pouvez supprimer que vos propres offres.',
+      return ActionResponse.failure(
+        code: 'permission-denied',
+        message: 'Vous ne pouvez supprimer que vos propres offres.',
+        toast: ToastLevel.info,
       );
-      return;
     }
 
     try {
       await _firestore.collection('offres').doc(offreId).delete();
-      Get.back();
-      Get.snackbar('Succès', 'Offre supprimée avec succès.');
+      return const ActionResponse(
+        success: true,
+        code: 'deleted',
+        message: 'Offre supprimee avec succes.',
+        toast: ToastLevel.success,
+      );
     } catch (e, st) {
       developer.log(
-        'Erreur lors de la suppression de l\'offre : $e',
+        'Erreur lors de la suppression de l offre: $e',
         name: 'OffreController.supprimerOffre',
         error: e,
         stackTrace: st,
       );
-      Get.snackbar('Erreur', 'Impossible de supprimer l\'offre : $e');
+
+      return ActionResponse.failure(
+        code: 'delete_failed',
+        message: 'Impossible de supprimer l offre pour le moment.',
+      );
     }
   }
 
-  /// 🎯 Postuler à une offre
-  Future<void> postulerOffre(AppUser joueur, Offre offre) async {
+  Future<ActionResponse> postulerOffre(AppUser joueur, Offre offre) async {
     if (joueur.role != 'joueur') {
-      Get.snackbar(
-        'Accès refusé',
-        'Seuls les joueurs peuvent postuler à une offre.',
+      return ActionResponse.failure(
+        code: 'permission-denied',
+        message: 'Seuls les joueurs peuvent postuler a une offre.',
+        toast: ToastLevel.info,
       );
-      return;
     }
 
-    if (offre.statut != 'ouverte') {
-      Get.snackbar(
-        'Offre indisponible',
-        'Vous ne pouvez pas postuler à cette offre.',
-      );
-      return;
-    }
-
-    final dejaPostule = offre.candidats.any((c) => c.uid == joueur.uid);
-    if (dejaPostule) {
-      Get.snackbar(
-        'Postulation existante',
-        'Vous avez déjà postulé à cette offre.',
-      );
-      return;
-    }
+    final docRef = _firestore.collection('offres').doc(offre.id);
 
     try {
-      final candidats = [...offre.candidats, joueur];
+      await _firestore.runTransaction((txn) async {
+        final snap = await txn.get(docRef);
+        if (!snap.exists) {
+          throw const _OffreFlowException(
+            code: 'not-found',
+            message: 'Offre introuvable.',
+          );
+        }
 
-      await _firestore.collection('offres').doc(offre.id).update({
-        'candidats': candidats.map((c) => c.toMap()).toList(),
+        final data = snap.data() ?? <String, dynamic>{};
+        final status =
+            _normalizeStatus(data['statut']?.toString() ?? offre.statut);
+        if (!_isOpenStatus(status)) {
+          throw const _OffreFlowException(
+            code: 'offer_closed',
+            message: 'Vous ne pouvez pas postuler a cette offre.',
+            toast: ToastLevel.info,
+          );
+        }
+
+        final candidats = _extractCandidateMaps(data['candidats']);
+        final dejaPostule = candidats
+            .any((candidate) => candidate['uid']?.toString() == joueur.uid);
+        if (dejaPostule) {
+          throw const _OffreFlowException(
+            code: 'already_applied',
+            message: 'Vous avez deja postule a cette offre.',
+            toast: ToastLevel.info,
+          );
+        }
+
+        candidats.add(joueur.toMap());
+
+        txn.update(docRef, {
+          'candidats': candidats,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
       });
 
-      Get.snackbar('Succès', 'Vous avez postulé à l\'offre.');
+      return const ActionResponse(
+        success: true,
+        code: 'applied',
+        message: 'Vous avez postule a l offre.',
+        toast: ToastLevel.success,
+      );
+    } on _OffreFlowException catch (e) {
+      return ActionResponse.failure(
+        code: e.code,
+        message: e.message,
+        toast: e.toast,
+      );
     } catch (e, st) {
       developer.log(
-        'Erreur lors de la postulation : $e',
+        'Erreur lors de la postulation offre: $e',
         name: 'OffreController.postulerOffre',
         error: e,
         stackTrace: st,
       );
-      Get.snackbar('Erreur', 'Impossible de postuler : $e');
+
+      return ActionResponse.failure(
+        code: 'apply_failed',
+        message: 'Impossible de postuler pour le moment.',
+      );
     }
   }
 
-  /// 🚪 Se désinscrire d'une offre
-  Future<void> seDesinscrireOffre(AppUser joueur, Offre offre) async {
+  Future<ActionResponse> seDesinscrireOffre(AppUser joueur, Offre offre) async {
     if (joueur.role != 'joueur') {
-      Get.snackbar(
-        'Accès refusé',
-        'Seuls les joueurs peuvent se désinscrire.',
+      return ActionResponse.failure(
+        code: 'permission-denied',
+        message: 'Seuls les joueurs peuvent se desinscrire.',
+        toast: ToastLevel.info,
       );
-      return;
     }
 
-    final estCandidat = offre.candidats.any((c) => c.uid == joueur.uid);
-    if (!estCandidat) {
-      Get.snackbar(
-        'Non inscrit',
-        'Vous n\'êtes pas inscrit à cette offre.',
-      );
-      return;
-    }
+    final docRef = _firestore.collection('offres').doc(offre.id);
 
     try {
-      final candidats =
-          offre.candidats.where((c) => c.uid != joueur.uid).toList();
+      await _firestore.runTransaction((txn) async {
+        final snap = await txn.get(docRef);
+        if (!snap.exists) {
+          throw const _OffreFlowException(
+            code: 'not-found',
+            message: 'Offre introuvable.',
+          );
+        }
 
-      await _firestore.collection('offres').doc(offre.id).update({
-        'candidats': candidats.map((c) => c.toMap()).toList(),
+        final data = snap.data() ?? <String, dynamic>{};
+        final candidats = _extractCandidateMaps(data['candidats']);
+        final estCandidat = candidats
+            .any((candidate) => candidate['uid']?.toString() == joueur.uid);
+
+        if (!estCandidat) {
+          throw const _OffreFlowException(
+            code: 'not_applied',
+            message: 'Vous n etes pas inscrit a cette offre.',
+            toast: ToastLevel.info,
+          );
+        }
+
+        final candidatsRestants = candidats
+            .where((candidate) => candidate['uid']?.toString() != joueur.uid)
+            .toList();
+
+        txn.update(docRef, {
+          'candidats': candidatsRestants,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
       });
 
-      Get.snackbar(
-        'Désinscription réussie',
-        'Vous vous êtes désinscrit de l\'offre.',
+      return const ActionResponse(
+        success: true,
+        code: 'withdrawn',
+        message: 'Vous vous etes desinscrit de l offre.',
+        toast: ToastLevel.success,
+      );
+    } on _OffreFlowException catch (e) {
+      return ActionResponse.failure(
+        code: e.code,
+        message: e.message,
+        toast: e.toast,
       );
     } catch (e, st) {
       developer.log(
-        'Erreur lors de la désinscription : $e',
+        'Erreur lors de la desinscription offre: $e',
         name: 'OffreController.seDesinscrireOffre',
         error: e,
         stackTrace: st,
       );
-      Get.snackbar('Erreur', 'Impossible de se désinscrire : $e');
+
+      return ActionResponse.failure(
+        code: 'withdraw_failed',
+        message: 'Impossible de se desinscrire pour le moment.',
+      );
     }
   }
 }

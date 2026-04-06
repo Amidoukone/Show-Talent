@@ -34,6 +34,13 @@ const STORAGE_BUCKET =
   process.env.STORAGE_BUCKET ||
   FIREBASE_CONFIG?.storageBucket ||
   defaultStorageBucket(process.env.GCLOUD_PROJECT);
+const OPTIMIZE_TRIGGER_OPTIONS = {
+  region: OPTIMIZE_TRIGGER_REGION,
+  memory: "2GiB" as const,
+  timeoutSeconds: 540,
+  maxInstances: 1,
+  ...(STORAGE_BUCKET ? {bucket: STORAGE_BUCKET} : {}),
+};
 const MAX_OPTIMIZE_FILE_SIZE_BYTES = parsePositiveIntEnv(
   process.env.MAX_OPTIMIZE_FILE_SIZE_BYTES,
   120 * 1024 * 1024,
@@ -91,7 +98,7 @@ function parseFirebaseConfig(
 
 function defaultStorageBucket(projectId: string | undefined): string {
   if (!projectId) {
-    throw new Error("Missing STORAGE_BUCKET and GCLOUD_PROJECT.");
+    return "";
   }
   return `${projectId}.appspot.com`;
 }
@@ -439,13 +446,7 @@ async function tryResolveThumbnailPath(
 /* -------------------------------------------------------------------------- */
 
 export const optimizeMp4Video = onObjectFinalized(
-  {
-    region: OPTIMIZE_TRIGGER_REGION,
-    bucket: STORAGE_BUCKET,
-    memory: "2GiB",
-    timeoutSeconds: 540,
-    maxInstances: 1,
-  },
+  OPTIMIZE_TRIGGER_OPTIONS,
   async (event: CloudEvent<StorageObjectData>) => {
     const object = event.data;
     const bucketName = object.bucket;
@@ -661,6 +662,12 @@ export {
   enableManagedAccountAuth,
   updateManagedAccountProfile,
 } from "./admin_account_actions";
+export {
+  adminDeleteEvent,
+  adminDeleteOffer,
+  adminSetEventStatus,
+  adminSetOfferStatus,
+} from "./admin_content_actions";
 
 /* -------------------------------------------------------------------------- */
 /* UPLOAD SESSION                                                              */

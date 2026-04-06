@@ -49,10 +49,6 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
 
   static const int _videoSlidingWindowLimit = 25;
 
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
-
   @override
   void initState() {
     super.initState();
@@ -69,7 +65,6 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     );
     _vc.replaceVideos(widget.videos, selectedIndex: _currentIndex);
 
-    // ✅ Orchestrateur (préload/pause/init/play/dispose window)
     _focusOrchestrator = VideoFocusOrchestrator(
       contextKey: widget.contextKey,
       videoManager: _videoManager,
@@ -92,10 +87,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     WidgetsBinding.instance.removeObserver(this);
 
     _pageController.dispose();
-
-    // Nettoyage centralisé (pause + dispose contexte)
     unawaited(_focusOrchestrator.onDispose());
-
     FeatureControllerRegistry.releaseVideoController(widget.contextKey);
 
     super.dispose();
@@ -111,10 +103,6 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Safe exit (anti-crash / anti-VideoPlayer orphan)
-  // ---------------------------------------------------------------------------
-
   Future<void> _safeExit() async {
     if (_isDisposed || _isExiting) return;
 
@@ -125,8 +113,6 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     } catch (_) {}
 
     await _videoManager.pauseAll(widget.contextKey);
-
-    // Laisser Flutter retirer les VideoPlayer de l’arbre
     await WidgetsBinding.instance.endOfFrame;
 
     if (!_isDisposed && mounted) {
@@ -134,36 +120,45 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Index change (orchestré)
-  // ---------------------------------------------------------------------------
-
   Future<void> _handleIndexChange(int idx) async {
     if (_isDisposed || _isExiting) return;
-    if (idx < 0 || idx >= widget.videos.length) return;
+
+    final videos = _currentVideos;
+    if (idx < 0 || idx >= videos.length) return;
 
     _currentIndex = idx;
     _vc.currentIndex.value = idx;
 
-    // ✅ Assure que l’orchestrateur a la liste à jour
-    _focusOrchestrator.updateVideos(_currentVideos);
-
-    // ✅ Orchestration centralisée (préload/pause/init/play/dispose window)
+    _focusOrchestrator.updateVideos(videos);
     await _focusOrchestrator.onIndexChanged(idx);
-
-    if (mounted) setState(() {});
   }
 
   void _triggerPageChangeHaptic() {
     unawaited(HapticFeedback.selectionClick().catchError((_) {}));
   }
 
-  /// Copie défensive : évite les effets de bord si la liste change en amont
-  List<Video> get _currentVideos => List.of(widget.videos);
+  List<Video> get _currentVideos => _vc.videoList.toList(growable: false);
 
-  // ---------------------------------------------------------------------------
-  // UI
-  // ---------------------------------------------------------------------------
+  void _syncPageWithFeedLength(int length) {
+    if (_isDisposed || _isExiting || length <= 0) return;
+
+    final clampedIndex = _currentIndex.clamp(0, length - 1).toInt();
+    if (clampedIndex == _currentIndex) return;
+
+    _currentIndex = clampedIndex;
+    _vc.currentIndex.value = clampedIndex;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_isDisposed || _isExiting || !_pageController.hasClients) return;
+
+      final currentPage = _pageController.page?.round() ?? _currentIndex;
+      if (currentPage != clampedIndex) {
+        _pageController.jumpToPage(clampedIndex);
+      }
+
+      unawaited(_handleIndexChange(clampedIndex));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -175,68 +170,84 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
       },
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: Stack(
-          children: [
-            // Pendant EXIT → aucun VideoPlayer monté
-            if (_isExiting)
-              const SizedBox.expand(
-                child: ColoredBox(color: Colors.black),
-              )
-            else
-              PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.vertical,
-                physics: const VideoPageScrollPhysics(),
-                dragStartBehavior: DragStartBehavior.down,
-                allowImplicitScrolling: false,
-                itemCount: widget.videos.length,
-                onPageChanged: (idx) {
-                  if (idx != _currentIndex) {
-                    _triggerPageChangeHaptic();
-                  }
-                  unawaited(_handleIndexChange(idx));
-                },
-                itemBuilder: (_, idx) {
-                  final video = widget.videos[idx];
-                  final player = _videoManager.getController(
-                    widget.contextKey,
-                    video.videoUrl,
-                  );
+        body: Obx(() {
+          final videos = _currentVideos;
+          _syncPageWithFeedLength(videos.length);
 
-                  return SmartVideoPlayer(
-                    key: ValueKey(video.id),
-                    player: player,
-                    videoController: _vc,
-                    userController: _userController,
-                    followController: _followController,
-                    contextKey: widget.contextKey,
-                    videoUrl: video.videoUrl,
-                    video: video,
-                    currentIndex: idx,
-                    videoList: widget.videos,
-                    enableTapToPlay: true,
-                    autoPlay: true,
-                    showControls: true,
-                    showProgressBar: true,
-                    showProfileAction: false,
-                  );
-                },
-              ),
-            SafeArea(
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back,
-                    color: Colors.white,
-                    size: 30,
+          return Stack(
+            children: [
+              if (_isExiting)
+                const SizedBox.expand(
+                  child: ColoredBox(color: Colors.black),
+                )
+              else if (videos.isEmpty)
+                const SizedBox.expand(
+                  child: Center(
+                    child: Text(
+                      'Aucune video a afficher',
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
-                  onPressed: _isExiting ? null : _safeExit,
+                )
+              else if (_currentIndex >= videos.length)
+                const SizedBox.shrink()
+              else
+                PageView.builder(
+                  controller: _pageController,
+                  scrollDirection: Axis.vertical,
+                  physics: const VideoPageScrollPhysics(),
+                  dragStartBehavior: DragStartBehavior.down,
+                  allowImplicitScrolling: false,
+                  itemCount: videos.length,
+                  onPageChanged: (idx) {
+                    if (idx < 0 || idx >= videos.length) return;
+                    if (idx != _currentIndex) {
+                      _triggerPageChangeHaptic();
+                    }
+                    unawaited(_handleIndexChange(idx));
+                  },
+                  itemBuilder: (_, idx) {
+                    final video = videos[idx];
+                    final player = _videoManager.getController(
+                      widget.contextKey,
+                      video.videoUrl,
+                    );
+
+                    return SmartVideoPlayer(
+                      key: ValueKey(video.id),
+                      player: player,
+                      videoController: _vc,
+                      userController: _userController,
+                      followController: _followController,
+                      contextKey: widget.contextKey,
+                      videoUrl: video.videoUrl,
+                      video: video,
+                      currentIndex: idx,
+                      videoList: videos,
+                      enableTapToPlay: true,
+                      autoPlay: true,
+                      showControls: true,
+                      showProgressBar: true,
+                      showProfileAction: false,
+                    );
+                  },
+                ),
+              SafeArea(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                    onPressed: _isExiting ? null : _safeExit,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        }),
       ),
     );
   }

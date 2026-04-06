@@ -115,7 +115,7 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
   Future<void> _handleIndexChange(int idx) async {
     if (_isDisposed) return;
 
-    final vids = _videoController.videoList.toList();
+    final vids = _currentVideos;
     if (idx < 0 || idx >= vids.length) return;
 
     _currentIndex = idx;
@@ -131,12 +131,34 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
   }
 
   /// Copie défensive : évite les effets de bord si la RxList change pendant le scroll
-  List<Video> get _currentVideos => _videoController.videoList.toList();
+  List<Video> get _currentVideos =>
+      _videoController.videoList.toList(growable: false);
+
+  void _syncPageWithFeedLength(int length) {
+    if (length <= 0) return;
+
+    final clampedIndex = _currentIndex.clamp(0, length - 1).toInt();
+    if (clampedIndex == _currentIndex) return;
+
+    _currentIndex = clampedIndex;
+    _videoController.currentIndex.value = clampedIndex;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_isDisposed || !_pageController.hasClients) return;
+
+      final currentPage = _pageController.page?.round() ?? _currentIndex;
+      if (currentPage != clampedIndex) {
+        _pageController.jumpToPage(clampedIndex);
+      }
+
+      unawaited(_handleIndexChange(clampedIndex));
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final videos = _videoController.videoList;
+      final videos = _currentVideos;
 
       if (videos.isEmpty) {
         return const Scaffold(
@@ -150,6 +172,11 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
         );
       }
 
+      _syncPageWithFeedLength(videos.length);
+      if (_currentIndex >= videos.length) {
+        return const SizedBox.shrink();
+      }
+
       return Scaffold(
         backgroundColor: Colors.black,
         body: PageView.builder(
@@ -160,6 +187,7 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
           allowImplicitScrolling: false,
           itemCount: videos.length,
           onPageChanged: (index) {
+            if (index < 0 || index >= videos.length) return;
             if (!_isDisposed) {
               if (index != _currentIndex) {
                 _triggerPageChangeHaptic();

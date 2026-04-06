@@ -20,6 +20,7 @@ migration is completed.
 - [Mobile Firebase Project Bootstrap Runbook](./docs/mobile-firebase-project-bootstrap-runbook.md)
 - [Cloud Cost Control Plan](./docs/cloud-cost-control-plan.md)
 - [Admin Bootstrap Runbook](./docs/admin-bootstrap-runbook.md)
+- [Admin Content Callables](./docs/admin-content-callables.md)
 - [Shared Backend Contract](./docs/shared-backend-contract.md)
 - [Inter-Repo Admin / Mobile Runbook](./docs/inter-repo-admin-mobile-runbook.md)
 - [Admin / Mobile Production Runbook](./docs/admin-mobile-production-runbook.md)
@@ -50,6 +51,42 @@ Cross-repo gate including external admin repository checks:
 powershell -ExecutionPolicy Bypass -File .\scripts\run-product-coherence-gate.ps1 `
   -IncludeBackendGate `
   -AdminRepoPath "C:\Users\Ing.Amidou.KONE\Desktop\MyApp\show_talent - web"
+```
+
+## Video release quality gate
+
+Local guardrails + targeted mobile/functions checks:
+
+```powershell
+npm.cmd run video:quality:release
+```
+
+Remote smoke flow (`upload -> processing -> ready -> playback -> delete`):
+
+```powershell
+npm.cmd run video:quality:release:remote
+```
+
+Remote smoke flow plus upload auth/app-check log verification:
+
+```powershell
+npm.cmd run video:quality:release:remote:verify
+```
+
+## Offer release quality gate
+
+Local guardrails + targeted mobile/functions checks for the Offer flow:
+
+```powershell
+npm.cmd run offer:quality:release
+```
+
+## Event release quality gate
+
+Local guardrails + targeted mobile/functions checks for the Event flow:
+
+```powershell
+npm.cmd run event:quality:release
 ```
 
 ## Sprint 6 command set

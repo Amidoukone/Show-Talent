@@ -83,13 +83,22 @@ class UserRepository {
     String? phone,
     DateTime? now,
   }) {
+    final normalizedRole = normalizeUserRole(role);
+    if (!isPublicSelfSignupRole(normalizedRole)) {
+      throw ArgumentError.value(
+        role,
+        'role',
+        'Le role doit etre joueur ou fan pour une inscription publique.',
+      );
+    }
+
     final createdAt = now ?? DateTime.now();
 
     return AppUser(
       uid: uid,
       nom: nom,
       email: email,
-      role: role,
+      role: normalizedRole,
       photoProfil: '',
       estActif: false,
       estBloque: false,
@@ -170,11 +179,20 @@ class UserRepository {
     required String role,
     String? phone,
   }) async {
+    final normalizedRole = normalizeUserRole(role);
+    if (!isPublicSelfSignupRole(normalizedRole)) {
+      throw ArgumentError.value(
+        role,
+        'role',
+        'Le role doit etre joueur ou fan pour une inscription publique.',
+      );
+    }
+
     final appUser = buildPublicSignupUser(
       uid: uid,
       nom: nom,
       email: email,
-      role: role,
+      role: normalizedRole,
       phone: phone,
     );
 

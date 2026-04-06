@@ -37,6 +37,26 @@ void main() {
       expect(decision.exists, isTrue);
       expect(decision.issue, UserAccessIssue.blockedOrDisabled);
     });
+
+    test('allows managed roles when profile is valid', () {
+      for (final role in const ['club', 'recruteur', 'agent']) {
+        final decision = UserRepository.evaluateUserData({
+          'uid': 'uid-$role',
+          'nom': 'Compte $role',
+          'email': '$role@adfoot.org',
+          'role': role,
+          'estBloque': false,
+          'authDisabled': false,
+        });
+
+        expect(decision.exists, isTrue);
+        expect(
+          decision.issue,
+          isNull,
+          reason: 'Le role $role doit pouvoir se connecter sur mobile.',
+        );
+      }
+    });
   });
 
   test('buildPublicSignupUser keeps public defaults safe', () {
@@ -56,5 +76,17 @@ void main() {
     expect(user.profilePublic, isTrue);
     expect(user.allowMessages, isTrue);
     expect(user.phone, '70000000');
+  });
+
+  test('buildPublicSignupUser rejects managed roles', () {
+    expect(
+      () => UserRepository.buildPublicSignupUser(
+        uid: 'club-1',
+        nom: 'Club Privilegie',
+        email: 'club@adfoot.org',
+        role: 'club',
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
   });
 }

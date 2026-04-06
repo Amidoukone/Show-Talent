@@ -269,7 +269,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   // SUBMIT
   // =========================================================
 
-  void _submitForm() {
+  Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate() ||
         _dateDebut == null ||
         _dateFin == null) {
@@ -284,12 +284,29 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       return;
     }
 
-    final currentUser = userController.user!;
+    final currentUser = userController.user;
+    if (currentUser == null) {
+      AdFeedback.error(
+        'Erreur',
+        'Utilisateur introuvable. Merci de vous reconnecter.',
+      );
+      return;
+    }
+
+    final titre = _titreController.text.trim();
+    final description = _descriptionController.text.trim();
+    if (titre.isEmpty || description.isEmpty) {
+      AdFeedback.error(
+        'Erreur',
+        'Le titre et la description sont obligatoires.',
+      );
+      return;
+    }
 
     final offre = Offre(
       id: isEditing ? editingOffre!.id : DateTime.now().toIso8601String(),
-      titre: _titreController.text,
-      description: _descriptionController.text,
+      titre: titre,
+      description: description,
       dateDebut: _dateDebut!,
       dateFin: _dateFin!,
       recruteur: currentUser,
@@ -315,20 +332,24 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       viewedBy: isEditing ? (editingOffre!.viewedBy ?? <String>[]) : <String>[],
     );
 
-    if (isEditing) {
-      offreController.modifierOffre(offre, currentUser);
-    } else {
-      offreController.publierOffre(offre, currentUser);
+    final response = isEditing
+        ? await offreController.modifierOffre(offre, currentUser)
+        : await offreController.publierOffre(offre, currentUser);
+
+    if (!response.success) {
+      AdFeedback.error(
+        'Erreur',
+        response.message,
+      );
+      return;
     }
 
     AdFeedback.success(
       'Succes',
-      isEditing
-          ? 'Offre mise a jour avec succes.'
-          : 'Offre publiee avec succes.',
+      response.message,
     );
 
-    Get.off(() => OffreScreen());
+    Get.off(() => const OffreScreen());
   }
 
   @override

@@ -2,6 +2,16 @@ import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+class EventRepositoryException implements Exception {
+  const EventRepositoryException({
+    required this.code,
+    required this.message,
+  });
+
+  final String code;
+  final String message;
+}
+
 class EventRepository {
   EventRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -15,20 +25,28 @@ class EventRepository {
 
   Stream<List<Event>> watchEvents() {
     return _eventsCollection.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = data['id'] ?? doc.id;
-        return Event.fromMap(data);
-      }).toList(growable: false);
+      return snapshot.docs.map(Event.fromDoc).toList(growable: false);
     });
   }
 
   Future<void> createEvent(Event event) {
-    return _eventsCollection.doc(event.id).set(event.toMap());
+    final payload = event.toMap();
+    payload['statut'] = Event.normalizeStatus(event.statut);
+    payload['lastUpdated'] = FieldValue.serverTimestamp();
+    return _eventsCollection.doc(event.id).set(payload);
   }
 
   Future<void> updateEvent(Event event) {
-    return _eventsCollection.doc(event.id).update(event.toMap());
+    final payload = event.toMap();
+    final status = Event.normalizeStatus(event.statut);
+    payload['statut'] = status;
+    payload['lastUpdated'] = FieldValue.serverTimestamp();
+    if (status == 'archive') {
+      payload['archivedAt'] = FieldValue.serverTimestamp();
+    } else {
+      payload['archivedAt'] = FieldValue.delete();
+    }
+    return _eventsCollection.doc(event.id).update(payload);
   }
 
   Future<void> deleteEvent(String eventId) {
@@ -41,34 +59,121 @@ class EventRepository {
       return null;
     }
 
-    final data = doc.data();
-    if (data == null) {
-      return null;
-    }
-
-    data['id'] = data['id'] ?? doc.id;
-    return Event.fromMap(data);
+    return Event.fromDoc(doc);
   }
 
   Future<void> updateEventStatus({
     required String eventId,
     required String status,
-    bool updateArchivedAt = false,
   }) {
+    final normalizedStatus = Event.normalizeStatus(status);
     return _eventsCollection.doc(eventId).update(<String, dynamic>{
-      'statut': status,
+      'statut': normalizedStatus,
       'lastUpdated': FieldValue.serverTimestamp(),
-      if (updateArchivedAt) 'archivedAt': FieldValue.serverTimestamp(),
+      if (normalizedStatus == 'archive')
+        'archivedAt': FieldValue.serverTimestamp()
+      else
+        'archivedAt': FieldValue.delete(),
     });
   }
 
-  Future<void> updateParticipants({
+  Future<void> registerParticipant({
     required String eventId,
-    required List<AppUser> participants,
+    required AppUser participant,
   }) {
-    return _eventsCollection.doc(eventId).update(<String, dynamic>{
-      'participants': participants.map((p) => p.toMap()).toList(),
-      'lastUpdated': FieldValue.serverTimestamp(),
+    final docRef = _eventsCollection.doc(eventId);
+
+    return _firestore.runTransaction((txn) async {
+      final snap = await txn.get(docRef);
+      if (!snap.exists) {
+        throw const EventRepositoryException(
+          code: 'not-found',
+          message: 'L\'evenement n\'existe pas.',
+        );
+      }
+
+      final event = Event.fromDoc(snap);
+      final status = Event.normalizeStatus(event.statut);
+      if (status == 'ferme' || status == 'archive') {
+        throw const EventRepositoryException(
+          code: 'event_closed',
+          message: 'L\'evenement n\'est pas ouvert.',
+        );
+      }
+
+      final alreadyRegistered =
+          event.participants.any((p) => p.uid == participant.uid);
+      if (alreadyRegistered) {
+        throw const EventRepositoryException(
+          code: 'already_registered',
+          message: 'Vous etes deja inscrit a cet evenement.',
+        );
+      }
+
+      if (event.capaciteMax != null &&
+          event.participants.length >= event.capaciteMax!) {
+        throw const EventRepositoryException(
+          code: 'capacity_reached',
+          message: 'La capacite maximale de cet evenement est atteinte.',
+        );
+      }
+
+      final participants = [
+        ...event.participants.map((p) => p.toMap()),
+        participant.toMap(),
+      ];
+
+      txn.update(docRef, {
+        'participants': participants,
+        'statut': status,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  Future<void> unregisterParticipant({
+    required String eventId,
+    required AppUser participant,
+  }) {
+    final docRef = _eventsCollection.doc(eventId);
+
+    return _firestore.runTransaction((txn) async {
+      final snap = await txn.get(docRef);
+      if (!snap.exists) {
+        throw const EventRepositoryException(
+          code: 'not-found',
+          message: 'L\'evenement n\'existe pas.',
+        );
+      }
+
+      final event = Event.fromDoc(snap);
+      final status = Event.normalizeStatus(event.statut);
+      if (status == 'ferme' || status == 'archive') {
+        throw const EventRepositoryException(
+          code: 'event_closed',
+          message: 'L\'evenement n\'est plus ouvert.',
+        );
+      }
+
+      final isRegistered =
+          event.participants.any((p) => p.uid == participant.uid);
+      if (!isRegistered) {
+        throw const EventRepositoryException(
+          code: 'not_registered',
+          message: 'Vous n\'etes pas inscrit a cet evenement.',
+        );
+      }
+
+      final participants = event.participants
+          .where((p) => p.uid != participant.uid)
+          .map((p) => p.toMap())
+          .toList(growable: false);
+
+      txn.update(docRef, {
+        'participants': participants,
+        'statut': status,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
     });
   }
 }

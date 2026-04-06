@@ -76,6 +76,81 @@ function getNumber(data: unknown, key: string): number {
   return typeof value === "number" ? value : 0;
 }
 
+function getSafeStoragePath(
+  rawPath: unknown,
+  options: {prefix: string; videoId: string}
+): string | null {
+  if (typeof rawPath !== "string") return null;
+
+  const normalized = rawPath.trim().replace(/^\/+/, "");
+  if (!normalized || normalized.includes("..")) return null;
+  if (!normalized.startsWith(options.prefix)) return null;
+  if (!normalized.includes(options.videoId)) return null;
+
+  return normalized;
+}
+
+function collectOwnedVideoAssetPaths(
+  videoId: string,
+  data: Record<string, unknown>
+): string[] {
+  const paths = new Set<string>([
+    `videos/${videoId}.mp4`,
+    `thumbnails/thumbnail_${videoId}.jpg`,
+    `thumbnails/thumbnail_${videoId}.jpeg`,
+    `thumbnails/thumbnail_${videoId}.png`,
+  ]);
+
+  const storagePath = getSafeStoragePath(data.storagePath, {
+    prefix: "videos/",
+    videoId,
+  });
+  if (storagePath) {
+    paths.add(storagePath);
+  }
+
+  const thumbnailPath = getSafeStoragePath(data.thumbnailPath, {
+    prefix: "thumbnails/",
+    videoId,
+  });
+  if (thumbnailPath) {
+    paths.add(thumbnailPath);
+  }
+
+  return Array.from(paths);
+}
+
+async function deleteStorageObjectIfExists(path: string): Promise<void> {
+  try {
+    await admin.storage().bucket().file(path).delete();
+  } catch (error) {
+    const code = (error as {code?: number | string}).code;
+    if (code === 404 || code === "404") {
+      return;
+    }
+    throw error;
+  }
+}
+
+async function cleanupVideoAssets(
+  videoId: string,
+  data: Record<string, unknown>
+): Promise<void> {
+  const paths = collectOwnedVideoAssetPaths(videoId, data);
+
+  for (const path of paths) {
+    try {
+      await deleteStorageObjectIfExists(path);
+    } catch (error) {
+      logger.warn("⚠️ deleteVideo asset cleanup skipped", {
+        videoId,
+        path,
+        error: (error as Error).message || String(error),
+      });
+    }
+  }
+}
+
 function timestampToMillis(value: unknown): number {
   if (!value) return 0;
   const candidate = value as any;
@@ -250,7 +325,7 @@ export const deleteVideo = onCall(
         throw new HttpsError("not-found", "Vidéo introuvable.");
       }
 
-      const data = snap.data() || {};
+      const data = (snap.data() || {}) as Record<string, unknown>;
       const ownerId = getString(data, "uid");
 
       if (ownerId !== uid) {
@@ -258,6 +333,7 @@ export const deleteVideo = onCall(
       }
 
       await ref.delete();
+      await cleanupVideoAssets(videoId, data);
       return ok("deleted", "Vidéo supprimée.");
     } catch (error) {
       logger.error("❌ deleteVideo error", error);

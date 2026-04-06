@@ -15,7 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
-// ✅ IMPORTANT : ajoute l’import de ta palette
+// Palette
 import 'package:adfoot/theme/ad_colors.dart';
 
 class OffreScreen extends StatefulWidget {
@@ -36,8 +36,25 @@ class _OffreScreenState extends State<OffreScreen> {
   final String _selectedRole = 'tous';
   String _sort = 'recentes';
 
-  /// ✅ Anti-spam : on ne compte qu'une vue par offre / session
+  /// Anti-spam: only one view counted per offer per session.
   final Set<String> _viewedOffres = <String>{};
+  String _normalizeStatus(String rawStatus) {
+    final value = rawStatus.trim().toLowerCase();
+    switch (value) {
+      case 'ouverte':
+        return 'ouverte';
+      case 'fermee':
+      case 'fermée':
+        return 'fermee';
+      case 'archivee':
+      case 'archivée':
+        return 'archivee';
+      case 'brouillon':
+        return 'brouillon';
+      default:
+        return value;
+    }
+  }
 
   @override
   void dispose() {
@@ -82,14 +99,14 @@ class _OffreScreenState extends State<OffreScreen> {
                   final offre = offres[index];
 
                   // =========================================================
-                  // 👁️ CORRECTION VUES (incrémentation réelle + anti-rebuild)
+                  // View increment with anti-rebuild protection.
                   // =========================================================
                   if (currentUser != null &&
                       currentUser.uid != offre.recruteur.uid &&
                       !_viewedOffres.contains(offre.id)) {
                     _viewedOffres.add(offre.id);
 
-                    // Fire-and-forget : pas besoin d'attendre, évite de bloquer l'UI
+                    // Fire-and-forget to keep UI responsive.
                     offreController.incrementVues(
                       offre: offre,
                       viewer: currentUser,
@@ -126,8 +143,7 @@ class _OffreScreenState extends State<OffreScreen> {
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
-                                        color: cs
-                                            .onSurface, // ✅ plus de couleur sombre illisible
+                                        color: cs.onSurface,
                                       ),
                                     ),
                                     const SizedBox(height: 8),
@@ -175,8 +191,7 @@ class _OffreScreenState extends State<OffreScreen> {
                                 'Valide jusqu\'au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)}',
                                 style: const TextStyle(
                                   fontSize: 14,
-                                  color: AdColors
-                                      .onSurfaceMuted, // ✅ cs.onSurfaceMuted -> AdColors
+                                  color: AdColors.onSurfaceMuted,
                                 ),
                               ),
                             ],
@@ -224,7 +239,7 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   // =========================================================
-  // 🔍 FILTRAGE / TRI
+  // Filtering / sorting
   // =========================================================
   List<Offre> _filteredOffres(List<Offre> source) {
     final query = _searchController.text.toLowerCase().trim();
@@ -234,8 +249,9 @@ class _OffreScreenState extends State<OffreScreen> {
           o.titre.toLowerCase().contains(query) ||
           o.description.toLowerCase().contains(query);
 
-      final matchesStatus =
-          _selectedStatus == 'tous' ? true : o.statut == _selectedStatus;
+      final matchesStatus = _selectedStatus == 'tous'
+          ? true
+          : _normalizeStatus(o.statut) == _selectedStatus;
 
       final matchesRole =
           _selectedRole == 'tous' ? true : o.recruteur.role == _selectedRole;
@@ -253,7 +269,7 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   // =========================================================
-  // 🧱 UI BUILDERS
+  // UI builders
   // =========================================================
   Widget _buildSkeletons() {
     return ListView.builder(
@@ -323,7 +339,7 @@ class _OffreScreenState extends State<OffreScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: const BoxDecoration(
-        color: AdColors.surfaceAlt, // ✅ cohérent dark
+        color: AdColors.surfaceAlt,
         border: Border(
           bottom: BorderSide(color: AdColors.divider),
         ),
@@ -337,7 +353,7 @@ class _OffreScreenState extends State<OffreScreen> {
             decoration: InputDecoration(
               hintText: 'Rechercher une offre...',
               prefixIcon: const Icon(Icons.search),
-              // ✅ laisse ton InputDecorationTheme faire le job (filled, couleurs, etc.)
+              // Keep theme-driven input styling.
             ),
           ),
           const SizedBox(height: 8),
@@ -356,14 +372,14 @@ class _OffreScreenState extends State<OffreScreen> {
                   onTap: () => setState(() => _selectedStatus = 'ouverte'),
                 ),
                 _FilterChip(
-                  label: 'Fermées',
-                  selected: _selectedStatus == 'fermée',
-                  onTap: () => setState(() => _selectedStatus = 'fermée'),
+                  label: 'Fermees',
+                  selected: _selectedStatus == 'fermee',
+                  onTap: () => setState(() => _selectedStatus = 'fermee'),
                 ),
                 _FilterChip(
-                  label: 'Archivées',
-                  selected: _selectedStatus == 'archivée',
-                  onTap: () => setState(() => _selectedStatus = 'archivée'),
+                  label: 'Archivees',
+                  selected: _selectedStatus == 'archivee',
+                  onTap: () => setState(() => _selectedStatus = 'archivee'),
                 ),
                 const SizedBox(width: 12),
                 DropdownButton<String>(
@@ -374,9 +390,9 @@ class _OffreScreenState extends State<OffreScreen> {
                       color: cs.onSurface, fontWeight: FontWeight.w600),
                   items: const [
                     DropdownMenuItem(
-                        value: 'recentes', child: Text('Plus récentes')),
+                        value: 'recentes', child: Text('Plus recentes')),
                     DropdownMenuItem(
-                        value: 'fin', child: Text('Se terminant bientôt')),
+                        value: 'fin', child: Text('Se terminant bientot')),
                   ],
                   onChanged: (v) {
                     if (v != null) setState(() => _sort = v);
@@ -462,21 +478,31 @@ class _OffreScreenState extends State<OffreScreen> {
     dynamic currentUser,
   ) {
     if (isOwner) {
+      final normalizedStatus = _normalizeStatus(offre.statut);
       return Wrap(
         spacing: 8,
         children: [
           DropdownButton<String>(
-            value: offre.statut,
+            value: normalizedStatus,
             dropdownColor: AdColors.surfaceCard,
             items: const [
               DropdownMenuItem(value: 'brouillon', child: Text('Brouillon')),
               DropdownMenuItem(value: 'ouverte', child: Text('Ouverte')),
-              DropdownMenuItem(value: 'fermée', child: Text('Fermée')),
-              DropdownMenuItem(value: 'archivée', child: Text('Archivée')),
+              DropdownMenuItem(value: 'fermee', child: Text('Fermee')),
+              DropdownMenuItem(value: 'archivee', child: Text('Archivee')),
             ],
-            onChanged: (v) {
+            onChanged: (v) async {
               if (v != null) {
-                offreController.changerStatut(offre, v);
+                if (currentUser == null) {
+                  AdFeedback.error(
+                    'Erreur',
+                    'Utilisateur introuvable. Merci de vous reconnecter.',
+                  );
+                  return;
+                }
+                final response =
+                    await offreController.changerStatut(offre, v, currentUser);
+                response.showToast(includeSuccess: true);
               }
             },
           ),
@@ -506,11 +532,19 @@ class _OffreScreenState extends State<OffreScreen> {
 
       return ElevatedButton(
         onPressed: () async {
-          if (inscrit) {
-            await offreController.seDesinscrireOffre(currentUser, offre);
-          } else {
-            await offreController.postulerOffre(currentUser, offre);
+          if (currentUser == null) {
+            AdFeedback.error(
+              'Erreur',
+              'Utilisateur introuvable. Merci de vous reconnecter.',
+            );
+            return;
           }
+
+          final response = inscrit
+              ? await offreController.seDesinscrireOffre(currentUser, offre)
+              : await offreController.postulerOffre(currentUser, offre);
+
+          response.showToast(includeSuccess: true);
         },
         child: Text(inscrit ? 'Se désinscrire' : 'Postuler'),
       );
@@ -541,20 +575,30 @@ class _OffreScreenState extends State<OffreScreen> {
     );
     if (!confirmed) return;
 
-    try {
-      await offreController.supprimerOffre(
-        offre.id,
-        userController.user!,
-        offre,
+    final currentUser = userController.user;
+    if (currentUser == null) {
+      AdFeedback.error(
+        'Erreur',
+        'Utilisateur introuvable. Merci de vous reconnecter.',
       );
+      return;
+    }
+
+    final response = await offreController.supprimerOffre(
+      offre.id,
+      currentUser,
+      offre,
+    );
+
+    if (response.success) {
       AdFeedback.success(
         'Offre supprimee',
         "L'offre a ete supprimee avec succes.",
       );
-    } catch (e) {
+    } else {
       AdFeedback.error(
         'Erreur',
-        "La suppression de l'offre a echoue : $e",
+        response.message,
       );
     }
   }
@@ -574,7 +618,7 @@ class _OffreScreenState extends State<OffreScreen> {
         return Container(
           padding: const EdgeInsets.all(16),
           decoration: const BoxDecoration(
-            color: AdColors.surfaceAlt, // ✅ dark
+            color: AdColors.surfaceAlt,
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: Column(
@@ -592,7 +636,7 @@ class _OffreScreenState extends State<OffreScreen> {
                     dropdownColor: AdColors.surfaceCard,
                     items: const [
                       DropdownMenuItem(value: 'nom', child: Text('Par nom')),
-                      DropdownMenuItem(value: 'role', child: Text('Par rôle')),
+                      DropdownMenuItem(value: 'role', child: Text('Par role')),
                     ],
                     onChanged: (v) => setState(() => sort = v ?? 'nom'),
                   ),
@@ -600,7 +644,7 @@ class _OffreScreenState extends State<OffreScreen> {
               ),
               const SizedBox(height: 12),
               if (sorted.isEmpty)
-                const Text('Aucun candidat pour l’instant')
+                const Text('Aucun candidat pour l\'instant')
               else
                 ListView.separated(
                   shrinkWrap: true,
@@ -677,15 +721,19 @@ class _StatusBadge extends StatelessWidget {
     Color bg;
     Color fg;
 
-    switch (status) {
+    final normalized = status.trim().toLowerCase();
+
+    switch (normalized) {
       case 'ouverte':
         bg = cs.primary.withValues(alpha: 0.14);
         fg = cs.primary;
         break;
+      case 'fermee':
       case 'fermée':
         bg = AdColors.error.withValues(alpha: 0.14);
         fg = AdColors.error;
         break;
+      case 'archivee':
       case 'archivée':
         bg = AdColors.onSurfaceMuted.withValues(alpha: 0.14);
         fg = AdColors.onSurfaceMuted;

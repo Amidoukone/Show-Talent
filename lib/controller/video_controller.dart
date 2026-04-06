@@ -446,9 +446,29 @@ class VideoController extends GetxController {
     );
 
     if (response.success) {
+      final removedIndex = videoList.indexWhere((v) => v.id == videoId);
+      final removedUrl =
+          removedIndex != -1 ? videoList[removedIndex].videoUrl : null;
+
       await videoManager.pauseAll(contextKey);
-      videoList.removeWhere((v) => v.id == videoId);
-      videoList.refresh();
+
+      if (removedUrl != null && removedUrl.isNotEmpty) {
+        await videoManager.disposeUrls(contextKey, [removedUrl]);
+      }
+
+      if (removedIndex != -1) {
+        videoList.removeAt(removedIndex);
+        if (videoList.isEmpty) {
+          currentIndex.value = -1;
+        } else {
+          final clampedIndex =
+              currentIndex.value.clamp(0, videoList.length - 1).toInt();
+          currentIndex.value = clampedIndex;
+          _prefetchThumbnailsAround(clampedIndex);
+        }
+        videoList.refresh();
+      }
+
       showSuccessToast(response.message);
     } else {
       unawaited(_logActionFailure(

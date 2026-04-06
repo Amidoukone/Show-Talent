@@ -1,10 +1,15 @@
-﻿param(
+param(
   [string]$ProjectId = "show-talent-5987d",
   [string]$Region = "europe-west1",
   [string]$ApiKey = $env:FIREBASE_WEB_API_KEY,
   [string]$FfmpegPath = "..\functions\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe",
   [int]$OptimizeTimeoutSec = 90,
+  [int]$ReadyTimeoutSec = 240,
+  [int]$ReadyPollSec = 5,
   [switch]$SkipOptimizeLogCheck,
+  [switch]$SkipReadyCheck,
+  [switch]$SkipPlaybackProbe,
+  [switch]$SkipDelete,
   [switch]$KeepAuthUser
 )
 
@@ -73,6 +78,254 @@ function Wait-OptimizeLogBySession {
   return $false
 }
 
+function Convert-FromFirestoreValue {
+  param(
+    [Parameter(Mandatory = $true)]$Value
+  )
+
+  if ($null -eq $Value) {
+    return $null
+  }
+
+  $propNames = @($Value.PSObject.Properties.Name)
+
+  if ($propNames -contains "nullValue") {
+    return $null
+  }
+  if ($propNames -contains "stringValue") {
+    return [string]$Value.stringValue
+  }
+  if ($propNames -contains "booleanValue") {
+    return [bool]$Value.booleanValue
+  }
+  if ($propNames -contains "integerValue") {
+    return [long]$Value.integerValue
+  }
+  if ($propNames -contains "doubleValue") {
+    return [double]$Value.doubleValue
+  }
+  if ($propNames -contains "timestampValue") {
+    return [string]$Value.timestampValue
+  }
+  if ($propNames -contains "mapValue") {
+    return Convert-FromFirestoreFields -Fields $Value.mapValue.fields
+  }
+  if ($propNames -contains "arrayValue") {
+    $items = @()
+    $values = $Value.arrayValue.values
+    if ($null -eq $values) {
+      return $items
+    }
+    foreach ($item in $values) {
+      $items += ,(Convert-FromFirestoreValue -Value $item)
+    }
+    return $items
+  }
+
+  return $Value
+}
+
+function Convert-FromFirestoreFields {
+  param(
+    $Fields
+  )
+
+  $parsed = [ordered]@{}
+  if ($null -eq $Fields) {
+    return $parsed
+  }
+
+  foreach ($prop in $Fields.PSObject.Properties) {
+    $parsed[$prop.Name] = Convert-FromFirestoreValue -Value $prop.Value
+  }
+
+  return $parsed
+}
+
+function Get-FirestoreVideoDoc {
+  param(
+    [Parameter(Mandatory = $true)][string]$Project,
+    [Parameter(Mandatory = $true)][string]$VideoId,
+    [Parameter(Mandatory = $true)][string]$IdToken,
+    [switch]$AllowNotFound
+  )
+
+  $uri = "https://firestore.googleapis.com/v1/projects/$Project/databases/(default)/documents/videos/$VideoId"
+
+  try {
+    $resp = Invoke-RestMethod -Method GET -Uri $uri -Headers @{
+      Authorization = "Bearer $IdToken"
+    } -TimeoutSec 45
+  } catch {
+    if ($_.Exception.Response) {
+      $status = [int]$_.Exception.Response.StatusCode
+      if ($AllowNotFound.IsPresent -and $status -eq 404) {
+        return $null
+      }
+      $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+      $content = $reader.ReadToEnd()
+      $reader.Close()
+      throw "GET $uri failed [$status]: $content"
+    }
+    throw
+  }
+
+  return Convert-FromFirestoreFields -Fields $resp.fields
+}
+
+function Wait-VideoReady {
+  param(
+    [Parameter(Mandatory = $true)][string]$Project,
+    [Parameter(Mandatory = $true)][string]$VideoId,
+    [Parameter(Mandatory = $true)][string]$IdToken,
+    [Parameter(Mandatory = $true)][int]$TimeoutSec,
+    [Parameter(Mandatory = $true)][int]$PollSec,
+    [hashtable]$StateTracker
+  )
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSec)
+  $failureStatuses = @("error", "failed", "failure")
+  $attempts = 0
+
+  while ((Get-Date) -lt $deadline) {
+    $attempts += 1
+    $doc = Get-FirestoreVideoDoc -Project $Project -VideoId $VideoId -IdToken $IdToken
+
+    $status = ""
+    if ($doc.ContainsKey("status") -and $doc.status -is [string]) {
+      $status = [string]$doc.status
+    }
+    $optimized = ($doc.ContainsKey("optimized") -and $doc.optimized -eq $true)
+
+    if ($null -ne $StateTracker) {
+      $StateTracker["attempts"] = $attempts
+      $StateTracker["status"] = $status
+      $StateTracker["optimized"] = $optimized
+    }
+
+    if ($failureStatuses -contains $status.ToLowerInvariant()) {
+      throw "Video entered a failure status while waiting for ready: $status"
+    }
+
+    if ($status -eq "ready" -and $optimized) {
+      return $doc
+    }
+
+    Start-Sleep -Seconds $PollSec
+  }
+
+  return $null
+}
+
+function Get-PlayableUrls {
+  param(
+    [Parameter(Mandatory = $true)][hashtable]$VideoDoc
+  )
+
+  $urls = New-Object System.Collections.Generic.List[string]
+  $seen = New-Object System.Collections.Generic.HashSet[string]
+
+  function Add-Url {
+    param([string]$Candidate)
+    if ([string]::IsNullOrWhiteSpace($Candidate)) {
+      return
+    }
+    $trimmed = $Candidate.Trim()
+    if ($seen.Add($trimmed)) {
+      $urls.Add($trimmed) | Out-Null
+    }
+  }
+
+  if ($VideoDoc.ContainsKey("videoUrl") -and $VideoDoc.videoUrl -is [string]) {
+    Add-Url -Candidate ([string]$VideoDoc.videoUrl)
+  }
+
+  if ($VideoDoc.ContainsKey("playback") -and $VideoDoc.playback -is [hashtable]) {
+    $playback = [hashtable]$VideoDoc.playback
+
+    if ($playback.ContainsKey("fallback") -and $playback.fallback -is [hashtable]) {
+      $fallback = [hashtable]$playback.fallback
+      if ($fallback.ContainsKey("url") -and $fallback.url -is [string]) {
+        Add-Url -Candidate ([string]$fallback.url)
+      }
+    }
+
+    if ($playback.ContainsKey("sourceAsset") -and $playback.sourceAsset -is [hashtable]) {
+      $sourceAsset = [hashtable]$playback.sourceAsset
+      if ($sourceAsset.ContainsKey("url") -and $sourceAsset.url -is [string]) {
+        Add-Url -Candidate ([string]$sourceAsset.url)
+      }
+    }
+
+    if ($playback.ContainsKey("mp4Sources") -and $playback.mp4Sources -is [object[]]) {
+      foreach ($entry in $playback.mp4Sources) {
+        if ($entry -is [hashtable] -and $entry.ContainsKey("url") -and $entry.url -is [string]) {
+          Add-Url -Candidate ([string]$entry.url)
+        }
+      }
+    }
+  }
+
+  if ($VideoDoc.ContainsKey("sources") -and $VideoDoc.sources -is [object[]]) {
+    foreach ($entry in $VideoDoc.sources) {
+      if ($entry -is [hashtable] -and $entry.ContainsKey("url") -and $entry.url -is [string]) {
+        Add-Url -Candidate ([string]$entry.url)
+      }
+    }
+  }
+
+  return @($urls.ToArray())
+}
+
+function Probe-PlaybackUrl {
+  param(
+    [Parameter(Mandatory = $true)][string]$Url
+  )
+
+  try {
+    $head = Invoke-WebRequest -Method Head -Uri $Url -TimeoutSec 45
+    return [ordered]@{
+      ok = $true
+      method = "HEAD"
+      status = [int]$head.StatusCode
+      url = $Url
+    }
+  } catch {
+    $headStatus = $null
+    if ($_.Exception.Response) {
+      $headStatus = [int]$_.Exception.Response.StatusCode
+    }
+
+    try {
+      $get = Invoke-WebRequest -Method Get -Uri $Url -Headers @{
+        Range = "bytes=0-0"
+      } -TimeoutSec 45
+
+      return [ordered]@{
+        ok = $true
+        method = "GET"
+        status = [int]$get.StatusCode
+        url = $Url
+        headStatus = $headStatus
+      }
+    } catch {
+      $getStatus = $null
+      if ($_.Exception.Response) {
+        $getStatus = [int]$_.Exception.Response.StatusCode
+      }
+
+      return [ordered]@{
+        ok = $false
+        method = "GET"
+        status = $getStatus
+        url = $Url
+        headStatus = $headStatus
+        error = $_.Exception.Message
+      }
+    }
+  }
+}
+
 $result = [ordered]@{
   success = $false
   startedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
@@ -88,14 +341,47 @@ $result = [ordered]@{
     checked = (-not $SkipOptimizeLogCheck.IsPresent)
     seenInLogs = $null
   }
+  waitReady = [ordered]@{
+    checked = (-not $SkipReadyCheck.IsPresent)
+    attempts = 0
+    status = $null
+    optimized = $null
+    readyObserved = $null
+  }
+  playback = [ordered]@{
+    checked = (-not $SkipPlaybackProbe.IsPresent)
+    urlCount = 0
+    probedUrl = $null
+    probeMethod = $null
+    probeStatus = $null
+  }
+  deleteVideo = [ordered]@{
+    attempted = (-not $SkipDelete.IsPresent)
+    success = $null
+    code = $null
+    message = $null
+  }
+  firestorePostDelete = [ordered]@{
+    checked = (-not $SkipDelete.IsPresent)
+    missing = $null
+  }
 }
 
 $idToken = $null
 $tmpVideo = $null
+$sessionId = $null
+$readyDoc = $null
 
 try {
   if ([string]::IsNullOrWhiteSpace($ApiKey)) {
-    throw "ApiKey manquante. Passe -ApiKey ou definis FIREBASE_WEB_API_KEY."
+    throw "ApiKey missing. Use -ApiKey or set FIREBASE_WEB_API_KEY."
+  }
+
+  if ($ReadyTimeoutSec -lt 5) {
+    throw "ReadyTimeoutSec must be >= 5."
+  }
+  if ($ReadyPollSec -lt 1) {
+    throw "ReadyPollSec must be >= 1."
   }
 
   $base = "https://$Region-$ProjectId.cloudfunctions.net"
@@ -247,6 +533,65 @@ try {
 
     if (-not $seen) {
       throw "optimizeMp4Video log did not include session $sessionId within ${OptimizeTimeoutSec}s"
+    }
+  }
+
+  if (-not $SkipReadyCheck.IsPresent) {
+    $readyDoc = Wait-VideoReady -Project $ProjectId -VideoId $sessionId -IdToken $idToken -TimeoutSec $ReadyTimeoutSec -PollSec $ReadyPollSec -StateTracker $result.waitReady
+    $result.waitReady.readyObserved = ($null -ne $readyDoc)
+    if ($null -eq $readyDoc) {
+      throw "Video did not reach status=ready and optimized=true within ${ReadyTimeoutSec}s."
+    }
+  }
+
+  if (-not $SkipPlaybackProbe.IsPresent) {
+    if ($null -eq $readyDoc) {
+      $readyDoc = Get-FirestoreVideoDoc -Project $ProjectId -VideoId $sessionId -IdToken $idToken
+    }
+
+    if ($null -eq $readyDoc) {
+      throw "Unable to fetch Firestore video document for playback checks."
+    }
+
+    $playableUrls = @(Get-PlayableUrls -VideoDoc $readyDoc)
+    $result.playback.urlCount = $playableUrls.Count
+
+    if ($playableUrls.Count -eq 0) {
+      throw "No playable URL found in Firestore contract (videoUrl/playback/sources)."
+    }
+
+    $probe = Probe-PlaybackUrl -Url $playableUrls[0]
+    $result.playback.probedUrl = [string]$probe.url
+    $result.playback.probeMethod = [string]$probe.method
+    $result.playback.probeStatus = $probe.status
+
+    if (-not $probe.ok) {
+      throw "Playback probe failed for $($playableUrls[0]): $($probe.error)"
+    }
+  }
+
+  if (-not $SkipDelete.IsPresent) {
+    $deleteResp = Invoke-JsonPost -Uri "$base/deleteVideo" -Headers $authHeaders -Body @{
+      data = @{
+        videoId = $sessionId
+      }
+    }
+
+    $deleteResult = $deleteResp.result
+    $deleteSuccess = [bool]$deleteResult.success
+    $result.deleteVideo.success = $deleteSuccess
+    $result.deleteVideo.code = [string]$deleteResult.code
+    $result.deleteVideo.message = [string]$deleteResult.message
+
+    if (-not $deleteSuccess) {
+      throw "deleteVideo returned success=false (code=$($result.deleteVideo.code))."
+    }
+
+    $postDeleteDoc = Get-FirestoreVideoDoc -Project $ProjectId -VideoId $sessionId -IdToken $idToken -AllowNotFound
+    $missing = ($null -eq $postDeleteDoc)
+    $result.firestorePostDelete.missing = $missing
+    if (-not $missing) {
+      throw "Video document still exists after deleteVideo."
     }
   }
 
