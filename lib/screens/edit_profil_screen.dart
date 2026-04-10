@@ -467,6 +467,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'Succes',
         'Profil mis a jour.',
       );
+    } on ProfileAccessRevokedException {
+      return;
     } catch (e) {
       debugPrint('EditProfile _save error: $e');
       AdFeedback.error(
@@ -780,10 +782,14 @@ class CvUploaderSection extends StatelessWidget {
                 allowedExtensions: ['pdf'],
               );
               if (result != null && result.files.single.path != null) {
-                await profileController.uploadCvPdf(
-                  user.uid,
-                  File(result.files.single.path!),
-                );
+                try {
+                  await profileController.uploadCvPdf(
+                    user.uid,
+                    File(result.files.single.path!),
+                  );
+                } on ProfileAccessRevokedException {
+                  return;
+                }
               }
             },
             style: ElevatedButton.styleFrom(
@@ -800,7 +806,11 @@ class CvUploaderSection extends StatelessWidget {
             const SizedBox(height: 10),
             ElevatedButton.icon(
               onPressed: () async {
-                await profileController.deleteCv(user.uid);
+                try {
+                  await profileController.deleteCv(user.uid);
+                } on ProfileAccessRevokedException {
+                  return;
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: kDanger,

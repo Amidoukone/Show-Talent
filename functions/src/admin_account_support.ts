@@ -3,6 +3,9 @@
 
 import {randomBytes} from "crypto";
 import {HttpsError} from "firebase-functions/v2/https";
+import {db} from "./firebase";
+import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
+import {resolveCallableAuth} from "./callable_auth";
 
 const REGION = "europe-west1";
 const MANAGED_ROLE_LIST = ["club", "recruteur", "agent"] as const;
@@ -10,6 +13,9 @@ const MANAGED_ROLES = new Set<string>(MANAGED_ROLE_LIST);
 
 type AdminCallableRequestLike = {
   auth?: {uid?: string; token?: Record<string, unknown> | null} | null;
+  rawRequest?: {
+    headers?: Record<string, string | string[] | undefined>;
+  } | null;
 };
 
 function getString(data: unknown, key: string): string {
@@ -67,13 +73,23 @@ function isPrivilegedClaims(
     token["superAdmin"] === true;
 }
 
-function assertAdminCaller(request: AdminCallableRequestLike): string {
-  const uid = request.auth?.uid;
-  if (!uid) {
-    throw new HttpsError("unauthenticated", "Authentification requise.");
+async function assertAdminCaller(
+  request: AdminCallableRequestLike,
+): Promise<string> {
+  const {uid, token} = await resolveCallableAuth(request);
+  if (isPrivilegedClaims(token)) {
+    return uid;
   }
 
-  if (!isPrivilegedClaims(request.auth?.token ?? null)) {
+  const userSnap = await db.collection("users").doc(uid).get();
+  const userData = userSnap.data() ?? {};
+  const role = normalizeRole(getString(userData, "role"));
+  const hasFirestoreAdminAccess = role === "admin" ||
+    userData["admin"] === true ||
+    userData["platformAdmin"] === true ||
+    userData["superAdmin"] === true;
+
+  if (!hasFirestoreAdminAccess) {
     throw new HttpsError(
       "permission-denied",
       "Action reservee a l administration.",
@@ -151,6 +167,7 @@ function cloneCallableRecord(
 }
 
 export {
+  LOW_CPU_REGION_OPTIONS,
   REGION,
   MANAGED_ROLE_LIST,
   MANAGED_ROLES,

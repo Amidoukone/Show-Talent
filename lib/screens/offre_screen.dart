@@ -2,6 +2,7 @@ import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/offre_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/offres_form.dart';
@@ -595,6 +596,8 @@ class _OffreScreenState extends State<OffreScreen> {
         'Offre supprimee',
         "L'offre a ete supprimee avec succes.",
       );
+    } else if (response.toast == ToastLevel.none) {
+      return;
     } else {
       AdFeedback.error(
         'Erreur',

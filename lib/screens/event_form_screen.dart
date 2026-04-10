@@ -1,5 +1,6 @@
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/theme/ad_colors.dart';
@@ -270,6 +271,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
         if (!mounted) return;
 
         if (!response.success) {
+          if (response.toast == ToastLevel.none) {
+            return;
+          }
           AdFeedback.error('Erreur', response.message);
           return;
         }
@@ -305,6 +309,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
         if (!mounted) return;
 
         if (!response.success) {
+          if (response.toast == ToastLevel.none) {
+            return;
+          }
           AdFeedback.error('Erreur', response.message);
           return;
         }

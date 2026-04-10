@@ -1,6 +1,4 @@
 import 'package:adfoot/config/app_environment.dart';
-import 'package:adfoot/config/app_routes.dart';
-import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/screens/signup_screen.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
@@ -28,8 +26,17 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   bool _isResettingPassword = false;
+  String? _sessionNoticeTitle;
+  String? _sessionNoticeMessage;
+  String _sessionNoticeKind = 'error';
 
   bool get _isBusy => _isLoading || _isResettingPassword;
+
+  @override
+  void initState() {
+    super.initState();
+    _captureSessionNotice();
+  }
 
   @override
   void dispose() {
@@ -59,21 +66,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (snapshot.destination == AuthSessionDestination.login) {
         _showErrorSnackbar(
-          snapshot.failure?.loginMessage ??
+          snapshot.failureMessage ??
+              snapshot.failure?.loginMessage ??
               'Connexion impossible pour le moment.',
+          title: snapshot.failureTitle ?? 'Connexion impossible',
         );
         return;
       }
 
-      await Get.find<AuthController>().handleAuthState(snapshot.firebaseUser);
-
-      if (snapshot.destination == AuthSessionDestination.main) {
-        await Get.offAllNamed(AppRoutes.main);
-      } else {
-        await Get.offAllNamed(AppRoutes.verifyEmail);
-      }
-
-      Get.find<UserController>().kickstart();
+      await Get.find<UserController>().applyResolvedSessionSnapshot(snapshot);
     } on FirebaseAuthException catch (error) {
       _showErrorSnackbar(AuthErrorMapper.toMessage(error));
     } on AuthFlowException catch (error) {
@@ -150,6 +151,48 @@ class _LoginScreenState extends State<LoginScreen> {
     return null;
   }
 
+  void _captureSessionNotice() {
+    Map<String, String>? notice;
+
+    final args = Get.arguments;
+    if (args is Map) {
+      final prefillEmail = args['prefillEmail']?.toString().trim();
+      if (prefillEmail != null && prefillEmail.isNotEmpty) {
+        _emailController.text = prefillEmail;
+      }
+
+      final title = args['sessionNoticeTitle']?.toString().trim();
+      final message = args['sessionNoticeMessage']?.toString().trim();
+      final kind = args['sessionNoticeKind']?.toString().trim().toLowerCase();
+      if (message != null && message.isNotEmpty) {
+        notice = <String, String>{
+          'sessionNoticeTitle': (title == null || title.isEmpty)
+              ? 'Information importante'
+              : title,
+          'sessionNoticeMessage': message,
+          'sessionNoticeKind': (kind == null || kind.isEmpty) ? 'error' : kind,
+        };
+      }
+    }
+
+    notice ??= Get.find<UserController>().consumePendingSessionNotice();
+    if (notice == null) {
+      return;
+    }
+
+    final title = notice['sessionNoticeTitle']?.trim();
+    final message = notice['sessionNoticeMessage']?.trim();
+    if (message == null || message.isEmpty) {
+      return;
+    }
+
+    _sessionNoticeTitle =
+        (title == null || title.isEmpty) ? 'Information importante' : title;
+    _sessionNoticeMessage = message;
+    _sessionNoticeKind =
+        notice['sessionNoticeKind']?.trim().toLowerCase() ?? 'error';
+  }
+
   void _showErrorSnackbar(
     String message, {
     String title = 'Connexion echouee',
@@ -163,6 +206,17 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isSuccessNotice = _sessionNoticeKind == 'success';
+    final noticeBackground = isSuccessNotice
+        ? cs.primaryContainer.withValues(alpha: 0.95)
+        : cs.errorContainer.withValues(alpha: 0.95);
+    final noticeBorder = isSuccessNotice
+        ? cs.primary.withValues(alpha: 0.18)
+        : cs.error.withValues(alpha: 0.18);
+    final noticeForeground =
+        isSuccessNotice ? cs.onPrimaryContainer : cs.onErrorContainer;
+    final noticeIcon =
+        isSuccessNotice ? Icons.verified_outlined : Icons.gpp_bad_outlined;
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -185,6 +239,59 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      if (_sessionNoticeMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: noticeBackground,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: noticeBorder,
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                noticeIcon,
+                                color: noticeForeground,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _sessionNoticeTitle ??
+                                          'Information importante',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleSmall
+                                          ?.copyWith(
+                                            color: noticeForeground,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _sessionNoticeMessage!,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
+                                          ?.copyWith(
+                                            color: noticeForeground.withValues(
+                                                alpha: .92),
+                                            height: 1.35,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
                       Align(
                         alignment: Alignment.center,
                         child: ClipRRect(

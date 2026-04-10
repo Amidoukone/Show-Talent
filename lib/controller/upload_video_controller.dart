@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:dio/dio.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
@@ -452,6 +453,26 @@ class UploadVideoController extends GetxController {
   }
 
   String _toUserMessage(Object error) {
+    if (error is FirebaseFunctionsException) {
+      final message = (error.message ?? '').trim();
+      if (message.isNotEmpty) {
+        return message;
+      }
+
+      switch (error.code) {
+        case 'unauthenticated':
+          return 'Authentification requise. Reconnectez-vous puis reessayez.';
+        case 'permission-denied':
+          return 'Votre compte ne peut pas televerser de videos.';
+        case 'resource-exhausted':
+          return 'Le service video est temporairement indisponible.';
+        case 'failed-precondition':
+          return 'Votre compte ne remplit pas les conditions pour televerser.';
+        default:
+          return 'Erreur serveur pendant le televersement.';
+      }
+    }
+
     final normalized = error.toString();
     if (normalized.startsWith('Exception: ')) {
       return normalized.substring('Exception: '.length);

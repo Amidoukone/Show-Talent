@@ -27,11 +27,11 @@ extension AuthSessionFailureMessage on UserAccessIssue {
   String get loginMessage {
     switch (this) {
       case UserAccessIssue.missingProfile:
-        return 'Compte incomplet ou non provisionné. Contactez l’équipe Adfoot.';
+        return 'Compte incomplet ou non provisionne. Contactez l equipe Adfoot.';
       case UserAccessIssue.adminPortalOnly:
-        return 'Ce compte est réservé au portail d’administration Adfoot.';
+        return 'Ce compte est reserve au portail d administration Adfoot.';
       case UserAccessIssue.blockedOrDisabled:
-        return 'Ce compte a été bloqué ou désactivé. Contactez l’équipe Adfoot.';
+        return 'Ce compte a ete suspendu, bloque ou desactive. Contactez l equipe Adfoot.';
     }
   }
 }
@@ -51,12 +51,16 @@ class AuthSessionSnapshot {
     this.firebaseUser,
     this.appUser,
     this.failure,
+    this.failureMessage,
+    this.failureTitle,
   });
 
   final AuthSessionDestination destination;
   final User? firebaseUser;
   final AppUser? appUser;
   final UserAccessIssue? failure;
+  final String? failureMessage;
+  final String? failureTitle;
 }
 
 class EmailVerificationSendResult {
@@ -90,6 +94,9 @@ class AuthSessionService {
 
   final FirebaseAuth _auth;
   final UserRepository _userRepository;
+  static const String _accessUnavailableTitle = 'Acces indisponible';
+  static const String _accessUnavailableMessage =
+      'Impossible de verifier votre acces pour le moment. Reessayez dans quelques instants.';
 
   User? get currentUser => _auth.currentUser;
   String? get currentUserEmail => _auth.currentUser?.email;
@@ -128,10 +135,10 @@ class AuthSessionService {
     final refreshed = _auth.currentUser;
     await refreshed?.getIdToken(true);
     if (refreshed == null) {
-      throw const AuthFlowException('Session introuvable après connexion.');
+      throw const AuthFlowException('Session introuvable apres connexion.');
     }
 
-    return resolveSession(
+    return resolveSessionSafely(
       refreshed,
       waitForVerifiedUserDocument: false,
       syncVerifiedUserRecord: false,
@@ -149,7 +156,7 @@ class AuthSessionService {
   }) async {
     if (!isPublicSelfSignupRole(role)) {
       throw const AuthFlowException(
-        'Seuls les comptes joueur et fan peuvent être créés dans l’application Adfoot.',
+        'Seuls les comptes joueur et fan peuvent etre crees dans l application Adfoot.',
       );
     }
 
@@ -160,7 +167,7 @@ class AuthSessionService {
 
     final user = userCred.user;
     if (user == null) {
-      throw const AuthFlowException('Impossible de créer le compte.');
+      throw const AuthFlowException('Impossible de creer le compte.');
     }
 
     if (nom.isNotEmpty) {
@@ -217,7 +224,7 @@ class AuthSessionService {
     final user = _auth.currentUser;
     if (user == null) {
       throw const AuthFlowException(
-        'Utilisateur non connecté. Veuillez vous reconnecter.',
+        'Utilisateur non connecte. Veuillez vous reconnecter.',
       );
     }
 
@@ -230,7 +237,7 @@ class AuthSessionService {
     } on FirebaseAuthException catch (error) {
       return EmailVerificationSendResult(
         sent: false,
-        errorMessage: error.message ?? 'Erreur d’envoi.',
+        errorMessage: error.message ?? 'Erreur d envoi.',
       );
     }
   }
@@ -248,7 +255,7 @@ class AuthSessionService {
     final user = _auth.currentUser;
     if (user == null) {
       throw const AuthFlowException(
-        'Utilisateur non connecté. Veuillez vous reconnecter.',
+        'Utilisateur non connecte. Veuillez vous reconnecter.',
       );
     }
 
@@ -256,17 +263,17 @@ class AuthSessionService {
     final refreshed = _auth.currentUser;
     if (refreshed == null) {
       throw const AuthFlowException(
-        'Session expirée. Veuillez vous reconnecter.',
+        'Session expiree. Veuillez vous reconnecter.',
       );
     }
 
     if (!refreshed.emailVerified) {
       throw const AuthFlowException(
-        'Votre e-mail n’est pas encore détecté comme vérifié. Après avoir cliqué sur le lien, attendez quelques secondes puis réessayez.',
+        'Votre e-mail n est pas encore detecte comme verifie. Apres avoir clique sur le lien, attendez quelques secondes puis reessayez.',
       );
     }
 
-    return resolveSession(
+    return resolveSessionSafely(
       refreshed,
       waitForVerifiedUserDocument: true,
       syncVerifiedUserRecord: true,
@@ -311,8 +318,10 @@ class AuthSessionService {
         return AuthSessionSnapshot(
           destination: AuthSessionDestination.login,
           firebaseUser: refreshed,
-          appUser: null,
+          appUser: decision.user,
           failure: decision.issue,
+          failureMessage: decision.message,
+          failureTitle: decision.title,
         );
       }
 
@@ -336,13 +345,19 @@ class AuthSessionService {
       return AuthSessionSnapshot(
         destination: AuthSessionDestination.login,
         firebaseUser: refreshed,
-        appUser: null,
+        appUser: decision.user,
         failure: decision.issue,
+        failureMessage: decision.message,
+        failureTitle: decision.title,
       );
     }
 
     var appUser = decision.user;
-    if (syncVerifiedUserRecord) {
+    final needsVerifiedSync = appUser != null &&
+        refreshed.emailVerified &&
+        (!appUser.emailVerified || !appUser.estActif);
+
+    if (syncVerifiedUserRecord || needsVerifiedSync) {
       appUser = await _userRepository.markEmailVerifiedAndActivate(
             refreshed.uid,
             updateLastLogin: updateLastLogin,
@@ -355,6 +370,38 @@ class AuthSessionService {
       firebaseUser: refreshed,
       appUser: appUser,
     );
+  }
+
+  Future<AuthSessionSnapshot> resolveSessionSafely(
+    User? firebaseUser, {
+    bool waitForVerifiedUserDocument = true,
+    bool syncVerifiedUserRecord = false,
+    bool updateLastLogin = false,
+    bool signOutOnInvalid = false,
+  }) async {
+    try {
+      return await resolveSession(
+        firebaseUser,
+        waitForVerifiedUserDocument: waitForVerifiedUserDocument,
+        syncVerifiedUserRecord: syncVerifiedUserRecord,
+        updateLastLogin: updateLastLogin,
+        signOutOnInvalid: signOutOnInvalid,
+      );
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') {
+        rethrow;
+      }
+
+      if (signOutOnInvalid) {
+        await signOut();
+      }
+
+      return const AuthSessionSnapshot(
+        destination: AuthSessionDestination.login,
+        failureTitle: _accessUnavailableTitle,
+        failureMessage: _accessUnavailableMessage,
+      );
+    }
   }
 
   Future<void> signOut() {

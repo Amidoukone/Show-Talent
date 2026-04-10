@@ -586,6 +586,10 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   void _showResponse(ActionResponse response) {
+    if (response.toast == ToastLevel.none) {
+      return;
+    }
+
     if (response.success) {
       AdFeedback.success('Succes', response.message);
       return;

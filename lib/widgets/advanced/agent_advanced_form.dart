@@ -80,10 +80,14 @@ class _AgentAdvancedFormState extends State<AgentAdvancedForm> {
         },
       };
 
-      await widget.profileController.updateProfilePatch(
-        widget.user.uid,
-        patch,
-      );
+      try {
+        await widget.profileController.updateProfilePatch(
+          widget.user.uid,
+          patch,
+        );
+      } on ProfileAccessRevokedException {
+        return;
+      }
 
       if (widget.autoCloseOnSave) {
         Get.back();
@@ -109,19 +113,17 @@ class _AgentAdvancedFormState extends State<AgentAdvancedForm> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
-
             TextFormField(
               controller: _licenseController,
               decoration: const InputDecoration(labelText: 'Numéro de licence'),
             ),
             const SizedBox(height: 12),
-
             TextFormField(
               controller: _countryController,
-              decoration: const InputDecoration(labelText: 'Pays de la licence'),
+              decoration:
+                  const InputDecoration(labelText: 'Pays de la licence'),
             ),
             const SizedBox(height: 12),
-
             TextFormField(
               controller: _zonesController,
               decoration: const InputDecoration(
@@ -129,7 +131,6 @@ class _AgentAdvancedFormState extends State<AgentAdvancedForm> {
                 hintText: 'Ex: Afrique, Europe, Moyen-Orient',
               ),
             ),
-
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _saving ? null : _save,

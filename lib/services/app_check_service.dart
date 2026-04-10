@@ -18,7 +18,10 @@ class AppCheckService {
   static bool get isEnabled => _enabled;
 
   static Future<void> initialize() async {
-    if (!_enabled) {
+    final bool installDebugProviderImplicitly = !kIsWeb && kDebugMode;
+    final bool shouldActivate = _enabled || installDebugProviderImplicitly;
+
+    if (!shouldActivate) {
       if (kDebugMode) {
         debugPrint('[AppCheck] disabled (APP_CHECK_ENABLED=false)');
       }
@@ -26,7 +29,8 @@ class AppCheckService {
     }
 
     final appCheck = FirebaseAppCheck.instance;
-    final useDebugProvider = kDebugMode || _forceDebugProvider;
+    final useDebugProvider =
+        installDebugProviderImplicitly || _forceDebugProvider;
 
     try {
       if (kIsWeb) {
@@ -44,6 +48,12 @@ class AppCheckService {
           providerWeb: ReCaptchaV3Provider(_webRecaptchaSiteKey),
         );
       } else {
+        if (kDebugMode && installDebugProviderImplicitly && !_enabled) {
+          debugPrint(
+            '[AppCheck] enabling Android/iOS debug provider for this debug build.',
+          );
+        }
+
         final AndroidAppCheckProvider androidProvider = useDebugProvider
             ? AndroidDebugProvider(
                 debugToken:

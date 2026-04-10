@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/config/app_routes.dart';
-import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/email_link_handler.dart';
 import 'package:adfoot/services/verify_email_throttle.dart';
@@ -97,6 +96,29 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     await Get.offAllNamed(AppRoutes.login);
   }
 
+  Future<void> _redirectToLoginAfterVerification({
+    String? email,
+  }) async {
+    try {
+      await _authSessionService.signOut();
+    } catch (_) {}
+
+    if (!mounted) {
+      return;
+    }
+
+    await Get.offAllNamed(
+      AppRoutes.login,
+      arguments: <String, dynamic>{
+        if (email != null && email.isNotEmpty) 'prefillEmail': email,
+        'sessionNoticeTitle': 'E-mail verifie',
+        'sessionNoticeMessage':
+            'Votre e-mail a ete verifie. Connectez-vous pour continuer.',
+        'sessionNoticeKind': 'success',
+      },
+    );
+  }
+
   Map<String, String> _mergedParamsFrom(Uri uri) {
     final params = <String, String>{...uri.queryParameters};
     if (uri.fragment.isNotEmpty) {
@@ -182,6 +204,12 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       return;
     }
 
+    final currentUser = _authSessionService.currentUser;
+    if (currentUser == null) {
+      await _redirectToLoginAfterVerification();
+      return;
+    }
+
     setState(() {
       _finishing = true;
     });
@@ -201,6 +229,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   Future<void> _finalizeVerificationAndNavigate() async {
     try {
+      final currentEmail = _authSessionService.currentUserEmail;
       final snapshot = await _authSessionService.finalizeCurrentVerifiedSession(
         updateLastLogin: true,
         signOutOnInvalid: true,
@@ -210,13 +239,10 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         return;
       }
 
-      if (snapshot.destination == AuthSessionDestination.main) {
-        await Get.offAllNamed(AppRoutes.main);
-        Get.find<UserController>().kickstart();
-        return;
-      }
-
-      await Get.offAllNamed(AppRoutes.login);
+      final resolvedEmail = currentEmail ??
+          snapshot.firebaseUser?.email ??
+          snapshot.appUser?.email;
+      await _redirectToLoginAfterVerification(email: resolvedEmail);
     } on AuthFlowException catch (error) {
       if (!mounted) {
         return;

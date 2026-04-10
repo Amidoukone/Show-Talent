@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/offre_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:intl/intl.dart';
 import 'package:adfoot/screens/offre_screen.dart';
@@ -337,6 +338,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
         : await offreController.publierOffre(offre, currentUser);
 
     if (!response.success) {
+      if (response.toast == ToastLevel.none) {
+        return;
+      }
       AdFeedback.error(
         'Erreur',
         response.message,

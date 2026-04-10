@@ -6,8 +6,8 @@
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {admin, db, fieldValue} from "./firebase";
-
-const REGION = "europe-west1";
+import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
+import {resolveCallableAuth} from "./callable_auth";
 
 type SuccessResponse<T> = {
   success: true;
@@ -40,10 +40,18 @@ const err = (code: string, message: string, retriable = false): ErrorResponse =>
   retriable,
 });
 
-function assertAuth(uid?: string): asserts uid is string {
-  if (!uid) {
-    throw new HttpsError("unauthenticated", "Authentification requise.");
-  }
+type AuthenticatedCallableRequestLike = {
+  auth?: {uid?: string; token?: Record<string, unknown> | null} | null;
+  rawRequest?: {
+    headers?: Record<string, string | string[] | undefined>;
+  } | null;
+};
+
+async function requireAuth(
+  request: AuthenticatedCallableRequestLike,
+): Promise<string> {
+  const {uid} = await resolveCallableAuth(request);
+  return uid;
 }
 
 function getString(data: unknown, key: string): string {
@@ -202,10 +210,9 @@ function shouldPersistClientLog(entry: {level: string; source: string}): boolean
  * Toggle like sur une vidéo
  */
 export const likeVideo = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request): Promise<ActionResponse<{liked: boolean; likes: number}>> => {
-    const uid = request.auth?.uid;
-    assertAuth(uid);
+    const uid = await requireAuth(request);
 
     const videoId = getString(request.data, "videoId");
     if (!videoId) {
@@ -255,10 +262,9 @@ export const likeVideo = onCall(
  * Signaler une vidéo
  */
 export const reportVideo = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request): Promise<ActionResponse<{reportCount: number}>> => {
-    const uid = request.auth?.uid;
-    assertAuth(uid);
+    const uid = await requireAuth(request);
 
     const videoId = getString(request.data, "videoId");
     if (!videoId) {
@@ -307,10 +313,9 @@ export const reportVideo = onCall(
  * Suppression d’une vidéo
  */
 export const deleteVideo = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request): Promise<ActionResponse<null>> => {
-    const uid = request.auth?.uid;
-    assertAuth(uid);
+    const uid = await requireAuth(request);
 
     const videoId = getString(request.data, "videoId");
     if (!videoId) {
@@ -347,10 +352,9 @@ export const deleteVideo = onCall(
  * Enregistrement du partage (auth + anti-spam)
  */
 export const shareVideo = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request): Promise<ActionResponse<{shareCount: number}>> => {
-    const uid = request.auth?.uid;
-    assertAuth(uid);
+    const uid = await requireAuth(request);
 
     const videoId = getString(request.data, "videoId");
     if (!videoId) {
@@ -566,10 +570,9 @@ async function sendFanoutToPlayers(params: {
  * Envoi push securise via backend (plus de cle privee cote client)
  */
 export const sendUserPush = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request): Promise<ActionResponse<{sent: boolean}>> => {
-    const uid = request.auth?.uid;
-    assertAuth(uid);
+    const uid = await requireAuth(request);
 
     const recipientUid = getString(request.data, "recipientUid");
     const contextType = getString(request.data, "contextType");
@@ -627,10 +630,9 @@ export const sendUserPush = onCall(
 );
 
 export const sendOfferFanout = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request): Promise<ActionResponse<FanoutStats>> => {
-    const uid = request.auth?.uid;
-    assertAuth(uid);
+    const uid = await requireAuth(request);
 
     const offerId = getString(request.data, "offerId");
     if (!offerId) {
@@ -663,10 +665,9 @@ export const sendOfferFanout = onCall(
 );
 
 export const sendEventFanout = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request): Promise<ActionResponse<FanoutStats>> => {
-    const uid = request.auth?.uid;
-    assertAuth(uid);
+    const uid = await requireAuth(request);
 
     const eventId = getString(request.data, "eventId");
     if (!eventId) {
@@ -699,10 +700,9 @@ export const sendEventFanout = onCall(
 );
 
 export const logClientEvents = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request): Promise<ActionResponse<{count: number}>> => {
-    const uid = request.auth?.uid;
-    assertAuth(uid);
+    const uid = await requireAuth(request);
 
     const entries = Array.isArray(request.data?.entries) ?
       request.data.entries :
@@ -768,10 +768,9 @@ export const logClientEvents = onCall(
  * Centralisation des erreurs/actions vidéo
  */
 export const videoActionLog = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request): Promise<ActionResponse<{logged: boolean}>> => {
-    const uid = request.auth?.uid;
-    assertAuth(uid);
+    const uid = await requireAuth(request);
 
     const action = getString(request.data, "action");
     if (!action) {

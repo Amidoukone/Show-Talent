@@ -17,6 +17,25 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(uid));
     }
 
+    function hasEffectiveAppBlock(data) {
+      return data.estBloque == true &&
+        (
+          data.blockMode != "temporary" ||
+          !(data.blockedUntil is timestamp) ||
+          data.blockedUntil > request.time
+        );
+    }
+
+    function hasActiveAccount(uid) {
+      return hasUserDoc(uid) &&
+        !hasEffectiveAppBlock(userDoc(uid).data) &&
+        userDoc(uid).data.authDisabled != true;
+    }
+
+    function signedInAndActive() {
+      return signedIn() && hasActiveAccount(request.auth.uid);
+    }
+
     function userRole() {
       return signedIn() && hasUserDoc(request.auth.uid) ?
         userDoc(request.auth.uid).data.role :
@@ -32,7 +51,7 @@ service cloud.firestore {
     }
 
     function isRecruiterOrClub() {
-      return signedIn() && isOpportunityPublisherRole(userRole());
+      return signedInAndActive() && isOpportunityPublisherRole(userRole());
     }
 
     function preservesUserIdentity() {
@@ -48,6 +67,8 @@ service cloud.firestore {
         request.resource.data.blockedAt == resource.data.blockedAt &&
         request.resource.data.blockedBy == resource.data.blockedBy &&
         request.resource.data.blockedReason == resource.data.blockedReason &&
+        request.resource.data.blockMode == resource.data.blockMode &&
+        request.resource.data.blockedUntil == resource.data.blockedUntil &&
         request.resource.data.authDisabledAt == resource.data.authDisabledAt &&
         request.resource.data.authDisabledBy == resource.data.authDisabledBy &&
         request.resource.data.authDisabledReason == resource.data.authDisabledReason &&
@@ -60,7 +81,7 @@ service cloud.firestore {
     }
 
     function expectedVerifiedActiveState() {
-      return request.resource.data.estBloque != true &&
+      return !hasEffectiveAppBlock(request.resource.data) &&
         request.resource.data.authDisabled != true;
     }
 
@@ -78,12 +99,14 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if signedIn();
+      allow read: if signedIn() &&
+        (hasActiveAccount(request.auth.uid) || isOwner(userId));
       allow create: if isOwner(userId) &&
         request.resource.data.uid == request.auth.uid &&
         isPublicSignupRole(request.resource.data.role) &&
         request.resource.data.createdByAdmin != true;
       allow update: if isOwner(userId) &&
+        hasActiveAccount(request.auth.uid) &&
         preservesUserIdentity() &&
         preservesProtectedUserFields() &&
         preservesVerificationState();
@@ -92,41 +115,44 @@ service cloud.firestore {
 
     match /videos/{videoId} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if signedInAndActive() &&
+        request.resource.data.uid == request.auth.uid;
+      allow update, delete: if signedInAndActive() &&
+        resource.data.uid == request.auth.uid;
     }
 
     match /offres/{offreId} {
-      allow read: if signedIn();
+      allow read: if signedInAndActive();
       allow create: if isRecruiterOrClub() &&
         request.resource.data.recruteur.uid == request.auth.uid;
-      allow update, delete: if signedIn() &&
+      allow update, delete: if signedInAndActive() &&
         resource.data.recruteur.uid == request.auth.uid;
     }
 
     match /events/{eventId} {
-      allow read: if signedIn();
+      allow read: if signedInAndActive();
       allow create: if isRecruiterOrClub() &&
         request.resource.data.organisateur.uid == request.auth.uid;
-      allow update, delete: if signedIn() &&
+      allow update, delete: if signedInAndActive() &&
         resource.data.organisateur.uid == request.auth.uid;
     }
 
     match /conversations/{conversationId} {
-      allow read: if signedIn() && request.auth.uid in resource.data.utilisateurIds;
-      allow create: if signedIn() &&
+      allow read: if signedInAndActive() &&
+        request.auth.uid in resource.data.utilisateurIds;
+      allow create: if signedInAndActive() &&
         request.auth.uid in request.resource.data.utilisateurIds &&
         request.resource.data.utilisateurIds.size() == 2;
-      allow update, delete: if signedIn() &&
+      allow update, delete: if signedInAndActive() &&
         request.auth.uid in resource.data.utilisateurIds;
 
       match /messages/{messageId} {
-        allow read: if signedIn() &&
+        allow read: if signedInAndActive() &&
           request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.utilisateurIds;
-        allow create: if signedIn() &&
+        allow create: if signedInAndActive() &&
           request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.utilisateurIds &&
           request.resource.data.expediteurId == request.auth.uid;
-        allow update, delete: if signedIn() &&
+        allow update, delete: if signedInAndActive() &&
           request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.utilisateurIds;
       }
     }

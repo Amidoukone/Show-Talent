@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../config/app_environment.dart';
 import '../models/action_response.dart';
+import '../services/callable_auth_guard.dart';
 
 class PushNotificationService {
   static final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
@@ -20,7 +21,10 @@ class PushNotificationService {
       ),
     );
 
-    final result = await callable.call<Map<String, dynamic>>(payload);
+    final result = await CallableAuthGuard.call<Map<String, dynamic>>(
+      callable,
+      payload,
+    );
     return result.data;
   }
 

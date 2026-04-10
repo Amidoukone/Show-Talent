@@ -6,8 +6,8 @@
 import {createHash, randomUUID} from "crypto";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {db, fieldValue, storage} from "./firebase";
-
-const REGION = "europe-west1";
+import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
+import {resolveCallableAuth} from "./callable_auth";
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
 // Safe rollout: keep App Check optional until mobile clients are fully configured.
@@ -49,6 +49,7 @@ interface CallerProfile {
   authDisabled?: boolean;
   estActif?: boolean;
   emailVerified?: boolean;
+  emailVerifiedAt?: unknown;
 }
 
 type RawMetadata = Record<string, unknown>;
@@ -157,11 +158,7 @@ async function assertUploadCallerEligible(
     );
   }
 
-  if (
-    userData.estBloque === true ||
-    userData.authDisabled === true ||
-    userData.estActif === false
-  ) {
+  if (userData.estBloque === true || userData.authDisabled === true) {
     throw new HttpsError(
       "permission-denied",
       "Compte inactif pour l upload video.",
@@ -175,6 +172,15 @@ async function assertUploadCallerEligible(
       "failed-precondition",
       "Email verifie requis avant upload video.",
     );
+  }
+
+  if (userData.estActif === false && emailVerified) {
+    await userSnap.ref.set({
+      estActif: true,
+      emailVerified: true,
+      emailVerifiedAt: fieldValue.serverTimestamp(),
+      updatedAt: fieldValue.serverTimestamp(),
+    }, {merge: true});
   }
 }
 
@@ -340,15 +346,12 @@ const asStringList = (value: unknown): string[] | undefined => {
 /* -------------------------------------------------------------------------- */
 
 export const createUploadSession = onCall(
-  {region: REGION, enforceAppCheck: ENFORCE_APP_CHECK},
+  {...LOW_CPU_REGION_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
   async (request): Promise<Record<string, unknown>> => {
-    const uid = request.auth?.uid;
-    if (!uid) {
-      throw new HttpsError("unauthenticated", "Authentification requise.");
-    }
+    const {uid, token} = await resolveCallableAuth(request);
     await assertUploadCallerEligible(
       uid,
-      request.auth?.token as Record<string, unknown> | undefined,
+      token ?? undefined,
     );
 
     const data = (request.data as Record<string, unknown>) ?? {};
@@ -422,13 +425,12 @@ export const createUploadSession = onCall(
 /* -------------------------------------------------------------------------- */
 
 export const requestThumbnailUploadUrl = onCall(
-  {region: REGION, enforceAppCheck: ENFORCE_APP_CHECK},
+  {...LOW_CPU_REGION_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
   async (request): Promise<Record<string, unknown>> => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError("unauthenticated", "Authentification requise.");
+    const {uid, token} = await resolveCallableAuth(request);
     await assertUploadCallerEligible(
       uid,
-      request.auth?.token as Record<string, unknown> | undefined,
+      token ?? undefined,
     );
 
     const data = (request.data as Record<string, unknown>) ?? {};
@@ -497,13 +499,12 @@ export const requestThumbnailUploadUrl = onCall(
 /* -------------------------------------------------------------------------- */
 
 export const finalizeUpload = onCall(
-  {region: REGION, enforceAppCheck: ENFORCE_APP_CHECK},
+  {...LOW_CPU_REGION_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
   async (request): Promise<Record<string, unknown>> => {
-    const uid = request.auth?.uid;
-    if (!uid) throw new HttpsError("unauthenticated", "Authentification requise.");
+    const {uid, token} = await resolveCallableAuth(request);
     await assertUploadCallerEligible(
       uid,
-      request.auth?.token as Record<string, unknown> | undefined,
+      token ?? undefined,
     );
 
     const data = (request.data as Record<string, unknown>) ?? {};

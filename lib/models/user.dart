@@ -15,6 +15,7 @@ class AppUser {
   String photoProfil;
   bool estActif;
   bool estBloque;
+  bool authDisabled;
   bool emailVerified;
   bool createdByAdmin;
   int followers;
@@ -23,6 +24,10 @@ class AppUser {
   DateTime dernierLogin;
   DateTime? emailVerifiedAt;
   String? phone;
+  String? blockedReason;
+  DateTime? blockedUntil;
+  String? blockMode;
+  String? authDisabledReason;
 
   // =========================
   // 🌍 Champs transverses
@@ -133,6 +138,7 @@ class AppUser {
     required this.photoProfil,
     required this.estActif,
     required this.estBloque,
+    this.authDisabled = false,
     required this.emailVerified,
     this.createdByAdmin = false,
     required this.followers,
@@ -141,6 +147,10 @@ class AppUser {
     required this.dernierLogin,
     this.emailVerifiedAt,
     this.phone,
+    this.blockedReason,
+    this.blockedUntil,
+    this.blockMode,
+    this.authDisabledReason,
 
     // Transverses
     this.birthDate,
@@ -210,6 +220,7 @@ class AppUser {
       photoProfil: map['photoProfil'] ?? '',
       estActif: map['estActif'] ?? false,
       estBloque: map['estBloque'] ?? false,
+      authDisabled: map['authDisabled'] == true,
       emailVerified: map['emailVerified'] ?? false,
       createdByAdmin: map['createdByAdmin'] as bool? ?? false,
       emailVerifiedAt: (map['emailVerifiedAt'] as Timestamp?)?.toDate(),
@@ -220,6 +231,10 @@ class AppUser {
       dernierLogin:
           (map['dernierLogin'] as Timestamp?)?.toDate() ?? DateTime.now(),
       phone: map['phone']?.toString(),
+      blockedReason: map['blockedReason']?.toString(),
+      blockedUntil: _parseNullableDate(map['blockedUntil']),
+      blockMode: _normalizeBlockMode(map['blockMode']?.toString()),
+      authDisabledReason: map['authDisabledReason']?.toString(),
 
       // Transverses
       birthDate: (map['birthDate'] as Timestamp?)?.toDate(),
@@ -327,6 +342,7 @@ class AppUser {
       'photoProfil': photoProfil,
       'estActif': estActif,
       'estBloque': estBloque,
+      'authDisabled': authDisabled,
       'emailVerified': emailVerified,
       'createdByAdmin': createdByAdmin,
       'emailVerifiedAt':
@@ -336,6 +352,11 @@ class AppUser {
       'dateInscription': Timestamp.fromDate(dateInscription),
       'dernierLogin': Timestamp.fromDate(dernierLogin),
       'phone': phone,
+      'blockedReason': blockedReason,
+      'blockedUntil':
+          blockedUntil != null ? Timestamp.fromDate(blockedUntil!) : null,
+      'blockMode': blockMode,
+      'authDisabledReason': authDisabledReason,
 
       // Transverses
       'birthDate': birthDate != null ? Timestamp.fromDate(birthDate!) : null,
@@ -410,6 +431,41 @@ class AppUser {
   bool get isCoach => role == 'coach';
   bool get isFan => role == 'fan';
   bool get canPublishOpportunities => isOpportunityPublisherRole(role);
+  bool get hasTemporaryBlock => estBloque && blockMode == 'temporary';
+  bool get hasPermanentBlock => estBloque && !hasTemporaryBlock;
+
+  bool get hasActiveAppBlock {
+    if (!estBloque) {
+      return false;
+    }
+
+    if (!hasTemporaryBlock) {
+      return true;
+    }
+
+    final endsAt = blockedUntil;
+    if (endsAt == null) {
+      return true;
+    }
+
+    return endsAt.isAfter(DateTime.now());
+  }
+
+  bool get hasExpiredTemporaryBlock {
+    if (!hasTemporaryBlock) {
+      return false;
+    }
+
+    final endsAt = blockedUntil;
+    if (endsAt == null) {
+      return false;
+    }
+
+    return !endsAt.isAfter(DateTime.now());
+  }
+
+  bool get isEffectivelyActiveAccount =>
+      !hasActiveAppBlock && !authDisabled && emailVerified;
 
   /// -------------------------
   /// MVP - Profil de base complete ?
@@ -520,5 +576,42 @@ class AppUser {
     if (hasAdvancedProfile) return 'Profil Avancé';
     if (isMvpProfileComplete) return 'Profil Vérifié';
     return 'Profil Basique';
+  }
+
+  static DateTime? _parseNullableDate(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+
+    if (value is DateTime) {
+      return value;
+    }
+
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+
+    return null;
+  }
+
+  static String? _normalizeBlockMode(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+
+    if (normalized == 'temporary' || normalized == 'permanent') {
+      return normalized;
+    }
+
+    return null;
   }
 }

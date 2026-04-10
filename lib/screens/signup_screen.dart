@@ -1,6 +1,5 @@
 import 'package:adfoot/config/app_environment.dart';
-import 'package:adfoot/config/app_routes.dart';
-import 'package:adfoot/controller/auth_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/verify_email_throttle.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
@@ -65,9 +64,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
         emailVerificationSettings: _acs,
       );
 
-      await Get.find<AuthController>()
-          .handleAuthState(result.session.firebaseUser);
-
       if (result.emailDelivery.sent && result.emailDelivery.sentAtMs != null) {
         VerifyEmailThrottle.lastSentAt =
             DateTime.fromMillisecondsSinceEpoch(result.emailDelivery.sentAtMs!);
@@ -90,9 +86,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
             : 'Compte créé. Vous pourrez renvoyer le lien depuis l\'écran suivant.',
       );
 
-      await Get.offAllNamed(
-        AppRoutes.verifyEmail,
-        arguments: {
+      await Get.find<UserController>().applyResolvedSessionSnapshot(
+        result.session,
+        routeArguments: {
           'emailSent': result.emailDelivery.sent,
           'sentAt': result.emailDelivery.sentAtMs,
         },

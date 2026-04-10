@@ -6,13 +6,20 @@ import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 
 import {db, fieldValue, storage} from "./firebase";
-import {REGION, assertAdminCaller, getString} from "./admin_account_support";
+import {
+  LOW_CPU_REGION_OPTIONS,
+  assertAdminCaller,
+  getString,
+} from "./admin_account_support";
 
 const OFFER_STATUSES = new Set(["brouillon", "ouverte", "fermee", "archivee"]);
 const EVENT_STATUSES = new Set(["brouillon", "ouvert", "ferme", "archive"]);
 
 type AdminContentCallableRequest = {
   auth?: {uid?: string; token?: Record<string, unknown> | null} | null;
+  rawRequest?: {
+    headers?: Record<string, string | string[] | undefined>;
+  } | null;
   data: unknown;
 };
 
@@ -262,7 +269,7 @@ async function deleteContentWithAdminRights(
   config: DeleteContentConfig,
   request: AdminContentCallableRequest,
 ) {
-  const adminUid = assertAdminCaller(request);
+  const adminUid = await assertAdminCaller(request);
   const contentId = getContentId(request.data, config.contentIdKey);
   if (!contentId) {
     throw new HttpsError("invalid-argument", `${config.contentIdKey} est requis.`);
@@ -368,9 +375,9 @@ const EVENT_DELETE_CONFIG: DeleteContentConfig = {
 };
 
 export const adminSetOfferStatus = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request) => {
-    const adminUid = assertAdminCaller(request);
+    const adminUid = await assertAdminCaller(request);
     const offerId = getContentId(request.data, "offerId");
     if (!offerId) {
       throw new HttpsError("invalid-argument", "offerId est requis.");
@@ -436,7 +443,7 @@ export const adminSetOfferStatus = onCall(
 );
 
 export const adminDeleteOffer = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request) => deleteContentWithAdminRights(
     OFFER_DELETE_CONFIG,
     request,
@@ -444,9 +451,9 @@ export const adminDeleteOffer = onCall(
 );
 
 export const adminSetEventStatus = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request) => {
-    const adminUid = assertAdminCaller(request);
+    const adminUid = await assertAdminCaller(request);
     const eventId = getContentId(request.data, "eventId");
     if (!eventId) {
       throw new HttpsError("invalid-argument", "eventId est requis.");
@@ -512,7 +519,7 @@ export const adminSetEventStatus = onCall(
 );
 
 export const adminDeleteEvent = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request) => deleteContentWithAdminRights(
     EVENT_DELETE_CONFIG,
     request,

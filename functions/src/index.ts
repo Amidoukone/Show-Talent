@@ -8,14 +8,12 @@ import {join} from "path";
 import {existsSync, unlinkSync} from "node:fs";
 import * as fsp from "node:fs/promises";
 import {spawn} from "node:child_process";
-import {Storage} from "@google-cloud/storage";
-import ffmpeg from "fluent-ffmpeg";
-import ffmpegInstaller from "@ffmpeg-installer/ffmpeg";
 import {onObjectFinalized, StorageObjectData} from "firebase-functions/v2/storage";
 import {CloudEvent} from "firebase-functions/v2";
 import {randomUUID} from "crypto";
 
 import {db, fieldValue} from "./firebase";
+import {REGION} from "./function_runtime";
 import {
   createUploadSession,
   finalizeUpload,
@@ -26,14 +24,14 @@ import {
 /* REGION & INIT                                                               */
 /* -------------------------------------------------------------------------- */
 
-const REGION = "europe-west1";
 const OPTIMIZE_TRIGGER_REGION =
   process.env.OPTIMIZE_TRIGGER_REGION || REGION;
 const FIREBASE_CONFIG = parseFirebaseConfig(process.env.FIREBASE_CONFIG);
 const STORAGE_BUCKET =
   process.env.STORAGE_BUCKET ||
   FIREBASE_CONFIG?.storageBucket ||
-  defaultStorageBucket(process.env.GCLOUD_PROJECT);
+  defaultStorageBucket(process.env.GCLOUD_PROJECT) ||
+  "show-talent-5987d.appspot.com";
 const OPTIMIZE_TRIGGER_OPTIONS = {
   region: OPTIMIZE_TRIGGER_REGION,
   memory: "2GiB" as const,
@@ -71,8 +69,65 @@ const MP4_RENDITION_PRESETS: readonly Mp4RenditionPreset[] = [
     audioBitrate: 128000,
   },
 ];
-ffmpeg.setFfmpegPath(ffmpegInstaller.path);
-const gcs = new Storage();
+type StorageClient = {
+  bucket: (name: string) => {
+    file: (path: string) => {
+      getMetadata: () => Promise<[unknown]>;
+      setMetadata: (metadata: Record<string, unknown>) => Promise<unknown>;
+      download: (options: {destination: string}) => Promise<unknown>;
+      exists: () => Promise<[boolean]>;
+      delete: () => Promise<unknown>;
+    };
+    upload: (
+      path: string,
+      options: {destination: string; metadata: Record<string, unknown>},
+    ) => Promise<unknown>;
+  };
+};
+type FfmpegBuilder = {
+  outputOptions: (options: string[]) => FfmpegBuilder;
+  on: (event: string, handler: (arg?: unknown) => void) => FfmpegBuilder;
+  save: (path: string) => void;
+};
+type FfmpegFactory = ((inputPath: string) => FfmpegBuilder) & {
+  setFfmpegPath: (path: string) => void;
+};
+
+let storagePromise: Promise<StorageClient> | null = null;
+let ffmpegPromise: Promise<FfmpegFactory> | null = null;
+let ffmpegPathPromise: Promise<string> | null = null;
+
+function getStorage(): Promise<StorageClient> {
+  if (!storagePromise) {
+    storagePromise = import("@google-cloud/storage").then(
+      ({Storage}) => new Storage() as unknown as StorageClient,
+    );
+  }
+  return storagePromise;
+}
+
+function getFfmpegPath(): Promise<string> {
+  if (!ffmpegPathPromise) {
+    ffmpegPathPromise = import("@ffmpeg-installer/ffmpeg").then(
+      (module) => module.default.path,
+    );
+  }
+  return ffmpegPathPromise;
+}
+
+async function getFfmpeg(): Promise<FfmpegFactory> {
+  if (!ffmpegPromise) {
+    ffmpegPromise = Promise.all([
+      import("fluent-ffmpeg"),
+      getFfmpegPath(),
+    ]).then(([module, ffmpegPath]) => {
+      const ffmpeg = module.default as unknown as FfmpegFactory;
+      ffmpeg.setFfmpegPath(ffmpegPath);
+      return ffmpeg;
+    });
+  }
+  return ffmpegPromise;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Utils                                                                       */
@@ -170,7 +225,8 @@ async function ensureDownloadToken(
   bucketName: string,
   objectPath: string
 ): Promise<string> {
-  const file = gcs.bucket(bucketName).file(objectPath);
+  const storage = await getStorage();
+  const file = storage.bucket(bucketName).file(objectPath);
 
   const [metaRaw] = await file.getMetadata().catch((): [null] => [null]);
   const meta: GcsFileMetadata | null =
@@ -297,6 +353,7 @@ async function transcodeMp4Rendition(
   outputPath: string,
   rendition: Mp4Rendition
 ): Promise<void> {
+  const ffmpeg = await getFfmpeg();
   const scaleFilter =
     rendition.scaleDimension === "width" ?
       `scale='min(${rendition.actualHeight},trunc(iw/2)*2)':-2` :
@@ -357,8 +414,9 @@ function parseVideoDimensionsFromFfmpegLog(
 async function probeVideoDimensions(
   inputPath: string
 ): Promise<VideoDimensions | null> {
+  const ffmpegPath = await getFfmpegPath();
   return new Promise((resolve) => {
-    const proc = spawn(ffmpegInstaller.path, ["-i", inputPath], {
+    const proc = spawn(ffmpegPath, ["-i", inputPath], {
       stdio: ["ignore", "ignore", "pipe"],
     });
 
@@ -386,7 +444,8 @@ async function robustDownload(
   destPath: string,
   attempts = 3
 ): Promise<void> {
-  const file = gcs.bucket(bucketName).file(srcPath);
+  const storage = await getStorage();
+  const file = storage.bucket(bucketName).file(srcPath);
   let lastErr: unknown = null;
 
   for (let i = 1; i <= attempts; i++) {
@@ -414,12 +473,13 @@ async function tryResolveThumbnailPath(
   bucketName: string,
   videoId: string
 ): Promise<string | null> {
+  const storage = await getStorage();
   try {
     const snap = await db.collection("videos").doc(videoId).get();
     const data = snap.data() as VideoDoc | undefined;
 
     if (data?.thumbnailPath) {
-      const f = gcs.bucket(bucketName).file(data.thumbnailPath);
+      const f = storage.bucket(bucketName).file(data.thumbnailPath);
       const [exists] = await f.exists();
       if (exists) return data.thumbnailPath;
     }
@@ -434,7 +494,7 @@ async function tryResolveThumbnailPath(
   ];
 
   for (const p of candidates) {
-    const [exists] = await gcs.bucket(bucketName).file(p).exists();
+    const [exists] = await storage.bucket(bucketName).file(p).exists();
     if (exists) return p;
   }
 
@@ -490,7 +550,8 @@ export const optimizeMp4Video = onObjectFinalized(
         },
         {merge: true},
       );
-      await gcs.bucket(bucketName).file(filePath).delete().catch((error) => {
+      const storage = await getStorage();
+      await storage.bucket(bucketName).file(filePath).delete().catch((error) => {
         console.warn("⚠️ Oversized file deletion skipped:", (error as Error).message);
       });
       return null;
@@ -503,7 +564,8 @@ export const optimizeMp4Video = onObjectFinalized(
       return null;
     }
 
-    const bucket = gcs.bucket(bucketName);
+    const storage = await getStorage();
+    const bucket = storage.bucket(bucketName);
     const tempInput = join(tmpdir(), fileName);
     const optimizedFile = join(tmpdir(), `optimized_${fileName}`);
 

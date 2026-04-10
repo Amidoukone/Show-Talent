@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/push_notification.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
@@ -33,6 +34,30 @@ class OffreController extends GetxController {
   bool get isLoading => _isLoading.value;
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _offresSubscription;
+
+  bool _isPermissionDenied(Object error) =>
+      error is FirebaseException && error.code == 'permission-denied';
+
+  Future<void> _handleProtectedAccessDenied() async {
+    if (!Get.isRegistered<UserController>()) {
+      return;
+    }
+
+    await Get.find<UserController>().handleProtectedAccessDenied(
+      fallbackTitle: 'Acces indisponible',
+      fallbackMessage:
+          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+    );
+  }
+
+  ActionResponse _sessionRevokedResponse() {
+    return const ActionResponse(
+      success: false,
+      code: 'session_revoked',
+      message: 'Votre session a ete fermee. Veuillez vous reconnecter.',
+      toast: ToastLevel.none,
+    );
+  }
 
   @override
   void onInit() {
@@ -128,6 +153,10 @@ class OffreController extends GetxController {
         error: error,
         stackTrace: stackTrace,
       );
+      if (_isPermissionDenied(error)) {
+        _offres.value = const <Offre>[];
+        unawaited(_handleProtectedAccessDenied());
+      }
       _isLoading.value = false;
     });
   }
@@ -211,6 +240,21 @@ class OffreController extends GetxController {
         message: 'Offre publiee avec succes.',
         toast: ToastLevel.success,
       );
+    } on FirebaseException catch (error, st) {
+      developer.log(
+        'Erreur lors de la publication de l offre: $error',
+        name: 'OffreController.publierOffre',
+        error: error,
+        stackTrace: st,
+      );
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+      return ActionResponse.failure(
+        code: 'publish_failed',
+        message: 'Impossible de publier l offre pour le moment.',
+      );
     } catch (e, st) {
       developer.log(
         'Erreur lors de la publication de l offre: $e',
@@ -263,6 +307,23 @@ class OffreController extends GetxController {
         code: 'updated',
         message: 'Offre modifiee avec succes.',
         toast: ToastLevel.success,
+      );
+    } on FirebaseException catch (error, st) {
+      developer.log(
+        'Erreur lors de la modification de l offre: $error',
+        name: 'OffreController.modifierOffre',
+        error: error,
+        stackTrace: st,
+      );
+
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+
+      return ActionResponse.failure(
+        code: 'update_failed',
+        message: 'Impossible de modifier l offre pour le moment.',
       );
     } catch (e, st) {
       developer.log(
@@ -318,6 +379,23 @@ class OffreController extends GetxController {
         message: 'Le statut est maintenant "$normalized".',
         toast: ToastLevel.success,
       );
+    } on FirebaseException catch (error, st) {
+      developer.log(
+        'Erreur lors du changement de statut offre: $error',
+        name: 'OffreController.changerStatut',
+        error: error,
+        stackTrace: st,
+      );
+
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+
+      return ActionResponse.failure(
+        code: 'status_update_failed',
+        message: 'Impossible de modifier le statut pour le moment.',
+      );
     } catch (e, st) {
       developer.log(
         'Erreur lors du changement de statut offre: $e',
@@ -353,6 +431,23 @@ class OffreController extends GetxController {
         code: 'deleted',
         message: 'Offre supprimee avec succes.',
         toast: ToastLevel.success,
+      );
+    } on FirebaseException catch (error, st) {
+      developer.log(
+        'Erreur lors de la suppression de l offre: $error',
+        name: 'OffreController.supprimerOffre',
+        error: error,
+        stackTrace: st,
+      );
+
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+
+      return ActionResponse.failure(
+        code: 'delete_failed',
+        message: 'Impossible de supprimer l offre pour le moment.',
       );
     } catch (e, st) {
       developer.log(
@@ -432,6 +527,23 @@ class OffreController extends GetxController {
         message: e.message,
         toast: e.toast,
       );
+    } on FirebaseException catch (error, st) {
+      developer.log(
+        'Erreur lors de la postulation offre: $error',
+        name: 'OffreController.postulerOffre',
+        error: error,
+        stackTrace: st,
+      );
+
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+
+      return ActionResponse.failure(
+        code: 'apply_failed',
+        message: 'Impossible de postuler pour le moment.',
+      );
     } catch (e, st) {
       developer.log(
         'Erreur lors de la postulation offre: $e',
@@ -502,6 +614,23 @@ class OffreController extends GetxController {
         code: e.code,
         message: e.message,
         toast: e.toast,
+      );
+    } on FirebaseException catch (error, st) {
+      developer.log(
+        'Erreur lors de la desinscription offre: $error',
+        name: 'OffreController.seDesinscrireOffre',
+        error: error,
+        stackTrace: st,
+      );
+
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+
+      return ActionResponse.failure(
+        code: 'withdraw_failed',
+        message: 'Impossible de se desinscrire pour le moment.',
       );
     } catch (e, st) {
       developer.log(

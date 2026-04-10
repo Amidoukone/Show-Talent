@@ -92,10 +92,14 @@ class _PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
         },
       };
 
-      await widget.profileController.updateProfilePatch(
-        widget.user.uid,
-        patch,
-      );
+      try {
+        await widget.profileController.updateProfilePatch(
+          widget.user.uid,
+          patch,
+        );
+      } on ProfileAccessRevokedException {
+        return;
+      }
 
       if (widget.autoCloseOnSave) {
         Get.back();
@@ -119,7 +123,6 @@ class _PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
-
           TextFormField(
             controller: _heightController,
             decoration: const InputDecoration(labelText: 'Taille (cm)'),
@@ -134,7 +137,6 @@ class _PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             },
           ),
           const SizedBox(height: 12),
-
           TextFormField(
             controller: _weightController,
             decoration: const InputDecoration(labelText: 'Poids (kg)'),
@@ -149,9 +151,10 @@ class _PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             },
           ),
           const SizedBox(height: 12),
-
           DropdownButtonFormField<String>(
-            value: (_strongFoot == null || _strongFoot!.isEmpty) ? null : _strongFoot,
+            value: (_strongFoot == null || _strongFoot!.isEmpty)
+                ? null
+                : _strongFoot,
             items: const [
               DropdownMenuItem(value: 'right', child: Text('Droit')),
               DropdownMenuItem(value: 'left', child: Text('Gauche')),
@@ -161,7 +164,6 @@ class _PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             decoration: const InputDecoration(labelText: 'Pied fort'),
           ),
           const SizedBox(height: 12),
-
           TextFormField(
             controller: _positionsController,
             decoration: const InputDecoration(
@@ -170,7 +172,6 @@ class _PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             ),
           ),
           const SizedBox(height: 12),
-
           TextFormField(
             controller: _skillsController,
             decoration: const InputDecoration(
@@ -178,7 +179,6 @@ class _PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
               hintText: 'Ex: Vitesse, Dribble, Finition',
             ),
           ),
-
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: _saving ? null : _save,

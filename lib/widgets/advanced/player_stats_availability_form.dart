@@ -22,7 +22,8 @@ class PlayerStatsAvailabilityForm extends StatefulWidget {
       _PlayerStatsAvailabilityFormState();
 }
 
-class _PlayerStatsAvailabilityFormState extends State<PlayerStatsAvailabilityForm> {
+class _PlayerStatsAvailabilityFormState
+    extends State<PlayerStatsAvailabilityForm> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _minutesController;
@@ -39,7 +40,8 @@ class _PlayerStatsAvailabilityFormState extends State<PlayerStatsAvailabilityFor
 
     final p = widget.user.playerProfile ?? {};
     final stats = (p['stats'] is Map) ? (p['stats'] as Map) : {};
-    final availability = (p['availability'] is Map) ? (p['availability'] as Map) : {};
+    final availability =
+        (p['availability'] is Map) ? (p['availability'] as Map) : {};
 
     _minutesController =
         TextEditingController(text: stats['minutes']?.toString() ?? '');
@@ -101,10 +103,14 @@ class _PlayerStatsAvailabilityFormState extends State<PlayerStatsAvailabilityFor
         }
       };
 
-      await widget.profileController.updateProfilePatch(
-        widget.user.uid,
-        patch,
-      );
+      try {
+        await widget.profileController.updateProfilePatch(
+          widget.user.uid,
+          patch,
+        );
+      } on ProfileAccessRevokedException {
+        return;
+      }
 
       if (widget.autoCloseOnSave) {
         Get.back();
@@ -128,7 +134,6 @@ class _PlayerStatsAvailabilityFormState extends State<PlayerStatsAvailabilityFor
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
-
           TextFormField(
             controller: _minutesController,
             decoration: const InputDecoration(labelText: 'Minutes jouées'),
@@ -136,7 +141,6 @@ class _PlayerStatsAvailabilityFormState extends State<PlayerStatsAvailabilityFor
             validator: (v) => _validateOptionalInt(v, min: 0, max: 500000),
           ),
           const SizedBox(height: 12),
-
           TextFormField(
             controller: _goalsController,
             decoration: const InputDecoration(labelText: 'Buts'),
@@ -144,22 +148,18 @@ class _PlayerStatsAvailabilityFormState extends State<PlayerStatsAvailabilityFor
             validator: (v) => _validateOptionalInt(v, min: 0, max: 9999),
           ),
           const SizedBox(height: 12),
-
           TextFormField(
             controller: _assistsController,
             decoration: const InputDecoration(labelText: 'Passes décisives'),
             keyboardType: TextInputType.number,
             validator: (v) => _validateOptionalInt(v, min: 0, max: 9999),
           ),
-
           const Divider(height: 32),
-
           SwitchListTile(
             title: const Text('Ouvert aux essais / opportunités'),
             value: _openToTrials,
             onChanged: (v) => setState(() => _openToTrials = v),
           ),
-
           TextFormField(
             controller: _regionsController,
             decoration: const InputDecoration(
@@ -167,7 +167,6 @@ class _PlayerStatsAvailabilityFormState extends State<PlayerStatsAvailabilityFor
               hintText: 'Ex: Mali, Sénégal, Côte d’Ivoire',
             ),
           ),
-
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: _saving ? null : _save,

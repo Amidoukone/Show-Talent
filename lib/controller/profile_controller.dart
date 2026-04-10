@@ -15,6 +15,10 @@ class ProfileFieldDelete {
   const ProfileFieldDelete._();
 }
 
+class ProfileAccessRevokedException implements Exception {
+  const ProfileAccessRevokedException();
+}
+
 class ProfileController extends GetxController {
   static const ProfileFieldDelete deleteField = ProfileFieldDelete._();
 
@@ -38,6 +42,21 @@ class ProfileController extends GetxController {
 
   bool get hasMoreVideos => _hasMoreVideos;
   bool get isLoadingVideos => _isLoadingVideos;
+
+  bool _isPermissionDenied(Object error) =>
+      error is FirebaseException && error.code == 'permission-denied';
+
+  Future<void> _handleProtectedAccessDenied() async {
+    if (!Get.isRegistered<UserController>()) {
+      return;
+    }
+
+    await Get.find<UserController>().handleProtectedAccessDenied(
+      fallbackTitle: 'Acces indisponible',
+      fallbackMessage:
+          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+    );
+  }
 
   @override
   void onClose() async {
@@ -79,6 +98,10 @@ class ProfileController extends GetxController {
       await fetchUserVideos(uid, isRefresh: true);
     } catch (e, st) {
       debugPrint('updateUserId error: $e\n$st');
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+        return;
+      }
       Get.snackbar(
         'Erreur',
         'Chargement du profil impossible.',
@@ -105,6 +128,9 @@ class ProfileController extends GetxController {
       },
       onError: (error, stackTrace) {
         debugPrint('profile user listener error: $error\n$stackTrace');
+        if (_isPermissionDenied(error)) {
+          unawaited(_handleProtectedAccessDenied());
+        }
       },
     );
   }
@@ -124,6 +150,10 @@ class ProfileController extends GetxController {
       }
     } catch (e, st) {
       debugPrint('updateUserProfile error: $e\n$st');
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+        throw const ProfileAccessRevokedException();
+      }
       Get.snackbar(
         'Erreur',
         'Impossible de mettre a jour le profil.',
@@ -202,6 +232,10 @@ class ProfileController extends GetxController {
       }
     } catch (e, st) {
       debugPrint('updateProfilePatch error: $e\n$st');
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+        throw const ProfileAccessRevokedException();
+      }
       Get.snackbar(
         'Erreur',
         'Impossible de mettre a jour le profil.',
@@ -443,6 +477,10 @@ class ProfileController extends GetxController {
       );
     } catch (e, st) {
       debugPrint('updateProfilePhoto error: $e\n$st');
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+        throw const ProfileAccessRevokedException();
+      }
       Get.snackbar(
         'Erreur',
         'Impossible de mettre a jour la photo.',
@@ -520,6 +558,10 @@ class ProfileController extends GetxController {
       }
     } catch (e, st) {
       debugPrint('fetchUserVideos error: $e\n$st');
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+        return;
+      }
       if (videoList.isEmpty) {
         Get.snackbar(
           'Erreur',
@@ -563,6 +605,10 @@ class ProfileController extends GetxController {
       );
     } catch (e) {
       debugPrint('uploadCvPdf error: $e');
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+        throw const ProfileAccessRevokedException();
+      }
       Get.snackbar(
         'Erreur',
         'Impossible d\'ajouter le CV.',
@@ -593,6 +639,10 @@ class ProfileController extends GetxController {
       );
     } catch (e) {
       debugPrint('deleteCv error: $e');
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+        throw const ProfileAccessRevokedException();
+      }
       Get.snackbar(
         'Erreur',
         'Impossible de supprimer le CV.',

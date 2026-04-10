@@ -47,16 +47,14 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
     final needs = c['needs'];
     if (needs is List) {
       _needsController = TextEditingController(
-        text: needs
-            .map((e) {
-              if (e is Map) {
-                final pos = e['position']?.toString() ?? '';
-                final prio = e['priority']?.toString() ?? '';
-                return prio.isNotEmpty ? '$pos:$prio' : pos;
-              }
-              return e.toString();
-            })
-            .join(', '),
+        text: needs.map((e) {
+          if (e is Map) {
+            final pos = e['position']?.toString() ?? '';
+            final prio = e['priority']?.toString() ?? '';
+            return prio.isNotEmpty ? '$pos:$prio' : pos;
+          }
+          return e.toString();
+        }).join(', '),
       );
     } else {
       _needsController = TextEditingController();
@@ -90,13 +88,12 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .map((e) {
-          final parts = e.split(':');
-          return {
-            'position': parts[0].trim(),
-            'priority': parts.length > 1 ? parts[1].trim() : null,
-          };
-        })
-        .toList();
+      final parts = e.split(':');
+      return {
+        'position': parts[0].trim(),
+        'priority': parts.length > 1 ? parts[1].trim() : null,
+      };
+    }).toList();
   }
 
   Future<void> _save() async {
@@ -113,10 +110,14 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
         }
       };
 
-      await widget.profileController.updateProfilePatch(
-        widget.user.uid,
-        patch,
-      );
+      try {
+        await widget.profileController.updateProfilePatch(
+          widget.user.uid,
+          patch,
+        );
+      } on ProfileAccessRevokedException {
+        return;
+      }
 
       if (widget.autoCloseOnSave) {
         Get.back();
@@ -142,7 +143,6 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 12),
-
             TextFormField(
               controller: _structureTypeController,
               decoration: const InputDecoration(
@@ -151,7 +151,6 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
               ),
             ),
             const SizedBox(height: 12),
-
             TextFormField(
               controller: _categoriesController,
               decoration: const InputDecoration(
@@ -160,7 +159,6 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
               ),
             ),
             const SizedBox(height: 12),
-
             TextFormField(
               controller: _needsController,
               decoration: const InputDecoration(
@@ -168,7 +166,6 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
                 hintText: 'Ex: DC:high, BU:medium',
               ),
             ),
-
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _saving ? null : _save,

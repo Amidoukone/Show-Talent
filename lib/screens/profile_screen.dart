@@ -599,7 +599,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       source: ImageSource.gallery,
     );
     if (file != null) {
-      await _profileController.updateProfilePhoto(uid, file.path);
+      try {
+        await _profileController.updateProfilePhoto(uid, file.path);
+      } on ProfileAccessRevokedException {
+        return;
+      }
     }
   }
 
@@ -770,6 +774,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           currentUserId: currentUserId,
                           shouldFollow: isFollowing,
                         );
+
+                        if (_authController.currentUid == null) {
+                          return;
+                        }
 
                         AdFeedback.error(
                           'Erreur',

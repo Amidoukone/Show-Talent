@@ -10,6 +10,7 @@ import 'package:get/get.dart';
 import '../models/action_response.dart';
 import '../models/video.dart';
 import '../config/app_environment.dart';
+import '../services/callable_auth_guard.dart';
 import '../services/feature_flag_service.dart';
 import '../widgets/video_manager.dart';
 import '../screens/success_toast.dart';
@@ -116,6 +117,30 @@ class VideoController extends GetxController {
   final List<Video> _pendingLiveHead = <Video>[];
   Future<void> Function(String thumbUrl)? _thumbnailPrefetchOverride;
 
+  bool _isPermissionDenied(Object error) =>
+      error is FirebaseException && error.code == 'permission-denied';
+
+  Future<void> _handleProtectedAccessDenied() async {
+    if (!Get.isRegistered<UserController>()) {
+      return;
+    }
+
+    await Get.find<UserController>().handleProtectedAccessDenied(
+      fallbackTitle: 'Acces indisponible',
+      fallbackMessage:
+          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+    );
+  }
+
+  ActionResponse _sessionRevokedResponse() {
+    return const ActionResponse(
+      success: false,
+      code: 'session_revoked',
+      message: 'Votre session a ete fermee. Veuillez vous reconnecter.',
+      toast: ToastLevel.none,
+    );
+  }
+
   // ------------------------------------------------------------------
   // LIFECYCLE
   // ------------------------------------------------------------------
@@ -178,11 +203,13 @@ class VideoController extends GetxController {
         }
       });
     }, onError: (e) {
-      debugPrint('❌ Erreur stream vidéos: $e');
+      debugPrint('Video stream error: $e');
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
     });
   }
 
-  // ------------------------------------------------------------------
   // PAGINATED FETCH
   // ------------------------------------------------------------------
 
@@ -237,7 +264,10 @@ class VideoController extends GetxController {
       _fetchLock?.complete();
       return true;
     } catch (e) {
-      debugPrint('❌ fetchPaginatedVideos error: $e');
+      debugPrint('fetchPaginatedVideos error: $e');
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
       _fetchLock?.completeError(e);
       return false;
     } finally {
@@ -304,6 +334,9 @@ class VideoController extends GetxController {
       return true;
     } catch (e) {
       debugPrint('refreshVideosKeepingFeed error: $e');
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
       _fetchLock?.completeError(e);
       return false;
     } finally {
@@ -533,15 +566,28 @@ class VideoController extends GetxController {
         ),
       );
 
-      final result = await callable.call<Map<String, dynamic>>(payload);
+      final result = await CallableAuthGuard.call<Map<String, dynamic>>(
+        callable,
+        payload,
+      );
       return ActionResponse.fromMap(result.data);
     } on FirebaseFunctionsException catch (e) {
+      if (e.code == 'permission-denied') {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+
       return ActionResponse.failure(
         message: e.message ?? 'Action impossible.',
         code: e.code,
         retriable: e.code == 'unavailable',
       );
     } catch (e) {
+      if (_isPermissionDenied(e)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+
       return ActionResponse.failure(
         message: 'Action impossible pour le moment.',
         retriable: true,
@@ -631,7 +677,7 @@ class VideoController extends GetxController {
         ),
       );
 
-      await callable.call({
+      await CallableAuthGuard.call(callable, {
         'action': action,
         'videoId': videoId,
         'code': code,

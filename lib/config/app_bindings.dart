@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 
 import '../controller/auth_controller.dart';
 import '../controller/follow_controller.dart';
-import '../controller/offre_controller.dart';
 import '../controller/user_controller.dart';
 import '../services/video_metrics_observer.dart';
 import '../widgets/video_manager.dart';
@@ -18,7 +17,6 @@ class AppBindings {
         VideoMetricsObserver(videoManager: videoManager).handle;
 
     _registerPermanent<AuthController>(() => AuthController());
-    _registerPermanent<OffreController>(() => OffreController());
     _registerPermanent<UserController>(() => UserController());
     _registerPermanent<FollowController>(() => FollowController());
   }

@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
 import '../config/app_environment.dart';
+import 'callable_auth_guard.dart';
 
 class ClientLogEntry {
   final String level;
@@ -84,7 +85,7 @@ class ClientLogger {
         'logClientEvents',
         options: HttpsCallableOptions(timeout: const Duration(seconds: 6)),
       );
-      await callable.call({
+      await CallableAuthGuard.call(callable, {
         'entries': payload.map((e) => e.toJson()).toList(),
         'context': _deviceContext(),
       });

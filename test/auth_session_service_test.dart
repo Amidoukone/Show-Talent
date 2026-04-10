@@ -24,7 +24,7 @@ void main() {
     );
     expect(
       UserAccessIssue.blockedOrDisabled.loginMessage,
-      contains('bloqué'),
+      contains('bloque'),
     );
   });
 }

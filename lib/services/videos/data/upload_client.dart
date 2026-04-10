@@ -8,6 +8,7 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../config/app_environment.dart';
+import '../../callable_auth_guard.dart';
 
 class UploadSessionState {
   final String sessionId;
@@ -231,7 +232,8 @@ class UploadClient {
     String contentType = 'video/mp4',
   }) async {
     final callable = _functions.httpsCallable('createUploadSession');
-    final result = await callable.call<Map<String, dynamic>>({
+    final result =
+        await CallableAuthGuard.call<Map<String, dynamic>>(callable, {
       if (sessionId != null) 'sessionId': sessionId,
       'contentType': contentType,
     });
@@ -444,7 +446,8 @@ class UploadClient {
     final hash = await _computeMd5(file);
 
     final callable = _functions.httpsCallable('requestThumbnailUploadUrl');
-    final result = await callable.call<Map<String, dynamic>>({
+    final result =
+        await CallableAuthGuard.call<Map<String, dynamic>>(callable, {
       'sessionId': sessionId,
       'hash': hash,
       'size': size,
@@ -528,7 +531,8 @@ class UploadClient {
     required Map<String, dynamic> metadata,
   }) async {
     final callable = _functions.httpsCallable('finalizeUpload');
-    final result = await callable.call<Map<String, dynamic>>({
+    final result =
+        await CallableAuthGuard.call<Map<String, dynamic>>(callable, {
       'sessionId': sessionId,
       'metadata': metadata,
     });

@@ -7,7 +7,7 @@ import * as logger from "firebase-functions/logger";
 
 import {auth, db, fieldValue} from "./firebase";
 import {
-  REGION,
+  LOW_CPU_REGION_OPTIONS,
   MANAGED_ROLES,
   assertAdminCaller,
   buildTemporaryPassword,
@@ -26,9 +26,9 @@ type ProvisionedManagedAccount = {
 };
 
 export const provisionManagedAccount = onCall(
-  {region: REGION},
+  LOW_CPU_REGION_OPTIONS,
   async (request) => {
-    const adminUid = assertAdminCaller(request);
+    const adminUid = await assertAdminCaller(request);
 
     const email = getString(request.data, "email").toLowerCase();
     const displayName =

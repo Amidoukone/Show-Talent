@@ -1,32 +1,42 @@
+import 'dart:async';
+
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:adfoot/controller/user_controller.dart';
 
 class FollowController extends GetxController {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
-  /// Suivre un utilisateur (abonnement)
-  /// - Mise à jour locale immédiate (optimiste)
-  /// - Firestore en tâche de fond
-  /// - Rollback automatique si erreur
+  bool _isPermissionDenied(Object error) =>
+      error is FirebaseException && error.code == 'permission-denied';
+
+  Future<void> _handleProtectedAccessDenied() async {
+    if (!Get.isRegistered<UserController>()) {
+      return;
+    }
+
+    await Get.find<UserController>().handleProtectedAccessDenied(
+      fallbackTitle: 'Acces indisponible',
+      fallbackMessage:
+          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+    );
+  }
+
   Future<bool> followUser(String currentUserId, String targetUserId) async {
     final userCtrl = Get.find<UserController>();
     final user = userCtrl.user;
 
-    // Sécurité
     if (user == null || user.uid != currentUserId) return false;
     if (currentUserId == targetUserId) return false;
 
-    // 🔄 Optimiste : mise à jour immédiate locale
     if (!user.followingsList.contains(targetUserId)) {
       user.followingsList.add(targetUserId);
       user.followings++;
-      userCtrl.update(); // UI immédiate
+      userCtrl.update();
     }
 
     try {
-      // ✅ Mise à jour Firestore en tâche de fond
       await firestore.collection('users').doc(currentUserId).update({
         'followingsList': FieldValue.arrayUnion([targetUserId]),
       });
@@ -36,31 +46,26 @@ class FollowController extends GetxController {
       });
 
       return true;
-    } catch (e) {
-      debugPrint('❌ followUser error: $e');
+    } catch (error) {
+      debugPrint('followUser error: $error');
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
 
-      // ↩️ Rollback en cas d’erreur
       user.followingsList.remove(targetUserId);
       user.followings--;
       userCtrl.update();
-
       return false;
     }
   }
 
-  /// Se désabonner d’un utilisateur
-  /// - Mise à jour locale immédiate (optimiste)
-  /// - Firestore en tâche de fond
-  /// - Rollback automatique si erreur
   Future<bool> unfollowUser(String currentUserId, String targetUserId) async {
     final userCtrl = Get.find<UserController>();
     final user = userCtrl.user;
 
-    // Sécurité
     if (user == null || user.uid != currentUserId) return false;
     if (currentUserId == targetUserId) return false;
 
-    // 🔄 Optimiste : suppression locale immédiate
     if (user.followingsList.contains(targetUserId)) {
       user.followingsList.remove(targetUserId);
       user.followings--;
@@ -68,7 +73,6 @@ class FollowController extends GetxController {
     }
 
     try {
-      // ✅ Firestore
       await firestore.collection('users').doc(currentUserId).update({
         'followingsList': FieldValue.arrayRemove([targetUserId]),
       });
@@ -78,30 +82,30 @@ class FollowController extends GetxController {
       });
 
       return true;
-    } catch (e) {
-      debugPrint('❌ unfollowUser error: $e');
+    } catch (error) {
+      debugPrint('unfollowUser error: $error');
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
 
-      // ↩️ Rollback
       user.followingsList.add(targetUserId);
       user.followings++;
       userCtrl.update();
-
       return false;
     }
   }
 
-  /// Récupère la liste des utilisateurs abonnés ou suivis
-  /// - [uid] : utilisateur cible
-  /// - [listType] : 'followers' ou 'followings'
-  /// - Renvoie une liste de maps avec isFollowing (bool)
   Future<List<Map<String, dynamic>>> fetchFollowList(
-      String uid, String listType) async {
+    String uid,
+    String listType,
+  ) async {
     try {
       final doc = await firestore.collection('users').doc(uid).get();
       if (!doc.exists) return [];
 
       final List<String> ids = List<String>.from(
-        doc.get(listType == 'followers' ? 'followersList' : 'followingsList') ?? [],
+        doc.get(listType == 'followers' ? 'followersList' : 'followingsList') ??
+            [],
       );
       if (ids.isEmpty) return [];
 
@@ -111,9 +115,9 @@ class FollowController extends GetxController {
       final List<String> currentFollowings =
           List<String>.from(currentUserDoc.get('followingsList') ?? []);
 
-      List<Map<String, dynamic>> result = [];
-
+      final result = <Map<String, dynamic>>[];
       const int batchSize = 10;
+
       for (int i = 0; i < ids.length; i += batchSize) {
         final chunk = ids.sublist(i, (i + batchSize).clamp(0, ids.length));
 
@@ -128,15 +132,18 @@ class FollowController extends GetxController {
             'uid': doc.id,
             'nom': data['nom'] ?? '',
             'photoProfil': data['photoProfil'] ?? '',
-            'role': data['role'] ?? 'Non spécifié',
+            'role': data['role'] ?? 'Non specifie',
             'isFollowing': currentFollowings.contains(doc.id),
           });
         }
       }
 
       return result;
-    } catch (e) {
-      debugPrint('❌ fetchFollowList error: $e');
+    } catch (error) {
+      debugPrint('fetchFollowList error: $error');
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
       return [];
     }
   }

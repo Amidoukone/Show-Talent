@@ -172,6 +172,9 @@ class _FollowListButtonState extends State<_FollowListButton> {
         if (!success) {
           // rollback si erreur
           widget.u.isFollowing = isFollowing;
+          if (Get.find<UserController>().user == null) {
+            return;
+          }
           AdFeedback.error('Erreur', "Impossible d'effectuer l'action.");
         }
 

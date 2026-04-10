@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/push_notification.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/message_converstion.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
@@ -38,6 +39,21 @@ class ChatController extends GetxController {
 
   int _bindEpoch = 0;
   String? _boundUid;
+
+  bool _isPermissionDenied(Object error) =>
+      error is FirebaseException && error.code == 'permission-denied';
+
+  Future<void> _handleProtectedAccessDenied() async {
+    if (!Get.isRegistered<UserController>()) {
+      return;
+    }
+
+    await Get.find<UserController>().handleProtectedAccessDenied(
+      fallbackTitle: 'Acces indisponible',
+      fallbackMessage:
+          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+    );
+  }
 
   @override
   void onInit() {
@@ -155,7 +171,13 @@ class ChatController extends GetxController {
           debugPrint("Erreur lors du chargement des conversations : $error");
         }
       },
-      onError: (error) => debugPrint("Erreur ecoute conversations : $error"),
+      onError: (error) {
+        debugPrint("Erreur ecoute conversations : $error");
+        if (_isPermissionDenied(error)) {
+          _resetLocalState();
+          unawaited(_handleProtectedAccessDenied());
+        }
+      },
     );
   }
 
@@ -204,6 +226,17 @@ class ChatController extends GetxController {
       return await _chatRepository.createOrGetConversation(
         currentUserId: currentUserId,
         otherUserId: otherUserId,
+      );
+    } on FirebaseException catch (error) {
+      debugPrint("Erreur creation conversation firebase : $error");
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        throw const ChatFlowException(
+          'Votre session a ete fermee. Veuillez vous reconnecter.',
+        );
+      }
+      throw const ChatFlowException(
+        'Impossible de demarrer la conversation pour le moment.',
       );
     } catch (error) {
       debugPrint("Erreur creation conversation : $error");
@@ -319,6 +352,12 @@ class ChatController extends GetxController {
     } on FirebaseException catch (error) {
       debugPrint(
           "Erreur envoi message firebase : ${error.code} ${error.message}");
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        throw const ChatFlowException(
+          'Votre session a ete fermee. Veuillez vous reconnecter.',
+        );
+      }
       throw const ChatFlowException(
         'Envoi impossible pour le moment. Verifiez votre connexion.',
       );
@@ -363,6 +402,9 @@ class ChatController extends GetxController {
       }
     } catch (error) {
       debugPrint("Erreur mise a jour message lu : $error");
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
     }
   }
 
@@ -384,6 +426,9 @@ class ChatController extends GetxController {
       }
     } catch (error) {
       debugPrint("Erreur mise a jour messages lus : $error");
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
     }
   }
 
@@ -418,6 +463,10 @@ class ChatController extends GetxController {
         );
       } catch (error) {
         debugPrint("Erreur markAllAsReadOnServer conv ${conv.id} : $error");
+        if (_isPermissionDenied(error)) {
+          unawaited(_handleProtectedAccessDenied());
+          return;
+        }
       }
     }
   }
@@ -456,6 +505,9 @@ class ChatController extends GetxController {
       }
     } catch (error) {
       debugPrint("Erreur suppression message : $error");
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
     }
   }
 
@@ -468,6 +520,9 @@ class ChatController extends GetxController {
       update();
     } catch (error) {
       debugPrint("Erreur suppression conversation : $error");
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
     }
   }
 }

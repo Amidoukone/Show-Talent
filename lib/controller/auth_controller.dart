@@ -41,14 +41,16 @@ class AuthController extends GetxController {
     }
 
     try {
-      final snapshot = await _authSessionService.resolveSession(
+      final snapshot = await _authSessionService.resolveSessionSafely(
         firebaseUser,
         waitForVerifiedUserDocument: true,
-        syncVerifiedUserRecord: true,
-        signOutOnInvalid: true,
+        syncVerifiedUserRecord: false,
+        signOutOnInvalid: false,
       );
 
-      _appUser.value = snapshot.appUser;
+      _appUser.value = snapshot.destination == AuthSessionDestination.main
+          ? snapshot.appUser
+          : null;
       final refreshed = snapshot.firebaseUser;
       if (snapshot.destination != AuthSessionDestination.main ||
           refreshed == null) {

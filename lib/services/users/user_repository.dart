@@ -13,11 +13,15 @@ class UserAccessDecision {
     required this.exists,
     required this.issue,
     this.user,
+    this.message,
+    this.title,
   });
 
   final bool exists;
   final UserAccessIssue? issue;
   final AppUser? user;
+  final String? message;
+  final String? title;
 
   bool get isAllowed => exists && issue == null;
 }
@@ -39,6 +43,21 @@ class UserRepository {
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
+  static const String _missingProfileMessage =
+      'Ce compte n est plus disponible. Si vous pensez qu il s agit d une erreur, contactez le support Adfoot.';
+  static const String _adminPortalOnlyMessage =
+      'Ce compte est reserve au portail d administration Adfoot.';
+  static const String _suspendedFallbackMessage =
+      'Votre compte a ete suspendu temporairement pour non-respect des regles Adfoot. Si vous pensez qu il s agit d une erreur, contactez le support.';
+  static const String _blockedFallbackMessage =
+      'Votre compte a ete bloque pour non-respect des regles Adfoot. Si vous pensez qu il s agit d une erreur, contactez le support.';
+  static const String _disabledFallbackMessage =
+      'L acces a ce compte a ete desactive. Contactez le support Adfoot.';
+  static const String _missingProfileTitle = 'Compte indisponible';
+  static const String _adminPortalOnlyTitle = 'Acces refuse';
+  static const String _suspendedTitle = 'Compte suspendu';
+  static const String _blockedTitle = 'Compte bloque';
+  static const String _disabledTitle = 'Compte desactive';
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
@@ -48,6 +67,8 @@ class UserRepository {
       return const UserAccessDecision(
         exists: false,
         issue: UserAccessIssue.missingProfile,
+        message: _missingProfileMessage,
+        title: _missingProfileTitle,
       );
     }
 
@@ -57,14 +78,18 @@ class UserRepository {
         exists: true,
         issue: UserAccessIssue.adminPortalOnly,
         user: user,
+        message: _adminPortalOnlyMessage,
+        title: _adminPortalOnlyTitle,
       );
     }
 
-    if (data['estBloque'] == true || data['authDisabled'] == true) {
+    if (user.hasActiveAppBlock || user.authDisabled) {
       return UserAccessDecision(
         exists: true,
         issue: UserAccessIssue.blockedOrDisabled,
         user: user,
+        message: _buildBlockedOrDisabledMessage(user),
+        title: _buildBlockedOrDisabledTitle(user),
       );
     }
 
@@ -143,6 +168,21 @@ class UserRepository {
         );
   }
 
+  Stream<UserAccessDecision> watchUserAccess(String uid) {
+    return _usersCollection.doc(uid).snapshots().map((doc) {
+      if (!doc.exists) {
+        return const UserAccessDecision(
+          exists: false,
+          issue: UserAccessIssue.missingProfile,
+          message: _missingProfileMessage,
+          title: _missingProfileTitle,
+        );
+      }
+
+      return evaluateUserData(doc.data());
+    });
+  }
+
   Future<AppUser?> fetchUserById(String uid) async {
     final doc = await _usersCollection.doc(uid).get();
     if (!doc.exists) {
@@ -166,6 +206,8 @@ class UserRepository {
       return const UserAccessDecision(
         exists: false,
         issue: UserAccessIssue.missingProfile,
+        message: _missingProfileMessage,
+        title: _missingProfileTitle,
       );
     }
 
@@ -300,5 +342,79 @@ class UserRepository {
     }
 
     return doc;
+  }
+
+  static String _buildBlockedOrDisabledMessage(AppUser user) {
+    final blockedReason = _normalizeReason(user.blockedReason);
+    if (user.hasTemporaryBlock) {
+      final endsAtLabel = _formatBlockedUntil(user.blockedUntil);
+      if (blockedReason != null && endsAtLabel != null) {
+        return 'Votre compte est suspendu jusqu au $endsAtLabel. Motif : $blockedReason';
+      }
+
+      if (endsAtLabel != null) {
+        return 'Votre compte est suspendu jusqu au $endsAtLabel. Contactez le support Adfoot si vous pensez qu il s agit d une erreur.';
+      }
+
+      if (blockedReason != null) {
+        return 'Votre compte a ete suspendu temporairement. Motif : $blockedReason';
+      }
+
+      return _suspendedFallbackMessage;
+    }
+
+    if (user.hasPermanentBlock) {
+      if (blockedReason != null) {
+        return 'Votre compte a ete bloque pour non-respect des regles Adfoot. Motif : $blockedReason';
+      }
+
+      return _blockedFallbackMessage;
+    }
+
+    final authDisabledReason = _normalizeReason(user.authDisabledReason);
+    if (user.authDisabled) {
+      if (authDisabledReason != null) {
+        return 'L acces a ce compte a ete desactive. Motif : $authDisabledReason';
+      }
+
+      return _disabledFallbackMessage;
+    }
+
+    return _blockedFallbackMessage;
+  }
+
+  static String _buildBlockedOrDisabledTitle(AppUser user) {
+    if (user.hasTemporaryBlock) {
+      return _suspendedTitle;
+    }
+
+    if (user.hasPermanentBlock) {
+      return _blockedTitle;
+    }
+
+    return _disabledTitle;
+  }
+
+  static String? _formatBlockedUntil(DateTime? value) {
+    if (value == null) {
+      return null;
+    }
+
+    final normalized = value.toLocal();
+    final day = normalized.day.toString().padLeft(2, '0');
+    final month = normalized.month.toString().padLeft(2, '0');
+    final year = normalized.year.toString();
+    final hour = normalized.hour.toString().padLeft(2, '0');
+    final minute = normalized.minute.toString().padLeft(2, '0');
+    return '$day/$month/$year a $hour:$minute';
+  }
+
+  static String? _normalizeReason(String? value) {
+    final normalized = value?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+
+    return normalized;
   }
 }

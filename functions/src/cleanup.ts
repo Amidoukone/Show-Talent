@@ -5,8 +5,7 @@ import {onSchedule} from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
 
 import {auth, db, fieldValue} from "./firebase";
-
-const REGION = "europe-west1";
+import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
 const DEFAULT_RETENTION_DAYS = 3;
 const MANAGED_ROLES = new Set(["admin", "club", "recruteur", "agent"]);
 
@@ -93,8 +92,8 @@ type CleanupStats = {
  */
 export const cleanupUnverifiedUsers = onSchedule(
   {
+    ...LOW_CPU_REGION_OPTIONS,
     schedule: "every 24 hours",
-    region: REGION,
     timeZone: "UTC",
     memory: "256MiB",
   },

@@ -1,37 +1,32 @@
-// lib/utils/auth_error_mapper.dart
 import 'package:firebase_auth/firebase_auth.dart';
 
 /// Centralise la traduction des erreurs FirebaseAuth en messages utilisateur.
-/// Homogène pour SignUp & Login.
+/// Homogene pour SignUp et Login.
 class AuthErrorMapper {
   static String toMessage(FirebaseAuthException e) {
     switch (e.code) {
-      // Inscription
       case 'email-already-in-use':
-        return 'Adresse e-mail déjà utilisée.';
+        return 'Adresse e-mail deja utilisee.';
       case 'weak-password':
-        return 'Mot de passe trop court (minimum 6 caractères).';
+        return 'Mot de passe trop court (minimum 6 caracteres).';
       case 'invalid-email':
         return 'Adresse e-mail invalide.';
       case 'operation-not-allowed':
-        return 'Inscription par e-mail désactivée.';
-
-      // Connexion
+        return 'Inscription par e-mail desactivee.';
       case 'user-not-found':
-        return 'Aucun compte associé à cet e-mail.';
+        return 'Ce compte est introuvable. Il a peut-etre ete supprime ou cet e-mail est incorrect.';
       case 'wrong-password':
         return 'Mot de passe incorrect.';
+      case 'invalid-credential':
+        return 'Identifiants invalides. Verifiez votre e-mail et votre mot de passe.';
       case 'user-disabled':
-        return 'Ce compte a été désactivé.';
-
-      // Généraux
+        return 'L acces a ce compte a ete desactive. Contactez le support Adfoot.';
       case 'too-many-requests':
-        return 'Trop de tentatives. Réessayez plus tard.';
+        return 'Trop de tentatives. Reessayez plus tard.';
       case 'network-request-failed':
-        return 'Problème de connexion réseau. Vérifiez votre connexion.';
-
+        return 'Probleme de connexion reseau. Verifiez votre connexion.';
       default:
-        return e.message ?? 'Une erreur est survenue. Réessayez.';
+        return e.message ?? 'Une erreur est survenue. Reessayez.';
     }
   }
 }

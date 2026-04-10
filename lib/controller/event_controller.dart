@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:adfoot/controller/push_notification.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/events/event_repository.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
@@ -18,6 +20,30 @@ class EventController extends GetxController {
   bool get isLoading => _isLoading.value;
 
   StreamSubscription<List<Event>>? _eventsSub;
+
+  bool _isPermissionDenied(Object error) =>
+      error is FirebaseException && error.code == 'permission-denied';
+
+  Future<void> _handleProtectedAccessDenied() async {
+    if (!Get.isRegistered<UserController>()) {
+      return;
+    }
+
+    await Get.find<UserController>().handleProtectedAccessDenied(
+      fallbackTitle: 'Acces indisponible',
+      fallbackMessage:
+          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+    );
+  }
+
+  ActionResponse _sessionRevokedResponse() {
+    return const ActionResponse(
+      success: false,
+      code: 'session_revoked',
+      message: 'Votre session a ete fermee. Veuillez vous reconnecter.',
+      toast: ToastLevel.none,
+    );
+  }
 
   @override
   void onInit() {
@@ -64,6 +90,10 @@ class EventController extends GetxController {
       onError: (error) {
         _isLoading.value = false;
         debugPrint('Firestore events stream failed: $error');
+        if (_isPermissionDenied(error)) {
+          _events.value = const <Event>[];
+          unawaited(_handleProtectedAccessDenied());
+        }
       },
     );
   }
@@ -121,6 +151,16 @@ class EventController extends GetxController {
         message: 'Votre evenement a ete cree avec succes.',
         toast: ToastLevel.success,
       );
+    } on FirebaseException catch (error) {
+      debugPrint('Event creation failed: $error');
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+      return ActionResponse.failure(
+        code: 'create_failed',
+        message: 'Echec de la creation de l evenement.',
+      );
     } catch (e) {
       debugPrint('Event creation failed: $e');
       return ActionResponse.failure(
@@ -149,6 +189,16 @@ class EventController extends GetxController {
         code: 'updated',
         message: 'Les modifications ont ete enregistrees.',
         toast: ToastLevel.success,
+      );
+    } on FirebaseException catch (error) {
+      debugPrint('Event update failed: $error');
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+      return ActionResponse.failure(
+        code: 'update_failed',
+        message: 'Echec de la mise a jour de l evenement.',
       );
     } catch (e) {
       debugPrint('Event update failed: $e');
@@ -188,6 +238,16 @@ class EventController extends GetxController {
         code: 'deleted',
         message: 'L evenement a ete supprime.',
         toast: ToastLevel.success,
+      );
+    } on FirebaseException catch (error) {
+      debugPrint('Event deletion failed: $error');
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+      return ActionResponse.failure(
+        code: 'delete_failed',
+        message: 'Echec de la suppression de l evenement.',
       );
     } catch (e) {
       debugPrint('Event deletion failed: $e');
@@ -237,6 +297,16 @@ class EventController extends GetxController {
         message: e.message,
         toast: ToastLevel.info,
       );
+    } on FirebaseException catch (error) {
+      debugPrint('Event registration failed: $error');
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+      return ActionResponse.failure(
+        code: 'registration_failed',
+        message: 'Echec de l inscription.',
+      );
     } catch (e) {
       debugPrint('Event registration failed: $e');
       return ActionResponse.failure(
@@ -282,6 +352,16 @@ class EventController extends GetxController {
         code: e.code,
         message: e.message,
         toast: ToastLevel.info,
+      );
+    } on FirebaseException catch (error) {
+      debugPrint('Event unregistration failed: $error');
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+      return ActionResponse.failure(
+        code: 'unregistration_failed',
+        message: 'Echec de la desinscription.',
       );
     } catch (e) {
       debugPrint('Event unregistration failed: $e');

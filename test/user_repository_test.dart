@@ -9,6 +9,8 @@ void main() {
       expect(decision.exists, isFalse);
       expect(decision.issue, UserAccessIssue.missingProfile);
       expect(decision.user, isNull);
+      expect(decision.title, 'Compte indisponible');
+      expect(decision.message, contains('plus disponible'));
     });
 
     test('blocks admin portal only roles on mobile', () {
@@ -22,6 +24,8 @@ void main() {
       expect(decision.exists, isTrue);
       expect(decision.issue, UserAccessIssue.adminPortalOnly);
       expect(decision.user?.uid, 'admin-1');
+      expect(decision.title, 'Acces refuse');
+      expect(decision.message, contains('administration Adfoot'));
     });
 
     test('blocks disabled or blocked accounts', () {
@@ -32,10 +36,69 @@ void main() {
         'role': 'joueur',
         'estBloque': false,
         'authDisabled': true,
+        'authDisabledReason': 'fraude detectee',
       });
 
       expect(decision.exists, isTrue);
       expect(decision.issue, UserAccessIssue.blockedOrDisabled);
+      expect(decision.title, 'Compte desactive');
+      expect(decision.user?.authDisabled, isTrue);
+      expect(decision.message, contains('fraude detectee'));
+    });
+
+    test('surfaces the admin permanent block reason to the mobile session', () {
+      final decision = UserRepository.evaluateUserData({
+        'uid': 'user-2',
+        'nom': 'Sanctioned User',
+        'email': 'sanctioned@adfoot.org',
+        'role': 'joueur',
+        'estBloque': true,
+        'blockMode': 'permanent',
+        'authDisabled': false,
+        'blockedReason': 'contenu non conforme',
+      });
+
+      expect(decision.exists, isTrue);
+      expect(decision.issue, UserAccessIssue.blockedOrDisabled);
+      expect(decision.title, 'Compte bloque');
+      expect(decision.user?.estBloque, isTrue);
+      expect(decision.message, contains('contenu non conforme'));
+    });
+
+    test('surfaces temporary suspension dates to the mobile session', () {
+      final decision = UserRepository.evaluateUserData({
+        'uid': 'user-3',
+        'nom': 'Suspended User',
+        'email': 'suspended@adfoot.org',
+        'role': 'joueur',
+        'estBloque': true,
+        'blockMode': 'temporary',
+        'blockedUntil': DateTime.utc(2026, 4, 23, 9, 30).toIso8601String(),
+        'authDisabled': false,
+        'blockedReason': 'video non adaptee',
+      });
+
+      expect(decision.exists, isTrue);
+      expect(decision.issue, UserAccessIssue.blockedOrDisabled);
+      expect(decision.title, 'Compte suspendu');
+      expect(decision.message, contains('23/04/2026'));
+      expect(decision.message, contains('video non adaptee'));
+    });
+
+    test('ignores expired temporary suspensions', () {
+      final decision = UserRepository.evaluateUserData({
+        'uid': 'user-4',
+        'nom': 'Expired Suspension',
+        'email': 'expired@adfoot.org',
+        'role': 'joueur',
+        'estBloque': true,
+        'blockMode': 'temporary',
+        'blockedUntil': DateTime.utc(2020, 1, 1).toIso8601String(),
+        'authDisabled': false,
+      });
+
+      expect(decision.exists, isTrue);
+      expect(decision.issue, isNull);
     });
 
     test('allows managed roles when profile is valid', () {
