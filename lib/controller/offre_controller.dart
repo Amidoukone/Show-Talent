@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/push_notification.dart';
@@ -9,6 +10,7 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
 
 class _OffreFlowException implements Exception {
   const _OffreFlowException({
@@ -26,6 +28,7 @@ class OffreController extends GetxController {
   static OffreController instance = Get.find();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final AuthSessionService _authSessionService = AuthSessionService();
 
   final Rx<List<Offre>> _offres = Rx<List<Offre>>([]);
   List<Offre> get offres => _offres.value;
@@ -33,6 +36,7 @@ class OffreController extends GetxController {
   final RxBool _isLoading = true.obs;
   bool get isLoading => _isLoading.value;
 
+  StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _offresSubscription;
 
   bool _isPermissionDenied(Object error) =>
@@ -62,11 +66,34 @@ class OffreController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _fetchOffres();
+    _authSub = _authSessionService.idTokenChanges().listen(
+      (user) {
+        if (user == null) {
+          unawaited(_stopOffresStream(clearData: true));
+          return;
+        }
+
+        _fetchOffres();
+      },
+      onError: (error) {
+        developer.log(
+          'Erreur ecoute auth pour les offres: $error',
+          name: 'OffreController.onInit',
+          error: error,
+        );
+      },
+    );
+
+    if (_authSessionService.currentUser != null) {
+      _fetchOffres();
+    } else {
+      _isLoading.value = false;
+    }
   }
 
   @override
   void onClose() {
+    _authSub?.cancel();
     _offresSubscription?.cancel();
     super.onClose();
   }
@@ -102,19 +129,14 @@ class OffreController extends GetxController {
         .toList();
   }
 
-  void _fetchOffres() {
-    _isLoading.value = true;
-    _offresSubscription?.cancel();
+  List<Offre> _parseSnapshotDocs(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    final now = DateTime.now();
+    final fetched = <Offre>[];
 
-    _offresSubscription = _firestore
-        .collection('offres')
-        .orderBy('dateCreation', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-      final now = DateTime.now();
-      final List<Offre> fetched = [];
-
-      for (final doc in snapshot.docs) {
+    for (final doc in docs) {
+      try {
         final offre = Offre.fromDoc(doc);
         final normalizedStatus = _normalizeStatus(offre.statut);
         if (offre.statut != normalizedStatus) {
@@ -129,7 +151,7 @@ class OffreController extends GetxController {
             }).catchError((error, stackTrace) {
               developer.log(
                 'Erreur lors de la mise a jour auto du statut offre: $error',
-                name: 'OffreController._fetchOffres',
+                name: 'OffreController._parseSnapshotDocs',
                 error: error,
                 stackTrace: stackTrace,
               );
@@ -141,9 +163,27 @@ class OffreController extends GetxController {
         }
 
         fetched.add(offre);
+      } catch (error, stackTrace) {
+        developer.log(
+          'Offre ignoree car document invalide: ${doc.id}',
+          name: 'OffreController._parseSnapshotDocs',
+          error: error,
+          stackTrace: stackTrace,
+        );
       }
+    }
 
-      _offres.value = fetched;
+    fetched.sort((a, b) => b.dateCreation.compareTo(a.dateCreation));
+    return fetched;
+  }
+
+  void _fetchOffres() {
+    _isLoading.value = true;
+    _offresSubscription?.cancel();
+
+    _offresSubscription =
+        _firestore.collection('offres').snapshots().listen((snapshot) {
+      _offres.value = _parseSnapshotDocs(snapshot.docs);
       update();
       _isLoading.value = false;
     }, onError: (error, stackTrace) {
@@ -155,10 +195,25 @@ class OffreController extends GetxController {
       );
       if (_isPermissionDenied(error)) {
         _offres.value = const <Offre>[];
-        unawaited(_handleProtectedAccessDenied());
+        final hasResolvedSession = Get.isRegistered<UserController>() &&
+            Get.find<UserController>().user != null;
+        if (hasResolvedSession && _authSessionService.currentUser != null) {
+          unawaited(_handleProtectedAccessDenied());
+        }
       }
       _isLoading.value = false;
     });
+  }
+
+  Future<void> _stopOffresStream({bool clearData = false}) async {
+    await _offresSubscription?.cancel();
+    _offresSubscription = null;
+
+    if (clearData) {
+      _offres.value = const <Offre>[];
+      _isLoading.value = false;
+      update();
+    }
   }
 
   Future<void> incrementVues({

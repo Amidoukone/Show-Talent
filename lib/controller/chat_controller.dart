@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/push_notification.dart';
 import 'package:adfoot/controller/user_controller.dart';
@@ -108,6 +109,10 @@ class ChatController extends GetxController {
 
   Stream<AppUser?> watchUserById(String uid) {
     return _chatRepository.watchUserById(uid);
+  }
+
+  Stream<Conversation?> watchConversationById(String conversationId) {
+    return _chatRepository.watchConversationById(conversationId);
   }
 
   Future<void> setActiveConversation({
@@ -242,6 +247,61 @@ class ChatController extends GetxController {
       debugPrint("Erreur creation conversation : $error");
       throw const ChatFlowException(
         'Impossible de demarrer la conversation pour le moment.',
+      );
+    }
+  }
+
+  Future<String?> findExistingConversationId({
+    required String currentUserId,
+    required String otherUserId,
+  }) async {
+    try {
+      return await _chatRepository.findExistingConversationId(
+        currentUserId: currentUserId,
+        otherUserId: otherUserId,
+      );
+    } on FirebaseException catch (error) {
+      debugPrint("Erreur recherche conversation firebase : $error");
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
+      return null;
+    } catch (error) {
+      debugPrint("Erreur recherche conversation : $error");
+      return null;
+    }
+  }
+
+  Future<GuidedConversationStartResult> startGuidedConversation({
+    required AppUser currentUser,
+    required AppUser otherUser,
+    required ContactContext context,
+    required String contactReason,
+    required String introMessage,
+  }) async {
+    try {
+      return await _chatRepository.startGuidedConversation(
+        currentUser: currentUser,
+        otherUser: otherUser,
+        context: context,
+        contactReason: contactReason,
+        introMessage: introMessage,
+      );
+    } on FirebaseException catch (error) {
+      debugPrint("Erreur creation contact guide firebase : $error");
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        throw const ChatFlowException(
+          'Votre session a ete fermee. Veuillez vous reconnecter.',
+        );
+      }
+      throw const ChatFlowException(
+        'Impossible de lancer ce premier contact pour le moment.',
+      );
+    } catch (error) {
+      debugPrint("Erreur creation contact guide : $error");
+      throw const ChatFlowException(
+        'Impossible de lancer ce premier contact pour le moment.',
       );
     }
   }

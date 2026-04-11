@@ -730,6 +730,7 @@ export {
   adminSetEventStatus,
   adminSetOfferStatus,
 } from "./admin_content_actions";
+export {adminSetContactIntakeFollowUp} from "./admin_contact_intake_actions";
 
 /* -------------------------------------------------------------------------- */
 /* UPLOAD SESSION                                                              */

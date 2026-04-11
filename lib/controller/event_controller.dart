@@ -5,13 +5,15 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/events/event_repository.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 class EventController extends GetxController {
   final EventRepository _eventRepository = EventRepository();
+  final AuthSessionService _authSessionService = AuthSessionService();
 
   final Rx<List<Event>> _events = Rx<List<Event>>([]);
   List<Event> get events => _events.value;
@@ -19,6 +21,7 @@ class EventController extends GetxController {
   final RxBool _isLoading = true.obs;
   bool get isLoading => _isLoading.value;
 
+  StreamSubscription<User?>? _authSub;
   StreamSubscription<List<Event>>? _eventsSub;
 
   bool _isPermissionDenied(Object error) =>
@@ -48,7 +51,25 @@ class EventController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    fetchEvents();
+    _authSub = _authSessionService.idTokenChanges().listen(
+      (user) {
+        if (user == null) {
+          unawaited(_stopEventsStream(clearData: true));
+          return;
+        }
+
+        fetchEvents();
+      },
+      onError: (error) {
+        debugPrint('EventController auth listen error: $error');
+      },
+    );
+
+    if (_authSessionService.currentUser != null) {
+      fetchEvents();
+    } else {
+      _isLoading.value = false;
+    }
   }
 
   Future<void> fetchEvents() async {
@@ -92,14 +113,30 @@ class EventController extends GetxController {
         debugPrint('Firestore events stream failed: $error');
         if (_isPermissionDenied(error)) {
           _events.value = const <Event>[];
-          unawaited(_handleProtectedAccessDenied());
+          final hasResolvedSession = Get.isRegistered<UserController>() &&
+              Get.find<UserController>().user != null;
+          if (hasResolvedSession && _authSessionService.currentUser != null) {
+            unawaited(_handleProtectedAccessDenied());
+          }
         }
       },
     );
   }
 
+  Future<void> _stopEventsStream({bool clearData = false}) async {
+    await _eventsSub?.cancel();
+    _eventsSub = null;
+
+    if (clearData) {
+      _events.value = const <Event>[];
+      _isLoading.value = false;
+      update();
+    }
+  }
+
   @override
   void onClose() {
+    _authSub?.cancel();
     _eventsSub?.cancel();
     super.onClose();
   }

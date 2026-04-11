@@ -23,8 +23,8 @@ void main() {
       contains('administration Adfoot'),
     );
     expect(
-      UserAccessIssue.blockedOrDisabled.loginMessage,
-      contains('bloque'),
+      UserAccessIssue.disabledAccount.loginMessage,
+      contains('desactive'),
     );
   });
 }

@@ -28,7 +28,7 @@ void main() {
       expect(decision.message, contains('administration Adfoot'));
     });
 
-    test('blocks disabled or blocked accounts', () {
+    test('blocks disabled accounts', () {
       final decision = UserRepository.evaluateUserData({
         'uid': 'user-1',
         'nom': 'Blocked User',
@@ -40,13 +40,13 @@ void main() {
       });
 
       expect(decision.exists, isTrue);
-      expect(decision.issue, UserAccessIssue.blockedOrDisabled);
+      expect(decision.issue, UserAccessIssue.disabledAccount);
       expect(decision.title, 'Compte desactive');
       expect(decision.user?.authDisabled, isTrue);
       expect(decision.message, contains('fraude detectee'));
     });
 
-    test('surfaces the admin permanent block reason to the mobile session', () {
+    test('ignores the legacy permanent block flag on mobile access', () {
       final decision = UserRepository.evaluateUserData({
         'uid': 'user-2',
         'nom': 'Sanctioned User',
@@ -59,13 +59,11 @@ void main() {
       });
 
       expect(decision.exists, isTrue);
-      expect(decision.issue, UserAccessIssue.blockedOrDisabled);
-      expect(decision.title, 'Compte bloque');
+      expect(decision.issue, isNull);
       expect(decision.user?.estBloque, isTrue);
-      expect(decision.message, contains('contenu non conforme'));
     });
 
-    test('surfaces temporary suspension dates to the mobile session', () {
+    test('ignores legacy temporary suspensions on mobile access', () {
       final decision = UserRepository.evaluateUserData({
         'uid': 'user-3',
         'nom': 'Suspended User',
@@ -79,10 +77,7 @@ void main() {
       });
 
       expect(decision.exists, isTrue);
-      expect(decision.issue, UserAccessIssue.blockedOrDisabled);
-      expect(decision.title, 'Compte suspendu');
-      expect(decision.message, contains('23/04/2026'));
-      expect(decision.message, contains('video non adaptee'));
+      expect(decision.issue, isNull);
     });
 
     test('ignores expired temporary suspensions', () {

@@ -26,6 +26,8 @@ service cloud.firestore {
         );
     }
 
+    // Mobile access currently tolerates legacy app-level block flags.
+    // Only authDisabled remains a hard access stop across user/content reads.
     function hasActiveAccount(uid) {
       return hasUserDoc(uid) &&
         userDoc(uid).data.authDisabled != true;
@@ -51,6 +53,16 @@ service cloud.firestore {
 
     function isRecruiterOrClub() {
       return signedInAndActive() && isOpportunityPublisherRole(userRole());
+    }
+
+    function isAdminOperator() {
+      return signedIn() &&
+        (
+          userRole() == "admin" ||
+          request.auth.token.admin == true ||
+          request.auth.token.platformAdmin == true ||
+          request.auth.token.superAdmin == true
+        );
     }
 
     function preservesUserIdentity() {
@@ -153,6 +165,24 @@ service cloud.firestore {
         allow update, delete: if signedInAndActive() &&
           request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.utilisateurIds;
       }
+    }
+
+    match /contact_intakes/{intakeId} {
+      allow read: if signedInAndActive() &&
+        (
+          resource.data.requesterUid == request.auth.uid ||
+          resource.data.targetUid == request.auth.uid ||
+          isAdminOperator()
+        );
+      allow create: if signedInAndActive() &&
+        request.resource.data.requesterUid == request.auth.uid &&
+        request.resource.data.targetUid is string &&
+        request.resource.data.targetUid != request.auth.uid &&
+        request.resource.data.status == "new" &&
+        request.resource.data.agencyFollowUpStatus == "new" &&
+        request.resource.data.contactReason is string &&
+        request.resource.data.introMessage is string;
+      allow update, delete: if isAdminOperator();
     }
 
     match /config/{docId} {

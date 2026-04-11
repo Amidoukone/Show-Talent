@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/auth_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/message_converstion.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
 import '../controller/chat_controller.dart';
 import '../models/user.dart';
 import '../widgets/ad_dialogs.dart';
@@ -61,11 +64,14 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final ChatController chatController = Get.find<ChatController>();
+  final UserController _userController = Get.find<UserController>();
+  final AuthSessionService _authSessionService = AuthSessionService();
   final TextEditingController messageController = TextEditingController();
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _listScroll = ScrollController();
 
   late final Stream<List<Message>> _messagesStream;
+  late final Stream<Conversation?> _conversationStream;
   late AppUser _otherUser;
   StreamSubscription<AppUser?>? _otherUserSub;
 
@@ -87,6 +93,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     _messagesStream = chatController.getMessages(widget.conversationId);
+    _conversationStream = chatController.watchConversationById(
+      widget.conversationId,
+    );
     _otherUser = widget.otherUser;
     _startOtherUserListener();
 
@@ -136,7 +145,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = AuthController.instance.user;
+    final currentUser = _userController.user ?? AuthController.instance.user;
+    if (currentUser == null && _authSessionService.currentUser != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Chargement')),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     if (currentUser == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Erreur')),
@@ -255,6 +273,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           child: SafeArea(
             child: Column(
               children: [
+                StreamBuilder<Conversation?>(
+                  stream: _conversationStream,
+                  builder: (context, snapshot) {
+                    return _buildGuidedContextBanner(snapshot.data);
+                  },
+                ),
                 Expanded(
                   child: StreamBuilder<List<Message>>(
                     stream: _messagesStream,
@@ -583,6 +607,78 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // ------------------------------
   // UI components
   // ------------------------------
+
+  Widget _buildGuidedContextBanner(Conversation? conversation) {
+    if (conversation == null || !conversation.hasGuidedContext) {
+      return const SizedBox.shrink();
+    }
+
+    final cs = Theme.of(context).colorScheme;
+    final contextLabel = ContactContext.labelForType(conversation.contextType);
+    final reasonLabel = ContactIntake.reasonLabel(
+      conversation.contactReason ?? '',
+    );
+    final followUpStatus = ContactIntake.normalizeAgencyFollowUpStatus(
+      conversation.agencyFollowUpStatus,
+    );
+    final followUpLabel = ContactIntake.agencyFollowUpLabel(
+      conversation.agencyFollowUpStatus ?? '',
+    );
+    final contextTitle = conversation.contextTitle?.trim();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cs.secondaryContainer.withValues(alpha: 0.68),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: cs.secondary.withValues(alpha: 0.14)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Premier contact cadre',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSecondaryContainer,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              contextTitle != null && contextTitle.isNotEmpty
+                  ? '$contextLabel - $contextTitle'
+                  : contextLabel,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: cs.onSecondaryContainer.withValues(alpha: 0.9),
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Motif: $reasonLabel. Adfoot garde ce premier echange dans le circuit officiel.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSecondaryContainer.withValues(alpha: 0.82),
+                    height: 1.3,
+                  ),
+            ),
+            if (followUpStatus != AgencyFollowUpStatus.newLead) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Suivi agence: $followUpLabel.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: cs.onSecondaryContainer.withValues(alpha: 0.82),
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _datePill({required String label}) {
     final cs = Theme.of(context).colorScheme;

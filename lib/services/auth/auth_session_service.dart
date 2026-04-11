@@ -30,8 +30,8 @@ extension AuthSessionFailureMessage on UserAccessIssue {
         return 'Compte incomplet ou non provisionne. Contactez l equipe Adfoot.';
       case UserAccessIssue.adminPortalOnly:
         return 'Ce compte est reserve au portail d administration Adfoot.';
-      case UserAccessIssue.blockedOrDisabled:
-        return 'Ce compte a ete suspendu, bloque ou desactive. Contactez l equipe Adfoot.';
+      case UserAccessIssue.disabledAccount:
+        return 'Ce compte a ete desactive. Contactez l equipe Adfoot.';
     }
   }
 }
@@ -310,7 +310,7 @@ class AuthSessionService {
       );
 
       if (decision.issue == UserAccessIssue.adminPortalOnly ||
-          decision.issue == UserAccessIssue.blockedOrDisabled) {
+          decision.issue == UserAccessIssue.disabledAccount) {
         if (signOutOnInvalid) {
           await signOut();
         }

@@ -222,7 +222,7 @@ function evaluateUserAccessIssue(userDoc) {
   }
 
   if (userDoc.estBloque === true || userDoc.authDisabled === true) {
-    return 'blockedOrDisabled';
+    return 'disabledAccount';
   }
 
   return null;
@@ -232,7 +232,7 @@ function evaluateMobileDestination({ emailVerified, userDoc }) {
   const issue = evaluateUserAccessIssue(userDoc);
 
   if (!emailVerified) {
-    if (issue === 'adminPortalOnly' || issue === 'blockedOrDisabled') {
+    if (issue === 'adminPortalOnly' || issue === 'disabledAccount') {
       return { destination: 'login', issue };
     }
     return { destination: 'verifyEmail', issue };

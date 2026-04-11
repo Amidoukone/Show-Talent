@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 enum UserAccessIssue {
   missingProfile,
   adminPortalOnly,
-  blockedOrDisabled,
+  disabledAccount,
 }
 
 class UserAccessDecision {
@@ -47,16 +47,10 @@ class UserRepository {
       'Ce compte n est plus disponible. Si vous pensez qu il s agit d une erreur, contactez le support Adfoot.';
   static const String _adminPortalOnlyMessage =
       'Ce compte est reserve au portail d administration Adfoot.';
-  static const String _suspendedFallbackMessage =
-      'Votre compte a ete suspendu temporairement pour non-respect des regles Adfoot. Si vous pensez qu il s agit d une erreur, contactez le support.';
-  static const String _blockedFallbackMessage =
-      'Votre compte a ete bloque pour non-respect des regles Adfoot. Si vous pensez qu il s agit d une erreur, contactez le support.';
   static const String _disabledFallbackMessage =
       'L acces a ce compte a ete desactive. Contactez le support Adfoot.';
   static const String _missingProfileTitle = 'Compte indisponible';
   static const String _adminPortalOnlyTitle = 'Acces refuse';
-  static const String _suspendedTitle = 'Compte suspendu';
-  static const String _blockedTitle = 'Compte bloque';
   static const String _disabledTitle = 'Compte desactive';
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
@@ -83,13 +77,13 @@ class UserRepository {
       );
     }
 
-    if (user.hasActiveAppBlock || user.authDisabled) {
+    if (user.authDisabled) {
       return UserAccessDecision(
         exists: true,
-        issue: UserAccessIssue.blockedOrDisabled,
+        issue: UserAccessIssue.disabledAccount,
         user: user,
-        message: _buildBlockedOrDisabledMessage(user),
-        title: _buildBlockedOrDisabledTitle(user),
+        message: _buildDisabledAccountMessage(user),
+        title: _disabledTitle,
       );
     }
 
@@ -344,69 +338,13 @@ class UserRepository {
     return doc;
   }
 
-  static String _buildBlockedOrDisabledMessage(AppUser user) {
-    final blockedReason = _normalizeReason(user.blockedReason);
-    if (user.hasTemporaryBlock) {
-      final endsAtLabel = _formatBlockedUntil(user.blockedUntil);
-      if (blockedReason != null && endsAtLabel != null) {
-        return 'Votre compte est suspendu jusqu au $endsAtLabel. Motif : $blockedReason';
-      }
-
-      if (endsAtLabel != null) {
-        return 'Votre compte est suspendu jusqu au $endsAtLabel. Contactez le support Adfoot si vous pensez qu il s agit d une erreur.';
-      }
-
-      if (blockedReason != null) {
-        return 'Votre compte a ete suspendu temporairement. Motif : $blockedReason';
-      }
-
-      return _suspendedFallbackMessage;
-    }
-
-    if (user.hasPermanentBlock) {
-      if (blockedReason != null) {
-        return 'Votre compte a ete bloque pour non-respect des regles Adfoot. Motif : $blockedReason';
-      }
-
-      return _blockedFallbackMessage;
-    }
-
+  static String _buildDisabledAccountMessage(AppUser user) {
     final authDisabledReason = _normalizeReason(user.authDisabledReason);
-    if (user.authDisabled) {
-      if (authDisabledReason != null) {
-        return 'L acces a ce compte a ete desactive. Motif : $authDisabledReason';
-      }
-
-      return _disabledFallbackMessage;
+    if (authDisabledReason != null) {
+      return 'L acces a ce compte a ete desactive. Motif : $authDisabledReason';
     }
 
-    return _blockedFallbackMessage;
-  }
-
-  static String _buildBlockedOrDisabledTitle(AppUser user) {
-    if (user.hasTemporaryBlock) {
-      return _suspendedTitle;
-    }
-
-    if (user.hasPermanentBlock) {
-      return _blockedTitle;
-    }
-
-    return _disabledTitle;
-  }
-
-  static String? _formatBlockedUntil(DateTime? value) {
-    if (value == null) {
-      return null;
-    }
-
-    final normalized = value.toLocal();
-    final day = normalized.day.toString().padLeft(2, '0');
-    final month = normalized.month.toString().padLeft(2, '0');
-    final year = normalized.year.toString();
-    final hour = normalized.hour.toString().padLeft(2, '0');
-    final minute = normalized.minute.toString().padLeft(2, '0');
-    return '$day/$month/$year a $hour:$minute';
+    return _disabledFallbackMessage;
   }
 
   static String? _normalizeReason(String? value) {

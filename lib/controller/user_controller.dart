@@ -309,7 +309,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
       await _handleCurrentUserAccessRevoked(
         UserAccessDecision(
           exists: true,
-          issue: UserAccessIssue.blockedOrDisabled,
+          issue: UserAccessIssue.disabledAccount,
           title: 'Compte desactive',
           message: error.message ??
               'L acces a ce compte a ete desactive. Contactez le support Adfoot.',
@@ -393,12 +393,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         switch (decision.issue) {
           UserAccessIssue.missingProfile => 'Compte indisponible',
           UserAccessIssue.adminPortalOnly => 'Acces refuse',
-          UserAccessIssue.blockedOrDisabled =>
-            decision.user?.hasTemporaryBlock == true
-                ? 'Compte suspendu'
-                : decision.user?.hasActiveAppBlock == true
-                    ? 'Compte bloque'
-                    : 'Compte desactive',
+          UserAccessIssue.disabledAccount => 'Compte desactive',
           null => 'Session fermee',
         };
 

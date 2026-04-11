@@ -1,11 +1,13 @@
 // lib/screens/profile_screen.dart
 import 'package:adfoot/config/feature_controller_registry.dart';
+import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/screens/profil_video_scrollview.dart';
 import 'package:adfoot/widgets/advanced/agent_advanced_form.dart';
 import 'package:adfoot/widgets/advanced/club_advanced_form.dart';
 import 'package:adfoot/widgets/advanced/player_advanced_form.dart';
 import 'package:adfoot/widgets/advanced/player_stats_availability_form.dart';
+import 'package:adfoot/widgets/contact_intake_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -13,6 +15,7 @@ import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/edit_profil_screen.dart';
@@ -386,13 +389,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // =======================
 
   bool _canSendMessage(AppUser user) {
-    final currentUser = _authController.user;
+    final currentUser = Get.find<UserController>().user ?? _authController.user;
     if (currentUser == null) return false;
     return currentUser.allowMessages && user.allowMessages;
   }
 
   void _showMessagingDisabledNotice(AppUser user) {
-    final currentUser = _authController.user;
+    final currentUser = Get.find<UserController>().user ?? _authController.user;
     if (currentUser == null) return;
 
     final isSenderDisabled = !currentUser.allowMessages;
@@ -418,8 +421,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    final currentUserId = _authController.currentUid;
-    if (currentUserId == null) {
+    final currentUser = Get.find<UserController>().user ?? _authController.user;
+    final currentUserId = currentUser?.uid ?? _authController.currentUid;
+    if (currentUser == null || currentUserId == null) {
       AdFeedback.error(
         'Session invalide',
         'Utilisateur non connecte.',
@@ -434,10 +438,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isMessageActionLoading = true);
     try {
-      final conversationId = await _chatController.createOrGetConversation(
+      final existingConversationId =
+          await _chatController.findExistingConversationId(
         currentUserId: currentUserId,
         otherUserId: user.uid,
       );
+
+      if (existingConversationId != null && existingConversationId.isNotEmpty) {
+        if (!mounted) {
+          return;
+        }
+
+        await Get.to(
+          () => ChatScreen(
+            conversationId: existingConversationId,
+            otherUser: user,
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      final draft = await Get.bottomSheet<GuidedContactDraft>(
+        ContactIntakeSheet(
+          currentUser: currentUser,
+          otherUser: user,
+          context: ContactContext.profile(
+            profileUid: user.uid,
+            title: user.nom,
+          ),
+        ),
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+      );
+
+      if (draft == null) {
+        return;
+      }
+
+      final result = await _chatController.startGuidedConversation(
+        currentUser: currentUser,
+        otherUser: user,
+        context: draft.context,
+        contactReason: draft.reasonCode,
+        introMessage: draft.introMessage,
+      );
+
+      final conversationId = result.conversationId;
+      if (result.createdIntake) {
+        AdFeedback.info(
+          'Contact enregistre',
+          'Le premier contact a ete cadre et transmis via Adfoot.',
+        );
+      }
 
       if (conversationId.isEmpty) {
         AdFeedback.error(
@@ -531,7 +587,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ? null
                       : () => _handleSendMessage(user),
                   icon: const Icon(Icons.message_outlined),
-                  label: const Text('Envoyer un message'),
+                  label: const Text('Contacter'),
                 )
               else
                 Text(
@@ -805,7 +861,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Expanded(
           child: ElevatedButton.icon(
             icon: const Icon(Icons.message_outlined),
-            label: const Text('Message'),
+            label: const Text('Contacter'),
             onPressed: canMessage && !_isMessageActionLoading
                 ? () => _handleSendMessage(user)
                 : null,

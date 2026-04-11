@@ -40,5 +40,16 @@ void main() {
       expect(controller, contains('runTransaction'));
       expect(controller, contains('_extractCandidateMaps'));
     });
+
+    test('offre controller keeps the mobile stream tolerant and sorted client-side',
+        () {
+      final controller =
+          File('lib/controller/offre_controller.dart').readAsStringSync();
+
+      expect(controller, contains("collection('offres').snapshots()"));
+      expect(controller, contains('_parseSnapshotDocs(snapshot.docs)'));
+      expect(controller, contains('Offre ignoree car document invalide'));
+      expect(controller, contains('fetched.sort((a, b) => b.dateCreation.compareTo(a.dateCreation));'));
+    });
   });
 }

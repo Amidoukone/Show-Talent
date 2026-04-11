@@ -6,6 +6,7 @@ import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/contact_intake.dart';
 
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
@@ -15,6 +16,7 @@ import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/contact_intake_sheet.dart';
 
 class EventDetailsScreen extends StatelessWidget {
   final Event event;
@@ -274,7 +276,14 @@ class EventDetailsScreen extends StatelessWidget {
                 ),
                 trailing: IconButton(
                   icon: Icon(Icons.chat_bubble_outline, color: cs.primary),
-                  onPressed: () => _openChatWith(p),
+                  onPressed: () => _openChatWith(
+                    p,
+                    context: ContactContext.event(
+                      eventId: event.id,
+                      title: event.titre,
+                      sourceLabel: 'Participants',
+                    ),
+                  ),
                 ),
                 onTap: () => Get.to(
                   () => ProfileScreen(uid: p.uid, isReadOnly: true),
@@ -284,12 +293,26 @@ class EventDetailsScreen extends StatelessWidget {
           ),
         if (event.participants.length > 3)
           TextButton(
-            onPressed: () => _showParticipants(event.participants),
+            onPressed: () => _showParticipants(
+              event.participants,
+              contactContext: ContactContext.event(
+                eventId: event.id,
+                title: event.titre,
+                sourceLabel: 'Participants',
+              ),
+            ),
             child: const Text('Voir tous les participants'),
           )
         else if (isOrganisateur && event.participants.isEmpty)
           TextButton(
-            onPressed: () => _showParticipants(event.participants),
+            onPressed: () => _showParticipants(
+              event.participants,
+              contactContext: ContactContext.event(
+                eventId: event.id,
+                title: event.titre,
+                sourceLabel: 'Participants',
+              ),
+            ),
             child: const Text('Gérer les participants'),
           ),
       ],
@@ -300,14 +323,20 @@ class EventDetailsScreen extends StatelessWidget {
   // 🔽 MODAL PARTICIPANTS (TRI + CHAT)
   // =========================================================
 
-  void _showParticipants(List<AppUser> participants) {
+  void _showParticipants(
+    List<AppUser> participants, {
+    required ContactContext contactContext,
+  }) {
     showModalBottomSheet(
       context: Get.context!,
       backgroundColor: AdColors.surfaceAlt,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => _ParticipantsModal(participants: participants),
+      builder: (_) => _ParticipantsModal(
+        participants: participants,
+        contactContext: contactContext,
+      ),
     );
   }
 
@@ -356,7 +385,10 @@ class EventDetailsScreen extends StatelessWidget {
     );
   }
 
-  void _openChatWith(AppUser other) async {
+  void _openChatWith(
+    AppUser other, {
+    required ContactContext context,
+  }) async {
     final chat = Get.find<ChatController>();
 
     final current = Get.find<UserController>().user;
@@ -371,15 +403,64 @@ class EventDetailsScreen extends StatelessWidget {
       return;
     }
 
-    final convId = await chat.createOrGetConversation(
-      currentUserId: current.uid,
-      otherUserId: other.uid,
-    );
+    try {
+      final existingConversationId = await chat.findExistingConversationId(
+        currentUserId: current.uid,
+        otherUserId: other.uid,
+      );
 
-    Get.to(() => ChatScreen(
-          conversationId: convId,
+      if (existingConversationId != null && existingConversationId.isNotEmpty) {
+        Get.to(() => ChatScreen(
+              conversationId: existingConversationId,
+              otherUser: other,
+            ));
+        return;
+      }
+
+      final draft = await Get.bottomSheet<GuidedContactDraft>(
+        ContactIntakeSheet(
+          currentUser: current,
           otherUser: other,
-        ));
+          context: context,
+        ),
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+      );
+
+      if (draft == null) {
+        return;
+      }
+
+      final result = await chat.startGuidedConversation(
+        currentUser: current,
+        otherUser: other,
+        context: draft.context,
+        contactReason: draft.reasonCode,
+        introMessage: draft.introMessage,
+      );
+
+      if (result.createdIntake) {
+        AdFeedback.info(
+          'Contact enregistre',
+          'Le premier contact a ete cadre et transmis via Adfoot.',
+        );
+      }
+
+      Get.to(() => ChatScreen(
+            conversationId: result.conversationId,
+            otherUser: other,
+          ));
+    } on ChatFlowException catch (error) {
+      AdFeedback.error(
+        'Erreur',
+        error.message,
+      );
+    } catch (_) {
+      AdFeedback.error(
+        'Erreur',
+        'Impossible de demarrer la conversation pour le moment.',
+      );
+    }
   }
 }
 // =========================================================
@@ -443,8 +524,12 @@ class _StatusBadge extends StatelessWidget {
 
 class _ParticipantsModal extends StatefulWidget {
   final List<AppUser> participants;
+  final ContactContext contactContext;
 
-  const _ParticipantsModal({required this.participants});
+  const _ParticipantsModal({
+    required this.participants,
+    required this.contactContext,
+  });
 
   @override
   State<_ParticipantsModal> createState() => _ParticipantsModalState();
@@ -540,15 +625,66 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                         return;
                       }
 
-                      final convId = await chat.createOrGetConversation(
-                        currentUserId: current.uid,
-                        otherUserId: p.uid,
-                      );
+                      try {
+                        final existingConversationId =
+                            await chat.findExistingConversationId(
+                          currentUserId: current.uid,
+                          otherUserId: p.uid,
+                        );
 
-                      Get.to(() => ChatScreen(
-                            conversationId: convId,
+                        if (existingConversationId != null &&
+                            existingConversationId.isNotEmpty) {
+                          Get.to(() => ChatScreen(
+                                conversationId: existingConversationId,
+                                otherUser: p,
+                              ));
+                          return;
+                        }
+
+                        final draft = await Get.bottomSheet<GuidedContactDraft>(
+                          ContactIntakeSheet(
+                            currentUser: current,
                             otherUser: p,
-                          ));
+                            context: widget.contactContext,
+                          ),
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                        );
+
+                        if (draft == null) {
+                          return;
+                        }
+
+                        final result = await chat.startGuidedConversation(
+                          currentUser: current,
+                          otherUser: p,
+                          context: draft.context,
+                          contactReason: draft.reasonCode,
+                          introMessage: draft.introMessage,
+                        );
+
+                        if (result.createdIntake) {
+                          AdFeedback.info(
+                            'Contact enregistre',
+                            'Le premier contact a ete cadre et transmis via Adfoot.',
+                          );
+                        }
+
+                        Get.to(() => ChatScreen(
+                              conversationId: result.conversationId,
+                              otherUser: p,
+                            ));
+                      } on ChatFlowException catch (error) {
+                        AdFeedback.error(
+                          'Erreur',
+                          error.message,
+                        );
+                      } catch (_) {
+                        AdFeedback.error(
+                          'Erreur',
+                          'Impossible de demarrer la conversation pour le moment.',
+                        );
+                      }
                     },
                   ),
                 );

@@ -6,6 +6,7 @@ import '../controller/auth_controller.dart';
 import '../controller/chat_controller.dart';
 import '../controller/user_controller.dart';
 import '../models/user.dart';
+import '../services/auth/auth_session_service.dart';
 import '../widgets/ad_dialogs.dart';
 import '../widgets/ad_feedback.dart';
 import '../widgets/ad_state_panel.dart';
@@ -28,6 +29,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
   // ✅ On s’appuie sur UserController.userList pour éviter FutureBuilder par item
   final UserController userController = Get.find<UserController>();
+  final AuthSessionService _authSessionService = AuthSessionService();
   bool _isOpeningConversation = false;
   final Set<String> _deletingConversationIds = <String>{};
 
@@ -118,7 +120,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         ),
         child: SafeArea(
           child: Obx(() {
-            final currentUserId = authController.user?.uid;
+            final currentUser = userController.user ?? authController.user;
+            final currentUserId =
+                currentUser?.uid ?? _authSessionService.currentUser?.uid;
             if (currentUserId == null) {
               return const Center(
                 child: Padding(
@@ -128,6 +132,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     message: 'Utilisateur non connecte.',
                   ),
                 ),
+              );
+            }
+
+            if (currentUser == null) {
+              return const Center(
+                child: CircularProgressIndicator(),
               );
             }
 
@@ -194,8 +204,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   }
 
                   // ✅ On conserve la logique de filtrage
-                  if (otherUser.estActif != true ||
-                      otherUser.emailVerified != true) {
+                  if (!otherUser.canAppearInMessagingDirectory) {
                     return _InfoCard(
                       title: "Utilisateur inactif ou non vérifié",
                       subtitle: "Cette conversation n’est pas disponible.",

@@ -49,6 +49,16 @@ class Conversation {
   Map<String, int> unreadCountByUser;
   String? lastMessage;
   DateTime? lastMessageDate;
+  String? createdVia;
+  String? contextType;
+  String? contextId;
+  String? contextTitle;
+  String? contactReason;
+  String? initiatedByUid;
+  String? initiatedByRole;
+  String? agencyFollowUpStatus;
+  String? contactIntakeId;
+  DateTime? createdAt;
   int unreadMessagesCount;
 
   Conversation({
@@ -59,6 +69,16 @@ class Conversation {
     this.unreadCountByUser = const {},
     this.lastMessage,
     this.lastMessageDate,
+    this.createdVia,
+    this.contextType,
+    this.contextId,
+    this.contextTitle,
+    this.contactReason,
+    this.initiatedByUid,
+    this.initiatedByRole,
+    this.agencyFollowUpStatus,
+    this.contactIntakeId,
+    this.createdAt,
     this.unreadMessagesCount = 0,
   });
 
@@ -72,6 +92,16 @@ class Conversation {
       'lastMessage': lastMessage,
       'lastMessageDate':
           lastMessageDate != null ? Timestamp.fromDate(lastMessageDate!) : null,
+      'createdVia': createdVia,
+      'contextType': contextType,
+      'contextId': contextId,
+      'contextTitle': contextTitle,
+      'contactReason': contactReason,
+      'initiatedByUid': initiatedByUid,
+      'initiatedByRole': initiatedByRole,
+      'agencyFollowUpStatus': agencyFollowUpStatus,
+      'contactIntakeId': contactIntakeId,
+      'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
     };
   }
 
@@ -92,9 +122,18 @@ class Conversation {
       utilisateurIds: List<String>.from(map['utilisateurIds'] ?? []),
       unreadCountByUser: unreadMap,
       lastMessage: map['lastMessage'] ?? '',
-      lastMessageDate: map['lastMessageDate'] != null
-          ? (map['lastMessageDate'] as Timestamp).toDate()
-          : null,
+      lastMessageDate: _parseNullableDate(map['lastMessageDate']),
+      createdVia: _normalizeNullableString(map['createdVia']),
+      contextType: _normalizeNullableString(map['contextType']),
+      contextId: _normalizeNullableString(map['contextId']),
+      contextTitle: _normalizeNullableString(map['contextTitle']),
+      contactReason: _normalizeNullableString(map['contactReason']),
+      initiatedByUid: _normalizeNullableString(map['initiatedByUid']),
+      initiatedByRole: _normalizeNullableString(map['initiatedByRole']),
+      agencyFollowUpStatus:
+          _normalizeNullableString(map['agencyFollowUpStatus']),
+      contactIntakeId: _normalizeNullableString(map['contactIntakeId']),
+      createdAt: _parseNullableDate(map['createdAt']),
       unreadMessagesCount: 0,
     );
   }
@@ -102,5 +141,40 @@ class Conversation {
   void updateLastMessage(String message, DateTime date) {
     lastMessage = message;
     lastMessageDate = date;
+  }
+
+  bool get hasGuidedContext {
+    return (contactReason?.trim().isNotEmpty ?? false) ||
+        (contextType?.trim().isNotEmpty ?? false) ||
+        (contextTitle?.trim().isNotEmpty ?? false);
+  }
+
+  static DateTime? _parseNullableDate(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+
+    if (value is DateTime) {
+      return value;
+    }
+
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+
+    return null;
+  }
+
+  static String? _normalizeNullableString(dynamic value) {
+    final normalized = value?.toString().trim();
+    return normalized == null || normalized.isEmpty ? null : normalized;
   }
 }
