@@ -28,7 +28,6 @@ service cloud.firestore {
 
     function hasActiveAccount(uid) {
       return hasUserDoc(uid) &&
-        !hasEffectiveAppBlock(userDoc(uid).data) &&
         userDoc(uid).data.authDisabled != true;
     }
 
@@ -81,8 +80,7 @@ service cloud.firestore {
     }
 
     function expectedVerifiedActiveState() {
-      return !hasEffectiveAppBlock(request.resource.data) &&
-        request.resource.data.authDisabled != true;
+      return request.resource.data.authDisabled != true;
     }
 
     function preservesVerificationState() {

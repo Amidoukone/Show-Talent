@@ -464,8 +464,14 @@ class AppUser {
     return !endsAt.isAfter(DateTime.now());
   }
 
-  bool get isEffectivelyActiveAccount =>
-      !hasActiveAppBlock && !authDisabled && emailVerified;
+  bool get isEffectivelyActiveAccount => !authDisabled && emailVerified;
+
+  bool get canAppearInMessagingDirectory {
+    return uid.trim().isNotEmpty &&
+        nom.trim().isNotEmpty &&
+        !authDisabled &&
+        !isAdminPortalOnlyRole(role);
+  }
 
   /// -------------------------
   /// MVP - Profil de base complete ?
