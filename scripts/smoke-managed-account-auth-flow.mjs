@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -93,6 +93,11 @@ function nowTag() {
 
 function randomSuffix() {
   return Math.random().toString(36).slice(2, 8);
+}
+
+function buildEphemeralPassword(role, runId) {
+  const normalizedRole = String(role || 'user').replace(/[^a-z0-9]/gi, '').slice(0, 12) || 'user';
+  return `Smoke-${normalizedRole}-${runId}-${randomSuffix()}!Aa1`;
 }
 
 function readServiceAccount(filePath) {
@@ -221,7 +226,7 @@ function evaluateUserAccessIssue(userDoc) {
     return 'adminPortalOnly';
   }
 
-  if (userDoc.estBloque === true || userDoc.authDisabled === true) {
+  if (userDoc.authDisabled === true) {
     return 'disabledAccount';
   }
 
@@ -290,7 +295,6 @@ async function ensureSmokeAdmin({ auth, db, email, password }) {
       nom: 'Smoke Admin',
       email,
       role: 'admin',
-      estBloque: false,
       authDisabled: false,
       createdByAdmin: false,
       estActif: true,
@@ -394,7 +398,7 @@ async function run() {
         role,
         email: `smoke.${role}.${runId}.${randomSuffix()}@example.com`,
         uid: null,
-        password: `Smoke${role[0].toUpperCase()}${role.slice(1)}!2026`,
+        password: buildEphemeralPassword(role, runId),
         checks: {},
       };
 
@@ -421,7 +425,6 @@ async function run() {
       assert(managedDocSnap.exists, `Missing /users doc after provision for ${role}`);
       assert(String(managedDoc.role || '').toLowerCase() === role, `Firestore role mismatch for ${role}`);
       assert(managedDoc.createdByAdmin === true, `createdByAdmin should be true for ${role}`);
-      assert(managedDoc.estBloque !== true, `estBloque should be false after provision for ${role}`);
 
       roleRun.checks.provision = {
         uid: roleRun.uid,
@@ -482,55 +485,6 @@ async function run() {
       });
       assert(afterDecision.destination === 'main', `Expected main after verification for ${role}`);
       roleRun.checks.loginAfterVerification = afterDecision;
-
-      await callCallable({
-        projectId: args.projectId,
-        region: args.region,
-        callableName: 'blockManagedAccount',
-        idToken: adminIdToken,
-        data: { uid: roleRun.uid },
-      });
-      const blockedDoc = (await db.collection('users').doc(roleRun.uid).get()).data() || null;
-
-      const signInBlocked = await signInWithPassword({
-        apiKey: args.apiKey,
-        email: roleRun.email,
-        password: roleRun.password,
-      });
-      const lookupBlocked = await lookupAccount({
-        apiKey: args.apiKey,
-        idToken: signInBlocked.idToken,
-      });
-      const blockedDecision = evaluateMobileDestination({
-        emailVerified: lookupBlocked?.emailVerified === true,
-        userDoc: blockedDoc,
-      });
-      assert(blockedDecision.destination === 'login', `Expected login when blocked for ${role}`);
-      roleRun.checks.blocked = blockedDecision;
-
-      await callCallable({
-        projectId: args.projectId,
-        region: args.region,
-        callableName: 'unblockManagedAccount',
-        idToken: adminIdToken,
-        data: { uid: roleRun.uid },
-      });
-      const unblockedDoc = (await db.collection('users').doc(roleRun.uid).get()).data() || null;
-      const signInUnblocked = await signInWithPassword({
-        apiKey: args.apiKey,
-        email: roleRun.email,
-        password: roleRun.password,
-      });
-      const lookupUnblocked = await lookupAccount({
-        apiKey: args.apiKey,
-        idToken: signInUnblocked.idToken,
-      });
-      const unblockedDecision = evaluateMobileDestination({
-        emailVerified: lookupUnblocked?.emailVerified === true,
-        userDoc: unblockedDoc,
-      });
-      assert(unblockedDecision.destination === 'main', `Expected main after unblock for ${role}`);
-      roleRun.checks.unblocked = unblockedDecision;
 
       await callCallable({
         projectId: args.projectId,

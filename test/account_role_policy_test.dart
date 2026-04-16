@@ -10,7 +10,6 @@ AppUser buildUser(String role) {
     role: role,
     photoProfil: '',
     estActif: true,
-    estBloque: false,
     emailVerified: true,
     followers: 0,
     followings: 0,

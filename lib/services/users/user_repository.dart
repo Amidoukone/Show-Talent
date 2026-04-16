@@ -56,6 +56,21 @@ class UserRepository {
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
 
+  static Map<String, dynamic> _legacyFieldCleanupPatch() {
+    return <String, dynamic>{
+      'authDisabled': false,
+      'authDisabledAt': FieldValue.delete(),
+      'authDisabledBy': FieldValue.delete(),
+      'authDisabledReason': FieldValue.delete(),
+      'estBloque': FieldValue.delete(),
+      'blockedAt': FieldValue.delete(),
+      'blockedBy': FieldValue.delete(),
+      'blockedReason': FieldValue.delete(),
+      'blockMode': FieldValue.delete(),
+      'blockedUntil': FieldValue.delete(),
+    };
+  }
+
   static UserAccessDecision evaluateUserData(Map<String, dynamic>? data) {
     if (data == null) {
       return const UserAccessDecision(
@@ -120,7 +135,6 @@ class UserRepository {
       role: normalizedRole,
       photoProfil: '',
       estActif: false,
-      estBloque: false,
       emailVerified: false,
       followers: 0,
       followings: 0,
@@ -233,9 +247,12 @@ class UserRepository {
     );
 
     await _usersCollection.doc(uid).set(
-          appUser.toMap(),
-          SetOptions(merge: true),
-        );
+      <String, dynamic>{
+        ..._legacyFieldCleanupPatch(),
+        ...appUser.toMap(),
+      },
+      SetOptions(merge: true),
+    );
 
     return appUser;
   }
@@ -257,6 +274,7 @@ class UserRepository {
     }
 
     final updates = <String, dynamic>{};
+    updates.addAll(_legacyFieldCleanupPatch());
     if (!user.emailVerified) {
       updates['emailVerified'] = true;
     }

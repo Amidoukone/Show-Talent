@@ -1,8 +1,11 @@
 import 'package:adfoot/config/app_routes.dart';
+import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/users/user_repository.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 enum AuthSessionDestination {
   login,
@@ -89,11 +92,17 @@ class AuthSessionService {
   AuthSessionService({
     FirebaseAuth? auth,
     UserRepository? userRepository,
+    FirebaseFunctions? functions,
   })  : _auth = auth ?? FirebaseAuth.instance,
-        _userRepository = userRepository ?? UserRepository();
+        _userRepository = userRepository ?? UserRepository(),
+        _functions = functions ??
+            FirebaseFunctions.instanceFor(
+              region: AppEnvironmentConfig.functionsRegion,
+            );
 
   final FirebaseAuth _auth;
   final UserRepository _userRepository;
+  final FirebaseFunctions _functions;
   static const String _accessUnavailableTitle = 'Acces indisponible';
   static const String _accessUnavailableMessage =
       'Impossible de verifier votre acces pour le moment. Reessayez dans quelques instants.';
@@ -105,6 +114,12 @@ class AuthSessionService {
 
   Stream<User?> idTokenChanges() => _auth.idTokenChanges();
 
+  ActionCodeSettings get _defaultEmailVerificationActionCodeSettings =>
+      AppEnvironmentConfig.buildEmailVerificationActionCodeSettings();
+
+  ActionCodeSettings get _defaultPasswordResetActionCodeSettings =>
+      AppEnvironmentConfig.buildPasswordResetActionCodeSettings();
+
   Future<User?> reloadCurrentUser() async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -113,6 +128,159 @@ class AuthSessionService {
 
     await user.reload();
     return _auth.currentUser;
+  }
+
+  Future<User?> _refreshCurrentUserAfterVerification({
+    int attempts = 10,
+    Duration retryDelay = const Duration(seconds: 2),
+  }) async {
+    User? refreshed = _auth.currentUser;
+
+    for (int attempt = 0; attempt < attempts; attempt++) {
+      if (refreshed == null) {
+        return null;
+      }
+
+      try {
+        await refreshed.getIdToken(true);
+      } catch (_) {
+        // Keep trying with the current session object.
+      }
+
+      await refreshed.reload();
+      refreshed = _auth.currentUser ?? refreshed;
+
+      if (refreshed.emailVerified) {
+        await refreshed.getIdToken(true);
+        await refreshed.reload();
+        return _auth.currentUser ?? refreshed;
+      }
+
+      if (attempt < attempts - 1) {
+        await Future.delayed(retryDelay);
+      }
+    }
+
+    return _auth.currentUser;
+  }
+
+  Future<User> _refreshVerifiedUserIdToken(User user) async {
+    await user.getIdToken(true);
+    return _auth.currentUser ?? user;
+  }
+
+  bool _isVerifiedActiveAppUser(AppUser? user) {
+    return user != null && user.emailVerified && user.estActif;
+  }
+
+  bool _isRetriableCallableSyncCode(String code) {
+    switch (code) {
+      case 'failed-precondition':
+      case 'not-found':
+      case 'unauthenticated':
+      case 'unavailable':
+      case 'unimplemented':
+      case 'deadline-exceeded':
+      case 'internal':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  Future<AppUser?> _completeEmailVerificationViaCallable({
+    required String uid,
+    required bool updateLastLogin,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable('completeEmailVerification');
+      await callable.call(<String, dynamic>{
+        'updateLastLogin': updateLastLogin,
+      });
+      return await _userRepository.fetchUserById(uid);
+    } on FirebaseFunctionsException catch (error) {
+      if (_isRetriableCallableSyncCode(error.code)) {
+        if (kDebugMode) {
+          debugPrint(
+            'AuthSessionService callable email verification sync skipped '
+            '(${error.code}): ${error.message}',
+          );
+        }
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<AppUser?> _retryEmailVerificationSync({
+    required String uid,
+    required bool updateLastLogin,
+    int attempts = 5,
+    Duration retryDelay = const Duration(seconds: 2),
+  }) async {
+    for (int attempt = 0; attempt < attempts; attempt++) {
+      final syncedUser = await _completeEmailVerificationViaCallable(
+        uid: uid,
+        updateLastLogin: updateLastLogin,
+      );
+
+      if (syncedUser != null &&
+          syncedUser.emailVerified &&
+          syncedUser.estActif) {
+        return syncedUser;
+      }
+
+      if (attempt < attempts - 1) {
+        await Future.delayed(retryDelay);
+      }
+    }
+
+    return await _userRepository.fetchUserById(uid);
+  }
+
+  Future<AppUser?> _syncVerifiedAppUserState({
+    required User verifiedUser,
+    required AppUser? currentAppUser,
+    required bool updateLastLogin,
+  }) async {
+    var appUser = await _completeEmailVerificationViaCallable(
+          uid: verifiedUser.uid,
+          updateLastLogin: updateLastLogin,
+        ) ??
+        currentAppUser;
+
+    if (_isVerifiedActiveAppUser(appUser)) {
+      return appUser;
+    }
+
+    try {
+      appUser = await _userRepository.markEmailVerifiedAndActivate(
+            verifiedUser.uid,
+            updateLastLogin: updateLastLogin,
+          ) ??
+          appUser;
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') {
+        rethrow;
+      }
+
+      if (kDebugMode) {
+        debugPrint(
+          'AuthSessionService local verified sync denied for '
+          '${verifiedUser.uid}; fallback callable retry will continue.',
+        );
+      }
+    }
+
+    if (_isVerifiedActiveAppUser(appUser)) {
+      return appUser;
+    }
+
+    return await _retryEmailVerificationSync(
+          uid: verifiedUser.uid,
+          updateLastLogin: updateLastLogin,
+        ) ??
+        appUser;
   }
 
   Future<AuthSessionSnapshot> signInWithEmailAndPassword({
@@ -132,8 +300,13 @@ class AuthSessionService {
     }
 
     await user.reload();
-    final refreshed = _auth.currentUser;
+    User? refreshed = _auth.currentUser;
     await refreshed?.getIdToken(true);
+    refreshed = await _refreshCurrentUserAfterVerification(
+          attempts: 3,
+          retryDelay: const Duration(seconds: 1),
+        ) ??
+        refreshed;
     if (refreshed == null) {
       throw const AuthFlowException('Session introuvable apres connexion.');
     }
@@ -142,6 +315,7 @@ class AuthSessionService {
       refreshed,
       waitForVerifiedUserDocument: false,
       syncVerifiedUserRecord: false,
+      updateLastLogin: true,
       signOutOnInvalid: true,
     );
   }
@@ -152,7 +326,7 @@ class AuthSessionService {
     required String nom,
     required String role,
     String? phone,
-    required ActionCodeSettings emailVerificationSettings,
+    ActionCodeSettings? emailVerificationSettings,
   }) async {
     if (!isPublicSelfSignupRole(role)) {
       throw const AuthFlowException(
@@ -200,11 +374,12 @@ class AuthSessionService {
 
   Future<void> sendPasswordResetEmail({
     required String email,
-    required ActionCodeSettings actionCodeSettings,
+    ActionCodeSettings? actionCodeSettings,
   }) {
     return _auth.sendPasswordResetEmail(
       email: email,
-      actionCodeSettings: actionCodeSettings,
+      actionCodeSettings:
+          actionCodeSettings ?? _defaultPasswordResetActionCodeSettings,
     );
   }
 
@@ -219,7 +394,7 @@ class AuthSessionService {
   }
 
   Future<EmailVerificationSendResult> sendCurrentUserEmailVerification({
-    required ActionCodeSettings actionCodeSettings,
+    ActionCodeSettings? actionCodeSettings,
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -229,7 +404,9 @@ class AuthSessionService {
     }
 
     try {
-      await user.sendEmailVerification(actionCodeSettings);
+      await user.sendEmailVerification(
+        actionCodeSettings ?? _defaultEmailVerificationActionCodeSettings,
+      );
       return EmailVerificationSendResult(
         sent: true,
         sentAtMs: DateTime.now().millisecondsSinceEpoch,
@@ -245,7 +422,10 @@ class AuthSessionService {
   Future<void> applyEmailVerificationCode(String oobCode) async {
     await _auth.checkActionCode(oobCode);
     await _auth.applyActionCode(oobCode);
-    await _auth.currentUser?.reload();
+    await _refreshCurrentUserAfterVerification(
+      attempts: 3,
+      retryDelay: const Duration(milliseconds: 700),
+    );
   }
 
   Future<AuthSessionSnapshot> finalizeCurrentVerifiedSession({
@@ -259,8 +439,7 @@ class AuthSessionService {
       );
     }
 
-    await user.reload();
-    final refreshed = _auth.currentUser;
+    final refreshed = await _refreshCurrentUserAfterVerification();
     if (refreshed == null) {
       throw const AuthFlowException(
         'Session expiree. Veuillez vous reconnecter.',
@@ -268,6 +447,21 @@ class AuthSessionService {
     }
 
     if (!refreshed.emailVerified) {
+      final syncedUser = await _retryEmailVerificationSync(
+        uid: refreshed.uid,
+        updateLastLogin: updateLastLogin,
+      );
+
+      if (syncedUser != null &&
+          syncedUser.emailVerified &&
+          syncedUser.estActif) {
+        return AuthSessionSnapshot(
+          destination: AuthSessionDestination.main,
+          firebaseUser: refreshed,
+          appUser: syncedUser,
+        );
+      }
+
       throw const AuthFlowException(
         'Votre e-mail n est pas encore detecte comme verifie. Apres avoir clique sur le lien, attendez quelques secondes puis reessayez.',
       );
@@ -325,6 +519,24 @@ class AuthSessionService {
         );
       }
 
+      final syncedUser = await _retryEmailVerificationSync(
+        uid: refreshed.uid,
+        updateLastLogin: updateLastLogin,
+      );
+
+      if (_isVerifiedActiveAppUser(syncedUser)) {
+        final reloadedUser = await _refreshCurrentUserAfterVerification(
+          attempts: 3,
+          retryDelay: const Duration(milliseconds: 700),
+        );
+
+        return AuthSessionSnapshot(
+          destination: AuthSessionDestination.main,
+          firebaseUser: reloadedUser ?? refreshed,
+          appUser: syncedUser,
+        );
+      }
+
       return AuthSessionSnapshot(
         destination: AuthSessionDestination.verifyEmail,
         firebaseUser: refreshed,
@@ -358,11 +570,20 @@ class AuthSessionService {
         (!appUser.emailVerified || !appUser.estActif);
 
     if (syncVerifiedUserRecord || needsVerifiedSync) {
-      appUser = await _userRepository.markEmailVerifiedAndActivate(
-            refreshed.uid,
+      final verifiedUser = await _refreshVerifiedUserIdToken(refreshed);
+      appUser = await _syncVerifiedAppUserState(
+            verifiedUser: verifiedUser,
+            currentAppUser: appUser,
             updateLastLogin: updateLastLogin,
           ) ??
           appUser;
+
+      if (kDebugMode && appUser != null) {
+        debugPrint(
+          'AuthSessionService synced verified user state for ${appUser.uid}: '
+          'emailVerified=${appUser.emailVerified} estActif=${appUser.estActif}',
+        );
+      }
     }
 
     return AuthSessionSnapshot(

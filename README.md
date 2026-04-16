@@ -16,6 +16,7 @@ migration is completed.
 - [MP4 Production Baseline Runbook](./MP4_PRODUCTION_BASELINE_RUNBOOK.md)
 - [HLS Staging Validation Runbook](./HLS_STAGING_VALIDATION_RUNBOOK.md)
 - [Firebase Environments Runbook](./docs/firebase-environments-runbook.md)
+- [Production-Next Recipe And Pilot Report](./docs/pv-recette-production-next.md)
 - [Mobile Firebase Config Runbook](./docs/mobile-firebase-config-runbook.md)
 - [Mobile Firebase Project Bootstrap Runbook](./docs/mobile-firebase-project-bootstrap-runbook.md)
 - [Cloud Cost Control Plan](./docs/cloud-cost-control-plan.md)

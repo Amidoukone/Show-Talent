@@ -67,4 +67,6 @@ service-account*.json
 
 # Generated smoke-test reports
 /docs/smoke-managed-account-auth-*.json
+/docs/smoke-public-signup-*.json
+/docs/smoke-public-signup.md
 

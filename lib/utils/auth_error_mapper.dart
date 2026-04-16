@@ -4,6 +4,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 /// Homogene pour SignUp et Login.
 class AuthErrorMapper {
   static String toMessage(FirebaseAuthException e) {
+    final normalizedMessage = (e.message ?? '').toUpperCase();
+
+    if (normalizedMessage.contains('CONFIGURATION_NOT_FOUND')) {
+      return 'La configuration Firebase Authentication de cet environnement est incomplete. Verifiez Authentication, le provider Email/Password et la configuration du projet Firebase cible.';
+    }
+
     switch (e.code) {
       case 'email-already-in-use':
         return 'Adresse e-mail deja utilisee.';
@@ -25,6 +31,8 @@ class AuthErrorMapper {
         return 'Trop de tentatives. Reessayez plus tard.';
       case 'network-request-failed':
         return 'Probleme de connexion reseau. Verifiez votre connexion.';
+      case 'internal-error':
+        return 'La plateforme Firebase a retourne une erreur interne pour cet environnement. Verifiez la configuration Authentication du projet cible.';
       default:
         return e.message ?? 'Une erreur est survenue. Reessayez.';
     }

@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("local", "staging", "production")]
+    [ValidateSet("local", "staging", "production", "production-next")]
     [string]$Environment = "production",
 
     [string]$Target = "lib/main.dart",
@@ -20,7 +20,19 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 if ($ReleaseGate -and -not $PSBoundParameters.ContainsKey("RequireSigning")) {
-    $RequireSigning = $Environment -eq "production"
+    $RequireSigning = $Environment -in @("production", "production-next")
+}
+
+function Get-EffectiveNativeEnvironment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$EnvironmentName
+    )
+
+    switch ($EnvironmentName) {
+        "production-next" { return "production" }
+        default { return $EnvironmentName }
+    }
 }
 
 function Read-MobileConfig {
@@ -94,6 +106,7 @@ function Mask-PreviewArg {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$effectiveNativeEnvironment = Get-EffectiveNativeEnvironment -EnvironmentName $Environment
 $preflightScript = Join-Path $repoRoot "scripts/check-android-release-readiness.ps1"
 $mobileConfigPath = Join-Path $repoRoot "config/mobile/$Environment.json"
 
@@ -134,7 +147,7 @@ try {
     $flutterArgs = @(
         "build", "appbundle",
         "--release",
-        "--flavor", $Environment,
+        "--flavor", $effectiveNativeEnvironment,
         "-t", $Target
     )
 
@@ -160,6 +173,7 @@ try {
     }
     $preview = "flutter " + ($previewArgs -join " ")
     Write-Host $preview
+    Write-Host "Effective native flavor: $effectiveNativeEnvironment"
     if ($null -ne $mobileConfig) {
         Write-Host "Mobile config file: $mobileConfigPath"
     } else {
@@ -188,7 +202,7 @@ try {
     }
 
     $bundleDir = Join-Path $repoRoot "build/app/outputs/bundle"
-    $preferredAab = Join-Path $bundleDir "$($Environment)Release/app-$Environment-release.aab"
+    $preferredAab = Join-Path $bundleDir "$($effectiveNativeEnvironment)Release/app-$effectiveNativeEnvironment-release.aab"
     $aabPath = $null
 
     if (Test-Path -LiteralPath $preferredAab) {

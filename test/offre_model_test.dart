@@ -66,5 +66,81 @@ void main() {
       expect(offre.dateCreation, isA<DateTime>());
       expect(offre.statut, 'ouverte');
     });
+
+    test('supports legacy aliases for owner and timestamps', () {
+      final offre = Offre.fromMap(
+        {
+          'title': 'Offre legacy',
+          'details': 'Format historique',
+          'createdAt': '2026-04-01T10:00:00.000Z',
+          'endDate': 1775000000000,
+          'ownerUid': 'club-legacy',
+          'ownerName': 'Club Legacy',
+          'ownerRole': 'club',
+          'applications': [
+            {
+              'uid': 'joueur-legacy',
+              'nom': 'Legacy Player',
+              'email': 'legacy@example.com',
+              'role': 'joueur',
+            },
+          ],
+          'status': 'archived',
+          'location': 'Bouake',
+        },
+        fallbackId: 'legacy-offer',
+      );
+
+      expect(offre.id, 'legacy-offer');
+      expect(offre.titre, 'Offre legacy');
+      expect(offre.description, 'Format historique');
+      expect(offre.recruteur.uid, 'club-legacy');
+      expect(offre.candidats.single.uid, 'joueur-legacy');
+      expect(offre.statut, 'archivee');
+      expect(offre.localisation, 'Bouake');
+    });
+
+    test('toMap stores recruiter and candidates as minimal embedded users', () {
+      final offre = Offre.fromMap(
+        {
+          'id': 'offre-min',
+          'titre': 'Scout lateral',
+          'description': 'Recherche lateral moderne',
+          'dateDebut': Timestamp.fromDate(DateTime.utc(2026, 4, 1)),
+          'dateFin': Timestamp.fromDate(DateTime.utc(2026, 4, 30)),
+          'dateCreation': Timestamp.fromDate(DateTime.utc(2026, 3, 15)),
+          'recruteur': {
+            'uid': 'club-embedded',
+            'nom': 'Club Embedded',
+            'email': 'club-embedded@example.com',
+            'role': 'club',
+            'offrePubliees': [
+              {'id': 'nested-offer'}
+            ],
+          },
+          'candidats': [
+            {
+              'uid': 'player-embedded',
+              'nom': 'Player Embedded',
+              'email': 'player-embedded@example.com',
+              'role': 'joueur',
+              'eventPublies': [
+                {'id': 'nested-event'}
+              ],
+            },
+          ],
+        },
+      );
+
+      final map = offre.toMap();
+      final recruteur = Map<String, dynamic>.from(map['recruteur'] as Map);
+      final candidat =
+          Map<String, dynamic>.from((map['candidats'] as List).single as Map);
+
+      expect(recruteur['uid'], 'club-embedded');
+      expect(recruteur.containsKey('offrePubliees'), isFalse);
+      expect(candidat['uid'], 'player-embedded');
+      expect(candidat.containsKey('eventPublies'), isFalse);
+    });
   });
 }

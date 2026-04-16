@@ -1,4 +1,3 @@
-import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/screens/signup_screen.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
@@ -109,10 +108,6 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _authSessionService.sendPasswordResetEmail(
         email: email,
-        actionCodeSettings: ActionCodeSettings(
-          url: AppEnvironmentConfig.passwordResetActionUrl,
-          handleCodeInApp: false,
-        ),
       );
 
       AdFeedback.success(

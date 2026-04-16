@@ -1,15 +1,12 @@
-import 'dart:async';
-
-import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
-import 'package:adfoot/services/email_link_handler.dart';
 import 'package:adfoot/services/verify_email_throttle.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../utils/email_action_link_parser.dart';
 import '../widgets/ad_app_bar.dart';
 import '../widgets/ad_button.dart';
 import '../widgets/ad_feedback.dart';
@@ -27,20 +24,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   final AuthSessionService _authSessionService = AuthSessionService();
 
   bool _isProcessing = true;
-  bool _finishing = false;
   bool _resending = false;
   String? _message;
-
-  Timer? _pollingTimer;
-  StreamSubscription<void>? _linkSub;
 
   bool _emailSent = false;
   int? _sentAtMs;
 
-  static final ActionCodeSettings _acs = ActionCodeSettings(
-    url: AppEnvironmentConfig.emailVerificationActionUrl,
-    handleCodeInApp: false,
-  );
+  static const String _loginAfterVerificationMessage =
+      'Si la page web indique que votre e-mail a ete verifie, '
+      'retournez a la connexion puis reconnectez-vous pour activer le compte.';
 
   @override
   void initState() {
@@ -56,17 +48,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       }
     }
 
-    _listenToEmailVerification();
-    _handlePossibleRedirectParams().then((_) {
-      _startVerificationPolling();
-    });
-  }
-
-  @override
-  void dispose() {
-    _pollingTimer?.cancel();
-    _linkSub?.cancel();
-    super.dispose();
+    _handlePossibleRedirectParams();
   }
 
   String _defaultUxMessage({required bool emailSent}) {
@@ -78,10 +60,10 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         ? 'Un e-mail de verification a ete envoye.\n\n$emailLine'
             'Ouvre ta boite de reception et clique sur le lien.\n'
             'Si tu ne le vois pas, verifie aussi Spam / Indesirables / Promotions.\n\n'
-            'Apres avoir clique, reviens ici et appuie sur "J\'ai clique sur le lien, continuer".'
+            'Une fois l e-mail verifie dans le navigateur, reviens ici puis retourne a la connexion.'
         : 'Verifie ta boite mail et clique sur le lien de verification.\n\n$emailLine'
             'Si tu ne le vois pas, verifie aussi Spam / Indesirables / Promotions.\n\n'
-            'Apres avoir clique, reviens ici et appuie sur "J\'ai clique sur le lien, continuer".';
+            'Une fois l e-mail verifie dans le navigateur, reviens ici puis retourne a la connexion.';
   }
 
   Future<void> _goBackToLogin() async {
@@ -96,8 +78,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     await Get.offAllNamed(AppRoutes.login);
   }
 
-  Future<void> _redirectToLoginAfterVerification({
+  Future<void> _redirectToLogin({
     String? email,
+    String? message,
   }) async {
     try {
       await _authSessionService.signOut();
@@ -112,82 +95,38 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       arguments: <String, dynamic>{
         if (email != null && email.isNotEmpty) 'prefillEmail': email,
         'sessionNoticeTitle': 'E-mail verifie',
-        'sessionNoticeMessage':
+        'sessionNoticeMessage': message ??
             'Votre e-mail a ete verifie. Connectez-vous pour continuer.',
         'sessionNoticeKind': 'success',
       },
     );
   }
 
-  Map<String, String> _mergedParamsFrom(Uri uri) {
-    final params = <String, String>{...uri.queryParameters};
-    if (uri.fragment.isNotEmpty) {
-      try {
-        params.addAll(Uri.splitQueryString(uri.fragment));
-      } catch (_) {}
-    }
-    return params;
-  }
-
   Future<void> _handlePossibleRedirectParams() async {
-    if (!kIsWeb) {
-      return;
-    }
+    if (kIsWeb) {
+      final params = EmailActionLinkParser.extract(Uri.base);
+      final mode = params['mode'];
+      final oobCode = params['oobCode'];
 
-    final params = _mergedParamsFrom(Uri.base);
-    final mode = params['mode'];
-    final oobCode = params['oobCode'];
-
-    if (mode == 'verifyEmail' && oobCode != null && oobCode.isNotEmpty) {
-      try {
-        await _authSessionService.applyEmailVerificationCode(oobCode);
-      } on FirebaseAuthException catch (error) {
-        debugPrint('applyActionCode error: ${error.code} - ${error.message}');
-      }
-
-      final user = _authSessionService.currentUser;
-      if (user == null) {
-        if (!mounted) {
+      if (mode == 'verifyEmail' && oobCode != null && oobCode.isNotEmpty) {
+        try {
+          await _authSessionService.applyEmailVerificationCode(oobCode);
+          await _redirectToLogin(
+            email: _authSessionService.currentUserEmail,
+            message: _loginAfterVerificationMessage,
+          );
           return;
+        } on FirebaseAuthException catch (error) {
+          debugPrint('applyActionCode error: ${error.code} - ${error.message}');
+          if (mounted) {
+            setState(() {
+              _message =
+                  'Le lien de verification est invalide ou expire. Demandez un nouveau lien.';
+            });
+          }
         }
-
-        setState(() {
-          _isProcessing = false;
-          _message =
-              'E-mail verifie. Veuillez vous reconnecter pour continuer.';
-        });
-        return;
-      }
-
-      if (_authSessionService.isCurrentUserEmailVerified) {
-        await _finalizeVerificationAndNavigate();
       }
     }
-  }
-
-  void _listenToEmailVerification() {
-    EmailLinkHandler.init().then((_) {
-      _linkSub = EmailLinkHandler.onEmailVerified.listen((_) {
-        _onEmailVerified();
-      });
-    });
-  }
-
-  void _startVerificationPolling() {
-    _pollingTimer = Timer.periodic(const Duration(seconds: 4), (_) async {
-      try {
-        final refreshed = await _authSessionService.reloadCurrentUser();
-        if (refreshed == null) {
-          return;
-        }
-
-        if (refreshed.emailVerified) {
-          _onEmailVerified();
-        }
-      } catch (_) {
-        // Ignore intermittent reload failures while polling.
-      }
-    });
 
     if (!mounted) {
       return;
@@ -199,71 +138,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     });
   }
 
-  Future<void> _onEmailVerified() async {
-    if (_finishing || !mounted) {
-      return;
-    }
-
-    final currentUser = _authSessionService.currentUser;
-    if (currentUser == null) {
-      await _redirectToLoginAfterVerification();
-      return;
-    }
-
-    setState(() {
-      _finishing = true;
-    });
-
-    try {
-      _pollingTimer?.cancel();
-      _linkSub?.cancel();
-      await _finalizeVerificationAndNavigate();
-    } finally {
-      if (mounted) {
-        setState(() {
-          _finishing = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _finalizeVerificationAndNavigate() async {
-    try {
-      final currentEmail = _authSessionService.currentUserEmail;
-      final snapshot = await _authSessionService.finalizeCurrentVerifiedSession(
-        updateLastLogin: true,
-        signOutOnInvalid: true,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      final resolvedEmail = currentEmail ??
-          snapshot.firebaseUser?.email ??
-          snapshot.appUser?.email;
-      await _redirectToLoginAfterVerification(email: resolvedEmail);
-    } on AuthFlowException catch (error) {
-      if (!mounted) {
-        return;
-      }
-
-      final needsVerificationHint =
-          error.message.contains('n\'est pas encore detecte') ||
-              error.message.contains('n\'est pas encore détecté');
-
-      setState(() {
-        _message = needsVerificationHint
-            ? '${_defaultUxMessage(emailSent: _emailSent)}\n\n'
-                'Ton e-mail n\'est pas encore detecte comme verifie.\n'
-                'Apres avoir clique sur le lien, attends 2 a 5 secondes puis reessaie.'
-            : error.message;
-      });
-    }
-  }
-
   Future<void> _resendEmail() async {
-    if (_isProcessing || _finishing || _resending) {
+    if (_isProcessing || _resending) {
       return;
     }
 
@@ -282,9 +158,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     }
 
     try {
-      final result = await _authSessionService.sendCurrentUserEmailVerification(
-        actionCodeSettings: _acs,
-      );
+      final result =
+          await _authSessionService.sendCurrentUserEmailVerification();
 
       if (!result.sent) {
         if (!mounted) {
@@ -342,9 +217,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         subtitle: 'Securisation du compte Adfoot',
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: (_isProcessing || _finishing || _resending)
-              ? null
-              : _goBackToLogin,
+          onPressed: (_isProcessing || _resending) ? null : _goBackToLogin,
           tooltip: 'Retour',
         ),
       ),
@@ -354,7 +227,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           child: _isProcessing
               ? const AdStatePanel.loading(
                   title: 'Verification en cours',
-                  message: 'Initialisation de la session securisee...',
+                  message: 'Preparation du parcours de verification...',
                 )
               : ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
@@ -372,17 +245,13 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                         ),
                         const SizedBox(height: 24),
                         AdButton(
-                          onPressed: _finishing ? null : _onEmailVerified,
-                          loading: _finishing,
-                          leading: Icons.check_circle_outline,
-                          label: _finishing
-                              ? 'Verification...'
-                              : 'J\'ai clique sur le lien, continuer',
+                          onPressed: _goBackToLogin,
+                          leading: Icons.login_outlined,
+                          label: 'Retour a la connexion',
                         ),
                         const SizedBox(height: 12),
                         AdButton(
-                          onPressed:
-                              (_finishing || _resending) ? null : _resendEmail,
+                          onPressed: _resending ? null : _resendEmail,
                           loading: _resending,
                           leading: Icons.email_outlined,
                           kind: AdButtonKind.tonal,

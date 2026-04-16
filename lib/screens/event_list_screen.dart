@@ -32,7 +32,7 @@ class _EventListScreenState extends State<EventListScreen> {
 
   String _selectedStatus = 'tous';
   String _selectedVisibility = 'tous';
-  bool _onlyUpcoming = true;
+  bool _onlyUpcoming = false;
 
   final Map<String, bool> _pendingInscription = {};
 

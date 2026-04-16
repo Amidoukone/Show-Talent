@@ -97,9 +97,7 @@ export const provisionManagedAccount = onCall(
       phone: phone || existingData.phone || null,
       role,
       photoProfil: existingData.photoProfil ?? "",
-      estActif: userRecord.emailVerified && userRecord.disabled !== true &&
-        existingData["estBloque"] !== true,
-      estBloque: existingData["estBloque"] === true,
+      estActif: userRecord.emailVerified && userRecord.disabled !== true,
       authDisabled: userRecord.disabled === true,
       emailVerified: userRecord.emailVerified,
       emailVerifiedAt: userRecord.emailVerified ?

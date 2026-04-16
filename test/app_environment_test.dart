@@ -6,12 +6,8 @@ void main() {
     expect(AppEnvironmentConfig.environment, AppEnvironment.production);
     expect(AppEnvironmentConfig.useFirebaseEmulators, isFalse);
     expect(
-      AppEnvironmentConfig.emailVerificationActionUrl,
-      'https://adfoot.org/verify',
-    );
-    expect(
-      AppEnvironmentConfig.passwordResetActionUrl,
-      'https://adfoot.org/reset',
+      AppEnvironmentConfig.emailLinkHost,
+      '${AppEnvironmentConfig.firebaseProjectId}.firebaseapp.com',
     );
     expect(
       AppEnvironmentConfig.emailLinkAllowedHosts,
@@ -21,6 +17,5 @@ void main() {
       AppEnvironmentConfig.emailLinkAllowedHosts,
       contains('${AppEnvironmentConfig.firebaseProjectId}.web.app'),
     );
-    expect(AppEnvironmentConfig.emailLinkAllowedHosts, contains('adfoot.org'));
   });
 }

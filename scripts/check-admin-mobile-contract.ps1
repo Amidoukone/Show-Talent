@@ -110,8 +110,6 @@ $interRepoRunbookRaw = Get-Content -LiteralPath $interRepoRunbookPath -Raw
 
 $requiredCallables = @(
     "provisionManagedAccount",
-    "blockManagedAccount",
-    "unblockManagedAccount",
     "deleteManagedAccount",
     "changeManagedAccountRole",
     "resendManagedAccountInvite",

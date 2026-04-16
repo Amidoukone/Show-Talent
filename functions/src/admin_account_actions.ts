@@ -6,7 +6,7 @@ import type {UserRecord} from "firebase-admin/auth";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 
-import {admin, auth, db, fieldValue, storage} from "./firebase";
+import {auth, db, fieldValue, storage} from "./firebase";
 import {
   LOW_CPU_REGION_OPTIONS,
   assertAdminCaller,
@@ -35,90 +35,12 @@ type ManagedAccountSummary = {
   email: string;
   role: string;
   createdByAdmin: boolean;
-  estBloque: boolean;
   estActif: boolean;
   authDisabled: boolean;
-  blockMode: "temporary" | "permanent" | null;
-  blockedUntil: string | null;
-  effectiveAppBlock: boolean;
 };
 
 function readBoolean(data: Record<string, unknown>, key: string): boolean {
   return data[key] === true;
-}
-
-function readOptionalPositiveInt(data: unknown, key: string): number | null {
-  if (typeof data !== "object" || data === null) return null;
-  const raw = (data as Record<string, unknown>)[key];
-
-  let value = NaN;
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    value = raw;
-  } else if (typeof raw === "string") {
-    value = Number(raw.trim());
-  }
-
-  if (!Number.isInteger(value) || value <= 0) {
-    return null;
-  }
-
-  return value;
-}
-
-function readBlockMode(data: Record<string, unknown>): "temporary" | "permanent" | null {
-  const value = data["blockMode"];
-  if (value === "temporary" || value === "permanent") {
-    return value;
-  }
-  return null;
-}
-
-function readBlockedUntil(data: Record<string, unknown>): Date | null {
-  const value = data["blockedUntil"];
-  if (value instanceof admin.firestore.Timestamp) {
-    return value.toDate();
-  }
-
-  if (value instanceof Date) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed;
-    }
-  }
-
-  return null;
-}
-
-function hasEffectiveAppBlock(
-  data: Record<string, unknown>,
-  options?: {
-    estBloque?: boolean;
-    blockMode?: "temporary" | "permanent" | null;
-    blockedUntil?: Date | null;
-    now?: Date;
-  },
-): boolean {
-  const estBloque = options?.estBloque ?? readBoolean(data, "estBloque");
-  if (!estBloque) {
-    return false;
-  }
-
-  const blockMode = options?.blockMode ?? readBlockMode(data);
-  if (blockMode !== "temporary") {
-    return true;
-  }
-
-  const blockedUntil = options?.blockedUntil ?? readBlockedUntil(data);
-  if (blockedUntil == null) {
-    return true;
-  }
-
-  const now = options?.now ?? new Date();
-  return blockedUntil.getTime() > now.getTime();
 }
 
 function getTargetUid(data: unknown): string {
@@ -199,51 +121,28 @@ function assertSafeAdminMutation(
 function computeAccountActiveState(
   target: ManagedTargetContext,
   options?: {
-    estBloque?: boolean;
-    blockMode?: "temporary" | "permanent" | null;
-    blockedUntil?: Date | null;
     authDisabled?: boolean;
   },
 ): boolean {
-  const effectiveAppBlock = hasEffectiveAppBlock(target.userData, {
-    estBloque: options?.estBloque,
-    blockMode: options?.blockMode,
-    blockedUntil: options?.blockedUntil,
-  });
   const authDisabled = options?.authDisabled ?? target.userRecord?.disabled === true;
   const emailVerified =
     target.userRecord?.emailVerified ?? readBoolean(target.userData, "emailVerified");
 
-  return !effectiveAppBlock && !authDisabled && emailVerified;
+  return !authDisabled && emailVerified;
 }
 
 function buildManagedAccountSummary(
   target: ManagedTargetContext,
   options?: {
-    estBloque?: boolean;
-    blockMode?: "temporary" | "permanent" | null;
-    blockedUntil?: Date | null;
     estActif?: boolean;
     authDisabled?: boolean;
   },
 ): ManagedAccountSummary {
   const email = target.userRecord?.email ??
     getString(target.userData, "email");
-  const estBloque = options?.estBloque ?? readBoolean(target.userData, "estBloque");
-  const blockMode = options?.blockMode ?? readBlockMode(target.userData);
-  const blockedUntil = options?.blockedUntil ?? readBlockedUntil(target.userData);
   const authDisabled = options?.authDisabled ?? target.userRecord?.disabled === true;
-  const estActif =
-    options?.estActif ?? computeAccountActiveState(target, {
-      estBloque,
-      blockMode,
-      blockedUntil,
-      authDisabled,
-    });
-  const effectiveAppBlock = hasEffectiveAppBlock(target.userData, {
-    estBloque,
-    blockMode,
-    blockedUntil,
+  const estActif = options?.estActif ?? computeAccountActiveState(target, {
+    authDisabled,
   });
 
   return {
@@ -251,12 +150,8 @@ function buildManagedAccountSummary(
     email,
     role: target.role,
     createdByAdmin: target.createdByAdmin,
-    estBloque,
     estActif,
     authDisabled,
-    blockMode,
-    blockedUntil: blockedUntil?.toISOString() ?? null,
-    effectiveAppBlock,
   };
 }
 
@@ -542,104 +437,6 @@ function sanitizeManagedProfilePatch(
   return updates;
 }
 
-export const blockManagedAccount = onCall(
-  LOW_CPU_REGION_OPTIONS,
-  async (request) => {
-    const adminUid = await assertAdminCaller(request);
-    const uid = getTargetUid(request.data);
-    const reason = getOptionalString(request.data, "reason");
-    const durationDays =
-      readOptionalPositiveInt(request.data, "durationDays") ??
-      readOptionalPositiveInt(request.data, "blockedForDays");
-
-    const target = await loadManagedTarget(uid);
-    assertSafeAdminMutation(target, adminUid);
-
-    const blockMode: "temporary" | "permanent" =
-      durationDays != null ? "temporary" : "permanent";
-    const blockedUntil = durationDays != null ?
-      new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) :
-      null;
-    const wasBlocked = hasEffectiveAppBlock(target.userData);
-
-    await target.userRef.set({
-      estBloque: true,
-      estActif: false,
-      blockedBy: adminUid,
-      blockedAt: fieldValue.serverTimestamp(),
-      blockedReason: reason ?? fieldValue.delete(),
-      blockMode,
-      blockedUntil: blockedUntil != null ?
-        admin.firestore.Timestamp.fromDate(blockedUntil) :
-        fieldValue.delete(),
-      updatedAt: fieldValue.serverTimestamp(),
-    }, {merge: true});
-
-    return {
-      success: true,
-      code: wasBlocked ?
-        "managed_account_already_blocked" :
-        blockMode == "temporary" ?
-          "managed_account_temporarily_suspended" :
-          "managed_account_blocked",
-      message: wasBlocked ?
-        "Compte deja bloque." :
-        blockMode == "temporary" ?
-          `Compte suspendu pour ${durationDays} jour(s).` :
-          "Compte bloque.",
-      data: buildManagedAccountSummary(target, {
-        estBloque: true,
-        blockMode,
-        blockedUntil,
-        estActif: false,
-      }),
-    };
-  },
-);
-
-export const unblockManagedAccount = onCall(
-  LOW_CPU_REGION_OPTIONS,
-  async (request) => {
-    const adminUid = await assertAdminCaller(request);
-    const uid = getTargetUid(request.data);
-
-    const target = await loadManagedTarget(uid);
-    assertSafeAdminMutation(target, adminUid);
-
-    const authDisabled = target.userRecord?.disabled === true;
-    const estActif = computeAccountActiveState(target, {
-      estBloque: false,
-      authDisabled,
-    });
-
-    await target.userRef.set({
-      estBloque: false,
-      estActif,
-      unblockedBy: adminUid,
-      unblockedAt: fieldValue.serverTimestamp(),
-      blockedBy: fieldValue.delete(),
-      blockedAt: fieldValue.delete(),
-      blockedReason: fieldValue.delete(),
-      blockMode: fieldValue.delete(),
-      blockedUntil: fieldValue.delete(),
-      updatedAt: fieldValue.serverTimestamp(),
-    }, {merge: true});
-
-    return {
-      success: true,
-      code: "managed_account_unblocked",
-      message: "Compte debloque.",
-      data: buildManagedAccountSummary(target, {
-        estBloque: false,
-        blockMode: null,
-        blockedUntil: null,
-        estActif,
-        authDisabled,
-      }),
-    };
-  },
-);
-
 export const disableManagedAccountAuth = onCall(
   LOW_CPU_REGION_OPTIONS,
   async (request) => {
@@ -708,9 +505,7 @@ export const enableManagedAccountAuth = onCall(
       await auth.updateUser(uid, {disabled: false});
     }
 
-    const estBloque = readBoolean(target.userData, "estBloque");
     const estActif = computeAccountActiveState(target, {
-      estBloque,
       authDisabled: false,
     });
 

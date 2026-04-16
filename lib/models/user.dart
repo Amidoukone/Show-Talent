@@ -14,7 +14,6 @@ class AppUser {
   String role;
   String photoProfil;
   bool estActif;
-  bool estBloque;
   bool authDisabled;
   bool emailVerified;
   bool createdByAdmin;
@@ -24,9 +23,6 @@ class AppUser {
   DateTime dernierLogin;
   DateTime? emailVerifiedAt;
   String? phone;
-  String? blockedReason;
-  DateTime? blockedUntil;
-  String? blockMode;
   String? authDisabledReason;
 
   // =========================
@@ -137,7 +133,6 @@ class AppUser {
     required this.role,
     required this.photoProfil,
     required this.estActif,
-    required this.estBloque,
     this.authDisabled = false,
     required this.emailVerified,
     this.createdByAdmin = false,
@@ -147,9 +142,6 @@ class AppUser {
     required this.dernierLogin,
     this.emailVerifiedAt,
     this.phone,
-    this.blockedReason,
-    this.blockedUntil,
-    this.blockMode,
     this.authDisabledReason,
 
     // Transverses
@@ -202,6 +194,17 @@ class AppUser {
   // 🔁 Parsing Firestore SAFE
   // =========================
   factory AppUser.fromMap(Map<String, dynamic> map) {
+    return AppUser._fromMap(map, parseNestedCollections: true);
+  }
+
+  factory AppUser.fromEmbeddedMap(Map<String, dynamic> map) {
+    return AppUser._fromMap(map, parseNestedCollections: false);
+  }
+
+  static AppUser _fromMap(
+    Map<String, dynamic> map, {
+    required bool parseNestedCollections,
+  }) {
     Map<String, dynamic>? safeMap(dynamic v) {
       if (v is Map) return Map<String, dynamic>.from(v);
       return null;
@@ -219,7 +222,6 @@ class AppUser {
       role: map['role'] ?? 'utilisateur',
       photoProfil: map['photoProfil'] ?? '',
       estActif: map['estActif'] ?? false,
-      estBloque: map['estBloque'] ?? false,
       authDisabled: map['authDisabled'] == true,
       emailVerified: map['emailVerified'] ?? false,
       createdByAdmin: map['createdByAdmin'] as bool? ?? false,
@@ -231,9 +233,6 @@ class AppUser {
       dernierLogin:
           (map['dernierLogin'] as Timestamp?)?.toDate() ?? DateTime.now(),
       phone: map['phone']?.toString(),
-      blockedReason: map['blockedReason']?.toString(),
-      blockedUntil: _parseNullableDate(map['blockedUntil']),
-      blockMode: _normalizeBlockMode(map['blockMode']?.toString()),
       authDisabledReason: map['authDisabledReason']?.toString(),
 
       // Transverses
@@ -255,7 +254,7 @@ class AppUser {
       buts: (map['buts'] as num?)?.toInt(),
       assistances: (map['assistances'] as num?)?.toInt(),
 
-      videosPubliees: map['videosPubliees'] is List
+      videosPubliees: parseNestedCollections && map['videosPubliees'] is List
           ? (map['videosPubliees'] as List)
               .map((v) => Video.fromMap(Map<String, dynamic>.from(v as Map)))
               .toList()
@@ -279,13 +278,13 @@ class AppUser {
       nomClub: map['nomClub']?.toString(),
       ligue: map['ligue']?.toString(),
 
-      offrePubliees: map['offrePubliees'] is List
+      offrePubliees: parseNestedCollections && map['offrePubliees'] is List
           ? (map['offrePubliees'] as List)
               .map((v) => Offre.fromMap(Map<String, dynamic>.from(v as Map)))
               .toList()
           : null,
 
-      eventPublies: map['eventPublies'] is List
+      eventPublies: parseNestedCollections && map['eventPublies'] is List
           ? (map['eventPublies'] as List)
               .map((v) => Event.fromMap(Map<String, dynamic>.from(v as Map)))
               .toList()
@@ -297,19 +296,27 @@ class AppUser {
       // Social
       team: map['team']?.toString(),
 
-      joueursSuivis: map['joueursSuivis'] is List
+      joueursSuivis: parseNestedCollections && map['joueursSuivis'] is List
           ? (map['joueursSuivis'] as List)
-              .map((j) => AppUser.fromMap(Map<String, dynamic>.from(j as Map)))
+              .map(
+                (j) => AppUser.fromEmbeddedMap(
+                  Map<String, dynamic>.from(j as Map),
+                ),
+              )
               .toList()
           : null,
 
-      clubsSuivis: map['clubsSuivis'] is List
+      clubsSuivis: parseNestedCollections && map['clubsSuivis'] is List
           ? (map['clubsSuivis'] as List)
-              .map((c) => AppUser.fromMap(Map<String, dynamic>.from(c as Map)))
+              .map(
+                (c) => AppUser.fromEmbeddedMap(
+                  Map<String, dynamic>.from(c as Map),
+                ),
+              )
               .toList()
           : null,
 
-      videosLikees: map['videosLikees'] is List
+      videosLikees: parseNestedCollections && map['videosLikees'] is List
           ? (map['videosLikees'] as List)
               .map((v) => Video.fromMap(Map<String, dynamic>.from(v as Map)))
               .toList()
@@ -333,7 +340,7 @@ class AppUser {
   // =========================
   // ⬆️ Firestore export SAFE
   // =========================
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toEmbeddedMap() {
     return {
       'uid': uid,
       'nom': nom,
@@ -341,10 +348,22 @@ class AppUser {
       'role': role,
       'photoProfil': photoProfil,
       'estActif': estActif,
-      'estBloque': estBloque,
       'authDisabled': authDisabled,
       'emailVerified': emailVerified,
       'createdByAdmin': createdByAdmin,
+      'phone': phone,
+      'nomClub': nomClub,
+      'ligue': ligue,
+      'entreprise': entreprise,
+      'team': team,
+      'profilePublic': profilePublic,
+      'allowMessages': allowMessages,
+    };
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      ...toEmbeddedMap(),
       'emailVerifiedAt':
           emailVerifiedAt != null ? Timestamp.fromDate(emailVerifiedAt!) : null,
       'followers': followers,
@@ -352,10 +371,6 @@ class AppUser {
       'dateInscription': Timestamp.fromDate(dateInscription),
       'dernierLogin': Timestamp.fromDate(dernierLogin),
       'phone': phone,
-      'blockedReason': blockedReason,
-      'blockedUntil':
-          blockedUntil != null ? Timestamp.fromDate(blockedUntil!) : null,
-      'blockMode': blockMode,
       'authDisabledReason': authDisabledReason,
 
       // Transverses
@@ -383,25 +398,19 @@ class AppUser {
       'eventOrganizerProfile': eventOrganizerProfile,
 
       // Club / recruteur
-      'nomClub': nomClub,
-      'ligue': ligue,
       'offrePubliees': offrePubliees?.map((o) => o.toMap()).toList(),
       'eventPublies': eventPublies?.map((e) => e.toMap()).toList(),
-      'entreprise': entreprise,
       'nombreDeRecrutements': nombreDeRecrutements,
 
       // Social
-      'team': team,
-      'joueursSuivis': joueursSuivis?.map((j) => j.toMap()).toList(),
-      'clubsSuivis': clubsSuivis?.map((c) => c.toMap()).toList(),
+      'joueursSuivis': joueursSuivis?.map((j) => j.toEmbeddedMap()).toList(),
+      'clubsSuivis': clubsSuivis?.map((c) => c.toEmbeddedMap()).toList(),
       'videosLikees': videosLikees?.map((v) => v.toMap()).toList(),
       'followersList': followersList,
       'followingsList': followingsList,
 
       // Docs
       'cvUrl': cvUrl,
-      'profilePublic': profilePublic,
-      'allowMessages': allowMessages,
     };
   }
 
@@ -431,38 +440,6 @@ class AppUser {
   bool get isCoach => role == 'coach';
   bool get isFan => role == 'fan';
   bool get canPublishOpportunities => isOpportunityPublisherRole(role);
-  bool get hasTemporaryBlock => estBloque && blockMode == 'temporary';
-  bool get hasPermanentBlock => estBloque && !hasTemporaryBlock;
-
-  bool get hasActiveAppBlock {
-    if (!estBloque) {
-      return false;
-    }
-
-    if (!hasTemporaryBlock) {
-      return true;
-    }
-
-    final endsAt = blockedUntil;
-    if (endsAt == null) {
-      return true;
-    }
-
-    return endsAt.isAfter(DateTime.now());
-  }
-
-  bool get hasExpiredTemporaryBlock {
-    if (!hasTemporaryBlock) {
-      return false;
-    }
-
-    final endsAt = blockedUntil;
-    if (endsAt == null) {
-      return false;
-    }
-
-    return !endsAt.isAfter(DateTime.now());
-  }
 
   bool get isEffectivelyActiveAccount => !authDisabled && emailVerified;
 
@@ -582,42 +559,5 @@ class AppUser {
     if (hasAdvancedProfile) return 'Profil Avancé';
     if (isMvpProfileComplete) return 'Profil Vérifié';
     return 'Profil Basique';
-  }
-
-  static DateTime? _parseNullableDate(dynamic value) {
-    if (value == null) {
-      return null;
-    }
-
-    if (value is Timestamp) {
-      return value.toDate();
-    }
-
-    if (value is DateTime) {
-      return value;
-    }
-
-    if (value is int) {
-      return DateTime.fromMillisecondsSinceEpoch(value);
-    }
-
-    if (value is String) {
-      return DateTime.tryParse(value);
-    }
-
-    return null;
-  }
-
-  static String? _normalizeBlockMode(String? value) {
-    final normalized = value?.trim().toLowerCase();
-    if (normalized == null || normalized.isEmpty) {
-      return null;
-    }
-
-    if (normalized == 'temporary' || normalized == 'permanent') {
-      return normalized;
-    }
-
-    return null;
   }
 }

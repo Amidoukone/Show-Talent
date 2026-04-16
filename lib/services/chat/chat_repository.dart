@@ -151,9 +151,19 @@ class ChatRepository {
     });
 
     if (!created) {
+      final recoveredIntake = await _recoverMissingGuidedContactIntake(
+        conversationRef: conversationRef,
+        currentUser: currentUser,
+        otherUser: otherUser,
+        context: normalizedContext,
+        contactReason: normalizedReason,
+        introMessage: normalizedIntro,
+      );
+
       return GuidedConversationStartResult(
         conversationId: conversationId,
         conversationCreated: false,
+        contactIntake: recoveredIntake,
       );
     }
 
@@ -177,25 +187,94 @@ class ChatRepository {
       recipientId: otherUser.uid,
     );
 
+    final intake = await _createAndLinkGuidedContactIntake(
+      conversationRef: conversationRef,
+      currentUser: currentUser,
+      otherUser: otherUser,
+      context: normalizedContext,
+      contactReason: normalizedReason,
+      introMessage: normalizedIntro,
+    );
+
+    return GuidedConversationStartResult(
+      conversationId: conversationId,
+      conversationCreated: true,
+      contactIntake: intake,
+    );
+  }
+
+  Future<ContactIntake?> _recoverMissingGuidedContactIntake({
+    required DocumentReference<Map<String, dynamic>> conversationRef,
+    required AppUser currentUser,
+    required AppUser otherUser,
+    required ContactContext context,
+    required String contactReason,
+    required String introMessage,
+  }) async {
+    final conversationSnap = await conversationRef.get();
+    if (!conversationSnap.exists) {
+      return null;
+    }
+
+    final conversationData = conversationSnap.data() ?? <String, dynamic>{};
+    final createdVia = conversationData['createdVia']?.toString().trim();
+    if (createdVia != 'guided_first_contact') {
+      return null;
+    }
+
+    final existingIntakeId =
+        conversationData['contactIntakeId']?.toString().trim();
+    if (existingIntakeId != null && existingIntakeId.isNotEmpty) {
+      final existingIntake =
+          await _contactIntakesCollection.doc(existingIntakeId).get();
+      if (!existingIntake.exists) {
+        return null;
+      }
+
+      return ContactIntake.fromMap(
+        existingIntake.data() ?? <String, dynamic>{},
+        fallbackId: existingIntake.id,
+      );
+    }
+
+    return _createAndLinkGuidedContactIntake(
+      conversationRef: conversationRef,
+      currentUser: currentUser,
+      otherUser: otherUser,
+      context: context,
+      contactReason: contactReason,
+      introMessage: introMessage,
+    );
+  }
+
+  Future<ContactIntake> _createAndLinkGuidedContactIntake({
+    required DocumentReference<Map<String, dynamic>> conversationRef,
+    required AppUser currentUser,
+    required AppUser otherUser,
+    required ContactContext context,
+    required String contactReason,
+    required String introMessage,
+  }) async {
     final intakeRef = _contactIntakesCollection.doc();
+    final now = DateTime.now();
     final intake = ContactIntake(
       id: intakeRef.id,
       requesterUid: currentUser.uid,
       targetUid: otherUser.uid,
       requesterRole: currentUser.role,
       targetRole: otherUser.role,
-      contextType: normalizedContext.normalizedType,
-      contextId: normalizedContext.normalizedId,
-      contextTitle: normalizedContext.normalizedTitle,
-      contactReason: normalizedReason,
-      introMessage: normalizedIntro,
+      contextType: context.normalizedType,
+      contextId: context.normalizedId,
+      contextTitle: context.normalizedTitle,
+      contactReason: contactReason,
+      introMessage: introMessage,
       status: ContactIntakeStatus.newRequest,
       agencyFollowUpStatus: AgencyFollowUpStatus.newLead,
-      conversationId: conversationId,
+      conversationId: conversationRef.id,
       requesterSnapshot: buildUserSnapshot(currentUser),
       targetSnapshot: buildUserSnapshot(otherUser),
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
+      createdAt: now,
+      updatedAt: now,
     );
 
     await intakeRef.set(intake.toMap());
@@ -208,11 +287,7 @@ class ChatRepository {
       SetOptions(merge: true),
     );
 
-    return GuidedConversationStartResult(
-      conversationId: conversationId,
-      conversationCreated: true,
-      contactIntake: intake,
-    );
+    return intake;
   }
 
   Future<void> persistMessageAndConversation({

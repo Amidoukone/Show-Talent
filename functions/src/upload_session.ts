@@ -45,7 +45,6 @@ interface VideoDoc {
 
 interface CallerProfile {
   role?: string;
-  estBloque?: boolean;
   authDisabled?: boolean;
   estActif?: boolean;
   emailVerified?: boolean;
@@ -158,7 +157,7 @@ async function assertUploadCallerEligible(
     );
   }
 
-  if (userData.estBloque === true || userData.authDisabled === true) {
+  if (userData.authDisabled === true) {
     throw new HttpsError(
       "permission-denied",
       "Compte inactif pour l upload video.",

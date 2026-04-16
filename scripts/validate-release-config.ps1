@@ -3,6 +3,7 @@ param(
     [switch]$SkipLocal,
     [switch]$SkipStaging,
     [switch]$SkipProduction,
+    [switch]$IncludeProductionNext,
     [switch]$SkipMobileChecks,
     [switch]$SkipFunctionsChecks
 )
@@ -109,6 +110,19 @@ function Get-ExpectedFunctionsPolicy {
                 "UNVERIFIED_PURGE_EXCLUDE_MANAGED" = "true"
             }
         }
+        "production-next" {
+            return @{
+                "ENFORCE_APPCHECK" = "true"
+                "STORAGE_BUCKET" = "adfoot-production.firebasestorage.app"
+                "OPTIMIZE_TRIGGER_REGION" = "europe-west1"
+                "VIDEO_UPLOADS_ENABLED" = "true"
+                "MAX_VIDEO_UPLOADS_PER_DAY" = "10"
+                "MAX_CONCURRENT_VIDEO_UPLOADS" = "2"
+                "MAX_OPTIMIZE_FILE_SIZE_BYTES" = "125829120"
+                "UNVERIFIED_ACCOUNT_RETENTION_DAYS" = "3"
+                "UNVERIFIED_PURGE_EXCLUDE_MANAGED" = "true"
+            }
+        }
         default {
             return @{
                 "ENFORCE_APPCHECK" = "true"
@@ -129,9 +143,10 @@ $selectedEnvironments = New-Object System.Collections.Generic.List[string]
 if (-not $SkipLocal) { $selectedEnvironments.Add("local") }
 if (-not $SkipStaging) { $selectedEnvironments.Add("staging") }
 if (-not $SkipProduction) { $selectedEnvironments.Add("production") }
+if ($IncludeProductionNext) { $selectedEnvironments.Add("production-next") }
 
 if ($selectedEnvironments.Count -eq 0) {
-    Write-Error "No environment selected. Remove one of -SkipLocal/-SkipStaging/-SkipProduction."
+    Write-Error "No environment selected. Remove one of -SkipLocal/-SkipStaging/-SkipProduction or add -IncludeProductionNext."
     exit 1
 }
 

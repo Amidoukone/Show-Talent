@@ -1,16 +1,16 @@
 /* eslint-disable linebreak-style */
-/* eslint-disable max-len */
-import * as admin from "firebase-admin";
 
-// Empêche les appels multiples à initializeApp()
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
+import {getApp, getApps, initializeApp} from "firebase-admin/app";
+import {getAuth} from "firebase-admin/auth";
+import {FieldValue, getFirestore} from "firebase-admin/firestore";
+import {getMessaging} from "firebase-admin/messaging";
+import {getStorage} from "firebase-admin/storage";
 
-// Export standardisé
-const db = admin.firestore();
-const auth = admin.auth();
-const fieldValue = admin.firestore.FieldValue;
-const storage = admin.storage();
+const app = getApps().length > 0 ? getApp() : initializeApp();
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
+const messaging = getMessaging(app);
+const fieldValue = FieldValue;
 
-export {admin, db, auth, fieldValue, storage};
+export {app, auth, db, fieldValue, messaging, storage};

@@ -1,4 +1,3 @@
-import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/verify_email_throttle.dart';
@@ -32,11 +31,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   static const _roles = publicSelfSignupRoles;
 
-  static final ActionCodeSettings _acs = ActionCodeSettings(
-    url: AppEnvironmentConfig.emailVerificationActionUrl,
-    handleCodeInApp: false,
-  );
-
   @override
   void dispose() {
     _emailController.dispose();
@@ -61,7 +55,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
         nom: _nameController.text.trim(),
         role: _selectedRole,
         phone: _phoneController.text.trim(),
-        emailVerificationSettings: _acs,
       );
 
       if (result.emailDelivery.sent && result.emailDelivery.sentAtMs != null) {

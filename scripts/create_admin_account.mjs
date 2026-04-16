@@ -259,7 +259,6 @@ async function main() {
     role,
     photoProfil: existingData.photoProfil ?? "",
     estActif: userRecord.emailVerified && userRecord.disabled !== true,
-    estBloque: existingData.estBloque === true,
     authDisabled: userRecord.disabled === true,
     emailVerified: userRecord.emailVerified,
     emailVerifiedAt:

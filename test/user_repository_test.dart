@@ -34,7 +34,6 @@ void main() {
         'nom': 'Blocked User',
         'email': 'blocked@adfoot.org',
         'role': 'joueur',
-        'estBloque': false,
         'authDisabled': true,
         'authDisabledReason': 'fraude detectee',
       });
@@ -46,7 +45,7 @@ void main() {
       expect(decision.message, contains('fraude detectee'));
     });
 
-    test('ignores the legacy permanent block flag on mobile access', () {
+    test('ignores legacy block metadata on mobile access', () {
       final decision = UserRepository.evaluateUserData({
         'uid': 'user-2',
         'nom': 'Sanctioned User',
@@ -60,40 +59,6 @@ void main() {
 
       expect(decision.exists, isTrue);
       expect(decision.issue, isNull);
-      expect(decision.user?.estBloque, isTrue);
-    });
-
-    test('ignores legacy temporary suspensions on mobile access', () {
-      final decision = UserRepository.evaluateUserData({
-        'uid': 'user-3',
-        'nom': 'Suspended User',
-        'email': 'suspended@adfoot.org',
-        'role': 'joueur',
-        'estBloque': true,
-        'blockMode': 'temporary',
-        'blockedUntil': DateTime.utc(2026, 4, 23, 9, 30).toIso8601String(),
-        'authDisabled': false,
-        'blockedReason': 'video non adaptee',
-      });
-
-      expect(decision.exists, isTrue);
-      expect(decision.issue, isNull);
-    });
-
-    test('ignores expired temporary suspensions', () {
-      final decision = UserRepository.evaluateUserData({
-        'uid': 'user-4',
-        'nom': 'Expired Suspension',
-        'email': 'expired@adfoot.org',
-        'role': 'joueur',
-        'estBloque': true,
-        'blockMode': 'temporary',
-        'blockedUntil': DateTime.utc(2020, 1, 1).toIso8601String(),
-        'authDisabled': false,
-      });
-
-      expect(decision.exists, isTrue);
-      expect(decision.issue, isNull);
     });
 
     test('allows managed roles when profile is valid', () {
@@ -103,7 +68,6 @@ void main() {
           'nom': 'Compte $role',
           'email': '$role@adfoot.org',
           'role': role,
-          'estBloque': false,
           'authDisabled': false,
         });
 

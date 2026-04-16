@@ -5,6 +5,16 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function videoDocIdFromFileName(fileName) {
+      return fileName[0:fileName.size() - 4];
+    }
+
+    function isOwnedVideoMp4(fileName) {
+      return fileName.matches('^[A-Za-z0-9_-]+\\.mp4$') &&
+        firestore.exists(/databases/(default)/documents/videos/$(videoDocIdFromFileName(fileName))) &&
+        firestore.get(/databases/(default)/documents/videos/$(videoDocIdFromFileName(fileName))).data.uid == request.auth.uid;
+    }
+
     match /profilePhotos/{uid} {
       allow read: if true;
       allow write: if signedIn() && request.auth.uid == uid;
@@ -15,10 +25,9 @@ service firebase.storage {
       allow write: if signedIn() && request.auth.uid == uid;
     }
 
-    match /videos/{videoId}.mp4 {
+    match /videos/{videoFileName} {
       allow read: if true;
-      allow write: if signedIn() &&
-        firestore.get(/databases/(default)/documents/videos/$(videoId)).data.uid == request.auth.uid;
+      allow write: if signedIn() && isOwnedVideoMp4(videoFileName);
     }
 
     match /thumbnails/{fileName} {

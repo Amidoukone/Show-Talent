@@ -715,8 +715,6 @@ export {
 
 export {provisionManagedAccount} from "./managed_accounts";
 export {
-  blockManagedAccount,
-  unblockManagedAccount,
   deleteManagedAccount,
   changeManagedAccountRole,
   resendManagedAccountInvite,
@@ -731,6 +729,7 @@ export {
   adminSetOfferStatus,
 } from "./admin_content_actions";
 export {adminSetContactIntakeFollowUp} from "./admin_contact_intake_actions";
+export {completeEmailVerification} from "./account_verification_actions";
 
 /* -------------------------------------------------------------------------- */
 /* UPLOAD SESSION                                                              */

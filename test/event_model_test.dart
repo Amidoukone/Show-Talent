@@ -97,5 +97,90 @@ void main() {
       final map = event.toMap();
       expect(map['statut'], 'archive');
     });
+
+    test('supports legacy aliases for organiser and dates', () {
+      final event = Event.fromMap(
+        {
+          'title': 'Event legacy',
+          'details': 'Ancien format',
+          'startDate': '2026-06-01T08:00:00.000Z',
+          'endDate': 1775000000000,
+          'dateCreation': '2026-05-01T12:00:00.000Z',
+          'ownerUid': 'org-legacy',
+          'ownerName': 'Legacy Org',
+          'ownerRole': 'club',
+          'inscrits': [
+            {
+              'uid': 'joueur-legacy',
+              'nom': 'Legacy Player',
+              'email': 'legacy@example.com',
+              'role': 'joueur',
+            },
+          ],
+          'status': 'closed',
+          'location': 'Yamoussoukro',
+          'public': false,
+        },
+        fallbackId: 'legacy-event',
+      );
+
+      expect(event.id, 'legacy-event');
+      expect(event.titre, 'Event legacy');
+      expect(event.description, 'Ancien format');
+      expect(event.organisateur.uid, 'org-legacy');
+      expect(event.participants.single.uid, 'joueur-legacy');
+      expect(event.statut, 'ferme');
+      expect(event.lieu, 'Yamoussoukro');
+      expect(event.estPublic, isFalse);
+    });
+
+    test('toMap stores organiser and participants as minimal embedded users',
+        () {
+      final event = Event.fromMap(
+        {
+          'id': 'event-min',
+          'titre': 'Camp detection',
+          'description': 'Tests et evaluation',
+          'dateDebut': Timestamp.fromDate(DateTime.utc(2026, 6, 1)),
+          'dateFin': Timestamp.fromDate(DateTime.utc(2026, 6, 2)),
+          'createdAt': Timestamp.fromDate(DateTime.utc(2026, 5, 1)),
+          'organisateur': {
+            'uid': 'org-embedded',
+            'nom': 'Org Embedded',
+            'email': 'org-embedded@example.com',
+            'role': 'club',
+            'eventPublies': [
+              {'id': 'nested-event'}
+            ],
+          },
+          'participants': [
+            {
+              'uid': 'player-embedded',
+              'nom': 'Player Embedded',
+              'email': 'player-embedded@example.com',
+              'role': 'joueur',
+              'offrePubliees': [
+                {'id': 'nested-offer'}
+              ],
+            },
+          ],
+          'statut': 'ouvert',
+          'lieu': 'Abidjan',
+          'estPublic': true,
+        },
+      );
+
+      final map = event.toMap();
+      final organisateur =
+          Map<String, dynamic>.from(map['organisateur'] as Map);
+      final participant = Map<String, dynamic>.from(
+        (map['participants'] as List).single as Map,
+      );
+
+      expect(organisateur['uid'], 'org-embedded');
+      expect(organisateur.containsKey('eventPublies'), isFalse);
+      expect(participant['uid'], 'player-embedded');
+      expect(participant.containsKey('offrePubliees'), isFalse);
+    });
   });
 }

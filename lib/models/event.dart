@@ -51,18 +51,22 @@ class Event {
     final value = rawStatus.trim().toLowerCase();
     switch (value) {
       case 'ouvert':
+      case 'open':
         return 'ouvert';
       case 'ferme':
       case 'ferm\u00e9':
       case 'ferm\u00c3\u00a9':
       case 'ferm\u00c3\u00a3\u00c2\u00a9':
+      case 'closed':
         return 'ferme';
       case 'archive':
       case 'archiv\u00e9':
       case 'archiv\u00c3\u00a9':
       case 'archiv\u00c3\u00a3\u00c2\u00a9':
+      case 'archived':
         return 'archive';
       case 'brouillon':
+      case 'draft':
         return 'brouillon';
       default:
         return value;
@@ -92,6 +96,15 @@ class Event {
     return null;
   }
 
+  static dynamic _readFirst(Map<String, dynamic> map, List<String> keys) {
+    for (final key in keys) {
+      if (map.containsKey(key) && map[key] != null) {
+        return map[key];
+      }
+    }
+    return null;
+  }
+
   int get nbParticipants => participants.length;
 
   bool get isExpired => dateFin.isBefore(DateTime.now());
@@ -106,8 +119,8 @@ class Event {
       'description': description,
       'dateDebut': Timestamp.fromDate(dateDebut),
       'dateFin': Timestamp.fromDate(dateFin),
-      'organisateur': organisateur.toMap(),
-      'participants': participants.map((p) => p.toMap()).toList(),
+      'organisateur': organisateur.toEmbeddedMap(),
+      'participants': participants.map((p) => p.toEmbeddedMap()).toList(),
       'statut': normalizeStatus(statut),
       'lieu': lieu,
       'estPublic': estPublic,
@@ -126,7 +139,8 @@ class Event {
     Map<String, dynamic> map, {
     String? fallbackId,
   }) {
-    final rawParticipants = map['participants'];
+    final rawParticipants =
+        _readFirst(map, ['participants', 'inscrits', 'candidats']);
     final participantMaps = rawParticipants is List
         ? rawParticipants
             .whereType<Map>()
@@ -134,27 +148,78 @@ class Event {
             .toList()
         : const <Map<String, dynamic>>[];
 
-    final rawOrganisateur = map['organisateur'];
+    final rawOrganisateur =
+        _readFirst(map, ['organisateur', 'owner', 'author', 'recruteur']);
     final organisateurMap = rawOrganisateur is Map
         ? Map<String, dynamic>.from(rawOrganisateur)
-        : <String, dynamic>{};
+        : <String, dynamic>{
+            'uid': _readFirst(
+              map,
+              ['organisateurUid', 'ownerUid', 'authorUid', 'recruteurUid'],
+            ),
+            'nom': _readFirst(
+              map,
+              ['organisateurNom', 'ownerName', 'authorName', 'recruteurNom'],
+            ),
+            'email': _readFirst(
+              map,
+              ['organisateurEmail', 'ownerEmail', 'authorEmail'],
+            ),
+            'role': _readFirst(
+              map,
+              [
+                'organisateurRole',
+                'ownerRole',
+                'authorRole',
+                'recruteurRole',
+                'role',
+              ],
+            ),
+            'photoProfil': _readFirst(
+              map,
+              [
+                'organisateurPhoto',
+                'ownerPhoto',
+                'authorPhoto',
+                'recruteurPhoto',
+                'photoProfil',
+              ],
+            ),
+          };
 
     final rawId = map['id']?.toString().trim() ?? '';
     final resolvedId = rawId.isNotEmpty ? rawId : (fallbackId ?? '');
 
     return Event(
       id: resolvedId,
-      titre: map['titre']?.toString() ?? '',
-      description: map['description']?.toString() ?? '',
-      dateDebut: _parseDate(map['dateDebut']),
-      dateFin: _parseDate(map['dateFin']),
-      organisateur: AppUser.fromMap(organisateurMap),
-      participants: participantMaps.map(AppUser.fromMap).toList(),
-      statut: normalizeStatus(map['statut']?.toString() ?? 'ouvert'),
-      lieu: map['lieu']?.toString() ?? '',
-      estPublic: map['estPublic'] as bool? ?? true,
-      createdAt: _parseDate(map['createdAt']),
-      capaciteMax: (map['capaciteMax'] as num?)?.toInt(),
+      titre: _readFirst(map, ['titre', 'title', 'nom'])?.toString() ?? '',
+      description:
+          _readFirst(map, ['description', 'details', 'contenu', 'body'])
+                  ?.toString() ??
+              '',
+      dateDebut: _parseDate(
+        _readFirst(map, ['dateDebut', 'startDate', 'date']),
+      ),
+      dateFin: _parseDate(
+        _readFirst(map, ['dateFin', 'endDate', 'expirationDate']),
+      ),
+      organisateur: AppUser.fromEmbeddedMap(organisateurMap),
+      participants: participantMaps.map(AppUser.fromEmbeddedMap).toList(),
+      statut: normalizeStatus(
+        _readFirst(map, ['statut', 'status'])?.toString() ?? 'ouvert',
+      ),
+      lieu: _readFirst(map, ['lieu', 'location', 'localisation'])?.toString() ??
+          '',
+      estPublic:
+          (_readFirst(map, ['estPublic', 'isPublic', 'public']) as bool?) ??
+              true,
+      createdAt: _parseDate(
+        _readFirst(map, ['createdAt', 'dateCreation', 'publishedAt']),
+      ),
+      capaciteMax:
+          (_readFirst(map, ['capaciteMax', 'capacity', 'maxParticipants'])
+                  as num?)
+              ?.toInt(),
       tags: map['tags'] is List
           ? (map['tags'] as List)
               .map((item) => item.toString().trim())

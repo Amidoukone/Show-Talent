@@ -17,17 +17,7 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(uid));
     }
 
-    function hasEffectiveAppBlock(data) {
-      return data.estBloque == true &&
-        (
-          data.blockMode != "temporary" ||
-          !(data.blockedUntil is timestamp) ||
-          data.blockedUntil > request.time
-        );
-    }
-
-    // Mobile access currently tolerates legacy app-level block flags.
-    // Only authDisabled remains a hard access stop across user/content reads.
+    // authDisabled is the only remaining hard access stop.
     function hasActiveAccount(uid) {
       return hasUserDoc(uid) &&
         userDoc(uid).data.authDisabled != true;
@@ -55,6 +45,10 @@ service cloud.firestore {
       return signedInAndActive() && isOpportunityPublisherRole(userRole());
     }
 
+    function isSignedInPlayer() {
+      return signedInAndActive() && userRole() == "joueur";
+    }
+
     function isAdminOperator() {
       return signedIn() &&
         (
@@ -73,13 +67,7 @@ service cloud.firestore {
 
     function preservesProtectedUserFields() {
       return request.resource.data.dateInscription == resource.data.dateInscription &&
-        request.resource.data.estBloque == resource.data.estBloque &&
         request.resource.data.authDisabled == resource.data.authDisabled &&
-        request.resource.data.blockedAt == resource.data.blockedAt &&
-        request.resource.data.blockedBy == resource.data.blockedBy &&
-        request.resource.data.blockedReason == resource.data.blockedReason &&
-        request.resource.data.blockMode == resource.data.blockMode &&
-        request.resource.data.blockedUntil == resource.data.blockedUntil &&
         request.resource.data.authDisabledAt == resource.data.authDisabledAt &&
         request.resource.data.authDisabledBy == resource.data.authDisabledBy &&
         request.resource.data.authDisabledReason == resource.data.authDisabledReason &&
@@ -106,6 +94,30 @@ service cloud.firestore {
         request.resource.data.emailVerified == resource.data.emailVerified &&
           request.resource.data.estActif == resource.data.estActif &&
           request.resource.data.emailVerifiedAt == resource.data.emailVerifiedAt;
+    }
+
+    function changesOnly(allowedKeys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys);
+    }
+
+    function canMutateOfferCandidates() {
+      return isSignedInPlayer() &&
+        resource.data.recruteur.uid != request.auth.uid &&
+        resource.data.statut == "ouverte" &&
+        changesOnly(["candidats", "lastUpdated"]);
+    }
+
+    function canMutateOfferViews() {
+      return signedInAndActive() &&
+        resource.data.recruteur.uid != request.auth.uid &&
+        changesOnly(["vues", "viewedBy", "lastUpdated"]);
+    }
+
+    function canMutateEventParticipants() {
+      return isSignedInPlayer() &&
+        resource.data.organisateur.uid != request.auth.uid &&
+        resource.data.statut == "ouvert" &&
+        changesOnly(["participants", "lastUpdated"]);
     }
 
     match /users/{userId} {
@@ -135,7 +147,13 @@ service cloud.firestore {
       allow read: if signedInAndActive();
       allow create: if isRecruiterOrClub() &&
         request.resource.data.recruteur.uid == request.auth.uid;
-      allow update, delete: if signedInAndActive() &&
+      allow update: if signedInAndActive() &&
+        (
+          resource.data.recruteur.uid == request.auth.uid ||
+          canMutateOfferCandidates() ||
+          canMutateOfferViews()
+        );
+      allow delete: if signedInAndActive() &&
         resource.data.recruteur.uid == request.auth.uid;
     }
 
@@ -143,7 +161,12 @@ service cloud.firestore {
       allow read: if signedInAndActive();
       allow create: if isRecruiterOrClub() &&
         request.resource.data.organisateur.uid == request.auth.uid;
-      allow update, delete: if signedInAndActive() &&
+      allow update: if signedInAndActive() &&
+        (
+          resource.data.organisateur.uid == request.auth.uid ||
+          canMutateEventParticipants()
+        );
+      allow delete: if signedInAndActive() &&
         resource.data.organisateur.uid == request.auth.uid;
     }
 

@@ -5,7 +5,7 @@
 
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
-import {admin, db, fieldValue} from "./firebase";
+import {db, fieldValue, messaging, storage} from "./firebase";
 import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 
@@ -130,7 +130,7 @@ function collectOwnedVideoAssetPaths(
 
 async function deleteStorageObjectIfExists(path: string): Promise<void> {
   try {
-    await admin.storage().bucket().file(path).delete();
+    await storage.bucket().file(path).delete();
   } catch (error) {
     const code = (error as {code?: number | string}).code;
     if (code === 404 || code === "404") {
@@ -528,7 +528,7 @@ async function sendFanoutToPlayers(params: {
   let failed = 0;
 
   for (const tokenChunk of chunkArray(tokens, 500)) {
-    const response = await admin.messaging().sendEachForMulticast({
+    const response = await messaging.sendEachForMulticast({
       tokens: tokenChunk,
       notification: {
         title: params.title,
@@ -597,7 +597,7 @@ export const sendUserPush = onCall(
     }
 
     try {
-      await admin.messaging().send({
+      await messaging.send({
         token,
         notification: {title, body},
         data: {

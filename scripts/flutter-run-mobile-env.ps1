@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("local", "staging", "production")]
+    [ValidateSet("local", "staging", "production", "production-next")]
     [string]$Environment = "production",
 
     [string]$Target = "lib/main.dart",
@@ -9,6 +9,8 @@ param(
     [switch]$UseNativeFlavor,
 
     [switch]$UseFirebaseEmulators,
+
+    [switch]$SkipRemoteAuthPreflight,
 
     [string]$EmulatorHost,
 
@@ -24,6 +26,18 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+function Get-EffectiveFlavorEnvironment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$EnvironmentName
+    )
+
+    switch ($EnvironmentName) {
+        "production-next" { return "production" }
+        default { return $EnvironmentName }
+    }
+}
 
 function Resolve-RepoRelativePath {
     param(
@@ -95,6 +109,8 @@ function Read-MobileConfig {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$authPreflightScript = Join-Path $repoRoot "scripts/check-mobile-auth-preflight.mjs"
+$effectiveFlavorEnvironment = Get-EffectiveFlavorEnvironment -EnvironmentName $Environment
 $defaultConfigPath = Join-Path $repoRoot "config/mobile/$Environment.json"
 $resolvedConfigPath = if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     $defaultConfigPath
@@ -151,7 +167,7 @@ foreach ($entry in $effectiveDefines.GetEnumerator()) {
 $flutterArgs = @("run", "-t", $Target) + $dartDefines
 
 if ($UseNativeFlavor) {
-    $flutterArgs += @("--flavor", $Environment)
+    $flutterArgs += @("--flavor", $effectiveFlavorEnvironment)
 }
 
 if ($DeviceId) {
@@ -164,6 +180,7 @@ if ($AdditionalArgs) {
 
 $commandPreview = "flutter " + ($flutterArgs -join " ")
 Write-Host $commandPreview
+Write-Host "Effective native flavor: $effectiveFlavorEnvironment"
 if ($null -ne $configDefines) {
     Write-Host "Mobile config file: $resolvedConfigPath"
 } else {
@@ -172,6 +189,20 @@ if ($null -ne $configDefines) {
 
 if ($PrintOnly) {
     exit 0
+}
+
+$shouldRunRemoteAuthPreflight =
+    -not $SkipRemoteAuthPreflight -and
+    -not $UseFirebaseEmulators -and
+    $Environment -ne "local" -and
+    $null -ne $configDefines
+
+if ($shouldRunRemoteAuthPreflight) {
+    Write-Host "Running remote Firebase Auth preflight..."
+    & node $authPreflightScript --environment $Environment --config $resolvedConfigPath
+    if ($LASTEXITCODE -gt 0) {
+        throw "Remote Firebase Auth preflight failed (exit code $LASTEXITCODE). Use -SkipRemoteAuthPreflight to bypass."
+    }
 }
 
 & flutter @flutterArgs

@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("local", "staging", "production")]
+    [ValidateSet("local", "staging", "production", "production-next")]
     [string]$Environment = "production",
 
     [string]$ConfigPath,
@@ -11,6 +11,18 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+function Get-EffectiveNativeEnvironment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$EnvironmentName
+    )
+
+    switch ($EnvironmentName) {
+        "production-next" { return "production" }
+        default { return $EnvironmentName }
+    }
+}
 
 function Resolve-RepoRelativePath {
     param(
@@ -98,6 +110,7 @@ function Get-PlistStringValue {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$effectiveNativeEnvironment = Get-EffectiveNativeEnvironment -EnvironmentName $Environment
 $defaultConfigPath = Join-Path $repoRoot "config/mobile/$Environment.json"
 $resolvedConfigPath = if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     $defaultConfigPath
@@ -105,8 +118,8 @@ $resolvedConfigPath = if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     Resolve-RepoRelativePath -RepoRoot $repoRoot -Path $ConfigPath
 }
 
-$androidFirebasePath = Join-Path $repoRoot "android/app/src/$Environment/google-services.json"
-$iosFirebasePath = Join-Path $repoRoot "ios/Firebase/$Environment/GoogleService-Info.plist"
+$androidFirebasePath = Join-Path $repoRoot "android/app/src/$effectiveNativeEnvironment/google-services.json"
+$iosFirebasePath = Join-Path $repoRoot "ios/Firebase/$effectiveNativeEnvironment/GoogleService-Info.plist"
 $plannedMobileId = Get-PlannedMobileId -EnvironmentName $Environment
 
 $warnings = New-Object System.Collections.Generic.List[string]
@@ -231,6 +244,7 @@ if (Test-Path -LiteralPath $iosFirebasePath) {
 }
 
 Write-Host "Environment              : $Environment"
+Write-Host "Effective native env     : $effectiveNativeEnvironment"
 Write-Host "Mobile config file       : $resolvedConfigPath"
 Write-Host "Planned Android package  : $plannedMobileId"
 Write-Host "Planned iOS bundle ID    : $plannedMobileId"

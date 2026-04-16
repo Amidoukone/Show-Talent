@@ -25,12 +25,16 @@ void main() {
           File('lib/screens/chat_screen.dart').readAsStringSync();
       final conversationModel =
           File('lib/models/message_converstion.dart').readAsStringSync();
+      final repository =
+          File('lib/services/chat/chat_repository.dart').readAsStringSync();
 
       expect(chatScreen, contains('watchConversationById'));
       expect(chatScreen, contains('Premier contact cadre'));
       expect(chatScreen, contains('Suivi agence:'));
       expect(conversationModel, contains('contactReason'));
       expect(conversationModel, contains('contextTitle'));
+      expect(repository, contains('_recoverMissingGuidedContactIntake'));
+      expect(repository, contains('_createAndLinkGuidedContactIntake'));
     });
 
     test(

@@ -66,6 +66,78 @@
                     android:scheme="https"
                     android:host="adfoot.org"
                     android:pathPrefix="/__/auth/action" />
+                <data
+                    android:scheme="https"
+                    android:host="show-talent-5987d.firebaseapp.com"
+                    android:pathPrefix="/verify" />
+                <data
+                    android:scheme="https"
+                    android:host="show-talent-5987d.firebaseapp.com"
+                    android:pathPrefix="/reset" />
+                <data
+                    android:scheme="https"
+                    android:host="show-talent-5987d.firebaseapp.com"
+                    android:pathPrefix="/__/auth/action" />
+                <data
+                    android:scheme="https"
+                    android:host="show-talent-5987d.web.app"
+                    android:pathPrefix="/verify" />
+                <data
+                    android:scheme="https"
+                    android:host="show-talent-5987d.web.app"
+                    android:pathPrefix="/reset" />
+                <data
+                    android:scheme="https"
+                    android:host="show-talent-5987d.web.app"
+                    android:pathPrefix="/__/auth/action" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-staging.firebaseapp.com"
+                    android:pathPrefix="/verify" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-staging.firebaseapp.com"
+                    android:pathPrefix="/reset" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-staging.firebaseapp.com"
+                    android:pathPrefix="/__/auth/action" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-staging.web.app"
+                    android:pathPrefix="/verify" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-staging.web.app"
+                    android:pathPrefix="/reset" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-staging.web.app"
+                    android:pathPrefix="/__/auth/action" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-production.firebaseapp.com"
+                    android:pathPrefix="/verify" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-production.firebaseapp.com"
+                    android:pathPrefix="/reset" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-production.firebaseapp.com"
+                    android:pathPrefix="/__/auth/action" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-production.web.app"
+                    android:pathPrefix="/verify" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-production.web.app"
+                    android:pathPrefix="/reset" />
+                <data
+                    android:scheme="https"
+                    android:host="adfoot-production.web.app"
+                    android:pathPrefix="/__/auth/action" />
             </intent-filter>
         </activity>
 

@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 
 import '../config/app_routes.dart';
 import '../config/app_environment.dart';
+import '../utils/email_action_link_parser.dart';
 
 /// Handles Firebase email verification links and password reset links.
 /// Mobile listens to incoming app links. Web is handled elsewhere.
@@ -84,23 +85,13 @@ class EmailLinkHandler {
     }
   }
 
-  static Map<String, String> _mergedParamsFrom(Uri uri) {
-    final params = <String, String>{...uri.queryParameters};
-    if (uri.fragment.isNotEmpty) {
-      try {
-        params.addAll(Uri.splitQueryString(uri.fragment));
-      } catch (_) {}
-    }
-    return params;
-  }
-
   static Future<bool> _handle(Uri link) async {
     if (link.scheme != 'https' || !_allowedHosts.contains(link.host)) {
       _logDebug('EmailLinkHandler ignored link with unsupported host: $link');
       return false;
     }
 
-    final params = _mergedParamsFrom(link);
+    final params = EmailActionLinkParser.extract(link);
     final mode = params['mode'];
     final oob = params['oobCode'];
 

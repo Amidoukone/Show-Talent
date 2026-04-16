@@ -1,4 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 
@@ -48,7 +49,7 @@ class AppEnvironmentConfig {
   );
   static const String _customEmailActionHost = String.fromEnvironment(
     'EMAIL_LINK_CUSTOM_HOST',
-    defaultValue: 'adfoot.org',
+    defaultValue: '',
   );
   static const String _extraEmailAllowedHosts =
       String.fromEnvironment('EMAIL_LINK_ALLOWED_HOSTS');
@@ -141,7 +142,12 @@ class AppEnvironmentConfig {
       return customHost;
     }
 
-    return '$firebaseProjectId.web.app';
+    final authDomain = _webAuthDomain.trim().toLowerCase();
+    if (authDomain.isNotEmpty) {
+      return authDomain;
+    }
+
+    return '$firebaseProjectId.firebaseapp.com';
   }
 
   static Uri buildEmailActionUri({String path = '/verify'}) {
@@ -158,6 +164,48 @@ class AppEnvironmentConfig {
 
   static String get passwordResetActionUrl =>
       buildEmailActionUri(path: '/reset').toString();
+
+  static ActionCodeSettings buildEmailVerificationActionCodeSettings() {
+    return ActionCodeSettings(
+      url: emailVerificationActionUrl,
+      handleCodeInApp: true,
+      androidPackageName: androidPackageName,
+      androidInstallApp: true,
+      iOSBundleId: iosBundleId,
+    );
+  }
+
+  static ActionCodeSettings buildPasswordResetActionCodeSettings() {
+    return ActionCodeSettings(
+      url: passwordResetActionUrl,
+      handleCodeInApp: true,
+      androidPackageName: androidPackageName,
+      androidInstallApp: true,
+      iOSBundleId: iosBundleId,
+    );
+  }
+
+  static String get androidPackageName {
+    switch (environment) {
+      case AppEnvironment.local:
+        return 'org.adfoot.app.local';
+      case AppEnvironment.staging:
+        return 'org.adfoot.app.staging';
+      case AppEnvironment.production:
+        return 'org.adfoot.app';
+    }
+  }
+
+  static String get iosBundleId {
+    switch (environment) {
+      case AppEnvironment.local:
+        return 'org.adfoot.app.local';
+      case AppEnvironment.staging:
+        return 'org.adfoot.app.staging';
+      case AppEnvironment.production:
+        return 'org.adfoot.app';
+    }
+  }
 
   static Set<String> get emailLinkAllowedHosts {
     final hosts = <String>{

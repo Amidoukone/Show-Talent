@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("local", "staging", "production")]
+    [ValidateSet("local", "staging", "production", "production-next")]
     [string]$Environment = "production",
 
     [switch]$ReleaseGate,
@@ -14,16 +14,28 @@ $ErrorActionPreference = "Stop"
 
 if ($ReleaseGate) {
     if (-not $PSBoundParameters.ContainsKey("RequireSigning")) {
-        $RequireSigning = $Environment -eq "production"
+        $RequireSigning = $Environment -in @("production", "production-next")
     }
     if (-not $PSBoundParameters.ContainsKey("RequireLegalUrls")) {
-        $RequireLegalUrls = $Environment -eq "production"
+        $RequireLegalUrls = $Environment -in @("production", "production-next")
     }
     if (-not $PSBoundParameters.ContainsKey("RequireNativeFirebase")) {
         $RequireNativeFirebase = $true
     }
     if (-not $PSBoundParameters.ContainsKey("RequireVersionBump")) {
-        $RequireVersionBump = $Environment -eq "production"
+        $RequireVersionBump = $Environment -in @("production", "production-next")
+    }
+}
+
+function Get-EffectiveNativeEnvironment {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$EnvironmentName
+    )
+
+    switch ($EnvironmentName) {
+        "production-next" { return "production" }
+        default { return $EnvironmentName }
     }
 }
 
@@ -89,6 +101,7 @@ $warnings = New-Object System.Collections.Generic.List[string]
 $errors = New-Object System.Collections.Generic.List[string]
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$effectiveNativeEnvironment = Get-EffectiveNativeEnvironment -EnvironmentName $Environment
 $expectedPackage = Get-PlannedPackageId -EnvironmentName $Environment
 $expectedAppName = Get-PlannedAppName -EnvironmentName $Environment
 
@@ -96,7 +109,7 @@ $gradlePath = Join-Path $repoRoot "android/app/build.gradle"
 $manifestPath = Join-Path $repoRoot "android/app/src/main/AndroidManifest.xml"
 $keyPropertiesPath = Join-Path $repoRoot "android/key.properties"
 $pubspecPath = Join-Path $repoRoot "pubspec.yaml"
-$androidFirebasePath = Join-Path $repoRoot "android/app/src/$Environment/google-services.json"
+$androidFirebasePath = Join-Path $repoRoot "android/app/src/$effectiveNativeEnvironment/google-services.json"
 $privacyPagePath = Join-Path $repoRoot "site_pub/legal/privacy-policy.html"
 $accountDeletionPagePath = Join-Path $repoRoot "site_pub/legal/account-deletion.html"
 $assetLinksPath = Join-Path $repoRoot "site_pub/.well-known/assetlinks.json"
@@ -134,7 +147,7 @@ if ($errors.Count -eq 0) {
         "<missing>"
     }
 
-    $suffixPattern = "(?s)$Environment\s*\{.*?applicationIdSuffix\s+""([^""]+)"""
+    $suffixPattern = "(?s)$effectiveNativeEnvironment\s*\{.*?applicationIdSuffix\s+""([^""]+)"""
     $suffixMatch = [regex]::Match($gradleRaw, $suffixPattern)
     $applicationIdSuffix = if ($suffixMatch.Success) {
         $suffixMatch.Groups[1].Value.Trim()
@@ -151,7 +164,7 @@ if ($errors.Count -eq 0) {
         }
     }
 
-    $appNamePattern = "(?s)$Environment\s*\{.*?resValue\s+""string""\s*,\s*""app_name""\s*,\s*""([^""]+)"""
+    $appNamePattern = "(?s)$effectiveNativeEnvironment\s*\{.*?resValue\s+""string""\s*,\s*""app_name""\s*,\s*""([^""]+)"""
     $appNameMatch = [regex]::Match($gradleRaw, $appNamePattern)
     $configuredAppName = if ($appNameMatch.Success) {
         $appNameMatch.Groups[1].Value.Trim()
@@ -329,6 +342,7 @@ if (Test-Path -LiteralPath $storeComplianceDocPath) {
 }
 
 Write-Host "Environment                 : $Environment"
+Write-Host "Effective native env        : $effectiveNativeEnvironment"
 Write-Host "Expected package            : $expectedPackage"
 Write-Host "Expected app name           : $expectedAppName"
 Write-Host "Release gate mode           : $ReleaseGate"
