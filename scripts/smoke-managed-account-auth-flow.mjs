@@ -353,8 +353,8 @@ async function run() {
     serviceAccountPath: serviceAccountInfo.resolved,
     admin: {
       email: adminEmail,
-      password: adminPassword,
       uid: null,
+      passwordRedacted: true,
     },
     steps: [],
     roleResults: [],
@@ -532,7 +532,11 @@ async function run() {
       assert(enabledDecision.destination === 'main', `Expected main after auth re-enable for ${role}`);
       roleRun.checks.authReEnabled = enabledDecision;
 
-      summary.roleResults.push(roleRun);
+      summary.roleResults.push({
+        ...roleRun,
+        passwordRedacted: true,
+      });
+      delete summary.roleResults[summary.roleResults.length - 1].password;
       addStep(`role_smoke_${role}`, true, {
         email: roleRun.email,
         uid: roleRun.uid,
