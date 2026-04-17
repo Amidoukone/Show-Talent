@@ -70,3 +70,7 @@ service-account*.json
 /docs/smoke-public-signup-*.json
 /docs/smoke-public-signup.md
 
+# Local-only folders kept out of Git
+/.firebase/
+/docs/
+
