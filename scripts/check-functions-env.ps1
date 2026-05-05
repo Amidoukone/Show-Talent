@@ -93,6 +93,7 @@ $envSpecific = Read-DotEnvFile -Path $envSpecificPath
 $effective = Merge-Maps -Base $baseEnv -Override $envSpecific
 
 $requiredKeys = @(
+  "APP_ENV",
   "ENFORCE_APPCHECK",
   "STORAGE_BUCKET",
   "OPTIMIZE_TRIGGER_REGION",
@@ -116,6 +117,8 @@ $positiveIntKeys = @(
   "MAX_OPTIMIZE_FILE_SIZE_BYTES",
   "UNVERIFIED_ACCOUNT_RETENTION_DAYS"
 )
+
+$allowedAppEnvironmentValues = @("local", "staging", "production")
 
 $errors = New-Object System.Collections.Generic.List[string]
 $warnings = New-Object System.Collections.Generic.List[string]
@@ -156,6 +159,13 @@ foreach ($key in $positiveIntKeys) {
     if (-not [int]::TryParse($raw, [ref]$parsed) -or $parsed -lt 1) {
       $errors.Add("Invalid positive integer for ${key}: $raw")
     }
+  }
+}
+
+if ($effective.ContainsKey("APP_ENV")) {
+  $appEnvironment = [string]$effective["APP_ENV"]
+  if ($allowedAppEnvironmentValues -notcontains $appEnvironment) {
+    $errors.Add("Invalid APP_ENV value: $appEnvironment")
   }
 }
 

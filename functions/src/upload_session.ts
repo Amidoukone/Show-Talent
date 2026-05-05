@@ -6,7 +6,7 @@
 import {createHash, randomUUID} from "crypto";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {db, fieldValue, storage} from "./firebase";
-import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
+import {LOW_CPU_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
@@ -345,7 +345,7 @@ const asStringList = (value: unknown): string[] | undefined => {
 /* -------------------------------------------------------------------------- */
 
 export const createUploadSession = onCall(
-  {...LOW_CPU_REGION_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
+  {...LOW_CPU_CALLABLE_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
   async (request): Promise<Record<string, unknown>> => {
     const {uid, token} = await resolveCallableAuth(request);
     await assertUploadCallerEligible(
@@ -424,7 +424,7 @@ export const createUploadSession = onCall(
 /* -------------------------------------------------------------------------- */
 
 export const requestThumbnailUploadUrl = onCall(
-  {...LOW_CPU_REGION_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
+  {...LOW_CPU_CALLABLE_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
   async (request): Promise<Record<string, unknown>> => {
     const {uid, token} = await resolveCallableAuth(request);
     await assertUploadCallerEligible(
@@ -498,7 +498,7 @@ export const requestThumbnailUploadUrl = onCall(
 /* -------------------------------------------------------------------------- */
 
 export const finalizeUpload = onCall(
-  {...LOW_CPU_REGION_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
+  {...LOW_CPU_CALLABLE_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
   async (request): Promise<Record<string, unknown>> => {
     const {uid, token} = await resolveCallableAuth(request);
     await assertUploadCallerEligible(

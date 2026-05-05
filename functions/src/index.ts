@@ -31,7 +31,7 @@ const STORAGE_BUCKET =
   process.env.STORAGE_BUCKET ||
   FIREBASE_CONFIG?.storageBucket ||
   defaultStorageBucket(process.env.GCLOUD_PROJECT) ||
-  "show-talent-5987d.appspot.com";
+  "adfoot-production.firebasestorage.app";
 const OPTIMIZE_TRIGGER_OPTIONS = {
   region: OPTIMIZE_TRIGGER_REGION,
   memory: "2GiB" as const,

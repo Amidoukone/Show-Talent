@@ -150,38 +150,50 @@ class AppEnvironmentConfig {
     return '$firebaseProjectId.firebaseapp.com';
   }
 
-  static Uri buildEmailActionUri({String path = '/verify'}) {
+  static String get emailActionContinueHost =>
+      _customEmailActionHost.trim().toLowerCase();
+
+  static Uri? buildEmailActionUri({String path = '/account/verify'}) {
+    final host = emailActionContinueHost;
+    if (host.isEmpty) {
+      return null;
+    }
+
     final normalizedPath = path.startsWith('/') ? path : '/$path';
     return Uri(
       scheme: 'https',
-      host: emailLinkHost,
+      host: host,
       path: normalizedPath,
     );
   }
 
-  static String get emailVerificationActionUrl =>
-      buildEmailActionUri(path: '/verify').toString();
+  static String? get emailVerificationActionUrl =>
+      buildEmailActionUri(path: '/account/verify')?.toString();
 
-  static String get passwordResetActionUrl =>
-      buildEmailActionUri(path: '/reset').toString();
+  static String? get passwordResetActionUrl =>
+      buildEmailActionUri(path: '/account/reset')?.toString();
 
-  static ActionCodeSettings buildEmailVerificationActionCodeSettings() {
+  static ActionCodeSettings? buildEmailVerificationActionCodeSettings() {
+    final url = emailVerificationActionUrl;
+    if (url == null || url.isEmpty) {
+      return null;
+    }
+
     return ActionCodeSettings(
-      url: emailVerificationActionUrl,
-      handleCodeInApp: true,
-      androidPackageName: androidPackageName,
-      androidInstallApp: true,
-      iOSBundleId: iosBundleId,
+      url: url,
+      handleCodeInApp: false,
     );
   }
 
-  static ActionCodeSettings buildPasswordResetActionCodeSettings() {
+  static ActionCodeSettings? buildPasswordResetActionCodeSettings() {
+    final url = passwordResetActionUrl;
+    if (url == null || url.isEmpty) {
+      return null;
+    }
+
     return ActionCodeSettings(
-      url: passwordResetActionUrl,
-      handleCodeInApp: true,
-      androidPackageName: androidPackageName,
-      androidInstallApp: true,
-      iOSBundleId: iosBundleId,
+      url: url,
+      handleCodeInApp: false,
     );
   }
 

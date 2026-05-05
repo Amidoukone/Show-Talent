@@ -81,26 +81,19 @@ void main() {
     });
   });
 
-  test('buildPublicSignupUser keeps public defaults safe', () {
-    final user = UserRepository.buildPublicSignupUser(
-      uid: 'player-1',
-      nom: 'Moussa Traore',
-      email: 'moussa@adfoot.org',
-      role: 'joueur',
-      phone: '70000000',
-      now: DateTime.utc(2026, 4, 2, 10),
+  test('buildPublicSignupUser rejects any public signup', () {
+    expect(
+      () => UserRepository.buildPublicSignupUser(
+        uid: 'player-1',
+        nom: 'Moussa Traore',
+        email: 'moussa@adfoot.org',
+        role: 'joueur',
+        phone: '70000000',
+        now: DateTime.utc(2026, 4, 2, 10),
+      ),
+      throwsA(isA<StateError>()),
     );
 
-    expect(user.uid, 'player-1');
-    expect(user.role, 'joueur');
-    expect(user.estActif, isFalse);
-    expect(user.emailVerified, isFalse);
-    expect(user.profilePublic, isTrue);
-    expect(user.allowMessages, isTrue);
-    expect(user.phone, '70000000');
-  });
-
-  test('buildPublicSignupUser rejects managed roles', () {
     expect(
       () => UserRepository.buildPublicSignupUser(
         uid: 'club-1',
@@ -108,7 +101,7 @@ void main() {
         email: 'club@adfoot.org',
         role: 'club',
       ),
-      throwsA(isA<ArgumentError>()),
+      throwsA(isA<StateError>()),
     );
   });
 }

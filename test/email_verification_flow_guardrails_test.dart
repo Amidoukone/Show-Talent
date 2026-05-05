@@ -13,7 +13,8 @@ void main() {
       expect(
           content, contains('await _refreshVerifiedUserIdToken(refreshed);'));
       expect(content, contains('markEmailVerifiedAndActivate('));
-      expect(content, contains("httpsCallable('completeEmailVerification')"));
+      expect(content, contains("httpsCallable('completeEmailVerification',"));
+      expect(content, contains('HttpsCallableOptions(timeout:'));
       expect(content, contains('_retryEmailVerificationSync('));
     });
 
@@ -115,6 +116,24 @@ void main() {
       expect(content, contains('estBloque: fieldValue.delete()'));
       expect(content, contains('blockedReason: fieldValue.delete()'));
       expect(content, contains('blockMode: fieldValue.delete()'));
+    });
+
+    test('hosting auth action page applies Firebase codes before success', () {
+      final script = File('site_pub/auth-action.js').readAsStringSync();
+      final resetPage = File('site_pub/reset/index.html').readAsStringSync();
+      final verifyPage = File('site_pub/verify/index.html').readAsStringSync();
+
+      expect(script, contains('accounts:update'));
+      expect(script, contains('accounts:resetPassword'));
+      expect(script, contains('newPassword'));
+      expect(script, contains('Opération terminée avec succès.'));
+      expect(resetPage, contains('id="reset-form"'));
+      expect(resetPage, contains('id="new-password"'));
+      expect(resetPage, contains('id="success-panel" class="success-panel" hidden'));
+      expect(verifyPage, contains('id="action-status"'));
+      expect(verifyPage, contains('id="success-panel" class="success-panel" hidden'));
+      expect(File('site_pub/auth-action.css').readAsStringSync(),
+          contains('[hidden]'));
     });
   });
 }

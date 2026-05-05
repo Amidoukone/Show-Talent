@@ -2,14 +2,24 @@
 /* eslint-disable require-jsdoc */
 
 import {randomBytes} from "crypto";
+import type {ActionCodeSettings} from "firebase-admin/auth";
 import {HttpsError} from "firebase-functions/v2/https";
 import {db} from "./firebase";
-import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
+import {
+  LOW_CPU_CALLABLE_OPTIONS,
+  LOW_CPU_REGION_OPTIONS,
+} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 
 const REGION = "europe-west1";
 const MANAGED_ROLE_LIST = ["club", "recruteur", "agent"] as const;
+const ADMIN_PROVISIONED_ROLE_LIST = [
+  "joueur",
+  "fan",
+  ...MANAGED_ROLE_LIST,
+] as const;
 const MANAGED_ROLES = new Set<string>(MANAGED_ROLE_LIST);
+const ADMIN_PROVISIONED_ROLES = new Set<string>(ADMIN_PROVISIONED_ROLE_LIST);
 
 type AdminCallableRequestLike = {
   auth?: {uid?: string; token?: Record<string, unknown> | null} | null;
@@ -53,12 +63,27 @@ function isManagedRole(role: string): boolean {
   return MANAGED_ROLES.has(normalizeRole(role));
 }
 
+function isAdminProvisionedRole(role: string): boolean {
+  return ADMIN_PROVISIONED_ROLES.has(normalizeRole(role));
+}
+
 function assertManagedRole(role: string): string {
   const normalized = normalizeRole(role);
   if (!isManagedRole(normalized)) {
     throw new HttpsError(
       "invalid-argument",
       "Le role doit etre club, recruteur ou agent.",
+    );
+  }
+  return normalized;
+}
+
+function assertAdminProvisionedRole(role: string): string {
+  const normalized = normalizeRole(role);
+  if (!isAdminProvisionedRole(normalized)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Le role doit etre joueur, fan, club, recruteur ou agent.",
     );
   }
   return normalized;
@@ -115,6 +140,103 @@ function buildTemporaryPassword(): string {
   return `${randomBytes(12).toString("base64url")}Aa1!`;
 }
 
+function normalizeEmailLinkHost(rawHost: string): string {
+  const trimmed = rawHost.trim().toLowerCase();
+  if (!trimmed) {
+    return "";
+  }
+
+  return trimmed
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "");
+}
+
+function getEmailLinkHost(): string {
+  return normalizeEmailLinkHost(
+    process.env.EMAIL_LINK_CUSTOM_HOST || "",
+  );
+}
+
+function buildEmailActionUrl(
+  path: "/account/verify" | "/account/reset",
+): string | null {
+  const host = getEmailLinkHost();
+  if (!host) {
+    return null;
+  }
+
+  return `https://${host}${path}`;
+}
+
+function buildEmailActionCodeSettings(
+  path: "/account/verify" | "/account/reset",
+): ActionCodeSettings | undefined {
+  const url = buildEmailActionUrl(path);
+  if (!url) {
+    return undefined;
+  }
+
+  return {
+    url,
+    handleCodeInApp: false,
+  };
+}
+
+function buildEmailVerificationActionCodeSettings():
+ActionCodeSettings | undefined {
+  return buildEmailActionCodeSettings("/account/verify");
+}
+
+function buildPasswordResetActionCodeSettings():
+ActionCodeSettings | undefined {
+  return buildEmailActionCodeSettings("/account/reset");
+}
+
+function localizeAuthActionLink(
+  link: string,
+  languageCode = "fr",
+): string {
+  if (!link) {
+    return link;
+  }
+
+  try {
+    const parsed = new URL(link);
+    if (!parsed.searchParams.has("lang")) {
+      parsed.searchParams.set("lang", languageCode);
+    }
+    return parsed.toString();
+  } catch (_) {
+    return link;
+  }
+}
+
+function buildHostedAuthActionLink(
+  firebaseActionLink: string,
+  path: "/account/verify" | "/account/reset",
+  languageCode = "fr",
+): string {
+  const host = getEmailLinkHost();
+  if (!host) {
+    return localizeAuthActionLink(firebaseActionLink, languageCode);
+  }
+
+  try {
+    const source = new URL(firebaseActionLink);
+    const target = new URL(`https://${host}${path}`);
+    for (const key of ["mode", "oobCode", "apiKey"]) {
+      const value = source.searchParams.get(key);
+      if (value) {
+        target.searchParams.set(key, value);
+      }
+    }
+    target.searchParams.set("lang", languageCode);
+    return target.toString();
+  } catch (_) {
+    return localizeAuthActionLink(firebaseActionLink, languageCode);
+  }
+}
+
 function cloneCallableValue(value: unknown): unknown {
   if (value === null) return null;
 
@@ -167,19 +289,28 @@ function cloneCallableRecord(
 }
 
 export {
+  ADMIN_PROVISIONED_ROLE_LIST,
+  ADMIN_PROVISIONED_ROLES,
+  LOW_CPU_CALLABLE_OPTIONS,
   LOW_CPU_REGION_OPTIONS,
   REGION,
   MANAGED_ROLE_LIST,
   MANAGED_ROLES,
   assertAdminCaller,
+  assertAdminProvisionedRole,
   assertManagedRole,
+  buildEmailVerificationActionCodeSettings,
+  buildHostedAuthActionLink,
+  buildPasswordResetActionCodeSettings,
   buildTemporaryPassword,
   cloneCallableRecord,
   getOptionalString,
   getPlainObject,
   getString,
+  isAdminProvisionedRole,
   isManagedRole,
   isPrivilegedClaims,
   isUserNotFound,
+  localizeAuthActionLink,
   normalizeRole,
 };

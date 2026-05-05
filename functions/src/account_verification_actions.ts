@@ -3,7 +3,7 @@
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 
 import {auth, db, fieldValue} from "./firebase";
-import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
+import {LOW_CPU_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 
 /**
@@ -55,7 +55,7 @@ function formatUnknownErrorMessage(error: unknown): string {
 }
 
 export const completeEmailVerification = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     try {
       const {uid} = await resolveCallableAuth(request);

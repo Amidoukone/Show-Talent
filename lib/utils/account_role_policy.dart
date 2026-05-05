@@ -1,7 +1,15 @@
-const publicSelfSignupRoles = <String>[
+const publicSelfSignupRoles = <String>[];
+
+const adminProvisionedRoles = <String>[
   'joueur',
   'fan',
+  'club',
+  'recruteur',
+  'agent',
 ];
+
+const publicSignupDisabledMessage =
+    'La creation de compte se fait uniquement via le super admin dans le projet administration Adfoot.';
 
 const managedAccountRoles = <String>[
   'club',

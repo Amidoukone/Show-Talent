@@ -7,7 +7,7 @@ import * as logger from "firebase-functions/logger";
 
 import {db, fieldValue, storage} from "./firebase";
 import {
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   assertAdminCaller,
   getString,
 } from "./admin_account_support";
@@ -375,7 +375,7 @@ const EVENT_DELETE_CONFIG: DeleteContentConfig = {
 };
 
 export const adminSetOfferStatus = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     const adminUid = await assertAdminCaller(request);
     const offerId = getContentId(request.data, "offerId");
@@ -443,7 +443,7 @@ export const adminSetOfferStatus = onCall(
 );
 
 export const adminDeleteOffer = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => deleteContentWithAdminRights(
     OFFER_DELETE_CONFIG,
     request,
@@ -451,7 +451,7 @@ export const adminDeleteOffer = onCall(
 );
 
 export const adminSetEventStatus = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     const adminUid = await assertAdminCaller(request);
     const eventId = getContentId(request.data, "eventId");
@@ -519,7 +519,7 @@ export const adminSetEventStatus = onCall(
 );
 
 export const adminDeleteEvent = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => deleteContentWithAdminRights(
     EVENT_DELETE_CONFIG,
     request,

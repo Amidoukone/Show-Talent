@@ -1,5 +1,6 @@
 /* eslint-disable linebreak-style */
 
+import type {CallableOptions} from "firebase-functions/v2/https";
 import type {SupportedRegion} from "firebase-functions/v2/options";
 
 const REGION: SupportedRegion = "europe-west1";
@@ -11,4 +12,11 @@ const LOW_CPU_REGION_OPTIONS = {
   cpu: "gcf_gen1" as const,
 };
 
-export {REGION, LOW_CPU_REGION_OPTIONS};
+const LOW_CPU_CALLABLE_OPTIONS = {
+  ...LOW_CPU_REGION_OPTIONS,
+  cors: true,
+  invoker: "public",
+  ingressSettings: "ALLOW_ALL",
+} satisfies CallableOptions;
+
+export {LOW_CPU_CALLABLE_OPTIONS, REGION, LOW_CPU_REGION_OPTIONS};

@@ -41,46 +41,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'REDACTED_WEB_API_KEY',
-    appId: '1:43422248234:web:90e6e10558e53ab4f8c253',
-    messagingSenderId: '43422248234',
-    projectId: 'show-talent-5987d',
-    authDomain: 'show-talent-5987d.firebaseapp.com',
-    storageBucket: 'show-talent-5987d.appspot.com',
+    apiKey: 'firebase-api-key-placeholder',
+    appId: '1:975666203662:web:75e8ffc66e6340bf32005f',
+    messagingSenderId: '975666203662',
+    projectId: 'adfoot-production',
+    authDomain: 'adfoot-production.firebaseapp.com',
+    storageBucket: 'adfoot-production.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'REDACTED_ANDROID_API_KEY',
-    appId: '1:43422248234:android:08b0ab2b97c1f39ef8c253',
-    messagingSenderId: '43422248234',
-    projectId: 'show-talent-5987d',
-    storageBucket: 'show-talent-5987d.appspot.com',
+    apiKey: 'firebase-api-key-placeholder',
+    appId: '1:975666203662:android:b83dd7a29d1dcd5932005f',
+    messagingSenderId: '975666203662',
+    projectId: 'adfoot-production',
+    storageBucket: 'adfoot-production.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'REDACTED_IOS_API_KEY',
-    appId: '1:43422248234:ios:5d961e9e382cbd4af8c253',
-    messagingSenderId: '43422248234',
-    projectId: 'show-talent-5987d',
-    storageBucket: 'show-talent-5987d.appspot.com',
-    iosBundleId: 'com.example.showTalent',
+    apiKey: 'firebase-api-key-placeholder',
+    appId: '1:975666203662:ios:5b190f523fd66f8632005f',
+    messagingSenderId: '975666203662',
+    projectId: 'adfoot-production',
+    storageBucket: 'adfoot-production.firebasestorage.app',
+    iosBundleId: 'org.adfoot.app',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'REDACTED_MACOS_API_KEY',
-    appId: '1:43422248234:ios:5d961e9e382cbd4af8c253',
-    messagingSenderId: '43422248234',
-    projectId: 'show-talent-5987d',
-    storageBucket: 'show-talent-5987d.appspot.com',
-    iosBundleId: 'com.example.showTalent',
+    apiKey: 'firebase-api-key-placeholder',
+    appId: '1:975666203662:ios:5b190f523fd66f8632005f',
+    messagingSenderId: '975666203662',
+    projectId: 'adfoot-production',
+    storageBucket: 'adfoot-production.firebasestorage.app',
+    iosBundleId: 'org.adfoot.app',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'REDACTED_WINDOWS_API_KEY',
-    appId: '1:43422248234:web:403c0fe305e9dedef8c253',
-    messagingSenderId: '43422248234',
-    projectId: 'show-talent-5987d',
-    authDomain: 'show-talent-5987d.firebaseapp.com',
-    storageBucket: 'show-talent-5987d.appspot.com',
+    apiKey: 'firebase-api-key-placeholder',
+    appId: '1:975666203662:web:75e8ffc66e6340bf32005f',
+    messagingSenderId: '975666203662',
+    projectId: 'adfoot-production',
+    authDomain: 'adfoot-production.firebaseapp.com',
+    storageBucket: 'adfoot-production.firebasestorage.app',
   );
 }

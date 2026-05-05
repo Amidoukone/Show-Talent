@@ -36,6 +36,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
   bool _navigating = false;
   bool _navScheduled = false;
   bool _accessRevocationInProgress = false;
+  String? _queuedRoute;
+  dynamic _queuedArguments;
 
   static const Duration _accessHeartbeatInterval = Duration(seconds: 4);
 
@@ -87,12 +89,30 @@ class UserController extends GetxController with WidgetsBindingObserver {
     final requestVersion = ++_routeRequestVersion;
 
     try {
-      final snapshot = await _authSessionService.resolveSessionSafely(
-        firebaseUser,
-        waitForVerifiedUserDocument: true,
-        syncVerifiedUserRecord: false,
-        signOutOnInvalid: true,
-      );
+      final snapshot = await _authSessionService
+          .resolveSessionSafely(
+            firebaseUser,
+            waitForVerifiedUserDocument: true,
+            syncVerifiedUserRecord: false,
+            signOutOnInvalid: true,
+          )
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              final fallbackUser =
+                  firebaseUser ?? _authSessionService.currentUser;
+              if (fallbackUser != null && fallbackUser.emailVerified) {
+                return AuthSessionSnapshot(
+                  destination: AuthSessionDestination.main,
+                  firebaseUser: fallbackUser,
+                );
+              }
+
+              return const AuthSessionSnapshot(
+                destination: AuthSessionDestination.login,
+              );
+            },
+          );
 
       await _applySessionSnapshot(snapshot, requestVersion: requestVersion);
     } catch (error) {
@@ -520,6 +540,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
     }
 
     if (_navigating) {
+      _queuedRoute = route;
+      _queuedArguments = arguments;
       return;
     }
 
@@ -530,9 +552,24 @@ class UserController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
-      await Get.offAllNamed(route, arguments: arguments);
+      final navFuture = Get.offAllNamed(route, arguments: arguments);
+      await (navFuture ?? Future<void>.value()).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint(
+            'UserController navigation timeout for route=$route',
+          );
+        },
+      );
     } finally {
       _navigating = false;
+      final queuedRoute = _queuedRoute;
+      final queuedArguments = _queuedArguments;
+      _queuedRoute = null;
+      _queuedArguments = null;
+      if (queuedRoute != null) {
+        unawaited(_safeOffAllNamed(queuedRoute, arguments: queuedArguments));
+      }
     }
   }
 

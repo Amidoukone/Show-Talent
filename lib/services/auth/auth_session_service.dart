@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/models/user.dart';
@@ -103,6 +105,8 @@ class AuthSessionService {
   final FirebaseAuth _auth;
   final UserRepository _userRepository;
   final FirebaseFunctions _functions;
+  static const Duration _verificationCallableTimeout = Duration(seconds: 8);
+  static const Duration _signInSessionResolveTimeout = Duration(seconds: 15);
   static const String _accessUnavailableTitle = 'Acces indisponible';
   static const String _accessUnavailableMessage =
       'Impossible de verifier votre acces pour le moment. Reessayez dans quelques instants.';
@@ -114,10 +118,10 @@ class AuthSessionService {
 
   Stream<User?> idTokenChanges() => _auth.idTokenChanges();
 
-  ActionCodeSettings get _defaultEmailVerificationActionCodeSettings =>
+  ActionCodeSettings? get _defaultEmailVerificationActionCodeSettings =>
       AppEnvironmentConfig.buildEmailVerificationActionCodeSettings();
 
-  ActionCodeSettings get _defaultPasswordResetActionCodeSettings =>
+  ActionCodeSettings? get _defaultPasswordResetActionCodeSettings =>
       AppEnvironmentConfig.buildPasswordResetActionCodeSettings();
 
   Future<User?> reloadCurrentUser() async {
@@ -193,7 +197,8 @@ class AuthSessionService {
     required bool updateLastLogin,
   }) async {
     try {
-      final callable = _functions.httpsCallable('completeEmailVerification');
+      final callable = _functions.httpsCallable('completeEmailVerification',
+          options: HttpsCallableOptions(timeout: _verificationCallableTimeout));
       await callable.call(<String, dynamic>{
         'updateLastLogin': updateLastLogin,
       });
@@ -283,6 +288,34 @@ class AuthSessionService {
         appUser;
   }
 
+  void _syncVerifiedAppUserStateInBackground({
+    required User verifiedUser,
+    required AppUser? currentAppUser,
+    required bool updateLastLogin,
+  }) {
+    unawaited(
+      _syncVerifiedAppUserState(
+        verifiedUser: verifiedUser,
+        currentAppUser: currentAppUser,
+        updateLastLogin: updateLastLogin,
+      ).then((syncedUser) {
+        if (kDebugMode && syncedUser != null) {
+          debugPrint(
+            'AuthSessionService background verification sync '
+            'for ${syncedUser.uid}: '
+            'emailVerified=${syncedUser.emailVerified} estActif=${syncedUser.estActif}',
+          );
+        }
+      }).catchError((Object error) {
+        if (kDebugMode) {
+          debugPrint(
+            'AuthSessionService background verification sync error: $error',
+          );
+        }
+      }),
+    );
+  }
+
   Future<AuthSessionSnapshot> signInWithEmailAndPassword({
     required String email,
     required String password,
@@ -313,10 +346,27 @@ class AuthSessionService {
 
     return resolveSessionSafely(
       refreshed,
-      waitForVerifiedUserDocument: false,
-      syncVerifiedUserRecord: false,
+      waitForVerifiedUserDocument: true,
+      syncVerifiedUserRecord: true,
       updateLastLogin: true,
       signOutOnInvalid: true,
+    ).timeout(
+      _signInSessionResolveTimeout,
+      onTimeout: () {
+        if (refreshed != null && refreshed.emailVerified) {
+          return AuthSessionSnapshot(
+            destination: AuthSessionDestination.main,
+            firebaseUser: refreshed,
+          );
+        }
+
+        return AuthSessionSnapshot(
+          destination: refreshed != null && !refreshed.emailVerified
+              ? AuthSessionDestination.verifyEmail
+              : AuthSessionDestination.login,
+          firebaseUser: refreshed,
+        );
+      },
     );
   }
 
@@ -328,48 +378,7 @@ class AuthSessionService {
     String? phone,
     ActionCodeSettings? emailVerificationSettings,
   }) async {
-    if (!isPublicSelfSignupRole(role)) {
-      throw const AuthFlowException(
-        'Seuls les comptes joueur et fan peuvent etre crees dans l application Adfoot.',
-      );
-    }
-
-    final userCred = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-
-    final user = userCred.user;
-    if (user == null) {
-      throw const AuthFlowException('Impossible de creer le compte.');
-    }
-
-    if (nom.isNotEmpty) {
-      await user.updateDisplayName(nom);
-    }
-
-    final appUser = await _userRepository.upsertPublicSignupUser(
-      uid: user.uid,
-      nom: nom,
-      email: email,
-      role: role,
-      phone: phone,
-    );
-
-    final emailDelivery = await sendCurrentUserEmailVerification(
-      actionCodeSettings: emailVerificationSettings,
-    );
-
-    await _auth.currentUser?.reload();
-
-    return SignUpFlowResult(
-      session: AuthSessionSnapshot(
-        destination: AuthSessionDestination.verifyEmail,
-        firebaseUser: _auth.currentUser,
-        appUser: appUser,
-      ),
-      emailDelivery: emailDelivery,
-    );
+    throw const AuthFlowException(publicSignupDisabledMessage);
   }
 
   Future<void> sendPasswordResetEmail({
@@ -549,6 +558,23 @@ class AuthSessionService {
       waitForDocument: waitForVerifiedUserDocument,
     );
 
+    if (decision.issue == UserAccessIssue.disabledAccount &&
+        refreshed.emailVerified) {
+      final syncedUser = await _syncVerifiedAppUserState(
+        verifiedUser: refreshed,
+        currentAppUser: decision.user,
+        updateLastLogin: updateLastLogin,
+      );
+
+      if (_isVerifiedActiveAppUser(syncedUser)) {
+        return AuthSessionSnapshot(
+          destination: AuthSessionDestination.main,
+          firebaseUser: refreshed,
+          appUser: syncedUser,
+        );
+      }
+    }
+
     if (!decision.isAllowed) {
       if (signOutOnInvalid) {
         await signOut();
@@ -569,7 +595,7 @@ class AuthSessionService {
         refreshed.emailVerified &&
         (!appUser.emailVerified || !appUser.estActif);
 
-    if (syncVerifiedUserRecord || needsVerifiedSync) {
+    if (syncVerifiedUserRecord) {
       final verifiedUser = await _refreshVerifiedUserIdToken(refreshed);
       appUser = await _syncVerifiedAppUserState(
             verifiedUser: verifiedUser,
@@ -584,6 +610,12 @@ class AuthSessionService {
           'emailVerified=${appUser.emailVerified} estActif=${appUser.estActif}',
         );
       }
+    } else if (needsVerifiedSync) {
+      _syncVerifiedAppUserStateInBackground(
+        verifiedUser: refreshed,
+        currentAppUser: appUser,
+        updateLastLogin: updateLastLogin,
+      );
     }
 
     return AuthSessionSnapshot(

@@ -3,20 +3,20 @@
     "platforms": {
       "android": {
         "default": {
-          "projectId": "show-talent-5987d",
-          "appId": "1:43422248234:android:08b0ab2b97c1f39ef8c253",
+          "projectId": "adfoot-production",
+          "appId": "1:975666203662:android:b83dd7a29d1dcd5932005f",
           "fileOutput": "android/app/google-services.json"
         }
       },
       "dart": {
         "lib/firebase_options.dart": {
-          "projectId": "show-talent-5987d",
+          "projectId": "adfoot-production",
           "configurations": {
-            "android": "1:43422248234:android:08b0ab2b97c1f39ef8c253",
-            "ios": "1:43422248234:ios:5d961e9e382cbd4af8c253",
-            "macos": "1:43422248234:ios:5d961e9e382cbd4af8c253",
-            "web": "1:43422248234:web:90e6e10558e53ab4f8c253",
-            "windows": "1:43422248234:web:403c0fe305e9dedef8c253"
+            "android": "1:975666203662:android:b83dd7a29d1dcd5932005f",
+            "ios": "1:975666203662:ios:5b190f523fd66f8632005f",
+            "macos": "1:975666203662:ios:5b190f523fd66f8632005f",
+            "web": "1:975666203662:web:75e8ffc66e6340bf32005f",
+            "windows": "1:975666203662:web:75e8ffc66e6340bf32005f"
           }
         }
       }
@@ -223,6 +223,38 @@
       }
     ],
     "rewrites": [
+      {
+        "source": "/verify",
+        "destination": "/verify/index.html"
+      },
+      {
+        "source": "/verify/**",
+        "destination": "/verify/index.html"
+      },
+      {
+        "source": "/account/verify",
+        "destination": "/verify/index.html"
+      },
+      {
+        "source": "/account/verify/**",
+        "destination": "/verify/index.html"
+      },
+      {
+        "source": "/reset",
+        "destination": "/reset/index.html"
+      },
+      {
+        "source": "/reset/**",
+        "destination": "/reset/index.html"
+      },
+      {
+        "source": "/account/reset",
+        "destination": "/reset/index.html"
+      },
+      {
+        "source": "/account/reset/**",
+        "destination": "/reset/index.html"
+      },
       {
         "source": "**",
         "destination": "/index.html"

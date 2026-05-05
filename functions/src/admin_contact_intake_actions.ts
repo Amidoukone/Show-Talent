@@ -7,7 +7,7 @@ import * as logger from "firebase-functions/logger";
 
 import {db, fieldValue} from "./firebase";
 import {
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   assertAdminCaller,
   getOptionalString,
   getString,
@@ -39,7 +39,7 @@ function normalizeAgencyFollowUpStatus(rawStatus: string): string {
 }
 
 export const adminSetContactIntakeFollowUp = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     const adminUid = await assertAdminCaller(request);
     const contactIntakeId =

@@ -1,24 +1,6 @@
 {
   "applinks": {
     "apps": [],
-    "details": [
-      {
-        "appIDs": [
-          "TEAMID.org.adfoot.app",
-          "TEAMID.org.adfoot.app.staging"
-        ],
-        "components": [
-          {
-            "/": "/verify/*"
-          },
-          {
-            "/": "/reset/*"
-          },
-          {
-            "/": "/__/auth/action*"
-          }
-        ]
-      }
-    ]
+    "details": []
   }
 }

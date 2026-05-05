@@ -7,9 +7,12 @@ import * as logger from "firebase-functions/logger";
 
 import {auth, db, fieldValue} from "./firebase";
 import {
-  LOW_CPU_REGION_OPTIONS,
-  MANAGED_ROLES,
+  LOW_CPU_CALLABLE_OPTIONS,
   assertAdminCaller,
+  assertAdminProvisionedRole,
+  buildEmailVerificationActionCodeSettings,
+  buildHostedAuthActionLink,
+  buildPasswordResetActionCodeSettings,
   buildTemporaryPassword,
   getString,
   isUserNotFound,
@@ -26,29 +29,24 @@ type ProvisionedManagedAccount = {
 };
 
 export const provisionManagedAccount = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     const adminUid = await assertAdminCaller(request);
 
     const email = getString(request.data, "email").toLowerCase();
     const displayName =
       getString(request.data, "nom") || getString(request.data, "displayName");
-    const role = normalizeRole(getString(request.data, "role"));
+    const rawRole = getString(request.data, "role");
     const phone = getString(request.data, "phone");
 
-    if (!email || !displayName || !role) {
+    if (!email || !displayName || !rawRole) {
       throw new HttpsError(
         "invalid-argument",
         "email, nom et role sont requis."
       );
     }
 
-    if (!MANAGED_ROLES.has(role)) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Le role doit etre club, recruteur ou agent."
-      );
-    }
+    const role = assertAdminProvisionedRole(rawRole);
 
     let userRecord;
     let existingUser = false;
@@ -83,12 +81,19 @@ export const provisionManagedAccount = onCall(
       );
     }
 
-    if (existingUser && userRecord.displayName !== displayName) {
+    if (
+      existingUser &&
+      (userRecord.displayName !== displayName || userRecord.disabled === true)
+    ) {
       userRecord = await auth.updateUser(userRecord.uid, {
         displayName,
         disabled: false,
       });
     }
+
+    const emailVerifiedAt = userRecord.emailVerified ?
+      existingData.emailVerifiedAt ?? fieldValue.serverTimestamp() :
+      null;
 
     await db.collection("users").doc(userRecord.uid).set({
       uid: userRecord.uid,
@@ -100,9 +105,7 @@ export const provisionManagedAccount = onCall(
       estActif: userRecord.emailVerified && userRecord.disabled !== true,
       authDisabled: userRecord.disabled === true,
       emailVerified: userRecord.emailVerified,
-      emailVerifiedAt: userRecord.emailVerified ?
-        fieldValue.serverTimestamp() :
-        null,
+      emailVerifiedAt,
       dateInscription: existingDoc.exists ?
         (existingData.dateInscription ?? fieldValue.serverTimestamp()) :
         fieldValue.serverTimestamp(),
@@ -121,10 +124,22 @@ export const provisionManagedAccount = onCall(
       updatedAt: fieldValue.serverTimestamp(),
     }, {merge: true});
 
-    const passwordSetupLink = await auth.generatePasswordResetLink(email);
+    const passwordSetupLink = buildHostedAuthActionLink(
+      await auth.generatePasswordResetLink(
+        email,
+        buildPasswordResetActionCodeSettings(),
+      ),
+      "/account/reset",
+    );
     const emailVerificationLink = userRecord.emailVerified ?
       null :
-      await auth.generateEmailVerificationLink(email);
+      buildHostedAuthActionLink(
+        await auth.generateEmailVerificationLink(
+          email,
+          buildEmailVerificationActionCodeSettings(),
+        ),
+        "/account/verify",
+      );
 
     return {
       success: true,

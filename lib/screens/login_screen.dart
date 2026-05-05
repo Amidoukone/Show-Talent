@@ -1,4 +1,6 @@
 import 'package:adfoot/controller/user_controller.dart';
+import 'dart:async';
+
 import 'package:adfoot/screens/signup_screen.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/utils/auth_error_mapper.dart';
@@ -73,7 +75,13 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      await Get.find<UserController>().applyResolvedSessionSnapshot(snapshot);
+      final userController = Get.find<UserController>();
+      await userController
+          .applyResolvedSessionSnapshot(snapshot)
+          .timeout(
+            const Duration(seconds: 12),
+            onTimeout: () => userController.kickstart(),
+          );
     } on FirebaseAuthException catch (error) {
       _showErrorSnackbar(AuthErrorMapper.toMessage(error));
     } on AuthFlowException catch (error) {
@@ -352,7 +360,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Comptes club, recruteur et agent : creation via l\'administration Adfoot.',
+                        'Tous les comptes sont maintenant crees par l\'administration Adfoot.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurface.withValues(alpha: .7),
@@ -377,7 +385,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: _isBusy
                                 ? null
                                 : () => Get.to(() => const SignUpScreen()),
-                            child: const Text('Creez un compte'),
+                            child: const Text('Obtenir un acces'),
                           ),
                         ],
                       ),

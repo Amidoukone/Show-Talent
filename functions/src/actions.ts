@@ -6,7 +6,7 @@
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {db, fieldValue, messaging, storage} from "./firebase";
-import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
+import {LOW_CPU_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 
 type SuccessResponse<T> = {
@@ -210,7 +210,7 @@ function shouldPersistClientLog(entry: {level: string; source: string}): boolean
  * Toggle like sur une vidéo
  */
 export const likeVideo = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{liked: boolean; likes: number}>> => {
     const uid = await requireAuth(request);
 
@@ -262,7 +262,7 @@ export const likeVideo = onCall(
  * Signaler une vidéo
  */
 export const reportVideo = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{reportCount: number}>> => {
     const uid = await requireAuth(request);
 
@@ -313,7 +313,7 @@ export const reportVideo = onCall(
  * Suppression d’une vidéo
  */
 export const deleteVideo = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<null>> => {
     const uid = await requireAuth(request);
 
@@ -352,7 +352,7 @@ export const deleteVideo = onCall(
  * Enregistrement du partage (auth + anti-spam)
  */
 export const shareVideo = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{shareCount: number}>> => {
     const uid = await requireAuth(request);
 
@@ -570,7 +570,7 @@ async function sendFanoutToPlayers(params: {
  * Envoi push securise via backend (plus de cle privee cote client)
  */
 export const sendUserPush = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{sent: boolean}>> => {
     const uid = await requireAuth(request);
 
@@ -630,7 +630,7 @@ export const sendUserPush = onCall(
 );
 
 export const sendOfferFanout = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<FanoutStats>> => {
     const uid = await requireAuth(request);
 
@@ -665,7 +665,7 @@ export const sendOfferFanout = onCall(
 );
 
 export const sendEventFanout = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<FanoutStats>> => {
     const uid = await requireAuth(request);
 
@@ -700,7 +700,7 @@ export const sendEventFanout = onCall(
 );
 
 export const logClientEvents = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{count: number}>> => {
     const uid = await requireAuth(request);
 
@@ -768,7 +768,7 @@ export const logClientEvents = onCall(
  * Centralisation des erreurs/actions vidéo
  */
 export const videoActionLog = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{logged: boolean}>> => {
     const uid = await requireAuth(request);
 

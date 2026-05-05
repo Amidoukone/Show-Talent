@@ -117,55 +117,7 @@ class UserRepository {
     String? phone,
     DateTime? now,
   }) {
-    final normalizedRole = normalizeUserRole(role);
-    if (!isPublicSelfSignupRole(normalizedRole)) {
-      throw ArgumentError.value(
-        role,
-        'role',
-        'Le role doit etre joueur ou fan pour une inscription publique.',
-      );
-    }
-
-    final createdAt = now ?? DateTime.now();
-
-    return AppUser(
-      uid: uid,
-      nom: nom,
-      email: email,
-      role: normalizedRole,
-      photoProfil: '',
-      estActif: false,
-      emailVerified: false,
-      followers: 0,
-      followings: 0,
-      dateInscription: createdAt,
-      dernierLogin: createdAt,
-      phone: phone != null && phone.trim().isNotEmpty ? phone.trim() : null,
-      emailVerifiedAt: null,
-      bio: null,
-      position: null,
-      clubActuel: null,
-      nombreDeMatchs: null,
-      buts: null,
-      assistances: null,
-      videosPubliees: const [],
-      performances: const {},
-      nomClub: null,
-      ligue: null,
-      offrePubliees: const [],
-      eventPublies: const [],
-      entreprise: null,
-      nombreDeRecrutements: null,
-      team: null,
-      joueursSuivis: const [],
-      clubsSuivis: const [],
-      videosLikees: const [],
-      cvUrl: null,
-      followersList: const [],
-      followingsList: const [],
-      profilePublic: true,
-      allowMessages: true,
-    );
+    throw StateError(publicSignupDisabledMessage);
   }
 
   Stream<List<AppUser>> watchAllUsers() {
@@ -229,32 +181,7 @@ class UserRepository {
     required String role,
     String? phone,
   }) async {
-    final normalizedRole = normalizeUserRole(role);
-    if (!isPublicSelfSignupRole(normalizedRole)) {
-      throw ArgumentError.value(
-        role,
-        'role',
-        'Le role doit etre joueur ou fan pour une inscription publique.',
-      );
-    }
-
-    final appUser = buildPublicSignupUser(
-      uid: uid,
-      nom: nom,
-      email: email,
-      role: normalizedRole,
-      phone: phone,
-    );
-
-    await _usersCollection.doc(uid).set(
-      <String, dynamic>{
-        ..._legacyFieldCleanupPatch(),
-        ...appUser.toMap(),
-      },
-      SetOptions(merge: true),
-    );
-
-    return appUser;
+    throw StateError(publicSignupDisabledMessage);
   }
 
   Future<AppUser?> markEmailVerifiedAndActivate(

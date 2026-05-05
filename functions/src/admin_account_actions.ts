@@ -8,9 +8,12 @@ import * as logger from "firebase-functions/logger";
 
 import {auth, db, fieldValue, storage} from "./firebase";
 import {
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   assertAdminCaller,
-  assertManagedRole,
+  assertAdminProvisionedRole,
+  buildEmailVerificationActionCodeSettings,
+  buildHostedAuthActionLink,
+  buildPasswordResetActionCodeSettings,
   cloneCallableRecord,
   getOptionalString,
   getPlainObject,
@@ -438,7 +441,7 @@ function sanitizeManagedProfilePatch(
 }
 
 export const disableManagedAccountAuth = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     const adminUid = await assertAdminCaller(request);
     const uid = getTargetUid(request.data);
@@ -485,7 +488,7 @@ export const disableManagedAccountAuth = onCall(
 );
 
 export const enableManagedAccountAuth = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     const adminUid = await assertAdminCaller(request);
     const uid = getTargetUid(request.data);
@@ -536,7 +539,7 @@ export const enableManagedAccountAuth = onCall(
 );
 
 export const resendManagedAccountInvite = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     const adminUid = await assertAdminCaller(request);
     const uid = getTargetUid(request.data);
@@ -553,11 +556,23 @@ export const resendManagedAccountInvite = onCall(
       );
     }
 
-    const passwordSetupLink = await auth.generatePasswordResetLink(email);
+    const passwordSetupLink = buildHostedAuthActionLink(
+      await auth.generatePasswordResetLink(
+        email,
+        buildPasswordResetActionCodeSettings(),
+      ),
+      "/account/reset",
+    );
     const emailVerificationLink =
       target.userRecord?.emailVerified === true ?
         null :
-        await auth.generateEmailVerificationLink(email);
+        buildHostedAuthActionLink(
+          await auth.generateEmailVerificationLink(
+            email,
+            buildEmailVerificationActionCodeSettings(),
+          ),
+          "/account/verify",
+        );
 
     await target.userRef.set({
       invitedBy: adminUid,
@@ -580,11 +595,11 @@ export const resendManagedAccountInvite = onCall(
 );
 
 export const changeManagedAccountRole = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     const adminUid = await assertAdminCaller(request);
     const uid = getTargetUid(request.data);
-    const nextRole = assertManagedRole(
+    const nextRole = assertAdminProvisionedRole(
       getString(request.data, "newRole") || getString(request.data, "role"),
     );
 
@@ -621,7 +636,7 @@ export const changeManagedAccountRole = onCall(
 );
 
 export const updateManagedAccountProfile = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     const adminUid = await assertAdminCaller(request);
     const uid = getTargetUid(request.data);
@@ -671,7 +686,7 @@ export const updateManagedAccountProfile = onCall(
 );
 
 export const deleteManagedAccount = onCall(
-  LOW_CPU_REGION_OPTIONS,
+  LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
     const adminUid = await assertAdminCaller(request);
     const uid = getTargetUid(request.data);

@@ -126,7 +126,7 @@ function Get-ExpectedFunctionsPolicy {
         default {
             return @{
                 "ENFORCE_APPCHECK" = "true"
-                "STORAGE_BUCKET" = "show-talent-5987d.appspot.com"
+                "STORAGE_BUCKET" = "adfoot-production.firebasestorage.app"
                 "OPTIMIZE_TRIGGER_REGION" = "europe-west1"
                 "VIDEO_UPLOADS_ENABLED" = "true"
                 "MAX_VIDEO_UPLOADS_PER_DAY" = "10"

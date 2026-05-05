@@ -21,13 +21,20 @@ AppUser buildUser(String role) {
 }
 
 void main() {
-  test('public self signup is limited to players and fans', () {
-    expect(publicSelfSignupRoles, ['joueur', 'fan']);
-    expect(isPublicSelfSignupRole('joueur'), isTrue);
-    expect(isPublicSelfSignupRole('fan'), isTrue);
+  test('public self signup is disabled on mobile', () {
+    expect(publicSelfSignupRoles, isEmpty);
+    expect(isPublicSelfSignupRole('joueur'), isFalse);
+    expect(isPublicSelfSignupRole('fan'), isFalse);
     expect(isPublicSelfSignupRole('club'), isFalse);
     expect(isPublicSelfSignupRole('recruteur'), isFalse);
     expect(isPublicSelfSignupRole('agent'), isFalse);
+  });
+
+  test('all business roles are now admin provisioned', () {
+    expect(
+      adminProvisionedRoles,
+      ['joueur', 'fan', 'club', 'recruteur', 'agent'],
+    );
   });
 
   test('managed roles stay server provisioned', () {

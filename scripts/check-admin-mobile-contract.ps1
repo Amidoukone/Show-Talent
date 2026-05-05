@@ -150,15 +150,15 @@ if ($null -ne $msg) { $errors.Add($msg) }
 
 $msg = Assert-ContainsRegex `
     -Raw $firestoreRulesRaw `
-    -Pattern 'function isPublicSignupRole\(role\)\s*\{\s*return role == "joueur" \|\| role == "fan";\s*\}' `
-    -Message "firestore.rules no longer restricts public signup to joueur/fan."
+    -Pattern 'function isPublicSignupRole\(role\)\s*\{\s*return false;\s*\}' `
+    -Message "firestore.rules does not disable public self-signup anymore."
 if ($null -ne $msg) { $errors.Add($msg) }
 
-if ($firestoreRulesRaw -match 'allow create: if isOwner\(userId\)\s*&&\s*request\.resource\.data\.uid == request\.auth\.uid\s*&&\s*isPublicSignupRole\(request\.resource\.data\.role\)\s*&&\s*request\.resource\.data\.createdByAdmin != true;') {
+if ($firestoreRulesRaw -match 'allow create: if false;') {
     # expected rule
 } else {
     $errors.Add(
-        "firestore.rules user create rule does not match the expected public self-signup guardrail."
+        "firestore.rules user create rule does not match the expected admin-only provisioning guardrail."
     )
 }
 
@@ -173,8 +173,8 @@ foreach ($roleLiteral in @("'joueur'", "'fan'", "'club'", "'recruteur'", "'agent
 
 $msg = Assert-ContainsRegex `
     -Raw $authSessionRaw `
-    -Pattern 'Seuls les comptes joueur et fan peuvent' `
-    -Message "AuthSessionService no longer blocks managed/admin self-signup on mobile."
+    -Pattern 'publicSignupDisabledMessage' `
+    -Message "AuthSessionService no longer disables public mobile self-signup."
 if ($null -ne $msg) { $errors.Add($msg) }
 
 $msg = Assert-ContainsRegex `
@@ -185,8 +185,8 @@ if ($null -ne $msg) { $errors.Add($msg) }
 
 $msg = Assert-ContainsRegex `
     -Raw $sharedContractRaw `
-    -Pattern 'projectId : `show-talent-5987d`' `
-    -Message "docs/shared-backend-contract.md no longer pins the shared Firebase projectId."
+    -Pattern 'APP_ENV=production' `
+    -Message "docs/shared-backend-contract.md no longer documents environment-driven backend targeting."
 if ($null -ne $msg) { $errors.Add($msg) }
 
 $msg = Assert-ContainsRegex `
@@ -214,8 +214,8 @@ if ($null -ne $resolvedAdminRepoPath) {
 
     $msg = Assert-ContainsRegex `
         -Raw $adminManagedAccountServiceRaw `
-        -Pattern "static const String _functionsRegion = 'europe-west1';" `
-        -Message "Admin managed_account_service.dart does not pin callable region to europe-west1."
+        -Pattern "AppEnvironmentConfig\.functionsRegion" `
+        -Message "Admin managed_account_service.dart does not use AppEnvironmentConfig.functionsRegion."
     if ($null -ne $msg) { $errors.Add($msg) }
 
     foreach ($callable in $requiredCallables) {
@@ -244,8 +244,8 @@ if ($null -ne $resolvedAdminRepoPath) {
 
     $msg = Assert-ContainsRegex `
         -Raw $adminFirebaseOptionsRaw `
-        -Pattern "projectId:\s*'show-talent-5987d'" `
-        -Message "Admin firebase_options.dart no longer pins projectId show-talent-5987d."
+        -Pattern "projectId:\s*'adfoot-production'" `
+        -Message "Admin firebase_options.dart does not default to adfoot-production."
     if ($null -ne $msg) { $errors.Add($msg) }
 
     $msg = Assert-ContainsRegex `
@@ -256,14 +256,14 @@ if ($null -ne $resolvedAdminRepoPath) {
 
     $msg = Assert-ContainsRegex `
         -Raw $adminPrdRunbookRaw `
-        -Pattern 'projectId : `show-talent-5987d`' `
-        -Message "Admin PRD runbook no longer pins shared projectId."
+        -Pattern 'APP_ENV` / `FIREBASE_PROJECT_ID' `
+        -Message "Admin PRD runbook does not document environment-driven project selection."
     if ($null -ne $msg) { $errors.Add($msg) }
 
     $msg = Assert-ContainsRegex `
         -Raw $adminProductionRunbookRaw `
-        -Pattern 'region Functions admin : `europe-west1`' `
-        -Message "Admin production runbook no longer pins callable region."
+        -Pattern 'FIREBASE_FUNCTIONS_REGION' `
+        -Message "Admin production runbook does not document the Functions region configuration."
     if ($null -ne $msg) { $errors.Add($msg) }
 }
 

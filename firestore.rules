@@ -34,7 +34,7 @@ service cloud.firestore {
     }
 
     function isPublicSignupRole(role) {
-      return role == "joueur" || role == "fan";
+      return false;
     }
 
     function isOpportunityPublisherRole(role) {
@@ -123,10 +123,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if signedIn() &&
         (hasActiveAccount(request.auth.uid) || isOwner(userId));
-      allow create: if isOwner(userId) &&
-        request.resource.data.uid == request.auth.uid &&
-        isPublicSignupRole(request.resource.data.role) &&
-        request.resource.data.createdByAdmin != true;
+      allow create: if false;
       allow update: if isOwner(userId) &&
         hasActiveAccount(request.auth.uid) &&
         preservesUserIdentity() &&
