@@ -100,6 +100,13 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys);
     }
 
+    function canUpdateOwnFcmToken() {
+      return changesOnly(["fcmToken"]) &&
+        request.resource.data.fcmToken is string &&
+        request.resource.data.fcmToken.size() > 0 &&
+        request.resource.data.fcmToken.size() <= 4096;
+    }
+
     function canMutateOfferCandidates() {
       return isSignedInPlayer() &&
         resource.data.recruteur.uid != request.auth.uid &&
@@ -126,9 +133,14 @@ service cloud.firestore {
       allow create: if false;
       allow update: if isOwner(userId) &&
         hasActiveAccount(request.auth.uid) &&
-        preservesUserIdentity() &&
-        preservesProtectedUserFields() &&
-        preservesVerificationState();
+        (
+          canUpdateOwnFcmToken() ||
+          (
+            preservesUserIdentity() &&
+            preservesProtectedUserFields() &&
+            preservesVerificationState()
+          )
+        );
       allow delete: if isOwner(userId);
     }
 

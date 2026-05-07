@@ -1,6 +1,9 @@
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/config/app_environment.dart';
+import 'package:adfoot/services/callable_auth_guard.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 enum UserAccessIssue {
   missingProfile,
@@ -39,10 +42,15 @@ class UserSettingsSnapshot {
 }
 
 class UserRepository {
-  UserRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  UserRepository({FirebaseFirestore? firestore, FirebaseFunctions? functions})
+      : _firestore = firestore ?? FirebaseFirestore.instance,
+        _functions = functions ??
+            FirebaseFunctions.instanceFor(
+              region: AppEnvironmentConfig.functionsRegion,
+            );
 
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
   static const String _missingProfileMessage =
       'Ce compte n est plus disponible. Si vous pensez qu il s agit d une erreur, contactez le support Adfoot.';
   static const String _adminPortalOnlyMessage =
@@ -260,10 +268,26 @@ class UserRepository {
   }
 
   Future<void> saveFcmToken(String uid, String token) async {
-    await _usersCollection.doc(uid).set(
-      {'fcmToken': token},
-      SetOptions(merge: true),
-    );
+    final sanitized = token.trim();
+    if (uid.trim().isEmpty || sanitized.isEmpty) {
+      return;
+    }
+
+    try {
+      final callable = _functions.httpsCallable('saveUserFcmToken');
+      await CallableAuthGuard.call(callable, {'token': sanitized});
+      return;
+    } catch (_) {
+      // FCM is non-critical. Keep a direct fallback for environments where the
+      // callable has not been deployed yet, but never block login/upload.
+    }
+
+    try {
+      await _usersCollection.doc(uid).set(
+        {'fcmToken': sanitized},
+        SetOptions(merge: true),
+      );
+    } catch (_) {}
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>?> _waitForUserDoc(

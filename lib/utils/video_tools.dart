@@ -8,6 +8,29 @@ import 'package:video_player/video_player.dart';
 
 import '../services/client_logger.dart';
 
+class PreparedVideoFile {
+  const PreparedVideoFile({
+    required this.file,
+    required this.wasTrimmed,
+    this.originalDurationSeconds,
+    this.uploadDurationSeconds,
+  });
+
+  final File file;
+  final bool wasTrimmed;
+  final int? originalDurationSeconds;
+  final int? uploadDurationSeconds;
+}
+
+class VideoPreparationException implements Exception {
+  const VideoPreparationException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// ============================================================================
 /// VideoTools
 /// ----------------------------------------------------------------------------
@@ -23,6 +46,7 @@ class VideoTools {
 
   // Tolérance (en ms) pour absorber les imprécisions de métadonnées
   static const int _durationLeewayMs = 10000;
+  static const int defaultMaxUploadDurationSeconds = 60;
 
   // Petit délai après sélection (certains OS écrivent encore le fichier).
   static const Duration _settleDelay = Duration(milliseconds: 120);
@@ -163,6 +187,55 @@ class VideoTools {
     }
   }
 
+  static Future<PreparedVideoFile> prepareVideoFileForUpload(
+    String videoPath, {
+    int maxDurationSeconds = defaultMaxUploadDurationSeconds,
+  }) async {
+    final source = File(videoPath);
+    if (!await source.exists()) {
+      throw const VideoPreparationException('Video introuvable.');
+    }
+
+    final sourceDurationMs = await _getDurationMsRobust(videoPath);
+    if (sourceDurationMs == null ||
+        _isWithinDurationLimit(sourceDurationMs, maxDurationSeconds)) {
+      return PreparedVideoFile(
+        file: source,
+        wasTrimmed: false,
+        originalDurationSeconds: _durationMsToSeconds(sourceDurationMs),
+        uploadDurationSeconds: _durationMsToSeconds(sourceDurationMs),
+      );
+    }
+
+    await _logInfo(
+      'prepareVideoFileForUpload',
+      'Trimming long video: ${_durationMsToSeconds(sourceDurationMs)}s '
+          '-> ${maxDurationSeconds}s',
+    );
+
+    final trimmed = await _trimVideoToDuration(
+      videoPath,
+      maxDurationSeconds: maxDurationSeconds,
+    );
+    final trimmedDurationMs = await _getDurationMsRobust(trimmed.path);
+
+    if (trimmedDurationMs != null &&
+        !_isWithinDurationLimit(trimmedDurationMs, maxDurationSeconds)) {
+      throw VideoPreparationException(
+        'La video preparee dure ${_formatDurationSeconds(_durationMsToSeconds(trimmedDurationMs))}. '
+        'La limite est de ${maxDurationSeconds}s.',
+      );
+    }
+
+    return PreparedVideoFile(
+      file: trimmed,
+      wasTrimmed: true,
+      originalDurationSeconds: _durationMsToSeconds(sourceDurationMs),
+      uploadDurationSeconds:
+          _durationMsToSeconds(trimmedDurationMs) ?? maxDurationSeconds,
+    );
+  }
+
   static Future<(int?, int?)> getDimensions(String videoPath) async {
     try {
       final dims = await _getDimensionsRobust(videoPath);
@@ -218,6 +291,69 @@ class VideoTools {
     }
 
     return bestMs;
+  }
+
+  static bool _isWithinDurationLimit(int durationMs, int maxDurationSeconds) {
+    final secondsFloor = (durationMs / 1000).floor();
+    if (secondsFloor <= maxDurationSeconds) return true;
+
+    final limitMs = maxDurationSeconds * 1000 + _durationLeewayMs;
+    return durationMs <= limitMs;
+  }
+
+  static int? _durationMsToSeconds(int? durationMs) {
+    return durationMs != null ? (durationMs / 1000).floor() : null;
+  }
+
+  static String _formatDurationSeconds(int? seconds) {
+    if (seconds == null) return 'inconnue';
+    final minutes = seconds ~/ 60;
+    final remainingSeconds = seconds % 60;
+    return '${minutes}m ${remainingSeconds.toString().padLeft(2, '0')}s';
+  }
+
+  static Future<File> _trimVideoToDuration(
+    String videoPath, {
+    required int maxDurationSeconds,
+  }) async {
+    try {
+      final info = await VideoCompress.compressVideo(
+        videoPath,
+        quality: VideoQuality.DefaultQuality,
+        deleteOrigin: false,
+        startTime: 0,
+        duration: maxDurationSeconds,
+        includeAudio: true,
+        frameRate: 30,
+      );
+
+      final outputPath = info?.path;
+      if (info == null ||
+          info.isCancel == true ||
+          outputPath == null ||
+          outputPath.trim().isEmpty) {
+        throw const VideoPreparationException(
+          'Preparation video annulee ou incomplete.',
+        );
+      }
+
+      final file = File(outputPath);
+      if (!await file.exists() || await file.length() <= 0) {
+        throw const VideoPreparationException(
+          'Fichier video prepare introuvable.',
+        );
+      }
+
+      return file;
+    } catch (error) {
+      if (error is VideoPreparationException) {
+        rethrow;
+      }
+      await _logError('_trimVideoToDuration', error.toString());
+      throw const VideoPreparationException(
+        'Impossible de preparer un extrait de 60 secondes.',
+      );
+    }
   }
 
   static Future<int?> _probeDurationWithVideoPlayer(String videoPath) async {

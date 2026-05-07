@@ -705,6 +705,7 @@ export {
   likeVideo,
   reportVideo,
   deleteVideo,
+  saveUserFcmToken,
   sendUserPush,
   sendOfferFanout,
   sendEventFanout,

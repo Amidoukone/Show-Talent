@@ -629,6 +629,38 @@ export const sendUserPush = onCall(
   }
 );
 
+export const saveUserFcmToken = onCall(
+  LOW_CPU_CALLABLE_OPTIONS,
+  async (request): Promise<ActionResponse<{saved: boolean}>> => {
+    const uid = await requireAuth(request);
+    const token = getString(request.data, "token");
+
+    if (!token || token.length > 4096) {
+      throw new HttpsError("invalid-argument", "Token FCM invalide.");
+    }
+
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      throw new HttpsError("not-found", "Profil utilisateur introuvable.");
+    }
+
+    if (userSnap.data()?.authDisabled === true) {
+      throw new HttpsError("permission-denied", "Compte desactive.");
+    }
+
+    await userRef.set(
+      {
+        fcmToken: token,
+        fcmTokenUpdatedAt: fieldValue.serverTimestamp(),
+      },
+      {merge: true}
+    );
+
+    return ok("saved", "Token FCM enregistre.", {saved: true});
+  }
+);
+
 export const sendOfferFanout = onCall(
   LOW_CPU_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<FanoutStats>> => {

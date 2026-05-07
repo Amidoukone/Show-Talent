@@ -1,10 +1,10 @@
 // lib/services/notifications.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 
+import 'users/user_repository.dart';
 import 'web_messaging_helper.dart';
 
 class NotificationService {
@@ -22,7 +22,8 @@ class NotificationService {
 
   /// Init notifs locales (à appeler au démarrage)
   static Future<void> initLocal() async {
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidSettings);
     await _local.initialize(initSettings);
 
@@ -76,10 +77,7 @@ class NotificationService {
     // 3) Persiste en base si on a un user
     final user = currentUser ?? FirebaseAuth.instance.currentUser;
     if (user != null) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-        {'fcmToken': token},
-        SetOptions(merge: true),
-      );
+      await UserRepository().saveFcmToken(user.uid, token);
     }
   }
 }

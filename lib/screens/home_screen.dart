@@ -414,11 +414,10 @@ class _HomeScreenState extends State<HomeScreen>
                   tag: 'profileAvatar',
                   child: CircleAvatar(
                     radius: 18,
-                    backgroundImage: NetworkImage(
-                      user.photoProfil.isNotEmpty
-                          ? user.photoProfil
-                          : 'https://via.placeholder.com/150',
-                    ),
+                    backgroundImage: user.photoProfil.isNotEmpty
+                        ? NetworkImage(user.photoProfil)
+                        : const AssetImage('assets/default_avatar.jpg')
+                            as ImageProvider,
                   ),
                 ),
               ),

@@ -232,13 +232,13 @@ class UploadClient {
     String contentType = 'video/mp4',
   }) async {
     final callable = _functions.httpsCallable('createUploadSession');
-    final result =
-        await CallableAuthGuard.call<Map<String, dynamic>>(callable, {
+    final data =
+        await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
+            callable, 'createUploadSession', {
       if (sessionId != null) 'sessionId': sessionId,
       'contentType': contentType,
     });
 
-    final data = result.data;
     final expiresAtMs = (data['expiresAt'] as num?)?.toInt() ?? 0;
 
     final session = UploadSessionState(
@@ -446,8 +446,9 @@ class UploadClient {
     final hash = await _computeMd5(file);
 
     final callable = _functions.httpsCallable('requestThumbnailUploadUrl');
-    final result =
-        await CallableAuthGuard.call<Map<String, dynamic>>(callable, {
+    final data =
+        await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
+            callable, 'requestThumbnailUploadUrl', {
       'sessionId': sessionId,
       'hash': hash,
       'size': size,
@@ -455,7 +456,6 @@ class UploadClient {
       if (thumbnailPath != null) 'thumbnailPath': thumbnailPath,
     });
 
-    final data = result.data;
     return ThumbnailUploadTicket(
       uploadUrl: data['uploadUrl'],
       thumbnailPath: data['thumbnailPath'],
@@ -531,11 +531,12 @@ class UploadClient {
     required Map<String, dynamic> metadata,
   }) async {
     final callable = _functions.httpsCallable('finalizeUpload');
-    final result =
-        await CallableAuthGuard.call<Map<String, dynamic>>(callable, {
+    final data =
+        await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
+            callable, 'finalizeUpload', {
       'sessionId': sessionId,
       'metadata': metadata,
     });
-    return (result.data['ok'] as bool?) ?? false;
+    return (data['ok'] as bool?) ?? false;
   }
 }

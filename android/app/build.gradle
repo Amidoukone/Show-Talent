@@ -16,10 +16,15 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def isStagingReleaseTask = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase().contains("stagingrelease")
+}
+def enableReleaseOptimization = !isStagingReleaseTask
+
 android {
     namespace = "org.adfoot.app"
     compileSdk = 35
-    ndkVersion = "29.0.13599879"
+    ndkVersion = "26.3.11579264"
 
     defaultConfig {
         applicationId = "org.adfoot.app"
@@ -28,6 +33,12 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled true
+        ndk {
+            // Production/staging target modern Android devices and Play's
+            // 64-bit requirement. Avoid configuring obsolete 32-bit ARM CMake
+            // toolchains that fail with recent Android NDK releases on Windows.
+            abiFilters "arm64-v8a"
+        }
     }
 
     flavorDimensions += "environment"
@@ -73,8 +84,8 @@ android {
         release {
             // For CI/local validation without key.properties, fallback remains debug-signed.
             signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
-            minifyEnabled true
-            shrinkResources true
+            minifyEnabled enableReleaseOptimization
+            shrinkResources enableReleaseOptimization
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
         debug {

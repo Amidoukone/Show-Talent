@@ -91,28 +91,27 @@ class UserController extends GetxController with WidgetsBindingObserver {
     try {
       final snapshot = await _authSessionService
           .resolveSessionSafely(
-            firebaseUser,
-            waitForVerifiedUserDocument: true,
-            syncVerifiedUserRecord: false,
-            signOutOnInvalid: true,
-          )
+        firebaseUser,
+        waitForVerifiedUserDocument: true,
+        syncVerifiedUserRecord: false,
+        signOutOnInvalid: true,
+      )
           .timeout(
-            const Duration(seconds: 15),
-            onTimeout: () {
-              final fallbackUser =
-                  firebaseUser ?? _authSessionService.currentUser;
-              if (fallbackUser != null && fallbackUser.emailVerified) {
-                return AuthSessionSnapshot(
-                  destination: AuthSessionDestination.main,
-                  firebaseUser: fallbackUser,
-                );
-              }
+        const Duration(seconds: 15),
+        onTimeout: () {
+          final fallbackUser = firebaseUser ?? _authSessionService.currentUser;
+          if (fallbackUser != null && fallbackUser.emailVerified) {
+            return AuthSessionSnapshot(
+              destination: AuthSessionDestination.main,
+              firebaseUser: fallbackUser,
+            );
+          }
 
-              return const AuthSessionSnapshot(
-                destination: AuthSessionDestination.login,
-              );
-            },
+          return const AuthSessionSnapshot(
+            destination: AuthSessionDestination.login,
           );
+        },
+      );
 
       await _applySessionSnapshot(snapshot, requestVersion: requestVersion);
     } catch (error) {
@@ -228,7 +227,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
           return;
         }
 
-        unawaited(_handleCurrentUserAccessRevoked(decision));
+        unawaited(_enforceCurrentSessionAccess());
       },
       onError: (error) {
         _currentUserAccessSub = null;

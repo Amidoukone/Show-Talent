@@ -90,26 +90,33 @@ class UploadVideoController extends GetxController {
       uploadProgress.value = 0.02;
       originalVideoPath = sourceFile.path;
 
-      final isValidDuration =
-          await VideoTools.isDurationValid(sourceFile.path, maxDuration: 62);
+      final preparedVideo = await VideoTools.prepareVideoFileForUpload(
+        sourceFile.path,
+        maxDurationSeconds: VideoTools.defaultMaxUploadDurationSeconds,
+      );
       final isValidQuality =
-          await VideoTools.isQualityAcceptable(sourceFile.path);
+          await VideoTools.isQualityAcceptable(preparedVideo.file.path);
 
-      if (!isValidDuration || !isValidQuality) {
+      if (!isValidQuality) {
         showErrorToast(
-          !isValidDuration
-              ? 'La duree depasse 60 secondes.'
-              : 'Qualite video insuffisante (minimum 480x360).',
+          'Qualite video insuffisante (minimum 480x360).',
         );
         return false;
       }
 
       uploadStage.value = 'Preparation du fichier...';
       uploadProgress.value = 0.08;
-      selectedVideo = sourceFile;
+      selectedVideo = preparedVideo.file;
+      originalVideoPath = selectedVideo!.path;
+      if (preparedVideo.wasTrimmed) {
+        showInfoToast(
+          'Video preparee en extrait de '
+          '${preparedVideo.uploadDurationSeconds ?? VideoTools.defaultMaxUploadDurationSeconds}s.',
+        );
+      }
 
       uploadStage.value = 'Generation de la miniature...';
-      thumbnail = await _retryThumbnail(sourceFile.path);
+      thumbnail = await _retryThumbnail(selectedVideo!.path);
       if (thumbnail == null) {
         showErrorToast('Erreur lors de la generation de la miniature.');
         return false;
@@ -120,6 +127,9 @@ class UploadVideoController extends GetxController {
       caption = sanitizedCaption;
       isPrepared = true;
       return true;
+    } on VideoPreparationException catch (error) {
+      showErrorToast(error.message);
+      return false;
     } catch (_) {
       showErrorToast(
         'Preparation impossible pour le moment. Merci de reessayer.',

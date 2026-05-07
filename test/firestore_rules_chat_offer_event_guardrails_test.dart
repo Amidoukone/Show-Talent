@@ -39,5 +39,14 @@ void main() {
       expect(
           rules, contains('changesOnly(["vues", "viewedBy", "lastUpdated"])'));
     });
+
+    test('rules allow only narrow owner FCM token updates', () {
+      final rules = File('firestore.rules').readAsStringSync();
+
+      expect(rules, contains('function canUpdateOwnFcmToken() {'));
+      expect(rules, contains('changesOnly(["fcmToken"])'));
+      expect(rules, contains('request.resource.data.fcmToken is string'));
+      expect(rules, contains('request.resource.data.fcmToken.size() <= 4096'));
+    });
   });
 }
