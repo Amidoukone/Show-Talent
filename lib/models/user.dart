@@ -215,13 +215,15 @@ class AppUser {
       return null;
     }
 
+    final normalizedRole = normalizeUserRole(map['role']?.toString());
+
     return AppUser(
       uid: map['uid'] ?? '',
       nom: map['nom'] ?? 'Nom inconnu',
       email: map['email'] ?? '',
-      role: map['role'] ?? 'utilisateur',
+      role: normalizedRole.isEmpty ? 'utilisateur' : normalizedRole,
       photoProfil: map['photoProfil'] ?? '',
-      estActif: map['estActif'] ?? false,
+      estActif: map['estActif'] as bool? ?? true,
       authDisabled: map['authDisabled'] == true,
       emailVerified: map['emailVerified'] ?? false,
       createdByAdmin: map['createdByAdmin'] as bool? ?? false,

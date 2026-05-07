@@ -4,6 +4,7 @@ import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/users/user_repository.dart';
+import 'package:adfoot/utils/auth_error_mapper.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -111,6 +112,58 @@ class AuthSessionService {
   static const String _accessUnavailableMessage =
       'Impossible de verifier votre acces pour le moment. Reessayez dans quelques instants.';
 
+  static bool isDisabledAuthFailure(FirebaseAuthException error) {
+    return error.code == 'user-disabled';
+  }
+
+  static bool isTransientAuthFailure(FirebaseAuthException error) {
+    switch (error.code) {
+      case 'network-request-failed':
+      case 'too-many-requests':
+      case 'internal-error':
+      case 'unavailable':
+      case 'deadline-exceeded':
+      case 'aborted':
+      case 'cancelled':
+        return true;
+    }
+
+    return _messageLooksTransient(error.message);
+  }
+
+  static bool isTransientFirebaseFailure(FirebaseException error) {
+    if (error is FirebaseAuthException) {
+      return isTransientAuthFailure(error);
+    }
+
+    switch (error.code) {
+      case 'unavailable':
+      case 'deadline-exceeded':
+      case 'aborted':
+      case 'cancelled':
+      case 'resource-exhausted':
+      case 'internal':
+        return true;
+    }
+
+    return _messageLooksTransient(error.message);
+  }
+
+  static bool _messageLooksTransient(String? message) {
+    final normalized = message?.toLowerCase() ?? '';
+    if (normalized.isEmpty) {
+      return false;
+    }
+
+    return normalized.contains('i/o error') ||
+        normalized.contains('software caused connection abort') ||
+        normalized.contains('connection abort') ||
+        normalized.contains('socket') ||
+        normalized.contains('network') ||
+        normalized.contains('timed out') ||
+        normalized.contains('timeout');
+  }
+
   User? get currentUser => _auth.currentUser;
   String? get currentUserEmail => _auth.currentUser?.email;
   bool get isCurrentUserEmailVerified =>
@@ -123,6 +176,24 @@ class AuthSessionService {
 
   ActionCodeSettings? get _defaultPasswordResetActionCodeSettings =>
       AppEnvironmentConfig.buildPasswordResetActionCodeSettings();
+
+  AuthSessionSnapshot _preserveCurrentSessionAfterTransientFailure(
+    User? firebaseUser,
+  ) {
+    final current = _auth.currentUser ?? firebaseUser;
+    if (current == null) {
+      return const AuthSessionSnapshot(
+        destination: AuthSessionDestination.login,
+      );
+    }
+
+    return AuthSessionSnapshot(
+      destination: current.emailVerified
+          ? AuthSessionDestination.main
+          : AuthSessionDestination.verifyEmail,
+      firebaseUser: current,
+    );
+  }
 
   Future<User?> reloadCurrentUser() async {
     final user = _auth.currentUser;
@@ -640,7 +711,43 @@ class AuthSessionService {
         updateLastLogin: updateLastLogin,
         signOutOnInvalid: signOutOnInvalid,
       );
+    } on FirebaseAuthException catch (error) {
+      if (isDisabledAuthFailure(error)) {
+        if (signOutOnInvalid) {
+          await signOut();
+        }
+
+        return AuthSessionSnapshot(
+          destination: AuthSessionDestination.login,
+          firebaseUser: firebaseUser,
+          failure: UserAccessIssue.disabledAccount,
+          failureTitle: 'Compte desactive',
+          failureMessage: AuthErrorMapper.toMessage(error),
+        );
+      }
+
+      if (isTransientAuthFailure(error)) {
+        if (kDebugMode) {
+          debugPrint(
+            'AuthSessionService transient auth access check skipped '
+            '(${error.code}): ${error.message}',
+          );
+        }
+        return _preserveCurrentSessionAfterTransientFailure(firebaseUser);
+      }
+
+      rethrow;
     } on FirebaseException catch (error) {
+      if (isTransientFirebaseFailure(error)) {
+        if (kDebugMode) {
+          debugPrint(
+            'AuthSessionService transient Firebase access check skipped '
+            '(${error.code}): ${error.message}',
+          );
+        }
+        return _preserveCurrentSessionAfterTransientFailure(firebaseUser);
+      }
+
       if (error.code != 'permission-denied') {
         rethrow;
       }

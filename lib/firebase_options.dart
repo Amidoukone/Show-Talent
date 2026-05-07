@@ -15,6 +15,16 @@ import 'package:flutter/foundation.dart'
 /// );
 /// ```
 class DefaultFirebaseOptions {
+  static const String _placeholderApiKey = 'firebase-api-key-placeholder';
+  static const String _placeholderAppId = 'firebase-app-id-placeholder';
+  static const String _placeholderSenderId = 'firebase-sender-id-placeholder';
+  static const String _placeholderProjectId = 'firebase-project-placeholder';
+  static const String _placeholderAuthDomain =
+      'firebase-project-placeholder.firebaseapp.com';
+  static const String _placeholderStorageBucket =
+      'firebase-project-placeholder.firebasestorage.app';
+  static const String _placeholderBundleId = 'org.adfoot.app.placeholder';
+
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
       return web;
@@ -41,46 +51,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'firebase-api-key-placeholder',
-    appId: '1:975666203662:web:75e8ffc66e6340bf32005f',
-    messagingSenderId: '975666203662',
-    projectId: 'adfoot-production',
-    authDomain: 'adfoot-production.firebaseapp.com',
-    storageBucket: 'adfoot-production.firebasestorage.app',
+    apiKey: _placeholderApiKey,
+    appId: _placeholderAppId,
+    messagingSenderId: _placeholderSenderId,
+    projectId: _placeholderProjectId,
+    authDomain: _placeholderAuthDomain,
+    storageBucket: _placeholderStorageBucket,
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'firebase-api-key-placeholder',
-    appId: '1:975666203662:android:b83dd7a29d1dcd5932005f',
-    messagingSenderId: '975666203662',
-    projectId: 'adfoot-production',
-    storageBucket: 'adfoot-production.firebasestorage.app',
+    apiKey: _placeholderApiKey,
+    appId: _placeholderAppId,
+    messagingSenderId: _placeholderSenderId,
+    projectId: _placeholderProjectId,
+    storageBucket: _placeholderStorageBucket,
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'firebase-api-key-placeholder',
-    appId: '1:975666203662:ios:5b190f523fd66f8632005f',
-    messagingSenderId: '975666203662',
-    projectId: 'adfoot-production',
-    storageBucket: 'adfoot-production.firebasestorage.app',
-    iosBundleId: 'org.adfoot.app',
+    apiKey: _placeholderApiKey,
+    appId: _placeholderAppId,
+    messagingSenderId: _placeholderSenderId,
+    projectId: _placeholderProjectId,
+    storageBucket: _placeholderStorageBucket,
+    iosBundleId: _placeholderBundleId,
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'firebase-api-key-placeholder',
-    appId: '1:975666203662:ios:5b190f523fd66f8632005f',
-    messagingSenderId: '975666203662',
-    projectId: 'adfoot-production',
-    storageBucket: 'adfoot-production.firebasestorage.app',
-    iosBundleId: 'org.adfoot.app',
+    apiKey: _placeholderApiKey,
+    appId: _placeholderAppId,
+    messagingSenderId: _placeholderSenderId,
+    projectId: _placeholderProjectId,
+    storageBucket: _placeholderStorageBucket,
+    iosBundleId: _placeholderBundleId,
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'firebase-api-key-placeholder',
-    appId: '1:975666203662:web:75e8ffc66e6340bf32005f',
-    messagingSenderId: '975666203662',
-    projectId: 'adfoot-production',
-    authDomain: 'adfoot-production.firebaseapp.com',
-    storageBucket: 'adfoot-production.firebasestorage.app',
+    apiKey: _placeholderApiKey,
+    appId: _placeholderAppId,
+    messagingSenderId: _placeholderSenderId,
+    projectId: _placeholderProjectId,
+    authDomain: _placeholderAuthDomain,
+    storageBucket: _placeholderStorageBucket,
   );
 }

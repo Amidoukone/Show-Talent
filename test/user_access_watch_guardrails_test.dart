@@ -15,5 +15,7 @@ void main() {
         contains('unawaited(_handleCurrentUserAccessRevoked(decision));'),
       ),
     );
+    expect(source, contains('isDisabledAuthFailure(error)'));
+    expect(source, contains('Duration(seconds: 60)'));
   });
 }

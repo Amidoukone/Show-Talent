@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:get/get.dart';
 
 import '../controller/auth_controller.dart';
+import '../controller/chat_controller.dart';
 import '../controller/follow_controller.dart';
 import '../controller/user_controller.dart';
 import '../services/video_metrics_observer.dart';
@@ -19,6 +20,7 @@ class AppBindings {
     _registerPermanent<AuthController>(() => AuthController());
     _registerPermanent<UserController>(() => UserController());
     _registerPermanent<FollowController>(() => FollowController());
+    _registerPermanent<ChatController>(() => ChatController());
   }
 
   static void warmUpBackgroundServices() {

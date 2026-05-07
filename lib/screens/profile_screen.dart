@@ -114,9 +114,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       tag: widget.uid,
       builder: (controller) {
         if (controller.user == null) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return _buildProfileLoadState(controller);
         }
 
         final user = controller.user!;
@@ -381,6 +379,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildProfileLoadState(ProfileController controller) {
+    final errorMessage = controller.profileLoadErrorMessage;
+    if (errorMessage == null || errorMessage.trim().isEmpty) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: kSurface,
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        centerTitle: true,
+        elevation: 0,
+        title: const Text('Profil'),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.account_circle_outlined,
+                  size: 56,
+                  color: AdColors.onSurfaceMuted,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  controller.profileLoadErrorTitle ?? 'Profil indisponible',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  errorMessage,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AdColors.onSurfaceMuted),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: controller.isLoadingUser
+                      ? null
+                      : () => controller.updateUserId(widget.uid),
+                  icon: controller.isLoadingUser
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                  label: const Text('Reessayer'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

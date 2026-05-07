@@ -4,6 +4,7 @@ import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/users/user_repository.dart';
+import 'package:adfoot/utils/auth_error_mapper.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -39,7 +40,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
   String? _queuedRoute;
   dynamic _queuedArguments;
 
-  static const Duration _accessHeartbeatInterval = Duration(seconds: 4);
+  static const Duration _accessHeartbeatInterval = Duration(seconds: 60);
 
   @override
   void onInit() {
@@ -114,6 +115,42 @@ class UserController extends GetxController with WidgetsBindingObserver {
       );
 
       await _applySessionSnapshot(snapshot, requestVersion: requestVersion);
+    } on FirebaseAuthException catch (error) {
+      if (AuthSessionService.isTransientAuthFailure(error)) {
+        debugPrint(
+          'UserController route auth check kept current session '
+          'after transient auth error (${error.code}): ${error.message}',
+        );
+        return;
+      }
+
+      if (!_isLatestRouteRequest(requestVersion)) {
+        return;
+      }
+
+      debugPrint('UserController _routeFromAuth auth error: $error');
+      await _syncCurrentUserAccessWatch(null);
+      await _stopAllUsersWatch();
+      _user.value = null;
+      await _safeOffAllNamed(AppRoutes.login);
+    } on FirebaseException catch (error) {
+      if (AuthSessionService.isTransientFirebaseFailure(error)) {
+        debugPrint(
+          'UserController route auth check kept current session '
+          'after transient Firebase error (${error.code}): ${error.message}',
+        );
+        return;
+      }
+
+      if (!_isLatestRouteRequest(requestVersion)) {
+        return;
+      }
+
+      debugPrint('UserController _routeFromAuth Firebase error: $error');
+      await _syncCurrentUserAccessWatch(null);
+      await _stopAllUsersWatch();
+      _user.value = null;
+      await _safeOffAllNamed(AppRoutes.login);
     } catch (error) {
       if (!_isLatestRouteRequest(requestVersion)) {
         return;
@@ -325,14 +362,33 @@ class UserController extends GetxController with WidgetsBindingObserver {
         ),
       );
     } on FirebaseAuthException catch (error) {
+      if (!AuthSessionService.isDisabledAuthFailure(error)) {
+        debugPrint(
+          'UserController enforceCurrentSessionAccess ignored auth error '
+          '(${error.code}): ${error.message}',
+        );
+        return;
+      }
+
       await _handleCurrentUserAccessRevoked(
         UserAccessDecision(
           exists: true,
           issue: UserAccessIssue.disabledAccount,
           title: 'Compte desactive',
-          message: error.message ??
-              'L acces a ce compte a ete desactive. Contactez le support Adfoot.',
+          message: AuthErrorMapper.toMessage(error),
         ),
+      );
+    } on FirebaseException catch (error) {
+      if (AuthSessionService.isTransientFirebaseFailure(error)) {
+        debugPrint(
+          'UserController enforceCurrentSessionAccess ignored transient '
+          'Firebase error (${error.code}): ${error.message}',
+        );
+        return;
+      }
+
+      debugPrint(
+        'UserController enforceCurrentSessionAccess Firebase error: $error',
       );
     } catch (error) {
       debugPrint('UserController enforceCurrentSessionAccess error: $error');
@@ -370,13 +426,9 @@ class UserController extends GetxController with WidgetsBindingObserver {
       );
 
       if (snapshot.destination == AuthSessionDestination.main) {
-        await _handleCurrentUserAccessRevoked(
-          UserAccessDecision(
-            exists: true,
-            issue: null,
-            title: fallbackTitle,
-            message: fallbackMessage,
-          ),
+        debugPrint(
+          'UserController protected access denied but session remains valid; '
+          'keeping the user signed in.',
         );
         return;
       }

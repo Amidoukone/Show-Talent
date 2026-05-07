@@ -19,6 +19,12 @@ class ProfileAccessRevokedException implements Exception {
   const ProfileAccessRevokedException();
 }
 
+class ProfileLoadException implements Exception {
+  const ProfileLoadException(this.message);
+
+  final String message;
+}
+
 class ProfileController extends GetxController {
   static const ProfileFieldDelete deleteField = ProfileFieldDelete._();
 
@@ -31,6 +37,9 @@ class ProfileController extends GetxController {
 
   final isLoadingPhoto = false.obs;
   final videoList = <Video>[].obs;
+  bool isLoadingUser = false;
+  String? profileLoadErrorTitle;
+  String? profileLoadErrorMessage;
 
   DocumentSnapshot<Map<String, dynamic>>? _lastVideoDoc;
   static const int _videoFetchLimit = 20;
@@ -45,6 +54,46 @@ class ProfileController extends GetxController {
 
   bool _isPermissionDenied(Object error) =>
       error is FirebaseException && error.code == 'permission-denied';
+
+  bool _isTransientFirestoreError(Object error) {
+    if (error is! FirebaseException) {
+      return false;
+    }
+
+    switch (error.code) {
+      case 'unavailable':
+      case 'deadline-exceeded':
+      case 'aborted':
+      case 'cancelled':
+      case 'resource-exhausted':
+      case 'internal':
+        return true;
+    }
+
+    final message = error.message?.toLowerCase() ?? '';
+    return message.contains('i/o error') ||
+        message.contains('software caused connection abort') ||
+        message.contains('connection abort') ||
+        message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('timeout');
+  }
+
+  String _profileLoadErrorMessage(Object error) {
+    if (error is ProfileLoadException) {
+      return error.message;
+    }
+
+    if (_isPermissionDenied(error)) {
+      return 'Vous n avez pas acces a ce profil avec la session actuelle.';
+    }
+
+    if (_isTransientFirestoreError(error)) {
+      return 'Connexion instable. Verifiez votre reseau puis reessayez.';
+    }
+
+    return 'Chargement du profil impossible. Reessayez dans quelques instants.';
+  }
 
   Future<void> _handleProtectedAccessDenied() async {
     if (!Get.isRegistered<UserController>()) {
@@ -85,19 +134,29 @@ class ProfileController extends GetxController {
   }
 
   Future<void> updateUserId(String uid) async {
+    isLoadingUser = true;
+    profileLoadErrorTitle = null;
+    profileLoadErrorMessage = null;
+    update();
+
     try {
       final doc = await _getWithRetry(_firestore.collection('users').doc(uid));
       if (!doc.exists) {
-        throw 'Profil introuvable';
+        throw const ProfileLoadException('Profil introuvable.');
       }
 
       user = AppUser.fromMap(doc.data()!);
+      isLoadingUser = false;
       update();
 
       _startUserListener(uid);
       await fetchUserVideos(uid, isRefresh: true);
     } catch (e, st) {
       debugPrint('updateUserId error: $e\n$st');
+      isLoadingUser = false;
+      profileLoadErrorTitle = 'Profil indisponible';
+      profileLoadErrorMessage = _profileLoadErrorMessage(e);
+      update();
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         return;
@@ -128,6 +187,11 @@ class ProfileController extends GetxController {
       },
       onError: (error, stackTrace) {
         debugPrint('profile user listener error: $error\n$stackTrace');
+        if (user == null) {
+          profileLoadErrorTitle = 'Profil indisponible';
+          profileLoadErrorMessage = _profileLoadErrorMessage(error);
+          update();
+        }
         if (_isPermissionDenied(error)) {
           unawaited(_handleProtectedAccessDenied());
         }
