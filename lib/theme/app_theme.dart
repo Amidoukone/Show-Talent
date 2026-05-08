@@ -71,7 +71,7 @@ class AppTheme {
           foregroundColor: AdColors.brandOn,
           disabledBackgroundColor: AdColors.disabled,
           disabledForegroundColor: AdColors.surfaceCard,
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size(0, 50),
           padding: const EdgeInsets.symmetric(
             vertical: AdSpacing.sm,
             horizontal: AdSpacing.md,
@@ -87,7 +87,7 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: AdColors.brand.withValues(alpha: 0.15),
           foregroundColor: AdColors.brand,
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size(0, 50),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AdRadius.md),
           ),
@@ -98,7 +98,7 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: AdColors.brand,
           side: const BorderSide(color: AdColors.brand, width: 1.2),
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size(0, 50),
           padding: const EdgeInsets.symmetric(
             vertical: AdSpacing.sm,
             horizontal: AdSpacing.md,

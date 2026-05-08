@@ -44,5 +44,18 @@ void main() {
       expect(content, contains('clamp(0, videoList.length - 1)'));
       expect(content, contains('_prefetchThumbnailsAround(clampedIndex);'));
     });
+
+    test('video feed screen releases its contextual controller on dispose', () {
+      final content =
+          File('lib/screens/video_feed_screen.dart').readAsStringSync();
+
+      expect(content,
+          contains('FeatureControllerRegistry.ensureVideoController('));
+      expect(
+        content,
+        contains(
+            'FeatureControllerRegistry.releaseVideoController(widget.contextKey);'),
+      );
+    });
   });
 }

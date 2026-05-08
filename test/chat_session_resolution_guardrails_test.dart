@@ -25,9 +25,15 @@ void main() {
       expect(
           conversation, contains('userController.user ?? authController.user'));
       expect(conversation, contains('AuthSessionService'));
+      expect(chat, contains('AppUser? get _resolvedCurrentUser'));
       expect(chat,
           contains('_userController.user ?? AuthController.instance.user'));
+      expect(chat, contains('String? get _resolvedCurrentUid'));
+      expect(chat, contains("_authSessionService.currentUser?.uid"));
       expect(chat, contains('_authSessionService.currentUser != null'));
+      expect(chat, contains('await chatController.setActiveConversation('));
+      expect(
+          chat, contains('await chatController.touchActiveConversation(uid);'));
     });
   });
 }

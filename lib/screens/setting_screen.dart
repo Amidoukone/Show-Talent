@@ -6,6 +6,7 @@ import 'package:adfoot/services/account_cleanup_service.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -23,6 +24,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _isDeleting = false;
   bool _loadingRole = true;
+  bool _sessionUnavailable = false;
 
   String _role = 'fan';
 
@@ -38,7 +40,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadUserSettings() async {
     final uid = _authSessionService.currentUser?.uid;
     if (uid == null) {
-      setState(() => _loadingRole = false);
+      setState(() {
+        _loadingRole = false;
+        _sessionUnavailable = true;
+      });
       return;
     }
 
@@ -73,7 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       AdFeedback.error(
         'Erreur',
-        'Impossible de sauvegarder les parametres.',
+        'Impossible de sauvegarder les paramètres.',
       );
       return false;
     }
@@ -84,6 +89,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_loadingRole) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_sessionUnavailable) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Paramètres'),
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: AdStatePanel.error(
+              title: 'Session invalide',
+              message: 'Impossible de charger les paramètres du compte.',
+            ),
+          ),
+        ),
       );
     }
 
@@ -157,10 +179,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       }
 
                       AdFeedback.info(
-                        'Confidentialite',
+                        'Confidentialité',
                         value
                             ? 'Votre profil est maintenant visible.'
-                            : 'Votre profil est desormais restreint.',
+                            : 'Votre profil est désormais restreint.',
                       );
                     },
             ),
@@ -203,10 +225,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             onTap: () {
               AdFeedback.info(
-                'Donnees personnelles',
-                "Adfoot ne vend jamais vos donnees.\n"
-                    'Elles servent uniquement a connecter les talents '
-                    'aux opportunites sportives.',
+                'Données personnelles',
+                "Adfoot ne vend jamais vos données.\n"
+                    'Elles servent uniquement à connecter les talents '
+                    'aux opportunités sportives.',
                 duration: const Duration(seconds: 5),
               );
             },
@@ -234,8 +256,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             onTap: () {
               AdFeedback.info(
-                'Equipe Adfoot',
-                "Avant toute decision, contactez-nous.\n\n"
+                'Équipe Adfoot',
+                "Avant toute décision, contactez-nous.\n\n"
                     "adfoot.org\nWhatsApp : +223 70 66 83 64",
                 duration: const Duration(seconds: 6),
               );
@@ -370,8 +392,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await AdDialogs.confirm(
       context: context,
       title: 'Supprimer mon compte',
-      message: 'Cette action supprimera definitivement votre compte et '
-          'toutes vos donnees. Voulez-vous continuer ?',
+      message: 'Cette action supprimera définitivement votre compte et '
+          'toutes vos données. Voulez-vous continuer ?',
       confirmLabel: 'Supprimer',
       cancelLabel: 'Annuler',
       danger: true,
@@ -404,8 +426,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       Get.offAllNamed(AppRoutes.login);
       AdFeedback.success(
-        'Compte supprime',
-        'Votre compte a ete supprime avec succes.',
+        'Compte supprimé',
+        'Votre compte a été supprimé avec succès.',
       );
     } on AccountCleanupException catch (error) {
       closeBlockingDialog();
@@ -435,7 +457,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final reconnectNow = await AdDialogs.confirm(
       context: context,
-      title: 'Verification de securite requise',
+      title: 'Vérification de sécurité requise',
       message: '$message\n\nReconnectez-vous puis relancez la suppression.',
       confirmLabel: 'Me reconnecter',
       cancelLabel: 'Plus tard',

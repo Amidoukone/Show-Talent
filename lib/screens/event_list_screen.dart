@@ -58,7 +58,7 @@ class _EventListScreenState extends State<EventListScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Evenements',
+          'Événements',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         backgroundColor: cs.surface,
@@ -71,7 +71,7 @@ class _EventListScreenState extends State<EventListScreen> {
           return _buildMissingUserState();
         }
 
-        if (eventController.isLoading) {
+        if (eventController.isLoading && eventController.events.isEmpty) {
           return _buildSkeletons();
         }
 
@@ -142,6 +142,11 @@ class _EventListScreenState extends State<EventListScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
+                          if (eventController.isLoading)
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 12),
+                              child: LinearProgressIndicator(minHeight: 2),
+                            ),
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
@@ -153,7 +158,7 @@ class _EventListScreenState extends State<EventListScreen> {
                               _buildChip(Icons.place_outlined, event.lieu),
                               _buildChip(
                                 Icons.privacy_tip_outlined,
-                                event.estPublic ? 'Public' : 'Prive',
+                                event.estPublic ? 'Public' : 'Privé',
                               ),
                               _buildChip(
                                 Icons.group_outlined,
@@ -222,7 +227,7 @@ class _EventListScreenState extends State<EventListScreen> {
           message: 'Impossible de charger le profil utilisateur.',
           action: AdButton(
             expanded: false,
-            label: 'Revenir a l accueil',
+            label: 'Revenir à l’accueil',
             onPressed: () {
               Get.offAllNamed(AppRoutes.main, arguments: {'tab': 0});
             },
@@ -265,17 +270,17 @@ class _EventListScreenState extends State<EventListScreen> {
 
   Widget _buildEmptyState(AppUser currentUser) {
     final isOrganizer = isOpportunityPublisherRole(currentUser.role);
-    final actionLabel = isOrganizer ? 'Creer un evenement' : 'Voir les clubs';
+    final actionLabel = isOrganizer ? 'Créer un événement' : 'Voir les clubs';
 
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: AdStatePanel(
           icon: Icons.event_busy,
-          title: 'Aucun evenement disponible',
+          title: 'Aucun événement disponible',
           message: isOrganizer
-              ? 'Vous pouvez publier votre premier evenement.'
-              : 'Aucun evenement ne correspond a vos filtres.',
+              ? 'Vous pouvez publier votre premier événement.'
+              : 'Aucun événement ne correspond à vos filtres.',
           action: AdButton(
             expanded: false,
             label: actionLabel,
@@ -334,7 +339,7 @@ class _EventListScreenState extends State<EventListScreen> {
                   onTap: () => setState(() => _selectedStatus = 'ouvert'),
                 ),
                 _FilterChip(
-                  label: 'Fermes',
+                  label: 'Fermés',
                   selected: _selectedStatus == 'ferme',
                   onTap: () => setState(() => _selectedStatus = 'ferme'),
                 ),
@@ -350,12 +355,12 @@ class _EventListScreenState extends State<EventListScreen> {
                   onTap: () => setState(() => _selectedVisibility = 'public'),
                 ),
                 _FilterChip(
-                  label: 'Prive',
+                  label: 'Privé',
                   selected: _selectedVisibility == 'prive',
                   onTap: () => setState(() => _selectedVisibility = 'prive'),
                 ),
                 _FilterChip(
-                  label: 'A venir',
+                  label: 'À venir',
                   selected: _onlyUpcoming,
                   onTap: () => setState(() => _onlyUpcoming = !_onlyUpcoming),
                 ),
@@ -434,8 +439,10 @@ class _EventListScreenState extends State<EventListScreen> {
     if (isOrganisateur) {
       final statusValue = _normalizeStatus(event.statut);
 
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           DropdownButton<String>(
             value: statusValue,
@@ -491,8 +498,10 @@ class _EventListScreenState extends State<EventListScreen> {
       );
     }
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         ElevatedButton.icon(
           onPressed: (!isParticipant && !isClosed && !isBusy)
@@ -515,7 +524,7 @@ class _EventListScreenState extends State<EventListScreen> {
                 ? null
                 : () => _confirmUnregisterEvent(context, event, currentUser),
             child: const Text(
-              'Se desinscrire',
+              'Se désinscrire',
               style: TextStyle(color: Colors.red),
             ),
           )
@@ -544,7 +553,7 @@ class _EventListScreenState extends State<EventListScreen> {
     final confirmed = await AdDialogs.confirm(
       context: context,
       title: 'Supprimer',
-      message: 'Voulez-vous vraiment supprimer cet evenement ?',
+      message: 'Voulez-vous vraiment supprimer cet événement ?',
       confirmLabel: 'Supprimer',
       cancelLabel: 'Annuler',
       danger: true,
@@ -568,8 +577,8 @@ class _EventListScreenState extends State<EventListScreen> {
   ) async {
     final confirmed = await AdDialogs.confirm(
       context: context,
-      title: 'Se desinscrire',
-      message: 'Voulez-vous vraiment vous desinscrire de cet evenement ?',
+      title: 'Se désinscrire',
+      message: 'Voulez-vous vraiment vous désinscrire de cet événement ?',
       confirmLabel: 'Confirmer',
       cancelLabel: 'Annuler',
       danger: true,
@@ -591,7 +600,7 @@ class _EventListScreenState extends State<EventListScreen> {
     }
 
     if (response.success) {
-      AdFeedback.success('Succes', response.message);
+      AdFeedback.success('Succès', response.message);
       return;
     }
 

@@ -23,6 +23,7 @@ class EventController extends GetxController {
 
   StreamSubscription<User?>? _authSub;
   StreamSubscription<List<Event>>? _eventsSub;
+  String? _activeAuthUid;
 
   bool _isPermissionDenied(Object error) =>
       error is FirebaseException && error.code == 'permission-denied';
@@ -33,9 +34,9 @@ class EventController extends GetxController {
     }
 
     await Get.find<UserController>().handleProtectedAccessDenied(
-      fallbackTitle: 'Acces indisponible',
+      fallbackTitle: 'Accès indisponible',
       fallbackMessage:
-          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+          'Votre session a été fermée pour protéger votre compte. Veuillez vous reconnecter.',
     );
   }
 
@@ -43,7 +44,7 @@ class EventController extends GetxController {
     return const ActionResponse(
       success: false,
       code: 'session_revoked',
-      message: 'Votre session a ete fermee. Veuillez vous reconnecter.',
+      message: 'Votre session a été fermée. Veuillez vous reconnecter.',
       toast: ToastLevel.none,
     );
   }
@@ -73,7 +74,17 @@ class EventController extends GetxController {
   }
 
   Future<void> fetchEvents() async {
-    _isLoading.value = true;
+    final currentUid = _authSessionService.currentUser?.uid;
+    final hasActiveStream =
+        _eventsSub != null && _activeAuthUid == currentUid;
+    if (hasActiveStream) {
+      return;
+    }
+
+    _activeAuthUid = currentUid;
+    if (_events.value.isEmpty) {
+      _isLoading.value = true;
+    }
     await _eventsSub?.cancel();
 
     _eventsSub = _eventRepository.watchEvents().listen(
@@ -126,6 +137,7 @@ class EventController extends GetxController {
   Future<void> _stopEventsStream({bool clearData = false}) async {
     await _eventsSub?.cancel();
     _eventsSub = null;
+    _activeAuthUid = null;
 
     if (clearData) {
       _events.value = const <Event>[];
@@ -185,7 +197,7 @@ class EventController extends GetxController {
       return const ActionResponse(
         success: true,
         code: 'created',
-        message: 'Votre evenement a ete cree avec succes.',
+        message: 'Votre événement a été créé avec succès.',
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error) {
@@ -196,13 +208,13 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'create_failed',
-        message: 'Echec de la creation de l evenement.',
+        message: 'Échec de la création de l’événement.',
       );
     } catch (e) {
       debugPrint('Event creation failed: $e');
       return ActionResponse.failure(
         code: 'create_failed',
-        message: 'Echec de la creation de l evenement.',
+        message: 'Échec de la création de l’événement.',
       );
     }
   }
@@ -214,7 +226,7 @@ class EventController extends GetxController {
     if (utilisateur.uid != event.organisateur.uid) {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Vous ne pouvez modifier que vos propres evenements.',
+        message: 'Vous ne pouvez modifier que vos propres événements.',
         toast: ToastLevel.info,
       );
     }
@@ -235,13 +247,13 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'update_failed',
-        message: 'Echec de la mise a jour de l evenement.',
+        message: 'Échec de la mise à jour de l’événement.',
       );
     } catch (e) {
       debugPrint('Event update failed: $e');
       return ActionResponse.failure(
         code: 'update_failed',
-        message: 'Echec de la mise a jour de l evenement.',
+        message: 'Échec de la mise à jour de l’événement.',
       );
     }
   }
@@ -256,7 +268,7 @@ class EventController extends GetxController {
       if (event == null) {
         return ActionResponse.failure(
           code: 'not-found',
-          message: 'L evenement n existe pas.',
+          message: 'L’événement n’existe pas.',
           toast: ToastLevel.info,
         );
       }
@@ -264,7 +276,7 @@ class EventController extends GetxController {
       if (event.organisateur.uid != utilisateur.uid) {
         return ActionResponse.failure(
           code: 'permission-denied',
-          message: 'Vous ne pouvez supprimer que vos propres evenements.',
+          message: 'Vous ne pouvez supprimer que vos propres événements.',
           toast: ToastLevel.info,
         );
       }
@@ -273,7 +285,7 @@ class EventController extends GetxController {
       return const ActionResponse(
         success: true,
         code: 'deleted',
-        message: 'L evenement a ete supprime.',
+        message: 'L’événement a été supprimé.',
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error) {
@@ -284,13 +296,13 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'delete_failed',
-        message: 'Echec de la suppression de l evenement.',
+        message: 'Échec de la suppression de l’événement.',
       );
     } catch (e) {
       debugPrint('Event deletion failed: $e');
       return ActionResponse.failure(
         code: 'delete_failed',
-        message: 'Echec de la suppression de l evenement.',
+        message: 'Échec de la suppression de l’événement.',
       );
     }
   }
@@ -302,7 +314,7 @@ class EventController extends GetxController {
     if (participant.role != 'joueur') {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Seuls les joueurs peuvent s inscrire a un evenement.',
+        message: 'Seuls les joueurs peuvent s’inscrire à un événement.',
         toast: ToastLevel.info,
       );
     }
@@ -325,7 +337,7 @@ class EventController extends GetxController {
       return const ActionResponse(
         success: true,
         code: 'registered',
-        message: 'Vous etes inscrit a l evenement.',
+        message: 'Vous êtes inscrit à l’événement.',
         toast: ToastLevel.success,
       );
     } on EventRepositoryException catch (e) {
@@ -360,7 +372,7 @@ class EventController extends GetxController {
     if (participant.role != 'joueur') {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Seuls les joueurs peuvent se desinscrire d un evenement.',
+        message: 'Seuls les joueurs peuvent se désinscrire d’un événement.',
         toast: ToastLevel.info,
       );
     }
@@ -381,7 +393,7 @@ class EventController extends GetxController {
       return const ActionResponse(
         success: true,
         code: 'unregistered',
-        message: 'Vous etes desinscrit de l evenement.',
+        message: 'Vous êtes désinscrit de l’événement.',
         toast: ToastLevel.success,
       );
     } on EventRepositoryException catch (e) {
@@ -427,8 +439,8 @@ class EventController extends GetxController {
   ) {
     return PushNotificationService.sendEventFanout(
       eventId: event.id,
-      title: 'Nouvel evenement',
-      body: '${utilisateur.nom} a cree un nouvel evenement : ${event.titre}',
+      title: 'Nouvel événement',
+      body: '${utilisateur.nom} a créé un nouvel événement : ${event.titre}',
     );
   }
 }

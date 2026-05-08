@@ -68,7 +68,7 @@ class AdButton extends StatelessWidget {
     final vertical = size == AdButtonSize.regular ? AdSpacing.sm : AdSpacing.xs;
 
     final base = ElevatedButton.styleFrom(
-      minimumSize: Size.fromHeight(size == AdButtonSize.regular ? 50 : 44),
+      minimumSize: Size(0, size == AdButtonSize.regular ? 50 : 44),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AdRadius.md),
       ),
@@ -109,7 +109,7 @@ class AdButton extends StatelessWidget {
   ButtonStyle _outlinedStyle(BuildContext context) {
     final vertical = size == AdButtonSize.regular ? AdSpacing.sm : AdSpacing.xs;
     return OutlinedButton.styleFrom(
-      minimumSize: Size.fromHeight(size == AdButtonSize.regular ? 50 : 44),
+      minimumSize: Size(0, size == AdButtonSize.regular ? 50 : 44),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AdRadius.md),
       ),

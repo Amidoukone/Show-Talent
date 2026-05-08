@@ -1,5 +1,6 @@
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/event_controller.dart';
+import 'package:adfoot/controller/offre_controller.dart';
 import 'package:adfoot/config/app_routes.dart';
 import 'package:get/get.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,5 +31,6 @@ void main() {
 
     expect(Get.isPrepared<ChatController>(), isTrue);
     expect(Get.isPrepared<EventController>(), isTrue);
+    expect(Get.isPrepared<OffreController>(), isTrue);
   });
 }

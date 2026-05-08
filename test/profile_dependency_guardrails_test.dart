@@ -17,4 +17,20 @@ void main() {
       contains('_registerPermanent<ChatController>(() => ChatController())'),
     );
   });
+
+  test('profile video feed ensures its tagged controller before lookup', () {
+    final registry =
+        File('lib/config/feature_controller_registry.dart').readAsStringSync();
+    final feed =
+        File('lib/screens/profile_video_feed_screen.dart').readAsStringSync();
+
+    expect(
+        registry, contains('static ProfileController ensureProfileController'));
+    expect(
+        feed,
+        contains(
+            'FeatureControllerRegistry.ensureProfileController(widget.uid)'));
+    expect(
+        feed, isNot(contains('Get.find<ProfileController>(tag: widget.uid)')));
+  });
 }

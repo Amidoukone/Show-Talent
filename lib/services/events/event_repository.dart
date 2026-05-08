@@ -119,8 +119,8 @@ class EventRepository {
       }
 
       final participants = [
-        ...event.participants.map((p) => p.toMap()),
-        participant.toMap(),
+        ...event.participants.map((p) => p.toEmbeddedMap()),
+        participant.toEmbeddedMap(),
       ];
 
       txn.update(docRef, {
@@ -166,7 +166,7 @@ class EventRepository {
 
       final participants = event.participants
           .where((p) => p.uid != participant.uid)
-          .map((p) => p.toMap())
+          .map((p) => p.toEmbeddedMap())
           .toList(growable: false);
 
       txn.update(docRef, {

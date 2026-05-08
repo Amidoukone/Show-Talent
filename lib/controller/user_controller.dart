@@ -498,6 +498,27 @@ class UserController extends GetxController with WidgetsBindingObserver {
     return requestVersion == _routeRequestVersion;
   }
 
+  bool _shouldNavigateToMain({dynamic routeArguments}) {
+    if (routeArguments != null) {
+      return true;
+    }
+
+    final navigatorState = Get.key.currentState;
+    if (navigatorState?.canPop() == true) {
+      return false;
+    }
+
+    final currentRoute = Get.currentRoute;
+    if (currentRoute.isEmpty) {
+      return false;
+    }
+
+    return currentRoute == AppRoutes.splash ||
+        currentRoute == AppRoutes.login ||
+        currentRoute == AppRoutes.verifyEmail ||
+        currentRoute == AppRoutes.resetPassword;
+  }
+
   Future<void> _applySessionSnapshot(
     AuthSessionSnapshot snapshot, {
     required int requestVersion,
@@ -555,6 +576,10 @@ class UserController extends GetxController with WidgetsBindingObserver {
         }
         _listenAllUsers();
         if (!_isLatestRouteRequest(requestVersion)) {
+          return;
+        }
+
+        if (!_shouldNavigateToMain(routeArguments: routeArguments)) {
           return;
         }
 

@@ -145,7 +145,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = _userController.user ?? AuthController.instance.user;
+    final currentUser = _resolvedCurrentUser;
     if (currentUser == null && _authSessionService.currentUser != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Chargement')),
@@ -421,6 +421,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  AppUser? get _resolvedCurrentUser =>
+      _userController.user ?? AuthController.instance.user;
+
+  String? get _resolvedCurrentUid =>
+      _resolvedCurrentUser?.uid ?? _authSessionService.currentUser?.uid;
+
   // ------------------------------
   // Delete message
   // ------------------------------
@@ -453,11 +459,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // Active conversation (notif throttle) - logique existante conservée
   // ------------------------------
   Future<void> _enterActiveConversation() async {
-    final user = AuthController.instance.user;
-    if (user == null) return;
+    final uid = _resolvedCurrentUid;
+    if (uid == null) return;
     try {
       await chatController.setActiveConversation(
-        uid: user.uid,
+        uid: uid,
         conversationId: widget.conversationId,
       );
       _lastTouchAt = DateTime.now();
@@ -465,11 +471,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _leaveActiveConversation() async {
-    final user = AuthController.instance.user;
-    if (user == null) return;
+    final uid = _resolvedCurrentUid;
+    if (uid == null) return;
     try {
       await chatController.setActiveConversation(
-        uid: user.uid,
+        uid: uid,
         conversationId: null,
       );
     } catch (_) {}
@@ -495,10 +501,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _touchActiveAt() async {
-    final user = AuthController.instance.user;
-    if (user == null) return;
+    final uid = _resolvedCurrentUid;
+    if (uid == null) return;
     try {
-      await chatController.touchActiveConversation(user.uid);
+      await chatController.touchActiveConversation(uid);
     } catch (_) {}
   }
 

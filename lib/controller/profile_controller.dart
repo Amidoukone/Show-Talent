@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/user.dart';
@@ -85,14 +86,14 @@ class ProfileController extends GetxController {
     }
 
     if (_isPermissionDenied(error)) {
-      return 'Vous n avez pas acces a ce profil avec la session actuelle.';
+      return 'Vous n’avez pas accès à ce profil avec la session actuelle.';
     }
 
     if (_isTransientFirestoreError(error)) {
-      return 'Connexion instable. Verifiez votre reseau puis reessayez.';
+      return 'Connexion instable. Vérifiez votre réseau puis réessayez.';
     }
 
-    return 'Chargement du profil impossible. Reessayez dans quelques instants.';
+    return 'Chargement du profil impossible. Réessayez dans quelques instants.';
   }
 
   Future<void> _handleProtectedAccessDenied() async {
@@ -101,9 +102,9 @@ class ProfileController extends GetxController {
     }
 
     await Get.find<UserController>().handleProtectedAccessDenied(
-      fallbackTitle: 'Acces indisponible',
+      fallbackTitle: 'Accès indisponible',
       fallbackMessage:
-          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+          'Votre session a été fermée pour protéger votre compte. Veuillez vous reconnecter.',
     );
   }
 
@@ -292,7 +293,14 @@ class ProfileController extends GetxController {
       }
 
       if (refreshGlobalUser && Get.isRegistered<UserController>()) {
-        await Get.find<UserController>().refreshUser();
+        try {
+          await Get.find<UserController>().refreshUser();
+        } catch (refreshError, refreshStackTrace) {
+          debugPrint(
+            'updateProfilePatch refreshUser warning: '
+            '$refreshError\n$refreshStackTrace',
+          );
+        }
       }
     } catch (e, st) {
       debugPrint('updateProfilePatch error: $e\n$st');
@@ -649,12 +657,27 @@ class ProfileController extends GetxController {
     await fetchUserVideos(user!.uid, isRefresh: true);
   }
 
-  Future<void> uploadCvPdf(String uid, File pdfFile) async {
+  Future<void> uploadCvPdf(
+    String uid, {
+    File? pdfFile,
+    Uint8List? pdfBytes,
+    String? fileName,
+  }) async {
     try {
+      if ((pdfFile == null && pdfBytes == null) ||
+          (pdfBytes != null && pdfBytes.isEmpty)) {
+        throw ArgumentError('CV payload is empty.');
+      }
+
       final ref = _storage
-          .ref('cvs/$uid/cv_${DateTime.now().millisecondsSinceEpoch}.pdf');
+          .ref(
+            'cvs/$uid/'
+            '${fileName?.trim().isNotEmpty == true ? fileName!.trim() : 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf'}',
+          );
       final metadata = SettableMetadata(contentType: 'application/pdf');
-      final uploadTask = await ref.putFile(pdfFile, metadata);
+      final uploadTask = pdfBytes != null
+          ? await ref.putData(pdfBytes, metadata)
+          : await ref.putFile(pdfFile!, metadata);
       final url = await uploadTask.ref.getDownloadURL();
 
       await _firestore.collection('users').doc(uid).update({'cvUrl': url});
@@ -667,8 +690,8 @@ class ProfileController extends GetxController {
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
-    } catch (e) {
-      debugPrint('uploadCvPdf error: $e');
+    } catch (e, st) {
+      debugPrint('uploadCvPdf error: $e\n$st');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();

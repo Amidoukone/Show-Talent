@@ -65,7 +65,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Text(
-          widget.event != null ? 'Modifier l\'evenement' : 'Creer un evenement',
+          widget.event != null
+              ? 'Modifier l\'événement'
+              : 'Créer un événement',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: cs.surface,
@@ -80,19 +82,19 @@ class _EventFormScreenState extends State<EventFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionTitle('Informations generales'),
+              _buildSectionTitle('Informations générales'),
               const SizedBox(height: 20),
               _buildTextField(
                 controller: titleController,
                 labelText: 'Titre',
-                hintText: 'Saisissez le titre de l\'evenement',
+                hintText: 'Saisissez le titre de l\'événement',
                 icon: Icons.title,
               ),
               const SizedBox(height: 20),
               _buildTextField(
                 controller: descriptionController,
                 labelText: 'Description',
-                hintText: 'Decrivez l\'evenement',
+                hintText: 'Décrivez l\'événement',
                 icon: Icons.description,
                 maxLines: 3,
               ),
@@ -106,7 +108,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
               const SizedBox(height: 20),
               _buildTextField(
                 controller: capacityController,
-                labelText: 'Capacite maximale (optionnel)',
+                labelText: 'Capacité maximale (optionnel)',
                 hintText: 'Ex: 50',
                 icon: Icons.groups,
                 keyboardType: TextInputType.number,
@@ -114,16 +116,16 @@ class _EventFormScreenState extends State<EventFormScreen> {
               const SizedBox(height: 20),
               _buildTextField(
                 controller: tagsController,
-                labelText: 'Tags / Categories (separes par des virgules)',
+                labelText: 'Tags / Catégories (séparés par des virgules)',
                 hintText: 'Ex: U19, Detection, Futsal',
                 icon: Icons.sell_outlined,
               ),
               const SizedBox(height: 20),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Evenement public'),
+                title: const Text('Événement public'),
                 subtitle:
-                    const Text('Desactivez pour rendre l\'evenement prive'),
+                    const Text('Désactivez pour rendre l\'événement privé'),
                 value: estPublic,
                 onChanged: (v) => setState(() => estPublic = v),
               ),
@@ -146,7 +148,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
               const SizedBox(height: 20),
               _buildSectionTitle('Dates'),
               const SizedBox(height: 10),
-              _buildDatePicker('Date de debut', startDate, (newDate) {
+              _buildDatePicker('Date de début', startDate, (newDate) {
                 setState(() {
                   startDate = newDate;
                   if (endDate != null && endDate!.isBefore(startDate!)) {
@@ -173,7 +175,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  child: Text(widget.event != null ? 'Modifier' : 'Creer'),
+                  child: Text(widget.event != null ? 'Modifier' : 'Créer'),
                 ),
               ),
             ],
@@ -201,7 +203,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     if (titleController.text.trim().length > 120) {
       AdFeedback.warning(
         'Titre trop long',
-        'Limitez le titre a 120 caracteres.',
+        'Limitez le titre à 120 caractères.',
       );
       return;
     }
@@ -209,7 +211,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     if (endDate!.isBefore(startDate!)) {
       AdFeedback.error(
         'Erreur date',
-        'La date de fin doit etre apres la date de debut.',
+        'La date de fin doit être après la date de début.',
       );
       return;
     }
@@ -219,7 +221,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
       capacite = int.tryParse(capacityController.text.trim());
       if (capacite == null || capacite <= 0) {
         AdFeedback.error(
-          'Capacite invalide',
+          'Capacité invalide',
           'Entrez un nombre positif.',
         );
         return;
@@ -278,7 +280,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
           return;
         }
 
-        AdFeedback.success('Succes', response.message);
+        AdFeedback.success('Succès', response.message);
         Navigator.pop(context, true);
       } else {
         final newEvent = Event(
@@ -316,7 +318,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
           return;
         }
 
-        AdFeedback.success('Succes', response.message);
+        AdFeedback.success('Succès', response.message);
         Navigator.pop(context, true);
       }
     } finally {

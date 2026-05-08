@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:adfoot/widgets/processing_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -24,8 +25,7 @@ class UploadForm extends StatefulWidget {
 }
 
 class _UploadFormState extends State<UploadForm> {
-  final UploadVideoController uploadVideoController =
-      Get.find<UploadVideoController>();
+  late final UploadVideoController uploadVideoController;
 
   final _formKey = GlobalKey<FormState>();
   final TextEditingController descriptionController = TextEditingController();
@@ -40,6 +40,8 @@ class _UploadFormState extends State<UploadForm> {
   @override
   void initState() {
     super.initState();
+    uploadVideoController =
+        FeatureControllerRegistry.ensureUploadVideoController();
     _videoPlayerController = VideoPlayerController.file(widget.videoFile)
       ..setLooping(true)
       ..initialize().then((_) {

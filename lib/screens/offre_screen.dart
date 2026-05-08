@@ -81,7 +81,7 @@ class _OffreScreenState extends State<OffreScreen> {
         final currentUser = userController.user;
         final offres = _filteredOffres(offreController.offres);
 
-        if (offreController.isLoading) {
+        if (offreController.isLoading && offres.isEmpty) {
           return _buildSkeletons();
         }
 
@@ -169,6 +169,11 @@ class _OffreScreenState extends State<OffreScreen> {
                             spacing: 8,
                             runSpacing: 8,
                             children: [
+                              if (offreController.isLoading)
+                                const Padding(
+                                  padding: EdgeInsets.only(bottom: 8),
+                                  child: LinearProgressIndicator(minHeight: 2),
+                                ),
                               if (offre.posteRecherche?.isNotEmpty ?? false)
                                 _buildChip(
                                     Icons.sports_soccer, offre.posteRecherche!),
@@ -303,7 +308,7 @@ class _OffreScreenState extends State<OffreScreen> {
 
   Widget _buildEmptyState(dynamic currentUser) {
     final isPublisher = isOpportunityPublisherRole(currentUser?.role);
-    final actionLabel = isPublisher ? 'Creer une offre' : 'Voir les clubs';
+    final actionLabel = isPublisher ? 'Créer une offre' : 'Voir les clubs';
 
     return Center(
       child: Padding(
@@ -312,7 +317,7 @@ class _OffreScreenState extends State<OffreScreen> {
           icon: Icons.search_off,
           title: 'Aucune offre disponible',
           message: isPublisher
-              ? 'Publiez votre premiere offre pour demarrer.'
+              ? 'Publiez votre première offre pour démarrer.'
               : 'Aucune offre ne correspond aux filtres actuels.',
           action: AdButton(
             expanded: false,
@@ -373,12 +378,12 @@ class _OffreScreenState extends State<OffreScreen> {
                   onTap: () => setState(() => _selectedStatus = 'ouverte'),
                 ),
                 _FilterChip(
-                  label: 'Fermees',
+                  label: 'Fermées',
                   selected: _selectedStatus == 'fermee',
                   onTap: () => setState(() => _selectedStatus = 'fermee'),
                 ),
                 _FilterChip(
-                  label: 'Archivees',
+                  label: 'Archivées',
                   selected: _selectedStatus == 'archivee',
                   onTap: () => setState(() => _selectedStatus = 'archivee'),
                 ),
@@ -391,9 +396,9 @@ class _OffreScreenState extends State<OffreScreen> {
                       color: cs.onSurface, fontWeight: FontWeight.w600),
                   items: const [
                     DropdownMenuItem(
-                        value: 'recentes', child: Text('Plus recentes')),
+                        value: 'recentes', child: Text('Plus récentes')),
                     DropdownMenuItem(
-                        value: 'fin', child: Text('Se terminant bientot')),
+                        value: 'fin', child: Text('Se terminant bientôt')),
                   ],
                   onChanged: (v) {
                     if (v != null) setState(() => _sort = v);
@@ -489,8 +494,8 @@ class _OffreScreenState extends State<OffreScreen> {
             items: const [
               DropdownMenuItem(value: 'brouillon', child: Text('Brouillon')),
               DropdownMenuItem(value: 'ouverte', child: Text('Ouverte')),
-              DropdownMenuItem(value: 'fermee', child: Text('Fermee')),
-              DropdownMenuItem(value: 'archivee', child: Text('Archivee')),
+              DropdownMenuItem(value: 'fermee', child: Text('Fermée')),
+              DropdownMenuItem(value: 'archivee', child: Text('Archivée')),
             ],
             onChanged: (v) async {
               if (v != null) {
@@ -593,8 +598,8 @@ class _OffreScreenState extends State<OffreScreen> {
 
     if (response.success) {
       AdFeedback.success(
-        'Offre supprimee',
-        "L'offre a ete supprimee avec succes.",
+        'Offre supprimée',
+        "L'offre a été supprimée avec succès.",
       );
     } else if (response.toast == ToastLevel.none) {
       return;
@@ -639,7 +644,7 @@ class _OffreScreenState extends State<OffreScreen> {
                     dropdownColor: AdColors.surfaceCard,
                     items: const [
                       DropdownMenuItem(value: 'nom', child: Text('Par nom')),
-                      DropdownMenuItem(value: 'role', child: Text('Par role')),
+                      DropdownMenuItem(value: 'role', child: Text('Par rôle')),
                     ],
                     onChanged: (v) => setState(() => sort = v ?? 'nom'),
                   ),

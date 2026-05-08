@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 
@@ -140,10 +141,12 @@ class _FollowListButton extends StatefulWidget {
 
 class _FollowListButtonState extends State<_FollowListButton> {
   bool _isLoading = false;
+  final AuthSessionService _authSessionService = AuthSessionService();
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = Get.find<UserController>().user?.uid;
+    final currentUserId = Get.find<UserController>().user?.uid ??
+        _authSessionService.currentUser?.uid;
     final followCtrl = Get.find<FollowController>();
 
     // Si c'est son propre compte → ne pas afficher le bouton
@@ -156,32 +159,31 @@ class _FollowListButtonState extends State<_FollowListButton> {
     return ElevatedButton(
       onPressed: () async {
         if (_isLoading) return;
+        if (currentUserId == null) {
+          AdFeedback.error('Erreur', 'Utilisateur non connecte.');
+          return;
+        }
 
         setState(() {
           _isLoading = true;
           widget.u.isFollowing = !isFollowing; // Optimisme
         });
 
-        bool success;
-        if (isFollowing) {
-          success = await followCtrl.unfollowUser(currentUserId, widget.u.uid);
-        } else {
-          success = await followCtrl.followUser(currentUserId, widget.u.uid);
-        }
+        try {
+          final bool success = isFollowing
+              ? await followCtrl.unfollowUser(currentUserId, widget.u.uid)
+              : await followCtrl.followUser(currentUserId, widget.u.uid);
 
-        if (!success) {
-          // rollback si erreur
-          widget.u.isFollowing = isFollowing;
-          if (Get.find<UserController>().user == null) {
-            return;
+          if (!success) {
+            widget.u.isFollowing = isFollowing;
+            AdFeedback.error('Erreur', "Impossible d'effectuer l'action.");
           }
-          AdFeedback.error('Erreur', "Impossible d'effectuer l'action.");
-        }
-
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+        } finally {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+          }
         }
       },
       style: ElevatedButton.styleFrom(

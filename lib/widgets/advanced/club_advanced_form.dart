@@ -1,29 +1,30 @@
-// lib/widgets/advanced/club_advanced_form.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../models/user.dart';
+
 import '../../controller/profile_controller.dart';
+import '../../models/user.dart';
 
 class ClubAdvancedForm extends StatefulWidget {
   final AppUser user;
   final ProfileController profileController;
-
-  /// true => Get.back() après sauvegarde (bottomSheet)
-  /// false => reste dans l’écran (EditAdvancedProfileScreen)
   final bool autoCloseOnSave;
+  final bool showSubmitButton;
+  final bool showSectionTitle;
 
   const ClubAdvancedForm({
     super.key,
     required this.user,
     required this.profileController,
     this.autoCloseOnSave = true,
+    this.showSubmitButton = true,
+    this.showSectionTitle = true,
   });
 
   @override
-  State<ClubAdvancedForm> createState() => _ClubAdvancedFormState();
+  State<ClubAdvancedForm> createState() => ClubAdvancedFormState();
 }
 
-class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
+class ClubAdvancedFormState extends State<ClubAdvancedForm> {
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _structureTypeController;
@@ -39,7 +40,6 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
 
     _structureTypeController =
         TextEditingController(text: c['structureType']?.toString() ?? '');
-
     _categoriesController = TextEditingController(
       text: (c['categories'] as List?)?.join(', ') ?? '',
     );
@@ -88,17 +88,21 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
         .map((e) {
-      final parts = e.split(':');
-      return {
-        'position': parts[0].trim(),
-        'priority': parts.length > 1 ? parts[1].trim() : null,
-      };
-    }).toList();
+          final parts = e.split(':');
+          return {
+            'position': parts[0].trim(),
+            'priority': parts.length > 1 ? parts[1].trim() : null,
+          };
+        }).toList();
   }
 
-  Future<void> _save() async {
-    if (_saving) return;
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+  Future<bool> save({bool showFeedback = true}) async {
+    if (_saving) {
+      return false;
+    }
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return false;
+    }
 
     setState(() => _saving = true);
     try {
@@ -114,18 +118,25 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
         await widget.profileController.updateProfilePatch(
           widget.user.uid,
           patch,
+          refreshGlobalUser: false,
         );
       } on ProfileAccessRevokedException {
-        return;
+        return false;
       }
 
-      if (widget.autoCloseOnSave) {
+      if (widget.autoCloseOnSave && showFeedback) {
         Get.back();
       }
 
-      Get.snackbar('Succès', 'Profil club avancé mis à jour');
+      if (showFeedback) {
+        Get.snackbar('Succès', 'Profil club avancé mis à jour');
+      }
+
+      return true;
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+      }
     }
   }
 
@@ -138,16 +149,18 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Profil club — Avancé',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
+            if (widget.showSectionTitle) ...[
+              const Text(
+                'Profil club avancé',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+            ],
             TextFormField(
               controller: _structureTypeController,
               decoration: const InputDecoration(
                 labelText: 'Type de structure',
-                hintText: 'Pro, Semi-pro, Académie…',
+                hintText: 'Pro, Semi-pro, Académie...',
               ),
             ),
             const SizedBox(height: 12),
@@ -166,11 +179,13 @@ class _ClubAdvancedFormState extends State<ClubAdvancedForm> {
                 hintText: 'Ex: DC:high, BU:medium',
               ),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _saving ? null : _save,
-              child: Text(_saving ? 'Sauvegarde...' : 'Sauvegarder'),
-            ),
+            if (widget.showSubmitButton) ...[
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _saving ? null : () => save(),
+                child: Text(_saving ? 'Sauvegarde...' : 'Sauvegarder'),
+              ),
+            ],
           ],
         ),
       ),

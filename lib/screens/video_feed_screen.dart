@@ -78,6 +78,7 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
     _pageController.dispose();
 
     unawaited(_focusOrchestrator.onDispose());
+    FeatureControllerRegistry.releaseVideoController(widget.contextKey);
 
     super.dispose();
   }

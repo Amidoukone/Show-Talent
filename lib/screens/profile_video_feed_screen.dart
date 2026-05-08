@@ -46,7 +46,8 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    _profileController = Get.find<ProfileController>(tag: widget.uid);
+    _profileController =
+        FeatureControllerRegistry.ensureProfileController(widget.uid);
 
     _videoController = FeatureControllerRegistry.ensureVideoController(
       contextKey: _ctxKey,

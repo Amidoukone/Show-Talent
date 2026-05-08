@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
-import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
@@ -23,52 +22,71 @@ class EventDetailsScreen extends StatelessWidget {
 
   const EventDetailsScreen({super.key, required this.event});
 
+  Event _resolveEvent(EventController controller) {
+    for (final candidate in controller.events) {
+      if (candidate.id == event.id) {
+        return candidate;
+      }
+    }
+    return event;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final AppUser currentUser = Get.find<UserController>().user!;
-    final bool isOrganisateur = event.organisateur.uid == currentUser.uid;
-    final cs = Theme.of(context).colorScheme;
+    return GetBuilder<EventController>(
+      builder: (eventController) {
+        final currentEvent = _resolveEvent(eventController);
+        final AppUser? currentUser = Get.find<UserController>().user;
+        final bool isOrganisateur = currentUser != null &&
+            currentEvent.organisateur.uid == currentUser.uid;
+        final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: AppBar(
-        title: const Text(
-          'Détails de l’événement',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
-        centerTitle: true,
-        actions: isOrganisateur
-            ? [
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  tooltip: 'Modifier',
-                  onPressed: () async {
-                    final updated =
-                        await Get.to(() => EventFormScreen(event: event));
-                    if (updated == true) {
-                      Get.find<EventController>().fetchEvents();
-                      Get.offAllNamed(AppRoutes.main, arguments: 2);
-                    }
-                  },
+        return Scaffold(
+          backgroundColor: cs.surface,
+          appBar: AppBar(
+            title: const Text(
+              'Détails de l’événement',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            backgroundColor: cs.surface,
+            foregroundColor: cs.onSurface,
+            centerTitle: true,
+            actions: isOrganisateur
+                ? [
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      tooltip: 'Modifier',
+                      onPressed: () async {
+                        final updated = await Get.to(
+                          () => EventFormScreen(event: currentEvent),
+                        );
+                        if (updated == true) {
+                          await eventController.fetchEvents();
+                        }
+                      },
+                    ),
+                  ]
+                : null,
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(context, currentEvent),
+                const SizedBox(height: 18),
+                _buildEventDetails(context, currentEvent),
+                const SizedBox(height: 22),
+                _buildParticipantsSection(
+                  context,
+                  currentEvent,
+                  isOrganisateur,
                 ),
-              ]
-            : null,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(context),
-            const SizedBox(height: 18),
-            _buildEventDetails(context),
-            const SizedBox(height: 22),
-            _buildParticipantsSection(context, isOrganisateur),
-          ],
-        ),
-      ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -76,16 +94,17 @@ class EventDetailsScreen extends StatelessWidget {
   // 🧑 HEADER ORGANISATEUR
   // =========================================================
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, Event currentEvent) {
     final cs = Theme.of(context).colorScheme;
-    final hasPhoto = event.organisateur.photoProfil.trim().startsWith('http');
+    final hasPhoto =
+        currentEvent.organisateur.photoProfil.trim().startsWith('http');
 
     return Row(
       children: [
         GestureDetector(
           onTap: () => Get.to(
             () => ProfileScreen(
-              uid: event.organisateur.uid,
+              uid: currentEvent.organisateur.uid,
               isReadOnly: true,
             ),
           ),
@@ -93,7 +112,9 @@ class EventDetailsScreen extends StatelessWidget {
             radius: 26,
             backgroundColor: AdColors.surfaceCardAlt,
             backgroundImage:
-                hasPhoto ? NetworkImage(event.organisateur.photoProfil) : null,
+                hasPhoto
+                    ? NetworkImage(currentEvent.organisateur.photoProfil)
+                    : null,
             child: hasPhoto
                 ? null
                 : const Icon(Icons.person, color: Colors.white70),
@@ -105,8 +126,8 @@ class EventDetailsScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                event.organisateur.nom.isNotEmpty
-                    ? event.organisateur.nom
+                currentEvent.organisateur.nom.isNotEmpty
+                    ? currentEvent.organisateur.nom
                     : 'Organisateur',
                 style: TextStyle(
                   fontSize: 16,
@@ -116,7 +137,7 @@ class EventDetailsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                event.organisateur.role,
+                currentEvent.organisateur.role,
                 style: const TextStyle(
                   color: AdColors.onSurfaceMuted,
                   fontWeight: FontWeight.w600,
@@ -125,7 +146,7 @@ class EventDetailsScreen extends StatelessWidget {
             ],
           ),
         ),
-        _StatusBadge(status: event.statut),
+        _StatusBadge(status: currentEvent.statut),
       ],
     );
   }
@@ -134,14 +155,14 @@ class EventDetailsScreen extends StatelessWidget {
   // 📄 DÉTAILS ÉVÉNEMENT
   // =========================================================
 
-  Widget _buildEventDetails(BuildContext context) {
+  Widget _buildEventDetails(BuildContext context, Event currentEvent) {
     final cs = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          event.titre,
+          currentEvent.titre,
           style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w900,
@@ -155,38 +176,38 @@ class EventDetailsScreen extends StatelessWidget {
           icon: Icons.calendar_today,
           label: 'Dates',
           value:
-              'Du ${DateFormat('dd MMM yyyy').format(event.dateDebut)} au ${DateFormat('dd MMM yyyy').format(event.dateFin)}',
+              'Du ${DateFormat('dd MMM yyyy').format(currentEvent.dateDebut)} au ${DateFormat('dd MMM yyyy').format(currentEvent.dateFin)}',
         ),
         const SizedBox(height: 12),
         _buildDetailRow(
           context: context,
           icon: Icons.place_outlined,
           label: 'Lieu',
-          value: event.lieu,
+          value: currentEvent.lieu,
         ),
         const SizedBox(height: 12),
         _buildDetailRow(
           context: context,
           icon: Icons.privacy_tip_outlined,
           label: 'Visibilité',
-          value: event.estPublic ? 'Public' : 'Privé',
+          value: currentEvent.estPublic ? 'Public' : 'Privé',
         ),
-        if (event.capaciteMax != null) ...[
+        if (currentEvent.capaciteMax != null) ...[
           const SizedBox(height: 12),
           _buildDetailRow(
             context: context,
             icon: Icons.groups,
             label: 'Capacité',
             value:
-                '${event.participants.length} / ${event.capaciteMax} participants',
+                '${currentEvent.participants.length} / ${currentEvent.capaciteMax} participants',
           ),
         ],
-        if (event.tags != null && event.tags!.isNotEmpty) ...[
+        if (currentEvent.tags != null && currentEvent.tags!.isNotEmpty) ...[
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: event.tags!
+            children: currentEvent.tags!
                 .map(
                   (tag) => Chip(
                     label: Text(
@@ -214,7 +235,7 @@ class EventDetailsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          event.description,
+          currentEvent.description,
           style: TextStyle(
             fontSize: 15.5,
             height: 1.55,
@@ -229,7 +250,11 @@ class EventDetailsScreen extends StatelessWidget {
   // 👥 PARTICIPANTS
   // =========================================================
 
-  Widget _buildParticipantsSection(BuildContext context, bool isOrganisateur) {
+  Widget _buildParticipantsSection(
+    BuildContext context,
+    Event currentEvent,
+    bool isOrganisateur,
+  ) {
     final cs = Theme.of(context).colorScheme;
 
     return Column(
@@ -244,14 +269,14 @@ class EventDetailsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        if (event.participants.isEmpty)
+        if (currentEvent.participants.isEmpty)
           const Text(
             'Aucun participant pour le moment.',
             style: TextStyle(color: AdColors.onSurfaceMuted),
           )
         else
           Column(
-            children: event.participants.take(3).map((p) {
+            children: currentEvent.participants.take(3).map((p) {
               final hasPhoto = p.photoProfil.trim().startsWith('http');
               return ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -279,8 +304,8 @@ class EventDetailsScreen extends StatelessWidget {
                   onPressed: () => _openChatWith(
                     p,
                     context: ContactContext.event(
-                      eventId: event.id,
-                      title: event.titre,
+                      eventId: currentEvent.id,
+                      title: currentEvent.titre,
                       sourceLabel: 'Participants',
                     ),
                   ),
@@ -291,25 +316,25 @@ class EventDetailsScreen extends StatelessWidget {
               );
             }).toList(),
           ),
-        if (event.participants.length > 3)
+        if (currentEvent.participants.length > 3)
           TextButton(
             onPressed: () => _showParticipants(
-              event.participants,
+              currentEvent.participants,
               contactContext: ContactContext.event(
-                eventId: event.id,
-                title: event.titre,
+                eventId: currentEvent.id,
+                title: currentEvent.titre,
                 sourceLabel: 'Participants',
               ),
             ),
             child: const Text('Voir tous les participants'),
           )
-        else if (isOrganisateur && event.participants.isEmpty)
+        else if (isOrganisateur && currentEvent.participants.isEmpty)
           TextButton(
             onPressed: () => _showParticipants(
-              event.participants,
+              currentEvent.participants,
               contactContext: ContactContext.event(
-                eventId: event.id,
-                title: event.titre,
+                eventId: currentEvent.id,
+                title: currentEvent.titre,
                 sourceLabel: 'Participants',
               ),
             ),

@@ -15,4 +15,12 @@ void main() {
     expect(tools, contains('duration: maxDurationSeconds'));
     expect(tools, contains('PreparedVideoFile'));
   });
+
+  test('upload form ensures its controller before use', () {
+    final form = File('lib/screens/upload_form.dart').readAsStringSync();
+
+    expect(form,
+        contains('FeatureControllerRegistry.ensureUploadVideoController()'));
+    expect(form, isNot(contains('Get.find<UploadVideoController>()')));
+  });
 }

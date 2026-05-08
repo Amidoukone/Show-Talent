@@ -3,10 +3,6 @@ import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/screens/profil_video_scrollview.dart';
-import 'package:adfoot/widgets/advanced/agent_advanced_form.dart';
-import 'package:adfoot/widgets/advanced/club_advanced_form.dart';
-import 'package:adfoot/widgets/advanced/player_advanced_form.dart';
-import 'package:adfoot/widgets/advanced/player_stats_availability_form.dart';
 import 'package:adfoot/widgets/contact_intake_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -18,6 +14,7 @@ import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/chat_screen.dart';
+import 'package:adfoot/screens/edit_advanced_profile_screen.dart';
 import 'package:adfoot/screens/edit_profil_screen.dart';
 import 'package:adfoot/screens/follow_list_screen.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -40,7 +37,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // ðŸŽ¨ Palette officielle
+  // Palette officielle
   static const kPrimary = AdColors.brand;
   static const kAccent = AdColors.accent;
   static const kDanger = AdColors.error;
@@ -152,12 +149,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (isOwnProfile && !widget.isReadOnly)
                 IconButton(
                   icon: const Icon(Icons.edit),
-                  onPressed: () => Get.to(
-                    () => EditProfileScreen(
-                      user: user,
-                      profileController: _profileController,
-                    ),
-                  ),
+                  onPressed: () async {
+                    final updated = await Get.to<bool>(
+                      () => EditProfileScreen(
+                        user: user,
+                        profileController: _profileController,
+                      ),
+                    );
+                    if (updated == true) {
+                      await _profileController.updateUserId(widget.uid);
+                    }
+                  },
                 )
               else if (!isOwnProfile && currentUid != null)
                 IconButton(
@@ -226,7 +228,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
 
-                  // Badge niveau + CTA avancÃ©
+                  // Badge niveau + CTA avancé
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -254,20 +256,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: _SectionCard(
-                          title: 'Football â€” Base',
+                          title: 'Football - Base',
                           icon: Icons.sports_soccer_outlined,
                           child: _buildBaseFootballSection(user),
                         ),
                       ),
                     ),
 
-                  // 2) Dossier scout (AvancÃ©)
+                  // 2) Dossier scout (Avancé)
                   if (user.shouldShowAdvancedSection)
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: _SectionCard(
-                          title: 'Dossier scout â€” AvancÃ©',
+                          title: 'Dossier scout - Avancé',
                           icon: Icons.auto_awesome_rounded,
                           child: _buildAdvancedFootballSection(user),
                         ),
@@ -294,7 +296,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: _SectionHeader(
                           icon: Icons.video_collection_outlined,
-                          title: 'VidÃ©os',
+                          title: 'Vidéos',
                         ),
                       ),
                     ),
@@ -466,11 +468,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     String message;
     if (isSenderDisabled && isRecipientDisabled) {
-      message = 'Les messages sont dÃ©sactivÃ©s pour vous deux.';
+      message = 'Les messages sont désactivés pour vous deux.';
     } else if (isSenderDisabled) {
-      message = 'Vous avez dÃ©sactivÃ© lâ€™envoi de messages.';
+      message = 'Vous avez désactivé l’envoi de messages.';
     } else {
-      message = 'Cet utilisateur a dÃ©sactivÃ© les messages.';
+      message = 'Cet utilisateur a désactivé les messages.';
     }
 
     AdFeedback.warning(
@@ -633,7 +635,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const Icon(Icons.lock_outline, size: 48, color: kPrimary),
               const SizedBox(height: 12),
               const Text(
-                'Profil privÃ©',
+                'Profil privé',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 textAlign: TextAlign.center,
               ),
@@ -654,7 +656,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 )
               else
                 Text(
-                  'La messagerie est dÃ©sactivÃ©e pour cet utilisateur.',
+                  'La messagerie est désactivée pour cet utilisateur.',
                   style: TextStyle(color: AdColors.onSurfaceMuted),
                   textAlign: TextAlign.center,
                 ),
@@ -671,7 +673,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Fermer la photo de profil', // âœ… OBLIGATOIRE
+      barrierLabel: 'Fermer la photo de profil', // Obligatoire
       barrierColor: Colors.black87,
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
@@ -727,30 +729,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // =======================
-  // UI helpers (MVP / AvancÃ©)
+  // UI helpers (MVP / Avancé)
   // =======================
 
   Widget _buildProfileLevelBadge(AppUser user) {
-    // Couleurs simples, cohÃ©rentes et lisibles
+    // Couleurs simples, cohérentes et lisibles
     Color bg;
     Color fg = Colors.white;
     IconData icon;
 
     switch (user.profileLevelLabel) {
-      case 'Profil Ã‰lite':
+      case 'Profil Élite':
         bg = const Color(0xFF1E3A8A); // bleu profond
         icon = Icons.verified_rounded;
         break;
-      case 'Profil AvancÃ©':
+      case 'Profil Avancé':
         bg = kAccent; // ton accent
         icon = Icons.auto_awesome_rounded;
         break;
-      case 'Profil VÃ©rifiÃ©':
+      case 'Profil Vérifié':
         bg = const Color(0xFF2E7D32); // vert
         icon = Icons.check_circle_rounded;
         break;
       default:
-        bg = const Color(0xFF607D8B); // gris bleutÃ©
+        bg = const Color(0xFF607D8B); // gris bleuté
         icon = Icons.info_rounded;
     }
 
@@ -792,56 +794,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
-              'Ajoute tes informations avancÃ©es (Dossier scout) pour augmenter tes chances dâ€™Ãªtre repÃ©rÃ©.',
+              'Ajoute tes informations avancées (Dossier scout) pour augmenter tes chances d’être repéré.',
               style: TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(width: 10),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: kPrimary),
-            onPressed: () {
-              if (user.isPlayer) {
-                Get.bottomSheet(
-                  SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: Column(
-                        children: [
-                          PlayerAdvancedForm(
-                            user: user,
-                            profileController: _profileController,
-                          ),
-                          const Divider(height: 32),
-                          PlayerStatsAvailabilityForm(
-                            user: user,
-                            profileController: _profileController,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  isScrollControlled: true,
-                );
-              } else if (user.isClub) {
-                Get.bottomSheet(
-                  ClubAdvancedForm(
+            onPressed: () async {
+              if (user.isPlayer || user.isClub || user.isRecruiter) {
+                final updated = await Get.to<bool>(
+                  () => EditAdvancedProfileScreen(
                     user: user,
                     profileController: _profileController,
                   ),
-                  isScrollControlled: true,
                 );
-              } else if (user.isRecruiter) {
-                Get.bottomSheet(
-                  AgentAdvancedForm(
-                    user: user,
-                    profileController: _profileController,
-                  ),
-                  isScrollControlled: true,
-                );
+                if (updated == true) {
+                  await _profileController.updateUserId(widget.uid);
+                }
               }
             },
             child: Text(
-              user.hasAdvancedProfile ? 'Modifier' : 'ComplÃ©ter',
+              user.hasAdvancedProfile ? 'Modifier' : 'Compléter',
             ),
           ),
         ],
@@ -865,7 +839,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               isFollowing ? Icons.person_remove_alt_1 : Icons.person_add_alt,
             ),
             label: Text(
-              isFollowing ? 'Se dÃ©sabonner' : 'Sâ€™abonner',
+              isFollowing ? 'Se désabonner' : 'S’abonner',
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor: isFollowing ? kDanger : kAccent,
@@ -935,7 +909,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // =======================
-  // Sections (Base / AvancÃ© / Preuves)
+  // Sections (Base / Avancé / Preuves)
   // =======================
 
   Widget _buildBaseFootballSection(AppUser user) {
@@ -948,17 +922,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    tiles.add(_infoTile('TÃ©lÃ©phone', user.phone));
+    tiles.add(_infoTile('Téléphone', user.phone));
 
     if (user.isPlayer || user.isCoach) {
       tiles.addAll([
-        _infoTile('Ã‚ge', user.age != null ? '${user.age} ans' : null,
+        _infoTile('Âge', user.age != null ? '${user.age} ans' : null,
             icon: Icons.cake_outlined),
         _infoTile('Position', user.position),
         _infoTile('Club actuel', user.team),
-        _infoTile('Matchs jouÃ©s', user.nombreDeMatchs?.toString()),
+        _infoTile('Matchs joués', user.nombreDeMatchs?.toString()),
         _infoTile('Buts', user.buts?.toString()),
-        _infoTile('Passes dÃ©cisives', user.assistances?.toString()),
+        _infoTile('Passes décisives', user.assistances?.toString()),
       ]);
     } else if (user.isClub) {
       tiles.addAll([
@@ -980,24 +954,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildAdvancedFootballSection(AppUser user) {
-    // Si pas encore rempli, on montre un rÃ©sumÃ© â€œvide + conseilâ€
+    // Si pas encore rempli, on montre un résumé vide + conseil
     if (!user.hasAdvancedProfile) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Ce profil nâ€™a pas encore de donnÃ©es avancÃ©es.',
+            'Ce profil n’a pas encore de données avancées.',
             style: const TextStyle(color: AdColors.onSurfaceMuted),
           ),
           const SizedBox(height: 8),
           Text(
             user.isPlayer
-                ? 'Ajoute taille, poids, pied fort, positions, stats et disponibilitÃ©.'
+                ? 'Ajoute taille, poids, pied fort, positions, stats et disponibilité.'
                 : user.isClub
-                    ? 'Ajoute structure, catÃ©gories et besoins.'
+                    ? 'Ajoute structure, catégories et besoins.'
                     : user.isRecruiter
                         ? 'Ajoute licence et zones.'
-                        : 'ComplÃ¨te les informations avancÃ©es.',
+                        : 'Complète les informations avancées.',
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
@@ -1005,7 +979,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     // ======================
-    // ðŸ‘¤ JOUEUR
+    // JOUEUR
     // ======================
     if (user.isPlayer) {
       final p = user.playerProfile ?? {};
@@ -1042,20 +1016,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _infoTile('Taille (cm)', height),
           _infoTile('Poids (kg)', weight),
           _infoTile('Pied fort', foot),
-          _infoTile('Positions (avancÃ©)', positions),
-          _infoTile('CompÃ©tences', skills),
+          _infoTile('Positions (avancé)', positions),
+          _infoTile('Compétences', skills),
           const Divider(),
-          _infoTile('Minutes jouÃ©es', minutes),
+          _infoTile('Minutes jouées', minutes),
           const Divider(),
           _infoTile('Disponible', open),
-          _infoTile('RÃ©gions', regions),
+          _infoTile('Régions', regions),
           const SizedBox(height: 6),
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
               user.hasScoutReadyProfile
-                  ? 'âœ… Dossier scout prÃªt (Ã‰lite)'
-                  : 'ðŸŸ¡ Dossier scout partiel',
+                  ? 'Dossier scout prêt (Élite)'
+                  : 'Dossier scout partiel',
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 color: user.hasScoutReadyProfile
@@ -1069,7 +1043,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     // ======================
-    // ðŸŸï¸ CLUB
+    // CLUB
     // ======================
     if (user.isClub) {
       final c = user.clubProfile ?? {};
@@ -1098,14 +1072,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return Column(
         children: [
           _infoTile('Structure', structureType),
-          _infoTile('CatÃ©gories', categories),
+          _infoTile('Catégories', categories),
           _infoTile('Besoins', needsText),
         ],
       );
     }
 
     // ======================
-    // ðŸ§‘â€ðŸ’¼ AGENT / RECRUTEUR
+    // AGENT / RECRUTEUR
     // ======================
     if (user.isRecruiter) {
       final a = user.agentProfile ?? {};
@@ -1124,7 +1098,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
     }
 
-    return const Text('Aucun profil avancÃ© pour ce rÃ´le.');
+    return const Text('Aucun profil avancé pour ce rôle.');
   }
 
   Widget _buildEvidenceSection(AppUser user) {
@@ -1149,7 +1123,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         tiles.add(const ListTile(
           leading: Icon(Icons.picture_as_pdf_outlined),
           title: Text('CV'),
-          subtitle: Text('Aucun CV ajoutÃ©'),
+          subtitle: Text('Aucun CV ajouté'),
         ));
       }
 
@@ -1157,7 +1131,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (user.performances != null && user.performances!.isNotEmpty) {
         final perf = user.performances!;
         final keys = perf.keys.toList()..sort();
-        final preview = keys.take(6).map((k) => '$k: ${perf[k]}').join(' â€¢ ');
+        final preview = keys.take(6).map((k) => '$k: ${perf[k]}').join(' • ');
 
         tiles.add(
           ListTile(
@@ -1170,20 +1144,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         tiles.add(const ListTile(
           leading: Icon(Icons.insights_outlined),
           title: Text('Performances'),
-          subtitle: Text('Non renseignÃ©'),
+          subtitle: Text('Non renseigné'),
         ));
       }
     }
 
-    // VidÃ©os publiÃ©es (simple indicateur ici)
+    // Vidéos publiées (simple indicateur ici)
     if (user.isPlayer) {
       final hasVideos = (user.videosPubliees?.isNotEmpty ?? false);
       tiles.add(
         ListTile(
           leading: const Icon(Icons.video_library_outlined),
-          title: const Text('VidÃ©os'),
+          title: const Text('Vidéos'),
           subtitle: Text(
-            hasVideos ? 'VidÃ©os disponibles' : 'Aucune vidÃ©o liÃ©e au profil',
+            hasVideos ? 'Vidéos disponibles' : 'Aucune vidéo liée au profil',
           ),
         ),
       );
@@ -1220,7 +1194,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  hasValue ? value! : 'Non spÃ©cifiÃ©',
+                  hasValue ? value! : 'Non spécifié',
                   style: TextStyle(
                     color:
                         hasValue ? AdColors.onSurface : AdColors.onSurfaceMuted,
@@ -1365,7 +1339,7 @@ class _HeaderCard extends StatelessWidget {
           ),
         ),
 
-        // ðŸŽ¯ Bouton Photo â€“ positionnÃ© proprement, sans overflow
+        // Bouton photo positionné proprement, sans overflow
         if (isOwnProfile && !isReadOnly)
           Positioned(
             top: 10,
@@ -1390,13 +1364,13 @@ class _StatsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      title: 'RÃ©seau',
+      title: 'Réseau',
       icon: Icons.people_outline,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _StatChip(
-            label: 'AbonnÃ©s',
+            label: 'Abonnés',
             value: user.followersList.length,
             onTap: () => Get.to(
               () => FollowListScreen(uid: user.uid, listType: 'followers'),

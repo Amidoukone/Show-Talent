@@ -38,6 +38,7 @@ class OffreController extends GetxController {
 
   StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _offresSubscription;
+  String? _activeAuthUid;
 
   bool _isPermissionDenied(Object error) =>
       error is FirebaseException && error.code == 'permission-denied';
@@ -48,9 +49,9 @@ class OffreController extends GetxController {
     }
 
     await Get.find<UserController>().handleProtectedAccessDenied(
-      fallbackTitle: 'Acces indisponible',
+      fallbackTitle: 'Accès indisponible',
       fallbackMessage:
-          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+          'Votre session a été fermée pour protéger votre compte. Veuillez vous reconnecter.',
     );
   }
 
@@ -58,7 +59,7 @@ class OffreController extends GetxController {
     return const ActionResponse(
       success: false,
       code: 'session_revoked',
-      message: 'Votre session a ete fermee. Veuillez vous reconnecter.',
+      message: 'Votre session a été fermée. Veuillez vous reconnecter.',
       toast: ToastLevel.none,
     );
   }
@@ -77,7 +78,7 @@ class OffreController extends GetxController {
       },
       onError: (error) {
         developer.log(
-          'Erreur ecoute auth pour les offres: $error',
+          'Erreur écoute auth pour les offres: $error',
           name: 'OffreController.onInit',
           error: error,
         );
@@ -178,7 +179,17 @@ class OffreController extends GetxController {
   }
 
   void _fetchOffres() {
-    _isLoading.value = true;
+    final currentUid = _authSessionService.currentUser?.uid;
+    final hasActiveStream =
+        _offresSubscription != null && _activeAuthUid == currentUid;
+    if (hasActiveStream) {
+      return;
+    }
+
+    _activeAuthUid = currentUid;
+    if (_offres.value.isEmpty) {
+      _isLoading.value = true;
+    }
     _offresSubscription?.cancel();
 
     _offresSubscription =
@@ -208,6 +219,7 @@ class OffreController extends GetxController {
   Future<void> _stopOffresStream({bool clearData = false}) async {
     await _offresSubscription?.cancel();
     _offresSubscription = null;
+    _activeAuthUid = null;
 
     if (clearData) {
       _offres.value = const <Offre>[];
@@ -484,7 +496,7 @@ class OffreController extends GetxController {
       return const ActionResponse(
         success: true,
         code: 'deleted',
-        message: 'Offre supprimee avec succes.',
+        message: 'Offre supprimée avec succès.',
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
@@ -562,7 +574,7 @@ class OffreController extends GetxController {
           );
         }
 
-        candidats.add(joueur.toMap());
+        candidats.add(joueur.toEmbeddedMap());
 
         txn.update(docRef, {
           'candidats': candidats,
@@ -618,7 +630,7 @@ class OffreController extends GetxController {
     if (joueur.role != 'joueur') {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Seuls les joueurs peuvent se desinscrire.',
+        message: 'Seuls les joueurs peuvent se désinscrire.',
         toast: ToastLevel.info,
       );
     }
@@ -685,7 +697,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'withdraw_failed',
-        message: 'Impossible de se desinscrire pour le moment.',
+        message: 'Impossible de se désinscrire pour le moment.',
       );
     } catch (e, st) {
       developer.log(
@@ -697,7 +709,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'withdraw_failed',
-        message: 'Impossible de se desinscrire pour le moment.',
+        message: 'Impossible de se désinscrire pour le moment.',
       );
     }
   }

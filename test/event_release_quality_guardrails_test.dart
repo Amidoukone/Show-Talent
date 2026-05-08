@@ -27,6 +27,7 @@ void main() {
       expect(screen, contains('Event.normalizeStatus'));
       expect(screen, contains('void _showResponse(ActionResponse response)'));
       expect(screen, contains('if (response.success)'));
+      expect(screen, contains('return Wrap('));
     });
 
     test(
@@ -52,6 +53,20 @@ void main() {
       expect(repository, contains('already_registered'));
       expect(repository, contains('not_registered'));
       expect(repository, contains('event_closed'));
+    });
+
+    test('event details stay in-app and tolerate transient missing session',
+        () {
+      final details =
+          File('lib/screens/event_detail_screen.dart').readAsStringSync();
+
+      expect(details, contains('final AppUser? currentUser'));
+      expect(details, contains('currentUser != null &&'));
+      expect(details,
+          contains('await Get.find<EventController>().fetchEvents();'));
+      expect(details, contains('Get.back(result: true);'));
+      expect(details, isNot(contains('Get.find<UserController>().user!')));
+      expect(details, isNot(contains('Get.offAllNamed(AppRoutes.main')));
     });
   });
 }

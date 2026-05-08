@@ -349,7 +349,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     }
 
     AdFeedback.success(
-      'Succes',
+      'Succès',
       response.message,
     );
 
