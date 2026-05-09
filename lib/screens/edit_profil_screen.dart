@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../models/user.dart';
-import 'profile_screen.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final AppUser user;
@@ -56,7 +55,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   bool _saving = false;
 
-  AppUser get user => widget.user;
+  AppUser get user {
+    final liveUser = profileController.user;
+    if (liveUser != null && liveUser.uid == widget.user.uid) {
+      return liveUser;
+    }
+    return widget.user;
+  }
+
   ProfileController get profileController => widget.profileController;
 
   bool get _isPlayer => user.role == 'joueur' || user.role == 'coach';
@@ -74,13 +80,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       text: user.languages?.join(', ') ?? '',
     );
 
-    _teamController = TextEditingController(text: user.team ?? '');
+    _teamController =
+        TextEditingController(text: user.team ?? user.clubActuel ?? '');
     _positionController = TextEditingController(text: user.position ?? '');
     _nombreMatchsController =
-        TextEditingController(text: (user.nombreDeMatchs ?? 0).toString());
-    _butsController = TextEditingController(text: (user.buts ?? 0).toString());
+        TextEditingController(text: user.nombreDeMatchs?.toString() ?? '');
+    _butsController = TextEditingController(text: user.buts?.toString() ?? '');
     _assistancesController =
-        TextEditingController(text: (user.assistances ?? 0).toString());
+        TextEditingController(text: user.assistances?.toString() ?? '');
     _selectedBirthDate = user.birthDate;
 
     _clubNameController = TextEditingController(text: user.nomClub ?? '');
@@ -88,7 +95,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     _entrepriseController = TextEditingController(text: user.entreprise ?? '');
     _nombreRecrutementsController = TextEditingController(
-      text: (user.nombreDeRecrutements ?? 0).toString(),
+      text: user.nombreDeRecrutements?.toString() ?? '',
     );
 
     _performancesController = TextEditingController(
@@ -437,8 +444,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         final team = _trimOrNull(_teamController.text);
         if (team != null) {
           patch['team'] = team;
-        } else if ((user.team?.isNotEmpty ?? false)) {
+          patch['clubActuel'] = team;
+        } else if ((user.team?.isNotEmpty ?? false) ||
+            (user.clubActuel?.isNotEmpty ?? false)) {
           patch['team'] = ProfileController.deleteField;
+          patch['clubActuel'] = ProfileController.deleteField;
         }
 
         final matches =
@@ -513,19 +523,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         user.uid,
         patch,
         refreshGlobalUser: false,
+        alsoUpdateLocalUser: false,
       );
 
+      AdFeedback.success('Succès', 'Profil mis à jour.');
       if (!mounted) {
         return;
       }
 
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop(true);
-      } else {
-        Get.off(() => ProfileScreen(uid: user.uid));
-      }
-
-      AdFeedback.success('Succès', 'Profil mis à jour.');
+      Navigator.of(context).pop(true);
+      return;
     } on ProfileAccessRevokedException {
       return;
     } catch (e) {
@@ -785,7 +792,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         const SizedBox(height: 16),
                         if (user.role == 'joueur') ...[
                           CvUploaderSection(
-                            user: user,
+                            initialUser: user,
                             profileController: profileController,
                           ),
                           const SizedBox(height: 16),
@@ -829,8 +836,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 }
 
-class CvUploaderSection extends StatelessWidget {
-  final AppUser user;
+class CvUploaderSection extends StatefulWidget {
+  final AppUser initialUser;
   final ProfileController profileController;
 
   static const kPrimary = _EditProfileScreenState.kPrimary;
@@ -839,18 +846,50 @@ class CvUploaderSection extends StatelessWidget {
 
   const CvUploaderSection({
     super.key,
-    required this.user,
+    required this.initialUser,
     required this.profileController,
   });
 
   @override
+  State<CvUploaderSection> createState() => _CvUploaderSectionState();
+}
+
+class _CvUploaderSectionState extends State<CvUploaderSection> {
+  String? _cvUrl;
+  bool _isUploading = false;
+  bool _isDeleting = false;
+
+  AppUser get _currentUser {
+    final liveUser = widget.profileController.user;
+    if (liveUser != null && liveUser.uid == widget.initialUser.uid) {
+      return liveUser;
+    }
+    return widget.initialUser;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _cvUrl = widget.initialUser.cvUrl;
+  }
+
+  @override
+  void didUpdateWidget(covariant CvUploaderSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _cvUrl = _currentUser.cvUrl;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final user = _currentUser;
+    final hasCv = (_cvUrl ?? '').trim().isNotEmpty;
+
     return _SectionCard(
       title: 'CV (PDF)',
       subtitle:
           'Ajoutez votre CV pour compléter votre présentation professionnelle.',
       icon: Icons.picture_as_pdf_outlined,
-      trailing: user.cvUrl != null
+      trailing: hasCv
           ? const Chip(
               label: Text('Disponible'),
               avatar: Icon(Icons.check_circle, color: Colors.white, size: 18),
@@ -867,62 +906,108 @@ class CvUploaderSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           ElevatedButton.icon(
-            onPressed: () async {
-              final result = await FilePicker.platform.pickFiles(
-                type: FileType.custom,
-                allowedExtensions: ['pdf'],
-                withData: true,
-              );
-              if (result != null) {
-                final pickedFile = result.files.single;
-                final Uint8List? bytes = pickedFile.bytes;
-                final String? path = pickedFile.path;
-                final String fileName = pickedFile.name.isNotEmpty
-                    ? pickedFile.name
-                    : 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf';
+            onPressed: _isUploading || _isDeleting
+                ? null
+                : () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['pdf'],
+                      withData: true,
+                    );
+                    if (result != null) {
+                      final pickedFile = result.files.single;
+                      final Uint8List? bytes = pickedFile.bytes;
+                      final String? path = pickedFile.path;
+                      final String fileName = pickedFile.name.isNotEmpty
+                          ? pickedFile.name
+                          : 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
-                try {
-                  await profileController.uploadCvPdf(
-                    user.uid,
-                    pdfBytes: bytes,
-                    pdfFile: path != null && path.isNotEmpty ? File(path) : null,
-                    fileName: fileName.toLowerCase().endsWith('.pdf')
-                        ? fileName
-                        : '$fileName.pdf',
-                  );
-                } on ProfileAccessRevokedException {
-                  return;
-                }
-              }
+                      try {
+                        setState(() => _isUploading = true);
+                        await widget.profileController.uploadCvPdf(
+                          user.uid,
+                          pdfBytes: bytes,
+                          pdfFile: path != null && path.isNotEmpty
+                              ? File(path)
+                              : null,
+                          fileName: fileName.toLowerCase().endsWith('.pdf')
+                              ? fileName
+                              : '$fileName.pdf',
+                        );
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() => _cvUrl = _currentUser.cvUrl);
+                      } on ProfileAccessRevokedException {
+                        return;
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isUploading = false);
+                        }
+                      }
+                    }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: kAccent,
+              backgroundColor: CvUploaderSection.kAccent,
               foregroundColor: Colors.white,
             ),
-            icon: const Icon(Icons.upload_file_rounded),
+            icon: _isUploading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.upload_file_rounded),
             label: Text(
-              user.cvUrl == null ? 'Ajouter un CV' : 'Remplacer le CV',
+              _isUploading
+                  ? 'Ajout du CV...'
+                  : hasCv
+                      ? 'Remplacer le CV'
+                      : 'Ajouter un CV',
               style: const TextStyle(color: Colors.white),
             ),
           ),
-          if (user.cvUrl != null) ...[
+          if (hasCv) ...[
             const SizedBox(height: 10),
             ElevatedButton.icon(
-              onPressed: () async {
-                try {
-                  await profileController.deleteCv(user.uid);
-                } on ProfileAccessRevokedException {
-                  return;
-                }
+              onPressed: _isUploading || _isDeleting
+                  ? null
+                  : () async {
+                      try {
+                        setState(() => _isDeleting = true);
+                        await widget.profileController.deleteCv(user.uid);
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() => _cvUrl = _currentUser.cvUrl);
+                      } on ProfileAccessRevokedException {
+                        return;
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isDeleting = false);
+                        }
+                      }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: kDanger,
+                backgroundColor: CvUploaderSection.kDanger,
                 foregroundColor: Colors.white,
               ),
-              icon: const Icon(Icons.delete_forever_rounded),
-              label: const Text(
-                'Supprimer le CV',
-                style: TextStyle(color: Colors.white),
+              icon: _isDeleting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.delete_forever_rounded),
+              label: Text(
+                _isDeleting ? 'Suppression...' : 'Supprimer le CV',
+                style: const TextStyle(color: Colors.white),
               ),
             ),
           ],

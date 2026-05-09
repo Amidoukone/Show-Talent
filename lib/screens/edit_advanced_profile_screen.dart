@@ -87,12 +87,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
       }
 
       Get.snackbar('Succès', 'Profil avancé mis à jour');
-
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop(true);
-      } else {
-        Get.back(result: true);
-      }
+      Navigator.of(context).pop(true);
+      return;
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -229,7 +225,6 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
                   title: 'Profil sportif',
                   subtitle:
                       'Renseignez le gabarit, le pied fort, les positions et les points forts.',
-                      
                   child: PlayerAdvancedForm(
                     key: _playerProfileKey,
                     user: _user,
@@ -284,7 +279,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
           _buildSectionCard(
             context: context,
             title: 'Informations avancées',
-            subtitle: 'Un seul bouton de sauvegarde est conservé sur cet écran.',
+            subtitle:
+                'Un seul bouton de sauvegarde est conservé sur cet écran.',
             child: child,
           ),
         ],

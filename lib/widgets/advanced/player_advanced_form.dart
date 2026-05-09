@@ -99,6 +99,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
           widget.user.uid,
           patch,
           refreshGlobalUser: false,
+          alsoUpdateLocalUser: false,
         );
       } on ProfileAccessRevokedException {
         return false;

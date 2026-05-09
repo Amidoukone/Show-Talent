@@ -48,5 +48,17 @@ void main() {
       expect(rules, contains('request.resource.data.fcmToken is string'));
       expect(rules, contains('request.resource.data.fcmToken.size() <= 4096'));
     });
+
+    test('rules allow narrow self-service profile updates for mobile', () {
+      final rules = File('firestore.rules').readAsStringSync();
+
+      expect(rules, contains('function canUpdateOwnProfile() {'));
+      expect(rules, contains('"cvUrl"'));
+      expect(rules, contains('"photoProfil"'));
+      expect(rules, contains('"playerProfile"'));
+      expect(rules, contains('"clubProfile"'));
+      expect(rules, contains('"agentProfile"'));
+      expect(rules, contains('canUpdateOwnProfile()'));
+    });
   });
 }

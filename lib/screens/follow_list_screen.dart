@@ -159,10 +159,6 @@ class _FollowListButtonState extends State<_FollowListButton> {
     return ElevatedButton(
       onPressed: () async {
         if (_isLoading) return;
-        if (currentUserId == null) {
-          AdFeedback.error('Erreur', 'Utilisateur non connecte.');
-          return;
-        }
 
         setState(() {
           _isLoading = true;

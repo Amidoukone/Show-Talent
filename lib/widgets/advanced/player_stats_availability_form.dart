@@ -120,6 +120,7 @@ class PlayerStatsAvailabilityFormState
           widget.user.uid,
           patch,
           refreshGlobalUser: false,
+          alsoUpdateLocalUser: false,
         );
       } on ProfileAccessRevokedException {
         return false;

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -28,6 +29,10 @@ class ProfileLoadException implements Exception {
 
 class ProfileController extends GetxController {
   static const ProfileFieldDelete deleteField = ProfileFieldDelete._();
+  static const Duration _firestoreReadTimeout = Duration(seconds: 12);
+  static const Duration _firestoreWriteTimeout = Duration(seconds: 15);
+  static const Duration _storageWriteTimeout = Duration(seconds: 45);
+  static const Duration _userRefreshTimeout = Duration(seconds: 8);
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -122,7 +127,7 @@ class ProfileController extends GetxController {
     int attempt = 0;
     while (attempt < 3) {
       try {
-        return await ref.get();
+        return await ref.get().timeout(_firestoreReadTimeout);
       } catch (_) {
         attempt++;
         if (attempt >= 3) {
@@ -132,6 +137,23 @@ class ProfileController extends GetxController {
       }
     }
     throw Exception('Firestore retry failed');
+  }
+
+  Future<void> _safeRefreshCurrentUser() async {
+    if (!Get.isRegistered<UserController>()) {
+      return;
+    }
+
+    try {
+      await Get.find<UserController>()
+          .refreshUser()
+          .timeout(_userRefreshTimeout);
+    } catch (refreshError, refreshStackTrace) {
+      debugPrint(
+        'ProfileController refreshUser warning: '
+        '$refreshError\n$refreshStackTrace',
+      );
+    }
   }
 
   Future<void> updateUserId(String uid) async {
@@ -205,14 +227,20 @@ class ProfileController extends GetxController {
       await _firestore
           .collection('users')
           .doc(updatedUser.uid)
-          .set(updatedUser.toMap(), SetOptions(merge: true));
+          .set(updatedUser.toMap(), SetOptions(merge: true))
+          .timeout(_firestoreWriteTimeout);
 
-      user = updatedUser;
-      update();
-
-      if (Get.isRegistered<UserController>()) {
-        await Get.find<UserController>().refreshUser();
+      try {
+        user = updatedUser;
+        update();
+      } catch (localSyncError, localSyncStackTrace) {
+        debugPrint(
+          'updateUserProfile local sync warning: '
+          '$localSyncError\n$localSyncStackTrace',
+        );
       }
+
+      await _safeRefreshCurrentUser();
     } catch (e, st) {
       debugPrint('updateUserProfile error: $e\n$st');
       if (_isPermissionDenied(e)) {
@@ -285,22 +313,27 @@ class ProfileController extends GetxController {
         }
       }
 
-      await _firestore.collection('users').doc(uid).update(finalPatch);
+      await _firestore
+          .collection('users')
+          .doc(uid)
+          .update(finalPatch)
+          .timeout(_firestoreWriteTimeout);
 
       if (alsoUpdateLocalUser && user != null && user!.uid == uid) {
-        _applyPatchToLocalUser(finalPatch);
-        update();
+        try {
+          _applyPatchToLocalUser(finalPatch);
+          update();
+        } catch (localSyncError, localSyncStackTrace) {
+          debugPrint(
+            'updateProfilePatch local sync warning: '
+            '$localSyncError\n$localSyncStackTrace\n'
+            'patch=$finalPatch',
+          );
+        }
       }
 
       if (refreshGlobalUser && Get.isRegistered<UserController>()) {
-        try {
-          await Get.find<UserController>().refreshUser();
-        } catch (refreshError, refreshStackTrace) {
-          debugPrint(
-            'updateProfilePatch refreshUser warning: '
-            '$refreshError\n$refreshStackTrace',
-          );
-        }
+        await _safeRefreshCurrentUser();
       }
     } catch (e, st) {
       debugPrint('updateProfilePatch error: $e\n$st');
@@ -526,20 +559,22 @@ class ProfileController extends GetxController {
     isLoadingPhoto.value = true;
     try {
       final ref = _storage.ref('profilePhotos/$uid');
-      await ref.putFile(
-        File(photoPath),
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      final url = await ref.getDownloadURL();
+      await ref
+          .putFile(
+            File(photoPath),
+            SettableMetadata(contentType: 'image/jpeg'),
+          )
+          .timeout(_storageWriteTimeout);
+      final url = await ref.getDownloadURL().timeout(_firestoreReadTimeout);
 
       await _firestore.collection('users').doc(uid).update({
         'photoProfil': url,
-      });
+      }).timeout(_firestoreWriteTimeout);
 
       user?.photoProfil = url;
       update();
 
-      await Get.find<UserController>().refreshUser();
+      await _safeRefreshCurrentUser();
 
       Get.snackbar(
         'Succes',
@@ -669,20 +704,40 @@ class ProfileController extends GetxController {
         throw ArgumentError('CV payload is empty.');
       }
 
-      final ref = _storage
-          .ref(
-            'cvs/$uid/'
-            '${fileName?.trim().isNotEmpty == true ? fileName!.trim() : 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf'}',
-          );
+      final targetFileName = fileName?.trim().isNotEmpty == true
+          ? fileName!.trim()
+          : 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final storagePath = 'cvs/$uid/$targetFileName';
+      final ref = _storage.ref(storagePath);
+      final previousCvUrl = user?.cvUrl;
       final metadata = SettableMetadata(contentType: 'application/pdf');
       final uploadTask = pdfBytes != null
-          ? await ref.putData(pdfBytes, metadata)
-          : await ref.putFile(pdfFile!, metadata);
-      final url = await uploadTask.ref.getDownloadURL();
+          ? await ref.putData(pdfBytes, metadata).timeout(_storageWriteTimeout)
+          : await ref.putFile(pdfFile!, metadata).timeout(_storageWriteTimeout);
+      final url =
+          await uploadTask.ref.getDownloadURL().timeout(_firestoreReadTimeout);
 
-      await _firestore.collection('users').doc(uid).update({'cvUrl': url});
+      await _firestore
+          .collection('users')
+          .doc(uid)
+          .update({'cvUrl': url}).timeout(_firestoreWriteTimeout);
       user?.cvUrl = url;
       update();
+
+      await _safeRefreshCurrentUser();
+
+      if (previousCvUrl != null &&
+          previousCvUrl.isNotEmpty &&
+          previousCvUrl != url) {
+        try {
+          await _storage.refFromURL(previousCvUrl).delete();
+        } catch (cleanupError, cleanupStackTrace) {
+          debugPrint(
+            'uploadCvPdf previous CV cleanup warning: '
+            '$cleanupError\n$cleanupStackTrace',
+          );
+        }
+      }
 
       Get.snackbar(
         'Succes',
@@ -691,10 +746,25 @@ class ProfileController extends GetxController {
         colorText: Colors.white,
       );
     } catch (e, st) {
-      debugPrint('uploadCvPdf error: $e\n$st');
+      debugPrint(
+        'uploadCvPdf error: $e\n'
+        'bucket=${AppEnvironmentConfig.firebaseOptions.storageBucket} '
+        'uid=$uid '
+        'authUid=${FirebaseAuth.instance.currentUser?.uid} '
+        'fileName=$fileName\n$st',
+      );
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
+      }
+      if (e is FirebaseException && e.code == 'unauthorized') {
+        Get.snackbar(
+          'Autorisation refusée',
+          'Le stockage Firebase refuse actuellement l\'ajout du CV pour cette session.',
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+        return;
       }
       Get.snackbar(
         'Erreur',
@@ -708,15 +778,20 @@ class ProfileController extends GetxController {
   Future<void> deleteCv(String uid) async {
     try {
       if (user?.cvUrl != null) {
-        await _storage.refFromURL(user!.cvUrl!).delete();
+        await _storage
+            .refFromURL(user!.cvUrl!)
+            .delete()
+            .timeout(_storageWriteTimeout);
       }
 
       await _firestore.collection('users').doc(uid).update({
         'cvUrl': FieldValue.delete(),
-      });
+      }).timeout(_firestoreWriteTimeout);
 
       user?.cvUrl = null;
       update();
+
+      await _safeRefreshCurrentUser();
 
       Get.snackbar(
         'Succes',

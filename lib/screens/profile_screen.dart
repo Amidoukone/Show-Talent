@@ -157,7 +157,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     );
                     if (updated == true) {
-                      await _profileController.updateUserId(widget.uid);
+                      _profileController.update();
                     }
                   },
                 )
@@ -810,7 +810,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 );
                 if (updated == true) {
-                  await _profileController.updateUserId(widget.uid);
+                  _profileController.update();
                 }
               }
             },

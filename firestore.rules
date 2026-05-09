@@ -84,16 +84,19 @@ service cloud.firestore {
     }
 
     function preservesVerificationState() {
-      return request.auth.token.email_verified == true ?
-        request.resource.data.emailVerified == true &&
-          request.resource.data.estActif == expectedVerifiedActiveState() &&
-          (
-            request.resource.data.emailVerifiedAt == resource.data.emailVerifiedAt ||
-            request.resource.data.emailVerifiedAt == request.time
-          ) :
+      return (
         request.resource.data.emailVerified == resource.data.emailVerified &&
-          request.resource.data.estActif == resource.data.estActif &&
-          request.resource.data.emailVerifiedAt == resource.data.emailVerifiedAt;
+        request.resource.data.estActif == resource.data.estActif &&
+        request.resource.data.emailVerifiedAt == resource.data.emailVerifiedAt
+      ) || (
+        request.auth.token.email_verified == true &&
+        request.resource.data.emailVerified == true &&
+        request.resource.data.estActif == expectedVerifiedActiveState() &&
+        (
+          request.resource.data.emailVerifiedAt == resource.data.emailVerifiedAt ||
+          request.resource.data.emailVerifiedAt == request.time
+        )
+      );
     }
 
     function changesOnly(allowedKeys) {
@@ -105,6 +108,40 @@ service cloud.firestore {
         request.resource.data.fcmToken is string &&
         request.resource.data.fcmToken.size() > 0 &&
         request.resource.data.fcmToken.size() <= 4096;
+    }
+
+    function canUpdateOwnProfile() {
+      return changesOnly([
+        "nom",
+        "phone",
+        "languages",
+        "bio",
+        "birthDate",
+        "position",
+        "team",
+        "clubActuel",
+        "nombreDeMatchs",
+        "buts",
+        "assistances",
+        "performances",
+        "nomClub",
+        "ligue",
+        "entreprise",
+        "nombreDeRecrutements",
+        "country",
+        "city",
+        "region",
+        "openToOpportunities",
+        "profilePublic",
+        "allowMessages",
+        "playerProfile",
+        "clubProfile",
+        "agentProfile",
+        "eventOrganizerProfile",
+        "photoProfil",
+        "cvUrl",
+        "updatedAt",
+      ]);
     }
 
     function canMutateOfferCandidates() {
@@ -135,11 +172,7 @@ service cloud.firestore {
         hasActiveAccount(request.auth.uid) &&
         (
           canUpdateOwnFcmToken() ||
-          (
-            preservesUserIdentity() &&
-            preservesProtectedUserFields() &&
-            preservesVerificationState()
-          )
+          canUpdateOwnProfile()
         );
       allow delete: if isOwner(userId);
     }
