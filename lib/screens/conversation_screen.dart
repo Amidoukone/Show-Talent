@@ -445,8 +445,7 @@ class _ConversationCard extends StatelessWidget {
 
     // ✅ Swipe-to-delete moderne (sans supprimer long-press)
     return Dismissible(
-      key: ValueKey(
-          "conv_${user.uid}_${dateLabel}_${unreadCount}_${lastMessage.hashCode}"),
+      key: ValueKey("conv_${user.uid}"),
       direction: DismissDirection.endToStart,
       confirmDismiss: (_) async {
         onSwipeDelete();

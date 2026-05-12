@@ -25,6 +25,8 @@ void main() {
           File('lib/screens/chat_screen.dart').readAsStringSync();
       final conversationModel =
           File('lib/models/message_converstion.dart').readAsStringSync();
+      final controller =
+          File('lib/controller/chat_controller.dart').readAsStringSync();
       final repository =
           File('lib/services/chat/chat_repository.dart').readAsStringSync();
 
@@ -33,6 +35,8 @@ void main() {
       expect(chatScreen, contains('Suivi agence:'));
       expect(conversationModel, contains('contactReason'));
       expect(conversationModel, contains('contextTitle'));
+      expect(controller, contains('Notification message non bloquante: '));
+      expect(controller, contains('Erreur verification messagerie firebase :'));
       expect(repository, contains('_recoverMissingGuidedContactIntake'));
       expect(repository, contains('_createAndLinkGuidedContactIntake'));
     });

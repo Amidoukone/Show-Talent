@@ -13,6 +13,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
+typedef ChatNotificationSender = Future<void> Function({
+  required String title,
+  required String body,
+  required String recipientUid,
+  required String contextType,
+  required String contextData,
+});
+
 class ChatFlowException implements Exception {
   const ChatFlowException(this.message);
 
@@ -25,8 +33,24 @@ class ChatFlowException implements Exception {
 class ChatController extends GetxController {
   static const Duration _activeWindowTolerance = Duration(seconds: 25);
 
-  final AuthSessionService _authSessionService = AuthSessionService();
-  final ChatRepository _chatRepository = ChatRepository();
+  ChatController({
+    AuthSessionService? authSessionService,
+    ChatRepository? chatRepository,
+    ChatNotificationSender? notificationSender,
+    Future<void> Function()? protectedAccessDeniedHandler,
+    String? Function()? currentUidResolver,
+  })  : _authSessionService = authSessionService ?? AuthSessionService(),
+        _chatRepository = chatRepository ?? ChatRepository(),
+        _notificationSender =
+            notificationSender ?? PushNotificationService.sendNotification,
+        _protectedAccessDeniedHandler = protectedAccessDeniedHandler,
+        _currentUidResolver = currentUidResolver;
+
+  final AuthSessionService _authSessionService;
+  final ChatRepository _chatRepository;
+  final ChatNotificationSender _notificationSender;
+  final Future<void> Function()? _protectedAccessDeniedHandler;
+  final String? Function()? _currentUidResolver;
 
   final Rx<List<Conversation>> _conversations =
       Rx<List<Conversation>>(<Conversation>[]);
@@ -44,7 +68,29 @@ class ChatController extends GetxController {
   bool _isPermissionDenied(Object error) =>
       error is FirebaseException && error.code == 'permission-denied';
 
+  String? _resolvedCurrentUid() {
+    final injected = _currentUidResolver?.call()?.trim();
+    if (injected != null && injected.isNotEmpty) {
+      return injected;
+    }
+
+    if (Get.isRegistered<AuthController>()) {
+      final authController = Get.find<AuthController>();
+      final currentUid = authController.currentUid?.trim();
+      if (currentUid != null && currentUid.isNotEmpty) {
+        return currentUid;
+      }
+    }
+
+    return _authSessionService.currentUser?.uid;
+  }
+
   Future<void> _handleProtectedAccessDenied() async {
+    if (_protectedAccessDeniedHandler != null) {
+      await _protectedAccessDeniedHandler!();
+      return;
+    }
+
     if (!Get.isRegistered<UserController>()) {
       return;
     }
@@ -74,8 +120,7 @@ class ChatController extends GetxController {
           debugPrint("ChatController auth listen error: $error"),
     );
 
-    final uid = AuthController.instance.currentUid ??
-        _authSessionService.currentUser?.uid;
+    final uid = _resolvedCurrentUid();
     if (uid != null) {
       _bindConversationsFor(uid);
     }
@@ -89,8 +134,7 @@ class ChatController extends GetxController {
   }
 
   void refreshConversations() {
-    final uid = AuthController.instance.currentUid ??
-        _authSessionService.currentUser?.uid;
+    final uid = _resolvedCurrentUid();
     if (uid == null) {
       _resetLocalState();
       _unbindConversations();
@@ -99,8 +143,9 @@ class ChatController extends GetxController {
     }
 
     if (_boundUid == uid && _convSub != null) {
-      _conversations.refresh();
-      update();
+      _unbindConversations();
+      _boundUid = null;
+      _bindConversationsFor(uid);
       return;
     }
 
@@ -391,22 +436,29 @@ class ChatController extends GetxController {
         update();
       }
 
-      final shouldNotify = await _chatRepository.shouldSendNotification(
-        recipientId: normalizedRecipientId,
-        conversationId: normalizedConversationId,
-        activeWindowTolerance: _activeWindowTolerance,
-      );
-      if (!shouldNotify) {
-        return;
-      }
+      try {
+        final shouldNotify = await _chatRepository.shouldSendNotification(
+          recipientId: normalizedRecipientId,
+          conversationId: normalizedConversationId,
+          activeWindowTolerance: _activeWindowTolerance,
+        );
+        if (!shouldNotify) {
+          return;
+        }
 
-      await PushNotificationService.sendNotification(
-        title: 'Nouveau message',
-        body: normalizedContent,
-        recipientUid: normalizedRecipientId,
-        contextType: 'message',
-        contextData: normalizedConversationId,
-      );
+        await _notificationSender(
+          title: 'Nouveau message',
+          body: normalizedContent,
+          recipientUid: normalizedRecipientId,
+          contextType: 'message',
+          contextData: normalizedConversationId,
+        );
+      } catch (notificationError, notificationStackTrace) {
+        debugPrint(
+          'Notification message non bloquante: '
+          '$notificationError\n$notificationStackTrace',
+        );
+      }
     } on ChatFlowException {
       rethrow;
     } on FirebaseException catch (error) {
@@ -438,8 +490,14 @@ class ChatController extends GetxController {
         senderId: senderId,
         recipientId: recipientId,
       );
+    } on FirebaseException catch (error) {
+      debugPrint("Erreur verification messagerie firebase : $error");
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
+      return false;
     } catch (_) {
-      return true;
+      return false;
     }
   }
 

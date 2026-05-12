@@ -110,6 +110,16 @@ service cloud.firestore {
         request.resource.data.fcmToken.size() <= 4096;
     }
 
+    function canUpdateOwnChatPresence() {
+      return changesOnly(["activeConversationId", "activeAt"]) &&
+        (
+          !("activeConversationId" in request.resource.data) ||
+          request.resource.data.activeConversationId == null ||
+          request.resource.data.activeConversationId is string
+        ) &&
+        request.resource.data.activeAt == request.time;
+    }
+
     function canUpdateOwnProfile() {
       return changesOnly([
         "nom",
@@ -172,6 +182,7 @@ service cloud.firestore {
         hasActiveAccount(request.auth.uid) &&
         (
           canUpdateOwnFcmToken() ||
+          canUpdateOwnChatPresence() ||
           canUpdateOwnProfile()
         );
       allow delete: if isOwner(userId);

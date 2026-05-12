@@ -18,6 +18,20 @@ class ChatRepository {
   CollectionReference<Map<String, dynamic>> get _contactIntakesCollection =>
       _firestore.collection('contact_intakes');
 
+  int _extractUnreadCount(Map<String, dynamic>? data, String userId) {
+    final raw = data?['unreadCountByUser'];
+    if (raw is! Map) {
+      return 0;
+    }
+
+    final value = raw[userId];
+    if (value is int) {
+      return value;
+    }
+
+    return int.tryParse('$value') ?? 0;
+  }
+
   static String buildConversationId(String uid1, String uid2) {
     final pair = <String>[uid1, uid2]..sort();
     return "${pair.first}__${pair.last}";
@@ -69,24 +83,25 @@ class ChatRepository {
     final ids = <String>[currentUserId, otherUserId]..sort();
     final conversationId = buildConversationId(currentUserId, otherUserId);
     final conversationRef = _conversationsCollection.doc(conversationId);
+    final existingConversationId = await findExistingConversationId(
+      currentUserId: currentUserId,
+      otherUserId: otherUserId,
+    );
+    if (existingConversationId != null) {
+      return existingConversationId;
+    }
+    final newConversation = Conversation(
+      id: conversationRef.id,
+      utilisateur1Id: ids[0],
+      utilisateur2Id: ids[1],
+      utilisateurIds: ids,
+      unreadCountByUser: <String, int>{
+        ids[0]: 0,
+        ids[1]: 0,
+      },
+    );
 
-    await _firestore.runTransaction((txn) async {
-      final snap = await txn.get(conversationRef);
-      if (snap.exists) return;
-
-      final newConversation = Conversation(
-        id: conversationRef.id,
-        utilisateur1Id: ids[0],
-        utilisateur2Id: ids[1],
-        utilisateurIds: ids,
-        unreadCountByUser: <String, int>{
-          ids[0]: 0,
-          ids[1]: 0,
-        },
-      );
-
-      txn.set(conversationRef, newConversation.toMap());
-    });
+    await conversationRef.set(newConversation.toMap());
 
     return conversationRef.id;
   }
@@ -96,8 +111,17 @@ class ChatRepository {
     required String otherUserId,
   }) async {
     final conversationId = buildConversationId(currentUserId, otherUserId);
-    final doc = await _conversationsCollection.doc(conversationId).get();
-    return doc.exists ? doc.id : null;
+    final snapshot = await _conversationsCollection
+        .where('utilisateurIds', arrayContains: currentUserId)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      if (doc.id == conversationId) {
+        return doc.id;
+      }
+    }
+
+    return null;
   }
 
   Future<GuidedConversationStartResult> startGuidedConversation({
@@ -117,40 +141,12 @@ class ChatRepository {
     );
     final conversationId = buildConversationId(currentUser.uid, otherUser.uid);
     final conversationRef = _conversationsCollection.doc(conversationId);
-
-    final created = await _firestore.runTransaction<bool>((txn) async {
-      final snap = await txn.get(conversationRef);
-      if (snap.exists) {
-        return false;
-      }
-
-      final ids = <String>[currentUser.uid, otherUser.uid]..sort();
-      final newConversation = Conversation(
-        id: conversationRef.id,
-        utilisateur1Id: ids[0],
-        utilisateur2Id: ids[1],
-        utilisateurIds: ids,
-        unreadCountByUser: <String, int>{
-          ids[0]: 0,
-          ids[1]: 0,
-        },
-        createdVia: 'guided_first_contact',
-        contextType: normalizedContext.normalizedType,
-        contextId: normalizedContext.normalizedId,
-        contextTitle:
-            normalizedContext.normalizedTitle ?? normalizedContext.displayLabel,
-        contactReason: normalizedReason,
-        initiatedByUid: currentUser.uid,
-        initiatedByRole: currentUser.role,
-        agencyFollowUpStatus: AgencyFollowUpStatus.newLead,
-        createdAt: DateTime.now(),
-      );
-
-      txn.set(conversationRef, newConversation.toMap());
-      return true;
-    });
-
-    if (!created) {
+    final ids = <String>[currentUser.uid, otherUser.uid]..sort();
+    final existingConversationId = await findExistingConversationId(
+      currentUserId: currentUser.uid,
+      otherUserId: otherUser.uid,
+    );
+    if (existingConversationId != null) {
       final recoveredIntake = await _recoverMissingGuidedContactIntake(
         conversationRef: conversationRef,
         currentUser: currentUser,
@@ -161,11 +157,32 @@ class ChatRepository {
       );
 
       return GuidedConversationStartResult(
-        conversationId: conversationId,
+        conversationId: existingConversationId,
         conversationCreated: false,
         contactIntake: recoveredIntake,
       );
     }
+    final newConversation = Conversation(
+      id: conversationRef.id,
+      utilisateur1Id: ids[0],
+      utilisateur2Id: ids[1],
+      utilisateurIds: ids,
+      unreadCountByUser: <String, int>{
+        ids[0]: 0,
+        ids[1]: 0,
+      },
+      createdVia: 'guided_first_contact',
+      contextType: normalizedContext.normalizedType,
+      contextId: normalizedContext.normalizedId,
+      contextTitle:
+          normalizedContext.normalizedTitle ?? normalizedContext.displayLabel,
+      contactReason: normalizedReason,
+      initiatedByUid: currentUser.uid,
+      initiatedByRole: currentUser.role,
+      agencyFollowUpStatus: AgencyFollowUpStatus.newLead,
+      createdAt: DateTime.now(),
+    );
+    await conversationRef.set(newConversation.toMap());
 
     final firstMessage = Message(
       id: '',
@@ -329,6 +346,10 @@ class ChatRepository {
     final senderDoc = await _usersCollection.doc(senderId).get();
     final recipientDoc = await _usersCollection.doc(recipientId).get();
 
+    if (!senderDoc.exists || !recipientDoc.exists) {
+      return false;
+    }
+
     final senderAllow = senderDoc.data()?['allowMessages'] as bool? ?? true;
     final recipientAllow =
         recipientDoc.data()?['allowMessages'] as bool? ?? true;
@@ -411,12 +432,57 @@ class ChatRepository {
   Future<void> deleteMessage({
     required String conversationId,
     required String messageId,
-  }) {
-    return _conversationsCollection
-        .doc(conversationId)
+  }) async {
+    final conversationRef = _conversationsCollection.doc(conversationId);
+    final messageRef = conversationRef.collection('messages').doc(messageId);
+
+    final messageSnapshot = await messageRef.get();
+    if (!messageSnapshot.exists) {
+      return;
+    }
+
+    final messageData = messageSnapshot.data() ?? <String, dynamic>{};
+    messageData['id'] = messageSnapshot.id;
+    final deletedMessage = Message.fromMap(messageData);
+
+    final conversationSnapshot = await conversationRef.get();
+    final conversationData = conversationSnapshot.data();
+    final currentRecipientUnread = deletedMessage.destinataireId.trim().isEmpty
+        ? 0
+        : _extractUnreadCount(
+            conversationData,
+            deletedMessage.destinataireId,
+          );
+
+    await messageRef.delete();
+
+    final latestMessageSnapshot = await conversationRef
         .collection('messages')
-        .doc(messageId)
-        .delete();
+        .orderBy('dateEnvoi', descending: true)
+        .limit(1)
+        .get();
+
+    final patch = <String, dynamic>{
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (latestMessageSnapshot.docs.isEmpty) {
+      patch['lastMessage'] = FieldValue.delete();
+      patch['lastMessageDate'] = FieldValue.delete();
+    } else {
+      final latestMessage =
+          Message.fromMap(latestMessageSnapshot.docs.first.data());
+      patch['lastMessage'] = latestMessage.contenu;
+      patch['lastMessageDate'] = Timestamp.fromDate(latestMessage.dateEnvoi);
+    }
+
+    if (!deletedMessage.estLu &&
+        deletedMessage.destinataireId.trim().isNotEmpty) {
+      patch['unreadCountByUser.${deletedMessage.destinataireId}'] =
+          currentRecipientUnread > 0 ? currentRecipientUnread - 1 : 0;
+    }
+
+    await conversationRef.set(patch, SetOptions(merge: true));
   }
 
   Future<void> deleteConversation(String conversationId) async {

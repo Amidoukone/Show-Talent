@@ -17,6 +17,18 @@ void main() {
           contains('request.resource.data.agencyFollowUpStatus == "new"'));
     });
 
+    test('rules allow narrow active chat presence updates for mobile', () {
+      final rules = File('firestore.rules').readAsStringSync();
+
+      expect(rules, contains('function canUpdateOwnChatPresence() {'));
+      expect(
+        rules,
+        contains('changesOnly(["activeConversationId", "activeAt"])'),
+      );
+      expect(rules, contains('request.resource.data.activeAt == request.time'));
+      expect(rules, contains('canUpdateOwnChatPresence()'));
+    });
+
     test(
         'rules allow player-side candidature and registration mutations only on narrow fields',
         () {
