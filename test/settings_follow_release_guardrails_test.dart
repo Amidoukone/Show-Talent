@@ -35,5 +35,38 @@ void main() {
       expect(follow,
           isNot(contains("if (Get.find<UserController>().user == null) {")));
     });
+
+    test('follow controller delegates mutations to callable backend', () {
+      final controller =
+          File('lib/controller/follow_controller.dart').readAsStringSync();
+      final backend =
+          File('functions/src/follow_actions.ts').readAsStringSync();
+      final exports = File('functions/src/index.ts').readAsStringSync();
+
+      expect(controller, contains("httpsCallable("));
+      expect(
+        controller,
+        contains("CallableAuthGuard.callDataWithHttpFallback"),
+      );
+      expect(controller, contains("'followUser'"));
+      expect(controller, contains("'unfollowUser'"));
+      expect(backend, contains('export const followUser = onCall('));
+      expect(backend, contains('export const unfollowUser = onCall('));
+      expect(exports, contains('export {followUser, unfollowUser}'));
+    });
+
+    test('follow list keeps coherent local UX details', () {
+      final follow =
+          File('lib/screens/follow_list_screen.dart').readAsStringSync();
+
+      expect(follow, contains("assets/default_avatar.jpg"));
+      expect(follow, contains('RefreshIndicator('));
+      expect(
+        follow,
+        contains("widget.listType == 'followings' &&"),
+      );
+      expect(follow, contains('currentUserId == widget.listOwnerUid'));
+      expect(follow, contains('widget.onRemove();'));
+    });
   });
 }

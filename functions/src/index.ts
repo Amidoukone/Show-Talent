@@ -713,6 +713,7 @@ export {
   shareVideo,
   videoActionLog,
 } from "./actions";
+export {followUser, unfollowUser} from "./follow_actions";
 
 export {provisionManagedAccount} from "./managed_accounts";
 export {
