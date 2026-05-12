@@ -119,8 +119,6 @@ class PlayerStatsAvailabilityFormState
         await widget.profileController.updateProfilePatch(
           widget.user.uid,
           patch,
-          refreshGlobalUser: false,
-          alsoUpdateLocalUser: false,
         );
       } on ProfileAccessRevokedException {
         return false;
@@ -174,8 +172,7 @@ class PlayerStatsAvailabilityFormState
             const SizedBox(height: 12),
             TextFormField(
               controller: _assistsController,
-              decoration:
-                  const InputDecoration(labelText: 'Passes décisives'),
+              decoration: const InputDecoration(labelText: 'Passes décisives'),
               keyboardType: TextInputType.number,
               validator: (v) => _validateOptionalInt(v, min: 0, max: 9999),
             ),
@@ -189,8 +186,8 @@ class PlayerStatsAvailabilityFormState
             TextFormField(
               controller: _regionsController,
               decoration: const InputDecoration(
-                labelText: 'Régions (séparées par ,)',
-                hintText: 'Ex: Mali, Sénégal, Côte d\'Ivoire',
+                labelText: 'Régions ciblées (séparées par des virgules)',
+                hintText: 'Ex : Mali, Sénégal, Côte d\'Ivoire',
               ),
             ),
             if (widget.showSubmitButton) ...[

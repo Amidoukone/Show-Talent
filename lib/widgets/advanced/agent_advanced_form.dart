@@ -33,17 +33,22 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
 
   bool _saving = false;
 
+  bool get _isAgent => widget.user.isAgent;
+
   @override
   void initState() {
     super.initState();
-    final a = widget.user.agentProfile ?? {};
+    final profile = widget.user.agentProfile ?? {};
 
-    _licenseController =
-        TextEditingController(text: a['licenseNumber']?.toString() ?? '');
-    _countryController =
-        TextEditingController(text: a['licenseCountry']?.toString() ?? '');
-    _zonesController =
-        TextEditingController(text: (a['zones'] as List?)?.join(', ') ?? '');
+    _licenseController = TextEditingController(
+      text: profile['licenseNumber']?.toString() ?? '',
+    );
+    _countryController = TextEditingController(
+      text: profile['licenseCountry']?.toString() ?? '',
+    );
+    _zonesController = TextEditingController(
+      text: (profile['zones'] as List?)?.join(', ') ?? '',
+    );
   }
 
   @override
@@ -54,9 +59,9 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
     super.dispose();
   }
 
-  String? _trimOrNull(String v) {
-    final t = v.trim();
-    return t.isEmpty ? null : t;
+  String? _trimOrNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   List<String> _csvToList(String raw) {
@@ -89,8 +94,6 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
         await widget.profileController.updateProfilePatch(
           widget.user.uid,
           patch,
-          refreshGlobalUser: false,
-          alsoUpdateLocalUser: false,
         );
       } on ProfileAccessRevokedException {
         return false;
@@ -101,7 +104,12 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
       }
 
       if (showFeedback) {
-        Get.snackbar('Succès', 'Profil agent / recruteur avancé mis à jour');
+        Get.snackbar(
+          'Succès',
+          _isAgent
+              ? 'Profil agent avancé mis à jour'
+              : 'Profil recruteur avancé mis à jour',
+        );
       }
 
       return true;
@@ -122,28 +130,44 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (widget.showSectionTitle) ...[
-              const Text(
-                'Profil recruteur / agent avancé',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              Text(
+                _isAgent ? 'Profil agent avancé' : 'Profil recruteur avancé',
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
             ],
             TextFormField(
               controller: _licenseController,
-              decoration: const InputDecoration(labelText: 'Numéro de licence'),
+              decoration: InputDecoration(
+                labelText: _isAgent
+                    ? 'Numéro de licence'
+                    : 'Référence de licence ou d’agrément',
+                hintText: _isAgent
+                    ? 'Ex : LIC-FAF-2026-014'
+                    : 'Ex : AGR-RECRUT-2026-03',
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _countryController,
-              decoration:
-                  const InputDecoration(labelText: 'Pays de la licence'),
+              decoration: InputDecoration(
+                labelText: _isAgent
+                    ? 'Pays de délivrance de la licence'
+                    : 'Pays de délivrance',
+                hintText: 'Ex : Côte d’Ivoire',
+              ),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _zonesController,
-              decoration: const InputDecoration(
-                labelText: 'Zones (séparées par ,)',
-                hintText: 'Ex: Afrique, Europe, Moyen-Orient',
+              decoration: InputDecoration(
+                labelText: _isAgent
+                    ? 'Zones de représentation'
+                    : 'Zones d’intervention',
+                hintText: _isAgent
+                    ? 'Ex : Afrique de l’Ouest, France, Belgique'
+                    : 'Ex : Côte d’Ivoire, Mali, Sénégal',
               ),
             ),
             if (widget.showSubmitButton) ...[

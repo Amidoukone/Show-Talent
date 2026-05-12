@@ -36,24 +36,25 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
   @override
   void initState() {
     super.initState();
-    final c = widget.user.clubProfile ?? {};
+    final clubProfile = widget.user.clubProfile ?? {};
 
-    _structureTypeController =
-        TextEditingController(text: c['structureType']?.toString() ?? '');
+    _structureTypeController = TextEditingController(
+      text: clubProfile['structureType']?.toString() ?? '',
+    );
     _categoriesController = TextEditingController(
-      text: (c['categories'] as List?)?.join(', ') ?? '',
+      text: (clubProfile['categories'] as List?)?.join(', ') ?? '',
     );
 
-    final needs = c['needs'];
+    final needs = clubProfile['needs'];
     if (needs is List) {
       _needsController = TextEditingController(
-        text: needs.map((e) {
-          if (e is Map) {
-            final pos = e['position']?.toString() ?? '';
-            final prio = e['priority']?.toString() ?? '';
-            return prio.isNotEmpty ? '$pos:$prio' : pos;
+        text: needs.map((entry) {
+          if (entry is Map) {
+            final position = entry['position']?.toString() ?? '';
+            final priority = entry['priority']?.toString() ?? '';
+            return priority.isNotEmpty ? '$position:$priority' : position;
           }
-          return e.toString();
+          return entry.toString();
         }).join(', '),
       );
     } else {
@@ -69,9 +70,9 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
     super.dispose();
   }
 
-  String? _trimOrNull(String v) {
-    final t = v.trim();
-    return t.isEmpty ? null : t;
+  String? _trimOrNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   List<String> _csvToList(String raw) {
@@ -87,8 +88,8 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
         .split(',')
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
-        .map((e) {
-          final parts = e.split(':');
+        .map((entry) {
+          final parts = entry.split(':');
           return {
             'position': parts[0].trim(),
             'priority': parts.length > 1 ? parts[1].trim() : null,
@@ -111,15 +112,13 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
           'structureType': _trimOrNull(_structureTypeController.text),
           'categories': _csvToList(_categoriesController.text),
           'needs': _parseNeeds(_needsController.text),
-        }
+        },
       };
 
       try {
         await widget.profileController.updateProfilePatch(
           widget.user.uid,
           patch,
-          refreshGlobalUser: false,
-          alsoUpdateLocalUser: false,
         );
       } on ProfileAccessRevokedException {
         return false;
@@ -161,23 +160,25 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
               controller: _structureTypeController,
               decoration: const InputDecoration(
                 labelText: 'Type de structure',
-                hintText: 'Pro, Semi-pro, Académie...',
+                hintText:
+                    'Ex : Club professionnel, centre de formation, académie',
               ),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _categoriesController,
               decoration: const InputDecoration(
-                labelText: 'Catégories',
-                hintText: 'U17, U19, Seniors',
+                labelText: 'Catégories encadrées',
+                hintText: 'Ex : U15, U17, U20, Seniors',
               ),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _needsController,
               decoration: const InputDecoration(
-                labelText: 'Besoins',
-                hintText: 'Ex: DC:high, BU:medium',
+                labelText: 'Besoins de recrutement prioritaires',
+                hintText:
+                    'Ex : Défenseur central:haute, avant-centre:moyenne',
               ),
             ),
             if (widget.showSubmitButton) ...[

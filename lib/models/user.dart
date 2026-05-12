@@ -6,7 +6,7 @@ import 'package:adfoot/utils/account_role_policy.dart';
 
 class AppUser {
   // =========================
-  // 🔑 Identité & système
+  // Identite et systeme
   // =========================
   String uid;
   String nom;
@@ -26,9 +26,9 @@ class AppUser {
   String? authDisabledReason;
 
   // =========================
-  // 🌍 Champs transverses
+  // Champs transverses
   // =========================
-  DateTime? birthDate; // âge calculé côté client
+  DateTime? birthDate; // age calcule cote client
   String? country;
   String? city;
   String? region;
@@ -36,7 +36,7 @@ class AppUser {
   bool? openToOpportunities;
 
   // =========================
-  // 🧍 Profil joueur (MVP existant)
+  // Profil joueur (MVP existant)
   // =========================
   String? bio;
   String? position;
@@ -48,7 +48,7 @@ class AppUser {
   Map<String, double>? performances;
 
   // =========================
-  // 🧠 Profil joueur (avancé – structuré)
+  // Profil joueur (avance - structure)
   // =========================
   Map<String, dynamic>? playerProfile;
   /*
@@ -73,7 +73,7 @@ class AppUser {
   */
 
   // =========================
-  // 🏟️ Club / Staff
+  // Club / Staff
   // =========================
   String? nomClub;
   String? ligue;
@@ -91,7 +91,7 @@ class AppUser {
   */
 
   // =========================
-  // 🧑‍💼 Recruteur / Agent
+  // Recruteur / Agent
   // =========================
   String? entreprise;
   int? nombreDeRecrutements;
@@ -105,12 +105,12 @@ class AppUser {
   */
 
   // =========================
-  // 🎪 Organisateur d’événements
+  // Organisateur d'evenements
   // =========================
   Map<String, dynamic>? eventOrganizerProfile;
 
   // =========================
-  // 🔗 Social & contenus
+  // Social et contenus
   // =========================
   String? team;
   List<AppUser>? joueursSuivis;
@@ -122,7 +122,7 @@ class AppUser {
   bool allowMessages;
 
   // =========================
-  // 📄 Documents
+  // Documents
   // =========================
   String? cvUrl;
 
@@ -162,7 +162,7 @@ class AppUser {
     this.videosPubliees,
     this.performances,
 
-    // Avancés par rôle
+    // Avances par role
     this.playerProfile,
     this.clubProfile,
     this.agentProfile,
@@ -191,7 +191,7 @@ class AppUser {
   });
 
   // =========================
-  // 🔁 Parsing Firestore SAFE
+  // Parsing Firestore SAFE
   // =========================
   factory AppUser.fromMap(Map<String, dynamic> map) {
     return AppUser._fromMap(map, parseNestedCollections: true);
@@ -270,7 +270,7 @@ class AppUser {
             )
           : null,
 
-      // Avancés
+      // Avances
       playerProfile: safeMap(map['playerProfile']),
       clubProfile: safeMap(map['clubProfile']),
       agentProfile: safeMap(map['agentProfile']),
@@ -340,7 +340,7 @@ class AppUser {
   }
 
   // =========================
-  // ⬆️ Firestore export SAFE
+  // Firestore export SAFE
   // =========================
   Map<String, dynamic> toEmbeddedMap() {
     return {
@@ -393,7 +393,7 @@ class AppUser {
       'videosPubliees': videosPubliees?.map((v) => v.toMap()).toList(),
       'performances': performances,
 
-      // Avancés
+      // Avances
       'playerProfile': playerProfile,
       'clubProfile': clubProfile,
       'agentProfile': agentProfile,
@@ -417,7 +417,7 @@ class AppUser {
   }
 
   // =========================
-  // 🎂 Âge calculé (safe)
+  // Age calcule (safe)
   // =========================
   int? get age {
     if (birthDate == null) return null;
@@ -434,7 +434,7 @@ class AppUser {
   // UI GETTERS (MVP / AVANCE)
   // =========================
 
-  /// Rôle helpers
+  /// Role helpers
   bool get isPlayer => role == 'joueur';
   bool get isClub => role == 'club';
   bool get isAgent => role == 'agent';
@@ -464,9 +464,7 @@ class AppUser {
             (team?.isNotEmpty ?? false);
 
       case 'club':
-        return nom.isNotEmpty &&
-            (nomClub?.isNotEmpty ?? false) &&
-            (ligue?.isNotEmpty ?? false);
+        return nom.isNotEmpty && (ligue?.isNotEmpty ?? false);
 
       case 'recruteur':
       case 'agent':
@@ -518,8 +516,7 @@ class AppUser {
 
     // Positions
     final positions = p['positions'];
-    final hasPosition = (positions is List && positions.isNotEmpty) ||
-        (position?.isNotEmpty ?? false);
+    final hasPosition = positions is List && positions.isNotEmpty;
 
     // Skills
     final skills = p['skills'];
@@ -537,7 +534,7 @@ class AppUser {
   }
 
   /// -------------------------
-  /// UI – Afficher bloc "Profil avancé" ?
+  /// UI - Afficher bloc "Profil avance" ?
   /// -------------------------
   bool get shouldShowAdvancedSection {
     if (isPlayer) return true;
@@ -547,7 +544,7 @@ class AppUser {
   }
 
   /// -------------------------
-  /// UI – Afficher CTA "Compléter profil avancé" ?
+  /// UI - Afficher CTA "Completer profil avance" ?
   /// -------------------------
   bool get shouldPromptAdvancedCompletion {
     return isMvpProfileComplete && !hasAdvancedProfile;
@@ -558,8 +555,8 @@ class AppUser {
   /// -------------------------
   String get profileLevelLabel {
     if (hasScoutReadyProfile) return 'Profil Élite';
-    if (hasAdvancedProfile) return 'Profil Avancé';
-    if (isMvpProfileComplete) return 'Profil Vérifié';
-    return 'Profil Basique';
+    if (hasAdvancedProfile) return 'Profil avancé';
+    if (isMvpProfileComplete) return 'Profil vérifié';
+    return 'Profil basique';
   }
 }

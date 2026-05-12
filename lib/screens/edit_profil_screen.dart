@@ -7,7 +7,6 @@ import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 
 import '../models/user.dart';
 
@@ -37,22 +36,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _bioController;
   late final TextEditingController _phoneController;
   late final TextEditingController _languagesController;
-
   late final TextEditingController _teamController;
-  late final TextEditingController _positionController;
-  late final TextEditingController _nombreMatchsController;
-  late final TextEditingController _butsController;
-  late final TextEditingController _assistancesController;
-  DateTime? _selectedBirthDate;
-
-  late final TextEditingController _clubNameController;
   late final TextEditingController _ligueController;
-
   late final TextEditingController _entrepriseController;
   late final TextEditingController _nombreRecrutementsController;
 
-  late final TextEditingController _performancesController;
-
+  DateTime? _selectedBirthDate;
   bool _saving = false;
 
   AppUser get user {
@@ -72,35 +61,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-
     _nomController = TextEditingController(text: user.nom);
     _bioController = TextEditingController(text: user.bio ?? '');
     _phoneController = TextEditingController(text: user.phone ?? '');
     _languagesController = TextEditingController(
       text: user.languages?.join(', ') ?? '',
     );
-
     _teamController =
         TextEditingController(text: user.team ?? user.clubActuel ?? '');
-    _positionController = TextEditingController(text: user.position ?? '');
-    _nombreMatchsController =
-        TextEditingController(text: user.nombreDeMatchs?.toString() ?? '');
-    _butsController = TextEditingController(text: user.buts?.toString() ?? '');
-    _assistancesController =
-        TextEditingController(text: user.assistances?.toString() ?? '');
-    _selectedBirthDate = user.birthDate;
-
-    _clubNameController = TextEditingController(text: user.nomClub ?? '');
     _ligueController = TextEditingController(text: user.ligue ?? '');
-
     _entrepriseController = TextEditingController(text: user.entreprise ?? '');
     _nombreRecrutementsController = TextEditingController(
       text: user.nombreDeRecrutements?.toString() ?? '',
     );
-
-    _performancesController = TextEditingController(
-      text: _performancesToText(user.performances),
-    );
+    _selectedBirthDate = user.birthDate;
   }
 
   @override
@@ -110,46 +84,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _phoneController.dispose();
     _languagesController.dispose();
     _teamController.dispose();
-    _positionController.dispose();
-    _nombreMatchsController.dispose();
-    _butsController.dispose();
-    _assistancesController.dispose();
-    _clubNameController.dispose();
     _ligueController.dispose();
     _entrepriseController.dispose();
     _nombreRecrutementsController.dispose();
-    _performancesController.dispose();
     super.dispose();
   }
 
-  String _trimOrEmpty(String v) => v.trim();
+  String _trimOrEmpty(String value) => value.trim();
 
-  String? _trimOrNull(String v) {
-    final t = v.trim();
-    return t.isEmpty ? null : t;
+  String? _trimOrNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
-  int? _intOrNull(String v) {
-    final t = v.trim();
-    if (t.isEmpty) {
+  int? _intOrNull(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
       return null;
     }
-    return int.tryParse(t);
+    return int.tryParse(trimmed);
   }
 
-  int? _intOrNullClamped(String v, {int? min, int? max}) {
-    final n = _intOrNull(v);
-    if (n == null) {
+  int? _intOrNullClamped(String value, {int? min, int? max}) {
+    final parsed = _intOrNull(value);
+    if (parsed == null) {
       return null;
     }
-    int x = n;
-    if (min != null && x < min) {
-      x = min;
+    int clamped = parsed;
+    if (min != null && clamped < min) {
+      clamped = min;
     }
-    if (max != null && x > max) {
-      x = max;
+    if (max != null && clamped > max) {
+      clamped = max;
     }
-    return x;
+    return clamped;
   }
 
   String? _validateOptionalNonNegativeInt(String? value, {int max = 9999}) {
@@ -170,60 +138,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return null;
   }
 
-  Map<String, double>? _parsePerformances(String raw) {
-    final text = raw.trim();
-    if (text.isEmpty) {
-      return null;
-    }
-
-    final lines = text.split('\n');
-    final out = <String, double>{};
-
-    for (final line in lines) {
-      final l = line.trim();
-      if (l.isEmpty) {
-        continue;
-      }
-
-      final sep = l.contains('=') ? '=' : (l.contains(':') ? ':' : null);
-      if (sep == null) {
-        continue;
-      }
-
-      final parts = l.split(sep);
-      if (parts.length < 2) {
-        continue;
-      }
-
-      final key = parts[0].trim();
-      final valStr = parts.sublist(1).join(sep).trim();
-      final val = double.tryParse(valStr.replaceAll(',', '.'));
-
-      if (key.isEmpty || val == null) {
-        continue;
-      }
-      out[key] = val;
-    }
-
-    return out.isEmpty ? null : out;
-  }
-
-  String _performancesToText(Map<String, double>? perf) {
-    if (perf == null || perf.isEmpty) {
-      return '';
-    }
-    final keys = perf.keys.toList()..sort();
-    return keys.map((k) => '$k=${perf[k]}').join('\n');
-  }
-
   InputDecorationTheme _inputDecorationTheme(BuildContext context) {
     final base = Theme.of(context).inputDecorationTheme;
-
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: const BorderSide(color: Color(0xFFB5C7C7)),
     );
-
     final focused = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: const BorderSide(color: kPrimary, width: 1.6),
@@ -333,7 +253,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: Text(
                 _selectedBirthDate != null
                     ? _formatBirthDate(_selectedBirthDate!)
-                    : 'Ajoute ta date de naissance',
+                    : 'Ajoutez votre date de naissance',
                 style: TextStyle(
                   color: _selectedBirthDate != null
                       ? AdColors.onSurface
@@ -376,7 +296,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       initialDate: initialDate,
       firstDate: earliest,
       lastDate: latest,
-      helpText: 'Choisir ta date de naissance',
+      helpText: 'Choisir votre date de naissance',
       confirmText: 'Valider',
       cancelText: 'Annuler',
     );
@@ -434,13 +354,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           patch['birthDate'] = ProfileController.deleteField;
         }
 
-        final position = _trimOrNull(_positionController.text);
-        if (position != null) {
-          patch['position'] = position;
-        } else if ((user.position?.isNotEmpty ?? false)) {
-          patch['position'] = ProfileController.deleteField;
-        }
-
         final team = _trimOrNull(_teamController.text);
         if (team != null) {
           patch['team'] = team;
@@ -450,46 +363,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           patch['team'] = ProfileController.deleteField;
           patch['clubActuel'] = ProfileController.deleteField;
         }
-
-        final matches =
-            _intOrNullClamped(_nombreMatchsController.text, min: 0, max: 9999);
-        if (matches != null) {
-          patch['nombreDeMatchs'] = matches;
-        } else if (user.nombreDeMatchs != null) {
-          patch['nombreDeMatchs'] = ProfileController.deleteField;
-        }
-
-        final goals =
-            _intOrNullClamped(_butsController.text, min: 0, max: 9999);
-        if (goals != null) {
-          patch['buts'] = goals;
-        } else if (user.buts != null) {
-          patch['buts'] = ProfileController.deleteField;
-        }
-
-        final assists =
-            _intOrNullClamped(_assistancesController.text, min: 0, max: 9999);
-        if (assists != null) {
-          patch['assistances'] = assists;
-        } else if (user.assistances != null) {
-          patch['assistances'] = ProfileController.deleteField;
-        }
-
-        final performances = _parsePerformances(_performancesController.text);
-        if (performances != null) {
-          patch['performances'] = performances;
-        } else if (user.performances?.isNotEmpty == true) {
-          patch['performances'] = ProfileController.deleteField;
-        }
       }
 
       if (_isClub) {
-        final clubName = _trimOrNull(_clubNameController.text);
-        if (clubName != null) {
-          patch['nomClub'] = clubName;
-        } else if ((user.nomClub?.isNotEmpty ?? false)) {
-          patch['nomClub'] = ProfileController.deleteField;
-        }
+        patch['nomClub'] = _trimOrEmpty(_nomController.text);
 
         final ligue = _trimOrNull(_ligueController.text);
         if (ligue != null) {
@@ -519,12 +396,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
       }
 
-      await profileController.updateProfilePatch(
-        user.uid,
-        patch,
-        refreshGlobalUser: false,
-        alsoUpdateLocalUser: false,
-      );
+      await profileController.updateProfilePatch(user.uid, patch);
 
       AdFeedback.success('Succès', 'Profil mis à jour.');
       if (!mounted) {
@@ -532,7 +404,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
 
       Navigator.of(context).pop(true);
-      return;
     } on ProfileAccessRevokedException {
       return;
     } catch (e) {
@@ -551,20 +422,49 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final inputTheme = _inputDecorationTheme(context);
+    final displayNameLabel = _isClub
+        ? 'Nom du club'
+        : _isRecruiter
+            ? 'Nom affiché'
+            : 'Nom complet';
     final headerTitle = _isPlayer
-        ? 'Profil sportif'
+        ? user.role == 'coach'
+            ? 'Profil coach'
+            : 'Profil joueur'
         : _isClub
             ? 'Profil club'
             : _isRecruiter
-                ? 'Profil recruteur'
+                ? user.isAgent
+                    ? 'Profil agent'
+                    : 'Profil recruteur'
                 : 'Profil';
     final headerSubtitle = _isPlayer
-        ? 'Mettez à jour vos informations publiques et vos indicateurs essentiels dans un écran plus lisible.'
+        ? user.role == 'coach'
+            ? 'Présentez vos informations publiques de coach dans un cadre clair, lisible et crédible.'
+            : 'Présentez vos informations publiques de joueur dans un cadre clair, lisible et crédible.'
         : _isClub
-            ? 'Rassemblez les informations visibles de votre structure dans une présentation plus claire.'
+            ? 'Rassemblez les informations visibles de votre club dans une présentation professionnelle et cohérente.'
             : _isRecruiter
-                ? 'Gardez vos informations de contact et de recrutement dans un parcours plus propre.'
-                : 'Mettez à jour les informations visibles de votre profil.';
+                ? user.isAgent
+                    ? 'Centralisez votre identité professionnelle, votre agence et vos coordonnées dans un profil de représentation plus clair.'
+                    : 'Centralisez votre identité professionnelle, votre structure de recrutement et vos coordonnées dans un profil plus clair.'
+                : 'Mettez à jour les informations visibles de votre profil dans un cadre plus clair.';
+    final generalInfoSubtitle = _isClub
+        ? 'Nom du club, contact, langues et présentation visibles sur le profil.'
+        : _isRecruiter
+            ? 'Nom affiché, contact, langues et présentation professionnelle visibles sur le profil.'
+            : 'Nom affiché, contact, langues et présentation visible sur le profil.';
+    final bioLabel = _isPlayer
+        ? user.role == 'coach'
+            ? 'Présentation du coach'
+            : 'Présentation du joueur'
+        : _isClub
+            ? 'Présentation du club'
+            : _isRecruiter
+                ? user.isAgent
+                    ? 'Présentation de l’agent'
+                    : 'Présentation du recruteur'
+                : 'Présentation';
 
     return Scaffold(
       backgroundColor: kSurface,
@@ -599,7 +499,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         child: SafeArea(
           child: LayoutBuilder(
-            builder: (_, c) => SingleChildScrollView(
+            builder: (_, constraints) => SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
               child: Center(
                 child: ConstrainedBox(
@@ -624,18 +524,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         const SizedBox(height: 16),
                         _SectionCard(
                           title: 'Informations générales',
-                          subtitle:
-                              'Nom, contact, langues, bio et informations de base du profil.',
+                          subtitle: generalInfoSubtitle,
                           icon: Icons.badge_rounded,
                           child: Column(
                             children: [
                               _buildTextField(
                                 controller: _nomController,
-                                label: 'Nom complet',
+                                label: displayNameLabel,
                                 icon: Icons.person_outline,
-                                validator: (v) {
-                                  final t = (v ?? '').trim();
-                                  if (t.isEmpty) {
+                                validator: (value) {
+                                  final text = (value ?? '').trim();
+                                  if (text.isEmpty) {
                                     return 'Le nom est requis';
                                   }
                                   return null;
@@ -653,17 +552,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 controller: _languagesController,
                                 label: 'Langues',
                                 icon: Icons.language_outlined,
-                                hint: 'Français, Anglais, Espagnol',
+                                hint: 'Ex : Français, Anglais, Espagnol',
                               ),
                               if (_isPlayer) ...[
                                 const SizedBox(height: 12),
                                 _buildBirthDateField(context),
                               ],
-                              if (user.role != 'fan') ...[
+                              if (!user.isFan) ...[
                                 const SizedBox(height: 12),
                                 _buildTextField(
                                   controller: _bioController,
-                                  label: 'Bio / Infos',
+                                  label: bioLabel,
                                   icon: Icons.info_outline,
                                   maxLines: 3,
                                 ),
@@ -675,113 +574,70 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         if (_isPlayer)
                           _SectionCard(
                             title: user.role == 'coach'
-                                ? 'Informations coach'
-                                : 'Informations joueur',
-                            subtitle:
-                                'Position, club actuel, statistiques et performances visibles.',
+                                ? 'Cadre sportif du coach'
+                                : 'Identité sportive',
+                            subtitle: user.role == 'coach'
+                                ? 'Renseignez la structure dans laquelle vous intervenez publiquement.'
+                                : 'Renseignez le club ou l’académie actuellement affiché(e) sur votre profil.',
                             icon: Icons.sports_soccer_outlined,
                             child: Column(
                               children: [
                                 _buildTextField(
-                                  controller: _positionController,
-                                  label: 'Position',
-                                  icon: Icons.location_searching_outlined,
-                                  hint: 'Ex: Ailier droit, MDC, Gardien...',
-                                ),
-                                const SizedBox(height: 12),
-                                _buildTextField(
                                   controller: _teamController,
-                                  label: 'Club actuel',
+                                  label: user.role == 'coach'
+                                      ? 'Club / structure actuelle'
+                                      : 'Club actuel',
                                   icon: Icons.flag_outlined,
-                                  hint: 'Ex: AS Bamako',
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: _buildTextField(
-                                        controller: _nombreMatchsController,
-                                        label: 'Matchs',
-                                        icon: Icons.scoreboard_outlined,
-                                        keyboardType: TextInputType.number,
-                                        validator:
-                                            _validateOptionalNonNegativeInt,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: _buildTextField(
-                                        controller: _butsController,
-                                        label: 'Buts',
-                                        icon: Icons.sports_soccer,
-                                        keyboardType: TextInputType.number,
-                                        validator:
-                                            _validateOptionalNonNegativeInt,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                _buildTextField(
-                                  controller: _assistancesController,
-                                  label: 'Passes décisives',
-                                  icon: Icons.group_add_outlined,
-                                  keyboardType: TextInputType.number,
-                                  validator: _validateOptionalNonNegativeInt,
-                                ),
-                                const SizedBox(height: 12),
-                                _buildTextField(
-                                  controller: _performancesController,
-                                  label: 'Performances (optionnel)',
-                                  icon: Icons.insights_outlined,
-                                  maxLines: 4,
-                                  hint: 'Format:\n'
-                                      'vitesse=8.5\n'
-                                      'finition=7\n'
-                                      'jeu_aerien=6.5',
+                                  hint: 'Ex : AS Bamako',
                                 ),
                               ],
                             ),
                           )
                         else if (_isClub)
                           _SectionCard(
-                            title: 'Informations club',
+                            title: 'Cadre sportif du club',
                             subtitle:
-                                'Nom du club et compétition ou ligue de référence.',
+                                'Renseignez la compétition principale du club pour situer immédiatement son niveau d’évolution.',
                             icon: Icons.stadium_outlined,
                             child: Column(
                               children: [
                                 _buildTextField(
-                                  controller: _clubNameController,
-                                  label: 'Nom du club',
-                                  icon: Icons.apartment_outlined,
-                                ),
-                                const SizedBox(height: 12),
-                                _buildTextField(
                                   controller: _ligueController,
-                                  label: 'Ligue',
+                                  label: 'Ligue / championnat principal',
                                   icon: Icons.emoji_events_outlined,
+                                  hint:
+                                      'Ex : Ligue 2, National U19, Régional 1',
                                 ),
                               ],
                             ),
                           )
                         else if (_isRecruiter)
                           _SectionCard(
-                            title: 'Informations recruteur / agent',
-                            subtitle:
-                                'Entreprise et volume de recrutements déjà réalisés.',
+                            title: user.isAgent
+                                ? 'Références de représentation'
+                                : 'Références de recrutement',
+                            subtitle: user.isAgent
+                                ? 'Présentez votre agence ou structure et le volume de mouvements accompagnés pour cadrer votre activité.'
+                                : 'Présentez votre structure et votre volume de recrutements pour situer clairement votre activité.',
                             icon: Icons.search_rounded,
                             child: Column(
                               children: [
                                 _buildTextField(
                                   controller: _entrepriseController,
-                                  label: 'Entreprise',
+                                  label: user.isAgent
+                                      ? 'Agence / structure'
+                                      : 'Structure / cellule de recrutement',
                                   icon: Icons.apartment_outlined,
+                                  hint: user.isAgent
+                                      ? 'Ex : Agence Horizon Football'
+                                      : 'Ex : Cellule de recrutement du FC Plateau',
                                 ),
                                 const SizedBox(height: 12),
                                 _buildTextField(
                                   controller: _nombreRecrutementsController,
-                                  label: 'Nombre de recrutements',
+                                  label: user.isAgent
+                                      ? 'Placements ou signatures réalisés'
+                                      : 'Recrutements réalisés',
                                   icon: Icons.how_to_reg_outlined,
                                   keyboardType: TextInputType.number,
                                   validator: _validateOptionalNonNegativeInt,
@@ -887,7 +743,7 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
     return _SectionCard(
       title: 'CV (PDF)',
       subtitle:
-          'Ajoutez votre CV pour compléter votre présentation professionnelle.',
+          'Ajoutez un CV football au format PDF pour renforcer la crédibilité de votre présentation.',
       icon: Icons.picture_as_pdf_outlined,
       trailing: hasCv
           ? const Chip(
@@ -914,39 +770,40 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
                       allowedExtensions: ['pdf'],
                       withData: true,
                     );
-                    if (result != null) {
-                      final pickedFile = result.files.single;
-                      final Uint8List? bytes = pickedFile.bytes;
-                      final String? path = pickedFile.path;
-                      final String fileName = pickedFile.name.isNotEmpty
-                          ? pickedFile.name
-                          : 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf';
+                    if (result == null) {
+                      return;
+                    }
 
-                      try {
-                        setState(() => _isUploading = true);
-                        await widget.profileController.uploadCvPdf(
-                          user.uid,
-                          pdfBytes: bytes,
-                          pdfFile: path != null && path.isNotEmpty
-                              ? File(path)
-                              : null,
-                          fileName: fileName.toLowerCase().endsWith('.pdf')
-                              ? fileName
-                              : '$fileName.pdf',
-                        );
-                        if (!mounted) {
-                          return;
-                        }
-                        setState(() => _cvUrl = _currentUser.cvUrl);
-                      } on ProfileAccessRevokedException {
+                    final pickedFile = result.files.single;
+                    final Uint8List? bytes = pickedFile.bytes;
+                    final String? path = pickedFile.path;
+                    final String fileName = pickedFile.name.isNotEmpty
+                        ? pickedFile.name
+                        : 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf';
+
+                    try {
+                      setState(() => _isUploading = true);
+                      await widget.profileController.uploadCvPdf(
+                        user.uid,
+                        pdfBytes: bytes,
+                        pdfFile:
+                            path != null && path.isNotEmpty ? File(path) : null,
+                        fileName: fileName.toLowerCase().endsWith('.pdf')
+                            ? fileName
+                            : '$fileName.pdf',
+                      );
+                      if (!mounted) {
                         return;
-                      } finally {
-                        if (mounted) {
-                          setState(() => _isUploading = false);
-                        }
+                      }
+                      setState(() => _cvUrl = _currentUser.cvUrl);
+                    } on ProfileAccessRevokedException {
+                      return;
+                    } finally {
+                      if (mounted) {
+                        setState(() => _isUploading = false);
                       }
                     }
-            },
+                  },
             style: ElevatedButton.styleFrom(
               backgroundColor: CvUploaderSection.kAccent,
               foregroundColor: Colors.white,
@@ -990,7 +847,7 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
                           setState(() => _isDeleting = false);
                         }
                       }
-              },
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: CvUploaderSection.kDanger,
                 foregroundColor: Colors.white,
@@ -1054,7 +911,10 @@ class _SectionCard extends StatelessWidget {
                   radius: 18,
                   backgroundColor:
                       _EditProfileScreenState.kPrimary.withValues(alpha: 0.1),
-                  child: Icon(icon, color: _EditProfileScreenState.kPrimary),
+                  child: Icon(
+                    icon,
+                    color: _EditProfileScreenState.kPrimary,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

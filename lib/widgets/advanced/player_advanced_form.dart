@@ -98,8 +98,6 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
         await widget.profileController.updateProfilePatch(
           widget.user.uid,
           patch,
-          refreshGlobalUser: false,
-          alsoUpdateLocalUser: false,
         );
       } on ProfileAccessRevokedException {
         return false;
@@ -193,16 +191,16 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             TextFormField(
               controller: _positionsController,
               decoration: const InputDecoration(
-                labelText: 'Positions (separees par ,)',
-                hintText: 'Ex: Ailier droit, MDC, Latéral',
+                labelText: 'Postes maîtrisés (séparés par des virgules)',
+                hintText: 'Ex : Ailier droit, Milieu défensif, Latéral',
               ),
             ),
             const SizedBox(height: 12),
             TextFormField(
               controller: _skillsController,
               decoration: const InputDecoration(
-                labelText: 'Compétences (séparées par ,)',
-                hintText: 'Ex: Vitesse, Dribble, Finition',
+                labelText: 'Qualités clés (séparées par des virgules)',
+                hintText: 'Ex : Vitesse, Dribble, Qualité de centre',
               ),
             ),
             if (widget.showSubmitButton) ...[

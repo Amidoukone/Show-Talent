@@ -22,6 +22,73 @@ import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 
+String _profileRoleLabel(AppUser user) {
+  switch (user.role) {
+    case 'joueur':
+      return 'Joueur';
+    case 'coach':
+      return 'Coach';
+    case 'club':
+      return 'Club';
+    case 'recruteur':
+      return 'Recruteur';
+    case 'agent':
+      return 'Agent';
+    case 'fan':
+      return 'Supporter';
+    default:
+      return user.role;
+  }
+}
+
+class _ProfileLevelStyle {
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final Color borderColor;
+  final IconData icon;
+
+  const _ProfileLevelStyle({
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.borderColor,
+    required this.icon,
+  });
+}
+
+_ProfileLevelStyle _profileLevelStyle(String label) {
+  switch (label) {
+    case 'Profil Elite':
+    case 'Profil Élite':
+      return const _ProfileLevelStyle(
+        backgroundColor: Color(0xFF1E3A8A),
+        foregroundColor: Colors.white,
+        borderColor: Color(0xFF1E3A8A),
+        icon: Icons.verified_rounded,
+      );
+    case 'Profil avancé':
+      return const _ProfileLevelStyle(
+        backgroundColor: AdColors.accent,
+        foregroundColor: Colors.white,
+        borderColor: AdColors.accent,
+        icon: Icons.auto_awesome_rounded,
+      );
+    case 'Profil vérifié':
+      return const _ProfileLevelStyle(
+        backgroundColor: Color(0xFF2E7D32),
+        foregroundColor: Colors.white,
+        borderColor: Color(0xFF2E7D32),
+        icon: Icons.check_circle_rounded,
+      );
+    default:
+      return const _ProfileLevelStyle(
+        backgroundColor: Color(0xFFE2E8F0),
+        foregroundColor: Color(0xFF334155),
+        borderColor: Color(0xFFCBD5E1),
+        icon: Icons.info_rounded,
+      );
+  }
+}
+
 class ProfileScreen extends StatefulWidget {
   final String uid;
   final bool isReadOnly;
@@ -196,7 +263,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: _StatsCard(user: user),
+                      child: _buildNetworkStatsCard(user),
                     ),
                   ),
 
@@ -221,14 +288,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Text(
                           user.bio?.isNotEmpty == true
                               ? user.bio!
-                              : 'Aucune biographie disponible.',
+                              : 'Aucune biographie renseignée.',
                           style: const TextStyle(fontSize: 15),
                         ),
                       ),
                     ),
                   ),
 
-                  // Badge niveau + CTA avancé
+                  // Badge niveau + CTA avance
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -243,50 +310,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: _buildAdvancedCtaIfNeeded(
+                      child: _buildAdvancedCtaIfNeededClean(
                         user,
                         isOwnProfile: isOwnProfile,
                       ),
                     ),
                   ),
 
-                  // 1) Football Base (MVP / Connect)
+                  // 1) Profil public
                   if (!user.isFan)
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: _SectionCard(
-                          title: 'Football - Base',
+                          title: _publicSectionTitleClean(user),
                           icon: Icons.sports_soccer_outlined,
-                          child: _buildBaseFootballSection(user),
+                          child: _buildBaseFootballSectionClean(user),
                         ),
                       ),
                     ),
 
-                  // 2) Dossier scout (Avancé)
+                  // 2) Informations avancees
                   if (user.shouldShowAdvancedSection)
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: _SectionCard(
-                          title: 'Dossier scout - Avancé',
+                          title: _advancedSectionTitleClean(user),
                           icon: Icons.auto_awesome_rounded,
-                          child: _buildAdvancedFootballSection(user),
+                          child: _buildAdvancedFootballSectionClean(user),
                         ),
                       ),
                     ),
 
-                  // 3) Preuves / Documents
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: _SectionCard(
-                        title: 'Preuves & documents',
-                        icon: Icons.folder_open_rounded,
-                        child: _buildEvidenceSection(user),
+                  // 3) Documents et preuves
+                  if (_shouldShowEvidenceSection(user))
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                        child: _SectionCard(
+                          title: 'Documents et preuves',
+                          icon: Icons.folder_open_rounded,
+                          child: _buildEvidenceSectionClean(user),
+                        ),
                       ),
                     ),
-                  ),
 
                   const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
@@ -439,7 +507,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.refresh),
-                  label: const Text('Reessayer'),
+                  label: const Text('Réessayer'),
                 ),
               ],
             ),
@@ -470,7 +538,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (isSenderDisabled && isRecipientDisabled) {
       message = 'Les messages sont désactivés pour vous deux.';
     } else if (isSenderDisabled) {
-      message = 'Vous avez désactivé l’envoi de messages.';
+      message = 'Vous avez désactivé l\'envoi de messages.';
     } else {
       message = 'Cet utilisateur a désactivé les messages.';
     }
@@ -729,57 +797,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // =======================
-  // UI helpers (MVP / Avancé)
+  // UI helpers (MVP / Avance)
   // =======================
 
   Widget _buildProfileLevelBadge(AppUser user) {
-    // Couleurs simples, cohérentes et lisibles
-    Color bg;
-    Color fg = Colors.white;
-    IconData icon;
-
-    switch (user.profileLevelLabel) {
-      case 'Profil Élite':
-        bg = const Color(0xFF1E3A8A); // bleu profond
-        icon = Icons.verified_rounded;
-        break;
-      case 'Profil Avancé':
-        bg = kAccent; // ton accent
-        icon = Icons.auto_awesome_rounded;
-        break;
-      case 'Profil Vérifié':
-        bg = const Color(0xFF2E7D32); // vert
-        icon = Icons.check_circle_rounded;
-        break;
-      default:
-        bg = const Color(0xFF607D8B); // gris bleuté
-        icon = Icons.info_rounded;
-    }
+    final style = _profileLevelStyle(user.profileLevelLabel);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: bg,
+        color: style.backgroundColor,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: fg, size: 18),
+          Icon(style.icon, color: style.foregroundColor, size: 18),
           const SizedBox(width: 8),
           Text(
             user.profileLevelLabel,
-            style: TextStyle(color: fg, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              color: style.foregroundColor,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAdvancedCtaIfNeeded(AppUser user, {required bool isOwnProfile}) {
-    // CTA seulement sur son profil (sinon confusion)
+  Widget _buildAdvancedCtaIfNeededClean(
+    AppUser user, {
+    required bool isOwnProfile,
+  }) {
     if (!isOwnProfile) return const SizedBox.shrink();
     if (user.isFan) return const SizedBox.shrink();
+
+    final message = user.isPlayer
+        ? 'Complétez votre fiche joueur et votre dossier scout pour présenter un profil plus crédible aux clubs et recruteurs.'
+        : user.isClub
+            ? 'Complétez la présentation de votre club pour afficher clairement votre structure, vos catégories et vos besoins.'
+            : user.isRecruiter
+                ? user.isAgent
+                    ? 'Complétez votre cadre de représentation pour présenter votre agence, votre licence et vos zones d’intervention.'
+                    : 'Complétez vos références professionnelles pour présenter votre structure, vos licences et vos zones d’intervention.'
+                : 'Complétez les informations avancées du profil.';
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -792,10 +854,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           const Icon(Icons.lightbulb_outline_rounded, color: kPrimary),
           const SizedBox(width: 10),
-          const Expanded(
+          Expanded(
             child: Text(
-              'Ajoute tes informations avancées (Dossier scout) pour augmenter tes chances d’être repéré.',
-              style: TextStyle(fontWeight: FontWeight.w600),
+              message,
+              style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(width: 10),
@@ -814,13 +876,339 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }
               }
             },
-            child: Text(
-              user.hasAdvancedProfile ? 'Modifier' : 'Compléter',
+            child: Text(user.hasAdvancedProfile ? 'Modifier' : 'Compléter'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNetworkStatsCard(AppUser user) {
+    return _SectionCard(
+      title: 'Réseau',
+      icon: Icons.people_outline,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _StatChip(
+            label: 'Abonnés',
+            value: user.followersList.length,
+            onTap: () => Get.to(
+              () => FollowListScreen(uid: user.uid, listType: 'followers'),
+            ),
+          ),
+          _StatChip(
+            label: 'Abonnements',
+            value: user.followingsList.length,
+            onTap: () => Get.to(
+              () => FollowListScreen(uid: user.uid, listType: 'followings'),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildBaseFootballSectionClean(AppUser user) {
+    final tiles = <Widget>[];
+    final location = [
+      user.city,
+      user.region,
+      user.country,
+    ].where((value) => value?.trim().isNotEmpty == true).join(', ');
+
+    tiles.add(
+      _infoTile('Téléphone', user.phone, icon: Icons.phone_outlined),
+    );
+
+    if (user.languages != null && user.languages!.isNotEmpty) {
+      tiles.add(
+        _infoTile('Langues parlées', user.languages!.join(', '),
+            icon: Icons.language_outlined),
+      );
+    }
+
+    if (location.isNotEmpty) {
+      tiles.add(
+        _infoTile('Localisation', location, icon: Icons.place_outlined),
+      );
+    }
+
+    if (user.isPlayer || user.isCoach) {
+      final teamLabel =
+          user.team?.isNotEmpty == true ? user.team : user.clubActuel;
+      tiles.addAll([
+        _infoTile('Âge', user.age == null ? null : '${user.age} ans',
+            icon: Icons.cake_outlined),
+        _infoTile(
+          user.isCoach ? 'Fonction sportive' : 'Poste principal',
+          user.position,
+          icon: Icons.sports_outlined,
+        ),
+        _infoTile(
+          user.isCoach ? 'Club / structure' : 'Club actuel',
+          teamLabel,
+          icon: Icons.flag_outlined,
+        ),
+      ]);
+    } else if (user.isClub) {
+      tiles.addAll([
+        _infoTile('Ligue / championnat', user.ligue,
+            icon: Icons.emoji_events_outlined),
+      ]);
+    } else if (user.isRecruiter) {
+      tiles.addAll([
+        _infoTile(
+          user.isAgent ? 'Agence / structure' : 'Structure de recrutement',
+          user.entreprise,
+          icon: Icons.business_outlined,
+        ),
+        _infoTile(
+          user.isAgent
+              ? 'Placements ou signatures réalisés'
+              : 'Recrutements réalisés',
+          user.nombreDeRecrutements?.toString(),
+          icon: Icons.how_to_reg_outlined,
+        ),
+      ]);
+    } else {
+      tiles.add(
+        _infoTile('Informations', 'Aucune information renseignée.'),
+      );
+    }
+
+    return Column(children: tiles);
+  }
+
+  Widget _buildAdvancedFootballSectionClean(AppUser user) {
+    if (!user.hasAdvancedProfile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Aucune information avancée n\'a encore été renseignée.',
+            style: TextStyle(color: AdColors.onSurfaceMuted),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            user.isPlayer
+                ? 'Ajoutez le gabarit, les postes, les statistiques et la disponibilité du joueur.'
+                : user.isClub
+                    ? 'Ajoutez la structure du club, les catégories et les besoins de recrutement.'
+                    : user.isRecruiter
+                        ? user.isAgent
+                            ? 'Ajoutez votre licence, votre pays de délivrance et vos zones de représentation.'
+                            : 'Ajoutez vos références de licence et vos zones d’intervention.'
+                        : 'Complétez les informations avancées du profil.',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ],
+      );
+    }
+
+    if (user.isPlayer) {
+      final p = user.playerProfile ?? {};
+      final physical = p['physical'] as Map<String, dynamic>? ?? {};
+      final height = physical['heightCm']?.toString();
+      final weight = physical['weightKg']?.toString();
+      final foot = _strongFootLabel(physical['strongFoot']?.toString());
+      final positions =
+          (p['positions'] is List) ? (p['positions'] as List).join(', ') : null;
+      final skills =
+          (p['skills'] is List) ? (p['skills'] as List).join(', ') : null;
+      final stats = p['stats'] as Map<String, dynamic>? ?? {};
+      final minutes = stats['minutes']?.toString();
+      final goals = stats['goals']?.toString();
+      final assists = stats['assists']?.toString();
+      final availability = p['availability'] as Map<String, dynamic>? ?? {};
+      final open = availability.containsKey('open')
+          ? (availability['open'] == true ? 'Oui' : 'Non')
+          : null;
+      final regions = (availability['regions'] is List)
+          ? (availability['regions'] as List).join(', ')
+          : null;
+
+      return Column(
+        children: [
+          _infoTile(
+            'Taille',
+            height == null ? null : '$height cm',
+            icon: Icons.height_outlined,
+          ),
+          _infoTile(
+            'Poids',
+            weight == null ? null : '$weight kg',
+            icon: Icons.monitor_weight_outlined,
+          ),
+          _infoTile('Pied préféré', foot, icon: Icons.sports_soccer_outlined),
+          _infoTile('Postes maîtrisés', positions,
+              icon: Icons.grid_view_rounded),
+          _infoTile('Qualités clés', skills, icon: Icons.star_outline_rounded),
+          const Divider(),
+          _infoTile(
+            'Temps de jeu cumulé',
+            minutes == null ? null : '$minutes min',
+            icon: Icons.timer_outlined,
+          ),
+          _infoTile('Buts inscrits', goals, icon: Icons.sports_score_outlined),
+          _infoTile('Passes décisives', assists,
+              icon: Icons.assistant_direction_outlined),
+          const Divider(),
+          _infoTile('Ouvert aux opportunités', open,
+              icon: Icons.public_outlined),
+          _infoTile('Zones ciblées', regions, icon: Icons.travel_explore),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              user.hasScoutReadyProfile
+                  ? 'Dossier scout prêt'
+                  : 'Dossier scout partiel',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: user.hasScoutReadyProfile
+                    ? const Color(0xFF2E7D32)
+                    : Colors.orange,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (user.isClub) {
+      final c = user.clubProfile ?? {};
+      final structureType = c['structureType']?.toString();
+      final categories = (c['categories'] is List)
+          ? (c['categories'] as List).join(', ')
+          : null;
+
+      String? needsText;
+      final needs = c['needs'];
+      if (needs is List && needs.isNotEmpty) {
+        needsText = needs
+            .map((e) {
+              if (e is Map) {
+                final pos = e['position']?.toString() ?? '';
+                final prio = e['priority']?.toString() ?? '';
+                return prio.isNotEmpty
+                    ? '$pos (${_priorityLabelClean(prio)})'
+                    : pos;
+              }
+              return e.toString();
+            })
+            .where((s) => s.trim().isNotEmpty)
+            .join(', ');
+      }
+
+      return Column(
+        children: [
+          _infoTile('Type de structure', structureType,
+              icon: Icons.account_tree_outlined),
+          _infoTile('Catégories encadrées', categories,
+              icon: Icons.groups_2_outlined),
+          _infoTile('Besoins de recrutement prioritaires', needsText,
+              icon: Icons.manage_search_outlined),
+        ],
+      );
+    }
+
+    if (user.isRecruiter) {
+      final a = user.agentProfile ?? {};
+      final license = a['licenseNumber']?.toString();
+      final country = a['licenseCountry']?.toString();
+      final zones =
+          (a['zones'] is List) ? (a['zones'] as List).join(', ') : null;
+
+      return Column(
+        children: [
+          _infoTile(
+            user.isAgent ? 'Numéro de licence' : 'Référence de licence ou d’agrément',
+            license,
+            icon: Icons.badge_outlined,
+          ),
+          _infoTile(
+            user.isAgent ? 'Pays de délivrance de la licence' : 'Pays de délivrance',
+            country,
+              icon: Icons.flag_circle_outlined),
+          _infoTile(
+            user.isAgent ? 'Zones de représentation' : 'Zones d’intervention',
+            zones,
+              icon: Icons.public_outlined),
+        ],
+      );
+    }
+
+    return const Text('Aucun profil avancé pour ce rôle.');
+  }
+
+  Widget _buildEvidenceSectionClean(AppUser user) {
+    final tiles = <Widget>[];
+
+    if (user.isPlayer) {
+      if (user.cvUrl != null) {
+        tiles.add(
+          ListTile(
+            leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+            title: const Text('Voir le CV'),
+            subtitle: const Text('CV au format PDF'),
+            onTap: () async {
+              final uri = Uri.parse(user.cvUrl!);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        );
+      } else {
+        tiles.add(const ListTile(
+          leading: Icon(Icons.picture_as_pdf_outlined),
+          title: Text('CV'),
+          subtitle: Text('Aucun CV renseigné'),
+        ));
+      }
+    }
+
+    return Column(children: tiles);
+  }
+
+  String _publicSectionTitleClean(AppUser user) {
+    if (user.isPlayer) return 'Fiche joueur';
+    if (user.isCoach) return 'Profil coach';
+    if (user.isClub) return 'Présentation du club';
+    if (user.isRecruiter) {
+      return user.isAgent
+          ? 'Références de représentation'
+          : 'Références professionnelles';
+    }
+    return 'Profil public';
+  }
+
+  String _advancedSectionTitleClean(AppUser user) {
+    if (user.isPlayer) return 'Dossier scout';
+    if (user.isClub) return 'Structure et recrutement';
+    if (user.isRecruiter) {
+      return user.isAgent
+          ? 'Licence et zones de représentation'
+          : 'Licence et zones d’intervention';
+    }
+    return 'Informations avancées';
+  }
+
+  String _priorityLabelClean(String value) {
+    switch (value.trim().toLowerCase()) {
+      case 'high':
+      case 'haute':
+        return 'haute priorité';
+      case 'medium':
+      case 'moyenne':
+        return 'priorité moyenne';
+      case 'low':
+      case 'basse':
+        return 'priorité basse';
+      default:
+        return value;
+    }
   }
 
   Widget _buildFollowMessageRow(AppUser user, {required bool canMessage}) {
@@ -909,261 +1297,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // =======================
-  // Sections (Base / Avancé / Preuves)
+  // Sections (Base / Avance / Preuves)
   // =======================
 
-  Widget _buildBaseFootballSection(AppUser user) {
-    final tiles = <Widget>[];
-
-    // Commun minimal
-    if (user.languages != null && user.languages!.isNotEmpty) {
-      tiles.add(
-        _infoTile('Langues', user.languages!.join(', ')),
-      );
-    }
-
-    tiles.add(_infoTile('Téléphone', user.phone));
-
-    if (user.isPlayer || user.isCoach) {
-      tiles.addAll([
-        _infoTile('Âge', user.age != null ? '${user.age} ans' : null,
-            icon: Icons.cake_outlined),
-        _infoTile('Position', user.position),
-        _infoTile('Club actuel', user.team),
-        _infoTile('Matchs joués', user.nombreDeMatchs?.toString()),
-        _infoTile('Buts', user.buts?.toString()),
-        _infoTile('Passes décisives', user.assistances?.toString()),
-      ]);
-    } else if (user.isClub) {
-      tiles.addAll([
-        _infoTile('Nom du club', user.nomClub),
-        _infoTile('Ligue', user.ligue),
-      ]);
-    } else if (user.isRecruiter) {
-      tiles.addAll([
-        _infoTile('Entreprise', user.entreprise),
-        _infoTile('Recrutements', user.nombreDeRecrutements?.toString()),
-      ]);
-    } else {
-      tiles.add(
-        _infoTile('Informations', 'Aucune information de base.'),
-      );
-    }
-
-    return Column(children: tiles);
-  }
-
-  Widget _buildAdvancedFootballSection(AppUser user) {
-    // Si pas encore rempli, on montre un résumé vide + conseil
-    if (!user.hasAdvancedProfile) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Ce profil n’a pas encore de données avancées.',
-            style: const TextStyle(color: AdColors.onSurfaceMuted),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            user.isPlayer
-                ? 'Ajoute taille, poids, pied fort, positions, stats et disponibilité.'
-                : user.isClub
-                    ? 'Ajoute structure, catégories et besoins.'
-                    : user.isRecruiter
-                        ? 'Ajoute licence et zones.'
-                        : 'Complète les informations avancées.',
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ],
-      );
-    }
-
-    // ======================
-    // JOUEUR
-    // ======================
-    if (user.isPlayer) {
-      final p = user.playerProfile ?? {};
-
-      // ---- Physical
-      final physical = p['physical'] as Map<String, dynamic>? ?? {};
-      final height = physical['heightCm']?.toString();
-      final weight = physical['weightKg']?.toString();
-      final foot = physical['strongFoot']?.toString();
-
-      // ---- Positions & skills
-      final positions =
-          (p['positions'] is List) ? (p['positions'] as List).join(', ') : null;
-
-      final skills =
-          (p['skills'] is List) ? (p['skills'] as List).join(', ') : null;
-
-      // ---- Stats
-      final stats = p['stats'] as Map<String, dynamic>? ?? {};
-      final minutes = stats['minutes']?.toString();
-
-      // ---- Availability
-      final availability = p['availability'] as Map<String, dynamic>? ?? {};
-      final open = availability.containsKey('open')
-          ? (availability['open'] == true ? 'Oui' : 'Non')
-          : null;
-
-      final regions = (availability['regions'] is List)
-          ? (availability['regions'] as List).join(', ')
-          : null;
-
-      return Column(
-        children: [
-          _infoTile('Taille (cm)', height),
-          _infoTile('Poids (kg)', weight),
-          _infoTile('Pied fort', foot),
-          _infoTile('Positions (avancé)', positions),
-          _infoTile('Compétences', skills),
-          const Divider(),
-          _infoTile('Minutes jouées', minutes),
-          const Divider(),
-          _infoTile('Disponible', open),
-          _infoTile('Régions', regions),
-          const SizedBox(height: 6),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              user.hasScoutReadyProfile
-                  ? 'Dossier scout prêt (Élite)'
-                  : 'Dossier scout partiel',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: user.hasScoutReadyProfile
-                    ? const Color(0xFF2E7D32)
-                    : Colors.orange,
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
-    // ======================
-    // CLUB
-    // ======================
-    if (user.isClub) {
-      final c = user.clubProfile ?? {};
-
-      final structureType = c['structureType']?.toString();
-      final categories = (c['categories'] is List)
-          ? (c['categories'] as List).join(', ')
-          : null;
-
-      String? needsText;
-      final needs = c['needs'];
-      if (needs is List && needs.isNotEmpty) {
-        needsText = needs
-            .map((e) {
-              if (e is Map) {
-                final pos = e['position']?.toString() ?? '';
-                final prio = e['priority']?.toString() ?? '';
-                return prio.isNotEmpty ? '$pos ($prio)' : pos;
-              }
-              return e.toString();
-            })
-            .where((s) => s.trim().isNotEmpty)
-            .join(', ');
-      }
-
-      return Column(
-        children: [
-          _infoTile('Structure', structureType),
-          _infoTile('Catégories', categories),
-          _infoTile('Besoins', needsText),
-        ],
-      );
-    }
-
-    // ======================
-    // AGENT / RECRUTEUR
-    // ======================
-    if (user.isRecruiter) {
-      final a = user.agentProfile ?? {};
-
-      final license = a['licenseNumber']?.toString();
-      final country = a['licenseCountry']?.toString();
-      final zones =
-          (a['zones'] is List) ? (a['zones'] as List).join(', ') : null;
-
-      return Column(
-        children: [
-          _infoTile('Licence', license),
-          _infoTile('Pays licence', country),
-          _infoTile('Zones', zones),
-        ],
-      );
-    }
-
-    return const Text('Aucun profil avancé pour ce rôle.');
-  }
-
-  Widget _buildEvidenceSection(AppUser user) {
-    final tiles = <Widget>[];
-    // CV joueur
-    if (user.isPlayer) {
-      if (user.cvUrl != null) {
-        tiles.add(
-          ListTile(
-            leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-            title: const Text('Voir le CV'),
-            subtitle: const Text('Document PDF'),
-            onTap: () async {
-              final uri = Uri.parse(user.cvUrl!);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
-            },
-          ),
-        );
-      } else {
-        tiles.add(const ListTile(
-          leading: Icon(Icons.picture_as_pdf_outlined),
-          title: Text('CV'),
-          subtitle: Text('Aucun CV ajouté'),
-        ));
-      }
-
-      // Performances (Map<String,double>)
-      if (user.performances != null && user.performances!.isNotEmpty) {
-        final perf = user.performances!;
-        final keys = perf.keys.toList()..sort();
-        final preview = keys.take(6).map((k) => '$k: ${perf[k]}').join(' • ');
-
-        tiles.add(
-          ListTile(
-            leading: const Icon(Icons.insights_outlined),
-            title: const Text('Performances'),
-            subtitle: Text(preview),
-          ),
-        );
-      } else {
-        tiles.add(const ListTile(
-          leading: Icon(Icons.insights_outlined),
-          title: Text('Performances'),
-          subtitle: Text('Non renseigné'),
-        ));
-      }
-    }
-
-    // Vidéos publiées (simple indicateur ici)
-    if (user.isPlayer) {
-      final hasVideos = (user.videosPubliees?.isNotEmpty ?? false);
-      tiles.add(
-        ListTile(
-          leading: const Icon(Icons.video_library_outlined),
-          title: const Text('Vidéos'),
-          subtitle: Text(
-            hasVideos ? 'Vidéos disponibles' : 'Aucune vidéo liée au profil',
-          ),
-        ),
-      );
-    }
-
-    return Column(children: tiles);
+  bool _shouldShowEvidenceSection(AppUser user) {
+    // A ce stade, seules les pièces joueur apportent une vraie preuve utile
+    // sur le profil public. Les comptes club / recruteur / agent restent plus
+    // lisibles sans un bloc vide ou redondant.
+    return user.isPlayer;
   }
 
   Widget _infoTile(String label, String? value, {IconData? icon}) {
@@ -1207,6 +1348,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  String _strongFootLabel(String? value) {
+    switch (value?.trim().toLowerCase()) {
+      case 'right':
+        return 'Droit';
+      case 'left':
+        return 'Gauche';
+      case 'both':
+        return 'Ambidextre';
+      default:
+        return value ?? '';
+    }
   }
 }
 
@@ -1299,7 +1453,7 @@ class _HeaderCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      user.role.toUpperCase(),
+                      _profileRoleLabel(user).toUpperCase(),
                       style: const TextStyle(
                         color: AdColors.onSurfaceMuted,
                         fontWeight: FontWeight.w700,
@@ -1314,6 +1468,7 @@ class _HeaderCard extends StatelessWidget {
                         _InfoPill(
                           icon: Icons.military_tech_outlined,
                           label: user.profileLevelLabel,
+                          style: _profileLevelStyle(user.profileLevelLabel),
                         ),
                         if (user.age != null)
                           _InfoPill(
@@ -1339,7 +1494,7 @@ class _HeaderCard extends StatelessWidget {
           ),
         ),
 
-        // Bouton photo positionné proprement, sans overflow
+        // Bouton photo positionne proprement, sans overflow
         if (isOwnProfile && !isReadOnly)
           Positioned(
             top: 10,
@@ -1352,39 +1507,6 @@ class _HeaderCard extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _StatsCard extends StatelessWidget {
-  final AppUser user;
-
-  const _StatsCard({required this.user});
-
-  @override
-  Widget build(BuildContext context) {
-    return _SectionCard(
-      title: 'Réseau',
-      icon: Icons.people_outline,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: [
-          _StatChip(
-            label: 'Abonnés',
-            value: user.followersList.length,
-            onTap: () => Get.to(
-              () => FollowListScreen(uid: user.uid, listType: 'followers'),
-            ),
-          ),
-          _StatChip(
-            label: 'Abonnements',
-            value: user.followingsList.length,
-            onTap: () => Get.to(
-              () => FollowListScreen(uid: user.uid, listType: 'followings'),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1510,29 +1632,42 @@ class _SectionCard extends StatelessWidget {
 class _InfoPill extends StatelessWidget {
   final String label;
   final IconData icon;
+  final _ProfileLevelStyle? style;
 
   const _InfoPill({
     required this.label,
     required this.icon,
+    this.style,
   });
 
   @override
   Widget build(BuildContext context) {
+    final resolvedStyle = style;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: AdColors.surfaceCard,
+        color: resolvedStyle?.backgroundColor ?? AdColors.surfaceCard,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AdColors.divider),
+        border: Border.all(
+          color: resolvedStyle?.borderColor ?? AdColors.divider,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: AdColors.brand),
+          Icon(
+            resolvedStyle?.icon ?? icon,
+            size: 18,
+            color: resolvedStyle?.foregroundColor ?? AdColors.brand,
+          ),
           const SizedBox(width: 6),
           Text(
             label,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: resolvedStyle?.foregroundColor,
+            ),
           ),
         ],
       ),

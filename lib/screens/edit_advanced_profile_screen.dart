@@ -36,6 +36,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
   AppUser get _user => widget.user;
   ProfileController get _profileController => widget.profileController;
 
+  bool get _isAgent => _user.isAgent;
+
   @override
   void initState() {
     super.initState();
@@ -86,9 +88,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
         return;
       }
 
-      Get.snackbar('Succès', 'Profil avancé mis à jour');
+      Get.snackbar('Succès', 'Informations avancées mises à jour');
       Navigator.of(context).pop(true);
-      return;
     } finally {
       if (mounted) {
         setState(() => _saving = false);
@@ -199,7 +200,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
             context: context,
             title: 'Dossier joueur',
             subtitle:
-                'Les informations sont séparées en deux sections pour rendre la modification plus claire.',
+                'Les informations sont réparties en deux volets pour vous aider à compléter votre profil sportif avec méthode.',
             icon: Icons.shield_outlined,
           ),
         ),
@@ -222,9 +223,9 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                 child: _buildSectionCard(
                   context: context,
-                  title: 'Profil sportif',
+                  title: 'Profil joueur',
                   subtitle:
-                      'Renseignez le gabarit, le pied fort, les positions et les points forts.',
+                      'Renseignez le gabarit, le pied préféré, les postes et les qualités fortes du joueur.',
                   child: PlayerAdvancedForm(
                     key: _playerProfileKey,
                     user: _user,
@@ -241,7 +242,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
                   context: context,
                   title: 'Dossier scout',
                   subtitle:
-                      'Ajoutez vos stats et votre disponibilité sans surcharger une seule page.',
+                      'Renseignez vos statistiques et votre disponibilité pour compléter votre dossier joueur.',
                   child: PlayerStatsAvailabilityForm(
                     key: _playerScoutKey,
                     user: _user,
@@ -263,6 +264,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
     BuildContext context, {
     required String title,
     required String subtitle,
+    required String sectionTitle,
+    required String sectionSubtitle,
     required IconData icon,
     required Widget child,
   }) {
@@ -278,9 +281,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
           ),
           _buildSectionCard(
             context: context,
-            title: 'Informations avancées',
-            subtitle:
-                'Un seul bouton de sauvegarde est conservé sur cet écran.',
+            title: sectionTitle,
+            subtitle: sectionSubtitle,
             child: child,
           ),
         ],
@@ -299,7 +301,10 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
         context,
         title: 'Profil club',
         subtitle:
-            'Centralisez la structure, les catégories et les besoins de recrutement.',
+            'Renseignez la structure du club, les catégories suivies et les priorités de recrutement pour présenter un cadre sportif clair.',
+        sectionTitle: 'Organisation sportive',
+        sectionSubtitle:
+            'Complétez les éléments qui aident les joueurs, agents et recruteurs à comprendre votre projet de club.',
         icon: Icons.groups_outlined,
         child: ClubAdvancedForm(
           key: _clubKey,
@@ -313,9 +318,15 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
     } else if (_user.isRecruiter) {
       body = _buildSingleSectionBody(
         context,
-        title: 'Profil recruteur',
-        subtitle:
-            'Mettez à jour vos références et vos zones d\'intervention dans un écran plus compact.',
+        title: _isAgent ? 'Profil agent' : 'Profil recruteur',
+        subtitle: _isAgent
+            ? 'Renseignez votre licence, votre pays d’exercice et vos zones d’intervention pour présenter un cadre de représentation crédible.'
+            : 'Renseignez vos références, votre zone de travail et vos informations de licence pour cadrer votre activité de recrutement.',
+        sectionTitle:
+            _isAgent ? 'Cadre de représentation' : 'Cadre de recrutement',
+        sectionSubtitle: _isAgent
+            ? 'Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre d’accompagnement.'
+            : 'Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre de recrutement.',
         icon: Icons.badge_outlined,
         child: AgentAdvancedForm(
           key: _agentKey,
@@ -332,7 +343,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profil avancé'),
+        title: const Text('Informations avancées'),
         centerTitle: true,
       ),
       body: SafeArea(child: body),
