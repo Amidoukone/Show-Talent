@@ -57,5 +57,40 @@ void main() {
             'FeatureControllerRegistry.releaseVideoController(widget.contextKey);'),
       );
     });
+
+    test('video share flow only records a completed share attempt', () {
+      final player =
+          File('lib/widgets/smart_video_player.dart').readAsStringSync();
+      final controller =
+          File('lib/controller/video_controller.dart').readAsStringSync();
+
+      expect(player, contains('ShareResultStatus.dismissed'));
+      expect(player, contains('ShareResultStatus.unavailable'));
+      expect(player, contains('widget.video.effectiveUrl.trim()'));
+      expect(player, contains('_buildShareText(shareUrl)'));
+      expect(player, contains('sharePositionOrigin: _sharePositionOrigin()'));
+      expect(player, contains('controller.partagerVideo(widget.video.id)'));
+      expect(
+          player, isNot(contains('ShareParams(text: \'Regarde cette vidéo :')));
+      expect(player, isNot(contains('(widget.video.shareCount + 1)')));
+
+      expect(controller, contains("'shareVideo'"));
+      expect(controller, contains("response.code == 'resource-exhausted'"));
+      expect(controller, contains('response.copyWith(toast: ToastLevel.info)'));
+    });
+
+    test('video playback failures keep a clear retry state', () {
+      final smartPlayer =
+          File('lib/widgets/smart_video_player.dart').readAsStringSync();
+      final tiktokPlayer =
+          File('lib/widgets/tiktok_video_player.dart').readAsStringSync();
+
+      expect(smartPlayer, contains("reason: 'runtime_value_error'"));
+      expect(smartPlayer, contains('Lecture interrompue. Réessayez.'));
+      expect(tiktokPlayer, contains('Widget _buildSafeState'));
+      expect(tiktokPlayer, contains('Préparation de la vidéo...'));
+      expect(tiktokPlayer, contains('FilledButton.icon'));
+      expect(tiktokPlayer, contains("label: const Text('Réessayer')"));
+    });
   });
 }

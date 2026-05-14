@@ -14,6 +14,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/screens/add_video.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/screens/success_toast.dart';
 import 'package:adfoot/services/feed_playback_metrics_service.dart';
 import 'package:adfoot/utils/video_cache_manager.dart' as custom_cache;
 import 'package:adfoot/widgets/tiktok_video_player.dart';
@@ -84,6 +85,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   bool _wakelockOn = false;
   bool _isDisposed = false;
   bool _isFollowActionLoading = false;
+  bool _isShareActionLoading = false;
 
   bool get _preferHls =>
       _vc.preferHlsPlayback && widget.video.hasAdaptiveHlsSource;
@@ -487,7 +489,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       return;
     }
     if (v.hasError) {
-      _becomePassive();
+      _stopFirstFrameWatchdog();
+      _stopStallWatchdog();
+      if (mounted && !_isDisposed) setState(() {});
+      if (_isActuallyVisible()) {
+        unawaited(_recoverPlayback(
+          forceMp4: _preferHls,
+          reason: 'runtime_value_error',
+        ));
+      } else {
+        _becomePassive();
+      }
       return;
     }
 
@@ -783,6 +795,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         final value = _safeValue(effectiveCtrl);
         final loadState =
             _videoManager.getLoadState(widget.contextKey, widget.videoUrl);
+        final errorMessage = _getErrorMessage(loadState) ??
+            (value?.hasError == true
+                ? 'Lecture interrompue. Réessayez.'
+                : null);
 
         return Stack(
           fit: StackFit.expand,
@@ -798,7 +814,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                   showProgressBar: widget.showProgressBar,
                   isBuffering: value?.isBuffering ?? false,
                   isLoading: loadState == VideoLoadState.loading,
-                  errorMessage: _getErrorMessage(loadState),
+                  errorMessage: errorMessage,
                   thumbnailUrl: widget.video.thumbnailUrl,
                   hasFirstFrame: _hasFirstFrame,
                   onTogglePlayPause: () {
@@ -844,7 +860,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     VideoController videoController,
     UserController userController,
   ) {
-    /// 🔥 utilisateur connecté (actions)
+    // Actions disponibles pour l'utilisateur connecte.
     final currentUser = userController.user;
     if (currentUser == null) return const SizedBox();
 
@@ -882,10 +898,13 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           ),
           const SizedBox(height: 24),
           _animatedActionButton(
-            icon: Icons.reply_rounded,
-            color: Colors.white,
+            icon: Icons.share_rounded,
+            color: _isShareActionLoading ? Colors.white70 : Colors.white,
             label: '${widget.video.shareCount}',
-            onTap: () => _shareVideo(videoController),
+            onTap: _isShareActionLoading
+                ? null
+                : () => _shareVideo(videoController),
+            isLoading: _isShareActionLoading,
           ),
           const SizedBox(height: 24),
           _animatedActionButton(
@@ -954,8 +973,9 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     required IconData icon,
     required Color color,
     required String label,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
     bool emphasized = false,
+    bool isLoading = false,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -980,18 +1000,27 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 ),
               ],
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: emphasized ? 32 : 30,
-              shadows: [
-                Shadow(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  blurRadius: 12,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
+            child: isLoading
+                ? SizedBox(
+                    width: emphasized ? 32 : 30,
+                    height: emphasized ? 32 : 30,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(color),
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    color: color,
+                    size: emphasized ? 32 : 30,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        blurRadius: 12,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
           ),
           const SizedBox(height: 6),
           Container(
@@ -1163,24 +1192,71 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   Future<void> _shareVideo(VideoController controller) async {
+    if (_isShareActionLoading) return;
+
+    final shareUrl = widget.video.effectiveUrl.trim();
+    if (shareUrl.isEmpty) {
+      showInfoToast('Lien vidéo indisponible pour le partage.');
+      return;
+    }
+
+    if (mounted && !_isDisposed) {
+      setState(() => _isShareActionLoading = true);
+    }
+
     try {
-      await SharePlus.instance.share(
-        ShareParams(text: 'Regarde cette vidéo : ${widget.video.videoUrl}'),
+      final result = await SharePlus.instance.share(
+        ShareParams(
+          text: _buildShareText(shareUrl),
+          title: 'Partager la vidéo',
+          subject: 'Vidéo Adfoot',
+          sharePositionOrigin: _sharePositionOrigin(),
+        ),
       );
+
+      switch (result.status) {
+        case ShareResultStatus.dismissed:
+          return;
+        case ShareResultStatus.success:
+        case ShareResultStatus.unavailable:
+          break;
+      }
+
       final response = await controller.partagerVideo(widget.video.id);
       if (response.success) {
-        widget.video.shareCount = response.data?['shareCount'] as int? ??
-            (widget.video.shareCount + 1);
+        final updatedCount = response.data?['shareCount'] as int?;
+        if (updatedCount != null) {
+          widget.video.shareCount = updatedCount;
+        }
         if (mounted && !_isDisposed) setState(() {});
       }
     } catch (_) {
-      Get.snackbar(
-        'Erreur',
-        'Partage impossible',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-      );
+      showErrorToast('Partage impossible pour le moment.');
+    } finally {
+      if (mounted && !_isDisposed) {
+        setState(() => _isShareActionLoading = false);
+      }
     }
+  }
+
+  String _buildShareText(String shareUrl) {
+    final caption = widget.video.caption.trim();
+    if (caption.isEmpty) {
+      return 'Regarde cette vidéo sur Adfoot.\n$shareUrl';
+    }
+
+    final shortCaption = caption.length > 120
+        ? '${caption.substring(0, 117).trim()}...'
+        : caption;
+    return 'Regarde cette vidéo sur Adfoot : $shortCaption\n$shareUrl';
+  }
+
+  Rect? _sharePositionOrigin() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is RenderBox && renderObject.hasSize) {
+      return renderObject.localToGlobal(Offset.zero) & renderObject.size;
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------------------

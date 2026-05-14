@@ -38,7 +38,7 @@ class TiktokVideoPlayer extends StatefulWidget {
 }
 
 class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
-  // Drag progress (utilisé pour l’UI du curseur / knob)
+  // Drag progress used by the progress knob UI.
   double _localDragProgress = 0.0;
   bool _isDragging = false;
   static const double _progressHorizontalPadding = 12.0;
@@ -73,7 +73,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   }
 
   // ---------------------------------------------------------------------------
-  // Sécurités centrales (controller peut disparaître si VideoManager dispose)
+  // Central safeguards: the controller can disappear after VideoManager dispose.
   // ---------------------------------------------------------------------------
 
   bool get _isControllerUsable {
@@ -81,8 +81,8 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     if (_isDisposed) return false;
     if (c == null) return false;
     try {
-      // IMPORTANT: ne pas toucher au player ID si plugin a déjà disposé.
-      // La lecture de value peut throw => catch.
+      // IMPORTANT: avoid touching the player ID after plugin disposal.
+      // Reading value can throw, so keep this guarded.
       final v = c.value;
       return v.isInitialized && !v.hasError;
     } catch (_) {
@@ -94,7 +94,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     if (!_isDisposed && mounted) setState(fn);
   }
 
-  // Clamp Duration (car Duration.clamp n’existe pas)
+  // Clamp Duration because Duration.clamp does not exist.
   Duration _clampDuration(Duration d, Duration min, Duration max) {
     if (d < min) return min;
     if (d > max) return max;
@@ -118,7 +118,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     });
   }
 
-  /// ✅ NOUVEAU : garantit que le timer est actif quand le player est utilisable
+  // Keeps the progress timer active while the player is usable.
   void _ensureProgressUpdaterRunning() {
     if (_progressTimer == null || !(_progressTimer?.isActive ?? false)) {
       _startProgressUpdater();
@@ -263,35 +263,25 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Si le controller devient invalide (ex: retour => dispose), on retourne une UI safe.
     if (!_isControllerUsable) {
       _stopAllTimers();
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          _buildThumbnailImage(),
-          if (widget.isLoading || widget.isBuffering)
-            const Center(child: CircularProgressIndicator(color: Colors.white)),
-        ],
+      return _buildSafeState(
+        showLoader: widget.isLoading || widget.isBuffering,
+        errorMessage: widget.errorMessage,
       );
     }
     if (_progressTimer == null || !(_progressTimer?.isActive ?? false)) {
       _startProgressUpdater();
     }
 
-    /// ✅ garantit progression active dès que le player est prêt
     _ensureProgressUpdaterRunning();
 
     final value = _safeValue();
     if (value == null) {
       _stopAllTimers();
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          _buildThumbnailImage(),
-          if (widget.isLoading || widget.isBuffering)
-            const Center(child: CircularProgressIndicator(color: Colors.white)),
-        ],
+      return _buildSafeState(
+        showLoader: widget.isLoading || widget.isBuffering,
+        errorMessage: widget.errorMessage,
       );
     }
     final bool hasError = value.hasError || widget.errorMessage != null;
@@ -315,7 +305,12 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
 
   Widget _buildContentLayer(
       VideoPlayerValue value, bool hasError, bool showLoader) {
-    if (hasError) return _buildErrorOverlay();
+    if (hasError) {
+      return _buildSafeState(
+        showLoader: false,
+        errorMessage: widget.errorMessage ?? 'Lecture vidéo indisponible.',
+      );
+    }
 
     return Stack(
       fit: StackFit.expand,
@@ -325,9 +320,65 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
               (_didRenderFrame(value) || widget.hasFirstFrame),
         ),
         if (value.isInitialized) _buildVideo(),
-        if (showLoader)
-          const Center(child: CircularProgressIndicator(color: Colors.white)),
+        if (showLoader) _buildLoadingIndicator(),
       ],
+    );
+  }
+
+  Widget _buildSafeState({
+    required bool showLoader,
+    String? errorMessage,
+  }) {
+    final hasError = errorMessage != null && errorMessage.trim().isNotEmpty;
+    return GestureDetector(
+      onTap: hasError ? null : _onTap,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _buildThumbnailImage(),
+          if (hasError)
+            _buildErrorOverlay(message: errorMessage)
+          else if (showLoader)
+            _buildLoadingIndicator(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator() {
+    return Center(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.42),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2.4,
+                ),
+              ),
+              SizedBox(height: 10),
+              Text(
+                'Préparation de la vidéo...',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -606,23 +657,38 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     );
   }
 
-  Widget _buildErrorOverlay() {
-    return Center(
+  Widget _buildErrorOverlay({String? message}) {
+    final resolvedMessage = (message != null && message.trim().isNotEmpty)
+        ? message.trim()
+        : 'Lecture vidéo indisponible.';
+
+    return Container(
+      color: Colors.black.withValues(alpha: 0.35),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 28),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
-          if (widget.errorMessage != null)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                widget.errorMessage!,
-                style: const TextStyle(color: Colors.white),
-              ),
+          const Icon(
+            Icons.play_disabled_rounded,
+            size: 46,
+            color: Colors.white,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            resolvedMessage,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
             ),
-          ElevatedButton(
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
             onPressed: widget.onRetry,
-            child: const Text('Réessayer'),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Réessayer'),
           ),
         ],
       ),

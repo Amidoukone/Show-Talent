@@ -527,22 +527,26 @@ class VideoController extends GetxController {
       offlineMessage: 'Connexion requise pour partager.',
     );
 
-    if (response.success) {
+    final resolved = response.code == 'resource-exhausted'
+        ? response.copyWith(toast: ToastLevel.info)
+        : response;
+
+    if (resolved.success) {
       _applyShareState(
         videoId,
-        response.data?['shareCount'] as int?,
+        resolved.data?['shareCount'] as int?,
       );
-    } else {
+    } else if (resolved.code != 'resource-exhausted') {
       unawaited(_logActionFailure(
         'shareVideo',
         videoId: videoId,
-        code: response.code,
-        message: response.message,
+        code: resolved.code,
+        message: resolved.message,
       ));
     }
 
-    response.showToast();
-    return response;
+    resolved.showToast();
+    return resolved;
   }
 
   // ------------------------------------------------------------------
