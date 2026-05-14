@@ -35,12 +35,13 @@ void main() {
       expect(chatScreen, contains('Suivi agence :'));
       expect(chatScreen, contains('Donner un retour sur la mise en relation'));
       expect(chatScreen, contains('_showContactFeedbackSheet'));
+      expect(chatScreen, contains('_resolveContactIntakeId'));
       expect(chatScreen, contains('ContactIntakeFeedbackService'));
       expect(conversationModel, contains('contactReason'));
       expect(conversationModel, contains('contextTitle'));
       expect(conversationModel, contains('latestParticipantFeedbackStatus'));
       expect(controller, contains('Notification message non bloquante: '));
-      expect(controller, contains('Erreur verification messagerie firebase :'));
+      expect(controller, contains('Erreur vérification messagerie firebase :'));
       expect(repository, contains('_recoverMissingGuidedContactIntake'));
       expect(repository, contains('_createAndLinkGuidedContactIntake'));
     });
@@ -57,13 +58,19 @@ void main() {
       ).readAsStringSync();
 
       expect(callableFile, contains('adminSetContactIntakeFollowUp'));
+      expect(callableFile,
+          contains('export const adminDeleteContactIntake = onCall'));
+      expect(callableFile, contains('adminDeleteContactIntakeConversation'));
       expect(callableFile, contains('submitContactIntakeFeedback'));
       expect(callableFile, contains('latestParticipantFeedbackStatus'));
       expect(callableFile, contains('agencyFollowUpStatus'));
+      expect(callableFile, contains('agencyFollowUpLabel(status)'));
       expect(callableFile,
           contains('recoverMissingContactIntakeFromConversation'));
       expect(callableFile, contains('conversationId'));
       expect(indexFile, contains('adminSetContactIntakeFollowUp'));
+      expect(indexFile, contains('adminDeleteContactIntake,'));
+      expect(indexFile, contains('adminDeleteContactIntakeConversation'));
       expect(indexFile, contains('submitContactIntakeFeedback'));
       expect(feedbackService,
           contains("httpsCallable('submitContactIntakeFeedback')"));

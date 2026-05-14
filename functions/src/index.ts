@@ -731,6 +731,8 @@ export {
   adminSetOfferStatus,
 } from "./admin_content_actions";
 export {
+  adminDeleteContactIntake,
+  adminDeleteContactIntakeConversation,
   adminSetContactIntakeFollowUp,
   submitContactIntakeFeedback,
 } from "./admin_contact_intake_actions";

@@ -39,7 +39,8 @@ void main() {
       expect(repository, contains('buildConversationId('));
       expect(
         repository,
-        contains('final existingConversationId = await findExistingConversationId('),
+        contains(
+            'final existingConversationId = await findExistingConversationId('),
       );
       expect(
         repository,
@@ -75,17 +76,57 @@ void main() {
       expect(controller, contains('await _chatRepository.deleteMessage('));
       expect(controller, contains('_syncUnreadFromConversation('));
       expect(controller, contains('Notification message non bloquante: '));
-      expect(controller, contains('Erreur verification messagerie firebase :'));
+      expect(controller, contains('Erreur vérification messagerie firebase :'));
 
       expect(repository, contains('await messageRef.delete();'));
-      expect(repository, contains("patch['lastMessage'] = FieldValue.delete();"));
+      expect(
+          repository, contains("patch['lastMessage'] = FieldValue.delete();"));
       expect(
         repository,
-        contains("patch['unreadCountByUser.\${deletedMessage.destinataireId}']"),
+        contains(
+            "patch['unreadCountByUser.\${deletedMessage.destinataireId}']"),
       );
 
-      expect(conversationScreen, contains('deleteConversation(conversationId)'));
+      expect(
+          conversationScreen, contains('deleteConversation(conversationId)'));
       expect(conversationScreen, contains('ValueKey("conv_\${user.uid}")'));
+    });
+
+    test('first contact and feedback sheets stay keyboard-safe', () {
+      final contactIntakeSheet =
+          File('lib/widgets/contact_intake_sheet.dart').readAsStringSync();
+      final chatScreen =
+          File('lib/screens/chat_screen.dart').readAsStringSync();
+      final adButton = File('lib/widgets/ad_button.dart').readAsStringSync();
+
+      expect(contactIntakeSheet, contains('ConstrainedBox('));
+      expect(contactIntakeSheet, contains('SingleChildScrollView('));
+      expect(
+        contactIntakeSheet,
+        contains(
+          'keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag',
+        ),
+      );
+      expect(
+        contactIntakeSheet,
+        contains('scrollPadding: const EdgeInsets.only(bottom: 120)'),
+      );
+
+      expect(chatScreen, contains('class MessageInputBar'));
+      expect(
+        chatScreen,
+        contains('minimum: const EdgeInsets.only(bottom: 8)'),
+      );
+      expect(
+        chatScreen,
+        contains(
+          'keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag',
+        ),
+      );
+      expect(chatScreen, isNot(contains('bottom > 0 ? bottom + 8')));
+
+      expect(adButton, contains('if (icon == null)'));
+      expect(adButton, isNot(contains('icon ?? const SizedBox.shrink()')));
     });
   });
 }

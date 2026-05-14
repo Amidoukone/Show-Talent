@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -247,7 +248,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          "Discussion en direct", // UI seulement (ne change pas ta logique)
+                          'Messagerie Adfoot',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: cs.onSurface.withValues(alpha: 0.75),
                             fontWeight: FontWeight.w700,
@@ -697,7 +698,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 note: feedbackNote,
               ),
             ],
-            if (conversation.contactIntakeId?.trim().isNotEmpty == true) ...[
+            if (_resolveContactIntakeId(conversation) != null) ...[
               const SizedBox(height: 10),
               Align(
                 alignment: Alignment.centerLeft,
@@ -716,8 +717,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  String? _resolveContactIntakeId(Conversation conversation) {
+    final linkedIntakeId = conversation.contactIntakeId?.trim();
+    if (linkedIntakeId != null && linkedIntakeId.isNotEmpty) {
+      return linkedIntakeId;
+    }
+
+    final conversationId = conversation.id.trim().isNotEmpty
+        ? conversation.id.trim()
+        : widget.conversationId.trim();
+    return conversationId.isEmpty ? null : conversationId;
+  }
+
   Future<void> _showContactFeedbackSheet(Conversation conversation) async {
-    final contactIntakeId = conversation.contactIntakeId?.trim();
+    final contactIntakeId = _resolveContactIntakeId(conversation);
     if (contactIntakeId == null || contactIntakeId.isEmpty) {
       return;
     }
@@ -790,7 +803,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         child: AdStatePanel(
           icon: Icons.chat_bubble_outline,
           title: 'Aucun message',
-          message: 'Commence la discussion avec $otherUserName.',
+          message: 'Envoyez un premier message à $otherUserName.',
         ),
       ),
     );
@@ -952,102 +965,112 @@ class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
     final cs = Theme.of(context).colorScheme;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = media.viewInsets.bottom;
+    final sheetMaxHeight = math.min(
+      media.size.height * 0.92,
+      math.max(280.0, media.size.height - bottomInset - media.padding.top - 12),
+    );
 
     return SafeArea(
       top: false,
       child: AnimatedPadding(
         duration: const Duration(milliseconds: 160),
         padding: EdgeInsets.only(bottom: bottomInset),
-        child: Container(
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: cs.outline.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(999),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: sheetMaxHeight),
+          child: Container(
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: cs.outline.withValues(alpha: 0.35),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Retour sur la mise en relation',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: cs.onSurface,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Ces informations restent structurées pour Adfoot. Elles aident à accompagner les talents sans ouvrir la discussion privée.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.72),
-                        height: 1.35,
-                      ),
-                ),
-                const SizedBox(height: 16),
-                ..._options.map((option) {
-                  final selected = _selectedStatus == option.status;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _FeedbackOptionTile(
-                      option: option,
-                      selected: selected,
-                      onTap: () {
-                        setState(() {
-                          _selectedStatus = option.status;
-                          _errorText = null;
-                        });
-                      },
-                    ),
-                  );
-                }),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _noteController,
-                  maxLines: 3,
-                  maxLength: 500,
-                  textInputAction: TextInputAction.newline,
-                  decoration: InputDecoration(
-                    labelText: 'Précision utile pour Adfoot',
-                    hintText:
-                        'Ex. : essai prévu samedi, recruteur sérieux, pas de réponse, comportement suspect...',
-                    errorText: _errorText,
-                    alignLabelWithHint: true,
+                  const SizedBox(height: 16),
+                  Text(
+                    'Retour sur la mise en relation',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface,
+                        ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Get.back<_ContactFeedbackDraft?>(),
-                        child: const Text('Annuler'),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Ces informations restent structurées pour Adfoot. Elles aident à accompagner les talents sans ouvrir la discussion privée.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.72),
+                          height: 1.35,
+                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  ..._options.map((option) {
+                    final selected = _selectedStatus == option.status;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _FeedbackOptionTile(
+                        option: option,
+                        selected: selected,
+                        onTap: () {
+                          setState(() {
+                            _selectedStatus = option.status;
+                            _errorText = null;
+                          });
+                        },
                       ),
+                    );
+                  }),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _noteController,
+                    maxLines: 3,
+                    maxLength: 500,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      labelText: 'Précision utile pour Adfoot',
+                      hintText:
+                          'Ex. : essai prévu samedi, recruteur sérieux, pas de réponse, comportement suspect...',
+                      errorText: _errorText,
+                      alignLabelWithHint: true,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: _submit,
-                        icon: const Icon(Icons.send_rounded),
-                        label: const Text('Envoyer le retour'),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Get.back<_ContactFeedbackDraft?>(),
+                          child: const Text('Annuler'),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _submit,
+                          icon: const Icon(Icons.send_rounded),
+                          label: const Text('Envoyer le retour'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1332,15 +1355,13 @@ class MessageInputBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-
     return SafeArea(
       top: false,
+      minimum: const EdgeInsets.only(bottom: 8),
       child: Padding(
-        padding: EdgeInsets.only(
+        padding: const EdgeInsets.only(
           left: 10,
           right: 10,
-          bottom: bottom > 0 ? bottom + 8 : 10,
           top: 8,
         ),
         child: Row(

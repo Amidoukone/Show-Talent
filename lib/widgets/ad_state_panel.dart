@@ -22,15 +22,15 @@ class AdStatePanel extends StatelessWidget {
 
   const AdStatePanel.empty({
     super.key,
-    this.title = 'Aucun element disponible',
-    this.message = 'Aucun contenu nest disponible pour le moment.',
+    this.title = 'Aucun élément disponible',
+    this.message = 'Aucun contenu n\'est disponible pour le moment.',
     this.action,
   }) : icon = Icons.inbox_outlined;
 
   const AdStatePanel.error({
     super.key,
-    this.title = 'Impossible de charger les donnees',
-    this.message = 'Reessayez dans quelques instants.',
+    this.title = 'Impossible de charger les données',
+    this.message = 'Réessayez dans quelques instants.',
     this.action,
   }) : icon = Icons.error_outline_rounded;
 

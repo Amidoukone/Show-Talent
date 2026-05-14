@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/widgets/ad_button.dart';
@@ -84,8 +86,13 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
     final cs = Theme.of(context).colorScheme;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final bottomInset = media.viewInsets.bottom;
+    final sheetMaxHeight = math.min(
+      media.size.height * 0.92,
+      math.max(280.0, media.size.height - bottomInset - media.padding.top - 12),
+    );
     final contextLabel = widget.context.normalizedTitle?.isNotEmpty == true
         ? '${widget.context.displayLabel} - ${widget.context.normalizedTitle}'
         : widget.context.displayLabel;
@@ -95,127 +102,142 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
       child: AnimatedPadding(
         duration: const Duration(milliseconds: 160),
         padding: EdgeInsets.only(bottom: bottomInset),
-        child: Container(
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: cs.outline.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Premier contact guidé',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: cs.onSurface,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Ce premier échange est cadré pour garder une mise en relation claire et suivie par Adfoot.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.72),
-                        height: 1.35,
-                      ),
-                ),
-                const SizedBox(height: 16),
-                _ContextCard(
-                  title: contextLabel,
-                  targetName: widget.otherUser.nom,
-                  targetRole: widget.otherUser.role,
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _selectedReason,
-                  decoration: const InputDecoration(
-                    labelText: 'Motif du contact',
-                  ),
-                  items: _reasonOptions()
-                      .map(
-                        (option) => DropdownMenuItem<String>(
-                          value: option.code,
-                          child: Text(option.label),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (value) {
-                    if (value == null) {
-                      return;
-                    }
-                    setState(() => _selectedReason = value);
-                  },
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _reasonOptions()
-                          .firstWhere(
-                            (option) => option.code == _selectedReason,
-                            orElse: () => _reasonOptions().last,
-                          )
-                          .description ??
-                      '',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.65),
-                      ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _introController,
-                  maxLength: 280,
-                  minLines: 3,
-                  maxLines: 5,
-                  textInputAction: TextInputAction.newline,
-                  decoration: const InputDecoration(
-                    labelText: 'Message d’introduction',
-                    hintText:
-                        'Expliquez clairement l’objet du contact et la prochaine étape souhaitée.',
-                    alignLabelWithHint: true,
-                  ),
-                  validator: (value) {
-                    final normalized = value?.trim() ?? '';
-                    if (normalized.length < 12) {
-                      return 'Ajoutez un message un peu plus précis.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                Row(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: sheetMaxHeight),
+          child: Container(
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: AdButton(
-                        label: 'Annuler',
-                        kind: AdButtonKind.outline,
-                        expanded: false,
-                        onPressed: () => Get.back<GuidedContactDraft?>(),
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: cs.outline.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: AdButton(
-                        label: 'Lancer le contact',
-                        expanded: false,
-                        onPressed: _submit,
+                    const SizedBox(height: 16),
+                    Text(
+                      'Premier contact guidé',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: cs.onSurface,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Cadrez l’échange avant l’ouverture de la conversation. Adfoot pourra suivre la mise en relation sans accéder aux messages privés.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.72),
+                            height: 1.35,
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    _ContextCard(
+                      title: contextLabel,
+                      targetName: widget.otherUser.nom,
+                      targetRole: widget.otherUser.role,
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: _selectedReason,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Motif du contact',
                       ),
+                      items: _reasonOptions()
+                          .map(
+                            (option) => DropdownMenuItem<String>(
+                              value: option.code,
+                              child: Text(
+                                option.label,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) {
+                        if (value == null) {
+                          return;
+                        }
+                        setState(() => _selectedReason = value);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _reasonOptions()
+                              .firstWhere(
+                                (option) => option.code == _selectedReason,
+                                orElse: () => _reasonOptions().last,
+                              )
+                              .description ??
+                          '',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.65),
+                            height: 1.28,
+                          ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _introController,
+                      maxLength: 280,
+                      minLines: 3,
+                      maxLines: 5,
+                      scrollPadding: const EdgeInsets.only(bottom: 120),
+                      textInputAction: TextInputAction.newline,
+                      decoration: const InputDecoration(
+                        labelText: 'Message d’introduction',
+                        hintText:
+                            'Présentez l’objet du contact et la prochaine étape souhaitée.',
+                        alignLabelWithHint: true,
+                      ),
+                      validator: (value) {
+                        final normalized = value?.trim() ?? '';
+                        if (normalized.length < 12) {
+                          return 'Ajoutez un message un peu plus précis.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: AdButton(
+                            label: 'Annuler',
+                            kind: AdButtonKind.outline,
+                            size: AdButtonSize.compact,
+                            expanded: false,
+                            onPressed: () => Get.back<GuidedContactDraft?>(),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: AdButton(
+                            label: 'Démarrer',
+                            size: AdButtonSize.compact,
+                            expanded: false,
+                            onPressed: _submit,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -266,6 +288,8 @@ class _ContextCard extends StatelessWidget {
         children: [
           Text(
             title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                   color: cs.onPrimaryContainer,
@@ -274,6 +298,8 @@ class _ContextCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'Contact visé : $targetName ($targetRole)',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: cs.onPrimaryContainer.withValues(alpha: 0.86),
                 ),

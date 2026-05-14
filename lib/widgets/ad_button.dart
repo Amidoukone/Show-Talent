@@ -47,17 +47,33 @@ class AdButton extends StatelessWidget {
         : (leading != null ? Icon(leading, size: 19) : null);
 
     if (kind == AdButtonKind.outline) {
+      if (icon == null) {
+        return OutlinedButton(
+          onPressed: loading ? null : onPressed,
+          style: _outlinedStyle(context),
+          child: Text(label),
+        );
+      }
+
       return OutlinedButton.icon(
         onPressed: loading ? null : onPressed,
-        icon: icon ?? const SizedBox.shrink(),
+        icon: icon,
         label: Text(label),
         style: _outlinedStyle(context),
       );
     }
 
+    if (icon == null) {
+      return ElevatedButton(
+        onPressed: loading ? null : onPressed,
+        style: _elevatedStyle(context),
+        child: Text(label),
+      );
+    }
+
     return ElevatedButton.icon(
       onPressed: loading ? null : onPressed,
-      icon: icon ?? const SizedBox.shrink(),
+      icon: icon,
       label: Text(label),
       style: _elevatedStyle(context),
     );

@@ -48,6 +48,22 @@ function normalizeAgencyFollowUpStatus(rawStatus: string): string {
   }
 }
 
+function agencyFollowUpLabel(status: string): string {
+  switch (normalizeAgencyFollowUpStatus(status)) {
+  case "reviewing":
+    return "En revue";
+  case "in_progress":
+    return "En accompagnement";
+  case "qualified":
+    return "Qualifié";
+  case "closed":
+    return "Clos";
+  case "new":
+  default:
+    return "Nouveau lead";
+  }
+}
+
 function normalizeParticipantFeedbackStatus(rawStatus: string): string {
   switch (rawStatus.trim().toLowerCase()) {
   case "discussion_started":
@@ -141,6 +157,127 @@ function readParticipants(
   return rawParticipants
     .map((value) => typeof value === "string" ? value.trim() : "")
     .filter((value) => value.length > 0);
+}
+
+async function deleteDocsInChunks(
+  refs: readonly FirebaseFirestore.DocumentReference[],
+): Promise<number> {
+  const chunkSize = 400;
+  for (let index = 0; index < refs.length; index += chunkSize) {
+    const batch = db.batch();
+    const chunk = refs.slice(index, index + chunkSize);
+    for (const ref of chunk) {
+      batch.delete(ref);
+    }
+    await batch.commit();
+  }
+
+  return refs.length;
+}
+
+async function clearActiveConversationForParticipants(
+  participants: readonly string[],
+  conversationId: string,
+): Promise<number> {
+  let clearedCount = 0;
+
+  for (const uid of participants) {
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      continue;
+    }
+
+    const userData = userSnap.data() ?? {};
+    if (readString(userData, "activeConversationId") !== conversationId) {
+      continue;
+    }
+
+    await userRef.set({
+      activeConversationId: null,
+      activeAt: fieldValue.serverTimestamp(),
+      updatedAt: fieldValue.serverTimestamp(),
+    }, {merge: true});
+    clearedCount += 1;
+  }
+
+  return clearedCount;
+}
+
+async function deleteLinkedContactIntakeConversation({
+  contactIntakeId,
+  intakeData,
+  requestedConversationId,
+}: {
+  contactIntakeId: string;
+  intakeData: FirebaseFirestore.DocumentData;
+  requestedConversationId: string;
+}): Promise<{
+  conversationId: string;
+  conversationDeleted: boolean;
+  deletedMessageCount: number;
+  activeConversationClearedCount: number;
+}> {
+  const linkedConversationId = readString(intakeData, "conversationId");
+  if (
+    requestedConversationId &&
+    linkedConversationId &&
+    requestedConversationId !== linkedConversationId
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "La conversation demandée ne correspond pas à cette mise en relation.",
+    );
+  }
+
+  const conversationId = linkedConversationId || requestedConversationId;
+  if (!conversationId) {
+    return {
+      conversationId: "",
+      conversationDeleted: false,
+      deletedMessageCount: 0,
+      activeConversationClearedCount: 0,
+    };
+  }
+
+  const conversationRef = db.collection("conversations").doc(conversationId);
+  const conversationSnap = await conversationRef.get();
+  if (!conversationSnap.exists) {
+    return {
+      conversationId,
+      conversationDeleted: false,
+      deletedMessageCount: 0,
+      activeConversationClearedCount: 0,
+    };
+  }
+
+  const conversationData = conversationSnap.data() ?? {};
+  const linkedIntakeId = readString(conversationData, "contactIntakeId");
+  if (linkedIntakeId && linkedIntakeId !== contactIntakeId) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Cette conversation est liée à une autre mise en relation.",
+    );
+  }
+
+  const participants = readParticipants(conversationData);
+  const messageSnapshot = await conversationRef.collection("messages").get();
+  const deletedMessageCount = await deleteDocsInChunks(
+    messageSnapshot.docs.map((doc) => doc.ref),
+  );
+  await conversationRef.delete();
+  const activeConversationClearedCount =
+    await clearActiveConversationForParticipants(
+      participants,
+      conversationId,
+    );
+
+  return {
+    conversationId,
+    conversationDeleted: true,
+    deletedMessageCount,
+    activeConversationClearedCount,
+  };
 }
 
 async function buildUserSnapshot(uid: string): Promise<Record<string, string>> {
@@ -519,7 +656,7 @@ export const adminSetContactIntakeFollowUp = onCall(
       return {
         success: true,
         code: "contact_intake_follow_up_updated",
-        message: `Suivi agence mis à jour : ${status}.`,
+        message: `Suivi agence mis à jour : ${agencyFollowUpLabel(status)}.`,
         data: {
           contactIntakeId,
           status,
@@ -543,6 +680,181 @@ export const adminSetContactIntakeFollowUp = onCall(
       throw new HttpsError(
         "internal",
         "Mise à jour du suivi agence impossible pour le moment.",
+      );
+    }
+  },
+);
+
+export const adminDeleteContactIntakeConversation = onCall(
+  LOW_CPU_CALLABLE_OPTIONS,
+  async (request) => {
+    const adminUid = await assertAdminCaller(request);
+    const contactIntakeId =
+      getString(request.data, "contactIntakeId") ||
+      getString(request.data, "id");
+    if (!contactIntakeId) {
+      throw new HttpsError(
+        "invalid-argument",
+        "contactIntakeId est requis.",
+      );
+    }
+
+    const requestedConversationId =
+      getOptionalString(request.data, "conversationId") ?? "";
+
+    try {
+      const intakeRef = db.collection("contact_intakes").doc(contactIntakeId);
+      const intakeSnap = await intakeRef.get();
+      if (!intakeSnap.exists) {
+        throw new HttpsError("not-found", "Mise en relation introuvable.");
+      }
+
+      const deletion = await deleteLinkedContactIntakeConversation({
+        contactIntakeId,
+        intakeData: intakeSnap.data() ?? {},
+        requestedConversationId,
+      });
+
+      await intakeRef.set({
+        conversationId: fieldValue.delete(),
+        conversationDeletedAt: fieldValue.serverTimestamp(),
+        conversationDeletedByUid: adminUid,
+        updatedAt: fieldValue.serverTimestamp(),
+      }, {merge: true});
+
+      logger.info("admin contact intake conversation deleted", {
+        contactIntakeId,
+        conversationId: deletion.conversationId || null,
+        deletedBy: adminUid,
+        conversationDeleted: deletion.conversationDeleted,
+        deletedMessageCount: deletion.deletedMessageCount,
+        activeConversationClearedCount:
+          deletion.activeConversationClearedCount,
+      });
+
+      return {
+        success: true,
+        code: deletion.conversationDeleted ?
+          "contact_intake_conversation_deleted" :
+          "contact_intake_conversation_not_found",
+        message: deletion.conversationDeleted ?
+          "Conversation supprimée. Le suivi admin reste conservé." :
+          "Aucune conversation active à supprimer. Le suivi admin a été mis à jour.",
+        data: {
+          contactIntakeId,
+          conversationId: deletion.conversationId || null,
+          deletedBy: adminUid,
+          conversationDeleted: deletion.conversationDeleted,
+          deletedMessageCount: deletion.deletedMessageCount,
+          activeConversationClearedCount:
+            deletion.activeConversationClearedCount,
+        },
+      };
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      logger.error("admin contact intake conversation deletion failed", {
+        contactIntakeId,
+        conversationId: requestedConversationId || null,
+        deletedBy: adminUid,
+        error,
+      });
+      throw new HttpsError(
+        "internal",
+        "Suppression de la conversation impossible pour le moment.",
+      );
+    }
+  },
+);
+
+export const adminDeleteContactIntake = onCall(
+  LOW_CPU_CALLABLE_OPTIONS,
+  async (request) => {
+    const adminUid = await assertAdminCaller(request);
+    const contactIntakeId =
+      getString(request.data, "contactIntakeId") ||
+      getString(request.data, "id");
+    if (!contactIntakeId) {
+      throw new HttpsError(
+        "invalid-argument",
+        "contactIntakeId est requis.",
+      );
+    }
+
+    const requestedConversationId =
+      getOptionalString(request.data, "conversationId") ?? "";
+
+    try {
+      const intakeRef = db.collection("contact_intakes").doc(contactIntakeId);
+      const intakeSnap = await intakeRef.get();
+      if (!intakeSnap.exists) {
+        return {
+          success: true,
+          code: "contact_intake_already_deleted",
+          message: "Mise en relation déjà supprimée.",
+          data: {
+            contactIntakeId,
+            deletedBy: adminUid,
+            alreadyDeleted: true,
+            conversationId: requestedConversationId || null,
+            conversationDeleted: false,
+            deletedMessageCount: 0,
+            activeConversationClearedCount: 0,
+          },
+        };
+      }
+
+      const deletion = await deleteLinkedContactIntakeConversation({
+        contactIntakeId,
+        intakeData: intakeSnap.data() ?? {},
+        requestedConversationId,
+      });
+
+      await intakeRef.delete();
+
+      logger.info("admin contact intake deleted", {
+        contactIntakeId,
+        conversationId: deletion.conversationId || null,
+        deletedBy: adminUid,
+        conversationDeleted: deletion.conversationDeleted,
+        deletedMessageCount: deletion.deletedMessageCount,
+        activeConversationClearedCount:
+          deletion.activeConversationClearedCount,
+      });
+
+      return {
+        success: true,
+        code: "contact_intake_deleted",
+        message: deletion.conversationDeleted ?
+          "Mise en relation supprimée avec sa conversation." :
+          "Mise en relation supprimée. Aucune conversation active n'était liée.",
+        data: {
+          contactIntakeId,
+          deletedBy: adminUid,
+          alreadyDeleted: false,
+          conversationId: deletion.conversationId || null,
+          conversationDeleted: deletion.conversationDeleted,
+          deletedMessageCount: deletion.deletedMessageCount,
+          activeConversationClearedCount:
+            deletion.activeConversationClearedCount,
+        },
+      };
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      logger.error("admin contact intake deletion failed", {
+        contactIntakeId,
+        conversationId: requestedConversationId || null,
+        deletedBy: adminUid,
+        error,
+      });
+      throw new HttpsError(
+        "internal",
+        "Suppression de la mise en relation impossible pour le moment.",
       );
     }
   },

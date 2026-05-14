@@ -86,8 +86,9 @@ class ChatController extends GetxController {
   }
 
   Future<void> _handleProtectedAccessDenied() async {
-    if (_protectedAccessDeniedHandler != null) {
-      await _protectedAccessDeniedHandler!();
+    final protectedAccessDeniedHandler = _protectedAccessDeniedHandler;
+    if (protectedAccessDeniedHandler != null) {
+      await protectedAccessDeniedHandler();
       return;
     }
 
@@ -96,9 +97,9 @@ class ChatController extends GetxController {
     }
 
     await Get.find<UserController>().handleProtectedAccessDenied(
-      fallbackTitle: 'Acces indisponible',
+      fallbackTitle: 'Accès indisponible',
       fallbackMessage:
-          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+          'Votre session a été fermée pour protéger votre compte. Veuillez vous reconnecter.',
     );
   }
 
@@ -268,7 +269,7 @@ class ChatController extends GetxController {
 
     if (currentUserId == otherUserId) {
       throw const ChatFlowException(
-        'Impossible de creer une conversation avec soi-meme.',
+        'Impossible de créer une conversation avec soi-même.',
       );
     }
 
@@ -282,16 +283,16 @@ class ChatController extends GetxController {
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ChatFlowException(
-          'Votre session a ete fermee. Veuillez vous reconnecter.',
+          'Votre session a été fermée. Veuillez vous reconnecter.',
         );
       }
       throw const ChatFlowException(
-        'Impossible de demarrer la conversation pour le moment.',
+        'Impossible de démarrer la conversation pour le moment.',
       );
     } catch (error) {
       debugPrint("Erreur creation conversation : $error");
       throw const ChatFlowException(
-        'Impossible de demarrer la conversation pour le moment.',
+        'Impossible de démarrer la conversation pour le moment.',
       );
     }
   }
@@ -337,7 +338,7 @@ class ChatController extends GetxController {
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ChatFlowException(
-          'Votre session a ete fermee. Veuillez vous reconnecter.',
+          'Votre session a été fermée. Veuillez vous reconnecter.',
         );
       }
       throw const ChatFlowException(
@@ -376,7 +377,7 @@ class ChatController extends GetxController {
         normalizedSenderId.isEmpty ||
         normalizedRecipientId.isEmpty) {
       throw const ChatFlowException(
-        'Session de messagerie invalide. Merci de reessayer.',
+        'Session de messagerie invalide. Merci de réessayer.',
       );
     }
 
@@ -388,7 +389,7 @@ class ChatController extends GetxController {
 
     if (normalizedContent.length > 2000) {
       throw const ChatFlowException(
-        'Le message depasse la limite autorisee (2000 caracteres).',
+        'Le message dépasse la limite autorisée (2000 caractères).',
       );
     }
 
@@ -400,7 +401,7 @@ class ChatController extends GetxController {
         );
         if (!canSend) {
           throw const ChatFlowException(
-            'L\'envoi de messages est desactive pour cette conversation.',
+            'L\'envoi de messages est désactivé pour cette conversation.',
           );
         }
       }
@@ -467,16 +468,16 @@ class ChatController extends GetxController {
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ChatFlowException(
-          'Votre session a ete fermee. Veuillez vous reconnecter.',
+          'Votre session a été fermée. Veuillez vous reconnecter.',
         );
       }
       throw const ChatFlowException(
-        'Envoi impossible pour le moment. Verifiez votre connexion.',
+        'Envoi impossible pour le moment. Vérifiez votre connexion.',
       );
     } catch (error) {
       debugPrint("Erreur envoi message : $error");
       throw const ChatFlowException(
-        'Envoi impossible pour le moment. Merci de reessayer.',
+        'Envoi impossible pour le moment. Merci de réessayer.',
       );
     }
   }
@@ -491,7 +492,7 @@ class ChatController extends GetxController {
         recipientId: recipientId,
       );
     } on FirebaseException catch (error) {
-      debugPrint("Erreur verification messagerie firebase : $error");
+      debugPrint("Erreur vérification messagerie firebase : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }

@@ -69,22 +69,28 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               child: const Icon(Icons.messenger_outline, size: 22),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Conversations",
-                  style: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  "Messages sécurisés et synchronisés",
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: cs.onSurface.withValues(alpha: 0.6),
-                    fontWeight: FontWeight.w600,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Conversations',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w800),
                   ),
-                ),
-              ],
+                  Text(
+                    'Messages et mises en relation',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: cs.onSurface.withValues(alpha: 0.6),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -102,7 +108,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         backgroundColor: cs.primary,
         icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
         label: const Text(
-          "Nouveau",
+          'Nouveau',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
         elevation: 3,
@@ -565,7 +571,7 @@ class _EmptyState extends StatelessWidget {
         child: AdStatePanel.empty(
           title: 'Aucune conversation',
           message:
-              'Démarre une discussion avec un utilisateur pour voir tes conversations ici.',
+              'Démarrez une discussion avec un utilisateur pour retrouver vos échanges ici.',
           action: FilledButton.icon(
             onPressed: onNewChat,
             icon: const Icon(Icons.chat_bubble_outline),
