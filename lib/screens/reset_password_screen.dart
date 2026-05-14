@@ -65,7 +65,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       );
 
       AdFeedback.success(
-        'Succes',
+        'Succès',
         'Mot de passe reinitialise avec succes.',
       );
 
@@ -83,7 +83,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     } catch (_) {
       AdFeedback.error(
         'Reinitialisation impossible',
-        'Une erreur inattendue est survenue. Veuillez reessayer.',
+        'Une erreur inattendue est survenue. Veuillez réessayer.',
       );
     } finally {
       if (mounted) {

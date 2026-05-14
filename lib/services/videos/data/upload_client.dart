@@ -321,7 +321,7 @@ class UploadClient {
 
         if (attempt == _maxChunkRetries) {
           throw UploadClientException(
-            'Echec upload $uploadLabel apres $_maxChunkRetries tentatives: '
+            'Échec upload $uploadLabel après $_maxChunkRetries tentatives: '
             '${_describeError(error)}.',
             statusCode: lastStatusCode,
           );
@@ -421,7 +421,7 @@ class UploadClient {
             _extractLastByte(response.headers.value('range'));
         if (lastPersistedByte < chunkStart) {
           throw const UploadClientException(
-            'Reponse 308 invalide pendant l\'upload video.',
+            'Réponse 308 invalide pendant l’upload vidéo.',
           );
         }
         uploadedBytes = lastPersistedByte + 1;
@@ -473,7 +473,7 @@ class UploadClient {
     CancelToken? cancelToken,
   }) async {
     if (ticket.isExpired) {
-      throw const UploadClientException('Lien miniature expire.');
+      throw const UploadClientException('Lien miniature expiré.');
     }
 
     final totalBytes = await _readValidFileLength(
@@ -506,7 +506,7 @@ class UploadClient {
             _extractLastByte(response.headers.value('range'));
         if (lastPersistedByte < chunkStart) {
           throw const UploadClientException(
-            'Reponse 308 invalide pendant l\'upload miniature.',
+            'Réponse 308 invalide pendant l’upload miniature.',
           );
         }
         uploadedBytes = lastPersistedByte + 1;

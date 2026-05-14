@@ -129,7 +129,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   padding: EdgeInsets.all(16),
                   child: AdStatePanel.error(
                     title: 'Session invalide',
-                    message: 'Utilisateur non connecte.',
+                    message: 'Utilisateur non connecté.',
                   ),
                 ),
               );
@@ -191,7 +191,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   if (otherUserId.isEmpty) {
                     return _InfoCard(
                       title: "Utilisateur inconnu",
-                      subtitle: "Impossible d'identifier l'autre participant.",
+                      subtitle: "Impossible d’identifier l’autre participant.",
                       icon: Icons.help_outline,
                     );
                   }
@@ -281,8 +281,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     try {
       await chatController.deleteConversation(conversationId);
       AdFeedback.success(
-        'Conversation supprimee',
-        'La conversation a ete supprimee avec succes.',
+        'Conversation supprimée',
+        'La conversation a été supprimée avec succès.',
       );
     } catch (e) {
       AdFeedback.error(
@@ -565,7 +565,7 @@ class _EmptyState extends StatelessWidget {
         child: AdStatePanel.empty(
           title: 'Aucune conversation',
           message:
-              'Demarre une discussion avec un utilisateur pour voir tes conversations ici.',
+              'Démarre une discussion avec un utilisateur pour voir tes conversations ici.',
           action: FilledButton.icon(
             onPressed: onNewChat,
             icon: const Icon(Icons.chat_bubble_outline),

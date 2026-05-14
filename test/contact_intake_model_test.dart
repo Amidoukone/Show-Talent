@@ -35,7 +35,7 @@ void main() {
     test('normalizes labels for reasons and context types', () {
       expect(
         ContactIntake.reasonLabel(ContactReasonCode.opportunity),
-        'Opportunite',
+        'Opportunité',
       );
       expect(
         ContactIntake.reasonLabel('unknown'),
@@ -63,7 +63,7 @@ void main() {
       );
       expect(
         ContactIntake.agencyFollowUpLabel(AgencyFollowUpStatus.qualified),
-        'Qualifie',
+        'Qualifié',
       );
       expect(
         ContactIntake.agencyFollowUpLabel('unknown'),

@@ -8,6 +8,7 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/message_converstion.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/services/contact_intake_feedback_service.dart';
 import '../controller/chat_controller.dart';
 import '../models/user.dart';
 import '../widgets/ad_dialogs.dart';
@@ -66,6 +67,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final ChatController chatController = Get.find<ChatController>();
   final UserController _userController = Get.find<UserController>();
   final AuthSessionService _authSessionService = AuthSessionService();
+  final ContactIntakeFeedbackService _feedbackService =
+      ContactIntakeFeedbackService();
   final TextEditingController messageController = TextEditingController();
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _listScroll = ScrollController();
@@ -83,6 +86,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _readSyncInFlight = false;
   static const Duration _readSyncThrottle = Duration(seconds: 2);
   bool _isSendingMessage = false;
+  bool _isSubmittingFeedback = false;
 
   // ✅ Petit cache UI : regroupe l'affichage des dates
   String? _lastDateHeaderKey;
@@ -161,7 +165,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         body: const Center(
           child: AdStatePanel.error(
             title: 'Session invalide',
-            message: 'Utilisateur non connecte.',
+            message: 'Utilisateur non connecté.',
           ),
         ),
       );
@@ -444,13 +448,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       await chatController.deleteMessage(widget.conversationId, message.id);
       AdFeedback.success(
-        'Message supprime',
-        'Le message a ete supprime avec succes.',
+        'Message supprimé',
+        'Le message a été supprimé avec succès.',
       );
     } catch (e) {
       AdFeedback.error(
         'Erreur',
-        'Echec de la suppression du message : $e',
+        'Échec de la suppression du message : $e',
       );
     }
   }
@@ -522,7 +526,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (!canSend) {
       AdFeedback.warning(
         'Messages indisponibles',
-        "L'envoi de messages est desactive pour cette conversation.",
+        "L’envoi de messages est désactivé pour cette conversation.",
       );
       return;
     }
@@ -549,7 +553,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     } catch (_) {
       AdFeedback.error(
         'Envoi impossible',
-        'Le message n\'a pas pu etre envoye. Merci de reessayer.',
+        'Le message n’a pas pu être envoyé. Merci de réessayer.',
       );
     } finally {
       if (mounted) {
@@ -631,6 +635,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       conversation.agencyFollowUpStatus ?? '',
     );
     final contextTitle = conversation.contextTitle?.trim();
+    final feedbackLabel = conversation.hasParticipantFeedback
+        ? ContactIntakeFeedbackStatus.label(
+            conversation.latestParticipantFeedbackStatus,
+          )
+        : null;
+    final feedbackNote = conversation.latestParticipantFeedbackNote?.trim();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -646,7 +656,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Premier contact cadre',
+              'Premier contact cadré',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w900,
                     color: cs.onSecondaryContainer,
@@ -664,7 +674,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 4),
             Text(
-              'Motif: $reasonLabel. Adfoot garde ce premier echange dans le circuit officiel.',
+              'Motif : $reasonLabel. Adfoot garde ce premier échange dans le circuit officiel.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: cs.onSecondaryContainer.withValues(alpha: 0.82),
                     height: 1.3,
@@ -673,17 +683,80 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             if (followUpStatus != AgencyFollowUpStatus.newLead) ...[
               const SizedBox(height: 4),
               Text(
-                'Suivi agence: $followUpLabel.',
+                'Suivi agence : $followUpLabel.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: cs.onSecondaryContainer.withValues(alpha: 0.82),
                       fontWeight: FontWeight.w700,
                     ),
               ),
             ],
+            if (feedbackLabel != null) ...[
+              const SizedBox(height: 8),
+              _FeedbackSignalPill(
+                label: 'Retour utilisateur : $feedbackLabel',
+                note: feedbackNote,
+              ),
+            ],
+            if (conversation.contactIntakeId?.trim().isNotEmpty == true) ...[
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _isSubmittingFeedback
+                      ? null
+                      : () => _showContactFeedbackSheet(conversation),
+                  icon: const Icon(Icons.assignment_turned_in_outlined),
+                  label: const Text('Donner un retour sur la mise en relation'),
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showContactFeedbackSheet(Conversation conversation) async {
+    final contactIntakeId = conversation.contactIntakeId?.trim();
+    if (contactIntakeId == null || contactIntakeId.isEmpty) {
+      return;
+    }
+
+    final draft = await showModalBottomSheet<_ContactFeedbackDraft>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ContactFeedbackSheet(
+        initialStatus: conversation.latestParticipantFeedbackStatus,
+        initialNote: conversation.latestParticipantFeedbackNote,
+      ),
+    );
+    if (draft == null) {
+      return;
+    }
+
+    setState(() => _isSubmittingFeedback = true);
+    try {
+      final result = await _feedbackService.submitFeedback(
+        contactIntakeId: contactIntakeId,
+        conversationId: widget.conversationId,
+        status: draft.status,
+        note: draft.note,
+      );
+
+      if (result.success) {
+        AdFeedback.success(
+          'Retour enregistré',
+          'Merci. Ce signal aide Adfoot à mieux suivre cette opportunité.',
+        );
+      } else {
+        AdFeedback.error('Retour impossible', result.message);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmittingFeedback = false);
+      }
+    }
   }
 
   Widget _datePill({required String label}) {
@@ -718,6 +791,350 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           icon: Icons.chat_bubble_outline,
           title: 'Aucun message',
           message: 'Commence la discussion avec $otherUserName.',
+        ),
+      ),
+    );
+  }
+}
+
+class _FeedbackSignalPill extends StatelessWidget {
+  const _FeedbackSignalPill({
+    required this.label,
+    this.note,
+  });
+
+  final String label;
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: cs.surface.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSecondaryContainer,
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          if (note?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 4),
+            Text(
+              note!.trim(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSecondaryContainer.withValues(alpha: 0.78),
+                    height: 1.25,
+                  ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactFeedbackDraft {
+  const _ContactFeedbackDraft({
+    required this.status,
+    required this.note,
+  });
+
+  final String status;
+  final String note;
+}
+
+class _ContactFeedbackSheet extends StatefulWidget {
+  const _ContactFeedbackSheet({
+    this.initialStatus,
+    this.initialNote,
+  });
+
+  final String? initialStatus;
+  final String? initialNote;
+
+  @override
+  State<_ContactFeedbackSheet> createState() => _ContactFeedbackSheetState();
+}
+
+class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
+  final TextEditingController _noteController = TextEditingController();
+  late String _selectedStatus;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedStatus = ContactIntakeFeedbackStatus.normalize(
+      widget.initialStatus,
+    );
+    _noteController.text = widget.initialNote?.trim() ?? '';
+  }
+
+  @override
+  void dispose() {
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  bool get _requiresNote {
+    return _selectedStatus == ContactIntakeFeedbackStatus.issueReported ||
+        _selectedStatus == ContactIntakeFeedbackStatus.trialScheduled ||
+        _selectedStatus == ContactIntakeFeedbackStatus.opportunitySerious;
+  }
+
+  List<_FeedbackOption> get _options => const <_FeedbackOption>[
+        _FeedbackOption(
+          status: ContactIntakeFeedbackStatus.noResponse,
+          title: 'Pas encore de réponse',
+          description: 'La conversation existe mais rien de concret encore.',
+          icon: Icons.hourglass_empty_rounded,
+        ),
+        _FeedbackOption(
+          status: ContactIntakeFeedbackStatus.discussionStarted,
+          title: 'Discussion engagée',
+          description: 'Un échange utile a commencé entre les deux parties.',
+          icon: Icons.forum_outlined,
+        ),
+        _FeedbackOption(
+          status: ContactIntakeFeedbackStatus.trialScheduled,
+          title: 'Essai / rendez-vous prévu',
+          description: 'Une date, un essai ou un appel concret est prévu.',
+          icon: Icons.event_available_outlined,
+        ),
+        _FeedbackOption(
+          status: ContactIntakeFeedbackStatus.opportunitySerious,
+          title: 'Opportunité sérieuse',
+          description: 'La piste semble crédible pour la suite du talent.',
+          icon: Icons.workspace_premium_outlined,
+        ),
+        _FeedbackOption(
+          status: ContactIntakeFeedbackStatus.notRelevant,
+          title: 'Non pertinent',
+          description: 'La mise en relation ne correspond finalement pas.',
+          icon: Icons.block_outlined,
+        ),
+        _FeedbackOption(
+          status: ContactIntakeFeedbackStatus.issueReported,
+          title: 'Problème signalé',
+          description: 'Comportement suspect, abus, promesse floue ou risque.',
+          icon: Icons.report_problem_outlined,
+        ),
+      ];
+
+  void _submit() {
+    final note = _noteController.text.trim();
+    if (_requiresNote && note.length < 8) {
+      setState(() {
+        _errorText = 'Ajoutez une note courte pour contextualiser ce retour.';
+      });
+      return;
+    }
+
+    Get.back<_ContactFeedbackDraft>(
+      result: _ContactFeedbackDraft(
+        status: _selectedStatus,
+        note: note,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return SafeArea(
+      top: false,
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 160),
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: Container(
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: cs.outline.withValues(alpha: 0.35),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Retour sur la mise en relation',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Ces informations restent structurées pour Adfoot. Elles aident à accompagner les talents sans ouvrir la discussion privée.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.72),
+                        height: 1.35,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                ..._options.map((option) {
+                  final selected = _selectedStatus == option.status;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _FeedbackOptionTile(
+                      option: option,
+                      selected: selected,
+                      onTap: () {
+                        setState(() {
+                          _selectedStatus = option.status;
+                          _errorText = null;
+                        });
+                      },
+                    ),
+                  );
+                }),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _noteController,
+                  maxLines: 3,
+                  maxLength: 500,
+                  textInputAction: TextInputAction.newline,
+                  decoration: InputDecoration(
+                    labelText: 'Précision utile pour Adfoot',
+                    hintText:
+                        'Ex. : essai prévu samedi, recruteur sérieux, pas de réponse, comportement suspect...',
+                    errorText: _errorText,
+                    alignLabelWithHint: true,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Get.back<_ContactFeedbackDraft?>(),
+                        child: const Text('Annuler'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _submit,
+                        icon: const Icon(Icons.send_rounded),
+                        label: const Text('Envoyer le retour'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeedbackOption {
+  const _FeedbackOption({
+    required this.status,
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
+
+  final String status;
+  final String title;
+  final String description;
+  final IconData icon;
+}
+
+class _FeedbackOptionTile extends StatelessWidget {
+  const _FeedbackOptionTile({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _FeedbackOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: selected
+          ? cs.primaryContainer.withValues(alpha: 0.6)
+          : cs.surfaceContainerHighest.withValues(alpha: 0.42),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected
+                  ? cs.primary.withValues(alpha: 0.45)
+                  : cs.outline.withValues(alpha: 0.24),
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                option.icon,
+                color:
+                    selected ? cs.primary : cs.onSurface.withValues(alpha: 0.7),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      option.title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: cs.onSurface,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      option.description,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSurface.withValues(alpha: 0.68),
+                            height: 1.25,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected) Icon(Icons.check_circle, color: cs.primary),
+            ],
+          ),
         ),
       ),
     );

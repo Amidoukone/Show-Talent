@@ -61,7 +61,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
               padding: EdgeInsets.all(16),
               child: AdStatePanel.error(
                 title: 'Session invalide',
-                message: 'Utilisateur non connecte.',
+                message: 'Utilisateur non connecté.',
               ),
             ),
           );
@@ -119,15 +119,15 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     return const AdStatePanel.empty(
                       title: 'Aucun utilisateur disponible',
                       message:
-                          'Il n\'y a actuellement aucun utilisateur avec qui discuter.',
+                          'Il n’y a actuellement aucun utilisateur avec qui discuter.',
                     );
                   }
 
                   if (filteredUsers.isEmpty) {
                     return const AdStatePanel.empty(
-                      title: 'Aucun resultat',
+                      title: 'Aucun résultat',
                       message:
-                          'Aucun utilisateur ne correspond a votre recherche.',
+                          'Aucun utilisateur ne correspond à votre recherche.',
                     );
                   }
 
@@ -152,7 +152,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                             if (resolvedCurrentUser == null) {
                               AdFeedback.error(
                                 'Erreur',
-                                'Utilisateur non connecte.',
+                                'Utilisateur non connecté.',
                               );
                               return;
                             }
@@ -162,8 +162,8 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                               AdFeedback.warning(
                                 'Messages indisponibles',
                                 !resolvedCurrentUser.allowMessages
-                                    ? 'Vous avez desactive les messages.'
-                                    : 'Cet utilisateur a desactive les messages.',
+                                    ? 'Vous avez désactivé les messages.'
+                                    : 'Cet utilisateur a désactivé les messages.',
                               );
                               return;
                             }
@@ -194,7 +194,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                                 currentUser: resolvedCurrentUser,
                                 otherUser: user,
                                 context: ContactContext.discovery(
-                                  title: 'Selection utilisateur',
+                                  title: 'Sélection utilisateur',
                                 ),
                               ),
                               isScrollControlled: true,
@@ -216,8 +216,8 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
 
                             if (result.createdIntake) {
                               AdFeedback.info(
-                                'Contact enregistre',
-                                'Le premier contact a ete cadre et transmis via Adfoot.',
+                                'Contact enregistré',
+                                'Le premier contact a été cadré et transmis via Adfoot.',
                               );
                             }
 
@@ -247,7 +247,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                           } catch (_) {
                             AdFeedback.error(
                               'Erreur',
-                              'Impossible de demarrer la conversation.',
+                              'Impossible de démarrer la conversation.',
                             );
                           } finally {
                             if (mounted) {
@@ -333,7 +333,7 @@ class _UserCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      user.role.isNotEmpty ? user.role : 'Role non renseigne',
+                      user.role.isNotEmpty ? user.role : 'Rôle non renseigné',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodySmall?.copyWith(

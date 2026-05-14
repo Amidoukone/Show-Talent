@@ -167,7 +167,7 @@ class CallableAuthGuard {
 
       throw _DirectCallableException(
         code: _httpStatusToFunctionsCode(response.statusCode),
-        message: 'Reponse serveur invalide pendant l appel $callableName.',
+        message: 'Réponse serveur invalide pendant l’appel $callableName.',
       );
     } on FormatException {
       final statusCode = response.statusCode;

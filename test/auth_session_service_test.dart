@@ -25,7 +25,7 @@ void main() {
     );
     expect(
       UserAccessIssue.disabledAccount.loginMessage,
-      contains('desactive'),
+      contains('désactivé'),
     );
   });
 

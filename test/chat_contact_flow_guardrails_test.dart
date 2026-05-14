@@ -31,10 +31,14 @@ void main() {
           File('lib/services/chat/chat_repository.dart').readAsStringSync();
 
       expect(chatScreen, contains('watchConversationById'));
-      expect(chatScreen, contains('Premier contact cadre'));
-      expect(chatScreen, contains('Suivi agence:'));
+      expect(chatScreen, contains('Premier contact cadré'));
+      expect(chatScreen, contains('Suivi agence :'));
+      expect(chatScreen, contains('Donner un retour sur la mise en relation'));
+      expect(chatScreen, contains('_showContactFeedbackSheet'));
+      expect(chatScreen, contains('ContactIntakeFeedbackService'));
       expect(conversationModel, contains('contactReason'));
       expect(conversationModel, contains('contextTitle'));
+      expect(conversationModel, contains('latestParticipantFeedbackStatus'));
       expect(controller, contains('Notification message non bloquante: '));
       expect(controller, contains('Erreur verification messagerie firebase :'));
       expect(repository, contains('_recoverMissingGuidedContactIntake'));
@@ -48,10 +52,22 @@ void main() {
         'functions/src/admin_contact_intake_actions.ts',
       ).readAsStringSync();
       final indexFile = File('functions/src/index.ts').readAsStringSync();
+      final feedbackService = File(
+        'lib/services/contact_intake_feedback_service.dart',
+      ).readAsStringSync();
 
       expect(callableFile, contains('adminSetContactIntakeFollowUp'));
+      expect(callableFile, contains('submitContactIntakeFeedback'));
+      expect(callableFile, contains('latestParticipantFeedbackStatus'));
       expect(callableFile, contains('agencyFollowUpStatus'));
+      expect(callableFile,
+          contains('recoverMissingContactIntakeFromConversation'));
+      expect(callableFile, contains('conversationId'));
       expect(indexFile, contains('adminSetContactIntakeFollowUp'));
+      expect(indexFile, contains('submitContactIntakeFeedback'));
+      expect(feedbackService,
+          contains("httpsCallable('submitContactIntakeFeedback')"));
+      expect(feedbackService, contains('normalizedCode'));
     });
   });
 }

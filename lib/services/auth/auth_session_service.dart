@@ -37,7 +37,7 @@ extension AuthSessionFailureMessage on UserAccessIssue {
       case UserAccessIssue.adminPortalOnly:
         return 'Ce compte est reserve au portail d administration Adfoot.';
       case UserAccessIssue.disabledAccount:
-        return 'Ce compte a ete desactive. Contactez l equipe Adfoot.';
+        return 'Ce compte a été désactivé. Contactez l’équipe Adfoot.';
     }
   }
 }
@@ -108,9 +108,9 @@ class AuthSessionService {
   final FirebaseFunctions _functions;
   static const Duration _verificationCallableTimeout = Duration(seconds: 8);
   static const Duration _signInSessionResolveTimeout = Duration(seconds: 15);
-  static const String _accessUnavailableTitle = 'Acces indisponible';
+  static const String _accessUnavailableTitle = 'Accès indisponible';
   static const String _accessUnavailableMessage =
-      'Impossible de verifier votre acces pour le moment. Reessayez dans quelques instants.';
+      'Impossible de vérifier votre accès pour le moment. Réessayez dans quelques instants.';
 
   static bool isDisabledAuthFailure(FirebaseAuthException error) {
     return error.code == 'user-disabled';
@@ -412,7 +412,7 @@ class AuthSessionService {
         ) ??
         refreshed;
     if (refreshed == null) {
-      throw const AuthFlowException('Session introuvable apres connexion.');
+      throw const AuthFlowException('Session introuvable après connexion.');
     }
 
     return resolveSessionSafely(
@@ -479,7 +479,7 @@ class AuthSessionService {
     final user = _auth.currentUser;
     if (user == null) {
       throw const AuthFlowException(
-        'Utilisateur non connecte. Veuillez vous reconnecter.',
+        'Utilisateur non connecté. Veuillez vous reconnecter.',
       );
     }
 
@@ -515,14 +515,14 @@ class AuthSessionService {
     final user = _auth.currentUser;
     if (user == null) {
       throw const AuthFlowException(
-        'Utilisateur non connecte. Veuillez vous reconnecter.',
+        'Utilisateur non connecté. Veuillez vous reconnecter.',
       );
     }
 
     final refreshed = await _refreshCurrentUserAfterVerification();
     if (refreshed == null) {
       throw const AuthFlowException(
-        'Session expiree. Veuillez vous reconnecter.',
+        'Session expirée. Veuillez vous reconnecter.',
       );
     }
 
@@ -543,7 +543,7 @@ class AuthSessionService {
       }
 
       throw const AuthFlowException(
-        'Votre e-mail n est pas encore detecte comme verifie. Apres avoir clique sur le lien, attendez quelques secondes puis reessayez.',
+        'Votre e-mail n’est pas encore détecté comme vérifié. Après avoir cliqué sur le lien, attendez quelques secondes puis réessayez.',
       );
     }
 
@@ -721,7 +721,7 @@ class AuthSessionService {
           destination: AuthSessionDestination.login,
           firebaseUser: firebaseUser,
           failure: UserAccessIssue.disabledAccount,
-          failureTitle: 'Compte desactive',
+          failureTitle: 'Compte désactivé',
           failureMessage: AuthErrorMapper.toMessage(error),
         );
       }

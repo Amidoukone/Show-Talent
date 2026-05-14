@@ -31,8 +31,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   int? _sentAtMs;
 
   static const String _loginAfterVerificationMessage =
-      'Si la page web indique que votre e-mail a ete verifie, '
-      'retournez a la connexion puis reconnectez-vous pour activer le compte.';
+      'Si la page web indique que votre e-mail a été vérifié, '
+      'retournez à la connexion puis reconnectez-vous pour activer le compte.';
 
   @override
   void initState() {
@@ -57,13 +57,13 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         (email != null && email.isNotEmpty) ? 'Adresse : $email\n\n' : '';
 
     return emailSent
-        ? 'Un e-mail de verification a ete envoye.\n\n$emailLine'
-            'Ouvre ta boite de reception et clique sur le lien.\n'
-            'Si tu ne le vois pas, verifie aussi Spam / Indesirables / Promotions.\n\n'
-            'Une fois l e-mail verifie dans le navigateur, reviens ici puis retourne a la connexion.'
-        : 'Verifie ta boite mail et clique sur le lien de verification.\n\n$emailLine'
-            'Si tu ne le vois pas, verifie aussi Spam / Indesirables / Promotions.\n\n'
-            'Une fois l e-mail verifie dans le navigateur, reviens ici puis retourne a la connexion.';
+        ? 'Un e-mail de vérification a été envoyé.\n\n$emailLine'
+            'Ouvre ta boîte de réception et clique sur le lien.\n'
+            'Si tu ne le vois pas, vérifie aussi Spam / Indésirables / Promotions.\n\n'
+            'Une fois l’e-mail vérifié dans le navigateur, reviens ici puis retourne à la connexion.'
+        : 'Vérifie ta boîte mail et clique sur le lien de vérification.\n\n$emailLine'
+            'Si tu ne le vois pas, vérifie aussi Spam / Indésirables / Promotions.\n\n'
+            'Une fois l’e-mail vérifié dans le navigateur, reviens ici puis retourne à la connexion.';
   }
 
   Future<void> _goBackToLogin() async {
@@ -94,9 +94,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       AppRoutes.login,
       arguments: <String, dynamic>{
         if (email != null && email.isNotEmpty) 'prefillEmail': email,
-        'sessionNoticeTitle': 'E-mail verifie',
+        'sessionNoticeTitle': 'E-mail vérifié',
         'sessionNoticeMessage': message ??
-            'Votre e-mail a ete verifie. Connectez-vous pour continuer.',
+            'Votre e-mail a été vérifié. Connectez-vous pour continuer.',
         'sessionNoticeKind': 'success',
       },
     );
@@ -121,7 +121,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           if (mounted) {
             setState(() {
               _message =
-                  'Le lien de verification est invalide ou expire. Demandez un nouveau lien.';
+                  'Le lien de vérification est invalide ou expiré. Demandez un nouveau lien.';
             });
           }
         }
@@ -185,8 +185,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       });
 
       AdFeedback.success(
-        'Lien envoye',
-        'Un e-mail de verification a ete renvoye.',
+        'Lien envoyé',
+        'Un e-mail de vérification a été renvoyé.',
       );
     } on AuthFlowException catch (error) {
       if (!mounted) {
@@ -213,8 +213,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AdAppBar(
-        title: 'Verification e-mail',
-        subtitle: 'Securisation du compte Adfoot',
+        title: 'Vérification e-mail',
+        subtitle: 'Sécurisation du compte Adfoot',
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: (_isProcessing || _resending) ? null : _goBackToLogin,
@@ -226,8 +226,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           padding: const EdgeInsets.all(24),
           child: _isProcessing
               ? const AdStatePanel.loading(
-                  title: 'Verification en cours',
-                  message: 'Preparation du parcours de verification...',
+                  title: 'Vérification en cours',
+                  message: 'Préparation du parcours de vérification...',
                 )
               : ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
@@ -247,7 +247,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                         AdButton(
                           onPressed: _goBackToLogin,
                           leading: Icons.login_outlined,
-                          label: 'Retour a la connexion',
+                          label: 'Retour à la connexion',
                         ),
                         const SizedBox(height: 12),
                         AdButton(
@@ -255,7 +255,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           loading: _resending,
                           leading: Icons.email_outlined,
                           kind: AdButtonKind.tonal,
-                          label: 'Renvoyer le lien de verification',
+                          label: 'Renvoyer le lien de vérification',
                         ),
                       ],
                     ),

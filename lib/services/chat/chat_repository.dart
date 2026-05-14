@@ -110,18 +110,37 @@ class ChatRepository {
     required String currentUserId,
     required String otherUserId,
   }) async {
-    final conversationId = buildConversationId(currentUserId, otherUserId);
+    final normalizedCurrentUserId = currentUserId.trim();
+    final normalizedOtherUserId = otherUserId.trim();
+    if (normalizedCurrentUserId.isEmpty ||
+        normalizedOtherUserId.isEmpty ||
+        normalizedCurrentUserId == normalizedOtherUserId) {
+      return null;
+    }
+
+    final conversationId = buildConversationId(
+      normalizedCurrentUserId,
+      normalizedOtherUserId,
+    );
     final snapshot = await _conversationsCollection
-        .where('utilisateurIds', arrayContains: currentUserId)
+        .where('utilisateurIds', arrayContains: normalizedCurrentUserId)
         .get();
 
+    String? legacyConversationId;
     for (final doc in snapshot.docs) {
+      final participantIds = _normalizeParticipantIds(doc.data());
+      if (!participantIds.contains(normalizedOtherUserId)) {
+        continue;
+      }
+
       if (doc.id == conversationId) {
         return doc.id;
       }
+
+      legacyConversationId ??= doc.id;
     }
 
-    return null;
+    return legacyConversationId;
   }
 
   Future<GuidedConversationStartResult> startGuidedConversation({
@@ -148,7 +167,7 @@ class ChatRepository {
     );
     if (existingConversationId != null) {
       final recoveredIntake = await _recoverMissingGuidedContactIntake(
-        conversationRef: conversationRef,
+        conversationRef: _conversationsCollection.doc(existingConversationId),
         currentUser: currentUser,
         otherUser: otherUser,
         context: normalizedContext,
@@ -244,14 +263,12 @@ class ChatRepository {
     if (existingIntakeId != null && existingIntakeId.isNotEmpty) {
       final existingIntake =
           await _contactIntakesCollection.doc(existingIntakeId).get();
-      if (!existingIntake.exists) {
-        return null;
+      if (existingIntake.exists) {
+        return ContactIntake.fromMap(
+          existingIntake.data() ?? <String, dynamic>{},
+          fallbackId: existingIntake.id,
+        );
       }
-
-      return ContactIntake.fromMap(
-        existingIntake.data() ?? <String, dynamic>{},
-        fallbackId: existingIntake.id,
-      );
     }
 
     return _createAndLinkGuidedContactIntake(
@@ -328,7 +345,7 @@ class ChatRepository {
       conversationRef,
       <String, dynamic>{
         'lastMessage': message.contenu,
-        'lastMessageDate': Timestamp.now(),
+        'lastMessageDate': Timestamp.fromDate(message.dateEnvoi),
         'updatedAt': FieldValue.serverTimestamp(),
         'unreadCountByUser.$recipientId': FieldValue.increment(1),
         'unreadCountByUser.$senderId': 0,
@@ -529,12 +546,48 @@ class ChatRepository {
   }
 
   static Map<String, dynamic> buildUserSnapshot(AppUser user) {
+    final organization = _resolveUserOrganization(user);
+
     return <String, dynamic>{
       'uid': user.uid,
       'nom': user.nom,
+      'displayName': user.nom,
       'role': user.role,
       'photoProfil': user.photoProfil,
+      if (user.email.trim().isNotEmpty) 'email': user.email.trim(),
+      if (organization != null) 'organisation': organization,
     };
+  }
+
+  static String? _resolveUserOrganization(AppUser user) {
+    for (final value in <String?>[
+      user.nomClub,
+      user.entreprise,
+      user.clubActuel,
+      user.team,
+    ]) {
+      final normalized = value?.trim();
+      if (normalized != null && normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  static List<String> _normalizeParticipantIds(Map<String, dynamic> data) {
+    final rawIds = data['utilisateurIds'];
+    if (rawIds is Iterable) {
+      return rawIds
+          .map((value) => value.toString().trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+    }
+
+    final ids = <String>[
+      data['utilisateur1Id']?.toString().trim() ?? '',
+      data['utilisateur2Id']?.toString().trim() ?? '',
+    ]..removeWhere((value) => value.isEmpty);
+    return ids;
   }
 
   static String buildGuidedFirstMessage({
@@ -545,16 +598,16 @@ class ChatRepository {
     final reasonLabel = ContactIntake.reasonLabel(reasonCode);
     final parts = <String>[
       'Premier contact Adfoot.',
-      'Motif: $reasonLabel.',
+      'Motif : $reasonLabel.',
     ];
 
     final contextLabel = context.displayLabel;
     final contextTitle = context.normalizedTitle;
     if (contextLabel.isNotEmpty && contextTitle != null) {
-      parts.add('Contexte: $contextLabel - $contextTitle.');
+      parts.add('Contexte : $contextLabel - $contextTitle.');
     } else if (contextLabel.isNotEmpty &&
         context.normalizedType != ContactContextType.none) {
-      parts.add('Contexte: $contextLabel.');
+      parts.add('Contexte : $contextLabel.');
     }
 
     if (introMessage.trim().isNotEmpty) {

@@ -1,7 +1,7 @@
 import 'package:adfoot/widgets/ad_feedback.dart';
 
 void showSuccessToast(String message) {
-  AdFeedback.success('Succes', message);
+  AdFeedback.success('Succès', message);
 }
 
 void showErrorToast(String message) {

@@ -64,7 +64,7 @@ class AccountCleanupService {
       if (error.code == 'requires-recent-login') {
         throw const AccountCleanupException(
           message:
-              'Verification de securite requise. Merci de vous reconnecter puis de relancer la suppression.',
+              'Vérification de sécurité requise. Merci de vous reconnecter puis de relancer la suppression.',
           requiresRecentLogin: true,
         );
       }
@@ -88,7 +88,7 @@ class AccountCleanupService {
     if (lastSignIn == null) {
       throw const AccountCleanupException(
         message:
-            'Verification de securite requise. Merci de vous reconnecter puis de relancer la suppression.',
+            'Vérification de sécurité requise. Merci de vous reconnecter puis de relancer la suppression.',
         requiresRecentLogin: true,
       );
     }
@@ -97,7 +97,7 @@ class AccountCleanupService {
     if (age > _maxDeleteAuthSessionAge) {
       throw const AccountCleanupException(
         message:
-            'Session de securite expiree. Merci de vous reconnecter puis de relancer la suppression.',
+            'Session de sécurité expirée. Merci de vous reconnecter puis de relancer la suppression.',
         requiresRecentLogin: true,
       );
     }

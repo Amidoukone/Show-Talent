@@ -111,10 +111,9 @@ class EventDetailsScreen extends StatelessWidget {
           child: CircleAvatar(
             radius: 26,
             backgroundColor: AdColors.surfaceCardAlt,
-            backgroundImage:
-                hasPhoto
-                    ? NetworkImage(currentEvent.organisateur.photoProfil)
-                    : null,
+            backgroundImage: hasPhoto
+                ? NetworkImage(currentEvent.organisateur.photoProfil)
+                : null,
             child: hasPhoto
                 ? null
                 : const Icon(Icons.person, color: Colors.white70),
@@ -422,8 +421,8 @@ class EventDetailsScreen extends StatelessWidget {
       AdFeedback.warning(
         'Messages indisponibles',
         !current.allowMessages
-            ? 'Vous avez desactive les messages.'
-            : 'Cet utilisateur a desactive les messages.',
+            ? 'Vous avez désactivé les messages.'
+            : 'Cet utilisateur a désactivé les messages.',
       );
       return;
     }
@@ -466,8 +465,8 @@ class EventDetailsScreen extends StatelessWidget {
 
       if (result.createdIntake) {
         AdFeedback.info(
-          'Contact enregistre',
-          'Le premier contact a ete cadre et transmis via Adfoot.',
+          'Contact enregistré',
+          'Le premier contact a été cadré et transmis via Adfoot.',
         );
       }
 
@@ -483,7 +482,7 @@ class EventDetailsScreen extends StatelessWidget {
     } catch (_) {
       AdFeedback.error(
         'Erreur',
-        'Impossible de demarrer la conversation pour le moment.',
+        'Impossible de démarrer la conversation pour le moment.',
       );
     }
   }
@@ -644,8 +643,8 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                         AdFeedback.warning(
                           'Messages indisponibles',
                           !current.allowMessages
-                              ? 'Vous avez desactive les messages.'
-                              : 'Cet utilisateur a desactive les messages.',
+                              ? 'Vous avez désactivé les messages.'
+                              : 'Cet utilisateur a désactivé les messages.',
                         );
                         return;
                       }
@@ -690,8 +689,8 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
 
                         if (result.createdIntake) {
                           AdFeedback.info(
-                            'Contact enregistre',
-                            'Le premier contact a ete cadre et transmis via Adfoot.',
+                            'Contact enregistré',
+                            'Le premier contact a été cadré et transmis via Adfoot.',
                           );
                         }
 
@@ -707,7 +706,7 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                       } catch (_) {
                         AdFeedback.error(
                           'Erreur',
-                          'Impossible de demarrer la conversation pour le moment.',
+                          'Impossible de démarrer la conversation pour le moment.',
                         );
                       }
                     },

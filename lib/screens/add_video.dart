@@ -43,7 +43,7 @@ class _AddVideoState extends State<AddVideo> {
       if (pickedFile == null) {
         AdFeedback.info(
           'Info',
-          'Aucune video selectionnee.',
+          'Aucune vidéo sélectionnée.',
         );
         return;
       }
@@ -56,14 +56,14 @@ class _AddVideoState extends State<AddVideo> {
       // Gestion permission/refus galerie
       AdFeedback.warning(
         'Autorisation requise',
-        "Veuillez autoriser l'acces a la galerie pour selectionner une video.\n($e)",
+        "Veuillez autoriser l’accès à la galerie pour sélectionner une vidéo.\n($e)",
         duration: const Duration(seconds: 5),
       );
     } catch (e) {
       isLoading.value = false;
       AdFeedback.error(
         'Erreur',
-        'Echec lors de la selection : $e',
+        'Échec lors de la sélection : $e',
       );
     }
   }

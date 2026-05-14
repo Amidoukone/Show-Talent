@@ -128,7 +128,7 @@ class _FollowListScreenState extends State<FollowListScreen> {
                     padding: EdgeInsets.all(16),
                     child: AdStatePanel.error(
                       title: 'Chargement impossible',
-                      message: 'Une erreur est survenue. Veuillez reessayer.',
+                      message: 'Une erreur est survenue. Veuillez réessayer.',
                     ),
                   ),
                 ],

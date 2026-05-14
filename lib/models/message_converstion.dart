@@ -58,6 +58,12 @@ class Conversation {
   String? initiatedByRole;
   String? agencyFollowUpStatus;
   String? contactIntakeId;
+  String? latestParticipantFeedbackStatus;
+  String? latestParticipantFeedbackNote;
+  String? latestParticipantFeedbackByUid;
+  String? latestParticipantFeedbackByRole;
+  String? suggestedAgencyFollowUpStatus;
+  DateTime? latestParticipantFeedbackAt;
   DateTime? createdAt;
   int unreadMessagesCount;
 
@@ -78,6 +84,12 @@ class Conversation {
     this.initiatedByRole,
     this.agencyFollowUpStatus,
     this.contactIntakeId,
+    this.latestParticipantFeedbackStatus,
+    this.latestParticipantFeedbackNote,
+    this.latestParticipantFeedbackByUid,
+    this.latestParticipantFeedbackByRole,
+    this.suggestedAgencyFollowUpStatus,
+    this.latestParticipantFeedbackAt,
     this.createdAt,
     this.unreadMessagesCount = 0,
   });
@@ -101,6 +113,14 @@ class Conversation {
       'initiatedByRole': initiatedByRole,
       'agencyFollowUpStatus': agencyFollowUpStatus,
       'contactIntakeId': contactIntakeId,
+      'latestParticipantFeedbackStatus': latestParticipantFeedbackStatus,
+      'latestParticipantFeedbackNote': latestParticipantFeedbackNote,
+      'latestParticipantFeedbackByUid': latestParticipantFeedbackByUid,
+      'latestParticipantFeedbackByRole': latestParticipantFeedbackByRole,
+      'suggestedAgencyFollowUpStatus': suggestedAgencyFollowUpStatus,
+      'latestParticipantFeedbackAt': latestParticipantFeedbackAt != null
+          ? Timestamp.fromDate(latestParticipantFeedbackAt!)
+          : null,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
     };
   }
@@ -133,6 +153,18 @@ class Conversation {
       agencyFollowUpStatus:
           _normalizeNullableString(map['agencyFollowUpStatus']),
       contactIntakeId: _normalizeNullableString(map['contactIntakeId']),
+      latestParticipantFeedbackStatus:
+          _normalizeNullableString(map['latestParticipantFeedbackStatus']),
+      latestParticipantFeedbackNote:
+          _normalizeNullableString(map['latestParticipantFeedbackNote']),
+      latestParticipantFeedbackByUid:
+          _normalizeNullableString(map['latestParticipantFeedbackByUid']),
+      latestParticipantFeedbackByRole:
+          _normalizeNullableString(map['latestParticipantFeedbackByRole']),
+      suggestedAgencyFollowUpStatus:
+          _normalizeNullableString(map['suggestedAgencyFollowUpStatus']),
+      latestParticipantFeedbackAt:
+          _parseNullableDate(map['latestParticipantFeedbackAt']),
       createdAt: _parseNullableDate(map['createdAt']),
       unreadMessagesCount: 0,
     );
@@ -147,6 +179,10 @@ class Conversation {
     return (contactReason?.trim().isNotEmpty ?? false) ||
         (contextType?.trim().isNotEmpty ?? false) ||
         (contextTitle?.trim().isNotEmpty ?? false);
+  }
+
+  bool get hasParticipantFeedback {
+    return latestParticipantFeedbackStatus?.trim().isNotEmpty == true;
   }
 
   static DateTime? _parseNullableDate(dynamic value) {

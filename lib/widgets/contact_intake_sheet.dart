@@ -39,11 +39,13 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
   }
 
   String _defaultReason() {
-    if (widget.currentUser.canPublishOpportunities && widget.otherUser.isPlayer) {
+    if (widget.currentUser.canPublishOpportunities &&
+        widget.otherUser.isPlayer) {
       return ContactReasonCode.opportunity;
     }
 
-    if (widget.currentUser.isPlayer && widget.otherUser.canPublishOpportunities) {
+    if (widget.currentUser.isPlayer &&
+        widget.otherUser.canPublishOpportunities) {
       return ContactReasonCode.application;
     }
 
@@ -54,28 +56,28 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
     return const <_ReasonOption>[
       _ReasonOption(
         code: ContactReasonCode.opportunity,
-        label: 'Opportunite',
-        description: 'Prise de contact autour d une opportunite concrete.',
+        label: 'Opportunité',
+        description: 'Prise de contact autour d’une opportunité concrète.',
       ),
       _ReasonOption(
         code: ContactReasonCode.trial,
-        label: 'Essai / Evaluation',
-        description: 'Invitation, observation ou mise a l essai.',
+        label: 'Essai / Évaluation',
+        description: 'Invitation, observation ou mise à l’essai.',
       ),
       _ReasonOption(
         code: ContactReasonCode.application,
-        label: 'Candidature / Presentation',
-        description: 'Presentation de profil ou manifestation d interet.',
+        label: 'Candidature / Présentation',
+        description: 'Présentation de profil ou manifestation d’intérêt.',
       ),
       _ReasonOption(
         code: ContactReasonCode.followUp,
         label: 'Suivi',
-        description: 'Relance ou suivi d un echange deja engage.',
+        description: 'Relance ou suivi d’un échange déjà engagé.',
       ),
       _ReasonOption(
         code: ContactReasonCode.information,
         label: 'Information',
-        description: 'Question ou demande de precision.',
+        description: 'Question ou demande de précision.',
       ),
     ];
   }
@@ -117,7 +119,7 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Premier contact guide',
+                  'Premier contact guidé',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w900,
                         color: cs.onSurface,
@@ -125,7 +127,7 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Ce premier echange est cadre pour garder une mise en relation claire et suivie par Adfoot.',
+                  'Ce premier échange est cadré pour garder une mise en relation claire et suivie par Adfoot.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: cs.onSurface.withValues(alpha: 0.72),
                         height: 1.35,
@@ -179,15 +181,15 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                   maxLines: 5,
                   textInputAction: TextInputAction.newline,
                   decoration: const InputDecoration(
-                    labelText: 'Message d introduction',
+                    labelText: 'Message d’introduction',
                     hintText:
-                        'Expliquez clairement l objet du contact et la prochaine etape souhaitee.',
+                        'Expliquez clairement l’objet du contact et la prochaine étape souhaitée.',
                     alignLabelWithHint: true,
                   ),
                   validator: (value) {
                     final normalized = value?.trim() ?? '';
                     if (normalized.length < 12) {
-                      return 'Ajoutez un message un peu plus precis.';
+                      return 'Ajoutez un message un peu plus précis.';
                     }
                     return null;
                   },
@@ -271,7 +273,7 @@ class _ContextCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Contact vise: $targetName ($targetRole)',
+            'Contact visé : $targetName ($targetRole)',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: cs.onPrimaryContainer.withValues(alpha: 0.86),
                 ),

@@ -76,9 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       final userController = Get.find<UserController>();
-      await userController
-          .applyResolvedSessionSnapshot(snapshot)
-          .timeout(
+      await userController.applyResolvedSessionSnapshot(snapshot).timeout(
             const Duration(seconds: 12),
             onTimeout: () => userController.kickstart(),
           );
@@ -88,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _showErrorSnackbar(error.message);
     } catch (_) {
       _showErrorSnackbar(
-        'Une erreur inattendue s\'est produite. Veuillez reessayer.',
+        'Une erreur inattendue s’est produite. Veuillez réessayer.',
       );
     } finally {
       if (mounted) {
@@ -119,7 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       AdFeedback.success(
-        'Succes',
+        'Succès',
         'E-mail de reinitialisation envoye.',
       );
     } on FirebaseAuthException catch (error) {
@@ -385,7 +383,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: _isBusy
                                 ? null
                                 : () => Get.to(() => const SignUpScreen()),
-                            child: const Text('Obtenir un acces'),
+                            child: const Text('Obtenir un accès'),
                           ),
                         ],
                       ),

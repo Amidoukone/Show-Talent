@@ -18,34 +18,48 @@ void main() {
     final message = ChatRepository.buildGuidedFirstMessage(
       context: ContactContext.event(
         eventId: 'event-1',
-        title: 'Tournoi Detection',
+        title: 'Tournoi Détection',
       ),
       reasonCode: ContactReasonCode.trial,
       introMessage: 'Nous souhaitons vous observer samedi.',
     );
 
     expect(message, contains('Premier contact Adfoot.'));
-    expect(message, contains('Essai / Evaluation'));
-    expect(message, contains('Tournoi Detection'));
+    expect(message, contains('Essai / Évaluation'));
+    expect(message, contains('Tournoi Détection'));
     expect(message, contains('observer samedi'));
   });
 
   test('chat repository avoids direct reads on missing conversation docs', () {
     final repository =
         File('lib/services/chat/chat_repository.dart').readAsStringSync();
+    final lookupStart =
+        repository.indexOf('Future<String?> findExistingConversationId');
+    final lookupEnd =
+        repository.indexOf('Future<GuidedConversationStartResult>');
+
+    expect(lookupStart, greaterThanOrEqualTo(0));
+    expect(lookupEnd, greaterThan(lookupStart));
+
+    final lookupSnippet = repository.substring(lookupStart, lookupEnd);
 
     expect(repository, contains(".where('utilisateurIds', arrayContains:"));
-    expect(repository, contains('final existingConversationId = await findExistingConversationId('));
-    expect(repository, contains('await conversationRef.set(newConversation.toMap());'));
+    expect(
+      repository,
+      contains(
+          'final existingConversationId = await findExistingConversationId('),
+    );
+    expect(repository,
+        contains('await conversationRef.set(newConversation.toMap());'));
+    expect(lookupSnippet, contains('_normalizeParticipantIds(doc.data())'));
+    expect(lookupSnippet, contains('legacyConversationId'));
     expect(repository, isNot(contains('.limit(100)')));
     expect(
-      repository,
-      isNot(contains(
-        "final doc = await _conversationsCollection.doc(conversationId).get();",
-      )),
+      lookupSnippet,
+      isNot(contains('.doc(conversationId).get()')),
     );
     expect(
-      repository,
+      lookupSnippet,
       isNot(contains('final snap = await txn.get(conversationRef);')),
     );
   });
@@ -67,5 +81,15 @@ void main() {
       repository,
       contains("patch['unreadCountByUser.\${deletedMessage.destinataireId}']"),
     );
+  });
+
+  test('chat repository stores admin-readable user snapshots', () {
+    final repository =
+        File('lib/services/chat/chat_repository.dart').readAsStringSync();
+
+    expect(repository, contains("'displayName': user.nom"));
+    expect(repository, contains("'email': user.email.trim()"));
+    expect(repository, contains("'organisation': organization"));
+    expect(repository, contains('_resolveUserOrganization(AppUser user)'));
   });
 }

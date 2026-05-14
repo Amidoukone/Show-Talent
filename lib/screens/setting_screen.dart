@@ -211,7 +211,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         'Messages',
                         value
                             ? 'Les messages sont autorisés.'
-                            : 'Les messages sont desactives.',
+                            : 'Les messages sont désactivés.',
                       );
                     },
             ),

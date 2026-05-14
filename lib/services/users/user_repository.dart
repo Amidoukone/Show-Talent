@@ -56,10 +56,10 @@ class UserRepository {
   static const String _adminPortalOnlyMessage =
       'Ce compte est reserve au portail d administration Adfoot.';
   static const String _disabledFallbackMessage =
-      'L acces a ce compte a ete desactive. Contactez le support Adfoot.';
+      'L’accès à ce compte a été désactivé. Contactez le support Adfoot.';
   static const String _missingProfileTitle = 'Compte indisponible';
-  static const String _adminPortalOnlyTitle = 'Acces refuse';
-  static const String _disabledTitle = 'Compte desactive';
+  static const String _adminPortalOnlyTitle = 'Accès refusé';
+  static const String _disabledTitle = 'Compte désactivé';
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
@@ -310,7 +310,7 @@ class UserRepository {
   static String _buildDisabledAccountMessage(AppUser user) {
     final authDisabledReason = _normalizeReason(user.authDisabledReason);
     if (authDisabledReason != null) {
-      return 'L acces a ce compte a ete desactive. Motif : $authDisabledReason';
+      return 'L’accès à ce compte a été désactivé. Motif : $authDisabledReason';
     }
 
     return _disabledFallbackMessage;

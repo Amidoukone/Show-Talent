@@ -730,7 +730,10 @@ export {
   adminSetEventStatus,
   adminSetOfferStatus,
 } from "./admin_content_actions";
-export {adminSetContactIntakeFollowUp} from "./admin_contact_intake_actions";
+export {
+  adminSetContactIntakeFollowUp,
+  submitContactIntakeFeedback,
+} from "./admin_contact_intake_actions";
 export {completeEmailVerification} from "./account_verification_actions";
 
 /* -------------------------------------------------------------------------- */

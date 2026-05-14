@@ -201,7 +201,7 @@ void main() {
             .having(
               (e) => e.message,
               'message',
-              contains('apres 2 tentatives'),
+              contains('après 2 tentatives'),
             ),
       ),
     );

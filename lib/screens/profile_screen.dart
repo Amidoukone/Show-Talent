@@ -538,7 +538,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (isSenderDisabled && isRecipientDisabled) {
       message = 'Les messages sont désactivés pour vous deux.';
     } else if (isSenderDisabled) {
-      message = 'Vous avez désactivé l\'envoi de messages.';
+      message = 'Vous avez désactivé l’envoi de messages.';
     } else {
       message = 'Cet utilisateur a désactivé les messages.';
     }
@@ -559,7 +559,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (currentUser == null || currentUserId == null) {
       AdFeedback.error(
         'Session invalide',
-        'Utilisateur non connecte.',
+        'Utilisateur non connecté.',
       );
       return;
     }
@@ -623,8 +623,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final conversationId = result.conversationId;
       if (result.createdIntake) {
         AdFeedback.info(
-          'Contact enregistre',
-          'Le premier contact a ete cadre et transmis via Adfoot.',
+          'Contact enregistré',
+          'Le premier contact a été cadré et transmis via Adfoot.',
         );
       }
 
@@ -709,7 +709,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                "Ce profil n'est pas visible pour le moment.",
+                "Ce profil n’est pas visible pour le moment.",
                 style: TextStyle(color: AdColors.onSurfaceMuted),
                 textAlign: TextAlign.center,
               ),
@@ -1123,17 +1123,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return Column(
         children: [
           _infoTile(
-            user.isAgent ? 'Numéro de licence' : 'Référence de licence ou d’agrément',
+            user.isAgent
+                ? 'Numéro de licence'
+                : 'Référence de licence ou d’agrément',
             license,
             icon: Icons.badge_outlined,
           ),
           _infoTile(
-            user.isAgent ? 'Pays de délivrance de la licence' : 'Pays de délivrance',
-            country,
+              user.isAgent
+                  ? 'Pays de délivrance de la licence'
+                  : 'Pays de délivrance',
+              country,
               icon: Icons.flag_circle_outlined),
           _infoTile(
-            user.isAgent ? 'Zones de représentation' : 'Zones d’intervention',
-            zones,
+              user.isAgent ? 'Zones de représentation' : 'Zones d’intervention',
+              zones,
               icon: Icons.public_outlined),
         ],
       );

@@ -81,7 +81,7 @@ class ContactContext {
       title: title?.trim(),
       sourceLabel: sourceLabel?.trim().isNotEmpty == true
           ? sourceLabel!.trim()
-          : 'Evenement',
+          : 'Événement',
     );
   }
 
@@ -91,7 +91,7 @@ class ContactContext {
     return ContactContext(
       type: ContactContextType.discovery,
       title: title?.trim(),
-      sourceLabel: 'Decouverte',
+      sourceLabel: 'Découverte',
     );
   }
 
@@ -145,11 +145,11 @@ class ContactContext {
       case ContactContextType.profile:
         return 'Profil';
       case ContactContextType.event:
-        return 'Evenement';
+        return 'Événement';
       case ContactContextType.participants:
         return 'Participants';
       case ContactContextType.discovery:
-        return 'Decouverte';
+        return 'Découverte';
       case ContactContextType.offer:
         return 'Offre';
       default:
@@ -326,11 +326,11 @@ class ContactIntake {
   static String reasonLabel(String code) {
     switch (normalizeReasonCode(code)) {
       case ContactReasonCode.opportunity:
-        return 'Opportunite';
+        return 'Opportunité';
       case ContactReasonCode.trial:
-        return 'Essai / Evaluation';
+        return 'Essai / Évaluation';
       case ContactReasonCode.application:
-        return 'Candidature / Presentation';
+        return 'Candidature / Présentation';
       case ContactReasonCode.followUp:
         return 'Suivi';
       default:
@@ -345,7 +345,7 @@ class ContactIntake {
       case AgencyFollowUpStatus.inProgress:
         return 'En accompagnement';
       case AgencyFollowUpStatus.qualified:
-        return 'Qualifie';
+        return 'Qualifié';
       case AgencyFollowUpStatus.closed:
         return 'Clos';
       case AgencyFollowUpStatus.newLead:

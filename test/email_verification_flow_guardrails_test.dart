@@ -52,7 +52,7 @@ void main() {
           File('lib/screens/verify_email_screen.dart').readAsStringSync();
 
       expect(content, contains('_redirectToLogin('));
-      expect(content, contains("'sessionNoticeTitle': 'E-mail verifie'"));
+      expect(content, contains("'sessionNoticeTitle': 'E-mail vérifié'"));
       expect(content, contains('Get.offAllNamed('));
       expect(content, contains('EmailActionLinkParser.extract(Uri.base)'));
     });
@@ -61,7 +61,7 @@ void main() {
       final content =
           File('lib/screens/verify_email_screen.dart').readAsStringSync();
 
-      expect(content, contains('Retour a la connexion'));
+      expect(content, contains('Retour à la connexion'));
       expect(content, contains('_goBackToLogin'));
       expect(content, contains('_loginAfterVerificationMessage'));
       expect(content, isNot(contains('J\\\'ai clique sur le lien, continuer')));
@@ -129,9 +129,11 @@ void main() {
       expect(script, contains('Opération terminée avec succès.'));
       expect(resetPage, contains('id="reset-form"'));
       expect(resetPage, contains('id="new-password"'));
-      expect(resetPage, contains('id="success-panel" class="success-panel" hidden'));
+      expect(resetPage,
+          contains('id="success-panel" class="success-panel" hidden'));
       expect(verifyPage, contains('id="action-status"'));
-      expect(verifyPage, contains('id="success-panel" class="success-panel" hidden'));
+      expect(verifyPage,
+          contains('id="success-panel" class="success-panel" hidden'));
       expect(File('site_pub/auth-action.css').readAsStringSync(),
           contains('[hidden]'));
     });

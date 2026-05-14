@@ -24,7 +24,7 @@ void main() {
       expect(decision.exists, isTrue);
       expect(decision.issue, UserAccessIssue.adminPortalOnly);
       expect(decision.user?.uid, 'admin-1');
-      expect(decision.title, 'Acces refuse');
+      expect(decision.title, 'Accès refusé');
       expect(decision.message, contains('administration Adfoot'));
     });
 
@@ -40,7 +40,7 @@ void main() {
 
       expect(decision.exists, isTrue);
       expect(decision.issue, UserAccessIssue.disabledAccount);
-      expect(decision.title, 'Compte desactive');
+      expect(decision.title, 'Compte désactivé');
       expect(decision.user?.authDisabled, isTrue);
       expect(decision.message, contains('fraude detectee'));
     });
