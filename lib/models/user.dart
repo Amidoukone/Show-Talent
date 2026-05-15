@@ -105,7 +105,7 @@ class AppUser {
   */
 
   // =========================
-  // Organisateur d'evenements
+  // Organisateur d’événements
   // =========================
   Map<String, dynamic>? eventOrganizerProfile;
 

@@ -88,7 +88,7 @@ class EventRepository {
       if (!snap.exists) {
         throw const EventRepositoryException(
           code: 'not-found',
-          message: 'L\'evenement n\'existe pas.',
+          message: 'L’événement n’existe pas.',
         );
       }
 
@@ -97,7 +97,7 @@ class EventRepository {
       if (status == 'ferme' || status == 'archive') {
         throw const EventRepositoryException(
           code: 'event_closed',
-          message: 'L\'evenement n\'est pas ouvert.',
+          message: 'L’événement n’est pas ouvert.',
         );
       }
 
@@ -106,7 +106,7 @@ class EventRepository {
       if (alreadyRegistered) {
         throw const EventRepositoryException(
           code: 'already_registered',
-          message: 'Vous etes deja inscrit a cet evenement.',
+          message: 'Vous êtes déjà inscrit à cet événement.',
         );
       }
 
@@ -114,7 +114,7 @@ class EventRepository {
           event.participants.length >= event.capaciteMax!) {
         throw const EventRepositoryException(
           code: 'capacity_reached',
-          message: 'La capacite maximale de cet evenement est atteinte.',
+          message: 'La capacité maximale de cet événement est atteinte.',
         );
       }
 
@@ -142,7 +142,7 @@ class EventRepository {
       if (!snap.exists) {
         throw const EventRepositoryException(
           code: 'not-found',
-          message: 'L\'evenement n\'existe pas.',
+          message: 'L’événement n’existe pas.',
         );
       }
 
@@ -151,7 +151,7 @@ class EventRepository {
       if (status == 'ferme' || status == 'archive') {
         throw const EventRepositoryException(
           code: 'event_closed',
-          message: 'L\'evenement n\'est plus ouvert.',
+          message: 'L’événement n’est plus ouvert.',
         );
       }
 
@@ -160,7 +160,7 @@ class EventRepository {
       if (!isRegistered) {
         throw const EventRepositoryException(
           code: 'not_registered',
-          message: 'Vous n\'etes pas inscrit a cet evenement.',
+          message: 'Vous n’êtes pas inscrit à cet événement.',
         );
       }
 

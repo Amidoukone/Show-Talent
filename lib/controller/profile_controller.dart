@@ -249,7 +249,7 @@ class ProfileController extends GetxController {
       }
       Get.snackbar(
         'Erreur',
-        'Impossible de mettre a jour le profil.',
+        'Impossible de mettre à jour le profil.',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
@@ -343,7 +343,7 @@ class ProfileController extends GetxController {
       }
       Get.snackbar(
         'Erreur',
-        'Impossible de mettre a jour le profil.',
+        'Impossible de mettre à jour le profil.',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
@@ -577,8 +577,8 @@ class ProfileController extends GetxController {
       await _safeRefreshCurrentUser();
 
       Get.snackbar(
-        'Succes',
-        'Photo mise a jour.',
+        'Succès',
+        'Photo mise à jour.',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
@@ -590,7 +590,7 @@ class ProfileController extends GetxController {
       }
       Get.snackbar(
         'Erreur',
-        'Impossible de mettre a jour la photo.',
+        'Impossible de mettre à jour la photo.',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );
@@ -740,8 +740,8 @@ class ProfileController extends GetxController {
       }
 
       Get.snackbar(
-        'Succes',
-        'CV ajoute ou mis a jour.',
+        'Succès',
+        'CV ajouté ou mis à jour.',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );
@@ -794,8 +794,8 @@ class ProfileController extends GetxController {
       await _safeRefreshCurrentUser();
 
       Get.snackbar(
-        'Succes',
-        'CV supprime.',
+        'Succès',
+        'CV supprimé.',
         backgroundColor: Colors.green,
         colorText: Colors.white,
       );

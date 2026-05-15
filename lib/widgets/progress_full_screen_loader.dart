@@ -58,13 +58,13 @@ class ProgressFullScreenLoader extends StatelessWidget {
                       } else if (stage.isNotEmpty) {
                         displayedStage = stage;
                       } else if (progress < 0.05) {
-                        displayedStage = 'Preparation...';
+                        displayedStage = 'Préparation...';
                       } else if (progress < 0.25) {
                         displayedStage = 'Compression...';
                       } else if (progress < 0.65) {
-                        displayedStage = 'Televersement video...';
+                        displayedStage = 'Téléversement vidéo...';
                       } else if (progress < 1.0) {
-                        displayedStage = 'Televersement miniature...';
+                        displayedStage = 'Téléversement miniature...';
                       } else {
                         displayedStage = 'Finalisation...';
                       }

@@ -52,9 +52,9 @@ class FollowController extends GetxController {
     }
 
     await Get.find<UserController>().handleProtectedAccessDenied(
-      fallbackTitle: 'Acces indisponible',
+      fallbackTitle: 'Accès indisponible',
       fallbackMessage:
-          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+          'Votre session a été fermée pour protéger votre compte. Veuillez vous reconnecter.',
     );
   }
 
@@ -114,8 +114,8 @@ class FollowController extends GetxController {
       options: HttpsCallableOptions(timeout: const Duration(seconds: 12)),
     );
 
-    final raw = await CallableAuthGuard.callDataWithHttpFallback<
-        Map<String, dynamic>>(
+    final raw =
+        await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
       callable,
       callableName,
       {'targetUserId': targetUserId},

@@ -42,7 +42,7 @@ export const provisionManagedAccount = onCall(
     if (!email || !displayName || !rawRole) {
       throw new HttpsError(
         "invalid-argument",
-        "email, nom et role sont requis."
+        "email, nom et rôle sont requis."
       );
     }
 
@@ -77,7 +77,7 @@ export const provisionManagedAccount = onCall(
     if (existingRole && existingRole !== role) {
       throw new HttpsError(
         "already-exists",
-        "Un compte existe deja avec un autre role."
+        "Un compte existe déjà avec un autre rôle."
       );
     }
 
@@ -147,8 +147,8 @@ export const provisionManagedAccount = onCall(
         "managed_account_updated" :
         "managed_account_created",
       message: existingUser ?
-        "Compte gere mis a jour." :
-        "Compte gere cree.",
+        "Compte géré mis à jour." :
+        "Compte géré créé.",
       data: {
         uid: userRecord.uid,
         email,

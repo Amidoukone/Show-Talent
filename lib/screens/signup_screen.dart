@@ -93,7 +93,7 @@ class SignUpScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     TextButton(
                       onPressed: () => Get.back(),
-                      child: const Text('J ai deja un compte'),
+                      child: const Text('J’ai déjà un compte'),
                     ),
                   ],
                 ),

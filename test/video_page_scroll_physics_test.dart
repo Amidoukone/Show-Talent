@@ -15,8 +15,8 @@ void main() {
   test('video page scroll physics is tuned for short and reactive swipes', () {
     const physics = VideoPageScrollPhysics();
 
-    expect(physics.minFlingDistance, 10);
-    expect(physics.minFlingVelocity, 140);
+    expect(physics.minFlingDistance, 5);
+    expect(physics.minFlingVelocity, 75);
     expect(physics.maxFlingVelocity, 12000);
     expect(physics.dragStartDistanceMotionThreshold, 1);
   });
@@ -26,7 +26,7 @@ void main() {
 
     expect(
       physics.applyPhysicsToUserOffset(metrics, 100),
-      closeTo(128, 0.001),
+      closeTo(158, 0.001),
     );
   });
 
@@ -35,11 +35,11 @@ void main() {
 
     expect(
       physics.carriedMomentum(4000),
-      closeTo(480, 0.001),
+      closeTo(720, 0.001),
     );
     expect(
       physics.carriedMomentum(30000),
-      closeTo(2200, 0.001),
+      closeTo(3000, 0.001),
     );
   });
 
@@ -79,7 +79,8 @@ void main() {
     );
   });
 
-  test('video page scroll physics stays on the current page for tiny drags',
+  test(
+      'video page scroll physics stays on the current page for slow tiny drags',
       () {
     const physics = VideoPageScrollPhysics();
 
@@ -95,16 +96,88 @@ void main() {
     expect(
       physics.targetPageForTests(
         position: metrics,
-        velocity: 90,
+        velocity: 70,
       ),
       1,
     );
     expect(
       physics.targetPixelsForTests(
         position: metrics,
-        velocity: 90,
+        velocity: 70,
       ),
       100,
+    );
+  });
+
+  test('video page scroll physics flips on gentle partial drags', () {
+    const physics = VideoPageScrollPhysics();
+
+    final forwardMetrics = FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: 400,
+      pixels: 119,
+      viewportDimension: 100,
+      axisDirection: AxisDirection.down,
+      devicePixelRatio: 1,
+    );
+    final backwardMetrics = FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: 400,
+      pixels: 181,
+      viewportDimension: 100,
+      axisDirection: AxisDirection.down,
+      devicePixelRatio: 1,
+    );
+
+    expect(
+      physics.targetPageForTests(
+        position: forwardMetrics,
+        velocity: 0,
+      ),
+      2,
+    );
+    expect(
+      physics.targetPageForTests(
+        position: backwardMetrics,
+        velocity: 0,
+      ),
+      1,
+    );
+  });
+
+  test('video page scroll physics ignores accidental micro drags', () {
+    const physics = VideoPageScrollPhysics();
+
+    final forwardMetrics = FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: 400,
+      pixels: 116,
+      viewportDimension: 100,
+      axisDirection: AxisDirection.down,
+      devicePixelRatio: 1,
+    );
+    final backwardMetrics = FixedScrollMetrics(
+      minScrollExtent: 0,
+      maxScrollExtent: 400,
+      pixels: 184,
+      viewportDimension: 100,
+      axisDirection: AxisDirection.down,
+      devicePixelRatio: 1,
+    );
+
+    expect(
+      physics.targetPageForTests(
+        position: forwardMetrics,
+        velocity: 0,
+      ),
+      1,
+    );
+    expect(
+      physics.targetPageForTests(
+        position: backwardMetrics,
+        velocity: 0,
+      ),
+      2,
     );
   });
 }

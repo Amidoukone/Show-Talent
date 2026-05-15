@@ -12,6 +12,6 @@ void main() {
     expect(controller, contains('profileLoadErrorMessage'));
     expect(controller, contains('Connexion instable'));
     expect(screen, contains('_buildProfileLoadState'));
-    expect(screen, contains('Reessayer'));
+    expect(screen, contains('Réessayer'));
   });
 }

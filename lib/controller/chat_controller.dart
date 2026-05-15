@@ -520,7 +520,7 @@ class ChatController extends GetxController {
         );
       }
     } catch (error) {
-      debugPrint("Erreur mise a jour message lu : $error");
+      debugPrint("Erreur mise à jour message lu : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -544,7 +544,7 @@ class ChatController extends GetxController {
         update();
       }
     } catch (error) {
-      debugPrint("Erreur mise a jour messages lus : $error");
+      debugPrint("Erreur mise à jour messages lus : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }

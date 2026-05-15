@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:get/get.dart';
@@ -120,15 +121,32 @@ class VideoController extends GetxController {
   bool _isPermissionDenied(Object error) =>
       error is FirebaseException && error.code == 'permission-denied';
 
+  bool _isAuthAccessFailure(Object error) {
+    if (error is! FirebaseException) {
+      return false;
+    }
+
+    final code = _normalizeAuthErrorToken(error.code);
+    final message = _normalizeAuthErrorToken(error.message ?? '');
+    return code == 'unauthenticated' ||
+        code == 'unauthentificated' ||
+        message.contains('unauthenticated') ||
+        message.contains('unauthentificated');
+  }
+
+  String _normalizeAuthErrorToken(String raw) {
+    return raw.trim().toLowerCase().replaceAll('_', '-');
+  }
+
   Future<void> _handleProtectedAccessDenied() async {
     if (!Get.isRegistered<UserController>()) {
       return;
     }
 
     await Get.find<UserController>().handleProtectedAccessDenied(
-      fallbackTitle: 'Acces indisponible',
+      fallbackTitle: 'Accès indisponible',
       fallbackMessage:
-          'Votre session a ete fermee pour proteger votre compte. Veuillez vous reconnecter.',
+          'Votre session a été fermée pour protéger votre compte. Veuillez vous reconnecter.',
     );
   }
 
@@ -136,8 +154,18 @@ class VideoController extends GetxController {
     return const ActionResponse(
       success: false,
       code: 'session_revoked',
-      message: 'Votre session a ete fermee. Veuillez vous reconnecter.',
+      message: 'Votre session a été fermée. Veuillez vous reconnecter.',
       toast: ToastLevel.none,
+    );
+  }
+
+  ActionResponse _authRequiredResponse() {
+    return const ActionResponse(
+      success: false,
+      code: 'unauthenticated',
+      message: 'Session expirée. Reconnectez-vous puis réessayez.',
+      toast: ToastLevel.info,
+      retriable: true,
     );
   }
 
@@ -440,15 +468,19 @@ class VideoController extends GetxController {
   }
 
   Future<ActionResponse> signalerVideo(String videoId, String userId) async {
-    final response = await _callAction(
+    var response = await _callAction(
       'reportVideo',
       {'videoId': videoId},
       offlineMessage: 'Connexion requise pour signaler.',
     );
 
+    if (!response.success && response.code == 'unauthenticated') {
+      response = await _reportVideoWithFirestoreFallback(videoId, userId);
+    }
+
     final toastLevel = response.code == 'already_reported'
         ? ToastLevel.info
-        : (response.success ? ToastLevel.success : ToastLevel.error);
+        : (response.success ? ToastLevel.success : response.toast);
 
     final resolved = response.copyWith(toast: toastLevel);
 
@@ -570,12 +602,18 @@ class VideoController extends GetxController {
         ),
       );
 
-      final result = await CallableAuthGuard.call<Map<String, dynamic>>(
+      final data = await CallableAuthGuard.callDataWithHttpFallback<
+          Map<String, dynamic>>(
         callable,
+        functionName,
         payload,
       );
-      return ActionResponse.fromMap(result.data);
+      return ActionResponse.fromMap(data);
     } on FirebaseFunctionsException catch (e) {
+      if (_isAuthAccessFailure(e)) {
+        return _authRequiredResponse();
+      }
+
       if (e.code == 'permission-denied') {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -612,6 +650,92 @@ class VideoController extends GetxController {
     } catch (_) {
       return false;
     }
+  }
+
+  Future<ActionResponse> _reportVideoWithFirestoreFallback(
+    String videoId,
+    String userId,
+  ) async {
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser == null || authUser.uid != userId) {
+      return _authRequiredResponse();
+    }
+
+    try {
+      await authUser.getIdToken();
+
+      final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
+      return FirebaseFirestore.instance
+          .runTransaction<ActionResponse>((tx) async {
+        final snap = await tx.get(ref);
+        if (!snap.exists) {
+          return ActionResponse.failure(
+            message: 'Vidéo introuvable.',
+            code: 'not-found',
+          );
+        }
+
+        final data = snap.data() ?? const <String, dynamic>{};
+        final reports = _asStringList(data['reports']);
+        final reportCount = _asInt(data['reportCount']) ?? reports.length;
+
+        if (reports.contains(userId)) {
+          return ActionResponse.failure(
+            message: 'Tu as déjà signalé cette vidéo.',
+            code: 'already_reported',
+            toast: ToastLevel.info,
+          );
+        }
+
+        final nextReportCount = reportCount >= reports.length
+            ? reportCount + 1
+            : reports.length + 1;
+        tx.update(ref, {
+          'reports': FieldValue.arrayUnion([userId]),
+          'reportCount': FieldValue.increment(1),
+        });
+
+        return ActionResponse(
+          success: true,
+          code: 'reported',
+          message: 'Signalement envoyé, merci !',
+          data: {'reportCount': nextReportCount},
+        );
+      });
+    } on FirebaseException catch (e) {
+      if (_isAuthAccessFailure(e)) {
+        return _authRequiredResponse();
+      }
+
+      return ActionResponse.failure(
+        message: 'Signalement impossible pour le moment.',
+        code: e.code,
+        retriable: true,
+      );
+    } catch (_) {
+      return ActionResponse.failure(
+        message: 'Signalement impossible pour le moment.',
+        retriable: true,
+      );
+    }
+  }
+
+  List<String> _asStringList(dynamic raw) {
+    if (raw is! List) {
+      return const <String>[];
+    }
+
+    return raw.map((value) => value.toString()).toList(growable: false);
+  }
+
+  int? _asInt(dynamic raw) {
+    if (raw is int) {
+      return raw;
+    }
+    if (raw is num) {
+      return raw.toInt();
+    }
+    return null;
   }
 
   void _applyLikeState(String videoId, String userId, bool liked) {

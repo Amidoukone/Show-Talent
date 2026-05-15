@@ -193,7 +193,7 @@ class VideoTools {
   }) async {
     final source = File(videoPath);
     if (!await source.exists()) {
-      throw const VideoPreparationException('Video introuvable.');
+      throw const VideoPreparationException('Vidéo introuvable.');
     }
 
     final sourceDurationMs = await _getDurationMsRobust(videoPath);
@@ -222,7 +222,7 @@ class VideoTools {
     if (trimmedDurationMs != null &&
         !_isWithinDurationLimit(trimmedDurationMs, maxDurationSeconds)) {
       throw VideoPreparationException(
-        'La video preparee dure ${_formatDurationSeconds(_durationMsToSeconds(trimmedDurationMs))}. '
+        'La vidéo préparée dure ${_formatDurationSeconds(_durationMsToSeconds(trimmedDurationMs))}. '
         'La limite est de ${maxDurationSeconds}s.',
       );
     }
@@ -333,14 +333,14 @@ class VideoTools {
           outputPath == null ||
           outputPath.trim().isEmpty) {
         throw const VideoPreparationException(
-          'Preparation video annulee ou incomplete.',
+          'Préparation vidéo annulée ou incomplète.',
         );
       }
 
       final file = File(outputPath);
       if (!await file.exists() || await file.length() <= 0) {
         throw const VideoPreparationException(
-          'Fichier video prepare introuvable.',
+          'Fichier vidéo préparé introuvable.',
         );
       }
 
@@ -351,7 +351,7 @@ class VideoTools {
       }
       await _logError('_trimVideoToDuration', error.toString());
       throw const VideoPreparationException(
-        'Impossible de preparer un extrait de 60 secondes.',
+        'Impossible de préparer un extrait de 60 secondes.',
       );
     }
   }

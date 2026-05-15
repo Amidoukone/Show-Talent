@@ -66,7 +66,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
       AdFeedback.success(
         'Succès',
-        'Mot de passe reinitialise avec succes.',
+        'Mot de passe réinitialisé avec succès.',
       );
 
       await Get.offAllNamed(AppRoutes.login);

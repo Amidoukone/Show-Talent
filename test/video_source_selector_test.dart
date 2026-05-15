@@ -115,7 +115,7 @@ void main() {
     expect(ordered.any((source) => source.url == hlsUrl), isFalse);
   });
 
-  test('falls back to legacy HLS only when no MP4 source exists', () {
+  test('does not fall back to HLS when no MP4 source exists', () {
     final url = VideoSourceSelector.chooseUrl(
       fallbackUrl: '',
       sources: const [
@@ -126,7 +126,38 @@ void main() {
       preferHls: true,
     );
 
-    expect(url, hlsUrl);
+    expect(url, isEmpty);
+  });
+
+  test('does not use an HLS fallback URL', () {
+    final ordered = VideoSourceSelector.prioritizedSources(
+      fallbackUrl: hlsUrl,
+      sources: const [],
+      adaptiveEnabled: true,
+      highBandwidth: true,
+      preferHls: true,
+    );
+
+    expect(ordered, isEmpty);
+    expect(
+      VideoSourceSelector.chooseUrl(
+        fallbackUrl: hlsUrl,
+        sources: const [],
+        adaptiveEnabled: true,
+        highBandwidth: true,
+        preferHls: true,
+      ),
+      isEmpty,
+    );
+  });
+
+  test('source lookup ignores HLS urls', () {
+    final source = VideoSourceSelector.sourceForUrl(
+      url: hlsUrl,
+      sources: hlsSources,
+    );
+
+    expect(source, isNull);
   });
 
   test('prioritized sources keep 480p ahead of 360p on low bandwidth', () {

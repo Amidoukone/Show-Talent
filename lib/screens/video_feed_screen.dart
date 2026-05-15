@@ -62,8 +62,6 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
       contextKey: widget.contextKey,
       videoManager: videoManager,
       videos: _currentVideos,
-      useHlsForVideo: (video) =>
-          videoController.preferHlsPlayback && video.hasAdaptiveHlsSource,
       disposeWindow: 20,
     );
 

@@ -10,22 +10,18 @@ class VideoFocusOrchestrator {
     required this.videoManager,
     required List<Video> videos,
     this.onRequestMore,
-    this.useHlsForVideo,
     this.disposeWindow = 25,
   }) : _videos = List.of(videos);
 
   final String contextKey;
   final VideoManager videoManager;
   final Future<void> Function()? onRequestMore;
-  final bool Function(Video video)? useHlsForVideo;
   final int disposeWindow;
 
   List<Video> _videos;
   bool _isDisposed = false;
   int _requestToken = 0;
   int? _lastFocusedIndex;
-
-  bool _useHls(Video video) => useHlsForVideo?.call(video) ?? false;
 
   void updateVideos(List<Video> videos) {
     _videos = List.of(videos);
@@ -38,7 +34,6 @@ class VideoFocusOrchestrator {
     final localToken = ++_requestToken;
     final currentVideo = _videos[index];
     final currentUrl = currentVideo.videoUrl;
-    final requestHls = _useHls(currentVideo);
     final preferForwardPreload =
         _lastFocusedIndex == null ? true : index >= _lastFocusedIndex!;
     _lastFocusedIndex = index;
@@ -51,7 +46,7 @@ class VideoFocusOrchestrator {
       originalUrl: currentUrl,
       resolvedUrl: resolvedUrl,
       sources: currentVideo.sources,
-      requestedHls: requestHls,
+      requestedHls: false,
       isPreload: false,
     );
 
@@ -73,7 +68,7 @@ class VideoFocusOrchestrator {
           contextKey,
           currentUrl,
           sources: currentVideo.sources,
-          useHls: requestHls,
+          useHls: false,
           autoPlay: true,
           activeUrl: currentUrl,
         );
@@ -109,7 +104,6 @@ class VideoFocusOrchestrator {
           _videos,
           index,
           activeUrl: currentUrl,
-          useHls: requestHls,
           preferForward: preferForwardPreload,
         ),
       );

@@ -59,7 +59,7 @@ class UploadVideoController extends GetxController {
     final sanitizedCaption = cap.trim();
 
     if (sanitizedDescription.isEmpty || sanitizedCaption.isEmpty) {
-      showErrorToast('Merci de renseigner une description et une legende.');
+      showErrorToast('Merci de renseigner une description et une légende.');
       return false;
     }
 
@@ -77,16 +77,16 @@ class UploadVideoController extends GetxController {
     try {
       final sourceFile = File(videoPath);
       if (!await sourceFile.exists()) {
-        showErrorToast('Video introuvable. Merci de reessayer.');
+        showErrorToast('Vidéo introuvable. Merci de réessayer.');
         return false;
       }
 
       if (await sourceFile.length() <= 0) {
-        showErrorToast('Le fichier video est vide.');
+        showErrorToast('Le fichier vidéo est vide.');
         return false;
       }
 
-      uploadStage.value = 'Analyse de la video...';
+      uploadStage.value = 'Analyse de la vidéo...';
       uploadProgress.value = 0.02;
       originalVideoPath = sourceFile.path;
 
@@ -99,26 +99,26 @@ class UploadVideoController extends GetxController {
 
       if (!isValidQuality) {
         showErrorToast(
-          'Qualite video insuffisante (minimum 480x360).',
+          'Qualité vidéo insuffisante (minimum 480x360).',
         );
         return false;
       }
 
-      uploadStage.value = 'Preparation du fichier...';
+      uploadStage.value = 'Préparation du fichier...';
       uploadProgress.value = 0.08;
       selectedVideo = preparedVideo.file;
       originalVideoPath = selectedVideo!.path;
       if (preparedVideo.wasTrimmed) {
         showInfoToast(
-          'Video preparee en extrait de '
+          'Vidéo préparée en extrait de '
           '${preparedVideo.uploadDurationSeconds ?? VideoTools.defaultMaxUploadDurationSeconds}s.',
         );
       }
 
-      uploadStage.value = 'Generation de la miniature...';
+      uploadStage.value = 'Génération de la miniature...';
       thumbnail = await _retryThumbnail(selectedVideo!.path);
       if (thumbnail == null) {
-        showErrorToast('Erreur lors de la generation de la miniature.');
+        showErrorToast('Erreur lors de la génération de la miniature.');
         return false;
       }
 
@@ -132,7 +132,7 @@ class UploadVideoController extends GetxController {
       return false;
     } catch (_) {
       showErrorToast(
-        'Preparation impossible pour le moment. Merci de reessayer.',
+        'Préparation impossible pour le moment. Merci de réessayer.',
       );
       return false;
     } finally {
@@ -159,7 +159,7 @@ class UploadVideoController extends GetxController {
 
   Future<void> uploadDirectly() async {
     if (isPreparing.value) {
-      showInfoToast('Preparation en cours...');
+      showInfoToast('Préparation en cours...');
       return;
     }
 
@@ -175,7 +175,7 @@ class UploadVideoController extends GetxController {
     final desc = (description ?? '').trim();
     final cap = (caption ?? '').trim();
     if (desc.isEmpty || cap.isEmpty) {
-      showErrorToast('Description ou legende manquante.');
+      showErrorToast('Description ou légende manquante.');
       isUploading(false);
       return;
     }
@@ -195,7 +195,7 @@ class UploadVideoController extends GetxController {
       );
       _activeSession = session;
 
-      uploadStage.value = 'Televersement...';
+      uploadStage.value = 'Téléversement...';
       _cancelToken = CancelToken();
 
       final videoUploaded = await _uploadClient.uploadFile(
@@ -203,7 +203,7 @@ class UploadVideoController extends GetxController {
         file: selectedVideo!,
         cancelToken: _cancelToken,
         onUrlRefreshed: () {
-          uploadStage.value = 'Renouvellement du lien securise...';
+          uploadStage.value = 'Renouvellement du lien sécurisé...';
         },
         onProgress: (p) {
           uploadProgress.value = 0.2 + (0.5 * p);
@@ -211,7 +211,7 @@ class UploadVideoController extends GetxController {
       );
 
       if (!videoUploaded) {
-        throw 'Echec upload video';
+        throw 'Échec upload vidéo';
       }
 
       if (!await thumbnail!.exists() || (await thumbnail!.length()) == 0) {
@@ -224,7 +224,7 @@ class UploadVideoController extends GetxController {
         }
       }
 
-      uploadStage.value = 'Preparation miniature securisee...';
+      uploadStage.value = 'Préparation miniature sécurisée...';
       final thumbTicket = await _uploadClient.requestThumbnailTicket(
         sessionId: session.sessionId,
         file: thumbnail!,
@@ -244,7 +244,7 @@ class UploadVideoController extends GetxController {
       );
 
       if (!thumbUploaded) {
-        throw 'Echec upload miniature';
+        throw 'Échec upload miniature';
       }
 
       uploadStage.value = 'Finalisation...';
@@ -286,7 +286,7 @@ class UploadVideoController extends GetxController {
       );
 
       if (!finalized) {
-        throw 'Echec finalisation serveur';
+        throw 'Échec finalisation serveur';
       }
 
       await _uploadClient.clearPersistedSession();
@@ -300,7 +300,7 @@ class UploadVideoController extends GetxController {
       await _cleanupLocalFiles();
     } catch (e) {
       if (e is DioException && CancelToken.isCancel(e)) {
-        showInfoToast('Televersement annule.');
+        showInfoToast('Téléversement annulé.');
       } else {
         showErrorToast(_toUserMessage(e));
       }
@@ -335,14 +335,14 @@ class UploadVideoController extends GetxController {
     Future<void> finalizeSuccessFlow() async {
       isOptimizing(false);
       await Future.delayed(const Duration(milliseconds: 300));
-      showSuccessToast('Video ajoutee avec succes !');
+      showSuccessToast('Vidéo ajoutée avec succès !');
       await navigateBackToFeed();
     }
 
     Future<void> finalizeFailureFlow(String status) async {
       isOptimizing(false);
       showErrorToast(
-        "Echec d'optimisation video (statut: $status). Merci de reessayer.",
+        "Échec d'optimisation vidéo (statut : $status). Merci de réessayer.",
       );
       await navigateBackToFeed();
     }
@@ -350,7 +350,7 @@ class UploadVideoController extends GetxController {
     Future<void> finalizePendingFlow() async {
       isOptimizing(false);
       showInfoToast(
-        'Votre video est en cours d\'optimisation. Elle sera visible sous peu.',
+        'Votre vidéo est en cours d’optimisation. Elle sera visible sous peu.',
       );
       await navigateBackToFeed();
     }
@@ -428,7 +428,7 @@ class UploadVideoController extends GetxController {
 
     if (isPreparing.value) {
       resetUploadState();
-      showInfoToast('Preparation annulee.');
+      showInfoToast('Préparation annulée.');
       return;
     }
 
@@ -443,7 +443,7 @@ class UploadVideoController extends GetxController {
     }
 
     resetUploadState();
-    showInfoToast('Televersement annule.');
+    showInfoToast('Téléversement annulé.');
   }
 
   void resetUploadState() {
@@ -471,15 +471,15 @@ class UploadVideoController extends GetxController {
 
       switch (error.code) {
         case 'unauthenticated':
-          return 'Authentification requise. Reconnectez-vous puis reessayez.';
+          return 'Authentification requise. Reconnectez-vous puis réessayez.';
         case 'permission-denied':
-          return 'Votre compte ne peut pas televerser de videos.';
+          return 'Votre compte ne peut pas téléverser de vidéos.';
         case 'resource-exhausted':
-          return 'Le service video est temporairement indisponible.';
+          return 'Le service vidéo est temporairement indisponible.';
         case 'failed-precondition':
-          return 'Votre compte ne remplit pas les conditions pour televerser.';
+          return 'Votre compte ne remplit pas les conditions pour téléverser.';
         default:
-          return 'Erreur serveur pendant le televersement.';
+          return 'Erreur serveur pendant le téléversement.';
       }
     }
 
@@ -488,7 +488,7 @@ class UploadVideoController extends GetxController {
       return normalized.substring('Exception: '.length);
     }
     if (normalized.trim().isEmpty) {
-      return 'Erreur pendant le televersement.';
+      return 'Erreur pendant le téléversement.';
     }
     return normalized;
   }

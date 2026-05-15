@@ -61,7 +61,8 @@ class EventDetailsScreen extends StatelessWidget {
                           () => EventFormScreen(event: currentEvent),
                         );
                         if (updated == true) {
-                          await eventController.fetchEvents();
+                          await Get.find<EventController>().fetchEvents();
+                          Get.back(result: true);
                         }
                       },
                     ),

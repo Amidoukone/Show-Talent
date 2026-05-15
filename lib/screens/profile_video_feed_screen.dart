@@ -67,8 +67,6 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
       contextKey: _ctxKey,
       videoManager: _videoManager,
       videos: _currentVideos,
-      useHlsForVideo: (video) =>
-          _videoController.preferHlsPlayback && video.hasAdaptiveHlsSource,
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -200,70 +198,21 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
             final vid = videos[index];
             final player = _videoManager.getController(_ctxKey, vid.videoUrl);
 
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                SmartVideoPlayer(
-                  key: ValueKey(vid.id),
-                  player: player,
-                  videoController: _videoController,
-                  userController: _userController,
-                  followController: _followController,
-                  contextKey: _ctxKey,
-                  videoUrl: vid.videoUrl,
-                  video: vid,
-                  currentIndex: index,
-                  videoList: videos,
-                  autoPlay: true,
-                  enableTapToPlay: true,
-                  showControls: true,
-                  showProgressBar: true,
-                ),
-                Positioned(
-                  bottom: 100,
-                  left: 12,
-                  right: 80,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        vid.description.trim().isNotEmpty
-                            ? vid.description.trim()
-                            : 'Pas de description',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black54,
-                              offset: Offset(1, 1),
-                              blurRadius: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        vid.caption.trim().isNotEmpty
-                            ? vid.caption.trim()
-                            : 'Pas de légende',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black54,
-                              offset: Offset(1, 1),
-                              blurRadius: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            return SmartVideoPlayer(
+              key: ValueKey(vid.id),
+              player: player,
+              videoController: _videoController,
+              userController: _userController,
+              followController: _followController,
+              contextKey: _ctxKey,
+              videoUrl: vid.videoUrl,
+              video: vid,
+              currentIndex: index,
+              videoList: videos,
+              autoPlay: true,
+              enableTapToPlay: true,
+              showControls: true,
+              showProgressBar: true,
             );
           },
         ),

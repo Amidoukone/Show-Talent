@@ -7,6 +7,8 @@ class VideoSourceSelector {
   static List<VideoSource> _nonHlsSources(List<VideoSource> sources) =>
       sources.where((source) => !source.isHls).toList();
 
+  static bool _isHlsUrl(String url) => url.toLowerCase().contains('.m3u8');
+
   static List<VideoSource> _sortedByHeight(List<VideoSource> sources) =>
       [...sources]..sort((a, b) => (a.height ?? 0).compareTo(b.height ?? 0));
 
@@ -41,7 +43,7 @@ class VideoSourceSelector {
   }) {
     final canonicalSource = _preferredSingleRenditionSource(candidateSources);
 
-    if (fallbackUrl.isEmpty) {
+    if (fallbackUrl.isEmpty || _isHlsUrl(fallbackUrl)) {
       return canonicalSource;
     }
 
@@ -62,12 +64,8 @@ class VideoSourceSelector {
     bool preferHls = false,
   }) {
     final sanitizedSources = _sanitize(sources);
-    final nonHlsSources = _nonHlsSources(sanitizedSources);
-    final candidateSources =
-        nonHlsSources.isNotEmpty ? nonHlsSources : sanitizedSources;
+    final candidateSources = _nonHlsSources(sanitizedSources);
 
-    // MP4-first baseline: HLS is only kept as a last-resort legacy fallback
-    // when no MP4 rendition or fallback URL is available.
     if (!adaptiveEnabled || candidateSources.isEmpty) {
       return _fallbackSource(
         fallbackUrl: fallbackUrl,
@@ -88,11 +86,11 @@ class VideoSourceSelector {
     required String url,
     required List<VideoSource> sources,
   }) {
-    if (url.isEmpty) {
+    if (url.isEmpty || _isHlsUrl(url)) {
       return null;
     }
 
-    final sanitizedSources = _sanitize(sources);
+    final sanitizedSources = _nonHlsSources(_sanitize(sources));
     for (final source in sanitizedSources) {
       if (source.url == url) {
         return source;
@@ -120,7 +118,6 @@ class VideoSourceSelector {
   }
 
   /// Returns sources ordered by priority for playback and fallback.
-  /// HLS is only kept as a legacy last resort when no MP4 source exists.
   static List<VideoSource> prioritizedSources({
     required String fallbackUrl,
     required List<VideoSource> sources,
@@ -129,9 +126,7 @@ class VideoSourceSelector {
     bool preferHls = false,
   }) {
     final sanitizedSources = _sanitize(sources);
-    final nonHlsSources = _nonHlsSources(sanitizedSources);
-    final candidateSources =
-        nonHlsSources.isNotEmpty ? nonHlsSources : sanitizedSources;
+    final candidateSources = _nonHlsSources(sanitizedSources);
 
     if (!adaptiveEnabled || candidateSources.isEmpty) {
       final primary = preferredSource(
@@ -166,7 +161,8 @@ class VideoSourceSelector {
         ...mp4Sources,
         ...mp4Sources.reversed,
       ],
-      if (fallbackUrl.isNotEmpty) VideoSource(url: fallbackUrl),
+      if (fallbackUrl.isNotEmpty && !_isHlsUrl(fallbackUrl))
+        VideoSource(url: fallbackUrl),
     ];
 
     return _dedupe(ordered);

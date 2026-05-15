@@ -75,8 +75,7 @@ class EventController extends GetxController {
 
   Future<void> fetchEvents() async {
     final currentUid = _authSessionService.currentUser?.uid;
-    final hasActiveStream =
-        _eventsSub != null && _activeAuthUid == currentUid;
+    final hasActiveStream = _eventsSub != null && _activeAuthUid == currentUid;
     if (hasActiveStream) {
       return;
     }
@@ -189,7 +188,7 @@ class EventController extends GetxController {
           success: true,
           code: 'created_notification_failed',
           message:
-              'Evenement cree avec succes, mais les notifications sont indisponibles.',
+              'Événement créé avec succès, mais les notifications sont indisponibles.',
           toast: ToastLevel.info,
         );
       }
@@ -236,7 +235,7 @@ class EventController extends GetxController {
       return const ActionResponse(
         success: true,
         code: 'updated',
-        message: 'Les modifications ont ete enregistrees.',
+        message: 'Les modifications ont été enregistrées.',
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error) {
@@ -354,13 +353,13 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'registration_failed',
-        message: 'Echec de l inscription.',
+        message: 'Échec de l’inscription.',
       );
     } catch (e) {
       debugPrint('Event registration failed: $e');
       return ActionResponse.failure(
         code: 'registration_failed',
-        message: 'Echec de l inscription.',
+        message: 'Échec de l’inscription.',
       );
     }
   }
@@ -410,13 +409,13 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'unregistration_failed',
-        message: 'Echec de la desinscription.',
+        message: 'Échec de la désinscription.',
       );
     } catch (e) {
       debugPrint('Event unregistration failed: $e');
       return ActionResponse.failure(
         code: 'unregistration_failed',
-        message: 'Echec de la desinscription.',
+        message: 'Échec de la désinscription.',
       );
     }
   }

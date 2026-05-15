@@ -151,7 +151,7 @@ class OffreController extends GetxController {
               'lastUpdated': FieldValue.serverTimestamp(),
             }).catchError((error, stackTrace) {
               developer.log(
-                'Erreur lors de la mise a jour auto du statut offre: $error',
+                'Erreur lors de la mise à jour auto du statut offre: $error',
                 name: 'OffreController._parseSnapshotDocs',
                 error: error,
                 stackTrace: stackTrace,
@@ -295,7 +295,7 @@ class OffreController extends GetxController {
         return ActionResponse(
           success: true,
           message:
-              'Offre publiee avec succes, mais les notifications sont temporairement indisponibles.',
+              'Offre publiée avec succès, mais les notifications sont temporairement indisponibles.',
           code: 'published_notification_failed',
           toast: ToastLevel.info,
         );
@@ -304,12 +304,12 @@ class OffreController extends GetxController {
       return const ActionResponse(
         success: true,
         code: 'published',
-        message: 'Offre publiee avec succes.',
+        message: 'Offre publiée avec succès.',
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
       developer.log(
-        'Erreur lors de la publication de l offre: $error',
+        'Erreur lors de la publication de l’offre: $error',
         name: 'OffreController.publierOffre',
         error: error,
         stackTrace: st,
@@ -320,18 +320,18 @@ class OffreController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'publish_failed',
-        message: 'Impossible de publier l offre pour le moment.',
+        message: 'Impossible de publier l’offre pour le moment.',
       );
     } catch (e, st) {
       developer.log(
-        'Erreur lors de la publication de l offre: $e',
+        'Erreur lors de la publication de l’offre: $e',
         name: 'OffreController.publierOffre',
         error: e,
         stackTrace: st,
       );
       return ActionResponse.failure(
         code: 'publish_failed',
-        message: 'Impossible de publier l offre pour le moment.',
+        message: 'Impossible de publier l’offre pour le moment.',
       );
     }
   }
@@ -341,12 +341,12 @@ class OffreController extends GetxController {
     final response = await PushNotificationService.sendOfferFanout(
       offerId: offre.id,
       title: 'Nouvelle offre disponible',
-      body: 'Une nouvelle offre a ete publiee par ${recruteur.nom}.',
+      body: 'Une nouvelle offre a été publiée par ${recruteur.nom}.',
     );
 
     if (!response.success) {
       developer.log(
-        'Erreur lors de l envoi des notifications offre: ${response.message}',
+        'Erreur lors de l’envoi des notifications offre: ${response.message}',
         name: 'OffreController._notifierJoueurs',
       );
     }
@@ -372,12 +372,12 @@ class OffreController extends GetxController {
       return const ActionResponse(
         success: true,
         code: 'updated',
-        message: 'Offre modifiee avec succes.',
+        message: 'Offre modifiée avec succès.',
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
       developer.log(
-        'Erreur lors de la modification de l offre: $error',
+        'Erreur lors de la modification de l’offre: $error',
         name: 'OffreController.modifierOffre',
         error: error,
         stackTrace: st,
@@ -390,11 +390,11 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'update_failed',
-        message: 'Impossible de modifier l offre pour le moment.',
+        message: 'Impossible de modifier l’offre pour le moment.',
       );
     } catch (e, st) {
       developer.log(
-        'Erreur lors de la modification de l offre: $e',
+        'Erreur lors de la modification de l’offre: $e',
         name: 'OffreController.modifierOffre',
         error: e,
         stackTrace: st,
@@ -402,7 +402,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'update_failed',
-        message: 'Impossible de modifier l offre pour le moment.',
+        message: 'Impossible de modifier l’offre pour le moment.',
       );
     }
   }
@@ -501,7 +501,7 @@ class OffreController extends GetxController {
       );
     } on FirebaseException catch (error, st) {
       developer.log(
-        'Erreur lors de la suppression de l offre: $error',
+        'Erreur lors de la suppression de l’offre: $error',
         name: 'OffreController.supprimerOffre',
         error: error,
         stackTrace: st,
@@ -514,11 +514,11 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'delete_failed',
-        message: 'Impossible de supprimer l offre pour le moment.',
+        message: 'Impossible de supprimer l’offre pour le moment.',
       );
     } catch (e, st) {
       developer.log(
-        'Erreur lors de la suppression de l offre: $e',
+        'Erreur lors de la suppression de l’offre: $e',
         name: 'OffreController.supprimerOffre',
         error: e,
         stackTrace: st,
@@ -526,7 +526,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'delete_failed',
-        message: 'Impossible de supprimer l offre pour le moment.',
+        message: 'Impossible de supprimer l’offre pour le moment.',
       );
     }
   }
@@ -535,7 +535,7 @@ class OffreController extends GetxController {
     if (joueur.role != 'joueur') {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Seuls les joueurs peuvent postuler a une offre.',
+        message: 'Seuls les joueurs peuvent postuler à une offre.',
         toast: ToastLevel.info,
       );
     }
@@ -558,7 +558,7 @@ class OffreController extends GetxController {
         if (!_isOpenStatus(status)) {
           throw const _OffreFlowException(
             code: 'offer_closed',
-            message: 'Vous ne pouvez pas postuler a cette offre.',
+            message: 'Vous ne pouvez pas postuler à cette offre.',
             toast: ToastLevel.info,
           );
         }
@@ -569,7 +569,7 @@ class OffreController extends GetxController {
         if (dejaPostule) {
           throw const _OffreFlowException(
             code: 'already_applied',
-            message: 'Vous avez deja postule a cette offre.',
+            message: 'Vous avez déjà postulé à cette offre.',
             toast: ToastLevel.info,
           );
         }
@@ -585,7 +585,7 @@ class OffreController extends GetxController {
       return const ActionResponse(
         success: true,
         code: 'applied',
-        message: 'Vous avez postule a l offre.',
+        message: 'Vous avez postulé à l’offre.',
         toast: ToastLevel.success,
       );
     } on _OffreFlowException catch (e) {
@@ -655,7 +655,7 @@ class OffreController extends GetxController {
         if (!estCandidat) {
           throw const _OffreFlowException(
             code: 'not_applied',
-            message: 'Vous n etes pas inscrit a cette offre.',
+            message: 'Vous n’êtes pas inscrit à cette offre.',
             toast: ToastLevel.info,
           );
         }
@@ -673,7 +673,7 @@ class OffreController extends GetxController {
       return const ActionResponse(
         success: true,
         code: 'withdrawn',
-        message: 'Vous vous etes desinscrit de l offre.',
+        message: 'Vous vous êtes désinscrit de l’offre.',
         toast: ToastLevel.success,
       );
     } on _OffreFlowException catch (e) {
@@ -684,7 +684,7 @@ class OffreController extends GetxController {
       );
     } on FirebaseException catch (error, st) {
       developer.log(
-        'Erreur lors de la desinscription offre: $error',
+        'Erreur lors de la désinscription offre: $error',
         name: 'OffreController.seDesinscrireOffre',
         error: error,
         stackTrace: st,
@@ -701,7 +701,7 @@ class OffreController extends GetxController {
       );
     } catch (e, st) {
       developer.log(
-        'Erreur lors de la desinscription offre: $e',
+        'Erreur lors de la désinscription offre: $e',
         name: 'OffreController.seDesinscrireOffre',
         error: e,
         stackTrace: st,

@@ -333,7 +333,7 @@ class UploadClient {
       }
     }
 
-    throw const UploadClientException('Echec upload: tentative introuvable.');
+    throw const UploadClientException('Échec upload : tentative introuvable.');
   }
 
   Future<int> _queryRemoteOffset(

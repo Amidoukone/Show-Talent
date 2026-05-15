@@ -90,7 +90,7 @@ function assertManagedTarget(target: ManagedTargetContext): void {
   if (!target.createdByAdmin && !isManagedRole(target.role)) {
     throw new HttpsError(
       "failed-precondition",
-      "Ce compte n est pas un compte gere par l administration.",
+      "Ce compte n’est pas un compte géré par l’administration.",
     );
   }
 }
@@ -477,8 +477,8 @@ export const disableManagedAccountAuth = onCall(
         "managed_account_auth_already_disabled" :
         "managed_account_auth_disabled",
       message: alreadyDisabled ?
-        "Le compte Auth etait deja desactive." :
-        "Le compte Auth a ete desactive.",
+        "Le compte Auth était déjà désactivé." :
+        "Le compte Auth a été désactivé.",
       data: buildManagedAccountSummary(target, {
         estActif: false,
         authDisabled: true,
@@ -528,8 +528,8 @@ export const enableManagedAccountAuth = onCall(
         "managed_account_auth_already_enabled" :
         "managed_account_auth_enabled",
       message: alreadyEnabled ?
-        "Le compte Auth etait deja actif." :
-        "Le compte Auth a ete reactive.",
+        "Le compte Auth était déjà actif." :
+        "Le compte Auth a été réactivé.",
       data: buildManagedAccountSummary(target, {
         estActif,
         authDisabled: false,
@@ -624,8 +624,8 @@ export const changeManagedAccountRole = onCall(
         "managed_account_role_changed" :
         "managed_account_role_unchanged",
       message: roleChanged ?
-        "Role du compte mis a jour." :
-        "Le compte possede deja ce role.",
+        "Rôle du compte mis à jour." :
+        "Le compte possède déjà ce rôle.",
       data: {
         ...buildManagedAccountSummary(target),
         previousRole: target.role,
@@ -659,7 +659,7 @@ export const updateManagedAccountProfile = onCall(
     if (Object.keys(updates).length === 0) {
       throw new HttpsError(
         "invalid-argument",
-        "Aucun champ profil autorise n a ete fourni.",
+        "Aucun champ profil autorisé n’a été fourni.",
       );
     }
 
@@ -676,7 +676,7 @@ export const updateManagedAccountProfile = onCall(
     return {
       success: true,
       code: "managed_account_profile_updated",
-      message: "Profil du compte gere mis a jour.",
+      message: "Profil du compte géré mis à jour.",
       data: {
         ...buildManagedAccountSummary(target),
         updatedFields: Object.keys(updates),

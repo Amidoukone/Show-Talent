@@ -209,7 +209,7 @@ class ChatTestHarness {
         !projectRules.contains('contact_intakes') ||
         !projectRules.contains('match /conversations/{conversationId}')) {
       throw StateError(
-        'Les regles Firestore du projet ont change; mettez a jour le harness chat.',
+        'Les règles Firestore du projet ont changé; mettez à jour le harness chat.',
       );
     }
 

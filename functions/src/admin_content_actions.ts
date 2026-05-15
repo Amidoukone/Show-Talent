@@ -355,9 +355,9 @@ const OFFER_DELETE_CONFIG: DeleteContentConfig = {
   ownerPath: "recruteur.uid",
   ownerPublishedField: "offrePubliees",
   deletedCode: "offer_deleted",
-  deletedMessage: "Offre supprimee.",
+  deletedMessage: "Offre supprimée.",
   alreadyDeletedCode: "offer_already_deleted",
-  alreadyDeletedMessage: "Offre deja supprimee.",
+  alreadyDeletedMessage: "Offre déjà supprimée.",
   collectStoragePaths: collectOfferStoragePaths,
 };
 
@@ -368,9 +368,9 @@ const EVENT_DELETE_CONFIG: DeleteContentConfig = {
   ownerPath: "organisateur.uid",
   ownerPublishedField: "eventPublies",
   deletedCode: "event_deleted",
-  deletedMessage: "Evenement supprime.",
+  deletedMessage: "Événement supprimé.",
   alreadyDeletedCode: "event_already_deleted",
-  alreadyDeletedMessage: "Evenement deja supprime.",
+  alreadyDeletedMessage: "Événement déjà supprimé.",
   collectStoragePaths: collectEventStoragePaths,
 };
 
@@ -392,7 +392,7 @@ export const adminSetOfferStatus = onCall(
     if (!OFFER_STATUSES.has(status)) {
       throw new HttpsError(
         "invalid-argument",
-        "Status offre invalide. Valeurs: brouillon, ouverte, fermee, archivee.",
+        "Statut offre invalide. Valeurs : brouillon, ouverte, fermée, archivée.",
       );
     }
 
@@ -416,7 +416,7 @@ export const adminSetOfferStatus = onCall(
       return {
         success: true,
         code: "offer_status_updated",
-        message: `Statut offre mis a jour: ${status}.`,
+        message: `Statut offre mis à jour : ${status}.`,
         data: {
           offerId,
           status,
@@ -436,7 +436,7 @@ export const adminSetOfferStatus = onCall(
       });
       throw new HttpsError(
         "internal",
-        "Mise a jour du statut offre impossible pour le moment.",
+        "Mise à jour du statut offre impossible pour le moment.",
       );
     }
   },
@@ -468,7 +468,7 @@ export const adminSetEventStatus = onCall(
     if (!EVENT_STATUSES.has(status)) {
       throw new HttpsError(
         "invalid-argument",
-        "Status evenement invalide. Valeurs: brouillon, ouvert, ferme, archive.",
+        "Statut événement invalide. Valeurs : brouillon, ouvert, fermé, archivé.",
       );
     }
 
@@ -476,7 +476,7 @@ export const adminSetEventStatus = onCall(
       const eventRef = db.collection("events").doc(eventId);
       const eventSnap = await eventRef.get();
       if (!eventSnap.exists) {
-        throw new HttpsError("not-found", "Evenement introuvable.");
+        throw new HttpsError("not-found", "Événement introuvable.");
       }
 
       await eventRef.set({
@@ -492,7 +492,7 @@ export const adminSetEventStatus = onCall(
       return {
         success: true,
         code: "event_status_updated",
-        message: `Statut evenement mis a jour: ${status}.`,
+        message: `Statut événement mis à jour : ${status}.`,
         data: {
           eventId,
           status,
@@ -512,7 +512,7 @@ export const adminSetEventStatus = onCall(
       });
       throw new HttpsError(
         "internal",
-        "Mise a jour du statut evenement impossible pour le moment.",
+        "Mise à jour du statut événement impossible pour le moment.",
       );
     }
   },

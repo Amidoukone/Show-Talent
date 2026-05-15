@@ -246,8 +246,6 @@ class VideoManager {
   int _networkProfileRequestToken = 0;
   bool _networkProfileInitialized = false;
 
-  bool _profilePrefersHls = false;
-
   int _maxActive = 8;
   int _maxConcurrentInits = 3;
   int _preloadRadius = 1;
@@ -421,8 +419,6 @@ class VideoManager {
     _preloadRadius = tuning.preloadRadius;
     _preloadTimeout = tuning.preloadTimeout;
     _activeTimeout = tuning.activeTimeout;
-
-    _profilePrefersHls = profile.preferHls;
 
     debugPrint(
       "[VideoManager] NetworkProfile applied ($reason): $profile -> "
@@ -865,9 +861,7 @@ class VideoManager {
       } catch (_) {}
     }
 
-    final requestedHls = !forceMp4Fallback &&
-        hlsStrategyEnabled &&
-        (useHls || _profilePrefersHls);
+    final requestedHls = false;
     final attemptHls = shouldAttemptHlsForRequest(
       preferHls: requestedHls,
       isPreload: isPreload,
@@ -1552,7 +1546,6 @@ class VideoManager {
     List<Video> videos,
     int index, {
     String? activeUrl,
-    bool useHls = false,
     bool preferForward = true,
   }) async {
     _ensureNetworkProfileWarm();
@@ -1571,7 +1564,7 @@ class VideoManager {
           contextKey,
           v.videoUrl,
           sources: v.sources,
-          useHls: useHls && v.hasAdaptiveHlsSource,
+          useHls: false,
           isPreload: true,
           activeUrl: activeUrl,
         ),

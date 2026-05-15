@@ -52,7 +52,7 @@ class UserRepository {
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
   static const String _missingProfileMessage =
-      'Ce compte n est plus disponible. Si vous pensez qu il s agit d une erreur, contactez le support Adfoot.';
+      'Ce compte n’est plus disponible. Si vous pensez qu’il s’agit d’une erreur, contactez le support Adfoot.';
   static const String _adminPortalOnlyMessage =
       'Ce compte est reserve au portail d administration Adfoot.';
   static const String _disabledFallbackMessage =

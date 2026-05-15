@@ -5,15 +5,16 @@ import 'package:flutter/widgets.dart';
 class VideoPageScrollPhysics extends PageScrollPhysics {
   const VideoPageScrollPhysics({super.parent});
 
-  static const double _dragMultiplier = 1.28;
-  static const double _momentumFactor = 0.12;
-  static const double _maxCarriedMomentum = 2200.0;
-  static const double _pageFlipThreshold = 0.14;
-  static const double _pageDecisionVelocity = 80.0;
+  static const double _dragMultiplier = 1.58;
+  static const double _momentumFactor = 0.18;
+  static const double _maxCarriedMomentum = 3000.0;
+  static const double _pageFlipThreshold = 0.10;
+  static const double _slowDragPageFlipThreshold = 0.18;
+  static const double _pageDecisionVelocity = 28.0;
   static const SpringDescription _snapSpring = SpringDescription(
-    mass: 0.9,
-    stiffness: 260.0,
-    damping: 28.0,
+    mass: 0.78,
+    stiffness: 190.0,
+    damping: 22.0,
   );
 
   @override
@@ -22,10 +23,10 @@ class VideoPageScrollPhysics extends PageScrollPhysics {
   }
 
   @override
-  double get minFlingDistance => 10.0;
+  double get minFlingDistance => 5.0;
 
   @override
-  double get minFlingVelocity => 140.0;
+  double get minFlingVelocity => 75.0;
 
   @override
   double get maxFlingVelocity => 12000.0;
@@ -118,6 +119,14 @@ class VideoPageScrollPhysics extends PageScrollPhysics {
       if (velocity < 0.0 && pageFraction <= 1.0 - _pageFlipThreshold) {
         return floorPage;
       }
+    }
+
+    if (pageFraction >= _slowDragPageFlipThreshold && pageFraction < 0.5) {
+      return ceilPage;
+    }
+    if (pageFraction > 0.5 &&
+        (1.0 - pageFraction) >= _slowDragPageFlipThreshold) {
+      return floorPage;
     }
 
     return currentPage.roundToDouble();

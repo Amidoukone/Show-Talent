@@ -86,7 +86,7 @@ type CleanupStats = {
 };
 
 /**
- * Supprime les utilisateurs non verifies apres 3 jours (Auth + Firestore).
+ * Supprime les utilisateurs non vérifiés après 3 jours (Auth + Firestore).
  * Les comptes geres par admin sont exclus par defaut.
  * Exécution quotidienne.
  */

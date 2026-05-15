@@ -137,7 +137,7 @@ async function assertUploadCallerEligible(
   if (!VIDEO_UPLOADS_ENABLED) {
     throw new HttpsError(
       "resource-exhausted",
-      "Les uploads video sont temporairement desactives.",
+      "Les uploads vidéo sont temporairement désactivés.",
     );
   }
 
@@ -153,14 +153,14 @@ async function assertUploadCallerEligible(
   if (userData.role !== VIDEO_UPLOAD_ROLE) {
     throw new HttpsError(
       "permission-denied",
-      "Upload reserve aux comptes joueur.",
+      "Upload réservé aux comptes joueur.",
     );
   }
 
   if (userData.authDisabled === true) {
     throw new HttpsError(
       "permission-denied",
-      "Compte inactif pour l upload video.",
+      "Compte inactif pour l’upload vidéo.",
     );
   }
 
@@ -169,7 +169,7 @@ async function assertUploadCallerEligible(
   if (!emailVerified) {
     throw new HttpsError(
       "failed-precondition",
-      "Email verifie requis avant upload video.",
+      "Email vérifié requis avant upload vidéo.",
     );
   }
 
@@ -211,14 +211,14 @@ async function assertUploadRateLimits(
   if (concurrentUploads >= MAX_CONCURRENT_VIDEO_UPLOADS) {
     throw new HttpsError(
       "resource-exhausted",
-      "Trop d uploads video en cours pour ce compte.",
+      "Trop d’uploads vidéo en cours pour ce compte.",
     );
   }
 
   if (recentUploads >= MAX_VIDEO_UPLOADS_PER_DAY) {
     throw new HttpsError(
       "resource-exhausted",
-      "Quota journalier d upload video atteint.",
+      "Quota journalier d’upload vidéo atteint.",
     );
   }
 }
@@ -365,7 +365,7 @@ export const createUploadSession = onCall(
     if (contentType !== "video/mp4") {
       throw new HttpsError(
         "invalid-argument",
-        "Seuls les uploads video/mp4 sont autorises.",
+        "Seuls les uploads video/mp4 sont autorisés.",
       );
     }
 

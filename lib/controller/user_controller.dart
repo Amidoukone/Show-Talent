@@ -233,7 +233,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
     } catch (error) {
       Get.snackbar(
         'Erreur',
-        'Echec de deconnexion : $error',
+        'Échec de déconnexion : $error',
         backgroundColor: Colors.red,
         colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,
@@ -358,7 +358,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
           title: snapshot.failureTitle,
           message: snapshot.failureMessage ??
               snapshot.failure?.loginMessage ??
-              'Votre session n est plus autorisee.',
+              'Votre session n’est plus autorisée.',
         ),
       );
     } on FirebaseAuthException catch (error) {
@@ -374,7 +374,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         UserAccessDecision(
           exists: true,
           issue: UserAccessIssue.disabledAccount,
-          title: 'Compte desactive',
+          title: 'Compte désactivé',
           message: AuthErrorMapper.toMessage(error),
         ),
       );
@@ -396,9 +396,9 @@ class UserController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> handleProtectedAccessDenied({
-    String fallbackTitle = 'Session fermee',
+    String fallbackTitle = 'Session fermée',
     String fallbackMessage =
-        'Votre session n est plus autorisee. Veuillez vous reconnecter.',
+        'Votre session n’est plus autorisée. Veuillez vous reconnecter.',
   }) async {
     if (_accessRevocationInProgress) {
       return;
@@ -463,14 +463,14 @@ class UserController extends GetxController with WidgetsBindingObserver {
     final title = decision.title ??
         switch (decision.issue) {
           UserAccessIssue.missingProfile => 'Compte indisponible',
-          UserAccessIssue.adminPortalOnly => 'Acces refuse',
-          UserAccessIssue.disabledAccount => 'Compte desactive',
-          null => 'Session fermee',
+          UserAccessIssue.adminPortalOnly => 'Accès refusé',
+          UserAccessIssue.disabledAccount => 'Compte désactivé',
+          null => 'Session fermée',
         };
 
     final message = decision.message ??
         decision.issue?.loginMessage ??
-        'Votre session n est plus autorisee.';
+        'Votre session n’est plus autorisée.';
 
     return <String, String>{
       'sessionNoticeTitle': title,

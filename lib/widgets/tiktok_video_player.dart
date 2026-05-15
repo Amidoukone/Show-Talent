@@ -37,25 +37,42 @@ class TiktokVideoPlayer extends StatefulWidget {
   State<TiktokVideoPlayer> createState() => _TiktokVideoPlayerState();
 }
 
+class _VideoGestureFeedback {
+  const _VideoGestureFeedback({
+    required this.label,
+    required this.icon,
+    required this.alignment,
+  });
+
+  final String label;
+  final IconData icon;
+  final Alignment alignment;
+}
+
 class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   // Drag progress used by the progress knob UI.
   double _localDragProgress = 0.0;
   bool _isDragging = false;
   static const double _progressHorizontalPadding = 12.0;
+  static const double _progressBottomSafeGap = 8.0;
 
-  String? _feedbackOverlay;
+  _VideoGestureFeedback? _feedbackOverlay;
   Timer? _feedbackTimer;
 
   bool _showControlOverlay = false;
   Timer? _overlayTimer;
 
   Timer? _progressTimer;
+  Timer? _slowLoadingTimer;
 
   bool _isDisposed = false;
+  bool _showSlowLoadingHelp = false;
 
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
+
+  static const Duration _slowLoadingDelay = Duration(milliseconds: 4500);
 
   @override
   void initState() {
@@ -69,6 +86,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     _feedbackTimer?.cancel();
     _overlayTimer?.cancel();
     _progressTimer?.cancel();
+    _slowLoadingTimer?.cancel();
     super.dispose();
   }
 
@@ -125,22 +143,54 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     }
   }
 
-  void _stopAllTimers() {
+  void _stopTransientTimers() {
     _feedbackTimer?.cancel();
     _overlayTimer?.cancel();
     _progressTimer?.cancel();
+  }
+
+  void _syncSlowLoadingState({
+    required bool showLoader,
+    required bool hasError,
+  }) {
+    if (!showLoader || hasError) {
+      _slowLoadingTimer?.cancel();
+      _slowLoadingTimer = null;
+      _showSlowLoadingHelp = false;
+      return;
+    }
+
+    if (_showSlowLoadingHelp || _slowLoadingTimer != null) {
+      return;
+    }
+
+    _slowLoadingTimer = Timer(_slowLoadingDelay, () {
+      _slowLoadingTimer = null;
+      if (_isDisposed) return;
+      _safeSetState(() => _showSlowLoadingHelp = true);
+    });
   }
 
   // ---------------------------------------------------------------------------
   // Feedback & overlays
   // ---------------------------------------------------------------------------
 
-  void _showFeedback(String text) {
+  void _showFeedback(
+    String label, {
+    required IconData icon,
+    Alignment alignment = Alignment.center,
+  }) {
     if (_isDisposed) return;
-    _safeSetState(() => _feedbackOverlay = text);
+    _safeSetState(
+      () => _feedbackOverlay = _VideoGestureFeedback(
+        label: label,
+        icon: icon,
+        alignment: alignment,
+      ),
+    );
 
     _feedbackTimer?.cancel();
-    _feedbackTimer = Timer(const Duration(seconds: 1), () {
+    _feedbackTimer = Timer(const Duration(milliseconds: 850), () {
       if (_isDisposed) return;
       _safeSetState(() => _feedbackOverlay = null);
     });
@@ -164,7 +214,12 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
 
   void _onTap() {
     if (_isDisposed) return;
+    final wasPlaying = _safeValue()?.isPlaying ?? widget.isPlaying;
     widget.onTogglePlayPause?.call();
+    _showFeedback(
+      wasPlaying ? 'Pause' : 'Lecture',
+      icon: wasPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+    );
     _toggleOverlay();
   }
 
@@ -186,7 +241,11 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       final clamped = _clampDuration(raw, Duration.zero, dur);
 
       ctrl.seekTo(clamped);
-      _showFeedback(isRight ? "+10s" : "-10s");
+      _showFeedback(
+        isRight ? '+10s' : '-10s',
+        icon: isRight ? Icons.forward_10_rounded : Icons.replay_10_rounded,
+        alignment: isRight ? Alignment.centerRight : Alignment.centerLeft,
+      );
       _toggleOverlay();
     } catch (_) {
       // controller potentiellement disposé entre temps
@@ -240,7 +299,10 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
                   widget.controller?.setPlaybackSpeed(s);
                 } catch (_) {}
                 Navigator.pop(context);
-                _showFeedback("${s}x");
+                _showFeedback(
+                  "${s}x",
+                  icon: Icons.speed_rounded,
+                );
               },
             );
           }).toList(),
@@ -264,9 +326,13 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   @override
   Widget build(BuildContext context) {
     if (!_isControllerUsable) {
-      _stopAllTimers();
+      final hasError =
+          widget.errorMessage != null && widget.errorMessage!.trim().isNotEmpty;
+      final showLoader = !hasError && (widget.isLoading || widget.isBuffering);
+      _syncSlowLoadingState(showLoader: showLoader, hasError: hasError);
+      _stopTransientTimers();
       return _buildSafeState(
-        showLoader: widget.isLoading || widget.isBuffering,
+        showLoader: showLoader,
         errorMessage: widget.errorMessage,
       );
     }
@@ -278,9 +344,13 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
 
     final value = _safeValue();
     if (value == null) {
-      _stopAllTimers();
+      final hasError =
+          widget.errorMessage != null && widget.errorMessage!.trim().isNotEmpty;
+      final showLoader = !hasError && (widget.isLoading || widget.isBuffering);
+      _syncSlowLoadingState(showLoader: showLoader, hasError: hasError);
+      _stopTransientTimers();
       return _buildSafeState(
-        showLoader: widget.isLoading || widget.isBuffering,
+        showLoader: showLoader,
         errorMessage: widget.errorMessage,
       );
     }
@@ -289,6 +359,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
         _didRenderFrame(value) || widget.hasFirstFrame;
     final bool showLoader = !hasRenderableFrame &&
         (widget.isLoading || value.isBuffering || !value.isInitialized);
+    _syncSlowLoadingState(showLoader: showLoader, hasError: hasError);
 
     return GestureDetector(
       onTap: _onTap,
@@ -346,18 +417,23 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   }
 
   Widget _buildLoadingIndicator() {
+    final showRetry = _showSlowLoadingHelp && widget.onRetry != null;
+    final message = _showSlowLoadingHelp
+        ? 'Connexion lente...'
+        : 'Préparation de la vidéo...';
+
     return Center(
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.42),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
+              const SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
@@ -365,16 +441,32 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
                   strokeWidth: 2.4,
                 ),
               ),
-              SizedBox(height: 10),
-              Text(
-                'Préparation de la vidéo...',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(height: 10),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
+              if (showRetry) ...[
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: widget.onRetry,
+                  icon: const Icon(Icons.refresh_rounded, size: 16),
+                  label: const Text('Réessayer'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -465,16 +557,65 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   }
 
   Widget _buildFeedbackOverlay() {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.black54,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          _feedbackOverlay!,
-          style: const TextStyle(color: Colors.white, fontSize: 18),
+    final feedback = _feedbackOverlay;
+    if (feedback == null) return const SizedBox.shrink();
+
+    return IgnorePointer(
+      child: Align(
+        alignment: feedback.alignment,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 42),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.88, end: 1),
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOutBack,
+            builder: (context, scale, child) {
+              return Transform.scale(scale: scale, child: child);
+            },
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.16),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      feedback.icon,
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      feedback.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -492,7 +633,11 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
               final dur = val.duration;
               final raw = val.position - const Duration(seconds: 10);
               ctrl.seekTo(_clampDuration(raw, Duration.zero, dur));
-              _showFeedback("-10s");
+              _showFeedback(
+                '-10s',
+                icon: Icons.replay_10_rounded,
+                alignment: Alignment.centerLeft,
+              );
             } catch (_) {}
             _toggleOverlay();
           }),
@@ -500,6 +645,12 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
           _iconButton(
             val.isPlaying ? Icons.pause : Icons.play_arrow,
             () {
+              _showFeedback(
+                val.isPlaying ? 'Pause' : 'Lecture',
+                icon: val.isPlaying
+                    ? Icons.pause_rounded
+                    : Icons.play_arrow_rounded,
+              );
               widget.onTogglePlayPause?.call();
               _toggleOverlay();
             },
@@ -512,7 +663,11 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
               final dur = val.duration;
               final raw = val.position + const Duration(seconds: 10);
               ctrl.seekTo(_clampDuration(raw, Duration.zero, dur));
-              _showFeedback("+10s");
+              _showFeedback(
+                '+10s',
+                icon: Icons.forward_10_rounded,
+                alignment: Alignment.centerRight,
+              );
             } catch (_) {}
             _toggleOverlay();
           }),
@@ -557,7 +712,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     final total = val.duration;
 
     return Positioned(
-      bottom: 0,
+      bottom: _progressBottomOffset(context),
       left: 0,
       right: 0,
       child: Column(
@@ -584,7 +739,10 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
 
               try {
                 widget.controller?.seekTo(val.duration * proportion);
-                _showFeedback(fmt(val.duration * proportion));
+                _showFeedback(
+                  fmt(val.duration * proportion),
+                  icon: Icons.drag_indicator_rounded,
+                );
               } catch (_) {}
               _toggleOverlay();
             },
@@ -655,6 +813,11 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
         ],
       ),
     );
+  }
+
+  double _progressBottomOffset(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewPadding.bottom;
+    return bottomInset > 0 ? bottomInset + _progressBottomSafeGap : 0;
   }
 
   Widget _buildErrorOverlay({String? message}) {

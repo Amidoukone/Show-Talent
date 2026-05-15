@@ -86,9 +86,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   bool _isDisposed = false;
   bool _isFollowActionLoading = false;
   bool _isShareActionLoading = false;
-
-  bool get _preferHls =>
-      _vc.preferHlsPlayback && widget.video.hasAdaptiveHlsSource;
+  bool _isCaptionExpanded = false;
 
   Timer? _playDebounceTimer;
   static const Duration _playDebounce = Duration(milliseconds: 120);
@@ -103,10 +101,28 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   static const int _bufferingMaxStrikesBeforeReload = 8;
   static const Duration _firstFrameTimeout = Duration(seconds: 6);
 
-  bool _forceMp4Fallback = false;
   bool _isRecovering = false;
   late final FeedPlaybackMetricsLogger _playbackMetricsLogger;
   FeedPlaybackSessionTracker? _playbackSession;
+
+  static const double _videoActionRailRight = 12;
+  static const double _videoActionRailReservedWidth = 92;
+  static const double _videoMetadataLeft = 16;
+  static const double _videoBottomMinimumOffset = 84;
+  static const double _videoBottomSafeGap = 18;
+  static const double _videoProgressReservedHeight = 36;
+  static const double _videoActionButtonExtent = 48;
+  static const double _videoActionIconSize = 28;
+  static const double _videoActionLabelMaxWidth = 68;
+  static const int _captionCollapsedMaxLines = 2;
+  static const int _descriptionMaxLines = 1;
+  static const List<Shadow> _videoMetadataTextShadow = <Shadow>[
+    Shadow(
+      offset: Offset(0, 1),
+      blurRadius: 3,
+      color: Color(0x99000000),
+    ),
+  ];
 
   // ---------------------------------------------------------------------------
   // LIFECYCLE
@@ -166,6 +182,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   void didUpdateWidget(covariant SmartVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    if (oldWidget.video.id != widget.video.id && _isCaptionExpanded) {
+      _isCaptionExpanded = false;
+    }
+
     if (!identical(oldWidget.videoController, widget.videoController)) {
       _vc = widget.videoController;
       _indexWorker?.dispose();
@@ -188,7 +208,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _detachListener(_ctrl);
       _player = null;
       _hasFirstFrame = false;
-      _forceMp4Fallback = false;
       _stopFirstFrameWatchdog();
       _stopStallWatchdog();
 
@@ -241,14 +260,13 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     String? recoveryReason,
   }) async {
     final localToken = ++_attachToken;
-    final useHls = _forceMp4Fallback ? false : _preferHls;
     final resolvedUrl =
         _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl);
     final canReuseExisting = _videoManager.shouldReuseControllerForRequest(
       originalUrl: widget.videoUrl,
       resolvedUrl: resolvedUrl,
       sources: widget.video.sources,
-      requestedHls: useHls,
+      requestedHls: false,
       isPreload: false,
     );
 
@@ -269,13 +287,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           widget.contextKey,
           widget.videoUrl,
           sources: widget.video.sources,
-          useHls: useHls,
-          forceMp4Fallback: _forceMp4Fallback,
+          useHls: false,
           preferDownloadedFile: preferDownloadedFile,
           autoPlay: false,
           activeUrl: widget.videoUrl,
-          recoveryFallbackFromSourceType:
-              _forceMp4Fallback && _preferHls ? 'hls' : null,
           recoveryReason: recoveryReason,
         );
       } catch (e) {
@@ -436,7 +451,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       hasMultipleMp4Sources: widget.video.hasMultipleMp4Sources &&
           _videoManager.adaptiveSourcesEnabled,
       networkTier: _videoManager.currentProfile?.tier.name,
-      preferHlsRequested: _preferHls,
+      preferHlsRequested: false,
       resolvedUrl: resolvedUrl,
       source: source,
     );
@@ -494,7 +509,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       if (mounted && !_isDisposed) setState(() {});
       if (_isActuallyVisible()) {
         unawaited(_recoverPlayback(
-          forceMp4: _preferHls,
           reason: 'runtime_value_error',
         ));
       } else {
@@ -584,7 +598,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         originalUrl: widget.videoUrl,
         resolvedUrl: resolvedUrl,
         sources: widget.video.sources,
-        requestedHls: _forceMp4Fallback ? false : _preferHls,
+        requestedHls: false,
         isPreload: false,
       );
 
@@ -611,7 +625,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           debugPrint('[SmartVideoPlayer] play error: $e');
           if (mounted && !_isDisposed) {
             await _recoverPlayback(
-              forceMp4: _preferHls,
               reason: 'play_error',
             );
           }
@@ -681,7 +694,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           if (_bufferingStrikes >= _bufferingMaxStrikesBeforeReload) {
             _bufferingStrikes = 0;
             await _recoverPlayback(
-              forceMp4: _preferHls,
               reason: 'buffering_watchdog',
             );
             return;
@@ -697,7 +709,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         if (_stallStrikes >= _stallMaxStrikesBeforeReload) {
           _stallStrikes = 0;
           await _recoverPlayback(
-            forceMp4: _preferHls,
             reason: 'stall_watchdog',
           );
         }
@@ -727,7 +738,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       if (_isDisposed || _hasFirstFrame || !_isActuallyVisible()) return;
       if (token != _attachToken || c != _ctrl) return;
       await _recoverPlayback(
-        forceMp4: _preferHls,
         reason: 'first_frame_timeout',
       );
     });
@@ -739,7 +749,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   Future<void> _recoverPlayback({
-    required bool forceMp4,
     required String reason,
   }) async {
     if (_isDisposed || _isRecovering) return;
@@ -756,7 +765,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           !resolvedUrl.toLowerCase().contains('.m3u8');
 
       await _purgeAndReloadController(
-        forceMp4: forceMp4,
         preferDownloadedFile: prefersDownloadedRecovery,
         recoveryReason: reason,
       );
@@ -832,6 +840,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 );
               },
             ),
+            if (widget.showControls) _buildVideoMetadataOverlay(context),
             if (widget.showControls)
               _buildActions(context, videoController, userController),
           ],
@@ -851,6 +860,161 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     }
   }
 
+  double _videoOverlayBottomOffset(MediaQueryData media) {
+    var bottom = media.viewPadding.bottom +
+        _videoBottomSafeGap +
+        (widget.showProgressBar ? _videoProgressReservedHeight : 0);
+    if (bottom < _videoBottomMinimumOffset) {
+      bottom = _videoBottomMinimumOffset;
+    }
+    return bottom;
+  }
+
+  double _videoActionSpacing(MediaQueryData media) =>
+      media.size.height < 700 ? 16 : 20;
+
+  double _videoSectionSpacing(MediaQueryData media) =>
+      media.size.height < 700 ? 20 : 24;
+
+  bool _captionNeedsExpansion({
+    required BuildContext context,
+    required String text,
+    required TextStyle style,
+    required double maxWidth,
+  }) {
+    if (text.trim().isEmpty || maxWidth <= 0) return false;
+
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: _captionCollapsedMaxLines,
+      textDirection: Directionality.of(context),
+    )..layout(maxWidth: maxWidth);
+
+    return painter.didExceedMaxLines;
+  }
+
+  Widget _buildVideoMetadataOverlay(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final bottomOffset = _videoOverlayBottomOffset(media);
+    final description = widget.video.description.trim().isNotEmpty
+        ? widget.video.description.trim()
+        : 'Pas de description';
+    final rawCaption = widget.video.caption.trim();
+    final caption = rawCaption.isNotEmpty ? rawCaption : 'Pas de légende';
+
+    final descriptionStyle = const TextStyle(
+      color: Colors.white,
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+      height: 1.2,
+      shadows: _videoMetadataTextShadow,
+    );
+    final captionStyle = const TextStyle(
+      color: Colors.white70,
+      fontSize: 13,
+      height: 1.28,
+      shadows: _videoMetadataTextShadow,
+    );
+    final linkStyle = const TextStyle(
+      color: Colors.white,
+      fontSize: 13,
+      fontWeight: FontWeight.w700,
+      height: 1.2,
+      shadows: _videoMetadataTextShadow,
+    );
+
+    return Positioned(
+      left: _videoMetadataLeft + media.viewPadding.left,
+      right: _videoActionRailReservedWidth + media.viewPadding.right,
+      bottom: bottomOffset,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final needsExpansion = rawCaption.isNotEmpty &&
+              _captionNeedsExpansion(
+                context: context,
+                text: caption,
+                style: captionStyle,
+                maxWidth: constraints.maxWidth,
+              );
+          final isExpanded = _isCaptionExpanded && needsExpansion;
+          final expandedCaptionMaxHeight =
+              media.size.height * (media.size.height < 700 ? 0.22 : 0.28);
+
+          Widget captionText = Text(
+            caption,
+            style: captionStyle,
+            maxLines: isExpanded ? null : _captionCollapsedMaxLines,
+            overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+          );
+
+          if (isExpanded) {
+            captionText = ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: expandedCaptionMaxHeight),
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: captionText,
+              ),
+            );
+          }
+
+          return AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.bottomLeft,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.play_circle_fill_rounded,
+                      size: 18,
+                      color: Colors.white,
+                      shadows: _videoMetadataTextShadow,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        description,
+                        style: descriptionStyle,
+                        maxLines: _descriptionMaxLines,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                captionText,
+                if (needsExpansion)
+                  Semantics(
+                    button: true,
+                    label: isExpanded
+                        ? 'Voir moins la légende'
+                        : 'Voir plus la légende',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (!mounted || _isDisposed) return;
+                        setState(() => _isCaptionExpanded = !isExpanded);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 6, bottom: 4),
+                        child: Text(
+                          isExpanded ? 'Voir moins' : 'Voir plus',
+                          style: linkStyle,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // ACTIONS
   // ---------------------------------------------------------------------------
@@ -867,100 +1031,110 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     final isOwner = widget.video.uid == currentUser.uid;
     final isFollowing = currentUser.followingsList.contains(widget.video.uid);
 
-    final screenHeight = MediaQuery.of(context).size.height;
-    double bottomOffset = screenHeight * 0.12;
-    if (bottomOffset < 80) bottomOffset = 80;
+    final media = MediaQuery.of(context);
+    final bottomOffset = _videoOverlayBottomOffset(media);
+    final actionSpacing = _videoActionSpacing(media);
+    final sectionSpacing = _videoSectionSpacing(media);
     final isLiked = widget.video.likes.contains(currentUser.uid);
 
     return Positioned(
-      right: 10,
+      right: _videoActionRailRight + media.viewPadding.right,
       bottom: bottomOffset,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.showDeleteAction && isOwner)
+      width: _videoActionRailReservedWidth - _videoActionRailRight,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.showDeleteAction && isOwner)
+              _animatedActionButton(
+                icon: Icons.delete_forever_rounded,
+                color: Colors.redAccent,
+                label: 'Supprimer',
+                onTap: () => _confirmDelete(context, videoController),
+                emphasized: true,
+              ),
+            if (widget.showDeleteAction && isOwner)
+              SizedBox(height: sectionSpacing),
             _animatedActionButton(
-              icon: Icons.delete_forever_rounded,
-              color: Colors.redAccent,
-              label: 'Supprimer',
-              onTap: () => _confirmDelete(context, videoController),
-              emphasized: true,
+              icon: isLiked
+                  ? Icons.favorite_rounded
+                  : Icons.favorite_border_rounded,
+              color: isLiked ? Colors.redAccent : Colors.white,
+              label: '${widget.video.likes.length}',
+              onTap: () => _toggleLike(videoController, currentUser.uid),
+              emphasized: isLiked,
             ),
-          if (widget.showDeleteAction && isOwner) const SizedBox(height: 24),
-          _animatedActionButton(
-            icon: isLiked
-                ? Icons.favorite_rounded
-                : Icons.favorite_border_rounded,
-            color: isLiked ? Colors.redAccent : Colors.white,
-            label: '${widget.video.likes.length}',
-            onTap: () => _toggleLike(videoController, currentUser.uid),
-            emphasized: isLiked,
-          ),
-          const SizedBox(height: 24),
-          _animatedActionButton(
-            icon: Icons.share_rounded,
-            color: _isShareActionLoading ? Colors.white70 : Colors.white,
-            label: '${widget.video.shareCount}',
-            onTap: _isShareActionLoading
-                ? null
-                : () => _shareVideo(videoController),
-            isLoading: _isShareActionLoading,
-          ),
-          const SizedBox(height: 24),
-          _animatedActionButton(
-            icon: Icons.flag_rounded,
-            color: Colors.white,
-            label: '${widget.video.reportCount}',
-            onTap: () async => videoController.signalerVideo(
-              widget.video.id,
-              currentUser.uid,
+            SizedBox(height: actionSpacing),
+            _animatedActionButton(
+              icon: Icons.share_rounded,
+              color: _isShareActionLoading ? Colors.white70 : Colors.white,
+              label: '${widget.video.shareCount}',
+              onTap: _isShareActionLoading
+                  ? null
+                  : () => _shareVideo(videoController),
+              isLoading: _isShareActionLoading,
             ),
-          ),
-          const SizedBox(height: 28),
-          if (currentUser.role == 'joueur')
-            Column(
-              children: [
-                FloatingActionButton(
-                  heroTag: 'addVideo_${widget.video.id}',
-                  mini: true,
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
-                  elevation: 3,
-                  onPressed: () async {
-                    await _videoManager.pauseAll(widget.contextKey);
-                    await _setWakelock(false);
-                    final result = await Get.to(() => const AddVideo());
-                    if (result == true) {
-                      final refreshed = widget.onRefreshRequested != null
-                          ? await widget.onRefreshRequested!()
-                          : await videoController.refreshVideos();
-                      if (!refreshed) {
-                        _scheduleMaybePlay();
-                      }
-                    } else {
-                      _scheduleMaybePlay();
-                    }
-                  },
-                  child: const Icon(Icons.add),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Vidéo',
-                  style: TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ],
+            SizedBox(height: actionSpacing),
+            _animatedActionButton(
+              icon: Icons.flag_rounded,
+              color: Colors.white,
+              label: '${widget.video.reportCount}',
+              onTap: () async => videoController.signalerVideo(
+                widget.video.id,
+                currentUser.uid,
+              ),
             ),
-          if (widget.showProfileAction) ...[
-            const SizedBox(height: 24),
-            _buildProfileAction(
-              context: context,
-              currentUserId: currentUser.uid,
-              isOwner: isOwner,
-              isFollowing: isFollowing,
-              userController: userController,
-            ),
+            if (currentUser.role == 'joueur') ...[
+              SizedBox(height: sectionSpacing),
+              Column(
+                children: [
+                  SizedBox.square(
+                    dimension: _videoActionButtonExtent,
+                    child: FloatingActionButton(
+                      heroTag: 'addVideo_${widget.video.id}',
+                      mini: true,
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                      elevation: 3,
+                      onPressed: () async {
+                        await _videoManager.pauseAll(widget.contextKey);
+                        await _setWakelock(false);
+                        final result = await Get.to(() => const AddVideo());
+                        if (result == true) {
+                          final refreshed = widget.onRefreshRequested != null
+                              ? await widget.onRefreshRequested!()
+                              : await videoController.refreshVideos();
+                          if (!refreshed) {
+                            _scheduleMaybePlay();
+                          }
+                        } else {
+                          _scheduleMaybePlay();
+                        }
+                      },
+                      child: const Icon(Icons.add, size: _videoActionIconSize),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Vidéo',
+                    style: TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ],
+              ),
+            ],
+            if (widget.showProfileAction) ...[
+              SizedBox(height: sectionSpacing),
+              _buildProfileAction(
+                context: context,
+                currentUserId: currentUser.uid,
+                isOwner: isOwner,
+                isFollowing: isFollowing,
+                userController: userController,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -984,13 +1158,15 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.all(10),
+            width: _videoActionButtonExtent,
+            height: _videoActionButtonExtent,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.18),
+              color: Colors.black.withValues(alpha: emphasized ? 0.24 : 0.18),
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withValues(alpha: 0.12),
-                width: 0.8,
+                color: Colors.white.withValues(alpha: emphasized ? 0.2 : 0.12),
+                width: 1,
               ),
               boxShadow: [
                 BoxShadow(
@@ -1002,8 +1178,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             ),
             child: isLoading
                 ? SizedBox(
-                    width: emphasized ? 32 : 30,
-                    height: emphasized ? 32 : 30,
+                    width: 24,
+                    height: 24,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       valueColor: AlwaysStoppedAnimation<Color>(color),
@@ -1012,7 +1188,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 : Icon(
                     icon,
                     color: color,
-                    size: emphasized ? 32 : 30,
+                    size: _videoActionIconSize,
                     shadows: [
                       Shadow(
                         color: Colors.black.withValues(alpha: 0.45),
@@ -1024,6 +1200,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           ),
           const SizedBox(height: 6),
           Container(
+            constraints: const BoxConstraints(
+              minWidth: 32,
+              maxWidth: _videoActionLabelMaxWidth,
+            ),
             padding: const EdgeInsets.symmetric(
               horizontal: 8,
               vertical: 2,
@@ -1034,6 +1214,9 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             ),
             child: Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 11,
@@ -1098,7 +1281,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             GestureDetector(
               onTap: openProfile,
               child: CircleAvatar(
-                radius: 26,
+                radius: 24,
                 backgroundColor: Colors.white,
                 backgroundImage:
                     photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
@@ -1143,7 +1326,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         ),
         const SizedBox(height: 6),
         const Text(
-          'Profil Joueur ',
+          'Profil',
           style: TextStyle(color: Colors.white, fontSize: 12),
         ),
       ],
@@ -1264,15 +1447,11 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   // ---------------------------------------------------------------------------
 
   Future<void> _purgeAndReloadController({
-    bool forceMp4 = false,
     bool purgeCachedFile = false,
     bool preferDownloadedFile = false,
     String? recoveryReason,
   }) async {
     if (_isDisposed) return;
-    if (forceMp4) {
-      _forceMp4Fallback = true;
-    }
 
     // Detach from UI before manager-level dispose to avoid rendering
     // a controller whose native player ID no longer exists.

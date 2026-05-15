@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 
 import '../controller/profile_controller.dart';
 import '../models/user.dart';
+import '../widgets/ad_feedback.dart';
 import '../widgets/advanced/agent_advanced_form.dart';
 import '../widgets/advanced/club_advanced_form.dart';
 import '../widgets/advanced/player_advanced_form.dart';
@@ -88,7 +88,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
         return;
       }
 
-      Get.snackbar('Succès', 'Informations avancées mises à jour');
+      AdFeedback.success('Succès', 'Informations avancées mises à jour');
       Navigator.of(context).pop(true);
     } finally {
       if (mounted) {

@@ -483,7 +483,7 @@ async function assertOfferOwner(senderUid: string, offerId: string): Promise<voi
 async function assertEventOwner(senderUid: string, eventId: string): Promise<void> {
   const eventSnap = await db.collection("events").doc(eventId).get();
   if (!eventSnap.exists) {
-    throw new HttpsError("not-found", "Evenement introuvable.");
+    throw new HttpsError("not-found", "Événement introuvable.");
   }
 
   const ownerId = getNestedString(eventSnap.data(), "organisateur.uid");
@@ -646,7 +646,7 @@ export const saveUserFcmToken = onCall(
     }
 
     if (userSnap.data()?.authDisabled === true) {
-      throw new HttpsError("permission-denied", "Compte desactive.");
+      throw new HttpsError("permission-denied", "Compte désactivé.");
     }
 
     await userRef.set(
@@ -678,7 +678,7 @@ export const sendOfferFanout = onCall(
       "Nouvelle offre disponible";
     const body =
       getString(request.data, "body").slice(0, 300) ||
-      "Une nouvelle offre a ete publiee.";
+      "Une nouvelle offre a été publiée.";
 
     try {
       const stats = await sendFanoutToPlayers({
@@ -688,10 +688,10 @@ export const sendOfferFanout = onCall(
         contextType: "offre",
         contextData: offerId,
       });
-      return ok("fanout_sent", "Notifications offre envoyees.", stats);
+      return ok("fanout_sent", "Notifications offre envoyées.", stats);
     } catch (error) {
       logger.error("❌ sendOfferFanout error", error);
-      return err("fanout_failed", "Echec fanout offre.", true);
+      return err("fanout_failed", "Échec fanout offre.", true);
     }
   }
 );
@@ -710,10 +710,10 @@ export const sendEventFanout = onCall(
 
     const title =
       getString(request.data, "title").slice(0, 120) ||
-      "Nouvel evenement";
+      "Nouvel événement";
     const body =
       getString(request.data, "body").slice(0, 300) ||
-      "Un nouvel evenement est disponible.";
+      "Un nouvel événement est disponible.";
 
     try {
       const stats = await sendFanoutToPlayers({
@@ -723,10 +723,10 @@ export const sendEventFanout = onCall(
         contextType: "event",
         contextData: eventId,
       });
-      return ok("fanout_sent", "Notifications evenement envoyees.", stats);
+      return ok("fanout_sent", "Notifications événement envoyées.", stats);
     } catch (error) {
       logger.error("❌ sendEventFanout error", error);
-      return err("fanout_failed", "Echec fanout evenement.", true);
+      return err("fanout_failed", "Échec fanout événement.", true);
     }
   }
 );
@@ -770,7 +770,7 @@ export const logClientEvents = onCall(
 
     const persisted = sanitized.filter(shouldPersistClientLog);
     if (!persisted.length) {
-      return ok("noop", "Tous les logs ont ete echantillonnes.");
+      return ok("noop", "Tous les logs ont été échantillonnés.");
     }
 
     const batch = db.batch();

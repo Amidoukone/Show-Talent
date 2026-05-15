@@ -13,7 +13,7 @@ void main() {
       expect(settings, contains("title: 'Session invalide'"));
       expect(
         settings,
-        contains('Impossible de charger les parametres du compte.'),
+        contains('Impossible de charger les paramètres du compte.'),
       );
     });
 

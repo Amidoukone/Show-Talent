@@ -69,8 +69,6 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
       contextKey: widget.contextKey,
       videoManager: _videoManager,
       videos: _currentVideos,
-      useHlsForVideo: (video) =>
-          _vc.preferHlsPlayback && video.hasAdaptiveHlsSource,
       disposeWindow: _videoSlidingWindowLimit,
     );
 

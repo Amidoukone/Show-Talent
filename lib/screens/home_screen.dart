@@ -29,8 +29,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final VideoController videoController;
   final UserController userController = Get.find<UserController>();
   final FollowController followController = Get.find<FollowController>();
@@ -39,8 +38,6 @@ class _HomeScreenState extends State<HomeScreen>
   late final VideoFocusOrchestrator _focusOrchestrator;
 
   bool _isConnected = true;
-  late final AnimationController _fadeController;
-  late final Animation<double> _fadeAnimation;
 
   StreamSubscription<bool>? _connectivitySubscription;
   bool _wakelockOn = false;
@@ -179,8 +176,6 @@ class _HomeScreenState extends State<HomeScreen>
       contextKey: 'home',
       videoManager: videoManager,
       videos: _currentVideos,
-      useHlsForVideo: (video) =>
-          videoController.preferHlsPlayback && video.hasAdaptiveHlsSource,
       disposeWindow: 25,
       onRequestMore: () async {
         if (videoController.hasMore && !videoController.isLoading) {
@@ -191,13 +186,6 @@ class _HomeScreenState extends State<HomeScreen>
         }
       },
     );
-
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _fadeAnimation =
-        CurvedAnimation(parent: _fadeController, curve: Curves.easeIn);
 
     _initConnectivityListener();
     _loadInitialVideos();
@@ -224,7 +212,6 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _fadeController.dispose();
     _pageController.dispose();
     _connectivitySubscription?.cancel();
     unawaited(_setWakelock(false));
@@ -292,8 +279,6 @@ class _HomeScreenState extends State<HomeScreen>
       _refreshFocusVideos();
     }
 
-    if (mounted) _fadeController.forward();
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final videos = videoController.videoList;
       if (videos.isNotEmpty) {
@@ -336,17 +321,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-
-    // ✅ Ombre ultra légère (TikTok-like) : lisibilité sans masquer la vidéo
-    const textShadow = <Shadow>[
-      Shadow(
-        offset: Offset(0, 1),
-        blurRadius: 2,
-        color: Color(0x55000000), // très léger
-      ),
-    ];
-
     return Scaffold(
       backgroundColor: AdColors.surface,
       extendBodyBehindAppBar: true,
@@ -488,79 +462,23 @@ class _HomeScreenState extends State<HomeScreen>
                   final player =
                       videoManager.getController('home', video.videoUrl);
 
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      SmartVideoPlayer(
-                        key: ValueKey(video.id),
-                        player: player,
-                        videoController: videoController,
-                        userController: userController,
-                        followController: followController,
-                        contextKey: 'home',
-                        videoUrl: video.videoUrl,
-                        video: video,
-                        currentIndex: index,
-                        videoList: videos,
-                        enableTapToPlay: true,
-                        autoPlay: true,
-                        showControls: true,
-                        showProgressBar: true,
-                        showDeleteAction: false,
-                        onRefreshRequested: _refreshHomeFeed,
-                      ),
-
-                      // ✅ Texte "TikTok-like": sans background, sans gradient masquant la vidéo
-                      Positioned(
-                        bottom: screenHeight * 0.14,
-                        left: 16,
-                        right: 96,
-                        child: FadeTransition(
-                          opacity: _fadeAnimation,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.play_circle_fill_rounded,
-                                    size: 18,
-                                    color: Colors.white,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      video.description.trim().isNotEmpty
-                                          ? video.description.trim()
-                                          : 'Pas de description',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
-                                      ).copyWith(shadows: textShadow),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                video.caption.trim().isNotEmpty
-                                    ? video.caption.trim()
-                                    : 'Pas de légende',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                  height: 1.3,
-                                ).copyWith(shadows: textShadow),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                  return SmartVideoPlayer(
+                    key: ValueKey(video.id),
+                    player: player,
+                    videoController: videoController,
+                    userController: userController,
+                    followController: followController,
+                    contextKey: 'home',
+                    videoUrl: video.videoUrl,
+                    video: video,
+                    currentIndex: index,
+                    videoList: videos,
+                    enableTapToPlay: true,
+                    autoPlay: true,
+                    showControls: true,
+                    showProgressBar: true,
+                    showDeleteAction: false,
+                    onRefreshRequested: _refreshHomeFeed,
                   );
                 },
               );

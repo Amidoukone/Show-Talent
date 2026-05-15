@@ -70,7 +70,7 @@ export const completeEmailVerification = onCall(
       if (!authRecord.emailVerified) {
         throw new HttpsError(
           "failed-precondition",
-          "L e-mail n est pas encore verifie dans Firebase Auth.",
+          "L’e-mail n’est pas encore vérifié dans Firebase Auth.",
         );
       }
 
