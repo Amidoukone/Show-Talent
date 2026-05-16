@@ -9,10 +9,35 @@ service firebase.storage {
       return fileName[0:fileName.size() - 4];
     }
 
+    function thumbnailDocIdFromJpgFileName(fileName) {
+      return fileName[10:fileName.size() - 4];
+    }
+
+    function thumbnailDocIdFromJpegFileName(fileName) {
+      return fileName[10:fileName.size() - 5];
+    }
+
+    function isOwnedVideoDoc(videoId) {
+      return firestore.exists(/databases/(default)/documents/videos/$(videoId)) &&
+        firestore.get(/databases/(default)/documents/videos/$(videoId)).data.uid == request.auth.uid;
+    }
+
     function isOwnedVideoMp4(fileName) {
       return fileName.matches('^[A-Za-z0-9_-]+\\.mp4$') &&
-        firestore.exists(/databases/(default)/documents/videos/$(videoDocIdFromFileName(fileName))) &&
-        firestore.get(/databases/(default)/documents/videos/$(videoDocIdFromFileName(fileName))).data.uid == request.auth.uid;
+        isOwnedVideoDoc(videoDocIdFromFileName(fileName));
+    }
+
+    function isOwnedThumbnail(fileName) {
+      return (
+        fileName.matches('^thumbnail_[A-Za-z0-9_-]+\\.jpg$') &&
+        isOwnedVideoDoc(thumbnailDocIdFromJpgFileName(fileName))
+      ) || (
+        fileName.matches('^thumbnail_[A-Za-z0-9_-]+\\.png$') &&
+        isOwnedVideoDoc(thumbnailDocIdFromJpgFileName(fileName))
+      ) || (
+        fileName.matches('^thumbnail_[A-Za-z0-9_-]+\\.jpeg$') &&
+        isOwnedVideoDoc(thumbnailDocIdFromJpegFileName(fileName))
+      );
     }
 
     match /profilePhotos/{uid} {
@@ -32,7 +57,7 @@ service firebase.storage {
 
     match /thumbnails/{fileName} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if signedIn() && isOwnedThumbnail(fileName);
     }
 
     match /hls/{videoId}/{allPaths=**} {

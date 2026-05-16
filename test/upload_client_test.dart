@@ -32,6 +32,28 @@ class TestUploadHttpClient implements UploadHttpClient {
   }
 }
 
+class RefreshingUploadClient extends UploadClient {
+  RefreshingUploadClient({
+    required UploadHttpClient httpClient,
+    required this.refreshedSession,
+    required Future<String> Function() cachePathProvider,
+  }) : super(
+          httpClient: httpClient,
+          cachePathProvider: cachePathProvider,
+          videoRetryDelay: Duration.zero,
+          maxChunkRetries: 2,
+        );
+
+  final UploadSessionState refreshedSession;
+  int refreshCalls = 0;
+
+  @override
+  Future<UploadSessionState> refreshSession(UploadSessionState session) async {
+    refreshCalls += 1;
+    return refreshedSession;
+  }
+}
+
 Response<dynamic> buildResponse(
   int statusCode, {
   Map<String, List<String>> headers = const {},
@@ -165,6 +187,84 @@ void main() {
 
     expect(uploaded, isTrue);
     expect(uploadCalls, 2);
+    expect(progressValues.last, 1.0);
+  });
+
+  test('uploadFile restarts from zero after refreshing an expired URL',
+      () async {
+    final file = await createFile('video_refresh.bin', [1, 2, 3, 4]);
+    final contentRanges = <String>[];
+
+    final expiredSession = buildSession().copyWith(
+      expiresAt: DateTime.now().subtract(const Duration(minutes: 1)),
+      uploadedBytes: 2,
+    );
+    final refreshedSession = expiredSession.copyWith(
+      uploadUrl: 'https://upload.example.com/video-refreshed',
+      expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+      uploadedBytes: 0,
+    );
+
+    final client = RefreshingUploadClient(
+      refreshedSession: refreshedSession,
+      cachePathProvider: () async => '${tempDir.path}/session_refresh.json',
+      httpClient: TestUploadHttpClient(
+        (path, {data, options, cancelToken}) async {
+          final contentRange = options?.headers?['Content-Range'] as String?;
+          if (contentRange == 'bytes */4') {
+            return buildResponse(400);
+          }
+
+          contentRanges.add(contentRange ?? '');
+          expect(path, refreshedSession.uploadUrl);
+          return buildResponse(200);
+        },
+      ),
+    );
+
+    final uploaded = await client.uploadFile(
+      session: expiredSession,
+      file: file,
+      onProgress: (_) {},
+    );
+
+    expect(uploaded, isTrue);
+    expect(client.refreshCalls, 1);
+    expect(contentRanges, ['bytes 0-3/4']);
+  });
+
+  test(
+      'uploadFile does not trust a completed local offset without remote state',
+      () async {
+    final file = await createFile('video_unverified.bin', [1, 2, 3, 4]);
+    final contentRanges = <String>[];
+    final progressValues = <double>[];
+
+    final client = UploadClient(
+      httpClient: TestUploadHttpClient(
+        (path, {data, options, cancelToken}) async {
+          final contentRange = options?.headers?['Content-Range'] as String?;
+          if (contentRange == 'bytes */4') {
+            return buildResponse(400);
+          }
+
+          contentRanges.add(contentRange ?? '');
+          return buildResponse(200);
+        },
+      ),
+      cachePathProvider: () async => '${tempDir.path}/session_unverified.json',
+      videoRetryDelay: Duration.zero,
+      maxChunkRetries: 2,
+    );
+
+    final uploaded = await client.uploadFile(
+      session: buildSession().copyWith(uploadedBytes: 4),
+      file: file,
+      onProgress: progressValues.add,
+    );
+
+    expect(uploaded, isTrue);
+    expect(contentRanges, ['bytes 0-3/4']);
     expect(progressValues.last, 1.0);
   });
 

@@ -263,7 +263,7 @@ class _BodyCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Durée maximale 60s • Qualité conseillée 480×360+',
+              'Durée maximale 60s • Qualité minimale 480×360',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontSize: 13,
@@ -310,7 +310,7 @@ class _BodyCard extends StatelessWidget {
                 _TipChip(icon: Icons.hd_rounded, label: '≥ 480×360'),
                 _TipChip(
                     icon: Icons.data_saver_on_rounded,
-                    label: 'Compression auto'),
+                    label: 'Optimisation auto'),
               ],
             ),
           ],

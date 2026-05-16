@@ -789,17 +789,26 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         final managedPlayer =
             _videoManager.getController(widget.contextKey, widget.videoUrl);
         final managedCtrl = managedPlayer?.controller;
+        final shouldBindManagedPlayer =
+            managedPlayer != null && !identical(managedPlayer, _player);
         final shouldDetachStaleCtrl = ctrl != null &&
             (managedCtrl == null || !identical(ctrl, managedCtrl));
-        if (shouldDetachStaleCtrl) {
+        if (shouldBindManagedPlayer || shouldDetachStaleCtrl) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted || _isDisposed) return;
-            if (!identical(_ctrl, ctrl)) return;
+            if (!shouldBindManagedPlayer && !identical(_ctrl, ctrl)) return;
             _bindPlayer(managedPlayer);
+            if (managedPlayer != null &&
+                widget.autoPlay &&
+                _isActuallyVisible()) {
+              _scheduleMaybePlay();
+            }
           });
         }
 
-        final effectiveCtrl = shouldDetachStaleCtrl ? managedCtrl : ctrl;
+        final effectiveCtrl = (shouldBindManagedPlayer || shouldDetachStaleCtrl)
+            ? managedCtrl
+            : ctrl;
         final value = _safeValue(effectiveCtrl);
         final loadState =
             _videoManager.getLoadState(widget.contextKey, widget.videoUrl);

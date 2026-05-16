@@ -184,5 +184,18 @@ void main() {
       expect(tiktokPlayer, contains('FilledButton.icon'));
       expect(tiktokPlayer, contains("label: const Text('Réessayer')"));
     });
+    test('visible video binds a newly ready managed controller without scroll',
+        () {
+      final smartPlayer =
+          File('lib/widgets/smart_video_player.dart').readAsStringSync();
+
+      expect(smartPlayer, contains('shouldBindManagedPlayer'));
+      expect(
+        smartPlayer,
+        contains('managedPlayer != null && !identical(managedPlayer, _player)'),
+      );
+      expect(smartPlayer, contains('_bindPlayer(managedPlayer);'));
+      expect(smartPlayer, contains('_scheduleMaybePlay();'));
+    });
   });
 }

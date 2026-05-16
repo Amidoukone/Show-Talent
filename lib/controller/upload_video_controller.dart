@@ -15,7 +15,7 @@ import 'package:adfoot/utils/video_tools.dart';
 import 'package:adfoot/screens/success_toast.dart';
 
 class UploadVideoController extends GetxController {
-  static const Duration _optimizationOverallTimeout = Duration(minutes: 3);
+  static const Duration _optimizationOverallTimeout = Duration(seconds: 45);
   static const Duration _pollInterval = Duration(seconds: 10);
 
   final isUploading = false.obs;
@@ -35,12 +35,18 @@ class UploadVideoController extends GetxController {
 
   UploadSessionState? _activeSession;
   String? _lastUploadedThumbPath;
+  int _operationSerial = 0;
+  int? _preparedDurationSec;
+  int? _preparedWidth;
+  int? _preparedHeight;
 
   @override
   void onClose() {
     VideoTools.dispose();
     super.onClose();
   }
+
+  bool _isCurrentOperation(int operation) => operation == _operationSerial;
 
   /* -------------------------------------------------------------------------- */
   /* Préparation                                                               */
@@ -57,6 +63,7 @@ class UploadVideoController extends GetxController {
 
     final sanitizedDescription = description.trim();
     final sanitizedCaption = cap.trim();
+    final operation = ++_operationSerial;
 
     if (sanitizedDescription.isEmpty || sanitizedCaption.isEmpty) {
       showErrorToast('Merci de renseigner une description et une légende.');
@@ -71,6 +78,9 @@ class UploadVideoController extends GetxController {
     this.description = null;
     caption = null;
     originalVideoPath = null;
+    _preparedDurationSec = null;
+    _preparedWidth = null;
+    _preparedHeight = null;
 
     var isPrepared = false;
 
@@ -94,8 +104,11 @@ class UploadVideoController extends GetxController {
         sourceFile.path,
         maxDurationSeconds: VideoTools.defaultMaxUploadDurationSeconds,
       );
+      if (!_isCurrentOperation(operation)) return false;
+
       final isValidQuality =
           await VideoTools.isQualityAcceptable(preparedVideo.file.path);
+      if (!_isCurrentOperation(operation)) return false;
 
       if (!isValidQuality) {
         showErrorToast(
@@ -105,9 +118,16 @@ class UploadVideoController extends GetxController {
       }
 
       uploadStage.value = 'Préparation du fichier...';
+      final (preparedWidth, preparedHeight) =
+          await VideoTools.getDimensions(preparedVideo.file.path);
+      if (!_isCurrentOperation(operation)) return false;
+
       uploadProgress.value = 0.08;
       selectedVideo = preparedVideo.file;
       originalVideoPath = selectedVideo!.path;
+      _preparedDurationSec = preparedVideo.uploadDurationSeconds;
+      _preparedWidth = preparedWidth;
+      _preparedHeight = preparedHeight;
       if (preparedVideo.wasTrimmed) {
         showInfoToast(
           'Vidéo préparée en extrait de '
@@ -117,6 +137,8 @@ class UploadVideoController extends GetxController {
 
       uploadStage.value = 'Génération de la miniature...';
       thumbnail = await _retryThumbnail(selectedVideo!.path);
+      if (!_isCurrentOperation(operation)) return false;
+
       if (thumbnail == null) {
         showErrorToast('Erreur lors de la génération de la miniature.');
         return false;
@@ -128,18 +150,22 @@ class UploadVideoController extends GetxController {
       isPrepared = true;
       return true;
     } on VideoPreparationException catch (error) {
+      if (!_isCurrentOperation(operation)) return false;
       showErrorToast(error.message);
       return false;
     } catch (_) {
+      if (!_isCurrentOperation(operation)) return false;
       showErrorToast(
         'Préparation impossible pour le moment. Merci de réessayer.',
       );
       return false;
     } finally {
-      isPreparing(false);
-      if (!isPrepared) {
-        uploadProgress.value = 0.0;
-        uploadStage.value = '';
+      if (_isCurrentOperation(operation)) {
+        isPreparing(false);
+        if (!isPrepared) {
+          uploadProgress.value = 0.0;
+          uploadStage.value = '';
+        }
       }
     }
   }
@@ -183,9 +209,6 @@ class UploadVideoController extends GetxController {
     uploadStage.value = 'Initialisation...';
     uploadProgress.value = 0.18;
 
-    final thumbContentType =
-        VideoTools.inferImageContentTypeFromPath(thumbnail!.path);
-
     UploadSessionState session;
 
     try {
@@ -225,6 +248,9 @@ class UploadVideoController extends GetxController {
       }
 
       uploadStage.value = 'Préparation miniature sécurisée...';
+      final thumbContentType =
+          VideoTools.inferImageContentTypeFromPath(thumbnail!.path);
+
       final thumbTicket = await _uploadClient.requestThumbnailTicket(
         sessionId: session.sessionId,
         file: thumbnail!,
@@ -250,9 +276,9 @@ class UploadVideoController extends GetxController {
       uploadStage.value = 'Finalisation...';
       uploadProgress.value = 0.95;
 
-      final durationSec =
-          await VideoTools.getDurationSeconds(originalVideoPath!);
-      final (w, h) = await VideoTools.getDimensions(originalVideoPath!);
+      final durationSec = _preparedDurationSec;
+      final w = _preparedWidth;
+      final h = _preparedHeight;
       final user = Get.find<UserController>().user;
 
       final finalized = await _uploadClient.finalizeUpload(
@@ -291,6 +317,7 @@ class UploadVideoController extends GetxController {
 
       await _uploadClient.clearPersistedSession();
       _activeSession = null;
+      await _releaseVideoProcessingResources();
 
       uploadStage.value = 'Optimisation en cours...';
       isUploading(false);
@@ -447,6 +474,7 @@ class UploadVideoController extends GetxController {
   }
 
   void resetUploadState() {
+    _operationSerial++;
     isPreparing(false);
     isUploading(false);
     isOptimizing(false);
@@ -457,6 +485,9 @@ class UploadVideoController extends GetxController {
     description = null;
     caption = null;
     originalVideoPath = null;
+    _preparedDurationSec = null;
+    _preparedWidth = null;
+    _preparedHeight = null;
     _cancelToken = null;
     _activeSession = null;
     _lastUploadedThumbPath = null;
@@ -501,6 +532,12 @@ class UploadVideoController extends GetxController {
         }
       } catch (_) {}
     }
+  }
+
+  Future<void> _releaseVideoProcessingResources() async {
+    try {
+      await VideoTools.dispose();
+    } catch (_) {}
   }
 
   Future<void> _deletePartialUpload(String videoPath, String thumbPath) async {

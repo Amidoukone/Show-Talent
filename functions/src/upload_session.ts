@@ -40,6 +40,7 @@ interface VideoDoc {
   thumbnailPath?: string;
   thumbnailGuard?: ThumbnailGuard;
   status?: string;
+  optimized?: boolean;
   createdAt?: unknown;
 }
 
@@ -128,6 +129,22 @@ function timestampToMillis(value: unknown): number {
   if (!value || typeof value !== "object") return 0;
   const candidate = value as {toMillis?: () => number};
   return typeof candidate.toMillis === "function" ? candidate.toMillis() : 0;
+}
+
+function resolveUploadLifecycleState(
+  doc: VideoDoc | undefined,
+): {status: string; optimized: boolean} {
+  const status = typeof doc?.status === "string" ? doc.status : "";
+
+  if (status === "ready" && doc?.optimized === true) {
+    return {status: "ready", optimized: true};
+  }
+
+  if (["error", "failed", "failure"].includes(status)) {
+    return {status, optimized: false};
+  }
+
+  return {status: "processing", optimized: false};
 }
 
 async function assertUploadCallerEligible(
@@ -241,12 +258,18 @@ function sanitizeThumbnailPath(
   const fallback = `thumbnails/thumbnail_${sessionId}.${ext}`;
   if (!provided) return fallback;
 
-  const safe = provided
+  const normalized = provided
     .trim()
+    .replace(/^\/+/, "")
     .replace(/\s+/g, "_")
     .replace(/[^a-zA-Z0-9_./-]/g, "");
 
-  return safe.endsWith(`.${ext}`) ? safe : fallback;
+  if (!normalized.startsWith("thumbnails/")) return fallback;
+  if (!normalized.endsWith(`.${ext}`)) return fallback;
+  if (!normalized.includes(sessionId)) return fallback;
+  if (normalized.includes("..")) return fallback;
+
+  return normalized;
 }
 
 function normalizeVideoStoragePath(sessionId: string, provided?: string): string {
@@ -302,9 +325,17 @@ async function validateThumbnail(
 
   const [meta] = await file.getMetadata();
   const actualSize = Number(meta.size ?? 0);
+  const actualContentType =
+    typeof meta.contentType === "string" ?
+      meta.contentType.toLowerCase() :
+      "";
 
   if (guard.size && actualSize !== guard.size) {
     throw new HttpsError("failed-precondition", "Taille miniature invalide.");
+  }
+
+  if (guard.contentType && actualContentType !== guard.contentType) {
+    throw new HttpsError("failed-precondition", "Type miniature invalide.");
   }
 
   const [buffer] = await file.download();
@@ -312,6 +343,27 @@ async function validateThumbnail(
 
   if (guard.hash && computedHash !== guard.hash) {
     throw new HttpsError("failed-precondition", "Hash miniature invalide.");
+  }
+}
+
+async function validateVideoUpload(path: string): Promise<void> {
+  const file = storage.bucket().file(path);
+  const [exists] = await file.exists();
+  if (!exists) throw new HttpsError("not-found", "Video introuvable.");
+
+  const [meta] = await file.getMetadata();
+  const actualSize = Number(meta.size ?? 0);
+  const actualContentType =
+    typeof meta.contentType === "string" ?
+      meta.contentType.toLowerCase() :
+      "";
+
+  if (!Number.isFinite(actualSize) || actualSize <= 0) {
+    throw new HttpsError("failed-precondition", "Fichier video vide.");
+  }
+
+  if (!actualContentType.startsWith("video/mp4")) {
+    throw new HttpsError("failed-precondition", "Type video invalide.");
   }
 }
 
@@ -374,15 +426,18 @@ export const createUploadSession = onCall(
 
     let storagePath = `videos/${sessionId}.mp4`;
     let thumbnailPath = `thumbnails/thumbnail_${sessionId}.jpg`;
+    let lifecycle = resolveUploadLifecycleState(undefined);
 
     const existing = await videoRef.get();
+    const isExistingSession = existing.exists;
     if (existing.exists) {
       const doc = existing.data() as VideoDoc | undefined;
       if (doc?.uid && doc.uid !== uid) {
         throw new HttpsError("permission-denied", "Session appartenant à un autre utilisateur.");
       }
-      storagePath = doc?.storagePath ?? storagePath;
-      thumbnailPath = doc?.thumbnailPath ?? thumbnailPath;
+      storagePath = normalizeVideoStoragePath(sessionId, doc?.storagePath);
+      thumbnailPath = normalizeThumbnailStoragePath(sessionId, doc?.thumbnailPath);
+      lifecycle = resolveUploadLifecycleState(doc);
     }
 
     await assertUploadRateLimits(uid, sessionId);
@@ -393,10 +448,10 @@ export const createUploadSession = onCall(
         uid,
         storagePath,
         thumbnailPath,
-        status: "processing",
-        optimized: false,
+        status: lifecycle.status,
+        optimized: lifecycle.optimized,
         updatedAt: fieldValue.serverTimestamp(),
-        createdAt: fieldValue.serverTimestamp(),
+        ...(isExistingSession ? {} : {createdAt: fieldValue.serverTimestamp()}),
       },
       {merge: true},
     );
@@ -440,6 +495,10 @@ export const requestThumbnailUploadUrl = onCall(
 
     if (!sessionId || !hash || size <= 0) {
       throw new HttpsError("invalid-argument", "Métadonnées miniature invalides.");
+    }
+
+    if (!/^[a-f0-9]{32}$/i.test(hash)) {
+      throw new HttpsError("invalid-argument", "Hash miniature invalide.");
     }
 
     const videoRef = db.collection("videos").doc(sessionId);
@@ -528,8 +587,10 @@ export const finalizeUpload = onCall(
       doc?.thumbnailPath,
     );
     const persistedThumbnailGuard = doc?.thumbnailGuard;
+    const lifecycle = resolveUploadLifecycleState(doc);
 
-    await validateThumbnail(doc?.thumbnailPath, doc?.thumbnailGuard);
+    await validateVideoUpload(persistedStoragePath);
+    await validateThumbnail(persistedThumbnailPath, persistedThumbnailGuard);
 
     const rawMetadata = (request.data as { metadata?: UploadMetadata } | undefined)?.metadata;
     const safe: ParsedMetadata = {};
@@ -562,9 +623,8 @@ export const finalizeUpload = onCall(
       safe.likes = asStringList(rawMetadata.likes);
       safe.reports = asStringList(rawMetadata.reports);
 
-      // NB: status/optimized ne doivent pas être trust côté client.
-      // On garde ton comportement existant: on force status=processing, optimized=false.
-      // (Si tu veux quand même accepter, il faut whitelister et valider.)
+      // NB: status/optimized ne doivent pas etre trust cote client.
+      // On conserve seulement un etat terminal deja pose par l'optimiseur.
     }
 
     // On n’écrit que les valeurs présentes dans safe
@@ -590,8 +650,8 @@ export const finalizeUpload = onCall(
     await videoRef.set(
       {
         uid,
-        status: "processing",
-        optimized: false,
+        status: lifecycle.status,
+        optimized: lifecycle.optimized,
 
         // ✅ CANONIQUE (nouveau standard)
         ...(safe.description ? {description: safe.description} : {}),

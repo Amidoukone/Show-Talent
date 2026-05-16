@@ -33,10 +33,6 @@ service cloud.firestore {
         null;
     }
 
-    function isPublicSignupRole(role) {
-      return false;
-    }
-
     function isOpportunityPublisherRole(role) {
       return role == "recruteur" || role == "club" || role == "agent";
     }
@@ -57,46 +53,6 @@ service cloud.firestore {
           request.auth.token.platformAdmin == true ||
           request.auth.token.superAdmin == true
         );
-    }
-
-    function preservesUserIdentity() {
-      return request.resource.data.uid == resource.data.uid &&
-        request.resource.data.role == resource.data.role &&
-        request.resource.data.createdByAdmin == resource.data.createdByAdmin;
-    }
-
-    function preservesProtectedUserFields() {
-      return request.resource.data.dateInscription == resource.data.dateInscription &&
-        request.resource.data.authDisabled == resource.data.authDisabled &&
-        request.resource.data.authDisabledAt == resource.data.authDisabledAt &&
-        request.resource.data.authDisabledBy == resource.data.authDisabledBy &&
-        request.resource.data.authDisabledReason == resource.data.authDisabledReason &&
-        request.resource.data.invitedBy == resource.data.invitedBy &&
-        request.resource.data.invitedAt == resource.data.invitedAt &&
-        request.resource.data.lastInviteAt == resource.data.lastInviteAt &&
-        request.resource.data.roleChangedBy == resource.data.roleChangedBy &&
-        request.resource.data.roleChangedAt == resource.data.roleChangedAt &&
-        request.resource.data.updatedByAdmin == resource.data.updatedByAdmin;
-    }
-
-    function expectedVerifiedActiveState() {
-      return request.resource.data.authDisabled != true;
-    }
-
-    function preservesVerificationState() {
-      return (
-        request.resource.data.emailVerified == resource.data.emailVerified &&
-        request.resource.data.estActif == resource.data.estActif &&
-        request.resource.data.emailVerifiedAt == resource.data.emailVerifiedAt
-      ) || (
-        request.auth.token.email_verified == true &&
-        request.resource.data.emailVerified == true &&
-        request.resource.data.estActif == expectedVerifiedActiveState() &&
-        (
-          request.resource.data.emailVerifiedAt == resource.data.emailVerifiedAt ||
-          request.resource.data.emailVerifiedAt == request.time
-        )
-      );
     }
 
     function changesOnly(allowedKeys) {

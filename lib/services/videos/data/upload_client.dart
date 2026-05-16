@@ -254,15 +254,13 @@ class UploadClient {
     return session;
   }
 
-  Future<UploadSessionState> refreshSession(
-    UploadSessionState session, {
-    int? uploadedBytes,
-  }) async {
+  Future<UploadSessionState> refreshSession(UploadSessionState session) async {
     final refreshed = await _createSession(
       localFilePath: session.localFilePath,
       sessionId: session.sessionId,
     );
-    return refreshed.copyWith(uploadedBytes: uploadedBytes);
+    // A new resumable URL starts a new server-side upload session.
+    return refreshed.copyWith(uploadedBytes: 0);
   }
 
   int _extractLastByte(String? rangeHeader) {
@@ -272,6 +270,12 @@ class UploadClient {
 
   bool _isTerminalSuccessStatus(int? statusCode) {
     return statusCode != null && _terminalSuccessStatuses.contains(statusCode);
+  }
+
+  int _clampUploadedBytes(int value, int totalBytes) {
+    if (value < 0) return 0;
+    if (value > totalBytes) return totalBytes;
+    return value;
   }
 
   String _describeError(Object error) {
@@ -316,8 +320,11 @@ class UploadClient {
       } catch (error) {
         if (cancelToken?.isCancelled == true) rethrow;
 
-        lastStatusCode =
-            error is UploadClientException ? error.statusCode : lastStatusCode;
+        if (error is UploadClientException) {
+          lastStatusCode = error.statusCode ?? lastStatusCode;
+        } else if (error is DioException) {
+          lastStatusCode = error.response?.statusCode ?? lastStatusCode;
+        }
 
         if (attempt == _maxChunkRetries) {
           throw UploadClientException(
@@ -391,11 +398,18 @@ class UploadClient {
     var uploadedBytes = session.uploadedBytes;
 
     final remoteOffset = await _queryRemoteOffset(current, totalBytes);
-    if (remoteOffset >= 0) uploadedBytes = remoteOffset + 1;
+    if (remoteOffset >= 0) {
+      uploadedBytes = _clampUploadedBytes(remoteOffset + 1, totalBytes);
+    } else if (uploadedBytes < 0 || uploadedBytes >= totalBytes) {
+      uploadedBytes = 0;
+      await persistSession(current.copyWith(uploadedBytes: 0));
+    }
 
     while (uploadedBytes < totalBytes) {
       if (current.isExpired) {
-        current = await refreshSession(current, uploadedBytes: uploadedBytes);
+        current = await refreshSession(current);
+        uploadedBytes = 0;
+        await persistSession(current.copyWith(uploadedBytes: 0));
         onUrlRefreshed?.call();
       }
 
@@ -419,7 +433,7 @@ class UploadClient {
       if (response.statusCode == 308) {
         final lastPersistedByte =
             _extractLastByte(response.headers.value('range'));
-        if (lastPersistedByte < chunkStart) {
+        if (lastPersistedByte < chunkStart || lastPersistedByte >= totalBytes) {
           throw const UploadClientException(
             'Réponse 308 invalide pendant l’upload vidéo.',
           );
@@ -442,7 +456,10 @@ class UploadClient {
     required String contentType,
     String? thumbnailPath,
   }) async {
-    final size = await file.length();
+    final size = await _readValidFileLength(
+      file: file,
+      label: 'miniature',
+    );
     final hash = await _computeMd5(file);
 
     final callable = _functions.httpsCallable('requestThumbnailUploadUrl');
@@ -504,7 +521,7 @@ class UploadClient {
       if (response.statusCode == 308) {
         final lastPersistedByte =
             _extractLastByte(response.headers.value('range'));
-        if (lastPersistedByte < chunkStart) {
+        if (lastPersistedByte < chunkStart || lastPersistedByte >= totalBytes) {
           throw const UploadClientException(
             'Réponse 308 invalide pendant l’upload miniature.',
           );

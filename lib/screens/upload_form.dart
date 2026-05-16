@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:adfoot/config/feature_controller_registry.dart';
@@ -33,7 +34,7 @@ class _UploadFormState extends State<UploadForm> {
   final FocusNode _descriptionFocus = FocusNode();
   final FocusNode _captionFocus = FocusNode();
 
-  late VideoPlayerController _videoPlayerController;
+  VideoPlayerController? _videoPlayerController;
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
 
@@ -42,21 +43,23 @@ class _UploadFormState extends State<UploadForm> {
     super.initState();
     uploadVideoController =
         FeatureControllerRegistry.ensureUploadVideoController();
-    _videoPlayerController = VideoPlayerController.file(widget.videoFile)
-      ..setLooping(true)
-      ..initialize().then((_) {
-        if (mounted) {
+    final controller = VideoPlayerController.file(widget.videoFile);
+    _videoPlayerController = controller;
+    unawaited(controller.setLooping(true).catchError((_) {}));
+    unawaited(
+      controller.initialize().then((_) {
+        if (mounted && identical(_videoPlayerController, controller)) {
           setState(() {
-            _duration = _videoPlayerController.value.duration;
+            _duration = controller.value.duration;
           });
         }
-      });
+      }).catchError((_) {}),
+    );
   }
 
   @override
   void dispose() {
-    _videoPlayerController.pause();
-    _videoPlayerController.dispose();
+    unawaited(_releasePreviewController(notify: false));
     descriptionController.dispose();
     captionController.dispose();
     _descriptionFocus.dispose();
@@ -65,15 +68,38 @@ class _UploadFormState extends State<UploadForm> {
   }
 
   void toggleVideoPlayback() {
-    if (_videoPlayerController.value.isInitialized) {
+    final controller = _videoPlayerController;
+    if (controller != null && controller.value.isInitialized) {
       setState(() {
         if (_isPlaying) {
-          _videoPlayerController.pause();
+          unawaited(controller.pause().catchError((_) {}));
         } else {
-          _videoPlayerController.play();
+          unawaited(controller.play().catchError((_) {}));
         }
         _isPlaying = !_isPlaying;
       });
+    }
+  }
+
+  Future<void> _releasePreviewController({bool notify = true}) async {
+    final controller = _videoPlayerController;
+    if (controller == null) return;
+
+    _videoPlayerController = null;
+    _isPlaying = false;
+
+    try {
+      if (controller.value.isInitialized) {
+        await controller.pause();
+      }
+    } catch (_) {}
+
+    try {
+      await controller.dispose();
+    } catch (_) {}
+
+    if (notify && mounted) {
+      setState(() {});
     }
   }
 
@@ -101,6 +127,7 @@ class _UploadFormState extends State<UploadForm> {
     // Ferme les claviers avant de lancer la preparation
     _descriptionFocus.unfocus();
     _captionFocus.unfocus();
+    await _releasePreviewController();
 
     try {
       final isReady = await uploadVideoController.prepareUpload(
@@ -124,6 +151,7 @@ class _UploadFormState extends State<UploadForm> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final previewController = _videoPlayerController;
 
     return Scaffold(
       appBar: AppBar(
@@ -169,14 +197,14 @@ class _UploadFormState extends State<UploadForm> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: _videoPlayerController.value.isInitialized
+                  child: previewController != null &&
+                          previewController.value.isInitialized
                       ? Stack(
                           alignment: Alignment.center,
                           children: [
                             AspectRatio(
-                              aspectRatio:
-                                  _videoPlayerController.value.aspectRatio,
-                              child: VideoPlayer(_videoPlayerController),
+                              aspectRatio: previewController.value.aspectRatio,
+                              child: VideoPlayer(previewController),
                             ),
                             // Bouton play/pause au centre
                             GestureDetector(
@@ -305,7 +333,7 @@ class _UploadFormState extends State<UploadForm> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Rappel : durée max 60s • qualité conseillée ≥ 480×360',
+                  'Rappel : durée max 60s • qualité minimale ≥ 480×360',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.7), fontSize: 12),
