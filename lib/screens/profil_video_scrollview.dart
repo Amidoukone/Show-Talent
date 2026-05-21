@@ -182,7 +182,7 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
                 const SizedBox.expand(
                   child: Center(
                     child: Text(
-                      'Aucune video a afficher',
+                      'Aucune vidéo à afficher',
                       style: TextStyle(color: Colors.white),
                     ),
                   ),

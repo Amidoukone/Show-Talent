@@ -1,6 +1,6 @@
 // ============================================================================
 // Root-level build.gradle
-// Compatible avec Flutter 3.32.7 / AGP 8.3.0 / Gradle 8.9 / Kotlin 1.8.22
+// Compatible with Flutter 3.32.7 / AGP 8.6.1 / Gradle 8.9 / Kotlin 1.8.22
 // ============================================================================
 
 allprojects {
@@ -10,23 +10,20 @@ allprojects {
     }
 }
 
-// Dossier de build commun (structure Flutter standard)
+// Shared build directory (standard Flutter structure).
 rootProject.buildDir = "../build"
 
 subprojects {
 
-    // Chaque module (app + plugins Flutter) a son propre dossier build
+    // Each module (app + Flutter plugins) has its own build directory.
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 
-    // Flutter exige que tous les plugins dépendent de :app
+    // Flutter requires every plugin module to depend on :app.
     project.evaluationDependsOn(":app")
 
-    // ------------------------------------------------------------------------
-    // 🔒 POINT CRITIQUE : FORÇAGE DE KOTLIN
-    // ------------------------------------------------------------------------
-    // Évite les erreurs du type :
-    // "Too many arguments for public constructor String()"
-    // sur package_info_plus, cloud_functions, etc.
+    // Critical guardrail: force Kotlin.
+    // Avoids errors like "Too many arguments for public constructor String()"
+    // on package_info_plus, cloud_functions, etc.
     configurations.all {
         resolutionStrategy.eachDependency { details ->
             if (details.requested.group == "org.jetbrains.kotlin") {
@@ -37,7 +34,7 @@ subprojects {
     }
 }
 
-// Tâche clean globale (utilisée par flutter clean)
+// Global clean task used by flutter clean.
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }

@@ -87,10 +87,6 @@ class _MainScreenState extends State<MainScreen> {
   void _onItemTapped(int index) {
     HapticFeedback.selectionClick();
 
-    if (index == 3) {
-      chatController.markAllAsReadLocal();
-    }
-
     setState(() {
       _selectedIndex = index;
     });
@@ -291,14 +287,14 @@ class _NavIconShell extends StatelessWidget {
       duration: const Duration(milliseconds: 200),
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
-        color: active ?
-            AdColors.brand.withValues(alpha: 0.18) :
-            Colors.transparent,
+        color: active
+            ? AdColors.brand.withValues(alpha: 0.18)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: active ?
-              AdColors.brand.withValues(alpha: 0.35) :
-              Colors.transparent,
+          color: active
+              ? AdColors.brand.withValues(alpha: 0.35)
+              : Colors.transparent,
           width: 1,
         ),
         boxShadow: active

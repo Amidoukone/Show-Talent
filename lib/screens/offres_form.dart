@@ -5,7 +5,6 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:intl/intl.dart';
-import 'package:adfoot/screens/offre_screen.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 
@@ -35,6 +34,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
 
   late bool isEditing;
   Offre? editingOffre;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -65,7 +65,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
         elevation: 0,
         backgroundColor: cs.surface,
         foregroundColor: cs.onSurface,
-        title: Text(isEditing ? 'Modifier l\'offre' : 'Nouvelle offre'),
+        title: Text(isEditing ? 'Modifier l’offre' : 'Nouvelle offre'),
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: cs.onSurface),
           onPressed: () => Get.back(),
@@ -84,8 +84,8 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                 TextFormField(
                   controller: _titreController,
                   decoration: _buildInputDecoration(
-                    'Titre de l\'offre',
-                    'Entrez le titre de l\'offre',
+                    'Titre de l’offre',
+                    'Entrez le titre de l’offre',
                     Icons.work_outline,
                   ),
                   validator: (value) => value == null || value.isEmpty
@@ -98,7 +98,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                   maxLines: 5,
                   decoration: _buildInputDecoration(
                     'Description',
-                    'Décrivez l\'offre en détail',
+                    'Décrivez l’offre en détail',
                     Icons.description_outlined,
                   ),
                   validator: (value) => value == null || value.isEmpty
@@ -161,14 +161,20 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _submitForm,
-                    child: Text(
-                      isEditing ? 'Mettre à jour' : 'Publier l\'offre',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    onPressed: _isSubmitting ? null : _submitForm,
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            isEditing ? 'Mettre à jour' : 'Publier l’offre',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -219,11 +225,19 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     return InkWell(
       onTap: () async {
         final now = DateTime.now();
-        final firstDate = isStart ? now : (_dateDebut ?? now);
+        final firstDate = _resolveFirstDate(
+          now: now,
+          selectedDate: date,
+          isStart: isStart,
+        );
+        final initialDate = _resolveInitialDate(
+          selectedDate: date,
+          firstDate: firstDate,
+        );
 
         final pickedDate = await showDatePicker(
           context: context,
-          initialDate: date ?? firstDate,
+          initialDate: initialDate,
           firstDate: firstDate,
           lastDate: DateTime(2100),
         );
@@ -266,21 +280,56 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     );
   }
 
+  DateTime _resolveFirstDate({
+    required DateTime now,
+    required DateTime? selectedDate,
+    required bool isStart,
+  }) {
+    if (isStart) {
+      if (isEditing && selectedDate != null && selectedDate.isBefore(now)) {
+        return selectedDate;
+      }
+      return now;
+    }
+
+    final minDate = _dateDebut ?? now;
+    if (isEditing && selectedDate != null && selectedDate.isBefore(minDate)) {
+      return selectedDate;
+    }
+    return minDate;
+  }
+
+  DateTime _resolveInitialDate({
+    required DateTime? selectedDate,
+    required DateTime firstDate,
+  }) {
+    if (selectedDate == null || selectedDate.isBefore(firstDate)) {
+      return firstDate;
+    }
+    return selectedDate;
+  }
+
   // =========================================================
   // SUBMIT
   // =========================================================
 
   Future<void> _submitForm() async {
+    if (_isSubmitting) return;
+
     if (!_formKey.currentState!.validate() ||
         _dateDebut == null ||
         _dateFin == null) {
+      AdFeedback.error(
+        'Erreur',
+        'Veuillez renseigner les informations obligatoires et la période.',
+      );
       return;
     }
 
     if (_dateDebut!.isAfter(_dateFin!)) {
       AdFeedback.error(
         'Erreur',
-        'La date de debut doit preceder la date de fin.',
+        'La date de début doit précéder la date de fin.',
       );
       return;
     }
@@ -304,6 +353,16 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       return;
     }
 
+    if (titre.length > 120) {
+      AdFeedback.warning(
+        'Titre trop long',
+        'Limitez le titre à 120 caractères.',
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
     final offre = Offre(
       id: isEditing ? editingOffre!.id : DateTime.now().toIso8601String(),
       titre: titre,
@@ -312,7 +371,8 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       dateFin: _dateFin!,
       recruteur: currentUser,
       candidats: isEditing ? editingOffre!.candidats : [],
-      statut: 'ouverte',
+      statut:
+          isEditing ? Offre.normalizeStatus(editingOffre!.statut) : 'ouverte',
       dateCreation: isEditing ? editingOffre!.dateCreation : DateTime.now(),
       localisation: _localisationController.text.trim().isEmpty
           ? null
@@ -331,29 +391,37 @@ class OffreFormScreenState extends State<OffreFormScreen> {
           : _pieceJointeController.text.trim(),
       vues: isEditing ? (editingOffre!.vues ?? 0) : 0,
       viewedBy: isEditing ? (editingOffre!.viewedBy ?? <String>[]) : <String>[],
+      archivedAt: isEditing ? editingOffre!.archivedAt : null,
+      lastUpdated: isEditing ? editingOffre!.lastUpdated : null,
     );
 
-    final response = isEditing
-        ? await offreController.modifierOffre(offre, currentUser)
-        : await offreController.publierOffre(offre, currentUser);
+    try {
+      final response = isEditing
+          ? await offreController.modifierOffre(offre, currentUser)
+          : await offreController.publierOffre(offre, currentUser);
 
-    if (!response.success) {
-      if (response.toast == ToastLevel.none) {
+      if (!response.success) {
+        if (response.toast == ToastLevel.none) {
+          return;
+        }
+        AdFeedback.error(
+          'Erreur',
+          response.message,
+        );
         return;
       }
-      AdFeedback.error(
-        'Erreur',
+
+      AdFeedback.success(
+        'Succès',
         response.message,
       );
-      return;
+
+      Get.back(result: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
-
-    AdFeedback.success(
-      'Succès',
-      response.message,
-    );
-
-    Get.off(() => const OffreScreen());
   }
 
   @override

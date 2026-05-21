@@ -13,7 +13,7 @@ void main() {
           'targetRole': 'joueur',
           'contextType': 'event',
           'contextId': 'event-42',
-          'contextTitle': 'Detection U19',
+          'contextTitle': 'Détection U19',
           'contactReason': 'trial',
           'introMessage': 'Nous souhaitons vous observer lors de notre stage.',
           'status': 'new',
@@ -27,7 +27,7 @@ void main() {
       expect(intake.id, 'intake-1');
       expect(intake.contextType, ContactContextType.event);
       expect(intake.contactReason, ContactReasonCode.trial);
-      expect(intake.contextTitle, 'Detection U19');
+      expect(intake.contextTitle, 'Détection U19');
       expect(intake.conversationId, 'club-1__player-1');
       expect(intake.createdAt?.year, 2026);
     });
@@ -49,6 +49,20 @@ void main() {
         ContactContext.labelForType('random'),
         'Contact',
       );
+    });
+
+    test('builds offer contact context for guided conversations', () {
+      final context = ContactContext.offer(
+        offerId: 'offer-42',
+        title: 'Attaquant U19',
+        sourceLabel: 'Candidats',
+      );
+
+      expect(context.normalizedType, ContactContextType.offer);
+      expect(context.normalizedId, 'offer-42');
+      expect(context.normalizedTitle, 'Attaquant U19');
+      expect(context.normalizedSourceLabel, 'Candidats');
+      expect(context.toMap(), containsPair('type', ContactContextType.offer));
     });
 
     test('normalizes agency follow-up statuses beyond the initial lead state',

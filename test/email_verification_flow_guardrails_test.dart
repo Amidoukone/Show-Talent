@@ -64,7 +64,7 @@ void main() {
       expect(content, contains('Retour à la connexion'));
       expect(content, contains('_goBackToLogin'));
       expect(content, contains('_loginAfterVerificationMessage'));
-      expect(content, isNot(contains('J\\\'ai clique sur le lien, continuer')));
+      expect(content, isNot(contains('J’ai cliqué sur le lien, continuer')));
     });
 
     test('email verification sending uses app-aware action code settings', () {

@@ -71,7 +71,7 @@ class AccountCleanupService {
 
       throw AccountCleanupException(
         message:
-            'Suppression du compte d\'authentification impossible (${error.code}).',
+            'Suppression du compte d’authentification impossible (${error.code}).',
       );
     }
   }

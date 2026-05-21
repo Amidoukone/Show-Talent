@@ -187,7 +187,7 @@ class PlayerStatsAvailabilityFormState
               controller: _regionsController,
               decoration: const InputDecoration(
                 labelText: 'Régions ciblées (séparées par des virgules)',
-                hintText: 'Ex : Mali, Sénégal, Côte d\'Ivoire',
+                hintText: 'Ex : Mali, Sénégal, Côte d’Ivoire',
               ),
             ),
             if (widget.showSubmitButton) ...[

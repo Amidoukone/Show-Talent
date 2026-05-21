@@ -18,6 +18,8 @@ import 'package:adfoot/theme/ad_colors.dart';
 
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
+import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 import 'package:adfoot/widgets/video_page_scroll_physics.dart';
@@ -122,6 +124,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!mounted) return false;
 
     return _activateHomeIndex(0, alignPageView: alignPageView);
+  }
+
+  Future<void> _retryHomeFeed() async {
+    final connected = await ConnectivityService().checkInitialConnection();
+    if (!mounted) return;
+
+    setState(() => _isConnected = connected);
+    if (connected) {
+      await _refreshHomeFeed();
+    }
+  }
+
+  Future<void> _openAddVideo() async {
+    await videoManager.pauseAll('home');
+    await _setWakelock(false);
+    final result = await Get.to(() => const AddVideo());
+    if (result == true) {
+      await _refreshHomeFeed();
+    }
   }
 
   Future<void> _openPendingLiveVideos() async {
@@ -406,38 +427,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
               if (videos.isEmpty) {
                 final user = userController.user;
-                return Stack(
-                  children: [
-                    const Center(
-                      child: Text(
-                        'Aucune vidéo disponible',
-                        style: TextStyle(
-                          color: AdColors.onSurfaceMuted,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    if (user != null && user.role == 'joueur')
-                      Positioned(
-                        bottom: 32,
-                        right: 24,
-                        child: FloatingActionButton(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
-                          onPressed: () async {
-                            await videoManager.pauseAll('home');
-                            await _setWakelock(false);
-                            final result = await Get.to(() => const AddVideo());
-                            if (result == true) {
-                              await _refreshHomeFeed();
-                            }
-                          },
-                          child: const Icon(Icons.add),
-                        ),
-                      ),
-                  ],
-                );
+                return _buildEmptyFeed(userRole: user?.role);
               }
 
               return PageView.builder(
@@ -548,30 +538,48 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildEmptyFeed({required String? userRole}) {
+    final canPublish = userRole == 'joueur';
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: AdStatePanel(
+          icon: Icons.play_circle_outline_rounded,
+          title: 'Aucune vidéo disponible',
+          message: canPublish
+              ? 'Publiez votre première vidéo pour apparaître dans le feed.'
+              : 'Revenez plus tard ou actualisez le feed.',
+          action: AdButton(
+            expanded: false,
+            leading: canPublish ? Icons.add_rounded : Icons.refresh_rounded,
+            label: canPublish ? 'Publier une vidéo' : 'Actualiser',
+            onPressed: canPublish
+                ? () => unawaited(_openAddVideo())
+                : () => unawaited(_retryHomeFeed()),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildNoInternet() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 34,
-            backgroundColor: AdColors.surfaceAlt,
-            child: Icon(
-              Icons.wifi_off_rounded,
-              color: AdColors.onSurfaceMuted,
-              size: 36,
-            ),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: AdStatePanel(
+          icon: Icons.wifi_off_rounded,
+          title: 'Pas de connexion Internet',
+          message:
+              'Vérifiez votre réseau, puis relancez le chargement du feed.',
+          action: AdButton(
+            expanded: false,
+            kind: AdButtonKind.outline,
+            leading: Icons.refresh_rounded,
+            label: 'Réessayer',
+            onPressed: () => unawaited(_retryHomeFeed()),
           ),
-          SizedBox(height: 20),
-          Text(
-            'Pas de connexion Internet',
-            style: TextStyle(
-              color: AdColors.onSurfaceMuted,
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

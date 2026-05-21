@@ -7,8 +7,8 @@ void main() {
     test('uses fallback id and parses mixed date formats safely', () {
       final event = Event.fromMap(
         {
-          'titre': 'Detection regionale',
-          'description': 'Journee de tests joueurs.',
+          'titre': 'Détection régionale',
+          'description': 'Journée de tests joueurs.',
           'dateDebut': Timestamp.fromDate(DateTime.utc(2026, 5, 12)),
           'dateFin': '2026-05-13T18:30:00.000Z',
           'createdAt': 1775000000000,
@@ -35,8 +35,8 @@ void main() {
       );
 
       expect(event.id, 'event-fallback-id');
-      expect(event.titre, 'Detection regionale');
-      expect(event.description, 'Journee de tests joueurs.');
+      expect(event.titre, 'Détection régionale');
+      expect(event.description, 'Journée de tests joueurs.');
       expect(event.dateDebut.year, 2026);
       expect(event.dateFin.month, 5);
       expect(event.createdAt.millisecondsSinceEpoch, 1775000000000);

@@ -35,14 +35,14 @@ void main() {
         'email': 'blocked@adfoot.org',
         'role': 'joueur',
         'authDisabled': true,
-        'authDisabledReason': 'fraude detectee',
+        'authDisabledReason': 'fraude détectée',
       });
 
       expect(decision.exists, isTrue);
       expect(decision.issue, UserAccessIssue.disabledAccount);
       expect(decision.title, 'Compte désactivé');
       expect(decision.user?.authDisabled, isTrue);
-      expect(decision.message, contains('fraude detectee'));
+      expect(decision.message, contains('fraude détectée'));
     });
 
     test('ignores legacy block metadata on mobile access', () {

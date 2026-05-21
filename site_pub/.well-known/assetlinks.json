@@ -1,26 +1,26 @@
-[
-  {
-    "relation": [
-      "delegate_permission/common.handle_all_urls"
-    ],
-    "target": {
-      "namespace": "android_app",
-      "package_name": "org.adfoot.app",
-      "sha256_cert_fingerprints": [
-        "61:3A:F4:33:DA:A6:45:34:0C:60:D8:D5:BE:EF:7A:A0:A0:CD:33:E9:D9:2D:47:EE:56:9D:73:24:CC:51:BB:EE"
-      ]
+﻿[
+    {
+        "relation":  [
+                         "delegate_permission/common.handle_all_urls"
+                     ],
+        "target":  {
+                       "namespace":  "android_app",
+                       "package_name":  "org.adfoot.app",
+                       "sha256_cert_fingerprints":  [
+                                                        "B9:94:BC:5C:C2:26:12:9F:ED:1F:2D:A1:7C:E3:BF:B3:A2:86:63:A4:77:32:DF:BB:70:C6:DA:C8:CD:8B:88:E3"
+                                                    ]
+                   }
+    },
+    {
+        "relation":  [
+                         "delegate_permission/common.handle_all_urls"
+                     ],
+        "target":  {
+                       "namespace":  "android_app",
+                       "package_name":  "org.adfoot.app.staging",
+                       "sha256_cert_fingerprints":  [
+                                                        "61:3A:F4:33:DA:A6:45:34:0C:60:D8:D5:BE:EF:7A:A0:A0:CD:33:E9:D9:2D:47:EE:56:9D:73:24:CC:51:BB:EE"
+                                                    ]
+                   }
     }
-  },
-  {
-    "relation": [
-      "delegate_permission/common.handle_all_urls"
-    ],
-    "target": {
-      "namespace": "android_app",
-      "package_name": "org.adfoot.app.staging",
-      "sha256_cert_fingerprints": [
-        "61:3A:F4:33:DA:A6:45:34:0C:60:D8:D5:BE:EF:7A:A0:A0:CD:33:E9:D9:2D:47:EE:56:9D:73:24:CC:51:BB:EE"
-      ]
-    }
-  }
 ]

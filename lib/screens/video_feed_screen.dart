@@ -159,7 +159,7 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
               ),
               const SizedBox(height: 12),
               const Text(
-                'Aucune video disponible pour le moment.',
+                'Aucune vidéo disponible pour le moment.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,

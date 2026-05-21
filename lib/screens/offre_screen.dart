@@ -3,7 +3,9 @@ import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/offre_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
+import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/offre.dart';
+import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/offres_form.dart';
 import 'package:adfoot/screens/profile_screen.dart';
@@ -12,6 +14,7 @@ import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
+import 'package:adfoot/widgets/contact_intake_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -79,169 +82,187 @@ class _OffreScreenState extends State<OffreScreen> {
       ),
       body: Obx(() {
         final currentUser = userController.user;
-        final offres = _filteredOffres(offreController.offres);
+        final allOffres = offreController.offres;
+        final offres = _filteredOffres(allOffres);
 
-        if (offreController.isLoading && offres.isEmpty) {
+        if (offreController.isLoading && allOffres.isEmpty) {
           return _buildSkeletons();
         }
 
-        if (offres.isEmpty) {
-          return _buildEmptyState(currentUser);
+        if (allOffres.isEmpty) {
+          return _buildEmptyState(currentUser, filteredOut: false);
         }
 
         return Column(
           children: [
             _buildFilters(),
             Expanded(
-              child: ListView.builder(
-                itemCount: offres.length,
-                padding: const EdgeInsets.all(8.0),
-                itemBuilder: (context, index) {
-                  final offre = offres[index];
+              child: offres.isEmpty
+                  ? _buildEmptyState(currentUser, filteredOut: true)
+                  : ListView.builder(
+                      itemCount: offres.length,
+                      padding: const EdgeInsets.all(8.0),
+                      itemBuilder: (context, index) {
+                        final offre = offres[index];
 
-                  // =========================================================
-                  // View increment with anti-rebuild protection.
-                  // =========================================================
-                  if (currentUser != null &&
-                      currentUser.uid != offre.recruteur.uid &&
-                      !_viewedOffres.contains(offre.id)) {
-                    _viewedOffres.add(offre.id);
+                        // =========================================================
+                        // View increment with anti-rebuild protection.
+                        // =========================================================
+                        if (currentUser != null &&
+                            currentUser.uid != offre.recruteur.uid &&
+                            !_viewedOffres.contains(offre.id)) {
+                          _viewedOffres.add(offre.id);
 
-                    // Fire-and-forget to keep UI responsive.
-                    offreController.incrementVues(
-                      offre: offre,
-                      viewer: currentUser,
-                    );
-                  }
+                          // Fire-and-forget to keep UI responsive.
+                          offreController.incrementVues(
+                            offre: offre,
+                            viewer: currentUser,
+                          );
+                        }
 
-                  final isOwner = currentUser?.uid == offre.recruteur.uid;
-                  final isPostulable = currentUser?.role == 'joueur' &&
-                      offre.statut == 'ouverte';
+                        final isOwner = currentUser?.uid == offre.recruteur.uid;
+                        final isPostulable = currentUser?.role == 'joueur' &&
+                            offre.statut == 'ouverte';
 
-                  return Card(
-                    margin:
-                        const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 5,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildRecruteurSection(context, offre),
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
+                        return Card(
+                          margin: const EdgeInsets.symmetric(
+                              vertical: 8, horizontal: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 5,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildRecruteurSection(context, offre),
+                                const SizedBox(height: 12),
+                                Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      offre.titre,
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: cs.onSurface,
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            offre.titre,
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: cs.onSurface,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            offre.description,
+                                            maxLines: 3,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: cs.onSurface,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
+                                    const SizedBox(width: 8),
+                                    _StatusBadge(status: offre.statut),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    if (offreController.isLoading)
+                                      const Padding(
+                                        padding: EdgeInsets.only(bottom: 8),
+                                        child: LinearProgressIndicator(
+                                            minHeight: 2),
+                                      ),
+                                    if (offre.posteRecherche?.isNotEmpty ??
+                                        false)
+                                      _buildChip(Icons.sports_soccer,
+                                          offre.posteRecherche!),
+                                    if (offre.niveau?.isNotEmpty ?? false)
+                                      _buildChip(
+                                          Icons.star_border, offre.niveau!),
+                                    if (offre.localisation?.isNotEmpty ?? false)
+                                      _buildChip(Icons.place_outlined,
+                                          offre.localisation!),
+                                    if (offre.remuneration?.isNotEmpty ?? false)
+                                      _buildChip(Icons.payments_outlined,
+                                          offre.remuneration!),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Icon(Icons.event,
+                                        size: 16,
+                                        color: AdColors.onSurfaceMuted),
+                                    const SizedBox(width: 4),
                                     Text(
-                                      offre.description,
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
+                                      "Valide jusqu’au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)}",
+                                      style: const TextStyle(
                                         fontSize: 14,
-                                        color: cs.onSurface,
+                                        color: AdColors.onSurfaceMuted,
                                       ),
                                     ),
                                   ],
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              _StatusBadge(status: offre.statut),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              if (offreController.isLoading)
-                                const Padding(
-                                  padding: EdgeInsets.only(bottom: 8),
-                                  child: LinearProgressIndicator(minHeight: 2),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Icon(Icons.remove_red_eye_outlined,
+                                        size: 16,
+                                        color: AdColors.onSurfaceMuted),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${offre.vues ?? 0} vues',
+                                      style: TextStyle(color: cs.onSurface),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Icon(Icons.group_outlined,
+                                        size: 16,
+                                        color: AdColors.onSurfaceMuted),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${offre.candidats.length} candidatures',
+                                      style: TextStyle(color: cs.onSurface),
+                                    ),
+                                  ],
                                 ),
-                              if (offre.posteRecherche?.isNotEmpty ?? false)
-                                _buildChip(
-                                    Icons.sports_soccer, offre.posteRecherche!),
-                              if (offre.niveau?.isNotEmpty ?? false)
-                                _buildChip(Icons.star_border, offre.niveau!),
-                              if (offre.localisation?.isNotEmpty ?? false)
-                                _buildChip(
-                                    Icons.place_outlined, offre.localisation!),
-                              if (offre.remuneration?.isNotEmpty ?? false)
-                                _buildChip(Icons.payments_outlined,
-                                    offre.remuneration!),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Icon(Icons.event,
-                                  size: 16, color: AdColors.onSurfaceMuted),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Valide jusqu\'au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)}',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: AdColors.onSurfaceMuted,
+                                const SizedBox(height: 8),
+                                _buildActionButtons(
+                                  context,
+                                  offre,
+                                  isOwner,
+                                  isPostulable,
+                                  currentUser,
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Icon(Icons.remove_red_eye_outlined,
-                                  size: 16, color: AdColors.onSurfaceMuted),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${offre.vues ?? 0} vues',
-                                style: TextStyle(color: cs.onSurface),
-                              ),
-                              const SizedBox(width: 12),
-                              Icon(Icons.group_outlined,
-                                  size: 16, color: AdColors.onSurfaceMuted),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${offre.candidats.length} candidatures',
-                                style: TextStyle(color: cs.onSurface),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          _buildActionButtons(
-                            context,
-                            offre,
-                            isOwner,
-                            isPostulable,
-                            currentUser,
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         );
       }),
       floatingActionButton: _buildFloatingButton(),
     );
+  }
+
+  void _resetFilters() {
+    _searchController.clear();
+    setState(() {
+      _selectedStatus = 'tous';
+      _sort = 'recentes';
+    });
   }
 
   // =========================================================
@@ -306,23 +327,34 @@ class _OffreScreenState extends State<OffreScreen> {
     );
   }
 
-  Widget _buildEmptyState(dynamic currentUser) {
+  Widget _buildEmptyState(dynamic currentUser, {required bool filteredOut}) {
     final isPublisher = isOpportunityPublisherRole(currentUser?.role);
-    final actionLabel = isPublisher ? 'Créer une offre' : 'Voir les clubs';
+    final actionLabel = filteredOut
+        ? 'Réinitialiser les filtres'
+        : isPublisher
+            ? 'Créer une offre'
+            : 'Explorer les vidéos';
 
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: AdStatePanel(
           icon: Icons.search_off,
-          title: 'Aucune offre disponible',
-          message: isPublisher
-              ? 'Publiez votre première offre pour démarrer.'
-              : 'Aucune offre ne correspond aux filtres actuels.',
+          title: filteredOut ? 'Aucun résultat' : 'Aucune offre disponible',
+          message: filteredOut
+              ? 'Aucune offre ne correspond aux filtres actuels.'
+              : isPublisher
+                  ? 'Publiez votre première offre pour démarrer.'
+                  : 'Revenez plus tard ou explorez les vidéos de talents.',
           action: AdButton(
             expanded: false,
             label: actionLabel,
             onPressed: () {
+              if (filteredOut) {
+                _resetFilters();
+                return;
+              }
+
               if (isPublisher) {
                 Get.to(() => const OffreFormScreen());
                 return;
@@ -330,7 +362,7 @@ class _OffreScreenState extends State<OffreScreen> {
 
               Get.offAllNamed(
                 AppRoutes.main,
-                arguments: {'tab': 2},
+                arguments: {'tab': 0},
               );
             },
           ),
@@ -536,23 +568,42 @@ class _OffreScreenState extends State<OffreScreen> {
       final bool inscrit =
           offre.candidats.any((c) => c.uid == currentUser?.uid);
 
-      return ElevatedButton(
-        onPressed: () async {
-          if (currentUser == null) {
-            AdFeedback.error(
-              'Erreur',
-              'Utilisateur introuvable. Merci de vous reconnecter.',
-            );
-            return;
-          }
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          ElevatedButton(
+            onPressed: () async {
+              if (currentUser == null) {
+                AdFeedback.error(
+                  'Erreur',
+                  'Utilisateur introuvable. Merci de vous reconnecter.',
+                );
+                return;
+              }
 
-          final response = inscrit
-              ? await offreController.seDesinscrireOffre(currentUser, offre)
-              : await offreController.postulerOffre(currentUser, offre);
+              final response = inscrit
+                  ? await offreController.seDesinscrireOffre(currentUser, offre)
+                  : await offreController.postulerOffre(currentUser, offre);
 
-          response.showToast(includeSuccess: true);
-        },
-        child: Text(inscrit ? 'Se désinscrire' : 'Postuler'),
+              response.showToast(includeSuccess: true);
+            },
+            child: Text(inscrit ? 'Se désinscrire' : 'Postuler'),
+          ),
+          OutlinedButton.icon(
+            onPressed: () => _openOfferChat(offre.recruteur, offre),
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: const Text('Contacter'),
+          ),
+        ],
+      );
+    }
+
+    if (currentUser != null && currentUser.uid != offre.recruteur.uid) {
+      return OutlinedButton.icon(
+        onPressed: () => _openOfferChat(offre.recruteur, offre),
+        icon: const Icon(Icons.chat_bubble_outline),
+        label: const Text('Contacter'),
       );
     }
 
@@ -599,7 +650,7 @@ class _OffreScreenState extends State<OffreScreen> {
     if (response.success) {
       AdFeedback.success(
         'Offre supprimée',
-        "L'offre a été supprimée avec succès.",
+        'L’offre a été supprimée avec succès.',
       );
     } else if (response.toast == ToastLevel.none) {
       return;
@@ -611,11 +662,111 @@ class _OffreScreenState extends State<OffreScreen> {
     }
   }
 
+  Future<void> _openOfferChat(
+    AppUser otherUser,
+    Offre offre, {
+    String sourceLabel = 'Offre',
+  }) async {
+    final current = userController.user;
+    if (current == null) {
+      AdFeedback.error(
+        'Erreur',
+        'Utilisateur introuvable. Merci de vous reconnecter.',
+      );
+      return;
+    }
+
+    if (current.uid == otherUser.uid) {
+      await Get.to(() => ProfileScreen(uid: current.uid, isReadOnly: false));
+      return;
+    }
+
+    if (!current.allowMessages || !otherUser.allowMessages) {
+      AdFeedback.warning(
+        'Messages indisponibles',
+        !current.allowMessages
+            ? 'Vous avez désactivé les messages.'
+            : 'Cet utilisateur a désactivé les messages.',
+      );
+      return;
+    }
+
+    try {
+      final existingConversationId =
+          await chatController.findExistingConversationId(
+        currentUserId: current.uid,
+        otherUserId: otherUser.uid,
+      );
+
+      if (existingConversationId != null && existingConversationId.isNotEmpty) {
+        await Get.to(() => ChatScreen(
+              conversationId: existingConversationId,
+              otherUser: otherUser,
+            ));
+        return;
+      }
+
+      final draft = await Get.bottomSheet<GuidedContactDraft>(
+        ContactIntakeSheet(
+          currentUser: current,
+          otherUser: otherUser,
+          context: ContactContext.offer(
+            offerId: offre.id,
+            title: offre.titre,
+            sourceLabel: sourceLabel,
+          ),
+        ),
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+      );
+
+      if (draft == null) {
+        return;
+      }
+
+      final result = await chatController.startGuidedConversation(
+        currentUser: current,
+        otherUser: otherUser,
+        context: draft.context,
+        contactReason: draft.reasonCode,
+        introMessage: draft.introMessage,
+      );
+
+      if (result.createdIntake) {
+        AdFeedback.info(
+          'Contact enregistré',
+          'Le premier contact a été cadré et transmis via Adfoot.',
+        );
+      }
+
+      final conversationId = result.conversationId.trim();
+      if (conversationId.isEmpty) {
+        AdFeedback.error(
+          'Erreur',
+          'Conversation indisponible pour le moment.',
+        );
+        return;
+      }
+
+      await Get.to(() => ChatScreen(
+            conversationId: conversationId,
+            otherUser: otherUser,
+          ));
+    } on ChatFlowException catch (error) {
+      AdFeedback.error('Erreur', error.message);
+    } catch (_) {
+      AdFeedback.error(
+        'Erreur',
+        'Impossible de démarrer la conversation pour le moment.',
+      );
+    }
+  }
+
   void _showCandidats(BuildContext context, Offre offre) {
+    String sort = 'nom';
+
     Get.bottomSheet(
       StatefulBuilder(builder: (context, setState) {
-        String sort = 'nom';
-
         final sorted = [...offre.candidats];
         if (sort == 'role') {
           sorted.sort((a, b) => a.role.compareTo(b.role));
@@ -652,7 +803,7 @@ class _OffreScreenState extends State<OffreScreen> {
               ),
               const SizedBox(height: 12),
               if (sorted.isEmpty)
-                const Text('Aucun candidat pour l\'instant')
+                const Text('Aucun candidat pour l’instant')
               else
                 ListView.separated(
                   shrinkWrap: true,
@@ -690,21 +841,11 @@ class _OffreScreenState extends State<OffreScreen> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.chat_bubble_outline),
-                          onPressed: () async {
-                            final current = userController.user;
-                            if (current == null) return;
-
-                            final conversationId =
-                                await chatController.createOrGetConversation(
-                              currentUserId: current.uid,
-                              otherUserId: candidat.uid,
-                            );
-
-                            Get.to(() => ChatScreen(
-                                  conversationId: conversationId,
-                                  otherUser: candidat,
-                                ));
-                          },
+                          onPressed: () => _openOfferChat(
+                            candidat,
+                            offre,
+                            sourceLabel: 'Candidats',
+                          ),
                         ),
                       ],
                     );
@@ -714,6 +855,8 @@ class _OffreScreenState extends State<OffreScreen> {
           ),
         );
       }),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
     );
   }
 }

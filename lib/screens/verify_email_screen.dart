@@ -168,7 +168,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
         AdFeedback.error(
           'Erreur',
-          result.errorMessage ?? 'Erreur d\'envoi.',
+          result.errorMessage ?? 'Erreur d’envoi.',
         );
         return;
       }

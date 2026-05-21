@@ -9,7 +9,7 @@ const adminProvisionedRoles = <String>[
 ];
 
 const publicSignupDisabledMessage =
-    'La creation de compte se fait uniquement via le super admin dans le projet administration Adfoot.';
+    'La création de compte se fait uniquement via le super admin dans le projet administration Adfoot.';
 
 const managedAccountRoles = <String>[
   'club',

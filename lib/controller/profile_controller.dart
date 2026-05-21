@@ -672,7 +672,7 @@ class ProfileController extends GetxController {
       if (videoList.isEmpty) {
         Get.snackbar(
           'Erreur',
-          'Chargement des videos impossible.',
+          'Chargement des vidéos impossible.',
           backgroundColor: Colors.red,
           colorText: Colors.white,
         );
@@ -760,7 +760,7 @@ class ProfileController extends GetxController {
       if (e is FirebaseException && e.code == 'unauthorized') {
         Get.snackbar(
           'Autorisation refusée',
-          'Le stockage Firebase refuse actuellement l\'ajout du CV pour cette session.',
+          'Le stockage Firebase refuse actuellement l’ajout du CV pour cette session.',
           backgroundColor: Colors.red,
           colorText: Colors.white,
         );
@@ -768,7 +768,7 @@ class ProfileController extends GetxController {
       }
       Get.snackbar(
         'Erreur',
-        'Impossible d\'ajouter le CV.',
+        'Impossible d’ajouter le CV.',
         backgroundColor: Colors.red,
         colorText: Colors.white,
       );

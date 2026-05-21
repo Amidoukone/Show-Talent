@@ -351,7 +351,7 @@ class _TipChip extends StatelessWidget {
 /// Overlay de progression en “verre dépoli”
 class _ProgressOverlay extends StatelessWidget {
   final UploadVideoController controller;
-  final bool waiting; // état "chargement" avant d'ouvrir la galerie
+  final bool waiting; // état "chargement" avant d’ouvrir la galerie
 
   const _ProgressOverlay({required this.controller, required this.waiting});
 

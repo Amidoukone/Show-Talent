@@ -23,7 +23,7 @@ void main() {
 
     test('keeps callable JSON errors as FirebaseFunctionsException', () {
       final response = http.Response(
-        '{"error":{"status":"PERMISSION_DENIED","message":"Acces refuse."}}',
+        '{"error":{"status":"PERMISSION_DENIED","message":"Accès refusé."}}',
         403,
       );
 
@@ -36,7 +36,7 @@ void main() {
         throwsA(
           isA<FirebaseFunctionsException>()
               .having((error) => error.code, 'code', 'permission-denied')
-              .having((error) => error.message, 'message', 'Acces refuse.'),
+              .having((error) => error.message, 'message', 'Accès refusé.'),
         ),
       );
     });

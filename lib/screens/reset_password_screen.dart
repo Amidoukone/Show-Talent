@@ -72,17 +72,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       await Get.offAllNamed(AppRoutes.login);
     } on FirebaseAuthException catch (error) {
       AdFeedback.error(
-        'Reinitialisation impossible',
+        'Réinitialisation impossible',
         AuthErrorMapper.toMessage(error),
       );
     } on AuthFlowException catch (error) {
       AdFeedback.error(
-        'Reinitialisation impossible',
+        'Réinitialisation impossible',
         error.message,
       );
     } catch (_) {
       AdFeedback.error(
-        'Reinitialisation impossible',
+        'Réinitialisation impossible',
         'Une erreur inattendue est survenue. Veuillez réessayer.',
       );
     } finally {
@@ -129,10 +129,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 ? AdStatePanel.error(
                     title: 'Lien invalide',
                     message:
-                        'Le lien de reinitialisation est invalide ou incomplet. '
+                        'Le lien de réinitialisation est invalide ou incomplet. '
                         'Demandez un nouveau lien depuis la page de connexion.',
                     action: AdButton(
-                      label: 'Retour a la connexion',
+                      label: 'Retour à la connexion',
                       leading: Icons.arrow_back,
                       onPressed: () => Get.offAllNamed(AppRoutes.login),
                       kind: AdButtonKind.primary,

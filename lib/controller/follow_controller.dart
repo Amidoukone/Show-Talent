@@ -258,7 +258,7 @@ class FollowController extends GetxController {
             'uid': doc.id,
             'nom': data['nom'] ?? '',
             'photoProfil': data['photoProfil'] ?? '',
-            'role': data['role'] ?? 'Non specifie',
+            'role': data['role'] ?? 'Non spécifié',
             'isFollowing': currentFollowings.contains(doc.id),
           };
         }

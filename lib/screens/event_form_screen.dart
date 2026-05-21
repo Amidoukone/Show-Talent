@@ -65,9 +65,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: Text(
-          widget.event != null
-              ? 'Modifier l\'événement'
-              : 'Créer un événement',
+          widget.event != null ? 'Modifier l’événement' : 'Créer un événement',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: cs.surface,
@@ -87,14 +85,14 @@ class _EventFormScreenState extends State<EventFormScreen> {
               _buildTextField(
                 controller: titleController,
                 labelText: 'Titre',
-                hintText: 'Saisissez le titre de l\'événement',
+                hintText: 'Saisissez le titre de l’événement',
                 icon: Icons.title,
               ),
               const SizedBox(height: 20),
               _buildTextField(
                 controller: descriptionController,
                 labelText: 'Description',
-                hintText: 'Décrivez l\'événement',
+                hintText: 'Décrivez l’événement',
                 icon: Icons.description,
                 maxLines: 3,
               ),
@@ -102,7 +100,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
               _buildTextField(
                 controller: locationController,
                 labelText: 'Lieu',
-                hintText: 'Entrez l\'emplacement',
+                hintText: 'Entrez l’emplacement',
                 icon: Icons.location_on,
               ),
               const SizedBox(height: 20),
@@ -117,7 +115,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
               _buildTextField(
                 controller: tagsController,
                 labelText: 'Tags / Catégories (séparés par des virgules)',
-                hintText: 'Ex: U19, Detection, Futsal',
+                hintText: 'Ex: U19, Détection, Futsal',
                 icon: Icons.sell_outlined,
               ),
               const SizedBox(height: 20),
@@ -125,7 +123,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Événement public'),
                 subtitle:
-                    const Text('Désactivez pour rendre l\'événement privé'),
+                    const Text('Désactivez pour rendre l’événement privé'),
                 value: estPublic,
                 onChanged: (v) => setState(() => estPublic = v),
               ),
@@ -175,7 +173,13 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  child: Text(widget.event != null ? 'Modifier' : 'Créer'),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(widget.event != null ? 'Modifier' : 'Créer'),
                 ),
               ),
             ],
@@ -375,13 +379,16 @@ class _EventFormScreenState extends State<EventFormScreen> {
     return InkWell(
       onTap: () async {
         final now = DateTime.now();
-        final firstDate = isStart
-            ? now
-            : startDate != null
-                ? startDate!
-                : now;
+        final firstDate = _resolveFirstDate(
+          now: now,
+          selectedDate: date,
+          isStart: isStart,
+        );
 
-        final initialDate = date ?? firstDate;
+        final initialDate = _resolveInitialDate(
+          selectedDate: date,
+          firstDate: firstDate,
+        );
         final pickedDate = await showDatePicker(
           context: context,
           initialDate: initialDate,
@@ -440,6 +447,39 @@ class _EventFormScreenState extends State<EventFormScreen> {
         ),
       ),
     );
+  }
+
+  DateTime _resolveFirstDate({
+    required DateTime now,
+    required DateTime? selectedDate,
+    required bool isStart,
+  }) {
+    if (isStart) {
+      if (widget.event != null &&
+          selectedDate != null &&
+          selectedDate.isBefore(now)) {
+        return selectedDate;
+      }
+      return now;
+    }
+
+    final minDate = startDate ?? now;
+    if (widget.event != null &&
+        selectedDate != null &&
+        selectedDate.isBefore(minDate)) {
+      return selectedDate;
+    }
+    return minDate;
+  }
+
+  DateTime _resolveInitialDate({
+    required DateTime? selectedDate,
+    required DateTime firstDate,
+  }) {
+    if (selectedDate == null || selectedDate.isBefore(firstDate)) {
+      return firstDate;
+    }
+    return selectedDate;
   }
 
   @override

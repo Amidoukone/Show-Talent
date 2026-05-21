@@ -1033,7 +1033,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     VideoController videoController,
     UserController userController,
   ) {
-    // Actions disponibles pour l'utilisateur connecte.
+    // Actions disponibles pour l’utilisateur connecté.
     final currentUser = userController.user;
     if (currentUser == null) return const SizedBox();
 
@@ -1272,7 +1272,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       if (!success && mounted && !_isDisposed) {
         Get.snackbar(
           'Erreur',
-          'Impossible de s\'abonner pour le moment',
+          'Impossible de s’abonner pour le moment',
           backgroundColor: Colors.red,
           colorText: Colors.white,
         );

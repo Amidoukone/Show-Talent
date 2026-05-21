@@ -10,9 +10,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 /// UserController
-/// - Source de verite pour l'etat utilisateur et la navigation auth.
-/// - Hydrate AppUser pour l'UI.
-/// - Ajoute un cache reactif par UID pour les videos.
+/// - Source de vérité pour l’état utilisateur et la navigation auth.
+/// - Hydrate AppUser pour l’UI.
+/// - Ajoute un cache réactif par UID pour les vidéos.
 class UserController extends GetxController with WidgetsBindingObserver {
   static UserController instance = Get.find();
 

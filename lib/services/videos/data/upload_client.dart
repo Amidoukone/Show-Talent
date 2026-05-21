@@ -313,7 +313,7 @@ class UploadClient {
         }
 
         throw UploadClientException(
-          'Statut HTTP inattendu pendant l\'upload $uploadLabel: '
+          'Statut HTTP inattendu pendant l’upload $uploadLabel: '
           '${statusCode ?? 'null'}.',
           statusCode: statusCode,
         );

@@ -279,7 +279,7 @@ class ChatController extends GetxController {
         otherUserId: otherUserId,
       );
     } on FirebaseException catch (error) {
-      debugPrint("Erreur creation conversation firebase : $error");
+      debugPrint("Erreur création conversation firebase : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ChatFlowException(
@@ -290,7 +290,7 @@ class ChatController extends GetxController {
         'Impossible de démarrer la conversation pour le moment.',
       );
     } catch (error) {
-      debugPrint("Erreur creation conversation : $error");
+      debugPrint("Erreur création conversation : $error");
       throw const ChatFlowException(
         'Impossible de démarrer la conversation pour le moment.',
       );
@@ -334,7 +334,7 @@ class ChatController extends GetxController {
         introMessage: introMessage,
       );
     } on FirebaseException catch (error) {
-      debugPrint("Erreur creation contact guide firebase : $error");
+      debugPrint("Erreur création contact guide firebase : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ChatFlowException(
@@ -345,7 +345,7 @@ class ChatController extends GetxController {
         'Impossible de lancer ce premier contact pour le moment.',
       );
     } catch (error) {
-      debugPrint("Erreur creation contact guide : $error");
+      debugPrint("Erreur création contact guide : $error");
       throw const ChatFlowException(
         'Impossible de lancer ce premier contact pour le moment.',
       );
@@ -401,7 +401,7 @@ class ChatController extends GetxController {
         );
         if (!canSend) {
           throw const ChatFlowException(
-            'L\'envoi de messages est désactivé pour cette conversation.',
+            'L’envoi de messages est désactivé pour cette conversation.',
           );
         }
       }

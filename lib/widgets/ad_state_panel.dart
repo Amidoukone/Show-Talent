@@ -23,7 +23,7 @@ class AdStatePanel extends StatelessWidget {
   const AdStatePanel.empty({
     super.key,
     this.title = 'Aucun élément disponible',
-    this.message = 'Aucun contenu n\'est disponible pour le moment.',
+    this.message = 'Aucun contenu n’est disponible pour le moment.',
     this.action,
   }) : icon = Icons.inbox_outlined;
 

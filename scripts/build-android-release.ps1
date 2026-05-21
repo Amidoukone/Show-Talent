@@ -105,13 +105,276 @@ function Mask-PreviewArg {
     return $Arg
 }
 
+function Find-AndroidAppBundle {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$EffectiveNativeEnvironment
+    )
+
+    $variantBundleDir = Get-AndroidAppBundleVariantDirectory `
+        -RepoRoot $RepoRoot `
+        -EffectiveNativeEnvironment $EffectiveNativeEnvironment
+    $preferredAab = Get-PreferredAndroidAppBundlePath `
+        -RepoRoot $RepoRoot `
+        -EffectiveNativeEnvironment $EffectiveNativeEnvironment
+
+    if (Test-Path -LiteralPath $preferredAab) {
+        return $preferredAab
+    }
+
+    $latestAab = Get-ChildItem -Path $variantBundleDir -Filter "*.aab" -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+
+    if ($null -ne $latestAab) {
+        return $latestAab.FullName
+    }
+
+    return $null
+}
+
+function Get-AndroidAppBundleDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    return Join-Path $RepoRoot "build/app/outputs/bundle"
+}
+
+function Get-AndroidAppBundleVariantDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$EffectiveNativeEnvironment
+    )
+
+    $bundleDir = Get-AndroidAppBundleDirectory -RepoRoot $RepoRoot
+    return Join-Path $bundleDir "$($EffectiveNativeEnvironment)Release"
+}
+
+function Get-PreferredAndroidAppBundlePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$EffectiveNativeEnvironment
+    )
+
+    $variantBundleDir = Get-AndroidAppBundleVariantDirectory `
+        -RepoRoot $RepoRoot `
+        -EffectiveNativeEnvironment $EffectiveNativeEnvironment
+    return Join-Path $variantBundleDir "app-$EffectiveNativeEnvironment-release.aab"
+}
+
+function Test-PathIsUnderDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    $fullDirectory = [System.IO.Path]::GetFullPath($Directory)
+    if (-not $fullDirectory.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
+        $fullDirectory = "$fullDirectory$([System.IO.Path]::DirectorySeparatorChar)"
+    }
+
+    return $fullPath.StartsWith($fullDirectory, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Clear-AndroidAppBundleOutput {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$EffectiveNativeEnvironment
+    )
+
+    $variantBundleDir = Get-AndroidAppBundleVariantDirectory `
+        -RepoRoot $RepoRoot `
+        -EffectiveNativeEnvironment $EffectiveNativeEnvironment
+
+    if (-not (Test-Path -LiteralPath $variantBundleDir)) {
+        return
+    }
+
+    if (-not (Test-PathIsUnderDirectory -Path $variantBundleDir -Directory $RepoRoot)) {
+        throw "Refusing to clean Android bundle output outside the repository: '$variantBundleDir'."
+    }
+
+    Get-ChildItem -Path $variantBundleDir -Filter "*.aab" -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force
+}
+
+function ConvertTo-LongPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $fullPath = [System.IO.Path]::GetFullPath($Path)
+    if (
+        [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT -and
+        -not $fullPath.StartsWith("\\?\", [System.StringComparison]::Ordinal)
+    ) {
+        return "\\?\$fullPath"
+    }
+
+    return $fullPath
+}
+
+function Clear-GeneratedBuildDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    $buildDir = Join-Path $RepoRoot "build"
+    if (-not (Test-Path -LiteralPath $buildDir)) {
+        return
+    }
+
+    if (-not (Test-PathIsUnderDirectory -Path $buildDir -Directory $RepoRoot)) {
+        throw "Refusing to clean build directory outside the repository: '$buildDir'."
+    }
+
+    $buildDirForDelete = ConvertTo-LongPath -Path $buildDir
+    Remove-Item -LiteralPath $buildDirForDelete -Recurse -Force
+}
+
+function Test-AabContainsFlutterDebugSymbols {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$AabPath
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($AabPath)
+    try {
+        foreach ($entry in $zip.Entries) {
+            if (
+                $entry.FullName -match '^BUNDLE-METADATA/com\.android\.tools\.build\.debugsymbols/.+/libflutter\.so\.(sym|dbg)$'
+            ) {
+                return $true
+            }
+        }
+    } finally {
+        $zip.Dispose()
+    }
+
+    return $false
+}
+
+function Get-RepoLockHash {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    $normalized = [System.IO.Path]::GetFullPath($RepoRoot).ToLowerInvariant()
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($normalized)
+        $hash = $sha256.ComputeHash($bytes)
+        return -join ($hash | ForEach-Object { $_.ToString("x2") })
+    } finally {
+        $sha256.Dispose()
+    }
+}
+
+function New-AndroidReleaseBuildLock {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    $lockRoot = Join-Path ([System.IO.Path]::GetTempPath()) "adfoot-release-locks"
+    New-Item -ItemType Directory -Path $lockRoot -Force | Out-Null
+
+    $lockHash = Get-RepoLockHash -RepoRoot $RepoRoot
+    $lockPath = Join-Path $lockRoot "android-release-$lockHash.lock"
+
+    try {
+        $lockStream = [System.IO.File]::Open(
+            $lockPath,
+            [System.IO.FileMode]::OpenOrCreate,
+            [System.IO.FileAccess]::ReadWrite,
+            [System.IO.FileShare]::None
+        )
+    } catch {
+        throw "Another Android release build is already running for this repository. Stop it before starting a new release build. Lock file: $lockPath"
+    }
+
+    $lockStream.SetLength(0)
+    $writer = New-Object System.IO.StreamWriter($lockStream, [System.Text.Encoding]::UTF8, 1024, $true)
+    try {
+        $writer.WriteLine("repo=$RepoRoot")
+        $writer.WriteLine("pid=$PID")
+        $writer.WriteLine("startedAt=$((Get-Date).ToString("o"))")
+        $writer.Flush()
+        $lockStream.Flush()
+    } finally {
+        $writer.Dispose()
+    }
+
+    return $lockStream
+}
+
+function Assert-NoConflictingAndroidBuildProcess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    if ([System.Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
+        return
+    }
+
+    $fullRepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
+    $conflicts = @(
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object {
+                $commandLine = [string]$_.CommandLine
+                if ([string]::IsNullOrWhiteSpace($commandLine)) {
+                    $false
+                } else {
+                    $isSameRepo = $commandLine.IndexOf($fullRepoRoot, [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+                    $isAndroidBundle = (
+                        $commandLine.IndexOf("GradleWrapperMain", [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -and
+                        $commandLine.IndexOf("bundle", [System.StringComparison]::OrdinalIgnoreCase) -ge 0
+                    )
+
+                    $isSameRepo -and $isAndroidBundle
+                }
+            } |
+            Select-Object ProcessId, Name, CommandLine
+    )
+
+    if ($conflicts.Count -gt 0) {
+        $summary = ($conflicts | ForEach-Object { "$($_.ProcessId) $($_.Name)" }) -join ", "
+        throw "Another Android/Gradle bundle build is already running for this repository ($summary). Stop it before starting a new release build."
+    }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $effectiveNativeEnvironment = Get-EffectiveNativeEnvironment -EnvironmentName $Environment
 $preflightScript = Join-Path $repoRoot "scripts/check-android-release-readiness.ps1"
 $mobileConfigPath = Join-Path $repoRoot "config/mobile/$Environment.json"
+$releaseBuildLock = $null
 
 Push-Location $repoRoot
 try {
+    if (-not $PrintOnly) {
+        Assert-NoConflictingAndroidBuildProcess -RepoRoot $repoRoot
+        $releaseBuildLock = New-AndroidReleaseBuildLock -RepoRoot $repoRoot
+    }
+
     if (-not $SkipPreflight) {
         $preflightArgs = @(
             "-ExecutionPolicy", "Bypass",
@@ -185,6 +448,8 @@ try {
     }
 
     if ($Clean) {
+        Clear-GeneratedBuildDirectory -RepoRoot $repoRoot
+
         & flutter clean
         if ($LASTEXITCODE -gt 0) {
             throw "flutter clean failed (exit code $LASTEXITCODE)."
@@ -196,23 +461,35 @@ try {
         }
     }
 
+    $bundleDir = Get-AndroidAppBundleDirectory -RepoRoot $repoRoot
+    Clear-AndroidAppBundleOutput `
+        -RepoRoot $repoRoot `
+        -EffectiveNativeEnvironment $effectiveNativeEnvironment
+
+    $buildStartedAt = Get-Date
     & flutter @flutterArgs
-    if ($LASTEXITCODE -gt 0) {
-        throw "flutter build appbundle failed (exit code $LASTEXITCODE)."
-    }
+    $flutterExitCode = $LASTEXITCODE
 
-    $bundleDir = Join-Path $repoRoot "build/app/outputs/bundle"
-    $preferredAab = Join-Path $bundleDir "$($effectiveNativeEnvironment)Release/app-$effectiveNativeEnvironment-release.aab"
-    $aabPath = $null
+    $aabPath = Find-AndroidAppBundle -RepoRoot $repoRoot -EffectiveNativeEnvironment $effectiveNativeEnvironment
 
-    if (Test-Path -LiteralPath $preferredAab) {
-        $aabPath = $preferredAab
-    } else {
-        $latestAab = Get-ChildItem -Path $bundleDir -Filter "*.aab" -Recurse -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime -Descending |
-            Select-Object -First 1
-        if ($null -ne $latestAab) {
-            $aabPath = $latestAab.FullName
+    if ($flutterExitCode -gt 0) {
+        $canAcceptFlutterDebugSymbolFalseNegative = $false
+
+        if (-not [string]::IsNullOrWhiteSpace([string]$aabPath) -and (Test-Path -LiteralPath $aabPath)) {
+            $aabFile = Get-Item -LiteralPath $aabPath
+            $wasProducedByThisBuild = $aabFile.LastWriteTime -ge $buildStartedAt.AddMinutes(-5)
+            $hasFlutterDebugSymbols = Test-AabContainsFlutterDebugSymbols -AabPath $aabPath
+            $canAcceptFlutterDebugSymbolFalseNegative = $wasProducedByThisBuild -and $hasFlutterDebugSymbols
+
+            if ($canAcceptFlutterDebugSymbolFalseNegative) {
+                Write-Host ""
+                Write-Host "Flutter returned exit code $flutterExitCode after producing an AAB with native debug symbols."
+                Write-Host "Continuing because this matches Flutter's apkanalyzer/cmdline-tools debug-symbol check false negative."
+            }
+        }
+
+        if (-not $canAcceptFlutterDebugSymbolFalseNegative) {
+            throw "flutter build appbundle failed (exit code $flutterExitCode)."
         }
     }
 
@@ -236,6 +513,9 @@ try {
     Write-Host "Artifact   : $artifactPath"
     Write-Host "Size (MB)  : $artifactSizeMb"
 } finally {
+    if ($null -ne $releaseBuildLock) {
+        $releaseBuildLock.Dispose()
+    }
     Pop-Location
 }
 

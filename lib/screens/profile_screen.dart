@@ -631,7 +631,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (conversationId.isEmpty) {
         AdFeedback.error(
           'Erreur',
-          'Impossible d\'ouvrir la messagerie pour le moment.',
+          'Impossible d’ouvrir la messagerie pour le moment.',
         );
         return;
       }
@@ -654,7 +654,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (_) {
       AdFeedback.error(
         'Erreur',
-        'Impossible d\'ouvrir la messagerie pour le moment.',
+        'Impossible d’ouvrir la messagerie pour le moment.',
       );
     } finally {
       if (mounted) {
@@ -986,7 +986,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Aucune information avancée n\'a encore été renseignée.',
+            'Aucune information avancée n’a encore été renseignée.',
             style: TextStyle(color: AdColors.onSurfaceMuted),
           ),
           const SizedBox(height: 8),

@@ -85,6 +85,21 @@ class ContactContext {
     );
   }
 
+  factory ContactContext.offer({
+    required String offerId,
+    String? title,
+    String? sourceLabel,
+  }) {
+    return ContactContext(
+      type: ContactContextType.offer,
+      id: offerId.trim(),
+      title: title?.trim(),
+      sourceLabel: sourceLabel?.trim().isNotEmpty == true
+          ? sourceLabel!.trim()
+          : 'Offre',
+    );
+  }
+
   factory ContactContext.discovery({
     String? title,
   }) {

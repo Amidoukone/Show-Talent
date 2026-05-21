@@ -32,7 +32,7 @@ class NotificationModel {
     };
   }
 
-  // Création à partir d'un Map provenant de Firestore
+  // Création à partir d’un Map provenant de Firestore
   factory NotificationModel.fromMap(Map<String, dynamic> map) {
     return NotificationModel(
       id: map['id'] ?? '',

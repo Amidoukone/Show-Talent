@@ -13,6 +13,9 @@ Committed templates:
 Templates also expose optional web FCM keys (`FIREBASE_WEB_*`) so web push can
 run without hardcoded values.
 
+Production templates set `APP_CHECK_ENABLED=true` so Android release builds use
+Play Integrity before backend App Check enforcement is enabled.
+
 Local files to create later:
 
 - `config/mobile/local.json`

@@ -418,6 +418,11 @@ class EventDetailsScreen extends StatelessWidget {
 
     final current = Get.find<UserController>().user;
     if (current == null) return;
+    if (current.uid == other.uid) {
+      await Get.to(() => ProfileScreen(uid: current.uid, isReadOnly: false));
+      return;
+    }
+
     if (!current.allowMessages || !other.allowMessages) {
       AdFeedback.warning(
         'Messages indisponibles',
@@ -496,23 +501,39 @@ class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
   final String status;
 
+  String _labelFor(String normalized) {
+    switch (normalized) {
+      case 'ouvert':
+        return 'Ouvert';
+      case 'ferme':
+        return 'Fermé';
+      case 'archive':
+        return 'Archivé';
+      case 'brouillon':
+        return 'Brouillon';
+      default:
+        return normalized;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final normalized = Event.normalizeStatus(status);
 
     Color bg;
     Color fg;
 
-    switch (status) {
+    switch (normalized) {
       case 'ouvert':
         bg = cs.primary.withValues(alpha: 0.15);
         fg = cs.primary;
         break;
-      case 'fermé':
+      case 'ferme':
         bg = AdColors.error.withValues(alpha: 0.15);
         fg = AdColors.error;
         break;
-      case 'archivé':
+      case 'archive':
         bg = AdColors.onSurfaceMuted.withValues(alpha: 0.15);
         fg = AdColors.onSurfaceMuted;
         break;
@@ -533,7 +554,7 @@ class _StatusBadge extends StatelessWidget {
         border: Border.all(color: AdColors.divider),
       ),
       child: Text(
-        status,
+        _labelFor(normalized),
         style: TextStyle(
           fontWeight: FontWeight.w800,
           color: fg,
@@ -606,114 +627,136 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
               ),
               const SizedBox(height: 8),
               const Divider(color: AdColors.divider),
-              ...sorted.map((p) {
-                final hasPhoto = p.photoProfil.trim().startsWith('http');
-
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    backgroundColor: AdColors.surfaceCardAlt,
-                    backgroundImage:
-                        hasPhoto ? NetworkImage(p.photoProfil) : null,
-                    child: hasPhoto
-                        ? null
-                        : const Icon(Icons.person, color: Colors.white70),
-                  ),
-                  title: Text(
-                    p.nom,
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w800,
+              if (sorted.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(
+                    child: Text(
+                      'Aucun participant pour le moment.',
+                      style: TextStyle(color: AdColors.onSurfaceMuted),
                     ),
                   ),
-                  subtitle: Text(
-                    p.role,
-                    style: const TextStyle(color: AdColors.onSurfaceMuted),
-                  ),
-                  onTap: () => Get.to(
-                    () => ProfileScreen(uid: p.uid, isReadOnly: true),
-                  ),
-                  trailing: IconButton(
-                    icon: Icon(Icons.chat_bubble_outline, color: cs.primary),
-                    onPressed: () async {
-                      final chat = Get.find<ChatController>();
+                )
+              else
+                ...sorted.map((p) {
+                  final hasPhoto = p.photoProfil.trim().startsWith('http');
 
-                      final current = Get.find<UserController>().user;
-                      if (current == null) return;
-                      if (!current.allowMessages || !p.allowMessages) {
-                        AdFeedback.warning(
-                          'Messages indisponibles',
-                          !current.allowMessages
-                              ? 'Vous avez désactivé les messages.'
-                              : 'Cet utilisateur a désactivé les messages.',
-                        );
-                        return;
-                      }
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: CircleAvatar(
+                      backgroundColor: AdColors.surfaceCardAlt,
+                      backgroundImage:
+                          hasPhoto ? NetworkImage(p.photoProfil) : null,
+                      child: hasPhoto
+                          ? null
+                          : const Icon(Icons.person, color: Colors.white70),
+                    ),
+                    title: Text(
+                      p.nom,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    subtitle: Text(
+                      p.role,
+                      style: const TextStyle(color: AdColors.onSurfaceMuted),
+                    ),
+                    onTap: () => Get.to(
+                      () => ProfileScreen(uid: p.uid, isReadOnly: true),
+                    ),
+                    trailing: IconButton(
+                      icon: Icon(Icons.chat_bubble_outline, color: cs.primary),
+                      onPressed: () async {
+                        final chat = Get.find<ChatController>();
 
-                      try {
-                        final existingConversationId =
-                            await chat.findExistingConversationId(
-                          currentUserId: current.uid,
-                          otherUserId: p.uid,
-                        );
-
-                        if (existingConversationId != null &&
-                            existingConversationId.isNotEmpty) {
-                          Get.to(() => ChatScreen(
-                                conversationId: existingConversationId,
-                                otherUser: p,
-                              ));
+                        final current = Get.find<UserController>().user;
+                        if (current == null) return;
+                        if (current.uid == p.uid) {
+                          await Get.to(
+                            () => ProfileScreen(
+                              uid: current.uid,
+                              isReadOnly: false,
+                            ),
+                          );
                           return;
                         }
 
-                        final draft = await Get.bottomSheet<GuidedContactDraft>(
-                          ContactIntakeSheet(
+                        if (!current.allowMessages || !p.allowMessages) {
+                          AdFeedback.warning(
+                            'Messages indisponibles',
+                            !current.allowMessages
+                                ? 'Vous avez désactivé les messages.'
+                                : 'Cet utilisateur a désactivé les messages.',
+                          );
+                          return;
+                        }
+
+                        try {
+                          final existingConversationId =
+                              await chat.findExistingConversationId(
+                            currentUserId: current.uid,
+                            otherUserId: p.uid,
+                          );
+
+                          if (existingConversationId != null &&
+                              existingConversationId.isNotEmpty) {
+                            Get.to(() => ChatScreen(
+                                  conversationId: existingConversationId,
+                                  otherUser: p,
+                                ));
+                            return;
+                          }
+
+                          final draft =
+                              await Get.bottomSheet<GuidedContactDraft>(
+                            ContactIntakeSheet(
+                              currentUser: current,
+                              otherUser: p,
+                              context: widget.contactContext,
+                            ),
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                          );
+
+                          if (draft == null) {
+                            return;
+                          }
+
+                          final result = await chat.startGuidedConversation(
                             currentUser: current,
                             otherUser: p,
-                            context: widget.contactContext,
-                          ),
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                        );
+                            context: draft.context,
+                            contactReason: draft.reasonCode,
+                            introMessage: draft.introMessage,
+                          );
 
-                        if (draft == null) {
-                          return;
-                        }
+                          if (result.createdIntake) {
+                            AdFeedback.info(
+                              'Contact enregistré',
+                              'Le premier contact a été cadré et transmis via Adfoot.',
+                            );
+                          }
 
-                        final result = await chat.startGuidedConversation(
-                          currentUser: current,
-                          otherUser: p,
-                          context: draft.context,
-                          contactReason: draft.reasonCode,
-                          introMessage: draft.introMessage,
-                        );
-
-                        if (result.createdIntake) {
-                          AdFeedback.info(
-                            'Contact enregistré',
-                            'Le premier contact a été cadré et transmis via Adfoot.',
+                          Get.to(() => ChatScreen(
+                                conversationId: result.conversationId,
+                                otherUser: p,
+                              ));
+                        } on ChatFlowException catch (error) {
+                          AdFeedback.error(
+                            'Erreur',
+                            error.message,
+                          );
+                        } catch (_) {
+                          AdFeedback.error(
+                            'Erreur',
+                            'Impossible de démarrer la conversation pour le moment.',
                           );
                         }
-
-                        Get.to(() => ChatScreen(
-                              conversationId: result.conversationId,
-                              otherUser: p,
-                            ));
-                      } on ChatFlowException catch (error) {
-                        AdFeedback.error(
-                          'Erreur',
-                          error.message,
-                        );
-                      } catch (_) {
-                        AdFeedback.error(
-                          'Erreur',
-                          'Impossible de démarrer la conversation pour le moment.',
-                        );
-                      }
-                    },
-                  ),
-                );
-              }),
+                      },
+                    ),
+                  );
+                }),
             ],
           ),
         ),

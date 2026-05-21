@@ -250,9 +250,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           ListTile(
             leading: Icon(Icons.support_agent, color: cs.primary),
-            title: const Text("Contacter l'équipe Adfoot"),
+            title: const Text('Contacter l’équipe Adfoot'),
             subtitle: const Text(
-              "Vérification d'opportunités et accompagnement sécurisé",
+              'Vérification d’opportunités et accompagnement sécurisé',
             ),
             onTap: () {
               AdFeedback.info(
@@ -345,7 +345,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: TextStyle(fontWeight: FontWeight.w600),
             ),
             SizedBox(height: 8),
-            Text("• Faux agents demandant de l'argent"),
+            Text('• Faux agents demandant de l’argent'),
             Text("• Promesses de contrats sans documents officiels"),
             Text("• Voyages non encadrés ou dangereux"),
             Text("• Exploitation de jeunes joueurs"),

@@ -54,7 +54,7 @@ class UserRepository {
   static const String _missingProfileMessage =
       'Ce compte n’est plus disponible. Si vous pensez qu’il s’agit d’une erreur, contactez le support Adfoot.';
   static const String _adminPortalOnlyMessage =
-      'Ce compte est reserve au portail d administration Adfoot.';
+      'Ce compte est réservé au portail d’administration Adfoot.';
   static const String _disabledFallbackMessage =
       'L’accès à ce compte a été désactivé. Contactez le support Adfoot.';
   static const String _missingProfileTitle = 'Compte indisponible';

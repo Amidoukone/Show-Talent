@@ -26,7 +26,7 @@ class AuthErrorMapper {
       case 'invalid-credential':
         return 'Identifiants invalides. Vérifiez votre e-mail et votre mot de passe.';
       case 'user-disabled':
-        return 'L\'accès à ce compte a été désactivé. Contactez le support Adfoot.';
+        return 'L’accès à ce compte a été désactivé. Contactez le support Adfoot.';
       case 'too-many-requests':
         return 'Trop de tentatives. Réessayez plus tard.';
       case 'network-request-failed':

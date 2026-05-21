@@ -16,15 +16,11 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
-def isStagingReleaseTask = gradle.startParameter.taskNames.any { taskName ->
-    taskName.toLowerCase().contains("stagingrelease")
-}
-def enableReleaseOptimization = !isStagingReleaseTask
-
 android {
     namespace = "org.adfoot.app"
     compileSdk = 35
-    ndkVersion = "26.3.11579264"
+    buildToolsVersion = "35.0.0"
+    ndkVersion = "29.0.13599879"
 
     defaultConfig {
         applicationId = "org.adfoot.app"
@@ -74,7 +70,7 @@ android {
             if (keystorePropertiesFile.exists()) {
                 keyAlias keystoreProperties["keyAlias"]
                 keyPassword keystoreProperties["keyPassword"]
-                storeFile keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null
+                storeFile keystoreProperties["storeFile"] ? rootProject.file(keystoreProperties["storeFile"]) : null
                 storePassword keystoreProperties["storePassword"]
             }
         }
@@ -84,12 +80,20 @@ android {
         release {
             // For CI/local validation without key.properties, fallback remains debug-signed.
             signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
-            minifyEnabled enableReleaseOptimization
-            shrinkResources enableReleaseOptimization
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
         debug {
             // Debug standard
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            // Keep native library packaging explicit for Play's 16 KB page-size
+            // compatibility path. NDK r29 handles 16 KB ELF alignment.
+            useLegacyPackaging true
         }
     }
 }

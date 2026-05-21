@@ -30,7 +30,8 @@ class WebMessagingHelper {
   }) async {
     // ✅ Cache mémoire (30 min)
     if (!forceRefresh && _cachedToken != null) {
-      final age = DateTime.now().difference(_cachedAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+      final age = DateTime.now()
+          .difference(_cachedAt ?? DateTime.fromMillisecondsSinceEpoch(0));
       if (age.inMinutes < 30) return _cachedToken;
     }
 
@@ -59,9 +60,10 @@ class WebMessagingHelper {
 
     // 2) Lire l'état d'autorisation **sans** déclencher de prompt
     try {
-      final settings = await FirebaseMessaging.instance.getNotificationSettings();
+      final settings =
+          await FirebaseMessaging.instance.getNotificationSettings();
       final status = settings.authorizationStatus;
-      // On n'essaie d'obtenir un token que si c'est déjà autorisé
+      // On n’essaie d’obtenir un token que si c’est déjà autorisé
       if (status != AuthorizationStatus.authorized) {
         return null; // silencieux : pas de prompt
       }
@@ -81,7 +83,7 @@ class WebMessagingHelper {
         _cachedToken = token;
         _cachedAt = DateTime.now();
         return token;
-            } catch (_) {
+      } catch (_) {
         // ignore et retente
       }
       await Future.delayed(const Duration(milliseconds: 600));

@@ -28,6 +28,15 @@ void main() {
       expect(screen, contains('void _showResponse(ActionResponse response)'));
       expect(screen, contains('if (response.success)'));
       expect(screen, contains('return Wrap('));
+      expect(
+        screen,
+        contains('_buildEmptyState(currentUser, filteredOut: true)'),
+      );
+      expect(screen, contains('_resetFilters()'));
+      expect(screen, contains('EventFormScreen(event: event)'));
+      expect(screen, contains('final isFull = _isFull(event);'));
+      expect(screen, contains('S’inscrire'));
+      expect(screen, isNot(contains("const Text('Details')")));
     });
 
     test(
@@ -65,6 +74,8 @@ void main() {
       expect(details,
           contains('await Get.find<EventController>().fetchEvents();'));
       expect(details, contains('Get.back(result: true);'));
+      expect(details, contains('current.uid == other.uid'));
+      expect(details, contains('Aucun participant pour le moment.'));
       expect(details, isNot(contains('Get.find<UserController>().user!')));
       expect(details, isNot(contains('Get.offAllNamed(AppRoutes.main')));
     });

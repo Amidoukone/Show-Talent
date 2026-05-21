@@ -143,11 +143,11 @@ class _FollowListScreenState extends State<FollowListScreen> {
                     padding: const EdgeInsets.all(16),
                     child: AdStatePanel.empty(
                       title: widget.listType == 'followers'
-                          ? 'Aucun abonne'
+                          ? 'Aucun abonné'
                           : 'Aucun abonnement',
                       message: widget.listType == 'followers'
-                          ? "Aucun abonne pour l'instant."
-                          : "Aucun abonnement pour l'instant.",
+                          ? "Aucun abonné pour l’instant."
+                          : "Aucun abonnement pour l’instant.",
                     ),
                   ),
                 ],
@@ -237,7 +237,7 @@ class _FollowListButtonState extends State<_FollowListButton> {
         _authSessionService.currentUser?.uid;
     final followCtrl = Get.find<FollowController>();
 
-    // Si c'est son propre compte → ne pas afficher le bouton
+    // Si c’est son propre compte → ne pas afficher le bouton
     if (currentUserId == null || widget.u.uid == currentUserId) {
       return const SizedBox.shrink();
     }
@@ -263,7 +263,7 @@ class _FollowListButtonState extends State<_FollowListButton> {
           if (!success) {
             widget.u.isFollowing = isFollowing;
             widget.onFollowStateChanged(isFollowing);
-            AdFeedback.error('Erreur', "Impossible d'effectuer l'action.");
+            AdFeedback.error('Erreur', 'Impossible d’effectuer l’action.');
           } else if (isFollowing &&
               widget.listType == 'followings' &&
               currentUserId == widget.listOwnerUid) {
@@ -272,7 +272,7 @@ class _FollowListButtonState extends State<_FollowListButton> {
         } catch (_) {
           widget.u.isFollowing = isFollowing;
           widget.onFollowStateChanged(isFollowing);
-          AdFeedback.error('Erreur', "Impossible d'effectuer l'action.");
+          AdFeedback.error('Erreur', 'Impossible d’effectuer l’action.');
         } finally {
           if (mounted) {
             setState(() {

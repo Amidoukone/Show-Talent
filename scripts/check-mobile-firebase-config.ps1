@@ -171,6 +171,18 @@ if ($null -eq $config) {
         }
     }
 
+    if ($Environment -in @("production", "production-next")) {
+        $rawAppCheckEnabled = if ($config.Contains("APP_CHECK_ENABLED")) {
+            [string]$config["APP_CHECK_ENABLED"]
+        } else {
+            ""
+        }
+
+        if ($rawAppCheckEnabled.Trim().ToLowerInvariant() -ne "true") {
+            $errors.Add("APP_CHECK_ENABLED must be true in mobile config for '$Environment'.")
+        }
+    }
+
     if (
         $config.Contains("FIREBASE_IOS_BUNDLE_ID") -and
         -not [string]::IsNullOrWhiteSpace([string]$config["FIREBASE_IOS_BUNDLE_ID"]) -and

@@ -33,9 +33,9 @@ extension AuthSessionFailureMessage on UserAccessIssue {
   String get loginMessage {
     switch (this) {
       case UserAccessIssue.missingProfile:
-        return 'Compte incomplet ou non provisionne. Contactez l equipe Adfoot.';
+        return 'Compte incomplet ou non provisionné. Contactez l’équipe Adfoot.';
       case UserAccessIssue.adminPortalOnly:
-        return 'Ce compte est reserve au portail d administration Adfoot.';
+        return 'Ce compte est réservé au portail d’administration Adfoot.';
       case UserAccessIssue.disabledAccount:
         return 'Ce compte a été désactivé. Contactez l’équipe Adfoot.';
     }

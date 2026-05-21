@@ -45,6 +45,11 @@ class _EventListScreenState extends State<EventListScreen> {
     return status == 'ferme' || status == 'archive';
   }
 
+  bool _isFull(Event event) {
+    final capacity = event.capaciteMax;
+    return capacity != null && event.participants.length >= capacity;
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -71,121 +76,136 @@ class _EventListScreenState extends State<EventListScreen> {
           return _buildMissingUserState();
         }
 
-        if (eventController.isLoading && eventController.events.isEmpty) {
+        final allEvents = eventController.events;
+        if (eventController.isLoading && allEvents.isEmpty) {
           return _buildSkeletons();
         }
 
-        final events = _filterEvents(eventController.events);
+        final events = _filterEvents(allEvents);
 
-        if (events.isEmpty) {
-          return _buildEmptyState(currentUser);
+        if (allEvents.isEmpty) {
+          return _buildEmptyState(currentUser, filteredOut: false);
         }
 
         return Column(
           children: [
             _buildFilters(),
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8),
-                itemCount: events.length,
-                itemBuilder: (context, index) {
-                  final event = events[index];
-                  final organiser = event.organisateur;
-                  final isParticipant =
-                      event.participants.any((p) => p.uid == currentUser.uid);
-                  final isOrganisateur = organiser.uid == currentUser.uid;
+              child: events.isEmpty
+                  ? _buildEmptyState(currentUser, filteredOut: true)
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: events.length,
+                      itemBuilder: (context, index) {
+                        final event = events[index];
+                        final organiser = event.organisateur;
+                        final isParticipant = event.participants
+                            .any((p) => p.uid == currentUser.uid);
+                        final isOrganisateur = organiser.uid == currentUser.uid;
 
-                  return Card(
-                    elevation: 5,
-                    margin:
-                        const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildOrganiserSection(organiser),
-                          const SizedBox(height: 12),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
+                        return Card(
+                          elevation: 5,
+                          margin: const EdgeInsets.symmetric(
+                              vertical: 8, horizontal: 6),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildOrganiserSection(organiser),
+                                const SizedBox(height: 12),
+                                Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      event.titre,
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w800,
-                                        color: cs.onSurface,
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            event.titre,
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w800,
+                                              color: cs.onSurface,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            event.description,
+                                            maxLines: 3,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              color: AdColors.onSurfaceMuted,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      event.description,
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        color: AdColors.onSurfaceMuted,
-                                      ),
+                                    const SizedBox(width: 8),
+                                    _StatusBadge(status: event.statut),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                if (eventController.isLoading)
+                                  const Padding(
+                                    padding: EdgeInsets.only(bottom: 12),
+                                    child:
+                                        LinearProgressIndicator(minHeight: 2),
+                                  ),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    _buildChip(
+                                      Icons.calendar_today,
+                                      '${DateFormat('dd MMM').format(event.dateDebut)} -> ${DateFormat('dd MMM').format(event.dateFin)}',
+                                    ),
+                                    _buildChip(
+                                        Icons.place_outlined, event.lieu),
+                                    _buildChip(
+                                      Icons.privacy_tip_outlined,
+                                      event.estPublic ? 'Public' : 'Privé',
+                                    ),
+                                    _buildChip(
+                                      Icons.group_outlined,
+                                      '${event.participants.length} participants',
                                     ),
                                   ],
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              _StatusBadge(status: event.statut),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          if (eventController.isLoading)
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 12),
-                              child: LinearProgressIndicator(minHeight: 2),
+                                const SizedBox(height: 16),
+                                _buildActions(
+                                  context: context,
+                                  event: event,
+                                  currentUser: currentUser,
+                                  isParticipant: isParticipant,
+                                  isOrganisateur: isOrganisateur,
+                                ),
+                              ],
                             ),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _buildChip(
-                                Icons.calendar_today,
-                                '${DateFormat('dd MMM').format(event.dateDebut)} -> ${DateFormat('dd MMM').format(event.dateFin)}',
-                              ),
-                              _buildChip(Icons.place_outlined, event.lieu),
-                              _buildChip(
-                                Icons.privacy_tip_outlined,
-                                event.estPublic ? 'Public' : 'Privé',
-                              ),
-                              _buildChip(
-                                Icons.group_outlined,
-                                '${event.participants.length} participants',
-                              ),
-                            ],
                           ),
-                          const SizedBox(height: 16),
-                          _buildActions(
-                            context: context,
-                            event: event,
-                            currentUser: currentUser,
-                            isParticipant: isParticipant,
-                            isOrganisateur: isOrganisateur,
-                          ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
           ],
         );
       }),
       floatingActionButton: _buildFloatingActionButton(userController.user),
     );
+  }
+
+  void _resetFilters() {
+    _searchController.clear();
+    setState(() {
+      _selectedStatus = 'tous';
+      _selectedVisibility = 'tous';
+      _onlyUpcoming = false;
+    });
   }
 
   List<Event> _filterEvents(List<Event> source) {
@@ -268,23 +288,37 @@ class _EventListScreenState extends State<EventListScreen> {
     );
   }
 
-  Widget _buildEmptyState(AppUser currentUser) {
+  Widget _buildEmptyState(
+    AppUser currentUser, {
+    required bool filteredOut,
+  }) {
     final isOrganizer = isOpportunityPublisherRole(currentUser.role);
-    final actionLabel = isOrganizer ? 'Créer un événement' : 'Voir les clubs';
+    final actionLabel = filteredOut
+        ? 'Réinitialiser les filtres'
+        : isOrganizer
+            ? 'Créer un événement'
+            : 'Explorer les vidéos';
 
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: AdStatePanel(
           icon: Icons.event_busy,
-          title: 'Aucun événement disponible',
-          message: isOrganizer
-              ? 'Vous pouvez publier votre premier événement.'
-              : 'Aucun événement ne correspond à vos filtres.',
+          title: filteredOut ? 'Aucun résultat' : 'Aucun événement disponible',
+          message: filteredOut
+              ? 'Aucun événement ne correspond à vos filtres.'
+              : isOrganizer
+                  ? 'Vous pouvez publier votre premier événement.'
+                  : 'Revenez plus tard ou explorez les vidéos de talents.',
           action: AdButton(
             expanded: false,
             label: actionLabel,
             onPressed: () {
+              if (filteredOut) {
+                _resetFilters();
+                return;
+              }
+
               if (isOrganizer) {
                 Get.to(() => const EventFormScreen());
                 return;
@@ -292,7 +326,7 @@ class _EventListScreenState extends State<EventListScreen> {
 
               Get.offAllNamed(
                 AppRoutes.main,
-                arguments: {'tab': 2},
+                arguments: {'tab': 0},
               );
             },
           ),
@@ -344,7 +378,7 @@ class _EventListScreenState extends State<EventListScreen> {
                   onTap: () => setState(() => _selectedStatus = 'ferme'),
                 ),
                 _FilterChip(
-                  label: 'Archives',
+                  label: 'Archivés',
                   selected: _selectedStatus == 'archive',
                   onTap: () => setState(() => _selectedStatus = 'archive'),
                 ),
@@ -433,7 +467,9 @@ class _EventListScreenState extends State<EventListScreen> {
     required bool isParticipant,
     required bool isOrganisateur,
   }) {
-    final isClosed = _isClosedStatus(event.statut);
+    final isClosed =
+        _isClosedStatus(event.statut) || event.dateFin.isBefore(DateTime.now());
+    final isFull = _isFull(event);
     final isBusy = _pendingInscription[event.id] == true;
 
     if (isOrganisateur) {
@@ -450,8 +486,8 @@ class _EventListScreenState extends State<EventListScreen> {
             items: const [
               DropdownMenuItem(value: 'brouillon', child: Text('Brouillon')),
               DropdownMenuItem(value: 'ouvert', child: Text('Ouvert')),
-              DropdownMenuItem(value: 'ferme', child: Text('Ferme')),
-              DropdownMenuItem(value: 'archive', child: Text('Archive')),
+              DropdownMenuItem(value: 'ferme', child: Text('Fermé')),
+              DropdownMenuItem(value: 'archive', child: Text('Archivé')),
             ],
             onChanged: (value) async {
               if (value == null) return;
@@ -483,9 +519,15 @@ class _EventListScreenState extends State<EventListScreen> {
               _showResponse(response);
             },
           ),
-          TextButton(
+          TextButton.icon(
+            onPressed: () => Get.to(() => EventFormScreen(event: event)),
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Modifier'),
+          ),
+          TextButton.icon(
             onPressed: () => Get.to(() => EventDetailsScreen(event: event)),
-            child: const Text('Details'),
+            icon: const Icon(Icons.info_outline),
+            label: const Text('Détails'),
           ),
           TextButton(
             onPressed: () => _confirmDeleteEvent(context, event),
@@ -504,7 +546,7 @@ class _EventListScreenState extends State<EventListScreen> {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         ElevatedButton.icon(
-          onPressed: (!isParticipant && !isClosed && !isBusy)
+          onPressed: (!isParticipant && !isClosed && !isFull && !isBusy)
               ? () async {
                   setState(() => _pendingInscription[event.id] = true);
                   final response = await eventController.registerToEvent(
@@ -516,7 +558,11 @@ class _EventListScreenState extends State<EventListScreen> {
                 }
               : null,
           icon: const Icon(Icons.event_available),
-          label: const Text('S inscrire'),
+          label: Text(isBusy
+              ? 'Inscription...'
+              : isFull
+                  ? 'Complet'
+                  : 'S’inscrire'),
         ),
         if (isParticipant && !isClosed)
           OutlinedButton(
@@ -531,7 +577,7 @@ class _EventListScreenState extends State<EventListScreen> {
         else
           OutlinedButton(
             onPressed: () => Get.to(() => EventDetailsScreen(event: event)),
-            child: const Text('Details'),
+            child: const Text('Détails'),
           ),
       ],
     );
@@ -617,6 +663,21 @@ class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
   final String status;
 
+  String _labelFor(String normalized) {
+    switch (normalized) {
+      case 'ouvert':
+        return 'Ouvert';
+      case 'ferme':
+        return 'Fermé';
+      case 'archive':
+        return 'Archivé';
+      case 'brouillon':
+        return 'Brouillon';
+      default:
+        return normalized;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -639,6 +700,10 @@ class _StatusBadge extends StatelessWidget {
         bg = AdColors.onSurfaceMuted.withValues(alpha: 0.15);
         fg = AdColors.onSurfaceMuted;
         break;
+      case 'brouillon':
+        bg = AdColors.warning.withValues(alpha: 0.18);
+        fg = AdColors.warning;
+        break;
       default:
         bg = cs.secondary.withValues(alpha: 0.15);
         fg = cs.secondary;
@@ -652,7 +717,7 @@ class _StatusBadge extends StatelessWidget {
         border: const BorderSide(color: AdColors.divider).toBorder(),
       ),
       child: Text(
-        normalized,
+        _labelFor(normalized),
         style: TextStyle(fontWeight: FontWeight.bold, color: fg),
       ),
     );

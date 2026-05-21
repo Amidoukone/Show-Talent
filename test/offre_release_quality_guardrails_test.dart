@@ -13,6 +13,10 @@ void main() {
       expect(form, contains('if (!response.success)'));
       expect(form, contains('AdFeedback.error('));
       expect(form, contains('AdFeedback.success('));
+      expect(form, contains('Offre.normalizeStatus(editingOffre!.statut)'));
+      expect(form, contains('Get.back(result: true);'));
+      expect(form, contains('bool _isSubmitting = false;'));
+      expect(form, contains('_resolveInitialDate('));
     });
 
     test('offre screen reacts to action responses for status, apply and delete',
@@ -25,6 +29,15 @@ void main() {
       expect(screen, contains('await offreController.supprimerOffre'));
       expect(screen, contains('response.showToast(includeSuccess: true);'));
       expect(screen, contains('response.message'));
+      expect(screen, contains('ContactContext.offer('));
+      expect(screen, contains('startGuidedConversation('));
+      expect(screen, contains('findExistingConversationId('));
+      expect(
+        screen,
+        contains('_buildEmptyState(currentUser, filteredOut: true)'),
+      );
+      expect(screen, contains('_resetFilters()'));
+      expect(screen, contains("arguments: {'tab': 0}"));
     });
 
     test('offre controller mutations return explicit action responses', () {
@@ -41,7 +54,8 @@ void main() {
       expect(controller, contains('_extractCandidateMaps'));
     });
 
-    test('offre controller keeps the mobile stream tolerant and sorted client-side',
+    test(
+        'offre controller keeps the mobile stream tolerant and sorted client-side',
         () {
       final controller =
           File('lib/controller/offre_controller.dart').readAsStringSync();
@@ -49,7 +63,10 @@ void main() {
       expect(controller, contains("collection('offres').snapshots()"));
       expect(controller, contains('_parseSnapshotDocs(snapshot.docs)'));
       expect(controller, contains('Offre ignoree car document invalide'));
-      expect(controller, contains('fetched.sort((a, b) => b.dateCreation.compareTo(a.dateCreation));'));
+      expect(
+          controller,
+          contains(
+              'fetched.sort((a, b) => b.dateCreation.compareTo(a.dateCreation));'));
     });
   });
 }

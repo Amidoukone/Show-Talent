@@ -11,6 +11,8 @@ void main() {
           File('lib/screens/profile_screen.dart').readAsStringSync();
       final eventScreen =
           File('lib/screens/event_detail_screen.dart').readAsStringSync();
+      final offerScreen =
+          File('lib/screens/offre_screen.dart').readAsStringSync();
       final selectUserScreen =
           File('lib/screens/select_user_screen.dart').readAsStringSync();
 
@@ -23,6 +25,12 @@ void main() {
       expect(eventScreen, contains('startGuidedConversation('));
       expect(eventScreen, contains('ContactIntakeSheet('));
       expect(eventScreen, contains('ChatScreen('));
+
+      expect(offerScreen, contains('findExistingConversationId('));
+      expect(offerScreen, contains('startGuidedConversation('));
+      expect(offerScreen, contains('ContactIntakeSheet('));
+      expect(offerScreen, contains('ContactContext.offer('));
+      expect(offerScreen, contains('ChatScreen('));
 
       expect(selectUserScreen, contains('findExistingConversationId('));
       expect(selectUserScreen, contains('startGuidedConversation('));
@@ -65,6 +73,8 @@ void main() {
           File('lib/services/chat/chat_repository.dart').readAsStringSync();
       final conversationScreen =
           File('lib/screens/conversation_screen.dart').readAsStringSync();
+      final mainScreen =
+          File('lib/screens/main_screen.dart').readAsStringSync();
 
       expect(chatScreen, contains('watchConversationById('));
       expect(chatScreen, contains('getMessages(widget.conversationId)'));
@@ -90,6 +100,7 @@ void main() {
       expect(
           conversationScreen, contains('deleteConversation(conversationId)'));
       expect(conversationScreen, contains('ValueKey("conv_\${user.uid}")'));
+      expect(mainScreen, isNot(contains('markAllAsReadLocal();')));
     });
 
     test('first contact and feedback sheets stay keyboard-safe', () {

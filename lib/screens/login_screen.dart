@@ -103,7 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = _emailController.text.trim();
     final emailError = _validateEmailValue(email);
     if (emailError != null) {
-      _showErrorSnackbar(emailError, title: 'Reinitialisation impossible');
+      _showErrorSnackbar(emailError, title: 'Réinitialisation impossible');
       return;
     }
 
@@ -118,19 +118,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
       AdFeedback.success(
         'Succès',
-        'E-mail de reinitialisation envoye.',
+        'E-mail de réinitialisation envoyé.',
       );
     } on FirebaseAuthException catch (error) {
       _showErrorSnackbar(
         AuthErrorMapper.toMessage(error),
-        title: 'Reinitialisation impossible',
+        title: 'Réinitialisation impossible',
       );
     } on AuthFlowException catch (error) {
-      _showErrorSnackbar(error.message, title: 'Reinitialisation impossible');
+      _showErrorSnackbar(error.message, title: 'Réinitialisation impossible');
     } catch (_) {
       _showErrorSnackbar(
-        'Impossible d\'envoyer le lien de reinitialisation pour le moment.',
-        title: 'Reinitialisation impossible',
+        'Impossible d’envoyer le lien de réinitialisation pour le moment.',
+        title: 'Réinitialisation impossible',
       );
     } finally {
       if (mounted) {
@@ -358,7 +358,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Tous les comptes sont maintenant crees par l\'administration Adfoot.',
+                        'Tous les comptes sont maintenant créés par l’administration Adfoot.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: cs.onSurface.withValues(alpha: .7),

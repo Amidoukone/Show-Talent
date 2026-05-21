@@ -13,6 +13,6 @@ void main() {
     );
 
     expect(find.text('Lien invalide'), findsOneWidget);
-    expect(find.text('Retour a la connexion'), findsOneWidget);
+    expect(find.text('Retour à la connexion'), findsOneWidget);
   });
 }

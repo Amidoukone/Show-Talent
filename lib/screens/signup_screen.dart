@@ -42,7 +42,7 @@ class SignUpScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Creation de compte centralisee',
+                      'Création de compte centralisée',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w800,
                             color: cs.onSurface,
@@ -51,7 +51,7 @@ class SignUpScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'L application mobile ne cree plus de comptes directement.',
+                      'L’application mobile ne crée plus de comptes directement.',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: cs.onSurface.withValues(alpha: 0.7),
                             fontWeight: FontWeight.w600,
@@ -62,30 +62,30 @@ class SignUpScreen extends StatelessWidget {
                     _InfoCard(
                       icon: Icons.admin_panel_settings_outlined,
                       color: cs.primary,
-                      title: 'Regle active',
+                      title: 'Règle active',
                       message: publicSignupDisabledMessage,
                     ),
                     const SizedBox(height: 14),
                     _InfoCard(
                       icon: Icons.groups_outlined,
                       color: cs.secondary,
-                      title: 'Roles concernes',
+                      title: 'Rôles concernés',
                       message:
-                          'Tous les comptes sont maintenant provisionnes dans le portail admin: $roleLabels.',
+                          'Tous les comptes sont maintenant provisionnés dans le portail admin : $roleLabels.',
                     ),
                     const SizedBox(height: 14),
                     _InfoCard(
                       icon: Icons.list_alt_outlined,
                       color: cs.tertiary,
                       title: 'Parcours utilisateur',
-                      message: '1. Contacter l administration Adfoot.\n'
-                          '2. Recevoir le lien de definition du mot de passe.\n'
-                          '3. Valider l adresse e-mail.\n'
-                          '4. Se connecter ensuite dans l application mobile.',
+                      message: '1. Contacter l’administration Adfoot.\n'
+                          '2. Recevoir le lien de définition du mot de passe.\n'
+                          '3. Valider l’adresse e-mail.\n'
+                          '4. Se connecter ensuite dans l’application mobile.',
                     ),
                     const SizedBox(height: 24),
                     AdButton(
-                      label: 'Retour a la connexion',
+                      label: 'Retour à la connexion',
                       onPressed: () => Get.back(),
                       leading: Icons.arrow_back_rounded,
                       kind: AdButtonKind.primary,

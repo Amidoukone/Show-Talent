@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
-
 class ConnectivityService {
   static final ConnectivityService _instance = ConnectivityService._internal();
   factory ConnectivityService() => _instance;
@@ -17,16 +16,16 @@ class ConnectivityService {
 
   ConnectivityService._internal() {
     // Ecoute temps réel
-    _subscription =
-        _connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
+    _subscription = _connectivity.onConnectivityChanged.listen(
+        (List<ConnectivityResult> results) {
       final hasConnection = _hasConnection(results);
       _safeAdd(hasConnection);
     }, onError: (e, st) {
       _debugLog('onConnectivityChanged error', e, st);
-      // En cas d'erreur de plugin, on ne spam pas le stream.
+      // En cas d’erreur de plugin, on ne spam pas le stream.
     });
 
-    // Etat initial
+    // État initial
     _connectivity.checkConnectivity().then((List<ConnectivityResult> results) {
       _safeAdd(_hasConnection(results));
     }).catchError((e, st) {
@@ -40,7 +39,8 @@ class ConnectivityService {
 
   /// Vérifie l'état initial de connexion (snapshot instantané).
   Future<bool> checkInitialConnection() async {
-    final results = await _connectivity.checkConnectivity(); // v6 -> List<ConnectivityResult>
+    final results = await _connectivity
+        .checkConnectivity(); // v6 -> List<ConnectivityResult>
     return _hasConnection(results);
   }
 

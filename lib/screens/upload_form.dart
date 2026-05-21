@@ -114,7 +114,7 @@ class _UploadFormState extends State<UploadForm> {
   }
 
   Future<void> _handleUpload() async {
-    // Evite double clic pendant un etat actif
+    // Évite double clic pendant un état actif
     if (uploadVideoController.isPreparing.value ||
         uploadVideoController.isUploading.value ||
         uploadVideoController.isOptimizing.value) {
@@ -124,7 +124,7 @@ class _UploadFormState extends State<UploadForm> {
     // Validation formulaire
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    // Ferme les claviers avant de lancer la preparation
+    // Ferme les claviers avant de lancer la préparation
     _descriptionFocus.unfocus();
     _captionFocus.unfocus();
     await _releasePreviewController();
