@@ -197,5 +197,20 @@ void main() {
       expect(smartPlayer, contains('_bindPlayer(managedPlayer);'));
       expect(smartPlayer, contains('_scheduleMaybePlay();'));
     });
+
+    test('home video search stays separate from the live feed state', () {
+      final home = File('lib/screens/home_screen.dart').readAsStringSync();
+
+      expect(
+          home, contains('List<Video> get _currentVideos => _isSearchActive'));
+      expect(home, contains('_searchResults.toList(growable: false)'));
+      expect(
+          home, contains('videoController.videoList.toList(growable: false)'));
+      expect(home, contains('if (_isSearchActive) {'));
+      expect(home, contains('return;'));
+      expect(home, contains('_feedIndexBeforeSearch'));
+      expect(home, contains('_jumpToPageSilently(restoreIndex)'));
+      expect(home, contains('whereIn: batch'));
+    });
   });
 }

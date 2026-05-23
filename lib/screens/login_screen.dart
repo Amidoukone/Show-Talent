@@ -196,7 +196,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _showErrorSnackbar(
     String message, {
-    String title = 'Connexion echouee',
+    String title = 'Connexion échouée',
   }) {
     AdFeedback.error(
       title,
@@ -345,7 +345,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         alignment: Alignment.centerRight,
                         child: TextButton(
                           onPressed: _isBusy ? null : _resetPassword,
-                          child: const Text('Mot de passe oublie ?'),
+                          child: const Text('Mot de passe oublié ?'),
                         ),
                       ),
                       const SizedBox(height: 8),

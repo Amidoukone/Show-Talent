@@ -98,7 +98,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       return 'Mot de passe requis.';
     }
     if (pass.length < 6) {
-      return 'Le mot de passe doit contenir au moins 6 caracteres.';
+      return 'Le mot de passe doit contenir au moins 6 caractères.';
     }
     return null;
   }
@@ -152,7 +152,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Text(
-                              'Reinitialiser le mot de passe',
+                              'Réinitialiser le mot de passe',
                               style: Theme.of(context)
                                   .textTheme
                                   .titleLarge

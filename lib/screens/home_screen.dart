@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:adfoot/screens/add_video.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,8 +14,10 @@ import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/connectivity_controller.dart';
+import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/utils/video_search_matcher.dart';
 
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
@@ -36,15 +39,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final UserController userController = Get.find<UserController>();
   final FollowController followController = Get.find<FollowController>();
   final PageController _pageController = PageController();
+  final TextEditingController _searchController = TextEditingController();
   final VideoManager videoManager = VideoManager();
   late final VideoFocusOrchestrator _focusOrchestrator;
 
+  static const int _searchUidBatchSize = 10;
+  static const int _searchResultLimit = 60;
+  static const int _searchRecentScanLimit = 120;
+
   bool _isConnected = true;
+  bool _isSearchLoading = false;
+  bool _searchUsersHydrated = false;
+  String _searchQuery = '';
+  String? _searchError;
+  List<Video> _searchResults = const <Video>[];
 
   StreamSubscription<bool>? _connectivitySubscription;
+  Timer? _searchDebounce;
   bool _wakelockOn = false;
   bool _hasHandledRouteRefresh = false;
   int? _silencedPageChangeIndex;
+  int _searchRequestToken = 0;
+  int? _feedIndexBeforeSearch;
+
+  bool get _isSearchActive => _searchQuery.trim().isNotEmpty;
 
   // ---------------------------------------------------------------------------
   // Wakelock helpers
@@ -62,12 +80,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _updateWakelockForCurrent() async {
     final idx = videoController.currentIndex.value;
-    if (idx < 0 || idx >= videoController.videoList.length) {
+    final videos = _currentVideos;
+    if (idx < 0 || idx >= videos.length) {
       await _setWakelock(false);
       return;
     }
 
-    final url = videoController.videoList[idx].videoUrl;
+    final url = videos[idx].videoUrl;
     final player = videoManager.getController('home', url);
     final ctrl = player?.controller;
 
@@ -83,7 +102,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Focus orchestrator helpers
   // ---------------------------------------------------------------------------
 
-  List<Video> get _currentVideos => videoController.videoList.toList();
+  List<Video> get _currentVideos => _isSearchActive
+      ? _searchResults.toList(growable: false)
+      : videoController.videoList.toList(growable: false);
 
   void _refreshFocusVideos() {
     _focusOrchestrator.updateVideos(_currentVideos);
@@ -93,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     int index, {
     bool alignPageView = false,
   }) async {
-    final videos = videoController.videoList;
+    final videos = _currentVideos;
     if (index < 0 || index >= videos.length) {
       await _setWakelock(false);
       return false;
@@ -111,6 +132,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<bool> _refreshHomeFeed({bool alignPageView = true}) async {
+    if (_isSearchActive) {
+      await _runVideoSearch(_searchQuery);
+      return _searchResults.isNotEmpty;
+    }
+
     final refreshed = await videoController.refreshVideosKeepingFeed();
     if (!mounted) return refreshed;
 
@@ -199,6 +225,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       videos: _currentVideos,
       disposeWindow: 25,
       onRequestMore: () async {
+        if (_isSearchActive) {
+          return;
+        }
         if (videoController.hasMore && !videoController.isLoading) {
           final fetched = await videoController.fetchPaginatedVideos();
           if (fetched) {
@@ -233,6 +262,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _searchDebounce?.cancel();
+    _searchController.dispose();
     _pageController.dispose();
     _connectivitySubscription?.cancel();
     unawaited(_setWakelock(false));
@@ -255,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       unawaited(_setWakelock(false));
     } else if (state == AppLifecycleState.resumed) {
       final idx = videoController.currentIndex.value;
-      if (idx >= 0 && idx < videoController.videoList.length) {
+      if (idx >= 0 && idx < _currentVideos.length) {
         unawaited(_onPageChanged(idx));
         WidgetsBinding.instance.addPostFrameCallback((_) {
           unawaited(_updateWakelockForCurrent());
@@ -310,24 +341,272 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   // ---------------------------------------------------------------------------
+  // Global video search
+  // ---------------------------------------------------------------------------
+
+  void _onSearchChanged(String value) {
+    final query = value.trim();
+    _searchDebounce?.cancel();
+
+    if (query.isEmpty) {
+      _clearVideoSearch();
+      return;
+    }
+
+    setState(() {
+      _feedIndexBeforeSearch ??= videoController.currentIndex.value;
+      _searchQuery = query;
+      _isSearchLoading = true;
+      _searchError = null;
+    });
+
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      unawaited(_runVideoSearch(query));
+    });
+  }
+
+  void _clearVideoSearch() {
+    _searchRequestToken++;
+    _searchDebounce?.cancel();
+    _searchController.clear();
+
+    setState(() {
+      _searchQuery = '';
+      _searchResults = const <Video>[];
+      _isSearchLoading = false;
+      _searchError = null;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (videoController.videoList.isEmpty) {
+        _feedIndexBeforeSearch = null;
+        unawaited(_setWakelock(false));
+        return;
+      }
+      final restoreIndex = (_feedIndexBeforeSearch ?? 0)
+          .clamp(0, videoController.videoList.length - 1)
+          .toInt();
+      _feedIndexBeforeSearch = null;
+      _jumpToPageSilently(restoreIndex);
+      _refreshFocusVideos();
+      unawaited(_onPageChanged(restoreIndex));
+    });
+  }
+
+  Future<void> _runVideoSearch(String rawQuery) async {
+    final query = rawQuery.trim();
+    if (query.isEmpty) {
+      _clearVideoSearch();
+      return;
+    }
+
+    final requestToken = ++_searchRequestToken;
+    if (mounted) {
+      setState(() {
+        _searchQuery = query;
+        _isSearchLoading = true;
+        _searchError = null;
+      });
+    }
+
+    try {
+      await _hydrateSearchUsersIfNeeded();
+      final matchesById = <String, Video>{};
+      final matchingAuthors = _matchingAuthorsForQuery(query);
+
+      if (matchingAuthors.isNotEmpty) {
+        try {
+          await _loadVideosForAuthors(
+            matchingAuthors.map((user) => user.uid).toSet(),
+            query: query,
+            matchesById: matchesById,
+          );
+        } catch (error) {
+          debugPrint('Video search author query fallback: $error');
+        }
+      }
+
+      if (matchesById.isEmpty) {
+        await _loadRecentVideosMatchingQuery(
+          query,
+          matchesById: matchesById,
+        );
+      }
+
+      if (!mounted || requestToken != _searchRequestToken) {
+        return;
+      }
+
+      setState(() {
+        _searchResults =
+            matchesById.values.take(_searchResultLimit).toList(growable: false);
+        _isSearchLoading = false;
+      });
+
+      await _activateFirstSearchResult();
+    } catch (error) {
+      if (!mounted || requestToken != _searchRequestToken) {
+        return;
+      }
+
+      setState(() {
+        _searchResults = const <Video>[];
+        _isSearchLoading = false;
+        _searchError =
+            'Recherche indisponible pour le moment. Réessayez dans un instant.';
+      });
+      await _setWakelock(false);
+    }
+  }
+
+  Future<void> _hydrateSearchUsersIfNeeded() async {
+    final hasWatchedPlayers =
+        userController.userList.any((user) => user.isPlayer);
+    if (_searchUsersHydrated || hasWatchedPlayers) {
+      return;
+    }
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'joueur')
+        .limit(300)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final user = AppUser.fromMap({
+        ...data,
+        'uid': data['uid'] ?? doc.id,
+      });
+      if (user.uid.trim().isNotEmpty) {
+        userController.usersCache[user.uid] = user;
+      }
+    }
+
+    _searchUsersHydrated = true;
+  }
+
+  List<AppUser> _matchingAuthorsForQuery(String query) {
+    final seen = <String>{};
+    final authors = <AppUser>[];
+
+    for (final user in userController.usersCache.values) {
+      if (user.uid.trim().isEmpty || !seen.add(user.uid)) {
+        continue;
+      }
+      if (!user.isPlayer) {
+        continue;
+      }
+      if (matchesUserVideoSearch(user, query)) {
+        authors.add(user);
+      }
+    }
+
+    return authors;
+  }
+
+  Future<void> _loadVideosForAuthors(
+    Set<String> authorIds, {
+    required String query,
+    required Map<String, Video> matchesById,
+  }) async {
+    final ids = authorIds.where((id) => id.trim().isNotEmpty).toList();
+    if (ids.isEmpty) {
+      return;
+    }
+
+    for (var start = 0; start < ids.length; start += _searchUidBatchSize) {
+      if (matchesById.length >= _searchResultLimit) {
+        return;
+      }
+
+      final end = (start + _searchUidBatchSize).clamp(0, ids.length).toInt();
+      final batch = ids.sublist(start, end);
+      final snapshot = await FirebaseFirestore.instance
+          .collection('videos')
+          .where('status', isEqualTo: 'ready')
+          .where('uid', whereIn: batch)
+          .limit(_searchResultLimit)
+          .get();
+
+      for (final doc in snapshot.docs) {
+        final video = Video.fromDoc(doc);
+        final author = userController.usersCache[video.uid];
+        if (video.videoUrl.isEmpty ||
+            !matchesVideoSearch(video, author, query)) {
+          continue;
+        }
+        matchesById[video.id] = video;
+        if (matchesById.length >= _searchResultLimit) {
+          return;
+        }
+      }
+    }
+  }
+
+  Future<void> _loadRecentVideosMatchingQuery(
+    String query, {
+    required Map<String, Video> matchesById,
+  }) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('videos')
+        .where('status', isEqualTo: 'ready')
+        .orderBy('updatedAt', descending: true)
+        .limit(_searchRecentScanLimit)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      if (matchesById.length >= _searchResultLimit) {
+        return;
+      }
+
+      final video = Video.fromDoc(doc);
+      final author = userController.usersCache[video.uid];
+      if (video.videoUrl.isEmpty || !matchesVideoSearch(video, author, query)) {
+        continue;
+      }
+      matchesById[video.id] = video;
+    }
+  }
+
+  Future<void> _activateFirstSearchResult() async {
+    await videoManager.pauseAll('home');
+    if (_searchResults.isEmpty) {
+      await _setWakelock(false);
+      return;
+    }
+
+    _jumpToPageSilently(0);
+    _refreshFocusVideos();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    await _onPageChanged(0);
+  }
+
+  // ---------------------------------------------------------------------------
   // Page change / playback orchestration
   // ---------------------------------------------------------------------------
 
   Future<void> _onPageChanged(int index) async {
-    final videos = videoController.videoList;
+    final videos = _currentVideos;
     if (index < 0 || index >= videos.length) return;
 
-    final shouldApplyPendingLiveOnTop =
-        videoController.updateCurrentIndex(index);
-    if (shouldApplyPendingLiveOnTop) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        unawaited(_openPendingLiveVideos());
-      });
-      return;
-    }
+    if (_isSearchActive) {
+      videoController.currentIndex.value = index;
+    } else {
+      final shouldApplyPendingLiveOnTop =
+          videoController.updateCurrentIndex(index);
+      if (shouldApplyPendingLiveOnTop) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          unawaited(_openPendingLiveVideos());
+        });
+        return;
+      }
 
-    videoController.prefetchThumbnailsAroundIndex(index);
+      videoController.prefetchThumbnailsAroundIndex(index);
+    }
 
     _refreshFocusVideos();
     await _focusOrchestrator.onIndexChanged(index);
@@ -339,6 +618,107 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // ---------------------------------------------------------------------------
   // UI
   // ---------------------------------------------------------------------------
+
+  Widget _buildVideoSearchField() {
+    return SizedBox(
+      height: 42,
+      child: TextField(
+        controller: _searchController,
+        onChanged: _onSearchChanged,
+        textInputAction: TextInputAction.search,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        cursorColor: Colors.white,
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: 'Rechercher attaquant, défenseur...',
+          hintStyle: TextStyle(
+            color: Colors.white.withValues(alpha: 0.68),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: Colors.white.withValues(alpha: 0.82),
+            size: 20,
+          ),
+          suffixIcon: _isSearchLoading
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                )
+              : (_isSearchActive
+                  ? IconButton(
+                      tooltip: 'Effacer la recherche',
+                      onPressed: _clearVideoSearch,
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    )
+                  : null),
+          filled: true,
+          fillColor: Colors.black.withValues(alpha: 0.34),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: BorderSide(
+              color: Colors.white.withValues(alpha: 0.18),
+            ),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: BorderSide(
+              color: Colors.white.withValues(alpha: 0.18),
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(999),
+            borderSide: BorderSide(
+              color: Colors.white.withValues(alpha: 0.72),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchState({
+    required IconData icon,
+    required String title,
+    required String message,
+    bool showClearAction = true,
+  }) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: AdStatePanel(
+          icon: icon,
+          title: title,
+          message: message,
+          action: showClearAction
+              ? AdButton(
+                  expanded: false,
+                  leading: Icons.close_rounded,
+                  label: 'Effacer',
+                  onPressed: _clearVideoSearch,
+                )
+              : null,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -365,16 +745,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
         ),
-        centerTitle: true,
-        title: const Text(
-          'Adfoot',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
-            color: Colors.white,
-          ),
-        ),
+        titleSpacing: 12,
+        centerTitle: false,
+        title: _buildVideoSearchField(),
         actions: [
           Obx(() {
             final user = userController.user;
@@ -423,9 +796,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       body: !_isConnected
           ? _buildNoInternet()
           : Obx(() {
-              final videos = videoController.videoList;
+              final feedVideos = videoController.videoList;
+              final videos = _currentVideos;
 
-              if (videos.isEmpty) {
+              if (_isSearchActive && videos.isEmpty) {
+                if (_isSearchLoading) {
+                  return _buildSearchState(
+                    icon: Icons.search_rounded,
+                    title: 'Recherche en cours',
+                    message: 'Nous cherchons les vidéos correspondantes.',
+                    showClearAction: false,
+                  );
+                }
+
+                return _buildSearchState(
+                  icon: Icons.search_off_rounded,
+                  title: 'Aucune vidéo trouvée',
+                  message: _searchError ??
+                      'Essayez avec attaquant, défenseur, milieu, gardien ou un autre poste.',
+                );
+              }
+
+              if (!_isSearchActive && feedVideos.isEmpty) {
                 final user = userController.user;
                 return _buildEmptyFeed(userRole: user?.role);
               }
@@ -476,7 +868,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       floatingActionButtonLocation: FloatingActionButtonLocation.centerTop,
       floatingActionButton: Obx(() {
         final pending = videoController.pendingLiveCount.value;
-        if (pending <= 0 || !_isConnected) {
+        if (pending <= 0 || !_isConnected || _isSearchActive) {
           return const SizedBox.shrink();
         }
 

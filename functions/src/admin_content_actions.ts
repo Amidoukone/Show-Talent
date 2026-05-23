@@ -42,12 +42,10 @@ function normalizeOfferStatus(rawStatus: string): string {
   case "ouverte":
     return "ouverte";
   case "fermee":
-  case "fermÃ©e":
-  case "fermÃ£Â©e":
+  case "fermée":
     return "fermee";
   case "archivee":
-  case "archivÃ©e":
-  case "archivÃ£Â©e":
+  case "archivée":
     return "archivee";
   case "brouillon":
     return "brouillon";
@@ -62,12 +60,10 @@ function normalizeEventStatus(rawStatus: string): string {
   case "ouvert":
     return "ouvert";
   case "ferme":
-  case "fermÃ©":
-  case "fermÃ£Â©":
+  case "fermé":
     return "ferme";
   case "archive":
-  case "archivÃ©":
-  case "archivÃ£Â©":
+  case "archivé":
     return "archive";
   case "brouillon":
     return "brouillon";
