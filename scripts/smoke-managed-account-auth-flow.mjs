@@ -8,9 +8,9 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
-const DEFAULT_PROJECT_ID = 'show-talent-5987d';
+const DEFAULT_PROJECT_ID = 'adfoot-production';
 const DEFAULT_REGION = 'europe-west1';
-const DEFAULT_SERVICE_ACCOUNT = path.join('.credentials', 'show-talent-5987d-ops.json');
+const DEFAULT_SERVICE_ACCOUNT = path.join('.credentials', 'adfoot-production-ops.json');
 const DEFAULT_ADMIN_CLAIM = 'admin';
 
 function parseArgs(argv) {
@@ -19,7 +19,7 @@ function parseArgs(argv) {
     region: DEFAULT_REGION,
     serviceAccount: DEFAULT_SERVICE_ACCOUNT,
     cleanup: true,
-    roles: ['club', 'recruteur', 'agent'],
+    roles: ['joueur', 'fan', 'club', 'recruteur', 'agent'],
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -422,13 +422,22 @@ async function run() {
 
       const managedDocSnap = await db.collection('users').doc(roleRun.uid).get();
       const managedDoc = managedDocSnap.data() || null;
+      const managedAuthRecord = await auth.getUser(roleRun.uid);
+      const managedClaims = managedAuthRecord.customClaims || {};
       assert(managedDocSnap.exists, `Missing /users doc after provision for ${role}`);
       assert(String(managedDoc.role || '').toLowerCase() === role, `Firestore role mismatch for ${role}`);
       assert(managedDoc.createdByAdmin === true, `createdByAdmin should be true for ${role}`);
+      assert(
+        managedClaims.admin !== true &&
+          managedClaims.platformAdmin !== true &&
+          managedClaims.superAdmin !== true,
+        `Provisioned ${role} account must not have admin claims`,
+      );
 
       roleRun.checks.provision = {
         uid: roleRun.uid,
         existingUser: provisionData.existingUser === true,
+        adminClaimsAbsent: true,
       };
 
       const resetCode = extractOobCode(provisionData.passwordSetupLink);

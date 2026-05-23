@@ -15,6 +15,7 @@ import {
   buildPasswordResetActionCodeSettings,
   buildTemporaryPassword,
   getString,
+  isPrivilegedClaims,
   isUserNotFound,
   normalizeRole,
 } from "./admin_account_support";
@@ -66,6 +67,14 @@ export const provisionManagedAccount = onCall(
         password: buildTemporaryPassword(),
         disabled: false,
       });
+    }
+
+    if (existingUser && isPrivilegedClaims(userRecord.customClaims)) {
+      throw new HttpsError(
+        "permission-denied",
+        "Un compte avec claims admin ne peut pas etre provisionne " +
+          "comme compte metier.",
+      );
     }
 
     const existingDoc = await db.collection("users").doc(userRecord.uid).get();

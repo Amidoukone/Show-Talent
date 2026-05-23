@@ -149,6 +149,12 @@ $msg = Assert-ContainsRegex `
 if ($null -ne $msg) { $errors.Add($msg) }
 
 $msg = Assert-ContainsRegex `
+    -Raw $managedAccountsRaw `
+    -Pattern 'isPrivilegedClaims\(userRecord\.customClaims\)' `
+    -Message "provisionManagedAccount no longer rejects existing Auth users with admin claims."
+if ($null -ne $msg) { $errors.Add($msg) }
+
+$msg = Assert-ContainsRegex `
     -Raw $firestoreRulesRaw `
     -Pattern 'function isPublicSignupRole\(role\)\s*\{\s*return false;\s*\}' `
     -Message "firestore.rules does not disable public self-signup anymore."
@@ -268,7 +274,7 @@ if ($null -ne $resolvedAdminRepoPath) {
 }
 
 if ($Strict) {
-    if ($sharedContractRaw -notmatch 'source d''autorite unique') {
+    if ($sharedContractRaw -notmatch "source d'? ?autorite unique") {
         $warnings.Add("shared-backend-contract wording changed. Re-validate cross-repo governance manually.")
     }
     if ($null -ne $resolvedAdminRepoPath -and $adminFirebaseOptionsRaw -match "iosBundleId:\s*'com\.example\.showTalent'") {

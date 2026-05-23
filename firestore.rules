@@ -37,6 +37,10 @@ service cloud.firestore {
       return role == "recruteur" || role == "club" || role == "agent";
     }
 
+    function isPublicSignupRole(role) {
+      return false;
+    }
+
     function isRecruiterOrClub() {
       return signedInAndActive() && isOpportunityPublisherRole(userRole());
     }
