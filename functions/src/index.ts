@@ -183,7 +183,7 @@ interface VideoDoc {
 interface PlaybackSource {
   url: string;
   path: string;
-  type: "mp4" | "hls";
+  type: "mp4";
   quality: string;
   height: number;
   bitrate?: number;
@@ -725,6 +725,8 @@ export {
   updateManagedAccountProfile,
 } from "./admin_account_actions";
 export {
+  adminDeleteVideo,
+  adminSetVideoStatus,
   adminDeleteEvent,
   adminDeleteOffer,
   adminSetEventStatus,

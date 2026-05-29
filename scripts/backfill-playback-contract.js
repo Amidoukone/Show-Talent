@@ -92,10 +92,6 @@ function isMp4Source(source) {
   return source.type === "mp4" || /\.mp4(?:$|\?)/i.test(source.url);
 }
 
-function isHlsSource(source) {
-  return source.type === "hls" || /\.m3u8(?:$|\?)/i.test(source.url);
-}
-
 function compareByHeight(a, b) {
   const left = typeof a.height === "number" ? a.height : 0;
   const right = typeof b.height === "number" ? b.height : 0;
@@ -168,11 +164,6 @@ function normalizePlaybackForComparison(playback) {
     sources: normalizedSources,
     ...(sourceAsset ? {sourceAsset: toPlaybackSourceMap(sourceAsset)} : {}),
     ...(fallbackSource ? {fallback: toPlaybackSourceMap(fallbackSource)} : {}),
-    ...(playback.hls &&
-    typeof playback.hls === "object" &&
-    Object.keys(playback.hls).length > 0 ?
-      {hls: playback.hls} :
-      {}),
   };
 }
 
@@ -325,7 +316,6 @@ async function main() {
       updatedAtUtc: toIso(data.updatedAt),
       optimized: data.optimized === true,
       status: data.status || null,
-      hasHlsSource: !!nextUpdate.playback.hls?.manifest?.url,
       sourceTypes: Array.isArray(data.sources) ?
         data.sources.map((source) => source?.type || null).filter(Boolean) :
         [],

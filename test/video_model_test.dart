@@ -2,16 +2,14 @@ import 'package:adfoot/models/video.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test(
-      'parses playback contract and merges sources without losing mp4 fallback',
-      () {
+  test('parses playback contract and ignores non-MP4 sources', () {
     final video = Video.fromMap({
       'id': 'video-1',
       'videoUrl': 'https://cdn.example.com/video.mp4',
       'thumbnail': 'https://cdn.example.com/thumb.jpg',
       'playback': {
         'version': 1,
-        'mode': 'single_rendition_hls',
+        'mode': 'mp4_only',
         'sourceAsset': {
           'url': 'https://cdn.example.com/video.mp4',
           'path': 'videos/video-1.mp4',
@@ -26,91 +24,22 @@ void main() {
           'quality': '480p',
           'height': 480,
         },
-        'hls': {
-          'manifest': {
-            'url': 'https://cdn.example.com/video/master.m3u8',
-            'path': 'hls/video-1/master.m3u8',
-            'type': 'hls',
-            'quality': 'auto',
-            'height': 480,
-          },
-          'adaptive': false,
-          'renditionCount': 1,
-          'segmentDurationSeconds': 6,
-        },
       },
       'sources': [
         {
-          'url': 'https://cdn.example.com/video/master.m3u8',
-          'type': 'hls',
-          'quality': 'auto',
-          'height': 480,
+          'url': 'https://cdn.example.com/video.webm',
+          'type': 'webm',
+          'quality': '720p',
+          'height': 720,
         },
       ],
     });
 
     expect(video.videoUrl, 'https://cdn.example.com/video.mp4');
-    expect(video.playback?.mode, 'single_rendition_hls');
+    expect(video.playback?.mode, 'mp4_only');
     expect(video.playback?.sourceAsset?.path, 'videos/video-1.mp4');
-    expect(video.playback?.hls?.manifest.path, 'hls/video-1/master.m3u8');
-    expect(video.hasHlsSource, isTrue);
-    expect(video.hasAdaptiveHlsSource, isFalse);
     expect(video.sources.map((source) => source.url), [
       'https://cdn.example.com/video.mp4',
-      'https://cdn.example.com/video/master.m3u8',
-    ]);
-  });
-
-  test('parses adaptive multi-rendition HLS playback contracts', () {
-    final video = Video.fromMap({
-      'id': 'video-2',
-      'videoUrl': 'https://cdn.example.com/video-2.mp4',
-      'playback': {
-        'version': 1,
-        'mode': 'multi_rendition_hls',
-        'sourceAsset': {
-          'url': 'https://cdn.example.com/video-2.mp4',
-          'path': 'videos/video-2.mp4',
-          'type': 'mp4',
-          'quality': '480p',
-          'height': 480,
-          'bitrate': 1000000,
-        },
-        'fallback': {
-          'url': 'https://cdn.example.com/video-2.mp4',
-          'path': 'videos/video-2.mp4',
-          'type': 'mp4',
-          'quality': '480p',
-          'height': 480,
-          'bitrate': 1000000,
-        },
-        'hls': {
-          'manifest': {
-            'url': 'https://cdn.example.com/video-2/master.m3u8',
-            'path': 'hls/video-2/master.m3u8',
-            'type': 'hls',
-            'quality': 'auto',
-            'height': 720,
-            'bitrate': 2400000,
-          },
-          'adaptive': true,
-          'renditionCount': 3,
-          'segmentDurationSeconds': 6,
-        },
-      },
-    });
-
-    expect(video.videoUrl, 'https://cdn.example.com/video-2.mp4');
-    expect(video.playback?.mode, 'multi_rendition_hls');
-    expect(video.playback?.hls?.adaptive, isTrue);
-    expect(video.playback?.hls?.renditionCount, 3);
-    expect(video.playback?.hls?.manifest.height, 720);
-    expect(video.playback?.hls?.manifest.bitrate, 2400000);
-    expect(video.hasHlsSource, isTrue);
-    expect(video.hasAdaptiveHlsSource, isTrue);
-    expect(video.sources.map((source) => source.url), [
-      'https://cdn.example.com/video-2.mp4',
-      'https://cdn.example.com/video-2/master.m3u8',
     ]);
   });
 
@@ -174,7 +103,6 @@ void main() {
       'https://cdn.example.com/mp4/video-3/720p.mp4',
       'https://cdn.example.com/video-3.mp4',
     ]);
-    expect(video.hasHlsSource, isFalse);
     expect(video.hasMultipleMp4Sources, isTrue);
     expect(
       video.playback?.effectiveModeForSourceType('mp4'),
@@ -217,6 +145,41 @@ void main() {
 
     expect(video.videoUrl, 'https://cdn.example.com/mp4/video-4/480p.mp4');
     expect(video.effectiveUrl, 'https://cdn.example.com/mp4/video-4/480p.mp4');
+  });
+
+  test('does not infer primary playback URL from non-MP4 fields', () {
+    final video = Video.fromMap({
+      'id': 'video-4b',
+      'videoUrl': 'https://cdn.example.com/videos/video-4b.webm',
+      'playback': {
+        'version': 2,
+        'mode': 'mp4_only',
+        'sourceAsset': {
+          'url': 'https://cdn.example.com/videos/video-4b.webm',
+          'path': 'videos/video-4b.webm',
+          'type': 'webm',
+        },
+        'fallback': {
+          'url': 'https://cdn.example.com/videos/video-4b.webm',
+          'path': 'videos/video-4b.webm',
+          'type': 'webm',
+        },
+        'sources': [
+          {
+            'url': 'https://cdn.example.com/mp4/video-4b/480p.mp4',
+            'path': 'mp4/video-4b/480p.mp4',
+            'type': 'mp4',
+            'quality': '480p',
+            'height': 480,
+          },
+        ],
+      },
+    });
+
+    expect(video.videoUrl, 'https://cdn.example.com/mp4/video-4b/480p.mp4');
+    expect(video.sources.map((source) => source.url), [
+      'https://cdn.example.com/mp4/video-4b/480p.mp4',
+    ]);
   });
 
   test('parses canonical single-rendition MP4 contracts', () {

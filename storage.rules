@@ -27,6 +27,12 @@ service firebase.storage {
         isOwnedVideoDoc(videoDocIdFromFileName(fileName));
     }
 
+    function isOwnedMp4Rendition(videoId, fileName) {
+      return videoId.matches('^[A-Za-z0-9_-]+$') &&
+        fileName.matches('^[A-Za-z0-9_.-]+\\.mp4$') &&
+        isOwnedVideoDoc(videoId);
+    }
+
     function isOwnedThumbnail(fileName) {
       return (
         fileName.matches('^thumbnail_[A-Za-z0-9_-]+\\.jpg$') &&
@@ -52,17 +58,20 @@ service firebase.storage {
 
     match /videos/{videoFileName} {
       allow read: if true;
-      allow write: if signedIn() && isOwnedVideoMp4(videoFileName);
+      allow create, update: if false;
+      allow delete: if signedIn() && isOwnedVideoMp4(videoFileName);
+    }
+
+    match /mp4/{videoId}/{fileName} {
+      allow read: if true;
+      allow create, update: if false;
+      allow delete: if signedIn() && isOwnedMp4Rendition(videoId, fileName);
     }
 
     match /thumbnails/{fileName} {
       allow read: if true;
-      allow write: if signedIn() && isOwnedThumbnail(fileName);
-    }
-
-    match /hls/{videoId}/{allPaths=**} {
-      allow read: if true;
-      allow write: if false;
+      allow create, update: if false;
+      allow delete: if signedIn() && isOwnedThumbnail(fileName);
     }
 
     match /{allPaths=**} {

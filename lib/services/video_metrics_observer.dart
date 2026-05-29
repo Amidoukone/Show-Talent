@@ -85,13 +85,8 @@ class VideoMetricsObserver {
       'sourceQuality': event.sourceQuality,
       'sourceHeight': event.sourceHeight,
       'sourceBitrate': event.sourceBitrate,
-      'requestedHls': event.requestedHls,
       'cacheBypassed': event.cacheBypassed,
       'playbackBranch': event.playbackBranch,
-      'hlsSuppressedReason': event.hlsSuppressedReason,
-      'manifestHost': event.manifestHost,
-      'manifestPath': event.manifestPath,
-      'manifestHasToken': event.manifestHasToken,
       'usedStreaming': event.usedStreaming,
       'usedStreamFallback': event.usedStreamFallback,
       'fallbackFromSourceType': event.fallbackFromSourceType,
@@ -103,9 +98,7 @@ class VideoMetricsObserver {
       'fallbackCacheHit': event.fallbackCacheHit,
       'reusedInFlightDownload': event.reusedInFlightDownload,
       'networkTier': _videoManager?.currentProfile?.tier.name,
-      'preferHls': _videoManager?.currentProfile?.preferHls,
       'adaptiveEnabled': _videoManager?.adaptiveSourcesEnabled,
-      'hlsStrategyEnabled': _videoManager?.hlsStrategyEnabled,
       'platform': kIsWeb ? 'web' : 'native',
     };
 

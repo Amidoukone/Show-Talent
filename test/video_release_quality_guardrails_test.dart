@@ -296,16 +296,15 @@ void main() {
       final profileScroll =
           File('lib/screens/profil_video_scrollview.dart').readAsStringSync();
 
-      expect(manager, contains('final requestedHls = false;'));
-      expect(orchestrator, contains('requestedHls: false'));
-      expect(orchestrator, isNot(contains('useHlsForVideo')));
-      expect(player, contains('preferHlsRequested: false'));
-      expect(player, isNot(contains('_preferHls')));
+      expect(manager, contains('bool adaptiveSourcesEnabled = false;'));
+      expect(manager, isNot(contains('VideoFormat.')));
+      expect(orchestrator, isNot(contains('alternatePlaybackForVideo')));
+      expect(player, isNot(contains('alternatePlaybackRequested')));
       expect(player, isNot(contains('_forceMp4Fallback')));
-      expect(home, isNot(contains('useHlsForVideo')));
-      expect(videoFeed, isNot(contains('useHlsForVideo')));
-      expect(profileFeed, isNot(contains('useHlsForVideo')));
-      expect(profileScroll, isNot(contains('useHlsForVideo')));
+      expect(home, isNot(contains('alternatePlaybackForVideo')));
+      expect(videoFeed, isNot(contains('alternatePlaybackForVideo')));
+      expect(profileFeed, isNot(contains('alternatePlaybackForVideo')));
+      expect(profileScroll, isNot(contains('alternatePlaybackForVideo')));
     });
 
     test('video preload keeps active playback first and staggers cache work',

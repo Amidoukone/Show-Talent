@@ -14,13 +14,11 @@ class NetworkProfile {
     required this.tier,
     this.hasConnection = true,
     this.measuredKbps,
-    this.preferHls = false,
   });
 
   final NetworkProfileTier tier;
   final bool hasConnection;
   final double? measuredKbps;
-  final bool preferHls;
 
   @override
   String toString() {
@@ -28,7 +26,6 @@ class NetworkProfile {
     if (measuredKbps != null) {
       buffer.write(', ${measuredKbps!.toStringAsFixed(0)} kbps');
     }
-    if (preferHls) buffer.write(', preferHls');
     buffer.write(hasConnection ? ')' : ', offline)');
     return buffer.toString();
   }
@@ -39,8 +36,7 @@ class NetworkProfileService {
     Connectivity? connectivity,
     http.Client? client,
     SharedPreferences? preferences,
-    this.downloadUri =
-        'https://speed.cloudflare.com/__down?bytes=8000',
+    this.downloadUri = 'https://speed.cloudflare.com/__down?bytes=8000',
     this.probeUri = 'https://speed.cloudflare.com/__down?bytes=1',
     this.internalDownloadUri,
     this.internalProbeUri,
@@ -95,7 +91,6 @@ class NetworkProfileService {
       final offline = NetworkProfile(
         tier: _baselineTier(connectivityResult),
         hasConnection: false,
-        preferHls: false,
       );
 
       await _saveCachedProfile(offline, transport, now);
@@ -113,7 +108,6 @@ class NetworkProfileService {
         final offline = NetworkProfile(
           tier: _baselineTier(connectivityResult),
           hasConnection: false,
-          preferHls: false,
         );
 
         await _saveCachedProfile(offline, transport, now);
@@ -136,10 +130,6 @@ class NetworkProfileService {
       return cached.profile;
     }
 
-    final preferHls =
-        connectivityResult == ConnectivityResult.wifi ||
-        connectivityResult == ConnectivityResult.ethernet;
-
     var tier = _baselineTier(connectivityResult);
     final throughput = await _measureThroughput();
 
@@ -158,7 +148,6 @@ class NetworkProfileService {
       tier: tier,
       hasConnection: true,
       measuredKbps: throughput,
-      preferHls: preferHls,
     );
 
     await _saveCachedProfile(measured, transport, DateTime.now());
@@ -236,9 +225,7 @@ class NetworkProfileService {
 
   Future<bool> _probeCdn(Uri uri) async {
     try {
-      final response = await _client
-          .head(uri)
-          .timeout(
+      final response = await _client.head(uri).timeout(
             measureTimeout,
             onTimeout: () => http.Response.bytes([], 408),
           );
@@ -265,9 +252,7 @@ class NetworkProfileService {
       }
 
       final stopwatch = Stopwatch()..start();
-      final response = await _client
-          .get(uri)
-          .timeout(
+      final response = await _client.get(uri).timeout(
             measureTimeout,
             onTimeout: () => http.Response.bytes([], 408),
           );
@@ -306,13 +291,11 @@ class NetworkProfileService {
         tier: tier,
         hasConnection: map['hasConnection'] == true,
         measuredKbps: (map['kbps'] as num?)?.toDouble(),
-        preferHls: map['preferHls'] == true,
       );
 
       return _CachedProfile(
         profile: profile,
-        timestamp:
-            DateTime.fromMillisecondsSinceEpoch(map['ts'] as int? ?? 0),
+        timestamp: DateTime.fromMillisecondsSinceEpoch(map['ts'] as int? ?? 0),
         transport: map['transport'] as String? ?? 'unknown',
       );
     } catch (_) {
@@ -333,7 +316,6 @@ class NetworkProfileService {
           'tier': profile.tier.name,
           'hasConnection': profile.hasConnection,
           'kbps': profile.measuredKbps,
-          'preferHls': profile.preferHls,
           'ts': timestamp.millisecondsSinceEpoch,
           'transport': transport,
         }),

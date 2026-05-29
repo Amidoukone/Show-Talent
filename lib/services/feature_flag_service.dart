@@ -4,25 +4,18 @@ import 'package:flutter/foundation.dart';
 class FeatureFlagConfig {
   final bool adaptiveEnabled;
   final int rolloutPercent;
-  final bool hlsPlaybackEnabled;
-  final bool preferHlsPlayback;
 
   const FeatureFlagConfig({
     this.adaptiveEnabled = false,
     this.rolloutPercent = 0,
-    this.hlsPlaybackEnabled = false,
-    this.preferHlsPlayback = false,
   });
 
   factory FeatureFlagConfig.fromData(Map<String, dynamic> data) {
+    final rawPercent = data['rolloutPercent'];
     return FeatureFlagConfig(
-      // Single-rendition MP4 baseline: adaptive and HLS flags remain readable
-      // in Firestore for backward compatibility, but they no longer drive
-      // runtime playback in the mobile app.
-      adaptiveEnabled: false,
-      rolloutPercent: 0,
-      hlsPlaybackEnabled: false,
-      preferHlsPlayback: false,
+      adaptiveEnabled: data['adaptiveEnabled'] == true,
+      rolloutPercent:
+          rawPercent is num ? rawPercent.round().clamp(0, 100).toInt() : 0,
     );
   }
 
@@ -31,17 +24,6 @@ class FeatureFlagConfig {
       return false;
     }
     return _isUserInRollout(uid, rolloutPercent);
-  }
-
-  bool isHlsPlaybackEnabledForUser(String? uid) {
-    if (!hlsPlaybackEnabled) {
-      return false;
-    }
-    return _isUserInRollout(uid, rolloutPercent);
-  }
-
-  bool shouldPreferHlsForUser(String? uid) {
-    return isHlsPlaybackEnabledForUser(uid) && preferHlsPlayback;
   }
 
   bool _isUserInRollout(String? uid, int percent) {
@@ -92,17 +74,5 @@ class FeatureFlagService {
 
   bool isAdaptiveEnabledForUser(String? uid) {
     return _cached.isAdaptiveEnabledForUser(uid);
-  }
-
-  bool isHlsPlaybackEnabledForUser(String? uid) {
-    return _cached.isHlsPlaybackEnabledForUser(uid);
-  }
-
-  bool shouldPreferHlsForUser(String? uid) {
-    return _cached.shouldPreferHlsForUser(uid);
-  }
-
-  bool useHlsForUser(String? uid) {
-    return shouldPreferHlsForUser(uid);
   }
 }

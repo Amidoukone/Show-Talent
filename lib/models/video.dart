@@ -30,9 +30,11 @@ List<VideoSource> _parseVideoSources(dynamic value) {
           _asMap(entry) ?? const <String, dynamic>{},
         ),
       )
-      .where((source) => source.url.isNotEmpty)
+      .where((source) => source.url.isNotEmpty && source.isMp4)
       .toList();
 }
+
+bool _isMp4Url(String url) => url.toLowerCase().trim().contains('.mp4');
 
 List<VideoSource> _dedupeVideoSources(Iterable<VideoSource> sources) {
   final seen = <String>{};
@@ -58,8 +60,14 @@ class VideoSource {
   final int? height;
   final int? bitrate;
 
-  bool get isHls =>
-      (type?.toLowerCase() == 'hls') || url.toLowerCase().contains('.m3u8');
+  bool get isMp4 {
+    final normalizedType = type?.toLowerCase().trim();
+    final normalizedUrl = url.toLowerCase().trim();
+    final normalizedPath = path?.toLowerCase().trim() ?? '';
+    return normalizedType == 'mp4' ||
+        normalizedUrl.contains('.mp4') ||
+        normalizedPath.endsWith('.mp4');
+  }
 
   const VideoSource({
     required this.url,
@@ -106,50 +114,12 @@ class VideoSource {
   }
 }
 
-class VideoPlaybackHls {
-  final VideoSource manifest;
-  final bool adaptive;
-  final int? renditionCount;
-  final int? segmentDurationSeconds;
-
-  const VideoPlaybackHls({
-    required this.manifest,
-    this.adaptive = false,
-    this.renditionCount,
-    this.segmentDurationSeconds,
-  });
-
-  factory VideoPlaybackHls.fromMap(Map<String, dynamic> data) {
-    final manifestMap = _asMap(data['manifest']) ?? const <String, dynamic>{};
-    return VideoPlaybackHls(
-      manifest: VideoSource.fromMap(manifestMap),
-      adaptive: data['adaptive'] == true,
-      renditionCount: _asInt(data['renditionCount']),
-      segmentDurationSeconds: _asInt(data['segmentDurationSeconds']),
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'manifest': manifest.toMap(),
-      'adaptive': adaptive,
-      if (renditionCount != null) 'renditionCount': renditionCount,
-      if (segmentDurationSeconds != null)
-        'segmentDurationSeconds': segmentDurationSeconds,
-    };
-  }
-
-  bool get isAdaptiveReady =>
-      manifest.url.isNotEmpty && adaptive && (renditionCount ?? 0) >= 2;
-}
-
 class VideoPlaybackContract {
   final int version;
   final String? mode;
   final List<VideoSource> renditionSources;
   final VideoSource? sourceAsset;
   final VideoSource? fallbackSource;
-  final VideoPlaybackHls? hls;
 
   const VideoPlaybackContract({
     this.version = 1,
@@ -157,13 +127,11 @@ class VideoPlaybackContract {
     this.renditionSources = const [],
     this.sourceAsset,
     this.fallbackSource,
-    this.hls,
   });
 
   factory VideoPlaybackContract.fromMap(Map<String, dynamic> data) {
     final sourceAssetMap = _asMap(data['sourceAsset']);
     final fallbackMap = _asMap(data['fallback']);
-    final hlsMap = _asMap(data['hls']);
 
     return VideoPlaybackContract(
       version: _asInt(data['version']) ?? 1,
@@ -175,47 +143,26 @@ class VideoPlaybackContract {
       fallbackSource: fallbackMap != null && fallbackMap.isNotEmpty
           ? VideoSource.fromMap(fallbackMap)
           : null,
-      hls: hlsMap != null && hlsMap.isNotEmpty
-          ? VideoPlaybackHls.fromMap(hlsMap)
-          : null,
     );
   }
 
-  List<VideoSource> get sources => _dedupeVideoSources([
-        ...mp4Sources,
-        if (hls?.manifest.url.isNotEmpty ?? false) hls!.manifest,
-      ]);
-
   List<VideoSource> get mp4Sources => _dedupeVideoSources([
-        ...renditionSources.where((source) => !source.isHls),
+        ...renditionSources.where((source) => source.isMp4),
         if ((fallbackSource?.url.isNotEmpty ?? false) &&
-            !(fallbackSource?.isHls ?? false))
+            (fallbackSource?.isMp4 ?? false))
           fallbackSource!,
         if ((sourceAsset?.url.isNotEmpty ?? false) &&
-            !(sourceAsset?.isHls ?? false))
+            (sourceAsset?.isMp4 ?? false))
           sourceAsset!,
       ]);
+
+  List<VideoSource> get sources => mp4Sources;
 
   bool get hasMultipleMp4Sources => mp4Sources.length > 1;
 
   String effectiveModeForSourceType(String? sourceType) {
-    if (sourceType == 'hls') {
-      return mode ??
-          (isAdaptiveHlsReady ? 'multi_rendition_hls' : 'single_rendition_hls');
-    }
     return hasMultipleMp4Sources ? 'multi_rendition_mp4' : 'mp4_only';
   }
-
-  String? get hlsManifestUrl {
-    final manifest = hls?.manifest.url;
-    if (manifest == null || manifest.isEmpty) {
-      return null;
-    }
-    return manifest;
-  }
-
-  bool get isAdaptiveHlsReady =>
-      mode == 'multi_rendition_hls' && (hls?.isAdaptiveReady ?? false);
 
   Map<String, dynamic> toMap() {
     return {
@@ -225,7 +172,6 @@ class VideoPlaybackContract {
         'sources': renditionSources.map((source) => source.toMap()).toList(),
       if (sourceAsset != null) 'sourceAsset': sourceAsset!.toMap(),
       if (fallbackSource != null) 'fallback': fallbackSource!.toMap(),
-      if (hls != null) 'hls': hls!.toMap(),
     };
   }
 }
@@ -282,16 +228,20 @@ class Video {
     ]);
 
     final fallbackUrl = readString(map['videoUrl']);
-    final playbackPrimaryUrl =
-        (playback?.fallbackSource?.url.isNotEmpty ?? false)
-            ? playback!.fallbackSource!.url
-            : (playback?.sourceAsset?.url.isNotEmpty ?? false)
-                ? playback!.sourceAsset!.url
-                : '';
+    final safeFallbackUrl = _isMp4Url(fallbackUrl) ? fallbackUrl : '';
+    final playbackFallback = playback?.fallbackSource;
+    final playbackSourceAsset = playback?.sourceAsset;
+    final playbackPrimaryUrl = ((playbackFallback?.url.isNotEmpty ?? false) &&
+            (playbackFallback?.isMp4 ?? false))
+        ? playbackFallback!.url
+        : ((playbackSourceAsset?.url.isNotEmpty ?? false) &&
+                (playbackSourceAsset?.isMp4 ?? false))
+            ? playbackSourceAsset!.url
+            : '';
     final inferredUrl = playbackPrimaryUrl.isNotEmpty
         ? playbackPrimaryUrl
-        : fallbackUrl.isNotEmpty
-            ? fallbackUrl
+        : safeFallbackUrl.isNotEmpty
+            ? safeFallbackUrl
             : (playback?.mp4Sources.isNotEmpty ?? false)
                 ? playback!.mp4Sources.first.url
                 : (mergedSources.isNotEmpty ? mergedSources.first.url : '');
@@ -365,17 +315,11 @@ class Video {
     return '';
   }
 
-  bool get hasHlsSource =>
-      playback?.hlsManifestUrl?.isNotEmpty == true ||
-      sources.any((source) => source.isHls);
-
-  bool get hasAdaptiveHlsSource => playback?.isAdaptiveHlsReady == true;
-
   bool get hasMultipleMp4Sources {
     final contract = playback;
     if (contract != null) {
       return contract.hasMultipleMp4Sources;
     }
-    return sources.where((source) => !source.isHls).length > 1;
+    return sources.where((source) => source.isMp4).length > 1;
   }
 }

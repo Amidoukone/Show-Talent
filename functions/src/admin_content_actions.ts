@@ -14,6 +14,12 @@ import {
 
 const OFFER_STATUSES = new Set(["brouillon", "ouverte", "fermee", "archivee"]);
 const EVENT_STATUSES = new Set(["brouillon", "ouvert", "ferme", "archive"]);
+const VIDEO_MODERATION_STATUSES = new Set([
+  "ready",
+  "under_review",
+  "hidden",
+  "removed",
+]);
 
 type AdminContentCallableRequest = {
   auth?: {uid?: string; token?: Record<string, unknown> | null} | null;
@@ -67,6 +73,31 @@ function normalizeEventStatus(rawStatus: string): string {
     return "archive";
   case "brouillon":
     return "brouillon";
+  default:
+    return value;
+  }
+}
+
+function normalizeVideoModerationStatus(rawStatus: string): string {
+  const value = rawStatus.trim().toLowerCase();
+  switch (value) {
+  case "ready":
+  case "published":
+  case "publiee":
+  case "publiée":
+    return "ready";
+  case "under_review":
+  case "review":
+  case "a_revoir":
+    return "under_review";
+  case "hidden":
+  case "masquee":
+  case "masquée":
+    return "hidden";
+  case "removed":
+  case "supprimee":
+  case "supprimée":
+    return "removed";
   default:
     return value;
   }
@@ -161,6 +192,82 @@ function collectEventStoragePaths(data: Record<string, unknown>): string[] {
   addStoragePath(data["flyerUrl"], paths);
   addStoragePath(data["flyerPath"], paths);
   addStoragePath(data["streamingUrl"], paths);
+  return [...paths];
+}
+
+function addVideoStoragePath(
+  value: unknown,
+  out: Set<string>,
+  videoId: string,
+): void {
+  if (typeof value !== "string") return;
+  const trimmed = value.trim();
+  if (!trimmed) return;
+
+  const path = trimmed.includes("://") ?
+    extractStoragePathFromUrl(trimmed) :
+    trimmed.replace(/^\/+/, "");
+
+  if (!path || path.includes("..") || !path.includes(videoId)) {
+    return;
+  }
+
+  if (
+    path.startsWith("videos/") ||
+    path.startsWith("thumbnails/") ||
+    path.startsWith("mp4/")
+  ) {
+    out.add(path);
+  }
+}
+
+function addVideoSourceStoragePath(
+  value: unknown,
+  out: Set<string>,
+  videoId: string,
+): void {
+  const source = asRecord(value);
+  if (!source) return;
+  addVideoStoragePath(source["path"], out, videoId);
+  addVideoStoragePath(source["url"], out, videoId);
+  addVideoStoragePath(source["videoUrl"], out, videoId);
+}
+
+function collectVideoStoragePaths(
+  videoId: string,
+  data: Record<string, unknown>,
+): string[] {
+  const paths = new Set<string>([
+    `videos/${videoId}.mp4`,
+    `thumbnails/thumbnail_${videoId}.jpg`,
+    `thumbnails/thumbnail_${videoId}.jpeg`,
+    `thumbnails/thumbnail_${videoId}.png`,
+  ]);
+
+  addVideoStoragePath(data["storagePath"], paths, videoId);
+  addVideoStoragePath(data["thumbnailPath"], paths, videoId);
+  addVideoStoragePath(data["videoUrl"], paths, videoId);
+  addVideoStoragePath(data["thumbnail"], paths, videoId);
+  addVideoStoragePath(data["thumbnailUrl"], paths, videoId);
+
+  if (Array.isArray(data["sources"])) {
+    for (const source of data["sources"]) {
+      addVideoSourceStoragePath(source, paths, videoId);
+    }
+  }
+
+  const playback = asRecord(data["playback"]);
+  if (playback) {
+    addVideoSourceStoragePath(playback["sourceAsset"], paths, videoId);
+    addVideoSourceStoragePath(playback["fallback"], paths, videoId);
+
+    if (Array.isArray(playback["sources"])) {
+      for (const source of playback["sources"]) {
+        addVideoSourceStoragePath(source, paths, videoId);
+      }
+    }
+  }
+
   return [...paths];
 }
 
@@ -369,6 +476,166 @@ const EVENT_DELETE_CONFIG: DeleteContentConfig = {
   alreadyDeletedMessage: "Événement déjà supprimé.",
   collectStoragePaths: collectEventStoragePaths,
 };
+
+export const adminSetVideoStatus = onCall(
+  LOW_CPU_CALLABLE_OPTIONS,
+  async (request) => {
+    const adminUid = await assertAdminCaller(request);
+    const videoId = getContentId(request.data, "videoId");
+    if (!videoId) {
+      throw new HttpsError("invalid-argument", "videoId est requis.");
+    }
+
+    const rawStatus = getString(request.data, "status");
+    if (!rawStatus) {
+      throw new HttpsError("invalid-argument", "status est requis.");
+    }
+
+    const status = normalizeVideoModerationStatus(rawStatus);
+    if (!VIDEO_MODERATION_STATUSES.has(status)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Statut vidéo invalide. Valeurs : ready, under_review, hidden, removed.",
+      );
+    }
+
+    try {
+      const videoRef = db.collection("videos").doc(videoId);
+      const videoSnap = await videoRef.get();
+      if (!videoSnap.exists) {
+        throw new HttpsError("not-found", "Vidéo introuvable.");
+      }
+
+      const videoData = videoSnap.data() ?? {};
+      if (status === "ready" && videoData.optimized !== true) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Seule une vidéo optimisée peut être republiée.",
+        );
+      }
+
+      await videoRef.set({
+        status,
+        moderationStatus: status,
+        updatedByAdmin: adminUid,
+        updatedAt: fieldValue.serverTimestamp(),
+        lastModeratedAt: fieldValue.serverTimestamp(),
+        ...(status === "ready" ? {
+          hiddenAt: fieldValue.delete(),
+          removedAt: fieldValue.delete(),
+        } : {}),
+        ...(status === "hidden" ? {
+          hiddenAt: fieldValue.serverTimestamp(),
+        } : {}),
+        ...(status === "removed" ? {
+          removedAt: fieldValue.serverTimestamp(),
+        } : {}),
+      }, {merge: true});
+
+      logger.info("admin video status updated", {
+        videoId,
+        status,
+        updatedBy: adminUid,
+      });
+
+      return {
+        success: true,
+        code: "video_status_updated",
+        message: `Statut vidéo mis à jour : ${status}.`,
+        data: {
+          videoId,
+          status,
+          updatedBy: adminUid,
+        },
+      };
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      logger.error("admin video status update failed", {
+        videoId,
+        status,
+        updatedBy: adminUid,
+        error,
+      });
+      throw new HttpsError(
+        "internal",
+        "Mise à jour du statut vidéo impossible pour le moment.",
+      );
+    }
+  },
+);
+
+export const adminDeleteVideo = onCall(
+  LOW_CPU_CALLABLE_OPTIONS,
+  async (request) => {
+    const adminUid = await assertAdminCaller(request);
+    const videoId = getContentId(request.data, "videoId");
+    if (!videoId) {
+      throw new HttpsError("invalid-argument", "videoId est requis.");
+    }
+
+    try {
+      const videoRef = db.collection("videos").doc(videoId);
+      const videoSnap = await videoRef.get();
+
+      if (!videoSnap.exists) {
+        return {
+          success: true,
+          code: "video_already_deleted",
+          message: "Vidéo déjà supprimée.",
+          data: {
+            videoId,
+            deletedBy: adminUid,
+            alreadyDeleted: true,
+            deletedAssetPaths: [],
+          },
+        };
+      }
+
+      const videoData = videoSnap.data() ?? {};
+      const assetPaths = collectVideoStoragePaths(videoId, videoData);
+      const deletedAssetPaths = await deleteStoragePaths(assetPaths, {
+        collectionName: "videos",
+        contentId: videoId,
+      });
+
+      await videoRef.delete();
+
+      logger.info("admin video deleted", {
+        videoId,
+        deletedBy: adminUid,
+        deletedAssetCount: deletedAssetPaths.length,
+      });
+
+      return {
+        success: true,
+        code: "video_deleted",
+        message: "Vidéo supprimée.",
+        data: {
+          videoId,
+          deletedBy: adminUid,
+          deletedAssetPaths,
+        },
+      };
+    } catch (error) {
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      logger.error("admin video deletion failed", {
+        videoId,
+        deletedBy: adminUid,
+        error,
+      });
+      throw new HttpsError(
+        "internal",
+        "Suppression vidéo impossible pour le moment.",
+      );
+    }
+  },
+);
 
 export const adminSetOfferStatus = onCall(
   LOW_CPU_CALLABLE_OPTIONS,

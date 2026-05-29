@@ -246,11 +246,6 @@ function collectVideoStoragePaths(data: Record<string, unknown>): string[] {
         addSourcePath(source);
       }
     }
-
-    const hls = asRecord(playback["hls"]);
-    if (hls) {
-      addSourcePath(hls["manifest"]);
-    }
   }
 
   return [...paths];

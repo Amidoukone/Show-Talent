@@ -273,7 +273,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       originalUrl: widget.videoUrl,
       resolvedUrl: resolvedUrl,
       sources: widget.video.sources,
-      requestedHls: false,
       isPreload: false,
     );
 
@@ -294,7 +293,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           widget.contextKey,
           widget.videoUrl,
           sources: widget.video.sources,
-          useHls: false,
           preferDownloadedFile: preferDownloadedFile,
           autoPlay: false,
           activeUrl: widget.videoUrl,
@@ -458,7 +456,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       hasMultipleMp4Sources: widget.video.hasMultipleMp4Sources &&
           _videoManager.adaptiveSourcesEnabled,
       networkTier: _videoManager.currentProfile?.tier.name,
-      preferHlsRequested: false,
       resolvedUrl: resolvedUrl,
       source: source,
     );
@@ -605,7 +602,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         originalUrl: widget.videoUrl,
         resolvedUrl: resolvedUrl,
         sources: widget.video.sources,
-        requestedHls: false,
         isPreload: false,
       );
 
@@ -779,11 +775,9 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           ) ??
           widget.video.resolvedUrl ??
           widget.video.effectiveUrl;
-      final prefersDownloadedRecovery =
-          !resolvedUrl.toLowerCase().contains('.m3u8');
 
       await _purgeAndReloadController(
-        preferDownloadedFile: prefersDownloadedRecovery,
+        preferDownloadedFile: resolvedUrl.isNotEmpty,
         recoveryReason: reason,
       );
     } finally {
@@ -1571,16 +1565,11 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     if (!kIsWeb && purgeCachedFile) {
       try {
         final cacheUrl = resolvedUrl ?? widget.videoUrl;
-        if (cacheUrl.toLowerCase().contains('.m3u8')) {
-          await CachedVideoPlayerPlus.removeFileFromCache(Uri.parse(cacheUrl));
-          await custom_cache.VideoCacheManager.removeCachedFile(cacheUrl);
-        } else {
-          final file = await custom_cache.VideoCacheManager.getFileIfCached(
-            cacheUrl,
-          );
-          if (file != null && await file.exists()) {
-            await file.delete();
-          }
+        final file = await custom_cache.VideoCacheManager.getFileIfCached(
+          cacheUrl,
+        );
+        if (file != null && await file.exists()) {
+          await file.delete();
         }
       } catch (_) {}
     }

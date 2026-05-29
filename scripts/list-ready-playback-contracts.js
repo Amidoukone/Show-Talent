@@ -86,10 +86,6 @@ function isMp4Source(source) {
   return source && (source.type === "mp4" || /\.mp4(?:$|\?)/i.test(source.url));
 }
 
-function isHlsSource(source) {
-  return source && (source.type === "hls" || /\.m3u8(?:$|\?)/i.test(source.url));
-}
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -124,7 +120,6 @@ async function main() {
     readyPlaybackV2: 0,
     readyMultiRenditionMp4: 0,
     readyWithThreeMp4Sources: 0,
-    readyWithHlsManifest: 0,
   };
 
   snapshot.forEach((doc) => {
@@ -143,7 +138,6 @@ async function main() {
     const mp4Sources = (Array.isArray(playback.sources) ? playback.sources : [])
       .map(normalizeSource)
       .filter((source) => source && isMp4Source(source));
-    const hlsManifest = normalizeSource(playback?.hls?.manifest);
     const fallback = normalizeSource(playback?.fallback);
 
     if (Object.keys(playback).length > 0) {
@@ -158,10 +152,6 @@ async function main() {
     if (mp4Sources.length >= 3) {
       summary.readyWithThreeMp4Sources += 1;
     }
-    if (hlsManifest && isHlsSource(hlsManifest)) {
-      summary.readyWithHlsManifest += 1;
-    }
-
     if (videos.length >= limit) {
       return;
     }
@@ -185,12 +175,6 @@ async function main() {
       mp4Paths: mp4Sources
         .map((source) => source.path)
         .filter((path) => isNonEmptyString(path)),
-      hlsManifestPath: hlsManifest?.path || null,
-      hlsAdaptive: playback?.hls?.adaptive === true,
-      hlsRenditionCount:
-        typeof playback?.hls?.renditionCount === "number" ?
-          playback.hls.renditionCount :
-          null,
     });
   });
 

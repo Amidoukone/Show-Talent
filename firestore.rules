@@ -192,6 +192,12 @@ service cloud.firestore {
         request.resource.data.reportCount == currentVideoReportCount() + 1;
     }
 
+    function canReadVideo() {
+      return resource.data.status == "ready" ||
+        isAdminOperator() ||
+        (signedInAndActive() && resource.data.uid == request.auth.uid);
+    }
+
     match /users/{userId} {
       allow read: if signedIn() &&
         (hasActiveAccount(request.auth.uid) || isOwner(userId));
@@ -207,11 +213,8 @@ service cloud.firestore {
     }
 
     match /videos/{videoId} {
-      allow read: if true;
-      allow create: if signedInAndActive() &&
-        request.resource.data.uid == request.auth.uid;
-      allow update: if signedInAndActive() &&
-        resource.data.uid == request.auth.uid;
+      allow read: if canReadVideo();
+      allow create: if false;
       allow update: if canToggleVideoLike();
       allow update: if canIncrementVideoShareCount();
       allow update: if canReportVideo();

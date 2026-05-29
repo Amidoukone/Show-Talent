@@ -63,16 +63,12 @@ class VideoController extends GetxController {
   VideoManager get videoManager => _videoManager;
 
   // ------------------------------------------------------------------
-  // FEATURE FLAGS (ADAPTIVE / HLS)
+  // FEATURE FLAGS (ADAPTIVE MP4)
   // ------------------------------------------------------------------
 
   bool _adaptivePlaybackEnabled = false;
-  bool _hlsPlaybackEnabled = false;
-  bool _preferHlsPlayback = false;
 
   bool get adaptivePlaybackEnabled => _adaptivePlaybackEnabled;
-  bool get hlsPlaybackEnabled => _hlsPlaybackEnabled;
-  bool get preferHlsPlayback => _preferHlsPlayback;
 
   Future<void> _initFeatureFlags() async {
     try {
@@ -84,18 +80,11 @@ class VideoController extends GetxController {
       await service.fetchConfig();
 
       _adaptivePlaybackEnabled = service.isAdaptiveEnabledForUser(uid);
-      _hlsPlaybackEnabled = service.isHlsPlaybackEnabledForUser(uid);
-      _preferHlsPlayback = service.shouldPreferHlsForUser(uid);
-
       _videoManager.updateAdaptiveFlag(_adaptivePlaybackEnabled);
-      _videoManager.updateHlsStrategyFlag(_preferHlsPlayback);
     } catch (e) {
       debugPrint('❌ Feature flag load error: $e');
       _adaptivePlaybackEnabled = false;
-      _hlsPlaybackEnabled = false;
-      _preferHlsPlayback = false;
       _videoManager.updateAdaptiveFlag(false);
-      _videoManager.updateHlsStrategyFlag(false);
     }
   }
 

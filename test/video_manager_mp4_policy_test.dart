@@ -1,7 +1,6 @@
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/videos/domain/network_profile.dart';
 import 'package:adfoot/widgets/video_manager.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -46,57 +45,12 @@ void main() {
     manager.resetNetworkProfileStateForTests();
   });
 
-  test('MP4-first baseline disables HLS attempts on Android preload', () {
-    expect(
-      manager.shouldAttemptHlsForRequest(
-        preferHls: true,
-        isPreload: true,
-        platform: TargetPlatform.android,
-      ),
-      isFalse,
-    );
-
-    expect(
-      manager.shouldAttemptHlsForRequest(
-        preferHls: true,
-        isPreload: false,
-        platform: TargetPlatform.android,
-      ),
-      isFalse,
-    );
-  });
-
-  test('MP4-first baseline disables HLS attempts on every platform', () {
-    expect(
-      manager.shouldAttemptHlsForRequest(
-        preferHls: true,
-        isPreload: true,
-        platform: TargetPlatform.iOS,
-      ),
-      isFalse,
-    );
-  });
-
-  test('controller reuse stays enabled under MP4-first baseline', () {
-    expect(
-      manager.shouldReuseControllerForRequest(
-        originalUrl: 'https://cdn.example.com/video.mp4',
-        resolvedUrl: 'https://cdn.example.com/video_720.mp4',
-        sources: mp4Sources,
-        requestedHls: true,
-        isPreload: false,
-      ),
-      isTrue,
-    );
-  });
-
   test('MP4 requests reuse existing controllers normally', () {
     expect(
       manager.shouldReuseControllerForRequest(
         originalUrl: 'https://cdn.example.com/video.mp4',
         resolvedUrl: 'https://cdn.example.com/video_720.mp4',
         sources: mp4Sources,
-        requestedHls: false,
         isPreload: false,
       ),
       isTrue,
@@ -118,7 +72,6 @@ void main() {
         originalUrl: mediumMp4.url,
         resolvedUrl: lowMp4.url,
         sources: mp4Sources,
-        requestedHls: false,
         isPreload: false,
       ),
       isFalse,
@@ -139,7 +92,6 @@ void main() {
         originalUrl: mediumMp4.url,
         resolvedUrl: highMp4.url,
         sources: mp4Sources,
-        requestedHls: false,
         isPreload: false,
       ),
       isTrue,
@@ -151,7 +103,6 @@ void main() {
       manager.shouldForceFreshDownloadAfterPrimaryInitFailureForTests(
         usedStreaming: false,
         isPreload: false,
-        isHls: false,
         url: highMp4.url
             .replaceFirst('cdn.example.com', 'firebasestorage.googleapis.com'),
       ),
@@ -162,7 +113,6 @@ void main() {
       manager.shouldForceFreshDownloadAfterPrimaryInitFailureForTests(
         usedStreaming: true,
         isPreload: false,
-        isHls: false,
         url: highMp4.url
             .replaceFirst('cdn.example.com', 'firebasestorage.googleapis.com'),
       ),
@@ -173,7 +123,6 @@ void main() {
   test('background cache warmup waits until stream init succeeds', () {
     expect(
       manager.shouldWarmCacheAfterStreamInitForTests(
-        isHls: false,
         isPreload: false,
         usedStreaming: true,
         usedStreamFallback: false,
@@ -183,7 +132,6 @@ void main() {
 
     expect(
       manager.shouldWarmCacheAfterStreamInitForTests(
-        isHls: false,
         isPreload: false,
         usedStreaming: true,
         usedStreamFallback: true,

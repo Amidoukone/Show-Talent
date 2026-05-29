@@ -15,7 +15,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart'
     show HttpExceptionWithStatus;
 import 'package:http/http.dart' as http;
-import 'package:video_player/video_player.dart' show VideoFormat;
 
 enum VideoLoadState { loading, ready, errorTimeout, errorSource }
 
@@ -38,13 +37,8 @@ class VideoMetricEvent {
     this.sourceQuality,
     this.sourceHeight,
     this.sourceBitrate,
-    this.requestedHls,
     this.cacheBypassed,
     this.playbackBranch,
-    this.hlsSuppressedReason,
-    this.manifestHost,
-    this.manifestPath,
-    this.manifestHasToken,
     this.usedStreaming,
     this.usedStreamFallback,
     this.fallbackFromSourceType,
@@ -71,13 +65,8 @@ class VideoMetricEvent {
   final String? sourceQuality;
   final int? sourceHeight;
   final int? sourceBitrate;
-  final bool? requestedHls;
   final bool? cacheBypassed;
   final String? playbackBranch;
-  final String? hlsSuppressedReason;
-  final String? manifestHost;
-  final String? manifestPath;
-  final bool? manifestHasToken;
   final bool? usedStreaming;
   final bool? usedStreamFallback;
   final String? fallbackFromSourceType;
@@ -110,13 +99,8 @@ class VideoMetricEvent {
       sourceQuality: sourceQuality,
       sourceHeight: sourceHeight,
       sourceBitrate: sourceBitrate,
-      requestedHls: requestedHls,
       cacheBypassed: cacheBypassed,
       playbackBranch: playbackBranch,
-      hlsSuppressedReason: hlsSuppressedReason,
-      manifestHost: manifestHost,
-      manifestPath: manifestPath,
-      manifestHasToken: manifestHasToken,
       usedStreaming: usedStreaming,
       usedStreamFallback: usedStreamFallback,
       fallbackFromSourceType: fallbackFromSourceType,
@@ -128,18 +112,6 @@ class VideoMetricEvent {
       reusedInFlightDownload: reusedInFlightDownload,
     );
   }
-}
-
-class _HlsBranchDetails {
-  const _HlsBranchDetails({
-    required this.host,
-    required this.path,
-    required this.hasToken,
-  });
-
-  final String? host;
-  final String? path;
-  final bool hasToken;
 }
 
 class _VideoDownloadResult {
@@ -210,7 +182,6 @@ class VideoManager {
   static const NetworkProfile _bootstrapNetworkProfile = NetworkProfile(
     tier: NetworkProfileTier.medium,
     hasConnection: true,
-    preferHls: false,
   );
   final Random _retryRandom = Random();
   Future<int> Function() _cacheSizeProvider =
@@ -231,7 +202,6 @@ class VideoManager {
 
   /// originalUrl -> resolvedUrl
   final Map<String, Map<String, String>> _resolvedUrlByContext = {};
-  final Set<String> _purgedHlsCacheUrls = <String>{};
 
   // ---------------------------------------------------------------------------
   // Network profile
@@ -374,8 +344,6 @@ class VideoManager {
     _networkProfileFuture = null;
     _networkProfileRequestToken = 0;
     adaptiveSourcesEnabled = false;
-    hlsStrategyEnabled = false;
-    _purgedHlsCacheUrls.clear();
     uiRevision.value = 0;
     for (final byUrl in _uiWatchersByContext.values) {
       for (final entry in byUrl.values) {
@@ -490,14 +458,9 @@ class VideoManager {
   // ---------------------------------------------------------------------------
 
   bool adaptiveSourcesEnabled = false;
-  bool hlsStrategyEnabled = false;
 
   void updateAdaptiveFlag(bool enabled) {
     adaptiveSourcesEnabled = enabled;
-  }
-
-  void updateHlsStrategyFlag(bool enabled) {
-    hlsStrategyEnabled = enabled;
   }
 
   bool _shouldAwaitAdaptiveProfileSelection({
@@ -508,7 +471,7 @@ class VideoManager {
       return false;
     }
 
-    final mp4SourceCount = sources.where((source) => !source.isHls).length;
+    final mp4SourceCount = sources.where((source) => source.isMp4).length;
     return mp4SourceCount > 1;
   }
 
@@ -625,23 +588,10 @@ class VideoManager {
     }
   }
 
-  @visibleForTesting
-  bool shouldAttemptHlsForRequest({
-    required bool preferHls,
-    required bool isPreload,
-    TargetPlatform? platform,
-  }) {
-    return false;
-  }
-
   bool _shouldPromotePreferredSource({
     required VideoSource currentSource,
     required VideoSource preferredSource,
   }) {
-    if (preferredSource.isHls != currentSource.isHls) {
-      return preferredSource.isHls && !currentSource.isHls;
-    }
-
     final currentHeight = currentSource.height ?? 0;
     final preferredHeight = preferredSource.height ?? 0;
     if (currentHeight > 0 && preferredHeight > 0) {
@@ -661,7 +611,6 @@ class VideoManager {
     required String originalUrl,
     String? resolvedUrl,
     List<VideoSource> sources = const [],
-    required bool requestedHls,
     required bool isPreload,
   }) {
     if (isPreload || !adaptiveSourcesEnabled || sources.isEmpty) {
@@ -673,16 +622,11 @@ class VideoManager {
       return true;
     }
 
-    final attemptHls = shouldAttemptHlsForRequest(
-      preferHls: requestedHls,
-      isPreload: isPreload,
-    );
     final preferredSource = VideoSourceSelector.preferredSource(
       fallbackUrl: originalUrl,
       sources: sources,
       adaptiveEnabled: adaptiveSourcesEnabled,
       highBandwidth: _isHighBandwidth,
-      preferHls: attemptHls,
     );
     if (preferredSource == null || preferredSource.url.isEmpty) {
       return true;
@@ -721,43 +665,11 @@ class VideoManager {
     return true;
   }
 
-  String? _hlsSuppressedReason({
-    required bool requestedHls,
-    required bool attemptedHls,
-    required bool isPreload,
-  }) {
-    if (!requestedHls || attemptedHls) {
-      return null;
-    }
-    return 'mp4_only_baseline';
-  }
-
-  _HlsBranchDetails _describeHlsUrl(String url) {
-    try {
-      final uri = Uri.parse(url);
-      return _HlsBranchDetails(
-        host: uri.host.isEmpty ? null : uri.host,
-        path: uri.path.isEmpty ? null : uri.path,
-        hasToken: uri.queryParameters.containsKey('token'),
-      );
-    } catch (_) {
-      return const _HlsBranchDetails(
-        host: null,
-        path: null,
-        hasToken: false,
-      );
-    }
-  }
-
   String _playbackBranch({
-    required bool isHls,
     required bool usedCache,
     required bool usedStreaming,
     required bool usedStreamFallback,
   }) {
-    if (isHls) {
-      return 'hls_network_direct';
-    }
     if (usedStreamFallback) {
       return 'mp4_stream_fallback';
     }
@@ -773,65 +685,43 @@ class VideoManager {
   bool _shouldForceFreshDownloadAfterPrimaryInitFailure({
     required bool usedStreaming,
     required bool isPreload,
-    required bool isHls,
     required String url,
   }) {
-    return !usedStreaming && !isPreload && !isHls && _isFirebaseStorageUrl(url);
+    return !usedStreaming && !isPreload && _isFirebaseStorageUrl(url);
   }
 
   bool _shouldWarmCacheAfterStreamInit({
-    required bool isHls,
     required bool isPreload,
     required bool usedStreaming,
     required bool usedStreamFallback,
   }) {
-    return !isHls && !isPreload && usedStreaming && !usedStreamFallback;
+    return !isPreload && usedStreaming && !usedStreamFallback;
   }
 
   @visibleForTesting
   bool shouldForceFreshDownloadAfterPrimaryInitFailureForTests({
     required bool usedStreaming,
     required bool isPreload,
-    required bool isHls,
     required String url,
   }) {
     return _shouldForceFreshDownloadAfterPrimaryInitFailure(
       usedStreaming: usedStreaming,
       isPreload: isPreload,
-      isHls: isHls,
       url: url,
     );
   }
 
   @visibleForTesting
   bool shouldWarmCacheAfterStreamInitForTests({
-    required bool isHls,
     required bool isPreload,
     required bool usedStreaming,
     required bool usedStreamFallback,
   }) {
     return _shouldWarmCacheAfterStreamInit(
-      isHls: isHls,
       isPreload: isPreload,
       usedStreaming: usedStreaming,
       usedStreamFallback: usedStreamFallback,
     );
-  }
-
-  Future<void> _purgeHlsCacheArtifactsIfNeeded(String url) async {
-    if (!_purgedHlsCacheUrls.add(url)) {
-      return;
-    }
-
-    try {
-      await CachedVideoPlayerPlus.removeFileFromCache(Uri.parse(url));
-    } catch (e) {
-      debugPrint(
-        '[VideoManager][HLS] cached_video_player cache purge failed for $url: $e',
-      );
-    }
-
-    await custom_cache.VideoCacheManager.removeCachedFile(url);
   }
 
   // ---------------------------------------------------------------------------
@@ -842,8 +732,6 @@ class VideoManager {
     String contextKey,
     String url, {
     List<VideoSource> sources = const [],
-    bool useHls = false,
-    bool forceMp4Fallback = false,
     bool preferDownloadedFile = false,
     bool isPreload = false,
     bool autoPlay = false,
@@ -864,32 +752,12 @@ class VideoManager {
       } catch (_) {}
     }
 
-    final requestedHls = false;
-    final attemptHls = shouldAttemptHlsForRequest(
-      preferHls: requestedHls,
-      isPreload: isPreload,
-    );
-    final hlsSuppressedReason = _hlsSuppressedReason(
-      requestedHls: requestedHls,
-      attemptedHls: attemptHls,
-      isPreload: isPreload,
-    );
-
     final candidates = VideoSourceSelector.prioritizedSources(
       fallbackUrl: url,
       sources: sources,
       adaptiveEnabled: adaptiveSourcesEnabled,
       highBandwidth: _isHighBandwidth,
-      preferHls: attemptHls,
     );
-
-    if (hlsSuppressedReason != null) {
-      debugPrint(
-        '[VideoManager][HLS] Suppressed HLS request for '
-        '${isPreload ? 'preload' : 'active'} init -> '
-        '$url (reason=$hlsSuppressedReason)',
-      );
-    }
 
     if (candidates.isEmpty) {
       _setLoadState(contextKey, url, VideoLoadState.errorSource);
@@ -904,13 +772,7 @@ class VideoManager {
     final lru = _lruByContext[contextKey]!;
     final futures = _initFuturesByContext[contextKey]!;
 
-    bool isHlsSource(VideoSource source) =>
-        source.isHls || source.url.toLowerCase().trim().contains('.m3u8');
-
     String sourceTypeFor(VideoSource source) {
-      if (isHlsSource(source)) {
-        return 'hls';
-      }
       final type = source.type?.toLowerCase().trim();
       return type == null || type.isEmpty ? 'mp4' : type;
     }
@@ -920,10 +782,8 @@ class VideoManager {
       String? fallbackFromSourceType,
     }) async {
       final effectiveUrl = candidate.url;
-      final isHls = isHlsSource(candidate);
       final sourceType = sourceTypeFor(candidate);
       final cacheKey = effectiveUrl;
-      final hlsDetails = isHls ? _describeHlsUrl(effectiveUrl) : null;
 
       // 1) LRU hit
       if (lru.containsKey(cacheKey)) {
@@ -977,21 +837,9 @@ class VideoManager {
           final timeout = isPreload ? _preloadTimeout : _activeTimeout;
           CachedVideoPlayerPlus player;
 
-          if (kIsWeb || isHls) {
-            if (!kIsWeb && isHls) {
-              await _purgeHlsCacheArtifactsIfNeeded(effectiveUrl);
-              debugPrint(
-                '[VideoManager][HLS] '
-                '${isPreload ? 'preload' : 'active'} '
-                'direct network init -> $effectiveUrl '
-                '(cacheBypassed=true host=${hlsDetails?.host} '
-                'path=${hlsDetails?.path} token=${hlsDetails?.hasToken})',
-              );
-            }
+          if (kIsWeb) {
             player = CachedVideoPlayerPlus.networkUrl(
               Uri.parse(effectiveUrl),
-              formatHint: isHls ? VideoFormat.hls : null,
-              skipCache: isHls,
             );
           } else {
             file = await custom_cache.VideoCacheManager.getFileIfCached(
@@ -1059,11 +907,8 @@ class VideoManager {
               primaryInitDuration = primaryInitStopwatch.elapsed;
             }
           } catch (streamError) {
-            final isM3u8 = effectiveUrl.toLowerCase().contains('.m3u8');
-            final canFallbackToDownloaded = !kIsWeb &&
-                !isPreload &&
-                _isFirebaseStorageUrl(effectiveUrl) &&
-                !isM3u8;
+            final canFallbackToDownloaded =
+                !kIsWeb && !isPreload && _isFirebaseStorageUrl(effectiveUrl);
             if (!canFallbackToDownloaded) {
               rethrow;
             }
@@ -1079,7 +924,6 @@ class VideoManager {
                 _shouldForceFreshDownloadAfterPrimaryInitFailure(
               usedStreaming: usedStreaming,
               isPreload: isPreload,
-              isHls: isHls,
               url: effectiveUrl,
             );
             if (shouldForceFreshDownload) {
@@ -1153,7 +997,6 @@ class VideoManager {
           debugPrint(
             "[VideoManager] Init ${isPreload ? 'preload' : 'active'} "
             "${kIsWeb ? 'web' : _playbackBranch(
-                isHls: isHls,
                 usedCache: usedCache,
                 usedStreaming: usedStreaming,
                 usedStreamFallback: usedStreamFallback,
@@ -1177,18 +1020,11 @@ class VideoManager {
               sourceQuality: candidate.quality,
               sourceHeight: candidate.height,
               sourceBitrate: candidate.bitrate,
-              requestedHls: attemptHls,
-              cacheBypassed: isHls ? true : null,
               playbackBranch: _playbackBranch(
-                isHls: isHls,
                 usedCache: usedCache,
                 usedStreaming: usedStreaming,
                 usedStreamFallback: usedStreamFallback,
               ),
-              hlsSuppressedReason: hlsSuppressedReason,
-              manifestHost: hlsDetails?.host,
-              manifestPath: hlsDetails?.path,
-              manifestHasToken: hlsDetails?.hasToken,
               usedStreaming: usedStreaming,
               usedStreamFallback: usedStreamFallback,
               fallbackFromSourceType: fallbackFromSourceType,
@@ -1203,7 +1039,6 @@ class VideoManager {
           );
 
           if (_shouldWarmCacheAfterStreamInit(
-            isHls: isHls,
             isPreload: isPreload,
             usedStreaming: usedStreaming,
             usedStreamFallback: usedStreamFallback,
@@ -1219,16 +1054,6 @@ class VideoManager {
             return Future.error(e);
           }
           debugPrint("❌ Video init error $effectiveUrl: $e\n$st");
-
-          if (isHls) {
-            debugPrint(
-              '[VideoManager][HLS] init failed -> $effectiveUrl '
-              '(cacheBypassed=true host=${hlsDetails?.host} '
-              'path=${hlsDetails?.path} token=${hlsDetails?.hasToken} '
-              'isPreload=$isPreload attemptedHls=$attemptHls '
-              'fallbackFrom=$fallbackFromSourceType reason=$recoveryReason)',
-            );
-          }
 
           if (!kIsWeb && file != null) {
             unawaited(_safeDeleteFile(file));
@@ -1248,18 +1073,11 @@ class VideoManager {
               sourceQuality: candidate.quality,
               sourceHeight: candidate.height,
               sourceBitrate: candidate.bitrate,
-              requestedHls: attemptHls,
-              cacheBypassed: isHls ? true : null,
               playbackBranch: _playbackBranch(
-                isHls: isHls,
                 usedCache: usedCache,
                 usedStreaming: usedStreaming,
                 usedStreamFallback: usedStreamFallback,
               ),
-              hlsSuppressedReason: hlsSuppressedReason,
-              manifestHost: hlsDetails?.host,
-              manifestPath: hlsDetails?.path,
-              manifestHasToken: hlsDetails?.hasToken,
               recoveryReason: recoveryReason,
               primaryInitDuration: primaryInitDuration,
               fallbackDownloadDuration: fallbackDownloadDuration,
@@ -1611,7 +1429,6 @@ class VideoManager {
         contextKey,
         video.videoUrl,
         sources: video.sources,
-        useHls: false,
         isPreload: true,
         activeUrl: activeUrl,
       );

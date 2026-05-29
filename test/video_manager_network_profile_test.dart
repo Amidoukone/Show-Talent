@@ -49,7 +49,6 @@ void main() {
     );
 
     expect(manager.currentProfile?.tier, NetworkProfileTier.medium);
-    expect(manager.currentProfile?.preferHls, isFalse);
 
     unawaited(manager.warmNetworkProfile());
     await flushMicrotasks();
@@ -61,13 +60,11 @@ void main() {
       const NetworkProfile(
         tier: NetworkProfileTier.high,
         hasConnection: true,
-        preferHls: true,
       ),
     );
     await flushMicrotasks();
 
     expect(manager.currentProfile?.tier, NetworkProfileTier.high);
-    expect(manager.currentProfile?.preferHls, isTrue);
   });
 
   test('warmNetworkProfile reuses the in-flight detection request', () async {

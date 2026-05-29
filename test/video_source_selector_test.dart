@@ -7,7 +7,7 @@ void main() {
   const lowestMp4 = 'https://cdn.example.com/video_360.mp4';
   const lowMp4 = 'https://cdn.example.com/video_480.mp4';
   const highMp4 = 'https://cdn.example.com/video_720.mp4';
-  const hlsUrl = 'https://cdn.example.com/playlist.m3u8';
+  const nonMp4Url = 'https://cdn.example.com/video.webm';
 
   const sources = <VideoSource>[
     VideoSource(url: lowestMp4, quality: '360p', type: 'mp4', height: 360),
@@ -15,8 +15,8 @@ void main() {
     VideoSource(url: lowMp4, quality: '480p', type: 'mp4', height: 480),
   ];
 
-  const hlsSources = <VideoSource>[
-    VideoSource(url: hlsUrl, quality: '720p', type: 'hls', height: 720),
+  const mixedSources = <VideoSource>[
+    VideoSource(url: nonMp4Url, quality: '720p', type: 'webm', height: 720),
     ...sources,
   ];
 
@@ -55,7 +55,7 @@ void main() {
   });
 
   test(
-      'prioritized sources collapse to the canonical mp4 when adaptive is disabled',
+      'prioritized sources collapse to the canonical MP4 when adaptive is disabled',
       () {
     final ordered = VideoSourceSelector.prioritizedSources(
       fallbackUrl: fallbackMp4,
@@ -78,83 +78,42 @@ void main() {
     expect(url, lowMp4);
   });
 
-  test('keeps MP4 first even when HLS preference is requested', () {
-    final url = VideoSourceSelector.chooseUrl(
-      fallbackUrl: fallbackMp4,
-      sources: hlsSources,
-      adaptiveEnabled: true,
-      highBandwidth: true,
-      preferHls: true,
-    );
-
-    expect(url, highMp4);
-  });
-
-  test('does not select HLS when preferHls is disabled', () {
-    final url = VideoSourceSelector.chooseUrl(
-      fallbackUrl: fallbackMp4,
-      sources: hlsSources,
-      adaptiveEnabled: true,
-      highBandwidth: true,
-      preferHls: false,
-    );
-
-    expect(url, highMp4);
-  });
-
-  test('prioritized sources keep MP4 first when preferHls is disabled', () {
+  test('ignores non-MP4 sources when selecting playback candidates', () {
     final ordered = VideoSourceSelector.prioritizedSources(
       fallbackUrl: fallbackMp4,
-      sources: hlsSources,
+      sources: mixedSources,
       adaptiveEnabled: true,
       highBandwidth: true,
-      preferHls: false,
     );
 
     expect(ordered.first.url, highMp4);
-    expect(ordered.any((source) => source.url == hlsUrl), isFalse);
+    expect(ordered.any((source) => source.url == nonMp4Url), isFalse);
   });
 
-  test('does not fall back to HLS when no MP4 source exists', () {
-    final url = VideoSourceSelector.chooseUrl(
-      fallbackUrl: '',
-      sources: const [
-        VideoSource(url: hlsUrl, quality: '720p', type: 'hls', height: 720),
-      ],
-      adaptiveEnabled: true,
-      highBandwidth: true,
-      preferHls: true,
-    );
-
-    expect(url, isEmpty);
-  });
-
-  test('does not use an HLS fallback URL', () {
+  test('does not use a non-MP4 fallback URL', () {
     final ordered = VideoSourceSelector.prioritizedSources(
-      fallbackUrl: hlsUrl,
+      fallbackUrl: nonMp4Url,
       sources: const [],
       adaptiveEnabled: true,
       highBandwidth: true,
-      preferHls: true,
     );
 
     expect(ordered, isEmpty);
     expect(
       VideoSourceSelector.chooseUrl(
-        fallbackUrl: hlsUrl,
+        fallbackUrl: nonMp4Url,
         sources: const [],
         adaptiveEnabled: true,
         highBandwidth: true,
-        preferHls: true,
       ),
       isEmpty,
     );
   });
 
-  test('source lookup ignores HLS urls', () {
+  test('source lookup ignores non-MP4 urls', () {
     final source = VideoSourceSelector.sourceForUrl(
-      url: hlsUrl,
-      sources: hlsSources,
+      url: nonMp4Url,
+      sources: mixedSources,
     );
 
     expect(source, isNull);

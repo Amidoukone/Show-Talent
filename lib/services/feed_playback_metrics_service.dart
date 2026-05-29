@@ -69,7 +69,6 @@ class FeedPlaybackSessionSummary {
     this.playbackMode,
     this.contractPlaybackMode,
     this.networkTier,
-    this.preferHlsRequested,
     this.timeToFirstFrame,
     this.stallRecoveryRate,
     this.initialResolvedUrl,
@@ -93,7 +92,6 @@ class FeedPlaybackSessionSummary {
   final String? playbackMode;
   final String? contractPlaybackMode;
   final String? networkTier;
-  final bool? preferHlsRequested;
   final Duration sessionDuration;
   final Duration watchDuration;
   final Duration? timeToFirstFrame;
@@ -130,7 +128,6 @@ class FeedPlaybackSessionSummary {
       'playbackMode': playbackMode,
       'contractPlaybackMode': contractPlaybackMode,
       'networkTier': networkTier,
-      'preferHlsRequested': preferHlsRequested,
       'sessionDurationMs': sessionDuration.inMilliseconds,
       'watchDurationMs': watchDuration.inMilliseconds,
       'timeToFirstFrameMs': timeToFirstFrame?.inMilliseconds,
@@ -173,7 +170,6 @@ class FeedPlaybackSessionTracker {
     this.playbackMode,
     this.hasMultipleMp4Sources = false,
     this.networkTier,
-    this.preferHlsRequested,
     String? resolvedUrl,
     VideoSource? source,
   })  : _now = now,
@@ -188,7 +184,6 @@ class FeedPlaybackSessionTracker {
   final String? playbackMode;
   final bool hasMultipleMp4Sources;
   final String? networkTier;
-  final bool? preferHlsRequested;
   final DateTime Function() _now;
   final DateTime _startedAt;
 
@@ -380,7 +375,6 @@ class FeedPlaybackSessionTracker {
       playbackMode: _resolvePlaybackMode(),
       contractPlaybackMode: playbackMode,
       networkTier: networkTier,
-      preferHlsRequested: preferHlsRequested,
       sessionDuration: sessionDuration,
       watchDuration: _watchDuration,
       timeToFirstFrame: _firstFrameAt?.difference(_startedAt),
@@ -417,9 +411,6 @@ class FeedPlaybackSessionTracker {
     final sourceType = _finalSourceType ?? _initialSourceType;
     if (sourceType == 'mp4') {
       return hasMultipleMp4Sources ? 'multi_rendition_mp4' : 'mp4_only';
-    }
-    if (sourceType == 'hls') {
-      return playbackMode ?? 'single_rendition_hls';
     }
     if (hasMultipleMp4Sources) {
       return 'multi_rendition_mp4';
@@ -467,9 +458,6 @@ class FeedPlaybackSessionTracker {
       return declared;
     }
     final value = (url ?? source?.url ?? '').toLowerCase();
-    if (value.contains('.m3u8')) {
-      return 'hls';
-    }
     if (value.contains('.mp4')) {
       return 'mp4';
     }

@@ -139,7 +139,7 @@ void main() {
         'https://cdn.example.com/active.mp4');
   });
 
-  test('success metrics include HLS playback metadata', () async {
+  test('success metrics include MP4 playback metadata', () async {
     final infoCalls = <LoggedMetricCall>[];
     final observer = VideoMetricsObserver(
       policy: const VideoMetricsPolicy(successSampleRate: 1),
@@ -165,16 +165,10 @@ void main() {
         sourceQuality: '480p',
         sourceHeight: 480,
         sourceBitrate: 1000000,
-        requestedHls: true,
-        cacheBypassed: true,
-        playbackBranch: 'hls_network_direct',
-        hlsSuppressedReason: 'android_preload_uses_mp4',
-        manifestHost: 'firebasestorage.googleapis.com',
-        manifestPath: '/v0/b/project.appspot.com/o/hls%2Fvideo%2Fmaster.m3u8',
-        manifestHasToken: true,
+        playbackBranch: 'mp4_stream_fallback',
         usedStreaming: true,
         usedStreamFallback: true,
-        fallbackFromSourceType: 'hls',
+        fallbackFromSourceType: 'mp4',
         recoveryReason: 'stall_watchdog',
         primaryInitDuration: const Duration(seconds: 12),
         fallbackDownloadDuration: const Duration(seconds: 4),
@@ -188,24 +182,9 @@ void main() {
     expect(infoCalls, hasLength(1));
     expect(infoCalls.single.metadata?['entryContext'], 'home');
     expect(infoCalls.single.metadata?['sourceType'], 'mp4');
-    expect(infoCalls.single.metadata?['requestedHls'], isTrue);
-    expect(infoCalls.single.metadata?['cacheBypassed'], isTrue);
-    expect(infoCalls.single.metadata?['playbackBranch'], 'hls_network_direct');
-    expect(
-      infoCalls.single.metadata?['hlsSuppressedReason'],
-      'android_preload_uses_mp4',
-    );
-    expect(
-      infoCalls.single.metadata?['manifestHost'],
-      'firebasestorage.googleapis.com',
-    );
-    expect(
-      infoCalls.single.metadata?['manifestPath'],
-      '/v0/b/project.appspot.com/o/hls%2Fvideo%2Fmaster.m3u8',
-    );
-    expect(infoCalls.single.metadata?['manifestHasToken'], isTrue);
+    expect(infoCalls.single.metadata?['playbackBranch'], 'mp4_stream_fallback');
     expect(infoCalls.single.metadata?['usedStreamFallback'], isTrue);
-    expect(infoCalls.single.metadata?['fallbackFromSourceType'], 'hls');
+    expect(infoCalls.single.metadata?['fallbackFromSourceType'], 'mp4');
     expect(infoCalls.single.metadata?['recoveryReason'], 'stall_watchdog');
     expect(infoCalls.single.metadata?['primaryInitDurationMs'], 12000);
     expect(infoCalls.single.metadata?['fallbackDownloadDurationMs'], 4000);

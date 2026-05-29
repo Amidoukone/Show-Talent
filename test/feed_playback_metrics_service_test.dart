@@ -23,7 +23,6 @@ void main() {
       now: () => now,
       playbackMode: 'multi_rendition_mp4',
       networkTier: 'medium',
-      preferHlsRequested: false,
       resolvedUrl: 'https://cdn.example.com/mp4/video-1/480p.mp4',
       source: const VideoSource(
         url: 'https://cdn.example.com/mp4/video-1/480p.mp4',
@@ -121,13 +120,13 @@ void main() {
     expect(summary.recoveryReasons, {'stall_watchdog': 1});
   });
 
-  test('tracker normalizes legacy HLS contracts to runtime MP4 mode', () {
+  test('tracker keeps multi-source MP4 runtime mode', () {
     var now = DateTime.utc(2026, 3, 20, 12);
     final tracker = FeedPlaybackSessionTracker(
       videoId: 'video-legacy',
       entryContext: 'home',
       now: () => now,
-      playbackMode: 'multi_rendition_hls',
+      playbackMode: 'multi_rendition_mp4',
       hasMultipleMp4Sources: true,
       resolvedUrl: 'https://cdn.example.com/mp4/video-legacy/720p.mp4',
       source: const VideoSource(
@@ -150,7 +149,7 @@ void main() {
     final summary = tracker.finish(endReason: 'passive');
 
     expect(summary.playbackMode, 'multi_rendition_mp4');
-    expect(summary.contractPlaybackMode, 'multi_rendition_hls');
+    expect(summary.contractPlaybackMode, 'multi_rendition_mp4');
     expect(summary.finalSourceType, 'mp4');
   });
 

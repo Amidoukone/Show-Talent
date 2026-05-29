@@ -2,12 +2,9 @@ import 'package:adfoot/models/video.dart';
 
 class VideoSourceSelector {
   static List<VideoSource> _sanitize(List<VideoSource> sources) =>
-      sources.where((source) => source.url.isNotEmpty).toList();
+      sources.where((source) => source.url.isNotEmpty && source.isMp4).toList();
 
-  static List<VideoSource> _nonHlsSources(List<VideoSource> sources) =>
-      sources.where((source) => !source.isHls).toList();
-
-  static bool _isHlsUrl(String url) => url.toLowerCase().contains('.m3u8');
+  static bool _isMp4Url(String url) => url.toLowerCase().contains('.mp4');
 
   static List<VideoSource> _sortedByHeight(List<VideoSource> sources) =>
       [...sources]..sort((a, b) => (a.height ?? 0).compareTo(b.height ?? 0));
@@ -43,7 +40,7 @@ class VideoSourceSelector {
   }) {
     final canonicalSource = _preferredSingleRenditionSource(candidateSources);
 
-    if (fallbackUrl.isEmpty || _isHlsUrl(fallbackUrl)) {
+    if (fallbackUrl.isEmpty || !_isMp4Url(fallbackUrl)) {
       return canonicalSource;
     }
 
@@ -61,10 +58,9 @@ class VideoSourceSelector {
     required List<VideoSource> sources,
     required bool adaptiveEnabled,
     required bool highBandwidth,
-    bool preferHls = false,
   }) {
     final sanitizedSources = _sanitize(sources);
-    final candidateSources = _nonHlsSources(sanitizedSources);
+    final candidateSources = sanitizedSources;
 
     if (!adaptiveEnabled || candidateSources.isEmpty) {
       return _fallbackSource(
@@ -86,11 +82,11 @@ class VideoSourceSelector {
     required String url,
     required List<VideoSource> sources,
   }) {
-    if (url.isEmpty || _isHlsUrl(url)) {
+    if (url.isEmpty || !_isMp4Url(url)) {
       return null;
     }
 
-    final sanitizedSources = _nonHlsSources(_sanitize(sources));
+    final sanitizedSources = _sanitize(sources);
     for (final source in sanitizedSources) {
       if (source.url == url) {
         return source;
@@ -105,14 +101,12 @@ class VideoSourceSelector {
     required List<VideoSource> sources,
     required bool adaptiveEnabled,
     required bool highBandwidth,
-    bool preferHls = false,
   }) {
     return preferredSource(
           fallbackUrl: fallbackUrl,
           sources: sources,
           adaptiveEnabled: adaptiveEnabled,
           highBandwidth: highBandwidth,
-          preferHls: preferHls,
         )?.url ??
         '';
   }
@@ -123,10 +117,9 @@ class VideoSourceSelector {
     required List<VideoSource> sources,
     required bool adaptiveEnabled,
     required bool highBandwidth,
-    bool preferHls = false,
   }) {
     final sanitizedSources = _sanitize(sources);
-    final candidateSources = _nonHlsSources(sanitizedSources);
+    final candidateSources = sanitizedSources;
 
     if (!adaptiveEnabled || candidateSources.isEmpty) {
       final primary = preferredSource(
@@ -134,7 +127,6 @@ class VideoSourceSelector {
         sources: sources,
         adaptiveEnabled: adaptiveEnabled,
         highBandwidth: highBandwidth,
-        preferHls: preferHls,
       );
 
       return _dedupe([
@@ -142,9 +134,7 @@ class VideoSourceSelector {
       ]);
     }
 
-    final mp4Sources = _sortedByHeight(
-      candidateSources.where((source) => !source.isHls).toList(),
-    );
+    final mp4Sources = _sortedByHeight(candidateSources);
 
     final preferred720 = _bestAtLeast(mp4Sources, 700);
     final preferred480 = _bestAtMost(mp4Sources, 540);
@@ -161,7 +151,7 @@ class VideoSourceSelector {
         ...mp4Sources,
         ...mp4Sources.reversed,
       ],
-      if (fallbackUrl.isNotEmpty && !_isHlsUrl(fallbackUrl))
+      if (fallbackUrl.isNotEmpty && _isMp4Url(fallbackUrl))
         VideoSource(url: fallbackUrl),
     ];
 

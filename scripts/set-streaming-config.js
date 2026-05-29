@@ -7,32 +7,14 @@ const PRESETS = {
   off: {
     adaptiveEnabled: false,
     rolloutPercent: 0,
-    hlsPlaybackEnabled: false,
-    preferHlsPlayback: false,
   },
   single_mp4: {
     adaptiveEnabled: false,
     rolloutPercent: 0,
-    hlsPlaybackEnabled: false,
-    preferHlsPlayback: false,
   },
   contract_mp4: {
     adaptiveEnabled: true,
     rolloutPercent: 100,
-    hlsPlaybackEnabled: false,
-    preferHlsPlayback: false,
-  },
-  hls_canary: {
-    adaptiveEnabled: true,
-    rolloutPercent: 10,
-    hlsPlaybackEnabled: false,
-    preferHlsPlayback: false,
-  },
-  hls_full: {
-    adaptiveEnabled: true,
-    rolloutPercent: 100,
-    hlsPlaybackEnabled: false,
-    preferHlsPlayback: false,
   },
 };
 
@@ -63,8 +45,8 @@ function printUsage() {
     [
       "Usage:",
       "  node .\\scripts\\set-streaming-config.js --project-id <gcp-project> [--credentials <service-account.json>] --show",
-      "  node .\\scripts\\set-streaming-config.js --project-id <gcp-project> [--credentials <service-account.json>] --preset <off|single_mp4|contract_mp4|hls_canary|hls_full> [--reason \"...\"] [--dry-run]",
-      "  node .\\scripts\\set-streaming-config.js --project-id <gcp-project> [--credentials <service-account.json>] --adaptive-enabled <true|false> --rollout-percent <0-100> --hls-playback-enabled <true|false> --prefer-hls-playback <true|false>",
+      "  node .\\scripts\\set-streaming-config.js --project-id <gcp-project> [--credentials <service-account.json>] --preset <off|single_mp4|contract_mp4> [--reason \"...\"] [--dry-run]",
+      "  node .\\scripts\\set-streaming-config.js --project-id <gcp-project> [--credentials <service-account.json>] --adaptive-enabled <true|false> --rollout-percent <0-100>",
     ].join("\n"),
   );
 }
@@ -119,24 +101,9 @@ function buildNextConfig(args) {
       "--rollout-percent",
     );
   }
-  if (args["hls-playback-enabled"] != null) {
-    base.hlsPlaybackEnabled = parseBoolean(
-      args["hls-playback-enabled"],
-      "--hls-playback-enabled",
-    );
-  }
-  if (args["prefer-hls-playback"] != null) {
-    base.preferHlsPlayback = parseBoolean(
-      args["prefer-hls-playback"],
-      "--prefer-hls-playback",
-    );
-  }
-
   const requiredKeys = [
     "adaptiveEnabled",
     "rolloutPercent",
-    "hlsPlaybackEnabled",
-    "preferHlsPlayback",
   ];
 
   for (const key of requiredKeys) {
@@ -150,10 +117,6 @@ function buildNextConfig(args) {
   return {
     adaptiveEnabled: base.adaptiveEnabled,
     rolloutPercent: base.rolloutPercent,
-    hlsPlaybackEnabled: false,
-    preferHlsPlayback: false,
-    // Legacy mirror for older clients still reading `useHls`.
-    useHls: false,
   };
 }
 
@@ -235,7 +198,7 @@ async function main() {
     return;
   }
 
-  await docRef.set(payload, {merge: true});
+  await docRef.set(payload);
   const current = await readCurrentConfig(docRef);
 
   console.log(

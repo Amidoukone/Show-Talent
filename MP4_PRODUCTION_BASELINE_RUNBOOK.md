@@ -18,7 +18,7 @@ Code anchors:
 Run these from repo root before any deploy:
 
 ```bash
-flutter test test/feed_playback_metrics_service_test.dart test/video_model_test.dart test/video_source_selector_test.dart test/video_metrics_observer_test.dart test/video_manager_hls_policy_test.dart test/video_manager_network_profile_test.dart test/widget_test.dart
+flutter test test/feed_playback_metrics_service_test.dart test/video_model_test.dart test/video_source_selector_test.dart test/video_metrics_observer_test.dart test/video_manager_mp4_policy_test.dart test/video_manager_network_profile_test.dart test/widget_test.dart
 npm.cmd --prefix functions run build
 ```
 
@@ -91,10 +91,8 @@ What `contract_mp4` means in this repo:
 
 - `adaptiveEnabled=true`
 - `rolloutPercent=100`
-- `hlsPlaybackEnabled=true`
-- `preferHlsPlayback=false`
 
-This keeps the HLS contract field available when present, but the feed remains MP4-first in production.
+This keeps the feed on the MP4-only runtime path while allowing adaptive MP4 source selection.
 
 ## 6) Post-switch validation
 

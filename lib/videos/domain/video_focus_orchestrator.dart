@@ -46,7 +46,6 @@ class VideoFocusOrchestrator {
       originalUrl: currentUrl,
       resolvedUrl: resolvedUrl,
       sources: currentVideo.sources,
-      requestedHls: false,
       isPreload: false,
     );
 
@@ -68,7 +67,6 @@ class VideoFocusOrchestrator {
           contextKey,
           currentUrl,
           sources: currentVideo.sources,
-          useHls: false,
           autoPlay: true,
           activeUrl: currentUrl,
         );
