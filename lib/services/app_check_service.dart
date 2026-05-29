@@ -1,5 +1,6 @@
 import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugPrint, defaultTargetPlatform, kDebugMode, kIsWeb;
 
 /// Progressive App Check bootstrap.
 /// Disabled by default so development is not blocked.
@@ -8,6 +9,8 @@ class AppCheckService {
       bool.fromEnvironment('APP_CHECK_ENABLED', defaultValue: false);
   static const bool _forceDebugProvider =
       bool.fromEnvironment('APP_CHECK_DEBUG_PROVIDER', defaultValue: false);
+  static const String _androidProviderName =
+      String.fromEnvironment('APP_CHECK_ANDROID_PROVIDER');
   static const String _webRecaptchaSiteKey =
       String.fromEnvironment('APP_CHECK_WEB_RECAPTCHA_SITE_KEY');
   static const String _androidDebugToken =
@@ -16,9 +19,22 @@ class AppCheckService {
       String.fromEnvironment('APP_CHECK_APPLE_DEBUG_TOKEN');
 
   static bool get isEnabled => _enabled;
+  static bool get _androidDebugProviderRequested =>
+      _forceDebugProvider ||
+      _androidProviderName.trim().toLowerCase() == 'debug';
+  static bool get _isAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  static bool get _isApple =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
+  static bool get _useAndroidDebugProvider =>
+      _isAndroid && (_androidDebugProviderRequested || kDebugMode);
+  static bool get _useAppleDebugProvider =>
+      _isApple && (_forceDebugProvider || kDebugMode);
 
   static Future<void> initialize() async {
-    final bool shouldActivate = _enabled || _forceDebugProvider;
+    final bool shouldActivate = _enabled || _androidDebugProviderRequested;
 
     if (!shouldActivate) {
       if (kDebugMode) {
@@ -28,7 +44,6 @@ class AppCheckService {
     }
 
     final appCheck = FirebaseAppCheck.instance;
-    final useDebugProvider = !kIsWeb && (_forceDebugProvider || kDebugMode);
 
     try {
       if (kIsWeb) {
@@ -46,19 +61,19 @@ class AppCheckService {
           providerWeb: ReCaptchaV3Provider(_webRecaptchaSiteKey),
         );
       } else {
-        if (kDebugMode && useDebugProvider) {
+        if (_useAndroidDebugProvider || _useAppleDebugProvider) {
           debugPrint(
-            '[AppCheck] enabling Android/iOS debug provider for this debug build.',
+            '[AppCheck] enabling debug provider for this build.',
           );
         }
 
-        final AndroidAppCheckProvider androidProvider = useDebugProvider
+        final AndroidAppCheckProvider androidProvider = _useAndroidDebugProvider
             ? AndroidDebugProvider(
                 debugToken:
                     _androidDebugToken.isEmpty ? null : _androidDebugToken,
               )
             : const AndroidPlayIntegrityProvider();
-        final AppleAppCheckProvider appleProvider = useDebugProvider
+        final AppleAppCheckProvider appleProvider = _useAppleDebugProvider
             ? AppleDebugProvider(
                 debugToken: _appleDebugToken.isEmpty ? null : _appleDebugToken,
               )

@@ -58,6 +58,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Timer? _searchDebounce;
   bool _wakelockOn = false;
   bool _hasHandledRouteRefresh = false;
+  bool _routeRefreshRequested = false;
+  String? _routeFocusVideoId;
   int? _silencedPageChangeIndex;
   int _searchRequestToken = 0;
   int? _feedIndexBeforeSearch;
@@ -110,6 +112,66 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _focusOrchestrator.updateVideos(_currentVideos);
   }
 
+  void _captureRoutePlaybackRequest() {
+    if (_hasHandledRouteRefresh) return;
+    _hasHandledRouteRefresh = true;
+
+    final args = Get.arguments;
+    if (args is! Map) return;
+
+    _routeRefreshRequested = args['refresh'] == true;
+    final rawVideoId = args['videoId'] ?? args['focusVideoId'];
+    if (rawVideoId is String && rawVideoId.trim().isNotEmpty) {
+      _routeFocusVideoId = rawVideoId.trim();
+      _routeRefreshRequested = true;
+    }
+  }
+
+  int _indexForVideoId(String? videoId) {
+    final targetId = videoId?.trim();
+    if (targetId == null || targetId.isEmpty) return 0;
+
+    final videos = _currentVideos;
+    final index = videos.indexWhere((video) => video.id == targetId);
+    return index >= 0 ? index : 0;
+  }
+
+  Future<int> _ensureFocusedVideoVisible(String? videoId) async {
+    final targetId = videoId?.trim();
+    if (targetId == null || targetId.isEmpty || _isSearchActive) {
+      return 0;
+    }
+
+    final existingIndex = _indexForVideoId(targetId);
+    if (existingIndex > 0 ||
+        _currentVideos.any((video) => video.id == targetId)) {
+      return existingIndex;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('videos')
+          .doc(targetId)
+          .get();
+      if (!mounted || !doc.exists) return 0;
+
+      final video = Video.fromDoc(doc);
+      if (video.status != 'ready' || video.videoUrl.isEmpty) {
+        return 0;
+      }
+
+      final current = videoController.videoList
+          .where((item) => item.id != video.id)
+          .toList(growable: false);
+      videoController.replaceVideos([video, ...current], selectedIndex: 0);
+      _refreshFocusVideos();
+      return 0;
+    } catch (error) {
+      debugPrint('[HomeScreen] focused video lookup failed: $error');
+      return 0;
+    }
+  }
+
   Future<bool> _activateHomeIndex(
     int index, {
     bool alignPageView = false,
@@ -131,7 +193,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return true;
   }
 
-  Future<bool> _refreshHomeFeed({bool alignPageView = true}) async {
+  Future<bool> _refreshHomeFeed({
+    bool alignPageView = true,
+    String? focusVideoId,
+  }) async {
     if (_isSearchActive) {
       await _runVideoSearch(_searchQuery);
       return _searchResults.isNotEmpty;
@@ -149,7 +214,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return false;
 
-    return _activateHomeIndex(0, alignPageView: alignPageView);
+    final targetIndex = await _ensureFocusedVideoVisible(focusVideoId);
+    if (!mounted) return false;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return false;
+
+    return _activateHomeIndex(targetIndex, alignPageView: alignPageView);
   }
 
   Future<void> _retryHomeFeed() async {
@@ -211,6 +281,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _captureRoutePlaybackRequest();
 
     videoController = FeatureControllerRegistry.ensureVideoController(
       contextKey: 'home',
@@ -244,19 +315,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-
-    if (_hasHandledRouteRefresh) return;
-    _hasHandledRouteRefresh = true;
-
-    final args = Get.arguments;
-    if (args is Map &&
-        args['refresh'] == true &&
-        videoController.videoList.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        unawaited(_refreshHomeFeed());
-      });
-    }
+    _captureRoutePlaybackRequest();
   }
 
   @override
@@ -326,6 +385,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     setState(() => _isConnected = connected);
 
+    if (connected && _routeRefreshRequested) {
+      await _refreshHomeFeed(focusVideoId: _routeFocusVideoId);
+      return;
+    }
+
     if (connected && videoController.videoList.isEmpty) {
       await videoController.fetchPaginatedVideos();
       _refreshFocusVideos();
@@ -335,7 +399,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final videos = videoController.videoList;
       if (videos.isNotEmpty) {
         _refreshFocusVideos();
-        await _activateHomeIndex(0, alignPageView: true);
+        final targetIndex = await _ensureFocusedVideoVisible(
+          _routeFocusVideoId,
+        );
+        if (!mounted) return;
+        await _activateHomeIndex(targetIndex, alignPageView: true);
       }
     });
   }
@@ -619,6 +687,172 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // UI
   // ---------------------------------------------------------------------------
 
+  String _firstRune(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    return String.fromCharCode(trimmed.runes.first);
+  }
+
+  String _profileInitials(AppUser user) {
+    final parts = user.nom
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.trim().isNotEmpty)
+        .toList(growable: false);
+
+    if (parts.isEmpty) return 'AD';
+
+    if (parts.length == 1) {
+      final letters = parts.first.runes
+          .take(2)
+          .map(String.fromCharCode)
+          .join()
+          .toUpperCase();
+      return letters.isEmpty ? 'AD' : letters;
+    }
+
+    final initials = parts.take(2).map(_firstRune).join().toUpperCase();
+    return initials.isEmpty ? 'AD' : initials;
+  }
+
+  IconData _profileRoleIcon(AppUser user) {
+    if (user.isPlayer) return Icons.sports_soccer_rounded;
+    if (user.isClub) return Icons.business_rounded;
+    if (user.isRecruiter) return Icons.workspace_premium_rounded;
+    if (user.isCoach) return Icons.groups_rounded;
+    return Icons.person_rounded;
+  }
+
+  Widget _buildProfileInitialsSurface(AppUser user) {
+    return Container(
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AdColors.surfaceCardAlt,
+            AdColors.surfaceCard,
+          ],
+        ),
+      ),
+      child: Text(
+        _profileInitials(user),
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: AdColors.onSurface,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileRoleBadge(AppUser user) {
+    return Container(
+      width: 16,
+      height: 16,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AdColors.surface,
+        border: Border.all(
+          color: AdColors.brand,
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Icon(
+        _profileRoleIcon(user),
+        color: AdColors.brand,
+        size: 9.5,
+      ),
+    );
+  }
+
+  Widget _buildHomeProfileAvatar(AppUser user) {
+    final photoUrl = user.photoProfil.trim();
+    final fallback = _buildProfileInitialsSurface(user);
+
+    return Semantics(
+      label: 'Profil',
+      button: true,
+      child: SizedBox.square(
+        dimension: 40,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AdColors.brand,
+                      AdColors.info,
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AdColors.brand.withValues(alpha: 0.2),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AdColors.surfaceCard,
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.14),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(1),
+                    child: ClipOval(
+                      child: photoUrl.isEmpty
+                          ? fallback
+                          : Image.network(
+                              photoUrl,
+                              fit: BoxFit.cover,
+                              cacheWidth: 96,
+                              cacheHeight: 96,
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return fallback;
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                return fallback;
+                              },
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              right: -1,
+              bottom: -1,
+              child: _buildProfileRoleBadge(user),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildVideoSearchField() {
     return SizedBox(
       height: 42,
@@ -778,14 +1012,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   await _onPageChanged(videoController.currentIndex.value);
                   await _updateWakelockForCurrent();
                 },
-                child: Hero(
-                  tag: 'profileAvatar',
-                  child: CircleAvatar(
-                    radius: 18,
-                    backgroundImage: user.photoProfil.isNotEmpty
-                        ? NetworkImage(user.photoProfil)
-                        : const AssetImage('assets/default_avatar.jpg')
-                            as ImageProvider,
+                child: Tooltip(
+                  message: 'Profil',
+                  child: Hero(
+                    tag: 'profileAvatar',
+                    child: _buildHomeProfileAvatar(user),
                   ),
                 ),
               ),

@@ -1,9 +1,10 @@
 param(
   [switch]$RunRemoteSmoke,
   [switch]$VerifyUploadLogs,
-  [string]$ProjectId = "show-talent-5987d",
+  [string]$ProjectId = "adfoot-production",
   [string]$Region = "europe-west1",
   [string]$ApiKey = $env:FIREBASE_WEB_API_KEY,
+  [string]$AppCheckToken = $env:FIREBASE_APP_CHECK_TOKEN,
   [int]$ReadyTimeoutSec = 240
 )
 
@@ -56,6 +57,9 @@ try {
 
       if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
         $smokeArgs += @("-ApiKey", $ApiKey)
+      }
+      if (-not [string]::IsNullOrWhiteSpace($AppCheckToken)) {
+        $smokeArgs += @("-AppCheckToken", $AppCheckToken)
       }
 
       & powershell @smokeArgs

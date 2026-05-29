@@ -51,11 +51,42 @@ void main() {
     final productionEnv = File('functions/.env.production').readAsStringSync();
     final mobileConfigCheck =
         File('scripts/check-mobile-firebase-config.ps1').readAsStringSync();
+    final buildScript =
+        File('scripts/build-android-release.ps1').readAsStringSync();
+    final runScript =
+        File('scripts/flutter-run-mobile-env.ps1').readAsStringSync();
+    final appCheckService =
+        File('lib/services/app_check_service.dart').readAsStringSync();
+    final packageJson = File('package.json').readAsStringSync();
+    final appCheckDebugScript =
+        File('scripts/configure-mobile-appcheck-debug.mjs').readAsStringSync();
+    final mobileConfigReadme =
+        File('config/mobile/README.md').readAsStringSync();
+    final gitignore = File('.gitignore').readAsStringSync();
 
     expect(productionTemplate, contains('"APP_CHECK_ENABLED": "true"'));
     expect(productionNextTemplate, contains('"APP_CHECK_ENABLED": "true"'));
     expect(productionEnv, contains('ENFORCE_APPCHECK=true'));
     expect(mobileConfigCheck, contains('APP_CHECK_ENABLED must be true'));
+    expect(buildScript, contains('Missing required mobile config file'));
+    expect(buildScript, contains('Mobile config APP_ENV'));
+    expect(buildScript, contains('APP_CHECK_ENABLED must be true'));
+    expect(buildScript, contains(r'$dartDefines["APP_ENV"] = $Environment'));
+    expect(runScript, contains('function Mask-PreviewArg'));
+    expect(runScript, contains('KEY|SECRET|TOKEN|PASSWORD'));
+    expect(appCheckService, contains('APP_CHECK_ANDROID_PROVIDER'));
+    expect(appCheckService, contains('TargetPlatform.android'));
+    expect(appCheckService, contains('AndroidDebugProvider'));
+    expect(appCheckService, contains('AndroidPlayIntegrityProvider'));
+    expect(packageJson, contains('mobile:appcheck:debug:production'));
+    expect(appCheckDebugScript, contains('firebaseappcheck.googleapis.com'));
+    expect(appCheckDebugScript, contains('APP_CHECK_ANDROID_DEBUG_TOKEN'));
+    expect(appCheckDebugScript, contains('--write-config'));
+    expect(appCheckDebugScript,
+        contains('Debug token: <written to ignored local config>'));
+    expect(appCheckDebugScript, isNot(contains('Debug token: \${token}')));
+    expect(mobileConfigReadme, contains('Pre-Play-Store App Check validation'));
+    expect(gitignore, contains('/config/mobile/*.json'));
   });
 
   test('production app links include public domain auth actions', () {

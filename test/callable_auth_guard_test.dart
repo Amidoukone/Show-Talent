@@ -21,6 +21,16 @@ void main() {
       );
     });
 
+    test('keeps App Check on raw HTTP fallback for production callables', () {
+      final source =
+          File('lib/services/callable_auth_guard.dart').readAsStringSync();
+
+      expect(source, contains("bool.fromEnvironment('APP_CHECK_ENABLED'"));
+      expect(source, contains('FirebaseAppCheck.instance.getToken'));
+      expect(source, contains('_appCheckEnabled && appCheckToken == null'));
+      expect(source, contains("'X-Firebase-AppCheck': appCheckToken"));
+    });
+
     test('keeps callable JSON errors as FirebaseFunctionsException', () {
       final response = http.Response(
         '{"error":{"status":"PERMISSION_DENIED","message":"Accès refusé."}}',

@@ -205,6 +205,8 @@ class VideoManager {
   static const Duration _activeAdaptiveSelectionBudget =
       Duration(milliseconds: 450);
   static const Duration _postInitStreamCacheWarmupDelay = Duration(seconds: 2);
+  static const Duration _secondaryPreloadDelay = Duration(milliseconds: 220);
+  static const Duration _maxPreloadStaggerDelay = Duration(milliseconds: 700);
   static const NetworkProfile _bootstrapNetworkProfile = NetworkProfile(
     tier: NetworkProfileTier.medium,
     hasConnection: true,
@@ -225,6 +227,7 @@ class VideoManager {
       _initFuturesByContext = {};
   final Map<String, Map<String, VideoLoadState>> _loadStatesByContext = {};
   final Map<String, Future<_VideoDownloadResult>> _downloadFuturesByUrl = {};
+  final Map<String, int> _preloadRequestTokensByContext = {};
 
   /// originalUrl -> resolvedUrl
   final Map<String, Map<String, String>> _resolvedUrlByContext = {};
@@ -432,7 +435,7 @@ class VideoManager {
         return const _VideoNetworkTuning(
           maxActive: 8,
           maxConcurrentInits: 3,
-          preloadRadius: 2,
+          preloadRadius: 3,
           preloadTimeout: Duration(seconds: 8),
           activeTimeout: Duration(seconds: 12),
         );
@@ -440,7 +443,7 @@ class VideoManager {
         return const _VideoNetworkTuning(
           maxActive: 6,
           maxConcurrentInits: 2,
-          preloadRadius: 1,
+          preloadRadius: 2,
           preloadTimeout: Duration(seconds: 10),
           activeTimeout: Duration(seconds: 12),
         );
@@ -1552,6 +1555,13 @@ class VideoManager {
     final radius = _preloadRadius;
     if (radius <= 0) return;
 
+    final token = (_preloadRequestTokensByContext[contextKey] ?? 0) + 1;
+    _preloadRequestTokensByContext[contextKey] = token;
+
+    final seenUrls = <String>{};
+    final active = activeUrl?.trim();
+    var preloadPosition = 0;
+
     for (final candidateIndex in preloadOrderForTests(
       totalVideos: videos.length,
       index: index,
@@ -1559,17 +1569,66 @@ class VideoManager {
       preferForward: preferForward,
     )) {
       final v = videos[candidateIndex];
+      final candidateUrl = v.videoUrl.trim();
+      if (candidateUrl.isEmpty || candidateUrl == active) {
+        continue;
+      }
+      if (!seenUrls.add(candidateUrl)) {
+        continue;
+      }
+
+      final delay = preloadPositionDelayForTests(preloadPosition);
       unawaited(
-        initializeController(
+        _preloadVideoAfterDelay(
           contextKey,
-          v.videoUrl,
-          sources: v.sources,
-          useHls: false,
-          isPreload: true,
+          v,
+          requestToken: token,
+          delay: delay,
           activeUrl: activeUrl,
         ),
       );
+      preloadPosition++;
     }
+  }
+
+  Future<void> _preloadVideoAfterDelay(
+    String contextKey,
+    Video video, {
+    required int requestToken,
+    required Duration delay,
+    String? activeUrl,
+  }) async {
+    if (delay > Duration.zero) {
+      await Future.delayed(delay);
+    }
+
+    if (_preloadRequestTokensByContext[contextKey] != requestToken) {
+      return;
+    }
+
+    try {
+      await initializeController(
+        contextKey,
+        video.videoUrl,
+        sources: video.sources,
+        useHls: false,
+        isPreload: true,
+        activeUrl: activeUrl,
+      );
+    } catch (error) {
+      debugPrint(
+          '[VideoManager] Preload skipped for ${video.videoUrl}: $error');
+    }
+  }
+
+  @visibleForTesting
+  Duration preloadPositionDelayForTests(int preloadPosition) {
+    if (preloadPosition <= 0) return Duration.zero;
+    final delayMs = _secondaryPreloadDelay.inMilliseconds * preloadPosition;
+    final cappedMs = delayMs > _maxPreloadStaggerDelay.inMilliseconds
+        ? _maxPreloadStaggerDelay.inMilliseconds
+        : delayMs;
+    return Duration(milliseconds: cappedMs);
   }
 
   @visibleForTesting
@@ -1704,6 +1763,7 @@ class VideoManager {
     _initFuturesByContext.remove(contextKey);
     _loadStatesByContext.remove(contextKey);
     _resolvedUrlByContext.remove(contextKey);
+    _preloadRequestTokensByContext.remove(contextKey);
     _notifyUiStateChanged();
   }
 

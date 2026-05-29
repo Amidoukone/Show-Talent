@@ -3,6 +3,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import 'package:adfoot/utils/video_ui_strings.dart';
+import 'package:adfoot/widgets/video_playback_controls.dart';
+import 'package:adfoot/widgets/video_state_overlay.dart';
+
 class TiktokVideoPlayer extends StatefulWidget {
   final VideoPlayerController? controller;
   final bool isPlaying;
@@ -53,7 +57,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   // Drag progress used by the progress knob UI.
   double _localDragProgress = 0.0;
   bool _isDragging = false;
-  static const double _progressHorizontalPadding = 12.0;
+  double _playbackSpeed = 1.0;
   static const double _progressBottomSafeGap = 8.0;
 
   _VideoGestureFeedback? _feedbackOverlay;
@@ -217,7 +221,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     final wasPlaying = _safeValue()?.isPlaying ?? widget.isPlaying;
     widget.onTogglePlayPause?.call();
     _showFeedback(
-      wasPlaying ? 'Pause' : 'Lecture',
+      wasPlaying ? VideoUiStrings.pause : VideoUiStrings.play,
       icon: wasPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
     );
     _toggleOverlay();
@@ -242,7 +246,9 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
 
       ctrl.seekTo(clamped);
       _showFeedback(
-        isRight ? '+10s' : '-10s',
+        isRight
+            ? VideoUiStrings.forwardTenSecondsFeedback
+            : VideoUiStrings.rewindTenSecondsFeedback,
         icon: isRight ? Icons.forward_10_rounded : Icons.replay_10_rounded,
         alignment: isRight ? Alignment.centerRight : Alignment.centerLeft,
       );
@@ -252,62 +258,75 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     }
   }
 
-  void _onDragStart(DragStartDetails _) {
+  void _onProgressDragStart() {
     if (_isDisposed) return;
     _safeSetState(() => _isDragging = true);
   }
 
-  void _onDragUpdate(DragUpdateDetails details, VideoPlayerValue val) {
+  void _onProgressChanged(
+    double proportion,
+    VideoPlayerValue val, {
+    bool showFeedback = false,
+  }) {
     if (_isDisposed) return;
     if (!_isControllerUsable) return;
-
-    final box = context.findRenderObject() as RenderBox?;
-    final totalWidth = box?.size.width ?? MediaQuery.of(context).size.width;
-    final trackWidth =
-        (totalWidth - (_progressHorizontalPadding * 2)).clamp(0.0, totalWidth);
-    final dx = (details.localPosition.dx - _progressHorizontalPadding)
-        .clamp(0.0, trackWidth);
-    final proportion =
-        (trackWidth == 0) ? 0.0 : (dx / trackWidth).clamp(0.0, 1.0);
-
-    _localDragProgress = proportion;
+    final clamped = proportion.clamp(0.0, 1.0).toDouble();
+    _safeSetState(() => _localDragProgress = clamped);
+    final target = val.duration * clamped;
 
     try {
-      widget.controller?.seekTo(val.duration * proportion);
+      widget.controller?.seekTo(target);
+      if (showFeedback) {
+        _showFeedback(
+          VideoUiStrings.formatPlaybackTime(target),
+          icon: Icons.drag_indicator_rounded,
+        );
+      }
     } catch (_) {}
   }
 
-  void _onDragEnd(DragEndDetails _) {
+  void _onProgressDragEnd() {
     if (_isDisposed) return;
     _safeSetState(() => _isDragging = false);
   }
 
-  void _openSpeedMenu() {
+  Future<void> _openSpeedMenu() async {
     if (!_isControllerUsable) return;
 
-    showModalBottomSheet(
+    final selectedSpeed = await showModalBottomSheet<double>(
       context: context,
-      backgroundColor: Colors.black87,
-      builder: (_) {
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [0.75, 1.0, 1.5, 2.0].map((s) {
-            return ListTile(
-              title: Text("${s}x", style: const TextStyle(color: Colors.white)),
-              onTap: () {
-                try {
-                  widget.controller?.setPlaybackSpeed(s);
-                } catch (_) {}
-                Navigator.pop(context);
-                _showFeedback(
-                  "${s}x",
-                  icon: Icons.speed_rounded,
-                );
-              },
-            );
-          }).toList(),
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return VideoPlaybackSpeedSheet(
+          selectedSpeed: _playbackSpeed,
+          onSpeedSelected: (speed) {
+            Navigator.of(sheetContext).pop(speed);
+          },
         );
       },
+    );
+
+    if (!mounted || _isDisposed || selectedSpeed == null) return;
+    _applyPlaybackSpeed(selectedSpeed);
+  }
+
+  void _applyPlaybackSpeed(double speed) {
+    if (!_isControllerUsable) return;
+
+    if (mounted && !_isDisposed) {
+      setState(() => _playbackSpeed = speed);
+    } else {
+      _playbackSpeed = speed;
+    }
+
+    final controller = widget.controller;
+    if (controller != null) {
+      unawaited(controller.setPlaybackSpeed(speed).catchError((_) {}));
+    }
+
+    _showFeedback(
+      VideoUiStrings.formatPlaybackSpeed(speed),
+      icon: Icons.speed_rounded,
     );
   }
 
@@ -379,7 +398,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     if (hasError) {
       return _buildSafeState(
         showLoader: false,
-        errorMessage: widget.errorMessage ?? 'Lecture vidéo indisponible.',
+        errorMessage: widget.errorMessage ?? VideoUiStrings.playbackUnavailable,
       );
     }
 
@@ -419,58 +438,13 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   Widget _buildLoadingIndicator() {
     final showRetry = _showSlowLoadingHelp && widget.onRetry != null;
     final message = _showSlowLoadingHelp
-        ? 'Connexion lente...'
-        : 'Préparation de la vidéo...';
+        ? VideoStateOverlay.slowLoadingMessage
+        : VideoStateOverlay.loadingMessage;
 
-    return Center(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.42),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2.4,
-                ),
-              ),
-              const SizedBox(height: 10),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 260),
-                child: Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (showRetry) ...[
-                const SizedBox(height: 8),
-                TextButton.icon(
-                  onPressed: widget.onRetry,
-                  icon: const Icon(Icons.refresh_rounded, size: 16),
-                  label: const Text('Réessayer'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(0, 32),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
+    return VideoStateOverlay.loading(
+      message: message,
+      showRetry: showRetry,
+      onRetry: widget.onRetry,
     );
   }
 
@@ -506,13 +480,23 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   }
 
   Widget _buildThumbnailFallback() {
-    return Container(
-      color: Colors.black,
-      alignment: Alignment.center,
-      child: const Icon(
-        Icons.videocam_off_rounded,
-        color: Colors.white54,
-        size: 36,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF11161C),
+            Color(0xFF050608),
+          ],
+        ),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.video_library_rounded,
+          color: Colors.white38,
+          size: 38,
+        ),
       ),
     );
   }
@@ -548,11 +532,57 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     return Stack(
       fit: StackFit.expand,
       children: [
+        if (!widget.hidePlayPauseIcon) _buildCenterPlaybackIndicator(val),
         if (_feedbackOverlay != null) _buildFeedbackOverlay(),
         if (_showControlOverlay && widget.showControls)
           _buildFloatingControls(val),
         if (widget.showProgressBar) _buildProgressBar(val),
       ],
+    );
+  }
+
+  Widget _buildCenterPlaybackIndicator(VideoPlayerValue val) {
+    final isPlaying = val.isPlaying;
+
+    return Semantics(
+      button: true,
+      label: isPlaying ? VideoUiStrings.pauseVideo : VideoUiStrings.playVideo,
+      child: IgnorePointer(
+        child: Center(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0.92, end: 1),
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutBack,
+            builder: (context, scale, child) {
+              return Transform.scale(scale: scale, child: child);
+            },
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.42),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.18),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.32),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: SizedBox.square(
+                dimension: 72,
+                child: Icon(
+                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 44,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -622,195 +652,70 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   }
 
   Widget _buildFloatingControls(VideoPlayerValue val) {
-    return Center(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _iconButton(Icons.replay_10, () {
-            if (!_isControllerUsable) return;
-            try {
-              final ctrl = widget.controller!;
-              final dur = val.duration;
-              final raw = val.position - const Duration(seconds: 10);
-              ctrl.seekTo(_clampDuration(raw, Duration.zero, dur));
-              _showFeedback(
-                '-10s',
-                icon: Icons.replay_10_rounded,
-                alignment: Alignment.centerLeft,
-              );
-            } catch (_) {}
-            _toggleOverlay();
-          }),
-          const SizedBox(width: 16),
-          _iconButton(
-            val.isPlaying ? Icons.pause : Icons.play_arrow,
-            () {
-              _showFeedback(
-                val.isPlaying ? 'Pause' : 'Lecture',
-                icon: val.isPlaying
-                    ? Icons.pause_rounded
-                    : Icons.play_arrow_rounded,
-              );
-              widget.onTogglePlayPause?.call();
-              _toggleOverlay();
-            },
-          ),
-          const SizedBox(width: 16),
-          _iconButton(Icons.forward_10, () {
-            if (!_isControllerUsable) return;
-            try {
-              final ctrl = widget.controller!;
-              final dur = val.duration;
-              final raw = val.position + const Duration(seconds: 10);
-              ctrl.seekTo(_clampDuration(raw, Duration.zero, dur));
-              _showFeedback(
-                '+10s',
-                icon: Icons.forward_10_rounded,
-                alignment: Alignment.centerRight,
-              );
-            } catch (_) {}
-            _toggleOverlay();
-          }),
-          const SizedBox(width: 16),
-          _iconButton(Icons.speed, () {
-            _openSpeedMenu();
-            _toggleOverlay();
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _iconButton(IconData icon, VoidCallback? onTap) {
-    return CircleAvatar(
-      backgroundColor: Colors.black54,
-      radius: 22,
-      child: IconButton(
-        icon: Icon(icon, color: Colors.white, size: 26),
-        onPressed: onTap,
-      ),
+    return VideoPlaybackControls(
+      isPlaying: val.isPlaying,
+      onReplay10: () {
+        if (!_isControllerUsable) return;
+        try {
+          final ctrl = widget.controller!;
+          final dur = val.duration;
+          final raw = val.position - const Duration(seconds: 10);
+          ctrl.seekTo(_clampDuration(raw, Duration.zero, dur));
+          _showFeedback(
+            VideoUiStrings.rewindTenSecondsFeedback,
+            icon: Icons.replay_10_rounded,
+            alignment: Alignment.centerLeft,
+          );
+        } catch (_) {}
+        _toggleOverlay();
+      },
+      onTogglePlayPause: () {
+        _showFeedback(
+          val.isPlaying ? VideoUiStrings.pause : VideoUiStrings.play,
+          icon: val.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+        );
+        widget.onTogglePlayPause?.call();
+        _toggleOverlay();
+      },
+      onForward10: () {
+        if (!_isControllerUsable) return;
+        try {
+          final ctrl = widget.controller!;
+          final dur = val.duration;
+          final raw = val.position + const Duration(seconds: 10);
+          ctrl.seekTo(_clampDuration(raw, Duration.zero, dur));
+          _showFeedback(
+            VideoUiStrings.forwardTenSecondsFeedback,
+            icon: Icons.forward_10_rounded,
+            alignment: Alignment.centerRight,
+          );
+        } catch (_) {}
+        _toggleOverlay();
+      },
+      onSpeed: () {
+        unawaited(_openSpeedMenu());
+        _toggleOverlay();
+      },
     );
   }
 
   Widget _buildProgressBar(VideoPlayerValue val) {
-    final durationMs = val.duration.inMilliseconds;
-    final posMs = val.position.inMilliseconds.clamp(0, durationMs);
-    final percent =
-        durationMs == 0 ? 0.0 : (posMs / durationMs).clamp(0.0, 1.0);
-
-    // Si on drag, on utilise la valeur locale (sinon valeur réelle)
-    final displayed = _isDragging ? _localDragProgress : percent;
-    final clampedDisplayed = displayed.clamp(0.0, 1.0);
-
-    String fmt(Duration d) {
-      final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-      final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-      return "$m:$s";
-    }
-
-    final current = Duration(milliseconds: posMs);
-    final total = val.duration;
-
     return Positioned(
       bottom: _progressBottomOffset(context),
       left: 0,
       right: 0,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            onHorizontalDragStart: _onDragStart,
-            onHorizontalDragUpdate: (d) => _onDragUpdate(d, val),
-            onHorizontalDragEnd: _onDragEnd,
-            onTapDown: (details) {
-              if (!_isControllerUsable) return;
-              final box = context.findRenderObject() as RenderBox?;
-              if (box == null) return;
-
-              final width = box.size.width;
-              final trackWidth =
-                  (width - (_progressHorizontalPadding * 2)).clamp(0.0, width);
-              if (trackWidth <= 0) return;
-
-              final tapPos =
-                  (details.localPosition.dx - _progressHorizontalPadding)
-                      .clamp(0.0, trackWidth);
-              final proportion = (tapPos / trackWidth).clamp(0.0, 1.0);
-
-              try {
-                widget.controller?.seekTo(val.duration * proportion);
-                _showFeedback(
-                  fmt(val.duration * proportion),
-                  icon: Icons.drag_indicator_rounded,
-                );
-              } catch (_) {}
-              _toggleOverlay();
-            },
-            child: Container(
-              height: 20,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: _progressHorizontalPadding),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final trackWidth = constraints.maxWidth;
-                  final knobLeft =
-                      (clampedDisplayed * trackWidth).clamp(0.0, trackWidth);
-
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.centerLeft,
-                    children: [
-                      Container(
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white30,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      FractionallySizedBox(
-                        widthFactor: clampedDisplayed,
-                        child: Container(
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.greenAccent,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: knobLeft - 6,
-                        child: Container(
-                          width: 12,
-                          height: 12,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                                color: Colors.greenAccent, width: 1.5),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(fmt(current),
-                    style:
-                        const TextStyle(color: Colors.white70, fontSize: 11)),
-                Text(fmt(total),
-                    style:
-                        const TextStyle(color: Colors.white70, fontSize: 11)),
-              ],
-            ),
-          ),
-        ],
+      child: VideoProgressBar(
+        position: val.position,
+        duration: val.duration,
+        isDragging: _isDragging,
+        dragProgress: _localDragProgress,
+        onDragStart: _onProgressDragStart,
+        onDragUpdate: (proportion) => _onProgressChanged(proportion, val),
+        onDragEnd: _onProgressDragEnd,
+        onTapSeek: (proportion) {
+          _onProgressChanged(proportion, val, showFeedback: true);
+          _toggleOverlay();
+        },
       ),
     );
   }
@@ -821,40 +726,9 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   }
 
   Widget _buildErrorOverlay({String? message}) {
-    final resolvedMessage = (message != null && message.trim().isNotEmpty)
-        ? message.trim()
-        : 'Lecture vidéo indisponible.';
-
-    return Container(
-      color: Colors.black.withValues(alpha: 0.35),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.play_disabled_rounded,
-            size: 46,
-            color: Colors.white,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            resolvedMessage,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: widget.onRetry,
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: const Text('Réessayer'),
-          ),
-        ],
-      ),
+    return VideoStateOverlay.error(
+      message: message,
+      onRetry: widget.onRetry,
     );
   }
 }

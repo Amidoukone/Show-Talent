@@ -78,3 +78,25 @@ npm.cmd run mobile:auth:preflight:staging
 non-local environments when a real config file is present. Use
 `-SkipRemoteAuthPreflight` only when you intentionally want to bypass the
 remote check.
+
+## Pre-Play-Store App Check validation
+
+Production config keeps `APP_CHECK_ENABLED=true`. For a release build installed
+directly on a phone before Play Store publication, use a registered App Check
+debug token instead of disabling backend enforcement:
+
+```powershell
+npm.cmd run mobile:appcheck:debug:production
+npm.cmd run mobile:run:production -- --release
+```
+
+The debug command creates a Firebase App Check debug token for the Android app
+and writes these keys only to the ignored local config file:
+
+- `APP_CHECK_DEBUG_PROVIDER=true`
+- `APP_CHECK_ANDROID_PROVIDER=debug`
+- `APP_CHECK_ANDROID_DEBUG_TOKEN=<registered UUIDv4 token>`
+
+Do not commit or share the generated token. Before the final Play Store build,
+remove those debug keys from the local config and verify that Play Integrity is
+registered in Firebase App Check with the release signing SHA-256 fingerprint.

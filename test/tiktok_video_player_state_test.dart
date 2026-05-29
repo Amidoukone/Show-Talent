@@ -59,7 +59,7 @@ void main() {
     await tester.pumpWidget(host(player(isLoading: true)));
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    expect(find.text('Préparation de la vidéo...'), findsOneWidget);
+    expect(find.text('Chargement de la vidéo...'), findsOneWidget);
     expect(find.text('Réessayer'), findsNothing);
   });
 }

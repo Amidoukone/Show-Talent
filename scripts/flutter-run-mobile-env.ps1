@@ -67,6 +67,34 @@ function ConvertTo-DartDefineValue {
     return [string]$Value
 }
 
+function Mask-PreviewArg {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Arg
+    )
+
+    if ($Arg -notlike "--dart-define=*") {
+        return $Arg
+    }
+
+    $payload = $Arg.Substring("--dart-define=".Length)
+    $parts = $payload.Split("=", 2)
+    if ($parts.Count -ne 2) {
+        return $Arg
+    }
+
+    $key = [string]$parts[0]
+    $value = [string]$parts[1]
+    if ($key -match "KEY|SECRET|TOKEN|PASSWORD") {
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            return "--dart-define=$key=<empty>"
+        }
+        return "--dart-define=$key=***"
+    }
+
+    return $Arg
+}
+
 function Read-MobileConfig {
     param(
         [Parameter(Mandatory = $true)]
@@ -178,7 +206,11 @@ if ($AdditionalArgs) {
     $flutterArgs += $AdditionalArgs
 }
 
-$commandPreview = "flutter " + ($flutterArgs -join " ")
+$previewArgs = @()
+foreach ($arg in $flutterArgs) {
+    $previewArgs += Mask-PreviewArg -Arg ([string]$arg)
+}
+$commandPreview = "flutter " + ($previewArgs -join " ")
 Write-Host $commandPreview
 Write-Host "Effective native flavor: $effectiveFlavorEnvironment"
 if ($null -ne $configDefines) {

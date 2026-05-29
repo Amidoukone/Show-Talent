@@ -11,6 +11,7 @@ import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -133,6 +134,60 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
   List<Video> get _currentVideos =>
       _videoController.videoList.toList(growable: false);
 
+  Widget _buildEmptyFeedState(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.video_library_outlined,
+                  color: Colors.white70,
+                  size: 42,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  VideoUiStrings.emptyProfileVideoFeedTitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  VideoUiStrings.emptyProfileVideoFeedMessage,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                OutlinedButton.icon(
+                  onPressed: () => Get.back<void>(),
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  label: const Text(
+                    VideoUiStrings.back,
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white54),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _syncPageWithFeedLength(int length) {
     if (length <= 0) return;
 
@@ -160,15 +215,7 @@ class _ProfileVideoFeedScreenState extends State<ProfileVideoFeedScreen>
       final videos = _currentVideos;
 
       if (videos.isEmpty) {
-        return const Scaffold(
-          backgroundColor: Colors.black,
-          body: Center(
-            child: Text(
-              'Aucune vidéo à afficher',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        );
+        return _buildEmptyFeedState(context);
       }
 
       _syncPageWithFeedLength(videos.length);

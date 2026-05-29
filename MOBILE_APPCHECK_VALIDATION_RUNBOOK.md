@@ -1,86 +1,90 @@
-# Mobile App Check Validation Runbook (Progressive / Safe)
+# Mobile App Check Validation Runbook
 
-Project: `show-talent-5987d`  
+Project: `adfoot-production`
 Region: `europe-west1`
 
-Goal: validate upload flow from the real mobile app with Firebase Auth token and App Check, without blocking development.
+Goal: keep upload callables protected by App Check while allowing release-build
+validation before the app is published on Play Store.
 
-## Safety model (already applied)
+## Current security model
 
-- Client App Check is integrated but disabled by default (`APP_CHECK_ENABLED=false`).
-- Upload callables use a backend toggle:
-  - `ENFORCE_APPCHECK=false` by default (safe for development).
-  - can be switched to `true` when all active clients send valid App Check tokens.
+- Mobile production config uses `APP_CHECK_ENABLED=true`.
+- Upload callables use `ENFORCE_APPCHECK=true` when deployed with production
+  env overrides.
+- The upload path is protected on all callable steps:
+  - `createUploadSession`
+  - `requestThumbnailUploadUrl`
+  - `finalizeUpload`
 
-## 1) Development validation from real mobile app
+## Pre-Play-Store release validation
 
-Run the app in debug with App Check enabled:
-
-```bash
-flutter run \
-  --dart-define=APP_CHECK_ENABLED=true \
-  --dart-define=APP_CHECK_DEBUG_PROVIDER=true
-```
-
-Then execute the real upload flow in the app:
-
-1. login with a normal user account
-2. create upload session
-3. upload video
-4. upload thumbnail
-5. finalize upload
-
-Expected behavior:
-
-- no `unauthenticated` error on callables
-- upload completes as before
-
-## 2) Register debug App Check token (Firebase Console)
-
-In debug mode, Firebase prints a debug App Check token in device logs.
-
-Add it in Firebase Console:
-
-1. App Check
-2. Manage debug tokens
-3. Add token
-
-Repeat test flow in app after token registration.
-
-## 3) Verify server logs
-
-Use this helper script from repo root:
+Use this lane only for trusted development phones. It keeps backend App Check
+enforcement enabled, but uses a registered debug token because the release build
+is installed outside Play Store.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\verify-mobile-upload-logs.ps1
+npm.cmd run mobile:appcheck:debug:production
+npm.cmd run mobile:run:production -- --release
 ```
 
-Expected:
+The first command registers a Firebase App Check debug token for the Android app
+and writes the token to `config/mobile/production.json`, which is ignored by
+git. The second command keeps the normal production flavor and build command.
 
-- `createUploadSession`, `requestThumbnailUploadUrl`, `finalizeUpload`
-- each function has at least one log with `"auth":"VALID"` and `"app":"VALID"`
+Expected local config additions:
 
-## 4) Progressive production rollout
-
-Keep this sequence:
-
-1. deploy client build with App Check enabled (release providers)
-2. monitor logs until app tokens are consistently valid
-3. switch backend env `ENFORCE_APPCHECK=true`
-4. deploy only upload callables
-
-Do not enable enforcement before step 2 is stable.
-
-## 5) Backend switch details
-
-`functions/src/upload_session.ts` uses:
-
-```ts
-const ENFORCE_APP_CHECK = process.env.ENFORCE_APPCHECK === "true";
+```json
+{
+  "APP_CHECK_ENABLED": "true",
+  "APP_CHECK_DEBUG_PROVIDER": "true",
+  "APP_CHECK_ANDROID_PROVIDER": "debug",
+  "APP_CHECK_ANDROID_DEBUG_TOKEN": "<registered UUIDv4 token>"
+}
 ```
 
-When `true`, these callables enforce App Check:
+Do not commit, paste into tickets, or share the debug token. Revoke it in
+Firebase Console after validation if the phone or workstation is no longer
+trusted.
 
-- `createUploadSession`
-- `requestThumbnailUploadUrl`
-- `finalizeUpload`
+## Real Play Integrity production path
+
+Before a public Play Store build:
+
+1. Remove `APP_CHECK_DEBUG_PROVIDER`, `APP_CHECK_ANDROID_PROVIDER`, and
+   `APP_CHECK_ANDROID_DEBUG_TOKEN` from `config/mobile/production.json`.
+2. Register the Android app in Firebase App Check with the Play Integrity
+   provider.
+3. Add the release signing certificate SHA-256 fingerprint used by
+   `android/key.properties`.
+4. If validating outside Play Store, configure the Firebase App Check Play
+   Integrity advanced settings for that distribution channel.
+5. Rebuild with:
+
+```powershell
+npm.cmd run mobile:run:production -- --release
+```
+
+## Upload validation
+
+On a real Android device:
+
+1. Sign in with a verified `joueur` account.
+2. Add a short MP4 video.
+3. Confirm the upload reaches `Finalisation...`.
+4. Confirm the video document eventually becomes `status == "ready"` and
+   `optimized == true`.
+
+If the app shows `Verification de securite indisponible`, the client could not
+obtain a valid App Check token. Check the local config provider first, then the
+Firebase App Check registration for the Android app.
+
+## Remote smoke option
+
+For CI or backend validation, provide a Firebase App Check token explicitly:
+
+```powershell
+$env:FIREBASE_APP_CHECK_TOKEN="<valid app check token>"
+$env:FIREBASE_SMOKE_EMAIL="<verified joueur email>"
+$env:FIREBASE_SMOKE_PASSWORD="<password>"
+npm.cmd run video:quality:release:remote:verify
+```

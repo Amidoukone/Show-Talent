@@ -394,11 +394,32 @@ try {
         }
     }
 
-    $dartDefines = [ordered]@{
-        "APP_ENV" = $Environment
+    $mobileConfig = Read-MobileConfig -Path $mobileConfigPath
+    if ($null -eq $mobileConfig -and ($Environment -ne "local" -or $ReleaseGate)) {
+        throw "Missing required mobile config file for '$Environment': $mobileConfigPath"
     }
 
-    $mobileConfig = Read-MobileConfig -Path $mobileConfigPath
+    if (
+        $null -ne $mobileConfig -and
+        $mobileConfig.Contains("APP_ENV") -and
+        $mobileConfig["APP_ENV"] -ne $Environment
+    ) {
+        throw "Mobile config APP_ENV '$($mobileConfig["APP_ENV"])' does not match requested environment '$Environment'."
+    }
+
+    if ($Environment -in @("production", "production-next")) {
+        $rawAppCheckEnabled = if ($null -ne $mobileConfig -and $mobileConfig.Contains("APP_CHECK_ENABLED")) {
+            [string]$mobileConfig["APP_CHECK_ENABLED"]
+        } else {
+            ""
+        }
+
+        if ($rawAppCheckEnabled.Trim().ToLowerInvariant() -ne "true") {
+            throw "APP_CHECK_ENABLED must be true in mobile config for '$Environment'."
+        }
+    }
+
+    $dartDefines = [ordered]@{}
     if ($null -ne $mobileConfig) {
         foreach ($entry in $mobileConfig.GetEnumerator()) {
             if (-not [string]::IsNullOrWhiteSpace([string]$entry.Value)) {
@@ -406,6 +427,7 @@ try {
             }
         }
     }
+    $dartDefines["APP_ENV"] = $Environment
 
     $flutterArgs = @(
         "build", "appbundle",

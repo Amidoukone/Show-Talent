@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -10,13 +11,24 @@ import '../config/app_environment.dart';
 class CallableAuthGuard {
   CallableAuthGuard._();
 
+  static const bool _appCheckEnabled =
+      bool.fromEnvironment('APP_CHECK_ENABLED', defaultValue: false);
+  static const bool _forceAppCheckDebugProvider =
+      bool.fromEnvironment('APP_CHECK_DEBUG_PROVIDER', defaultValue: false);
+  static const String _androidProviderName =
+      String.fromEnvironment('APP_CHECK_ANDROID_PROVIDER');
+  static bool get _shouldReadAppCheckToken =>
+      _appCheckEnabled ||
+      _forceAppCheckDebugProvider ||
+      _androidProviderName.trim().toLowerCase() == 'debug';
+
   static Future<void> prepareCall({bool forceRefresh = false}) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return;
+    if (user != null) {
+      await user.getIdToken(forceRefresh);
     }
 
-    await user.getIdToken(forceRefresh);
+    await _readAppCheckToken(forceRefresh: forceRefresh);
   }
 
   static Future<HttpsCallableResult<T>> call<T>(
@@ -89,6 +101,14 @@ class CallableAuthGuard {
         message: 'Authentification requise.',
       );
     }
+    final appCheckToken = await _readAppCheckToken(forceRefresh: true);
+    if (_appCheckEnabled && appCheckToken == null) {
+      throw _DirectCallableException(
+        code: 'failed-precondition',
+        message: 'Verification de securite indisponible. Verifiez App Check, '
+            "redemarrez l'application puis reessayez.",
+      );
+    }
 
     final client = httpClient ?? http.Client();
     final shouldCloseClient = httpClient == null;
@@ -100,6 +120,7 @@ class CallableAuthGuard {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
+          if (appCheckToken != null) 'X-Firebase-AppCheck': appCheckToken,
         },
         body: jsonEncode({'data': parameters ?? <String, dynamic>{}}),
       );
@@ -196,6 +217,25 @@ class CallableAuthGuard {
           '${AppEnvironmentConfig.firebaseProjectId}.cloudfunctions.net',
       '/$callableName',
     );
+  }
+
+  static Future<String?> _readAppCheckToken({
+    bool forceRefresh = false,
+  }) async {
+    if (!_shouldReadAppCheckToken) {
+      return null;
+    }
+
+    try {
+      final token = await FirebaseAppCheck.instance.getToken(forceRefresh);
+      final trimmed = token?.trim() ?? '';
+      return trimmed.isEmpty ? null : trimmed;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[CallableAuthGuard] App Check token unavailable: $error');
+      }
+      return null;
+    }
   }
 
   static String _normalizeCallableErrorCode(dynamic rawStatus) {

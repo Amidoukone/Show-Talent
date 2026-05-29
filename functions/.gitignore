@@ -8,6 +8,7 @@ typings/
 # Node.js dependency directory
 node_modules/
 *.local
+.env
 .env.local
 .env.production
 .env.prod
@@ -17,4 +18,5 @@ node_modules/
 !.env.example
 !.env.local.example
 !.env.production.example
+!.env.production-next.example
 !.env.staging.example

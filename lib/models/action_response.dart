@@ -25,14 +25,18 @@ class ActionResponse {
   }) {
     final map = raw ?? <String, dynamic>{};
     final ok = map['success'] == true;
-    final resolvedToast = toastOverride ??
-        (ok ? ToastLevel.success : ToastLevel.error);
+    final resolvedToast =
+        toastOverride ?? (ok ? ToastLevel.success : ToastLevel.error);
 
     return ActionResponse(
       success: ok,
-      message: (map['message'] ?? (ok ? 'Action réalisée.' : 'Action impossible.')).toString(),
+      message:
+          (map['message'] ?? (ok ? 'Action réalisée.' : 'Action impossible.'))
+              .toString(),
       code: map['code']?.toString(),
-      data: (map['data'] is Map<String, dynamic>) ? map['data'] as Map<String, dynamic> : null,
+      data: (map['data'] is Map<String, dynamic>)
+          ? map['data'] as Map<String, dynamic>
+          : null,
       toast: resolvedToast,
       retriable: map['retriable'] == true,
     );
@@ -55,7 +59,8 @@ class ActionResponse {
 
   factory ActionResponse.offline([String? message]) {
     return ActionResponse.failure(
-      message: message ?? 'Connexion indisponible. Réessaie quand tu es en ligne.',
+      message:
+          message ?? 'Connexion indisponible. Réessaie quand tu es en ligne.',
       code: 'offline',
       toast: ToastLevel.info,
       retriable: true,

@@ -10,7 +10,9 @@ import 'package:get/get.dart';
 
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/services/video_observability_service.dart';
 import 'package:adfoot/services/videos/data/upload_client.dart';
+import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/utils/video_tools.dart';
 import 'package:adfoot/screens/success_toast.dart';
 
@@ -31,6 +33,8 @@ class UploadVideoController extends GetxController {
   String? originalVideoPath;
 
   final UploadClient _uploadClient = UploadClient();
+  final VideoObservabilityService _observability =
+      VideoObservabilityService.instance;
   CancelToken? _cancelToken;
 
   UploadSessionState? _activeSession;
@@ -66,7 +70,7 @@ class UploadVideoController extends GetxController {
     final operation = ++_operationSerial;
 
     if (sanitizedDescription.isEmpty || sanitizedCaption.isEmpty) {
-      showErrorToast('Merci de renseigner une description et une légende.');
+      showErrorToast(VideoUiStrings.uploadMissingRequiredFields);
       return false;
     }
 
@@ -87,16 +91,16 @@ class UploadVideoController extends GetxController {
     try {
       final sourceFile = File(videoPath);
       if (!await sourceFile.exists()) {
-        showErrorToast('Vidéo introuvable. Merci de réessayer.');
+        showErrorToast(VideoUiStrings.uploadSourceNotFound);
         return false;
       }
 
       if (await sourceFile.length() <= 0) {
-        showErrorToast('Le fichier vidéo est vide.');
+        showErrorToast(VideoUiStrings.uploadEmptyFile);
         return false;
       }
 
-      uploadStage.value = 'Analyse de la vidéo...';
+      uploadStage.value = VideoUiStrings.uploadStageAnalyze;
       uploadProgress.value = 0.02;
       originalVideoPath = sourceFile.path;
 
@@ -111,13 +115,11 @@ class UploadVideoController extends GetxController {
       if (!_isCurrentOperation(operation)) return false;
 
       if (!isValidQuality) {
-        showErrorToast(
-          'Qualité vidéo insuffisante (minimum 480x360).',
-        );
+        showErrorToast(VideoUiStrings.uploadQualityTooLow);
         return false;
       }
 
-      uploadStage.value = 'Préparation du fichier...';
+      uploadStage.value = VideoUiStrings.uploadStagePrepareFile;
       final (preparedWidth, preparedHeight) =
           await VideoTools.getDimensions(preparedVideo.file.path);
       if (!_isCurrentOperation(operation)) return false;
@@ -130,17 +132,19 @@ class UploadVideoController extends GetxController {
       _preparedHeight = preparedHeight;
       if (preparedVideo.wasTrimmed) {
         showInfoToast(
-          'Vidéo préparée en extrait de '
-          '${preparedVideo.uploadDurationSeconds ?? VideoTools.defaultMaxUploadDurationSeconds}s.',
+          VideoUiStrings.uploadTrimmed(
+            preparedVideo.uploadDurationSeconds ??
+                VideoTools.defaultMaxUploadDurationSeconds,
+          ),
         );
       }
 
-      uploadStage.value = 'Génération de la miniature...';
+      uploadStage.value = VideoUiStrings.uploadStageGenerateThumbnail;
       thumbnail = await _retryThumbnail(selectedVideo!.path);
       if (!_isCurrentOperation(operation)) return false;
 
       if (thumbnail == null) {
-        showErrorToast('Erreur lors de la génération de la miniature.');
+        showErrorToast(VideoUiStrings.uploadThumbnailFailed);
         return false;
       }
 
@@ -149,14 +153,32 @@ class UploadVideoController extends GetxController {
       caption = sanitizedCaption;
       isPrepared = true;
       return true;
-    } on VideoPreparationException catch (error) {
+    } on VideoPreparationException catch (error, stackTrace) {
       if (!_isCurrentOperation(operation)) return false;
+      unawaited(
+        _observability.logUploadFailure(
+          stage: 'prepare',
+          code: 'preparation-error',
+          error: error.message,
+          stackTrace: stackTrace,
+          metadata: _uploadDiagnostics(operation: operation),
+        ),
+      );
       showErrorToast(error.message);
       return false;
-    } catch (_) {
+    } catch (error, stackTrace) {
       if (!_isCurrentOperation(operation)) return false;
+      unawaited(
+        _observability.logUploadFailure(
+          stage: 'prepare',
+          code: 'unexpected-preparation-error',
+          error: error,
+          stackTrace: stackTrace,
+          metadata: _uploadDiagnostics(operation: operation),
+        ),
+      );
       showErrorToast(
-        'Préparation impossible pour le moment. Merci de réessayer.',
+        VideoUiStrings.uploadPreparationFailed,
       );
       return false;
     } finally {
@@ -185,12 +207,12 @@ class UploadVideoController extends GetxController {
 
   Future<void> uploadDirectly() async {
     if (isPreparing.value) {
-      showInfoToast('Préparation en cours...');
+      showInfoToast(VideoUiStrings.uploadPreparationInProgress);
       return;
     }
 
     if (selectedVideo == null || thumbnail == null) {
-      showErrorToast('Fichier manquant.');
+      showErrorToast(VideoUiStrings.uploadMissingFile);
       return;
     }
 
@@ -201,12 +223,12 @@ class UploadVideoController extends GetxController {
     final desc = (description ?? '').trim();
     final cap = (caption ?? '').trim();
     if (desc.isEmpty || cap.isEmpty) {
-      showErrorToast('Description ou légende manquante.');
+      showErrorToast(VideoUiStrings.uploadMissingMetadata);
       isUploading(false);
       return;
     }
 
-    uploadStage.value = 'Initialisation...';
+    uploadStage.value = VideoUiStrings.uploadStageInitialize;
     uploadProgress.value = 0.18;
 
     UploadSessionState session;
@@ -218,7 +240,7 @@ class UploadVideoController extends GetxController {
       );
       _activeSession = session;
 
-      uploadStage.value = 'Téléversement...';
+      uploadStage.value = VideoUiStrings.uploadStageUploading;
       _cancelToken = CancelToken();
 
       final videoUploaded = await _uploadClient.uploadFile(
@@ -226,7 +248,7 @@ class UploadVideoController extends GetxController {
         file: selectedVideo!,
         cancelToken: _cancelToken,
         onUrlRefreshed: () {
-          uploadStage.value = 'Renouvellement du lien sécurisé...';
+          uploadStage.value = VideoUiStrings.uploadStageRefreshSecureLink;
         },
         onProgress: (p) {
           uploadProgress.value = 0.2 + (0.5 * p);
@@ -234,7 +256,7 @@ class UploadVideoController extends GetxController {
       );
 
       if (!videoUploaded) {
-        throw 'Échec upload vidéo';
+        throw VideoUiStrings.uploadVideoTransferFailed;
       }
 
       if (!await thumbnail!.exists() || (await thumbnail!.length()) == 0) {
@@ -243,11 +265,11 @@ class UploadVideoController extends GetxController {
         if (regenerated != null && await regenerated.exists()) {
           thumbnail = regenerated;
         } else {
-          throw 'Miniature manquante';
+          throw VideoUiStrings.uploadMissingThumbnail;
         }
       }
 
-      uploadStage.value = 'Préparation miniature sécurisée...';
+      uploadStage.value = VideoUiStrings.uploadStagePrepareSecureThumbnail;
       final thumbContentType =
           VideoTools.inferImageContentTypeFromPath(thumbnail!.path);
 
@@ -259,7 +281,7 @@ class UploadVideoController extends GetxController {
       );
       _lastUploadedThumbPath = thumbTicket.thumbnailPath;
 
-      uploadStage.value = 'Envoi de la miniature...';
+      uploadStage.value = VideoUiStrings.uploadStageSendThumbnail;
       final thumbUploaded = await _uploadClient.uploadThumbnailFile(
         ticket: thumbTicket,
         file: thumbnail!,
@@ -270,10 +292,10 @@ class UploadVideoController extends GetxController {
       );
 
       if (!thumbUploaded) {
-        throw 'Échec upload miniature';
+        throw VideoUiStrings.uploadThumbnailTransferFailed;
       }
 
-      uploadStage.value = 'Finalisation...';
+      uploadStage.value = VideoUiStrings.uploadStageFinalize;
       uploadProgress.value = 0.95;
 
       final durationSec = _preparedDurationSec;
@@ -312,23 +334,41 @@ class UploadVideoController extends GetxController {
       );
 
       if (!finalized) {
-        throw 'Échec finalisation serveur';
+        throw VideoUiStrings.uploadFinalizeFailed;
       }
 
       await _uploadClient.clearPersistedSession();
       _activeSession = null;
       await _releaseVideoProcessingResources();
 
-      uploadStage.value = 'Optimisation en cours...';
+      uploadStage.value = VideoUiStrings.uploadStageOptimize;
       isUploading(false);
       isOptimizing(true);
 
       await _waitForVideoStatusReady(session.sessionId);
       await _cleanupLocalFiles();
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (e is DioException && CancelToken.isCancel(e)) {
-        showInfoToast('Téléversement annulé.');
+        unawaited(
+          _observability.logUploadInfo(
+            event: 'upload_cancelled',
+            stage: uploadStage.value.isNotEmpty ? uploadStage.value : 'upload',
+            sessionId: _activeSession?.sessionId,
+            metadata: _uploadDiagnostics(operation: _operationSerial),
+          ),
+        );
+        showInfoToast(VideoUiStrings.uploadCancelled);
       } else {
+        unawaited(
+          _observability.logUploadFailure(
+            stage: uploadStage.value.isNotEmpty ? uploadStage.value : 'upload',
+            sessionId: _activeSession?.sessionId,
+            code: _uploadFailureCode(e),
+            error: e,
+            stackTrace: stackTrace,
+            metadata: _uploadDiagnostics(operation: _operationSerial),
+          ),
+        );
         showErrorToast(_toUserMessage(e));
       }
       isUploading(false);
@@ -355,30 +395,48 @@ class UploadVideoController extends GetxController {
       await Future.delayed(const Duration(milliseconds: 200));
       Get.offAllNamed(
         AppRoutes.main,
-        arguments: {'tab': 0, 'refresh': true},
+        arguments: {
+          'tab': 0,
+          'refresh': true,
+          'videoId': videoId,
+          'autoplay': true,
+        },
       );
     }
 
     Future<void> finalizeSuccessFlow() async {
       isOptimizing(false);
       await Future.delayed(const Duration(milliseconds: 300));
-      showSuccessToast('Vidéo ajoutée avec succès !');
+      showSuccessToast(VideoUiStrings.uploadSuccess);
       await navigateBackToFeed();
     }
 
     Future<void> finalizeFailureFlow(String status) async {
-      isOptimizing(false);
-      showErrorToast(
-        "Échec d'optimisation vidéo (statut : $status). Merci de réessayer.",
+      unawaited(
+        _observability.logUploadFailure(
+          stage: 'optimization',
+          sessionId: videoId,
+          code: 'optimization-$status',
+          error: 'Video optimization ended with status $status.',
+          metadata: _uploadDiagnostics(operation: _operationSerial),
+        ),
       );
+      isOptimizing(false);
+      showErrorToast(VideoUiStrings.uploadOptimizationFailed(status));
       await navigateBackToFeed();
     }
 
     Future<void> finalizePendingFlow() async {
-      isOptimizing(false);
-      showInfoToast(
-        'Votre vidéo est en cours d’optimisation. Elle sera visible sous peu.',
+      unawaited(
+        _observability.logUploadInfo(
+          event: 'upload_optimization_pending',
+          stage: 'optimization',
+          sessionId: videoId,
+          metadata: _uploadDiagnostics(operation: _operationSerial),
+        ),
       );
+      isOptimizing(false);
+      showInfoToast(VideoUiStrings.uploadOptimizationPending);
       await navigateBackToFeed();
     }
 
@@ -455,7 +513,7 @@ class UploadVideoController extends GetxController {
 
     if (isPreparing.value) {
       resetUploadState();
-      showInfoToast('Préparation annulée.');
+      showInfoToast(VideoUiStrings.uploadPreparationCancelled);
       return;
     }
 
@@ -470,7 +528,7 @@ class UploadVideoController extends GetxController {
     }
 
     resetUploadState();
-    showInfoToast('Téléversement annulé.');
+    showInfoToast(VideoUiStrings.uploadCancelled);
   }
 
   void resetUploadState() {
@@ -493,24 +551,62 @@ class UploadVideoController extends GetxController {
     _lastUploadedThumbPath = null;
   }
 
+  Map<String, dynamic> _uploadDiagnostics({required int operation}) {
+    return {
+      'operation': operation,
+      'stage': uploadStage.value,
+      'progress': uploadProgress.value,
+      'isPreparing': isPreparing.value,
+      'isUploading': isUploading.value,
+      'isOptimizing': isOptimizing.value,
+      'sessionId': _activeSession?.sessionId,
+      'videoPath': _activeSession?.videoPath,
+      'thumbnailPath': _lastUploadedThumbPath ?? _activeSession?.thumbnailPath,
+      'preparedDurationSec': _preparedDurationSec,
+      'preparedWidth': _preparedWidth,
+      'preparedHeight': _preparedHeight,
+      'hasSelectedVideo': selectedVideo != null,
+      'hasThumbnail': thumbnail != null,
+    };
+  }
+
+  String _uploadFailureCode(Object error) {
+    if (error is FirebaseFunctionsException) {
+      return error.code;
+    }
+    if (error is DioException) {
+      final statusCode = error.response?.statusCode;
+      if (statusCode != null) return 'http-$statusCode';
+      return error.type.name;
+    }
+    if (error is UploadClientException) {
+      return error.statusCode != null
+          ? 'upload-client-${error.statusCode}'
+          : 'upload-client';
+    }
+    return 'upload-error';
+  }
+
   String _toUserMessage(Object error) {
     if (error is FirebaseFunctionsException) {
+      if (error.code == 'unauthenticated') {
+        return VideoUiStrings.uploadAuthRequired;
+      }
+
       final message = (error.message ?? '').trim();
       if (message.isNotEmpty) {
         return message;
       }
 
       switch (error.code) {
-        case 'unauthenticated':
-          return 'Authentification requise. Reconnectez-vous puis réessayez.';
         case 'permission-denied':
-          return 'Votre compte ne peut pas téléverser de vidéos.';
+          return VideoUiStrings.uploadPermissionDenied;
         case 'resource-exhausted':
-          return 'Le service vidéo est temporairement indisponible.';
+          return VideoUiStrings.uploadServiceUnavailable;
         case 'failed-precondition':
-          return 'Votre compte ne remplit pas les conditions pour téléverser.';
+          return VideoUiStrings.uploadPreconditionFailed;
         default:
-          return 'Erreur serveur pendant le téléversement.';
+          return VideoUiStrings.uploadServerError;
       }
     }
 
@@ -519,7 +615,7 @@ class UploadVideoController extends GetxController {
       return normalized.substring('Exception: '.length);
     }
     if (normalized.trim().isEmpty) {
-      return 'Erreur pendant le téléversement.';
+      return VideoUiStrings.uploadUnknownError;
     }
     return normalized;
   }

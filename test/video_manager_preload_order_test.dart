@@ -55,4 +55,16 @@ void main() {
       [2, 1],
     );
   });
+
+  test('preload delays keep first neighbor immediate and stagger the rest', () {
+    expect(manager.preloadPositionDelayForTests(0), Duration.zero);
+    expect(
+      manager.preloadPositionDelayForTests(1),
+      const Duration(milliseconds: 220),
+    );
+    expect(
+      manager.preloadPositionDelayForTests(4),
+      const Duration(milliseconds: 700),
+    );
+  });
 }

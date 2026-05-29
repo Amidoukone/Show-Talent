@@ -10,6 +10,7 @@ import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -159,7 +160,7 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
               ),
               const SizedBox(height: 12),
               const Text(
-                'Aucune vidéo disponible pour le moment.',
+                VideoUiStrings.emptyVideoFeedTitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white,
@@ -169,7 +170,7 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
               ),
               const SizedBox(height: 8),
               const Text(
-                'Revenez au feed principal pour actualiser la liste.',
+                VideoUiStrings.emptyVideoFeedMessage,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Colors.white70,
@@ -181,7 +182,7 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
                 onPressed: () => Get.back<void>(),
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
                 label: const Text(
-                  'Retour',
+                  VideoUiStrings.back,
                   style: TextStyle(color: Colors.white),
                 ),
                 style: OutlinedButton.styleFrom(

@@ -9,6 +9,7 @@ import 'package:adfoot/controller/upload_video_controller.dart';
 import 'package:adfoot/widgets/progress_full_screen_loader.dart';
 import 'package:video_player/video_player.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 
 class UploadForm extends StatefulWidget {
@@ -141,8 +142,8 @@ class _UploadFormState extends State<UploadForm> {
       await uploadVideoController.uploadDirectly();
     } catch (e) {
       AdFeedback.error(
-        'Erreur',
-        'Erreur inattendue : $e',
+        VideoUiStrings.uploadUnexpectedErrorTitle,
+        VideoUiStrings.unexpectedUploadError(e),
       );
     }
   }
@@ -155,7 +156,7 @@ class _UploadFormState extends State<UploadForm> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Téléverser une vidéo'),
+        title: const Text(VideoUiStrings.uploadFormTitle),
         backgroundColor: cs.surface,
         foregroundColor: cs.onSurface,
       ),
@@ -258,22 +259,22 @@ class _UploadFormState extends State<UploadForm> {
                         maxLength: 80,
                         style: const TextStyle(color: AdColors.onSurface),
                         decoration: const InputDecoration(
-                          labelText: 'Description (obligatoire)',
+                          labelText: VideoUiStrings.descriptionLabel,
                           counterText: '',
                           filled: true,
                           fillColor: AdColors.surfaceCard,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(10)),
                           ),
-                          hintText: 'Ex: Dribble + frappe pied gauche',
+                          hintText: VideoUiStrings.descriptionHint,
                         ),
                         validator: (val) {
                           final v = (val ?? '').trim();
                           if (v.isEmpty) {
-                            return 'La description est requise.';
+                            return VideoUiStrings.descriptionRequired;
                           }
                           if (v.length < 3) {
-                            return 'Au moins 3 caractères.';
+                            return VideoUiStrings.minThreeChars;
                           }
                           return null;
                         },
@@ -290,19 +291,19 @@ class _UploadFormState extends State<UploadForm> {
                         maxLength: 140,
                         style: const TextStyle(color: AdColors.onSurface),
                         decoration: InputDecoration(
-                          labelText: 'Légende (obligatoire)',
+                          labelText: VideoUiStrings.captionLabel,
                           counterText: '',
                           filled: true,
                           fillColor: AdColors.surfaceCard,
                           border: const OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(10)),
                           ),
-                          hintText: 'Ex: #U17 #Ailier #Vitesse',
+                          hintText: VideoUiStrings.captionHint,
                         ),
                         validator: (val) {
                           final v = (val ?? '').trim();
                           if (v.isEmpty) {
-                            return 'La légende est requise.';
+                            return VideoUiStrings.captionRequired;
                           }
                           return null;
                         },
@@ -318,7 +319,7 @@ class _UploadFormState extends State<UploadForm> {
                   onPressed: isBusy ? null : _handleUpload,
                   icon: const Icon(Icons.cloud_upload, color: Colors.white),
                   label: const Text(
-                    'Téléverser la vidéo',
+                    VideoUiStrings.uploadVideoButton,
                     style: TextStyle(fontSize: 16, color: Colors.white),
                   ),
                   style: ElevatedButton.styleFrom(
@@ -333,7 +334,7 @@ class _UploadFormState extends State<UploadForm> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Rappel : durée max 60s • qualité minimale ≥ 480×360',
+                  VideoUiStrings.uploadReminder,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.7), fontSize: 12),

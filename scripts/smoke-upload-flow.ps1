@@ -1,7 +1,10 @@
 param(
-  [string]$ProjectId = "show-talent-5987d",
+  [string]$ProjectId = "adfoot-production",
   [string]$Region = "europe-west1",
   [string]$ApiKey = $env:FIREBASE_WEB_API_KEY,
+  [string]$AppCheckToken = $env:FIREBASE_APP_CHECK_TOKEN,
+  [string]$SmokeEmail = $env:FIREBASE_SMOKE_EMAIL,
+  [string]$SmokePassword = $env:FIREBASE_SMOKE_PASSWORD,
   [string]$FfmpegPath = "..\functions\node_modules\@ffmpeg-installer\win32-x64\ffmpeg.exe",
   [int]$OptimizeTimeoutSec = 90,
   [int]$ReadyTimeoutSec = 240,
@@ -332,6 +335,9 @@ $result = [ordered]@{
   projectId = $ProjectId
   region = $Region
   auth = [ordered]@{}
+  appCheck = [ordered]@{
+    tokenProvided = $false
+  }
   createUploadSession = [ordered]@{}
   videoUpload = [ordered]@{}
   requestThumbnailUploadUrl = [ordered]@{}
@@ -371,6 +377,7 @@ $idToken = $null
 $tmpVideo = $null
 $sessionId = $null
 $readyDoc = $null
+$ownsAuthUser = $false
 
 try {
   if ([string]::IsNullOrWhiteSpace($ApiKey)) {
@@ -393,25 +400,60 @@ try {
 
   $runTs = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
   $suffix = [Guid]::NewGuid().ToString("N").Substring(0, 8)
-  $email = "smoke.upload.$runTs.$suffix@example.com"
-  $password = "Tmp!$runTs`Ab9"
 
-  $signUp = Invoke-JsonPost -Uri "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$ApiKey" -Body @{
-    email = $email
-    password = $password
-    returnSecureToken = $true
+  if (
+    [string]::IsNullOrWhiteSpace($SmokeEmail) -xor
+    [string]::IsNullOrWhiteSpace($SmokePassword)
+  ) {
+    throw "Set both FIREBASE_SMOKE_EMAIL and FIREBASE_SMOKE_PASSWORD, or neither."
   }
 
-  $idToken = [string]$signUp.idToken
-  if (-not $idToken) {
-    throw "Firebase Auth signUp did not return idToken."
+  if (
+    -not [string]::IsNullOrWhiteSpace($SmokeEmail) -and
+    -not [string]::IsNullOrWhiteSpace($SmokePassword)
+  ) {
+    $signIn = Invoke-JsonPost -Uri "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$ApiKey" -Body @{
+      email = $SmokeEmail
+      password = $SmokePassword
+      returnSecureToken = $true
+    }
+
+    $idToken = [string]$signIn.idToken
+    if (-not $idToken) {
+      throw "Firebase Auth signInWithPassword did not return idToken."
+    }
+
+    $result.auth.mode = "existing"
+    $result.auth.email = $SmokeEmail
+    $result.auth.localId = [string]$signIn.localId
+  } else {
+    $email = "smoke.upload.$runTs.$suffix@example.com"
+    $password = "Tmp!$runTs`Ab9"
+
+    $signUp = Invoke-JsonPost -Uri "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$ApiKey" -Body @{
+      email = $email
+      password = $password
+      returnSecureToken = $true
+    }
+
+    $idToken = [string]$signUp.idToken
+    if (-not $idToken) {
+      throw "Firebase Auth signUp did not return idToken."
+    }
+
+    $ownsAuthUser = $true
+    $result.auth.mode = "temporary"
+    $result.auth.email = $email
+    $result.auth.localId = [string]$signUp.localId
   }
 
-  $result.auth.email = $email
-  $result.auth.localId = [string]$signUp.localId
   $result.auth.tokenObtained = $true
 
   $authHeaders = @{ Authorization = "Bearer $idToken" }
+  if (-not [string]::IsNullOrWhiteSpace($AppCheckToken)) {
+    $authHeaders["X-Firebase-AppCheck"] = $AppCheckToken.Trim()
+    $result.appCheck.tokenProvided = $true
+  }
 
   $tmpVideo = Join-Path $env:TEMP ("smoke_upload_" + $runTs + ".mp4")
   New-TinyMp4 -FfmpegExe $FfmpegPath -OutputPath $tmpVideo
@@ -604,13 +646,15 @@ try {
     Remove-Item -Force $tmpVideo
   }
 
-  if ($idToken -and -not $KeepAuthUser.IsPresent) {
+  if ($idToken -and $ownsAuthUser -and -not $KeepAuthUser.IsPresent) {
     try {
       $null = Invoke-JsonPost -Uri "https://identitytoolkit.googleapis.com/v1/accounts:delete?key=$ApiKey" -Body @{ idToken = $idToken }
       $result.auth.userCleanup = "deleted"
     } catch {
       $result.auth.userCleanup = "failed"
     }
+  } elseif ($idToken -and -not $ownsAuthUser) {
+    $result.auth.userCleanup = "not-owned"
   } elseif ($KeepAuthUser.IsPresent) {
     $result.auth.userCleanup = "kept"
   }

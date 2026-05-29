@@ -9,6 +9,8 @@
     "mobile:auth:preflight:staging": "node .\\scripts\\check-mobile-auth-preflight.mjs --environment staging",
     "mobile:auth:preflight:production": "node .\\scripts\\check-mobile-auth-preflight.mjs --environment production",
     "mobile:auth:preflight:production-next": "node .\\scripts\\check-mobile-auth-preflight.mjs --environment production-next",
+    "mobile:appcheck:debug:production": "node .\\scripts\\configure-mobile-appcheck-debug.mjs --environment production --write-config",
+    "mobile:appcheck:debug:production-next": "node .\\scripts\\configure-mobile-appcheck-debug.mjs --environment production-next --write-config",
     "mobile:ids:check": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-mobile-identifiers.ps1",
     "mobile:run:local": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-run-mobile-env.ps1 -Environment local -UseNativeFlavor",
     "mobile:run:staging": "powershell -ExecutionPolicy Bypass -File .\\scripts\\flutter-run-mobile-env.ps1 -Environment staging -UseNativeFlavor",

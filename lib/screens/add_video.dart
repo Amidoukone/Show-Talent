@@ -11,7 +11,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:adfoot/controller/upload_video_controller.dart';
 import 'upload_form.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'success_toast.dart';
 
 /// 🎨 Couleurs de marque centralisées (évite les doublons + warnings)
 const Color kBrand = Color(0xFF2ED573); // vert lumineux (action)
@@ -41,10 +43,7 @@ class _AddVideoState extends State<AddVideo> {
       isLoading.value = false;
 
       if (pickedFile == null) {
-        AdFeedback.info(
-          'Info',
-          'Aucune vidéo sélectionnée.',
-        );
+        showInfoToast(VideoUiStrings.noVideoSelected);
         return;
       }
 
@@ -55,15 +54,15 @@ class _AddVideoState extends State<AddVideo> {
       isLoading.value = false;
       // Gestion permission/refus galerie
       AdFeedback.warning(
-        'Autorisation requise',
-        "Veuillez autoriser l’accès à la galerie pour sélectionner une vidéo.\n($e)",
+        VideoUiStrings.galleryPermissionTitle,
+        VideoUiStrings.galleryPermissionDetails(e),
         duration: const Duration(seconds: 5),
       );
     } catch (e) {
       isLoading.value = false;
       AdFeedback.error(
-        'Erreur',
-        'Échec lors de la sélection : $e',
+        VideoUiStrings.videoSelectionErrorTitle,
+        VideoUiStrings.videoSelectionFailed(e),
       );
     }
   }
@@ -77,7 +76,7 @@ class _AddVideoState extends State<AddVideo> {
       // ❌ On n’étend plus derrière l’AppBar pour garantir lisibilité
       extendBodyBehindAppBar: false,
       appBar: AppBar(
-        title: const Text('Ajouter une vidéo'),
+        title: const Text(VideoUiStrings.addVideoScreenTitle),
         backgroundColor: cs.surface, // ✅ fond sombre cohérent
         foregroundColor: cs.onSurface, // ✅ icônes + texte lisibles
         elevation: 0,
@@ -252,7 +251,7 @@ class _BodyCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Sélectionnez une vidéo depuis votre galerie',
+              VideoUiStrings.addVideoPickTitle,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontSize: 18,
@@ -263,7 +262,7 @@ class _BodyCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Durée maximale 60s • Qualité minimale 480×360',
+              VideoUiStrings.uploadConstraintsHint,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     fontSize: 13,
@@ -282,7 +281,7 @@ class _BodyCard extends StatelessWidget {
                 label: const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text(
-                    'Choisir depuis la galerie',
+                    VideoUiStrings.chooseFromGallery,
                     style: TextStyle(
                         fontSize: 16,
                         color: Colors.white,
@@ -306,11 +305,18 @@ class _BodyCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _TipChip(icon: Icons.timer_rounded, label: '≤ 60 secondes'),
-                _TipChip(icon: Icons.hd_rounded, label: '≥ 480×360'),
                 _TipChip(
-                    icon: Icons.data_saver_on_rounded,
-                    label: 'Optimisation auto'),
+                  icon: Icons.timer_rounded,
+                  label: VideoUiStrings.maxDurationChip,
+                ),
+                _TipChip(
+                  icon: Icons.hd_rounded,
+                  label: VideoUiStrings.minQualityChip,
+                ),
+                _TipChip(
+                  icon: Icons.data_saver_on_rounded,
+                  label: VideoUiStrings.autoOptimizationChip,
+                ),
               ],
             ),
           ],
@@ -361,29 +367,39 @@ class _ProgressOverlay extends StatelessWidget {
     final optimizing = controller.isOptimizing.value;
     final progress = controller.uploadProgress.value;
     final hasValue = progress > 0 && progress <= 1;
+    final stage = controller.uploadStage.value;
 
     String title;
     String subtitle = '';
+    IconData icon;
     Widget progressWidget;
 
     if (waiting) {
-      title = 'Chargement…';
+      title = VideoUiStrings.overlayLoading;
+      subtitle = VideoUiStrings.overlayWaiting;
+      icon = Icons.hourglass_top_rounded;
       progressWidget =
           const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
     } else if (optimizing) {
-      title = 'Optimisation en cours…';
+      title = VideoUiStrings.uploadOptimizationTitle;
+      subtitle = VideoUiStrings.uploadOptimizationSubtitle;
+      icon = Icons.auto_awesome_rounded;
       progressWidget =
           const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
     } else if (uploading) {
-      title = 'Téléversement en cours';
-      subtitle = '${(progress * 100).toInt()}%';
+      title = VideoUiStrings.uploadProgressTitle;
+      subtitle =
+          stage.isNotEmpty ? stage : VideoUiStrings.uploadProgressSubtitle;
+      icon = Icons.cloud_upload_rounded;
       progressWidget = CircularProgressIndicator(
         strokeWidth: 3,
         color: Colors.white,
         value: hasValue ? progress : null,
       );
     } else {
-      title = 'Veuillez patienter…';
+      title = VideoUiStrings.overlayWaiting;
+      subtitle = VideoUiStrings.uploadProgressSubtitle;
+      icon = Icons.sync_rounded;
       progressWidget =
           const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
     }
@@ -406,7 +422,25 @@ class _ProgressOverlay extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  progressWidget,
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 58,
+                        height: 58,
+                        child: progressWidget,
+                      ),
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: AdColors.brand.withValues(alpha: .18),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(icon, color: Colors.white, size: 22),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 14),
                   Text(
                     title,
@@ -415,7 +449,6 @@ class _ProgressOverlay extends StatelessWidget {
                       color: Colors.white,
                       fontSize: 16.5,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: .2,
                     ),
                   ),
                   if (subtitle.isNotEmpty) ...[
@@ -430,6 +463,15 @@ class _ProgressOverlay extends StatelessWidget {
                   ],
                   if (uploading && hasValue) ...[
                     const SizedBox(height: 14),
+                    Text(
+                      '${(progress.clamp(0.0, 1.0) * 100).toInt()}%',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: .95),
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
                     LinearProgressIndicator(
                       value: progress.clamp(0.0, 1.0),
                       minHeight: 6,

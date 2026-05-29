@@ -13,6 +13,8 @@ import '../models/video.dart';
 import '../config/app_environment.dart';
 import '../services/callable_auth_guard.dart';
 import '../services/feature_flag_service.dart';
+import '../services/video_observability_service.dart';
+import '../utils/video_ui_strings.dart';
 import '../widgets/video_manager.dart';
 import '../screens/success_toast.dart';
 import 'user_controller.dart';
@@ -105,6 +107,8 @@ class VideoController extends GetxController {
     region: AppEnvironmentConfig.functionsRegion,
   );
   final Connectivity _connectivity = Connectivity();
+  final VideoObservabilityService _observability =
+      VideoObservabilityService.instance;
 
   // ------------------------------------------------------------------
   // INTERNAL LOCKS
@@ -144,9 +148,8 @@ class VideoController extends GetxController {
     }
 
     await Get.find<UserController>().handleProtectedAccessDenied(
-      fallbackTitle: 'Accès indisponible',
-      fallbackMessage:
-          'Votre session a été fermée pour protéger votre compte. Veuillez vous reconnecter.',
+      fallbackTitle: VideoUiStrings.protectedAccessTitle,
+      fallbackMessage: VideoUiStrings.protectedAccessMessage,
     );
   }
 
@@ -154,7 +157,7 @@ class VideoController extends GetxController {
     return const ActionResponse(
       success: false,
       code: 'session_revoked',
-      message: 'Votre session a été fermée. Veuillez vous reconnecter.',
+      message: VideoUiStrings.sessionRevokedMessage,
       toast: ToastLevel.none,
     );
   }
@@ -163,7 +166,7 @@ class VideoController extends GetxController {
     return const ActionResponse(
       success: false,
       code: 'unauthenticated',
-      message: 'Session expirée. Reconnectez-vous puis réessayez.',
+      message: VideoUiStrings.authRequiredMessage,
       toast: ToastLevel.info,
       retriable: true,
     );
@@ -444,11 +447,15 @@ class VideoController extends GetxController {
   // ------------------------------------------------------------------
 
   Future<ActionResponse> likeVideo(String videoId, String userId) async {
-    final response = await _callAction(
+    var response = await _callAction(
       'likeVideo',
       {'videoId': videoId},
-      offlineMessage: 'Impossible de liker hors connexion.',
+      offlineMessage: VideoUiStrings.likeOffline,
     );
+
+    if (!response.success && response.code == 'unauthenticated') {
+      response = await _likeVideoWithFirestoreFallback(videoId, userId);
+    }
 
     if (response.success) {
       final liked = response.data?['liked'] == true;
@@ -471,7 +478,7 @@ class VideoController extends GetxController {
     var response = await _callAction(
       'reportVideo',
       {'videoId': videoId},
-      offlineMessage: 'Connexion requise pour signaler.',
+      offlineMessage: VideoUiStrings.reportOffline,
     );
 
     if (!response.success && response.code == 'unauthenticated') {
@@ -507,7 +514,7 @@ class VideoController extends GetxController {
     final response = await _callAction(
       'deleteVideo',
       {'videoId': videoId},
-      offlineMessage: 'Connexion requise pour supprimer cette vidéo.',
+      offlineMessage: VideoUiStrings.deleteOffline,
     );
 
     if (response.success) {
@@ -553,11 +560,15 @@ class VideoController extends GetxController {
   // ------------------------------------------------------------------
 
   Future<ActionResponse> partagerVideo(String videoId) async {
-    final response = await _callAction(
+    var response = await _callAction(
       'shareVideo',
       {'videoId': videoId},
-      offlineMessage: 'Connexion requise pour partager.',
+      offlineMessage: VideoUiStrings.shareOffline,
     );
+
+    if (!response.success && response.code == 'unauthenticated') {
+      response = await _shareVideoWithFirestoreFallback(videoId);
+    }
 
     final resolved = response.code == 'resource-exhausted'
         ? response.copyWith(toast: ToastLevel.info)
@@ -620,7 +631,7 @@ class VideoController extends GetxController {
       }
 
       return ActionResponse.failure(
-        message: e.message ?? 'Action impossible.',
+        message: e.message ?? VideoUiStrings.genericActionImpossible,
         code: e.code,
         retriable: e.code == 'unavailable',
       );
@@ -631,7 +642,7 @@ class VideoController extends GetxController {
       }
 
       return ActionResponse.failure(
-        message: 'Action impossible pour le moment.',
+        message: VideoUiStrings.genericActionRetry,
         retriable: true,
       );
     }
@@ -670,7 +681,7 @@ class VideoController extends GetxController {
         final snap = await tx.get(ref);
         if (!snap.exists) {
           return ActionResponse.failure(
-            message: 'Vidéo introuvable.',
+            message: VideoUiStrings.videoNotFound,
             code: 'not-found',
           );
         }
@@ -681,7 +692,7 @@ class VideoController extends GetxController {
 
         if (reports.contains(userId)) {
           return ActionResponse.failure(
-            message: 'Tu as déjà signalé cette vidéo.',
+            message: VideoUiStrings.videoAlreadyReported,
             code: 'already_reported',
             toast: ToastLevel.info,
           );
@@ -698,7 +709,7 @@ class VideoController extends GetxController {
         return ActionResponse(
           success: true,
           code: 'reported',
-          message: 'Signalement envoyé, merci !',
+          message: VideoUiStrings.reportSent,
           data: {'reportCount': nextReportCount},
         );
       });
@@ -708,13 +719,143 @@ class VideoController extends GetxController {
       }
 
       return ActionResponse.failure(
-        message: 'Signalement impossible pour le moment.',
+        message: VideoUiStrings.reportUnavailable,
         code: e.code,
         retriable: true,
       );
     } catch (_) {
       return ActionResponse.failure(
-        message: 'Signalement impossible pour le moment.',
+        message: VideoUiStrings.reportUnavailable,
+        retriable: true,
+      );
+    }
+  }
+
+  Future<ActionResponse> _likeVideoWithFirestoreFallback(
+    String videoId,
+    String userId,
+  ) async {
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser == null || authUser.uid != userId) {
+      return _authRequiredResponse();
+    }
+
+    try {
+      await authUser.getIdToken(true);
+
+      final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
+      return FirebaseFirestore.instance
+          .runTransaction<ActionResponse>((tx) async {
+        final snap = await tx.get(ref);
+        if (!snap.exists) {
+          return ActionResponse.failure(
+            message: VideoUiStrings.videoNotFound,
+            code: 'not-found',
+          );
+        }
+
+        final data = snap.data() ?? const <String, dynamic>{};
+        final likes = _asStringList(data['likes']);
+        final hasLiked = likes.contains(userId);
+        final liked = !hasLiked;
+
+        tx.update(ref, {
+          'likes': liked
+              ? FieldValue.arrayUnion([userId])
+              : FieldValue.arrayRemove([userId]),
+        });
+
+        return ActionResponse(
+          success: true,
+          code: 'like-toggled',
+          message:
+              liked ? VideoUiStrings.likeAdded : VideoUiStrings.likeRemoved,
+          data: {
+            'liked': liked,
+            'likes': liked
+                ? likes.length + 1
+                : (likes.isNotEmpty ? likes.length - 1 : 0),
+          },
+        );
+      });
+    } on FirebaseException catch (e) {
+      if (_isAuthAccessFailure(e)) {
+        return _authRequiredResponse();
+      }
+
+      if (e.code == 'permission-denied') {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+
+      return ActionResponse.failure(
+        message: VideoUiStrings.likeUnavailable,
+        code: e.code,
+        retriable: true,
+      );
+    } catch (_) {
+      return ActionResponse.failure(
+        message: VideoUiStrings.likeUnavailable,
+        retriable: true,
+      );
+    }
+  }
+
+  Future<ActionResponse> _shareVideoWithFirestoreFallback(
+    String videoId,
+  ) async {
+    final authUser = FirebaseAuth.instance.currentUser;
+    if (authUser == null) {
+      return _authRequiredResponse();
+    }
+
+    try {
+      await authUser.getIdToken(true);
+
+      final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
+      return FirebaseFirestore.instance
+          .runTransaction<ActionResponse>((tx) async {
+        final snap = await tx.get(ref);
+        if (!snap.exists) {
+          return ActionResponse.failure(
+            message: VideoUiStrings.videoNotFound,
+            code: 'not-found',
+          );
+        }
+
+        final data = snap.data() ?? const <String, dynamic>{};
+        final currentShareCount = _asInt(data['shareCount']) ?? 0;
+        final nextShareCount = currentShareCount + 1;
+
+        tx.update(ref, {
+          'shareCount': FieldValue.increment(1),
+        });
+
+        return ActionResponse(
+          success: true,
+          code: 'shared',
+          message: VideoUiStrings.shareRecorded,
+          data: {'shareCount': nextShareCount},
+        );
+      });
+    } on FirebaseException catch (e) {
+      if (_isAuthAccessFailure(e)) {
+        return _authRequiredResponse();
+      }
+
+      if (e.code == 'permission-denied') {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+
+      return ActionResponse.failure(
+        message: VideoUiStrings.shareUnavailable,
+        code: e.code,
+        retriable: true,
+      );
+    } catch (_) {
+      return ActionResponse.failure(
+        message: VideoUiStrings.shareUnavailable,
         retriable: true,
       );
     }
@@ -795,25 +936,16 @@ class VideoController extends GetxController {
     String? message,
     Map<String, dynamic>? extra,
   }) async {
-    try {
-      if (await _isOffline()) return;
-
-      final callable = _functions.httpsCallable(
-        'videoActionLog',
-        options: HttpsCallableOptions(
-          timeout: const Duration(seconds: 6),
-        ),
-      );
-
-      await CallableAuthGuard.call(callable, {
-        'action': action,
-        'videoId': videoId,
-        'code': code,
-        'message': message,
-        'extra': extra ?? {},
-        'platform': kIsWeb ? 'web' : 'mobile',
-      });
-    } catch (_) {}
+    await _observability.logActionFailure(
+      action: action,
+      videoId: videoId,
+      code: code,
+      message: message,
+      metadata: {
+        'contextKey': contextKey,
+        ...?extra,
+      },
+    );
   }
 
   Future<QuerySnapshot<Map<String, dynamic>>> _loadReadyVideosPage({
