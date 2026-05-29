@@ -58,6 +58,24 @@ function New-TinyMp4 {
   }
 }
 
+function New-TemporaryAuthSecret {
+  param(
+    [int]$ByteCount = 24
+  )
+
+  $bytes = New-Object byte[] $ByteCount
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $rng.GetBytes($bytes)
+  } finally {
+    $rng.Dispose()
+  }
+
+  $randomPart = [Convert]::ToBase64String($bytes).TrimEnd("=")
+  $randomPart = $randomPart.Replace("+", "A").Replace("/", "b")
+  return -join @($randomPart, "!", "A", "9")
+}
+
 function Wait-OptimizeLogBySession {
   param(
     [Parameter(Mandatory = $true)][string]$Project,
@@ -428,11 +446,11 @@ try {
     $result.auth.localId = [string]$signIn.localId
   } else {
     $email = "smoke.upload.$runTs.$suffix@example.com"
-    $password = "Tmp!$runTs`Ab9"
+    $authSecret = New-TemporaryAuthSecret
 
     $signUp = Invoke-JsonPost -Uri "https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=$ApiKey" -Body @{
       email = $email
-      password = $password
+      password = $authSecret
       returnSecureToken = $true
     }
 
