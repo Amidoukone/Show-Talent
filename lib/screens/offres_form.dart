@@ -1,12 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:uuid/uuid.dart';
 import 'package:adfoot/controller/offre_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:intl/intl.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
+import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+
+class OffreFormResult {
+  const OffreFormResult({
+    required this.title,
+    required this.message,
+    this.kind = 'success',
+  });
+
+  final String title;
+  final String message;
+  final String kind;
+
+  Map<String, String> toRouteArguments() {
+    return <String, String>{
+      'offerSystemNoticeTitle': title,
+      'offerSystemNoticeMessage': message,
+      'offerSystemNoticeKind': kind,
+    };
+  }
+}
 
 class OffreFormScreen extends StatefulWidget {
   const OffreFormScreen({super.key});
@@ -17,6 +41,10 @@ class OffreFormScreen extends StatefulWidget {
 
 /// Classe publique (évite l'erreur "private type in public API")
 class OffreFormScreenState extends State<OffreFormScreen> {
+  static const int _maxTitleLength = 120;
+  static const int _minDescriptionLength = 20;
+  static const int _maxDescriptionLength = 1200;
+
   final OffreController offreController = Get.find();
   final UserController userController = Get.find<UserController>();
   final _formKey = GlobalKey<FormState>();
@@ -31,15 +59,42 @@ class OffreFormScreenState extends State<OffreFormScreen> {
 
   DateTime? _dateDebut;
   DateTime? _dateFin;
+  late Map<TextEditingController, String> _initialTextValues;
+  DateTime? _initialDateDebut;
+  DateTime? _initialDateFin;
 
   late bool isEditing;
+  late final String _draftOfferId;
   Offre? editingOffre;
   bool _isSubmitting = false;
+  bool _hasCompletedSubmit = false;
+
+  bool get _submitLocked => _isSubmitting || _hasCompletedSubmit;
+  bool get _hasUnsavedChanges {
+    if (_hasCompletedSubmit) return false;
+    final textChanged = _initialTextValues.entries.any(
+      (entry) => entry.key.text.trim() != entry.value,
+    );
+    return textChanged ||
+        _dateDebut != _initialDateDebut ||
+        _dateFin != _initialDateFin;
+  }
+
+  Iterable<TextEditingController> get _textControllers sync* {
+    yield _titreController;
+    yield _descriptionController;
+    yield _localisationController;
+    yield _remunerationController;
+    yield _niveauController;
+    yield _posteController;
+    yield _pieceJointeController;
+  }
 
   @override
   void initState() {
     super.initState();
     isEditing = Get.arguments != null;
+    _draftOfferId = const Uuid().v4();
 
     if (isEditing) {
       editingOffre = Get.arguments as Offre;
@@ -53,131 +108,189 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       _posteController.text = editingOffre!.posteRecherche ?? '';
       _pieceJointeController.text = editingOffre!.pieceJointeUrl ?? '';
     }
+
+    _initialTextValues = <TextEditingController, String>{
+      for (final controller in _textControllers) controller: controller.text,
+    };
+    _initialDateDebut = _dateDebut;
+    _initialDateFin = _dateFin;
+    for (final controller in _textControllers) {
+      controller.addListener(_onTextChanged);
+    }
+  }
+
+  void _onTextChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      backgroundColor: cs.surface,
-      appBar: AppBar(
-        elevation: 0,
+    return PopScope<void>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        await _handleBackNavigation();
+      },
+      child: Scaffold(
         backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
-        title: Text(isEditing ? 'Modifier l’offre' : 'Nouvelle offre'),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: cs.onSurface),
-          onPressed: () => Get.back(),
+        appBar: AppBar(
+          elevation: 0,
+          backgroundColor: cs.surface,
+          foregroundColor: cs.onSurface,
+          title: Text(isEditing ? 'Modifier l’offre' : 'Nouvelle offre'),
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: cs.onSurface),
+            onPressed: _handleBackNavigation,
+          ),
         ),
-      ),
-      body: SingleChildScrollView(
-        child: Padding(
+        body: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Form(
             key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSectionTitle('Informations générales', cs),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _titreController,
-                  decoration: _buildInputDecoration(
-                    'Titre de l’offre',
-                    'Entrez le titre de l’offre',
-                    Icons.work_outline,
-                  ),
-                  validator: (value) => value == null || value.isEmpty
-                      ? 'Le titre est requis'
-                      : null,
-                ),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _descriptionController,
-                  maxLines: 5,
-                  decoration: _buildInputDecoration(
-                    'Description',
-                    'Décrivez l’offre en détail',
-                    Icons.description_outlined,
-                  ),
-                  validator: (value) => value == null || value.isEmpty
-                      ? 'La description est requise'
-                      : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _posteController,
-                  decoration: _buildInputDecoration(
-                    'Poste recherché',
-                    'Ex: Attaquant, Milieu',
-                    Icons.sports_soccer,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _niveauController,
-                  decoration: _buildInputDecoration(
-                    'Niveau / Section',
-                    'Ex: U19, Sénior, Pro',
-                    Icons.leaderboard_outlined,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _localisationController,
-                  decoration: _buildInputDecoration(
-                    'Localisation',
-                    'Ville, Pays ou région',
-                    Icons.place_outlined,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _remunerationController,
-                  decoration: _buildInputDecoration(
-                    'Rémunération (optionnel)',
-                    'Ex: 2k-3k €/mois',
-                    Icons.payments_outlined,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Période', cs),
-                const SizedBox(height: 16),
-                _buildDatePicker(
-                  'Date de début',
-                  _dateDebut,
-                  (picked) => setState(() => _dateDebut = picked),
-                  isStart: true,
-                ),
-                const SizedBox(height: 16),
-                _buildDatePicker(
-                  'Date de fin',
-                  _dateFin,
-                  (picked) => setState(() => _dateFin = picked),
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: _isSubmitting ? null : _submitForm,
-                    child: _isSubmitting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(
-                            isEditing ? 'Mettre à jour' : 'Publier l’offre',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildFormSection(
+                      title: 'Résumé',
+                      children: [
+                        TextFormField(
+                          controller: _titreController,
+                          maxLength: _maxTitleLength,
+                          textInputAction: TextInputAction.next,
+                          decoration: _buildInputDecoration(
+                            'Titre de l’offre',
+                            'Ex: Recherche latéral droit U19',
+                            Icons.work_outline,
                           ),
-                  ),
+                          validator: _validateTitle,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _descriptionController,
+                          maxLength: _maxDescriptionLength,
+                          minLines: 5,
+                          maxLines: 8,
+                          decoration: _buildInputDecoration(
+                            'Description',
+                            'Profil, contexte, attentes et prochaines étapes',
+                            Icons.description_outlined,
+                          ),
+                          validator: _validateDescription,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildFormSection(
+                      title: 'Profil recherché',
+                      children: [
+                        TextFormField(
+                          controller: _posteController,
+                          textInputAction: TextInputAction.next,
+                          decoration: _buildInputDecoration(
+                            'Poste recherché',
+                            'Ex: Attaquant, milieu relayeur',
+                            Icons.sports_soccer,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _niveauController,
+                          textInputAction: TextInputAction.next,
+                          decoration: _buildInputDecoration(
+                            'Niveau / Section',
+                            'Ex: U19, Sénior, Pro',
+                            Icons.leaderboard_outlined,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _localisationController,
+                          textInputAction: TextInputAction.next,
+                          decoration: _buildInputDecoration(
+                            'Localisation',
+                            'Ville, pays ou région',
+                            Icons.place_outlined,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildFormSection(
+                      title: 'Conditions',
+                      children: [
+                        TextFormField(
+                          controller: _remunerationController,
+                          textInputAction: TextInputAction.next,
+                          decoration: _buildInputDecoration(
+                            'Rémunération (optionnel)',
+                            'Ex: 2k-3k €/mois',
+                            Icons.payments_outlined,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _pieceJointeController,
+                          keyboardType: TextInputType.url,
+                          textInputAction: TextInputAction.done,
+                          decoration: _buildInputDecoration(
+                            'Lien document (optionnel)',
+                            'URL vers une fiche, un règlement ou un brief',
+                            Icons.attach_file_outlined,
+                          ),
+                          validator: _validateOptionalUrl,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildFormSection(
+                      title: 'Période',
+                      children: [
+                        _buildDatePicker(
+                          'Date de début',
+                          _dateDebut,
+                          _setStartDate,
+                          isStart: true,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildDatePicker(
+                          'Date de fin',
+                          _dateFin,
+                          _setEndDate,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: _submitLocked ? null : _submitForm,
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Text(
+                                isEditing ? 'Mettre à jour' : 'Publier l’offre',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -200,6 +313,29 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     );
   }
 
+  Widget _buildFormSection({
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AdSpacing.md),
+      decoration: BoxDecoration(
+        color: AdColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(AdRadius.lg),
+        border: Border.all(color: AdColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionTitle(title, Theme.of(context).colorScheme),
+          const SizedBox(height: 16),
+          ...children,
+        ],
+      ),
+    );
+  }
+
   InputDecoration _buildInputDecoration(
     String label,
     String hint,
@@ -214,6 +350,81 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       labelStyle: const TextStyle(color: AdColors.onSurface),
       hintStyle: const TextStyle(color: AdColors.onSurfaceMuted),
     );
+  }
+
+  String? _validateTitle(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return 'Le titre est requis.';
+    }
+    if (normalized.length > _maxTitleLength) {
+      return 'Limitez le titre à $_maxTitleLength caractères.';
+    }
+    return null;
+  }
+
+  String? _validateDescription(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return 'La description est requise.';
+    }
+    if (normalized.length < _minDescriptionLength) {
+      return 'Ajoutez au moins $_minDescriptionLength caractères.';
+    }
+    if (normalized.length > _maxDescriptionLength) {
+      return 'Limitez la description à $_maxDescriptionLength caractères.';
+    }
+    return null;
+  }
+
+  String? _validateOptionalUrl(String? value) {
+    final normalized = value?.trim() ?? '';
+    if (normalized.isEmpty) return null;
+
+    final uri = Uri.tryParse(normalized);
+    if (uri == null || !uri.hasScheme || uri.host.trim().isEmpty) {
+      return 'Entrez une URL valide.';
+    }
+    if (uri.scheme != 'https' && uri.scheme != 'http') {
+      return 'Utilisez une URL commençant par http ou https.';
+    }
+    return null;
+  }
+
+  void _setStartDate(DateTime picked) {
+    setState(() {
+      _dateDebut = picked;
+      if (_dateFin != null && _dateFin!.isBefore(picked)) {
+        _dateFin = null;
+      }
+    });
+  }
+
+  void _setEndDate(DateTime picked) {
+    setState(() => _dateFin = picked);
+  }
+
+  Future<void> _handleBackNavigation() async {
+    if (_isSubmitting) {
+      return;
+    }
+
+    if (!_hasUnsavedChanges) {
+      Get.back();
+      return;
+    }
+
+    final discard = await AdDialogs.confirm(
+      context: context,
+      title: 'Quitter sans enregistrer ?',
+      message: 'Les modifications de cette offre ne seront pas conservées.',
+      confirmLabel: 'Quitter',
+      cancelLabel: 'Continuer',
+      danger: true,
+    );
+    if (discard && mounted) {
+      Get.back();
+    }
   }
 
   Widget _buildDatePicker(
@@ -314,7 +525,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   // =========================================================
 
   Future<void> _submitForm() async {
-    if (_isSubmitting) return;
+    if (_submitLocked) return;
 
     if (!_formKey.currentState!.validate() ||
         _dateDebut == null ||
@@ -345,18 +556,12 @@ class OffreFormScreenState extends State<OffreFormScreen> {
 
     final titre = _titreController.text.trim();
     final description = _descriptionController.text.trim();
-    if (titre.isEmpty || description.isEmpty) {
+    final titleValidation = _validateTitle(titre);
+    final descriptionValidation = _validateDescription(description);
+    if (titleValidation != null || descriptionValidation != null) {
       AdFeedback.error(
         'Erreur',
-        'Le titre et la description sont obligatoires.',
-      );
-      return;
-    }
-
-    if (titre.length > 120) {
-      AdFeedback.warning(
-        'Titre trop long',
-        'Limitez le titre à 120 caractères.',
+        titleValidation ?? descriptionValidation!,
       );
       return;
     }
@@ -364,7 +569,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     setState(() => _isSubmitting = true);
 
     final offre = Offre(
-      id: isEditing ? editingOffre!.id : DateTime.now().toIso8601String(),
+      id: isEditing ? editingOffre!.id : _draftOfferId,
       titre: titre,
       description: description,
       dateDebut: _dateDebut!,
@@ -411,21 +616,48 @@ class OffreFormScreenState extends State<OffreFormScreen> {
         return;
       }
 
-      AdFeedback.success(
-        'Succès',
-        response.message,
-      );
-
-      Get.back(result: true);
-    } finally {
       if (mounted) {
+        setState(() => _hasCompletedSubmit = true);
+      } else {
+        _hasCompletedSubmit = true;
+      }
+
+      _navigateAfterSuccessfulSubmit(response.message);
+    } finally {
+      if (mounted && !_hasCompletedSubmit) {
         setState(() => _isSubmitting = false);
       }
     }
   }
 
+  void _navigateAfterSuccessfulSubmit(String message) {
+    if (Get.isSnackbarOpen) {
+      Get.closeCurrentSnackbar();
+    }
+
+    final result = OffreFormResult(
+      title: isEditing ? 'Offre mise à jour' : 'Offre publiée',
+      message: message,
+    );
+    final navigator = Get.key.currentState;
+    if (navigator?.canPop() ?? false) {
+      Get.back(result: result);
+    } else {
+      Get.offAllNamed(
+        AppRoutes.main,
+        arguments: <String, dynamic>{
+          'tab': 1,
+          ...result.toRouteArguments(),
+        },
+      );
+    }
+  }
+
   @override
   void dispose() {
+    for (final controller in _textControllers) {
+      controller.removeListener(_onTextChanged);
+    }
     _titreController.dispose();
     _descriptionController.dispose();
     _localisationController.dispose();

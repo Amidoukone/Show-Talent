@@ -13,9 +13,12 @@ import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
+import 'package:adfoot/widgets/ad_system_notice.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+
+import 'package:adfoot/theme/ad_tokens.dart';
 
 class EventListScreen extends StatefulWidget {
   const EventListScreen({super.key});
@@ -33,8 +36,10 @@ class _EventListScreenState extends State<EventListScreen> {
   String _selectedStatus = 'tous';
   String _selectedVisibility = 'tous';
   bool _onlyUpcoming = false;
+  bool _onlyMine = false;
 
-  final Map<String, bool> _pendingInscription = {};
+  final Set<String> _pendingEventActions = <String>{};
+  AdSystemNoticeData? _systemNotice;
 
   String _normalizeStatus(String rawStatus) {
     return Event.normalizeStatus(rawStatus);
@@ -81,15 +86,24 @@ class _EventListScreenState extends State<EventListScreen> {
           return _buildSkeletons();
         }
 
-        final events = _filterEvents(allEvents);
+        final events = _filterEvents(allEvents, currentUser);
 
         if (allEvents.isEmpty) {
-          return _buildEmptyState(currentUser, filteredOut: false);
+          return Column(
+            children: [
+              _buildSystemNoticeSlot(),
+              Expanded(
+                child: _buildEmptyState(currentUser, filteredOut: false),
+              ),
+            ],
+          );
         }
 
         return Column(
           children: [
-            _buildFilters(),
+            _buildSystemNoticeSlot(),
+            _buildEventsOverview(allEvents, events, currentUser),
+            _buildFilters(currentUser),
             Expanded(
               child: events.isEmpty
                   ? _buildEmptyState(currentUser, filteredOut: true)
@@ -104,88 +118,110 @@ class _EventListScreenState extends State<EventListScreen> {
                         final isOrganisateur = organiser.uid == currentUser.uid;
 
                         return Card(
-                          elevation: 5,
+                          color: AdColors.surfaceCard,
+                          clipBehavior: Clip.antiAlias,
+                          elevation: 2,
                           margin: const EdgeInsets.symmetric(
                               vertical: 8, horizontal: 6),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
+                            side: const BorderSide(color: AdColors.divider),
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(14),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildOrganiserSection(organiser),
-                                const SizedBox(height: 12),
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            event.titre,
-                                            style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w800,
-                                              color: cs.onSurface,
+                          child: InkWell(
+                            onTap: () => _openEventDetails(event),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildOrganiserSection(organiser),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              event.titre,
+                                              style: TextStyle(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w800,
+                                                color: cs.onSurface,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            event.description,
-                                            maxLines: 3,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              color: AdColors.onSurfaceMuted,
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              event.description,
+                                              maxLines: 3,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                color: AdColors.onSurfaceMuted,
+                                                height: 1.35,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    _StatusBadge(status: event.statut),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                if (eventController.isLoading)
-                                  const Padding(
-                                    padding: EdgeInsets.only(bottom: 12),
-                                    child:
-                                        LinearProgressIndicator(minHeight: 2),
+                                      const SizedBox(width: 8),
+                                      _StatusBadge(status: event.statut),
+                                    ],
                                   ),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    _buildChip(
-                                      Icons.calendar_today,
-                                      '${DateFormat('dd MMM').format(event.dateDebut)} -> ${DateFormat('dd MMM').format(event.dateFin)}',
+                                  const SizedBox(height: 12),
+                                  if (eventController.isLoading)
+                                    const Padding(
+                                      padding: EdgeInsets.only(bottom: 12),
+                                      child:
+                                          LinearProgressIndicator(minHeight: 2),
                                     ),
-                                    _buildChip(
-                                        Icons.place_outlined, event.lieu),
-                                    _buildChip(
-                                      Icons.privacy_tip_outlined,
-                                      event.estPublic ? 'Public' : 'Privé',
-                                    ),
-                                    _buildChip(
-                                      Icons.group_outlined,
-                                      '${event.participants.length} participants',
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                _buildActions(
-                                  context: context,
-                                  event: event,
-                                  currentUser: currentUser,
-                                  isParticipant: isParticipant,
-                                  isOrganisateur: isOrganisateur,
-                                ),
-                              ],
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      _buildChip(
+                                        Icons.calendar_today,
+                                        '${DateFormat('dd MMM').format(event.dateDebut)} -> ${DateFormat('dd MMM').format(event.dateFin)}',
+                                      ),
+                                      _buildChip(
+                                          Icons.place_outlined, event.lieu),
+                                      _buildChip(
+                                        Icons.privacy_tip_outlined,
+                                        event.estPublic ? 'Public' : 'Privé',
+                                      ),
+                                      _buildChip(
+                                        Icons.group_outlined,
+                                        '${event.participants.length} participants',
+                                      ),
+                                      if (_isExpired(event))
+                                        _buildAlertChip(
+                                          Icons.timer_off_outlined,
+                                          'Terminé',
+                                          AdColors.error,
+                                        )
+                                      else if (_isUpcomingSoon(event))
+                                        _buildAlertChip(
+                                          Icons.schedule_rounded,
+                                          _eventTimingSummary(event),
+                                          AdColors.warning,
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildTimingRow(event),
+                                  const SizedBox(height: 16),
+                                  _buildActions(
+                                    context: context,
+                                    event: event,
+                                    currentUser: currentUser,
+                                    isParticipant: isParticipant,
+                                    isOrganisateur: isOrganisateur,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         );
@@ -205,16 +241,157 @@ class _EventListScreenState extends State<EventListScreen> {
       _selectedStatus = 'tous';
       _selectedVisibility = 'tous';
       _onlyUpcoming = false;
+      _onlyMine = false;
     });
   }
 
-  List<Event> _filterEvents(List<Event> source) {
+  bool get _hasActiveFilters {
+    return _searchController.text.trim().isNotEmpty ||
+        _selectedStatus != 'tous' ||
+        _selectedVisibility != 'tous' ||
+        _onlyUpcoming ||
+        _onlyMine;
+  }
+
+  Future<void> _openCreateEventForm() async {
+    final result = await Get.to(() => const EventFormScreen());
+    _handleEventFormResult(result);
+  }
+
+  Future<void> _openEditEventForm(Event event) async {
+    final result = await Get.to(() => EventFormScreen(event: event));
+    _handleEventFormResult(result);
+  }
+
+  Future<void> _openEventDetails(Event event) async {
+    final result = await Get.to(() => EventDetailsScreen(event: event));
+    _handleEventFormResult(result);
+  }
+
+  void _handleEventFormResult(Object? result) {
+    if (result == null || !mounted) return;
+
+    if (result is EventFormResult) {
+      _showSystemNotice(
+        title: result.title,
+        message: result.message,
+        tone: result.kind == 'info'
+            ? AdSystemNoticeTone.info
+            : AdSystemNoticeTone.success,
+      );
+      return;
+    }
+
+    if (result == true) {
+      _showSystemNotice(
+        title: 'Événement enregistré',
+        message: 'La liste des événements a été mise à jour.',
+      );
+    }
+  }
+
+  void _showSystemNotice({
+    required String title,
+    required String message,
+    AdSystemNoticeTone tone = AdSystemNoticeTone.success,
+  }) {
+    final resolvedTitle = title.trim();
+    final resolvedMessage = message.trim();
+    if (!mounted || resolvedMessage.isEmpty) return;
+
+    setState(() {
+      _systemNotice = AdSystemNoticeData(
+        title: resolvedTitle.isEmpty ? 'Action confirmée' : resolvedTitle,
+        message: resolvedMessage,
+        tone: tone,
+      );
+    });
+  }
+
+  void _dismissSystemNotice() {
+    if (!mounted || _systemNotice == null) return;
+    setState(() => _systemNotice = null);
+  }
+
+  String _eventActionKey(Event event, String action) => '${event.id}:$action';
+
+  bool _isEventActionPending(Event event, String action) {
+    return _pendingEventActions.contains(_eventActionKey(event, action));
+  }
+
+  Future<ActionResponse?> _runEventAction({
+    required Event event,
+    required String action,
+    required Future<ActionResponse> Function() task,
+  }) async {
+    final key = _eventActionKey(event, action);
+    if (_pendingEventActions.contains(key)) return null;
+
+    if (mounted) {
+      setState(() => _pendingEventActions.add(key));
+    } else {
+      _pendingEventActions.add(key);
+    }
+
+    try {
+      return await task();
+    } finally {
+      if (mounted) {
+        setState(() => _pendingEventActions.remove(key));
+      } else {
+        _pendingEventActions.remove(key);
+      }
+    }
+  }
+
+  DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  int _daysUntilStart(Event event) {
+    return _dateOnly(event.dateDebut)
+        .difference(_dateOnly(DateTime.now()))
+        .inDays;
+  }
+
+  int _daysUntilEnd(Event event) {
+    return _dateOnly(event.dateFin)
+        .difference(_dateOnly(DateTime.now()))
+        .inDays;
+  }
+
+  bool _isExpired(Event event) => _daysUntilEnd(event) < 0;
+
+  bool _isUpcomingSoon(Event event) {
+    final days = _daysUntilStart(event);
+    return days >= 0 && days <= 7;
+  }
+
+  bool _isOpenForRegistration(Event event) {
+    return !_isClosedStatus(event.statut) && !_isExpired(event);
+  }
+
+  String _eventTimingSummary(Event event) {
+    if (_isExpired(event)) return 'Terminé';
+    final daysUntilStart = _daysUntilStart(event);
+    if (daysUntilStart < 0) return 'En cours';
+    if (daysUntilStart == 0) return 'Aujourd’hui';
+    if (daysUntilStart == 1) return 'Demain';
+    if (daysUntilStart <= 7) return 'Dans $daysUntilStart jours';
+    return 'À venir';
+  }
+
+  List<Event> _filterEvents(List<Event> source, AppUser currentUser) {
     final query = _searchController.text.toLowerCase().trim();
 
     return source.where((event) {
       final matchesSearch = query.isEmpty ||
           event.titre.toLowerCase().contains(query) ||
-          event.lieu.toLowerCase().contains(query);
+          event.description.toLowerCase().contains(query) ||
+          event.lieu.toLowerCase().contains(query) ||
+          event.organisateur.nom.toLowerCase().contains(query) ||
+          event.organisateur.role.toLowerCase().contains(query) ||
+          (event.tags ?? const <String>[])
+              .any((tag) => tag.toLowerCase().contains(query));
 
       final matchesStatus = _selectedStatus == 'tous'
           ? true
@@ -228,11 +405,14 @@ class _EventListScreenState extends State<EventListScreen> {
 
       final matchesUpcoming =
           !_onlyUpcoming || event.dateFin.isAfter(DateTime.now());
+      final matchesMine =
+          !_onlyMine || event.organisateur.uid == currentUser.uid;
 
       return matchesSearch &&
           matchesStatus &&
           matchesVisibility &&
-          matchesUpcoming;
+          matchesUpcoming &&
+          matchesMine;
     }).toList()
       ..sort((a, b) => a.dateDebut.compareTo(b.dateDebut));
   }
@@ -288,6 +468,159 @@ class _EventListScreenState extends State<EventListScreen> {
     );
   }
 
+  Widget _buildSystemNoticeSlot() {
+    final notice = _systemNotice;
+
+    return AnimatedSwitcher(
+      duration: AdMotion.normal,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: notice == null
+          ? const SizedBox.shrink(key: ValueKey<String>('event-notice-empty'))
+          : Padding(
+              key: ValueKey<String>(
+                'event-notice-${notice.title}-${notice.message}',
+              ),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+              child: AdSystemNotice(
+                notice: notice,
+                onDismiss: _dismissSystemNotice,
+              ),
+            ),
+    );
+  }
+
+  Widget _buildEventsOverview(
+    List<Event> allEvents,
+    List<Event> filteredEvents,
+    AppUser currentUser,
+  ) {
+    final isPublisher = isOpportunityPublisherRole(currentUser.role);
+    final openCount =
+        allEvents.where((event) => _isOpenForRegistration(event)).length;
+    final soonCount = allEvents.where((event) => _isUpcomingSoon(event)).length;
+    final ownedEvents =
+        allEvents.where((event) => event.organisateur.uid == currentUser.uid);
+    final myParticipants = ownedEvents.fold<int>(
+      0,
+      (total, event) => total + event.participants.length,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      decoration: const BoxDecoration(
+        color: AdColors.surface,
+        border: Border(bottom: BorderSide(color: AdColors.divider)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AdColors.brand.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(AdRadius.md),
+                  border: Border.all(
+                    color: AdColors.brand.withValues(alpha: 0.25),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.event_available_outlined,
+                  color: AdColors.brand,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Événements',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: AdColors.onSurface,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      isPublisher
+                          ? 'Gérez vos événements et les inscriptions.'
+                          : 'Repérez les événements ouverts et à venir.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AdColors.onSurfaceMuted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _EventMetric(
+                icon: Icons.filter_list_rounded,
+                label: 'Affichés',
+                value: '${filteredEvents.length}/${allEvents.length}',
+              ),
+              _EventMetric(
+                icon: Icons.event_available_outlined,
+                label: 'Ouverts',
+                value: '$openCount',
+              ),
+              _EventMetric(
+                icon: Icons.schedule_rounded,
+                label: 'Bientôt',
+                value: '$soonCount',
+              ),
+              if (isPublisher)
+                _EventMetric(
+                  icon: Icons.mark_email_unread_outlined,
+                  label: 'Inscrits reçus',
+                  value: '$myParticipants',
+                ),
+            ],
+          ),
+          if (isPublisher) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => setState(() => _onlyMine = !_onlyMine),
+                  icon: Icon(
+                    _onlyMine
+                        ? Icons.public_rounded
+                        : Icons.manage_accounts_outlined,
+                  ),
+                  label: Text(
+                    _onlyMine ? 'Tous les événements' : 'Mes événements',
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    _openCreateEventForm();
+                  },
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Créer un événement'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptyState(
     AppUser currentUser, {
     required bool filteredOut,
@@ -320,7 +653,7 @@ class _EventListScreenState extends State<EventListScreen> {
               }
 
               if (isOrganizer) {
-                Get.to(() => const EventFormScreen());
+                _openCreateEventForm();
                 return;
               }
 
@@ -335,7 +668,7 @@ class _EventListScreenState extends State<EventListScreen> {
     );
   }
 
-  Widget _buildFilters() {
+  Widget _buildFilters(AppUser currentUser) {
     final cs = Theme.of(context).colorScheme;
 
     return Container(
@@ -352,9 +685,19 @@ class _EventListScreenState extends State<EventListScreen> {
             controller: _searchController,
             onChanged: (_) => setState(() {}),
             style: TextStyle(color: cs.onSurface),
-            decoration: const InputDecoration(
-              hintText: 'Rechercher (titre, lieu)...',
-              prefixIcon: Icon(Icons.search),
+            decoration: InputDecoration(
+              hintText: 'Rechercher titre, lieu, organisateur...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchController.text.trim().isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Effacer la recherche',
+                      icon: const Icon(Icons.close_rounded),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {});
+                      },
+                    ),
             ),
           ),
           const SizedBox(height: 8),
@@ -398,6 +741,20 @@ class _EventListScreenState extends State<EventListScreen> {
                   selected: _onlyUpcoming,
                   onTap: () => setState(() => _onlyUpcoming = !_onlyUpcoming),
                 ),
+                if (isOpportunityPublisherRole(currentUser.role)) ...[
+                  const SizedBox(width: 8),
+                  _FilterChip(
+                    label: 'Mes événements',
+                    selected: _onlyMine,
+                    onTap: () => setState(() => _onlyMine = !_onlyMine),
+                  ),
+                ],
+                if (_hasActiveFilters)
+                  TextButton.icon(
+                    onPressed: _resetFilters,
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    label: const Text('Réinitialiser'),
+                  ),
               ],
             ),
           ),
@@ -460,6 +817,51 @@ class _EventListScreenState extends State<EventListScreen> {
     );
   }
 
+  Widget _buildAlertChip(IconData icon, String label, Color color) {
+    return Chip(
+      avatar: Icon(icon, size: 16, color: color),
+      label: Text(
+        label,
+        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+      ),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide(color: color.withValues(alpha: 0.3)),
+    );
+  }
+
+  Widget _buildTimingRow(Event event) {
+    final expired = _isExpired(event);
+    final soon = _isUpcomingSoon(event);
+    final color = expired
+        ? AdColors.error
+        : soon
+            ? AdColors.warning
+            : AdColors.onSurfaceMuted;
+
+    return Row(
+      children: [
+        Icon(
+          expired ? Icons.timer_off_outlined : Icons.event,
+          size: 16,
+          color: color,
+        ),
+        const SizedBox(width: 4),
+        Expanded(
+          child: Text(
+            '${DateFormat('dd MMM yyyy').format(event.dateDebut)} -> ${DateFormat('dd MMM yyyy').format(event.dateFin)} · ${_eventTimingSummary(event)}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 14,
+              color: color,
+              fontWeight: expired || soon ? FontWeight.w700 : null,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildActions({
     required BuildContext context,
     required Event event,
@@ -467,10 +869,11 @@ class _EventListScreenState extends State<EventListScreen> {
     required bool isParticipant,
     required bool isOrganisateur,
   }) {
-    final isClosed =
-        _isClosedStatus(event.statut) || event.dateFin.isBefore(DateTime.now());
+    final isClosed = !_isOpenForRegistration(event);
     final isFull = _isFull(event);
-    final isBusy = _pendingInscription[event.id] == true;
+    final registerPending = _isEventActionPending(event, 'registration');
+    final statusPending = _isEventActionPending(event, 'status');
+    final deletePending = _isEventActionPending(event, 'delete');
 
     if (isOrganisateur) {
       final statusValue = _normalizeStatus(event.statut);
@@ -489,52 +892,76 @@ class _EventListScreenState extends State<EventListScreen> {
               DropdownMenuItem(value: 'ferme', child: Text('Fermé')),
               DropdownMenuItem(value: 'archive', child: Text('Archivé')),
             ],
-            onChanged: (value) async {
-              if (value == null) return;
+            onChanged: statusPending
+                ? null
+                : (value) async {
+                    if (value == null || value == statusValue) return;
 
-              final updated = Event(
-                id: event.id,
-                titre: event.titre,
-                description: event.description,
-                dateDebut: event.dateDebut,
-                dateFin: event.dateFin,
-                organisateur: event.organisateur,
-                participants: event.participants,
-                statut: value,
-                lieu: event.lieu,
-                estPublic: event.estPublic,
-                createdAt: event.createdAt,
-                capaciteMax: event.capaciteMax,
-                tags: event.tags,
-                streamingUrl: event.streamingUrl,
-                flyerUrl: event.flyerUrl,
-                views: event.views,
-                archivedAt:
-                    value == 'archive' ? DateTime.now() : event.archivedAt,
-                lastUpdated: DateTime.now(),
-              );
+                    final updated = Event(
+                      id: event.id,
+                      titre: event.titre,
+                      description: event.description,
+                      dateDebut: event.dateDebut,
+                      dateFin: event.dateFin,
+                      organisateur: event.organisateur,
+                      participants: event.participants,
+                      statut: value,
+                      lieu: event.lieu,
+                      estPublic: event.estPublic,
+                      createdAt: event.createdAt,
+                      capaciteMax: event.capaciteMax,
+                      tags: event.tags,
+                      streamingUrl: event.streamingUrl,
+                      flyerUrl: event.flyerUrl,
+                      views: event.views,
+                      archivedAt: value == 'archive'
+                          ? DateTime.now()
+                          : event.archivedAt,
+                      lastUpdated: DateTime.now(),
+                    );
 
-              final response =
-                  await eventController.updateEvent(updated, currentUser);
-              _showResponse(response);
-            },
+                    final response = await _runEventAction(
+                      event: event,
+                      action: 'status',
+                      task: () => eventController.updateEvent(
+                        updated,
+                        currentUser,
+                      ),
+                    );
+                    if (response != null) {
+                      _showResponse(response,
+                          successTitle: 'Statut mis à jour');
+                    }
+                  },
           ),
+          if (statusPending)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           TextButton.icon(
-            onPressed: () => Get.to(() => EventFormScreen(event: event)),
+            onPressed: () => _openEditEventForm(event),
             icon: const Icon(Icons.edit_outlined),
             label: const Text('Modifier'),
           ),
           TextButton.icon(
-            onPressed: () => Get.to(() => EventDetailsScreen(event: event)),
+            onPressed: () => _openEventDetails(event),
             icon: const Icon(Icons.info_outline),
             label: const Text('Détails'),
           ),
-          TextButton(
-            onPressed: () => _confirmDeleteEvent(context, event),
-            child: const Text(
-              'Supprimer',
-              style: TextStyle(color: Colors.red),
-            ),
+          TextButton.icon(
+            onPressed: deletePending
+                ? null
+                : () => _confirmDeleteEvent(context, event),
+            icon: deletePending
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.delete_outline, color: Colors.red),
+            label: Text(deletePending ? 'Suppression...' : 'Supprimer'),
           ),
         ],
       );
@@ -546,27 +973,37 @@ class _EventListScreenState extends State<EventListScreen> {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         ElevatedButton.icon(
-          onPressed: (!isParticipant && !isClosed && !isFull && !isBusy)
-              ? () async {
-                  setState(() => _pendingInscription[event.id] = true);
-                  final response = await eventController.registerToEvent(
-                      event.id, currentUser);
-                  if (mounted) {
-                    setState(() => _pendingInscription[event.id] = false);
-                  }
-                  _showResponse(response);
-                }
-              : null,
+          onPressed:
+              (!isParticipant && !isClosed && !isFull && !registerPending)
+                  ? () async {
+                      final response = await _runEventAction(
+                        event: event,
+                        action: 'registration',
+                        task: () => eventController.registerToEvent(
+                          event.id,
+                          currentUser,
+                        ),
+                      );
+                      if (response != null) {
+                        _showResponse(
+                          response,
+                          successTitle: 'Inscription confirmée',
+                        );
+                      }
+                    }
+                  : null,
           icon: const Icon(Icons.event_available),
-          label: Text(isBusy
+          label: Text(registerPending
               ? 'Inscription...'
-              : isFull
-                  ? 'Complet'
-                  : 'S’inscrire'),
+              : isClosed
+                  ? 'Événement fermé'
+                  : isFull
+                      ? 'Complet'
+                      : 'S’inscrire'),
         ),
         if (isParticipant && !isClosed)
           OutlinedButton(
-            onPressed: isBusy
+            onPressed: registerPending
                 ? null
                 : () => _confirmUnregisterEvent(context, event, currentUser),
             child: const Text(
@@ -576,7 +1013,7 @@ class _EventListScreenState extends State<EventListScreen> {
           )
         else
           OutlinedButton(
-            onPressed: () => Get.to(() => EventDetailsScreen(event: event)),
+            onPressed: () => _openEventDetails(event),
             child: const Text('Détails'),
           ),
       ],
@@ -586,7 +1023,9 @@ class _EventListScreenState extends State<EventListScreen> {
   FloatingActionButton? _buildFloatingActionButton(AppUser? currentUser) {
     if (currentUser != null && isOpportunityPublisherRole(currentUser.role)) {
       return FloatingActionButton(
-        onPressed: () => Get.to(() => const EventFormScreen()),
+        onPressed: () {
+          _openCreateEventForm();
+        },
         backgroundColor: AdColors.brand,
         foregroundColor: AdColors.brandOn,
         child: const Icon(Icons.add),
@@ -596,6 +1035,8 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Future<void> _confirmDeleteEvent(BuildContext context, Event event) async {
+    if (_isEventActionPending(event, 'delete')) return;
+
     final confirmed = await AdDialogs.confirm(
       context: context,
       title: 'Supprimer',
@@ -612,8 +1053,14 @@ class _EventListScreenState extends State<EventListScreen> {
       return;
     }
 
-    final response = await eventController.deleteEvent(event.id, currentUser);
-    _showResponse(response);
+    final response = await _runEventAction(
+      event: event,
+      action: 'delete',
+      task: () => eventController.deleteEvent(event.id, currentUser),
+    );
+    if (response != null) {
+      _showResponse(response, successTitle: 'Événement supprimé');
+    }
   }
 
   Future<void> _confirmUnregisterEvent(
@@ -631,22 +1078,29 @@ class _EventListScreenState extends State<EventListScreen> {
     );
     if (!confirmed) return;
 
-    setState(() => _pendingInscription[event.id] = true);
-    final response =
-        await eventController.unregisterFromEvent(event.id, currentUser);
-    if (mounted) {
-      setState(() => _pendingInscription[event.id] = false);
+    final response = await _runEventAction(
+      event: event,
+      action: 'registration',
+      task: () => eventController.unregisterFromEvent(event.id, currentUser),
+    );
+    if (response != null) {
+      _showResponse(response, successTitle: 'Inscription retirée');
     }
-    _showResponse(response);
   }
 
-  void _showResponse(ActionResponse response) {
+  void _showResponse(
+    ActionResponse response, {
+    required String successTitle,
+  }) {
     if (response.toast == ToastLevel.none) {
       return;
     }
 
     if (response.success) {
-      AdFeedback.success('Succès', response.message);
+      _showSystemNotice(
+        title: successTitle,
+        message: response.message,
+      );
       return;
     }
 
@@ -656,6 +1110,55 @@ class _EventListScreenState extends State<EventListScreen> {
     }
 
     AdFeedback.error('Erreur', response.message);
+  }
+}
+
+class _EventMetric extends StatelessWidget {
+  const _EventMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 38),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AdColors.surfaceCard,
+        borderRadius: BorderRadius.circular(AdRadius.md),
+        border: Border.all(color: AdColors.divider),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: AdColors.brand),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AdColors.onSurface,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AdColors.onSurfaceMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

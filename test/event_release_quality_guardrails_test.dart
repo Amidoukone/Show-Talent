@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Event release quality guardrails', () {
-    test('event form awaits controller result before success feedback', () {
+    test('event form awaits controller result before system feedback', () {
       final form =
           File('lib/screens/event_form_screen.dart').readAsStringSync();
 
@@ -13,7 +13,29 @@ void main() {
       expect(form, contains('await eventController.createEvent'));
       expect(form, contains('if (!response.success)'));
       expect(form, contains('AdFeedback.error('));
-      expect(form, contains('AdFeedback.success('));
+      expect(form, isNot(contains('AdFeedback.success(')));
+      expect(form, contains('class EventFormResult'));
+      expect(form, contains('PopScope<void>'));
+      expect(form, contains('_handleBackNavigation()'));
+      expect(form, contains('AdDialogs.confirm('));
+      expect(form, contains('bool get _submitLocked'));
+      expect(form, contains('bool get _hasUnsavedChanges'));
+      expect(form, contains('id: _draftEventId'));
+      expect(form, contains('_completeSubmit(response.message)'));
+      expect(form, contains('_buildFormSection('));
+      expect(
+        form,
+        contains('constraints: const BoxConstraints(maxWidth: 720)'),
+      );
+      expect(form, contains('width: double.infinity'));
+      expect(form, contains('_setStartDate'));
+      expect(form, contains('_setEndDate'));
+      expect(form, contains("child: Text('Fermé')"));
+      expect(form, contains("child: Text('Archivé')"));
+      expect(form, contains('Publier l’événement'));
+      expect(form, contains('maxLength: _maxTitleLength'));
+      expect(form, contains('maxLength: _maxDescriptionLength'));
+      expect(form, contains('_validateOptionalUrl'));
     });
 
     test('event list reacts to action responses for register/unregister/delete',
@@ -21,21 +43,35 @@ void main() {
       final screen =
           File('lib/screens/event_list_screen.dart').readAsStringSync();
 
-      expect(screen, contains('await eventController.registerToEvent'));
-      expect(screen, contains('await eventController.unregisterFromEvent'));
-      expect(screen, contains('await eventController.deleteEvent'));
+      expect(screen, contains('await _runEventAction('));
+      expect(screen, contains('eventController.registerToEvent('));
+      expect(screen, contains('eventController.unregisterFromEvent('));
+      expect(screen, contains('eventController.deleteEvent('));
       expect(screen, contains('Event.normalizeStatus'));
-      expect(screen, contains('void _showResponse(ActionResponse response)'));
+      expect(screen, contains('void _showResponse('));
+      expect(screen, contains('required String successTitle'));
       expect(screen, contains('if (response.success)'));
+      expect(screen,
+          contains("import 'package:adfoot/widgets/ad_system_notice.dart';"));
+      expect(screen, contains('AdSystemNotice('));
+      expect(screen, contains('_pendingEventActions'));
+      expect(screen, contains('_isEventActionPending('));
+      expect(screen, contains('_isOpenForRegistration(Event event)'));
+      expect(screen, contains('_buildEventsOverview('));
+      expect(screen, contains('_onlyMine'));
+      expect(screen, contains('event.organisateur.nom.toLowerCase()'));
+      expect(screen, contains('Icons.mark_email_unread_outlined'));
+      expect(screen, contains('Créer un événement'));
       expect(screen, contains('return Wrap('));
       expect(
         screen,
         contains('_buildEmptyState(currentUser, filteredOut: true)'),
       );
       expect(screen, contains('_resetFilters()'));
-      expect(screen, contains('EventFormScreen(event: event)'));
+      expect(screen, contains('_openEditEventForm(event)'));
       expect(screen, contains('final isFull = _isFull(event);'));
       expect(screen, contains('S’inscrire'));
+      expect(screen, isNot(contains('AdFeedback.success(')));
       expect(screen, isNot(contains("const Text('Details')")));
     });
 
@@ -73,7 +109,7 @@ void main() {
       expect(details, contains('currentUser != null &&'));
       expect(details,
           contains('await Get.find<EventController>().fetchEvents();'));
-      expect(details, contains('Get.back(result: true);'));
+      expect(details, contains('Get.back(result: updated);'));
       expect(details, contains('current.uid == other.uid'));
       expect(details, contains('Aucun participant pour le moment.'));
       expect(details, isNot(contains('Get.find<UserController>().user!')));
