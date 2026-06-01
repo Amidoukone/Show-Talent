@@ -102,7 +102,10 @@ $requiredKeys = @(
   "MAX_CONCURRENT_VIDEO_UPLOADS",
   "MAX_OPTIMIZE_FILE_SIZE_BYTES",
   "UNVERIFIED_ACCOUNT_RETENTION_DAYS",
-  "UNVERIFIED_PURGE_EXCLUDE_MANAGED"
+  "UNVERIFIED_PURGE_EXCLUDE_MANAGED",
+  "VIDEO_SHARE_BASE_URL",
+  "ANDROID_PACKAGE_NAME",
+  "ANDROID_APP_DOWNLOAD_URL"
 )
 
 $booleanKeys = @(
@@ -166,6 +169,32 @@ if ($effective.ContainsKey("APP_ENV")) {
   $appEnvironment = [string]$effective["APP_ENV"]
   if ($allowedAppEnvironmentValues -notcontains $appEnvironment) {
     $errors.Add("Invalid APP_ENV value: $appEnvironment")
+  }
+}
+
+if ($effective.ContainsKey("VIDEO_SHARE_BASE_URL")) {
+  $shareBaseUrl = [string]$effective["VIDEO_SHARE_BASE_URL"]
+  $shareUri = $null
+  if (
+    -not [System.Uri]::TryCreate($shareBaseUrl, [System.UriKind]::Absolute, [ref]$shareUri) -or
+    $shareUri.Scheme -ne "https" -or
+    [string]::IsNullOrWhiteSpace($shareUri.Host)
+  ) {
+    $errors.Add("VIDEO_SHARE_BASE_URL must be an absolute HTTPS URL.")
+  }
+}
+
+if ($effective.ContainsKey("ANDROID_PACKAGE_NAME")) {
+  $androidPackageName = [string]$effective["ANDROID_PACKAGE_NAME"]
+  if ($androidPackageName -notmatch "^org\.adfoot\.app(\.(local|staging))?$") {
+    $errors.Add("ANDROID_PACKAGE_NAME has unexpected value: $androidPackageName")
+  }
+}
+
+if ($effective.ContainsKey("ANDROID_APP_DOWNLOAD_URL")) {
+  $downloadUrl = [string]$effective["ANDROID_APP_DOWNLOAD_URL"]
+  if ($downloadUrl -notmatch "^/download/android/?$" -and $downloadUrl -notmatch "^https://") {
+    $errors.Add("ANDROID_APP_DOWNLOAD_URL must be /download/android/ or an absolute HTTPS URL.")
   }
 }
 

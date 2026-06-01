@@ -349,7 +349,7 @@ async function validateThumbnail(
 async function validateVideoUpload(path: string): Promise<void> {
   const file = storage.bucket().file(path);
   const [exists] = await file.exists();
-  if (!exists) throw new HttpsError("not-found", "Video introuvable.");
+  if (!exists) throw new HttpsError("not-found", "Vidéo introuvable.");
 
   const [meta] = await file.getMetadata();
   const actualSize = Number(meta.size ?? 0);
@@ -359,11 +359,11 @@ async function validateVideoUpload(path: string): Promise<void> {
       "";
 
   if (!Number.isFinite(actualSize) || actualSize <= 0) {
-    throw new HttpsError("failed-precondition", "Fichier video vide.");
+    throw new HttpsError("failed-precondition", "Fichier vidéo vide.");
   }
 
   if (!actualContentType.startsWith("video/mp4")) {
-    throw new HttpsError("failed-precondition", "Type video invalide.");
+    throw new HttpsError("failed-precondition", "Type vidéo invalide.");
   }
 }
 

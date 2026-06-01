@@ -23,6 +23,8 @@ class VideoStateOverlay extends StatelessWidget {
 
   static const String loadingMessage = VideoUiStrings.loadingMessage;
   static const String slowLoadingMessage = VideoUiStrings.slowLoadingMessage;
+  static const String slowLoadingDetail = VideoUiStrings.slowLoadingDetail;
+  static const String errorTitle = VideoUiStrings.playbackErrorTitle;
   static const String errorMessage = VideoUiStrings.playbackUnavailable;
   static const String retryLabel = VideoUiStrings.retry;
 
@@ -42,6 +44,10 @@ class VideoStateOverlay extends StatelessWidget {
   }
 
   Widget _buildLoading() {
+    final resolvedMessage =
+        message.trim().isEmpty ? loadingMessage : message.trim();
+    final isSlowLoading = resolvedMessage == slowLoadingMessage;
+
     return Center(
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -75,15 +81,31 @@ class VideoStateOverlay extends StatelessWidget {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 260),
                 child: Text(
-                  message.trim().isEmpty ? loadingMessage : message.trim(),
+                  resolvedMessage,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
+              if (isSlowLoading) ...[
+                const SizedBox(height: 6),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  child: Text(
+                    slowLoadingDetail,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.76),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      height: 1.25,
+                    ),
+                  ),
+                ),
+              ],
               if (showRetry && onRetry != null) ...[
                 const SizedBox(height: 8),
                 TextButton.icon(
@@ -105,45 +127,89 @@ class VideoStateOverlay extends StatelessWidget {
   }
 
   Widget _buildError() {
-    final resolvedMessage =
-        message.trim().isEmpty ? errorMessage : message.trim();
+    final resolvedMessage = _publicErrorMessage(message);
 
     return Container(
-      color: Colors.black.withValues(alpha: 0.48),
+      color: Colors.black.withValues(alpha: 0.54),
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.play_disabled_rounded,
-            size: 46,
-            color: AdColors.brand,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.56),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.14),
           ),
-          const SizedBox(height: 12),
-          Text(
-            resolvedMessage,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.play_disabled_rounded,
+                  size: 44,
+                  color: AdColors.brand,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  errorTitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  resolvedMessage,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.82),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    height: 1.25,
+                  ),
+                ),
+                if (onRetry != null) ...[
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text(retryLabel),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AdColors.brand,
+                      foregroundColor: AdColors.brandOn,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (onRetry != null) ...[
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-              label: const Text(retryLabel),
-              style: FilledButton.styleFrom(
-                backgroundColor: AdColors.brand,
-                foregroundColor: AdColors.brandOn,
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
+  }
+
+  String _publicErrorMessage(String rawMessage) {
+    final candidate = rawMessage.trim();
+    if (candidate.isEmpty) {
+      return errorMessage;
+    }
+
+    final lower = candidate.toLowerCase();
+    final looksTechnical = candidate.length > 92 ||
+        lower.contains('exception') ||
+        lower.contains('http://') ||
+        lower.contains('https://') ||
+        lower.contains('firebase') ||
+        lower.contains('video_player') ||
+        lower.contains('source error') ||
+        lower.contains('error code');
+
+    return looksTechnical ? errorMessage : candidate;
   }
 }

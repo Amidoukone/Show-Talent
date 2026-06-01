@@ -17,5 +17,10 @@ void main() {
       AppEnvironmentConfig.emailLinkAllowedHosts,
       contains('${AppEnvironmentConfig.firebaseProjectId}.web.app'),
     );
+    expect(
+      AppEnvironmentConfig.videoShareBaseUri.toString(),
+      'https://adfoot.org',
+    );
+    expect(AppEnvironmentConfig.videoShareAllowedHosts, contains('adfoot.org'));
   });
 }

@@ -101,7 +101,8 @@ void main() {
 
     expect(find.byTooltip(VideoUiStrings.unlikeVideo), findsOneWidget);
     expect(find.byTooltip(VideoUiStrings.shareVideo), findsOneWidget);
-    expect(find.byTooltip(VideoUiStrings.addVideoSemantic), findsOneWidget);
+    expect(find.byTooltip(VideoUiStrings.moreVideoActionsSemantic),
+        findsOneWidget);
     expect(find.byTooltip(VideoUiStrings.followingProfile), findsWidgets);
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
     expect(find.text('1.3k'), findsOneWidget);
@@ -114,6 +115,12 @@ void main() {
     expect(likes, 1);
     expect(shares, 1);
     expect(openedProfile, 1);
+
+    await tester.tap(find.byTooltip(VideoUiStrings.moreVideoActionsSemantic));
+    await tester.pumpAndSettle();
+
+    expect(find.text(VideoUiStrings.addVideoSemantic), findsOneWidget);
+    expect(find.text(VideoUiStrings.reportVideoSemantic), findsOneWidget);
   });
 
   testWidgets('follow badge calls the follow action when available',

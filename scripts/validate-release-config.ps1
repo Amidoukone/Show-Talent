@@ -95,6 +95,9 @@ function Get-ExpectedFunctionsPolicy {
                 "MAX_OPTIMIZE_FILE_SIZE_BYTES" = "62914560"
                 "UNVERIFIED_ACCOUNT_RETENTION_DAYS" = "3"
                 "UNVERIFIED_PURGE_EXCLUDE_MANAGED" = "true"
+                "VIDEO_SHARE_BASE_URL" = "https://adfoot-staging.firebaseapp.com"
+                "ANDROID_PACKAGE_NAME" = "org.adfoot.app.local"
+                "ANDROID_APP_DOWNLOAD_URL" = "/download/android/"
             }
         }
         "staging" {
@@ -108,6 +111,9 @@ function Get-ExpectedFunctionsPolicy {
                 "MAX_OPTIMIZE_FILE_SIZE_BYTES" = "62914560"
                 "UNVERIFIED_ACCOUNT_RETENTION_DAYS" = "3"
                 "UNVERIFIED_PURGE_EXCLUDE_MANAGED" = "true"
+                "VIDEO_SHARE_BASE_URL" = "https://adfoot-staging.firebaseapp.com"
+                "ANDROID_PACKAGE_NAME" = "org.adfoot.app.staging"
+                "ANDROID_APP_DOWNLOAD_URL" = "/download/android/"
             }
         }
         "production-next" {
@@ -121,6 +127,9 @@ function Get-ExpectedFunctionsPolicy {
                 "MAX_OPTIMIZE_FILE_SIZE_BYTES" = "125829120"
                 "UNVERIFIED_ACCOUNT_RETENTION_DAYS" = "3"
                 "UNVERIFIED_PURGE_EXCLUDE_MANAGED" = "true"
+                "VIDEO_SHARE_BASE_URL" = "https://adfoot.org"
+                "ANDROID_PACKAGE_NAME" = "org.adfoot.app"
+                "ANDROID_APP_DOWNLOAD_URL" = "/download/android/"
             }
         }
         default {
@@ -134,6 +143,9 @@ function Get-ExpectedFunctionsPolicy {
                 "MAX_OPTIMIZE_FILE_SIZE_BYTES" = "125829120"
                 "UNVERIFIED_ACCOUNT_RETENTION_DAYS" = "3"
                 "UNVERIFIED_PURGE_EXCLUDE_MANAGED" = "true"
+                "VIDEO_SHARE_BASE_URL" = "https://adfoot.org"
+                "ANDROID_PACKAGE_NAME" = "org.adfoot.app"
+                "ANDROID_APP_DOWNLOAD_URL" = "/download/android/"
             }
         }
     }

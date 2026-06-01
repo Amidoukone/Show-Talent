@@ -51,6 +51,10 @@ class AppEnvironmentConfig {
     'EMAIL_LINK_CUSTOM_HOST',
     defaultValue: '',
   );
+  static const String _videoShareBaseUrl = String.fromEnvironment(
+    'VIDEO_SHARE_BASE_URL',
+    defaultValue: 'https://adfoot.org',
+  );
   static const String _extraEmailAllowedHosts =
       String.fromEnvironment('EMAIL_LINK_ALLOWED_HOSTS');
   static const String _firebaseProjectId =
@@ -152,6 +156,32 @@ class AppEnvironmentConfig {
 
   static String get emailActionContinueHost =>
       _customEmailActionHost.trim().toLowerCase();
+
+  static Uri get videoShareBaseUri {
+    final raw = _videoShareBaseUrl.trim();
+    final parsed = Uri.tryParse(raw);
+
+    if (parsed != null &&
+        parsed.scheme == 'https' &&
+        parsed.host.trim().isNotEmpty) {
+      return parsed.replace(
+        path: parsed.path == '/' ? '' : parsed.path,
+        queryParameters: null,
+        fragment: null,
+      );
+    }
+
+    return Uri.parse('https://adfoot.org');
+  }
+
+  static Set<String> get videoShareAllowedHosts {
+    final host = videoShareBaseUri.host.toLowerCase();
+    return <String>{
+      host,
+      'adfoot.org',
+      'www.adfoot.org',
+    }..removeWhere((entry) => entry.trim().isEmpty);
+  }
 
   static Uri? buildEmailActionUri({String path = '/account/verify'}) {
     final host = emailActionContinueHost;

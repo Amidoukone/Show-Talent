@@ -224,6 +224,24 @@
     ],
     "rewrites": [
       {
+        "source": "/download/android",
+        "destination": "/download/android/index.html"
+      },
+      {
+        "source": "/v",
+        "function": {
+          "functionId": "videoSharePage",
+          "region": "europe-west1"
+        }
+      },
+      {
+        "source": "/v/**",
+        "function": {
+          "functionId": "videoSharePage",
+          "region": "europe-west1"
+        }
+      },
+      {
         "source": "/verify",
         "destination": "/verify/index.html"
       },

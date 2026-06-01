@@ -30,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _sessionNoticeTitle;
   String? _sessionNoticeMessage;
   String _sessionNoticeKind = 'error';
+  Map<String, dynamic>? _postLoginRouteArguments;
 
   bool get _isBusy => _isLoading || _isResettingPassword;
 
@@ -76,7 +77,12 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       final userController = Get.find<UserController>();
-      await userController.applyResolvedSessionSnapshot(snapshot).timeout(
+      await userController
+          .applyResolvedSessionSnapshot(
+            snapshot,
+            routeArguments: _postLoginRouteArguments,
+          )
+          .timeout(
             const Duration(seconds: 12),
             onTimeout: () => userController.kickstart(),
           );
@@ -157,6 +163,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final args = Get.arguments;
     if (args is Map) {
+      _postLoginRouteArguments = _extractPostLoginRouteArguments(args);
+
       final prefillEmail = args['prefillEmail']?.toString().trim();
       if (prefillEmail != null && prefillEmail.isNotEmpty) {
         _emailController.text = prefillEmail;
@@ -192,6 +200,28 @@ class _LoginScreenState extends State<LoginScreen> {
     _sessionNoticeMessage = message;
     _sessionNoticeKind =
         notice['sessionNoticeKind']?.trim().toLowerCase() ?? 'error';
+  }
+
+  Map<String, dynamic>? _extractPostLoginRouteArguments(
+      Map<dynamic, dynamic> args) {
+    final videoId = args['videoId']?.toString().trim();
+    final focusVideoId = args['focusVideoId']?.toString().trim();
+    final hasVideoTarget = (videoId != null && videoId.isNotEmpty) ||
+        (focusVideoId != null && focusVideoId.isNotEmpty);
+
+    if (!hasVideoTarget) {
+      return null;
+    }
+
+    return <String, dynamic>{
+      'tab': args['tab'] is int ? args['tab'] : 0,
+      'refresh': args['refresh'] == true,
+      if (videoId != null && videoId.isNotEmpty) 'videoId': videoId,
+      if (focusVideoId != null && focusVideoId.isNotEmpty)
+        'focusVideoId': focusVideoId,
+      'autoplay': args['autoplay'] != false,
+      if (args['source'] != null) 'source': args['source'].toString(),
+    };
   }
 
   void _showErrorSnackbar(

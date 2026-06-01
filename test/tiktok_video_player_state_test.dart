@@ -1,3 +1,4 @@
+import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/tiktok_video_player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,16 +43,17 @@ void main() {
     await tester.pumpWidget(
       host(
         player(
-          errorMessage: 'Lecture vidéo indisponible.',
+          errorMessage: VideoUiStrings.playbackUnavailable,
           onRetry: () => retried = true,
         ),
       ),
     );
 
-    expect(find.text('Lecture vidéo indisponible.'), findsOneWidget);
-    expect(find.text('Réessayer'), findsOneWidget);
+    expect(find.text(VideoUiStrings.playbackErrorTitle), findsOneWidget);
+    expect(find.text(VideoUiStrings.playbackUnavailable), findsOneWidget);
+    expect(find.text(VideoUiStrings.retry), findsOneWidget);
 
-    await tester.tap(find.text('Réessayer'));
+    await tester.tap(find.text(VideoUiStrings.retry));
     expect(retried, isTrue);
   });
 
@@ -59,7 +61,7 @@ void main() {
     await tester.pumpWidget(host(player(isLoading: true)));
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    expect(find.text('Chargement de la vidéo...'), findsOneWidget);
-    expect(find.text('Réessayer'), findsNothing);
+    expect(find.text(VideoUiStrings.loadingMessage), findsOneWidget);
+    expect(find.text(VideoUiStrings.retry), findsNothing);
   });
 }

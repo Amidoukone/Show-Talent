@@ -547,7 +547,7 @@ export const resendManagedAccountInvite = onCall(
     if (!email) {
       throw new HttpsError(
         "failed-precondition",
-        "Le compte cible ne contient pas d email exploitable.",
+        "Le compte cible ne contient pas d’e-mail exploitable.",
       );
     }
 

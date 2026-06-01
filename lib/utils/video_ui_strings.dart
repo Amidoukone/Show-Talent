@@ -3,6 +3,9 @@ class VideoUiStrings {
 
   static const String loadingMessage = 'Chargement de la vid\u00e9o...';
   static const String slowLoadingMessage = 'Connexion lente...';
+  static const String slowLoadingDetail =
+      'La vid\u00e9o continue de charger. R\u00e9essayez si elle reste bloqu\u00e9e.';
+  static const String playbackErrorTitle = 'Lecture impossible';
   static const String playbackUnavailable = 'Lecture vid\u00e9o indisponible.';
   static const String playbackInterruptedRetry =
       'Lecture interrompue. R\u00e9essayez.';
@@ -19,7 +22,8 @@ class VideoUiStrings {
   static const String currentPlaybackSpeed = 'Vitesse actuelle';
   static const String progressBarSemantic = 'Progression de la vid\u00e9o';
 
-  static const String loadingTooLong = 'Chargement trop long';
+  static const String loadingTooLong =
+      'Le chargement prend trop de temps. R\u00e9essayez.';
   static const String playbackError = 'Erreur de lecture';
   static const String genericActionImpossible = 'Action impossible.';
   static const String genericActionRetry = 'Action impossible pour le moment.';
@@ -28,6 +32,10 @@ class VideoUiStrings {
   static const String seeLessCaption = 'Voir moins la l\u00e9gende';
   static const String seeMore = 'Voir plus';
   static const String seeLess = 'Voir moins';
+  static const String videoCaptionSheetTitle = 'L\u00e9gende';
+  static const String videoCaptionOpen = 'Ouvrir la l\u00e9gende';
+  static const String videoPublisherProfileSemantic =
+      'Ouvrir le profil du joueur';
   static const String back = 'Retour';
   static const String emptyVideoFeedTitle =
       'Aucune vid\u00e9o disponible pour le moment.';
@@ -37,6 +45,15 @@ class VideoUiStrings {
       'Aucune vid\u00e9o \u00e0 afficher';
   static const String emptyProfileVideoFeedMessage =
       'Ce profil n\u2019a pas encore de vid\u00e9o disponible.';
+  static const String emptyHomeVideoFeedTitle = 'Aucune vid\u00e9o disponible';
+  static const String emptyHomeVideoFeedPlayerMessage =
+      'Publiez votre premi\u00e8re vid\u00e9o pour appara\u00eetre dans le feed.';
+  static const String emptyHomeVideoFeedDefaultMessage =
+      'Revenez plus tard ou actualisez le feed.';
+  static const String noInternetTitle = 'Pas de connexion Internet';
+  static const String noInternetMessage =
+      'V\u00e9rifiez votre r\u00e9seau, puis relancez le chargement du feed.';
+  static const String refresh = 'Actualiser';
 
   static const String delete = 'Supprimer';
   static const String deleteVideoTitle = 'Supprimer la vid\u00e9o';
@@ -68,6 +85,8 @@ class VideoUiStrings {
   static const String reportVideoSecondaryAction = 'Continuer la lecture';
   static const String sensitiveActionWarning = 'Action sensible';
   static const String moderationReviewLabel = 'Revue mod\u00e9ration';
+  static const String moreVideoActions = 'Plus';
+  static const String moreVideoActionsSemantic = 'Plus d\u2019actions';
   static const String addVideo = 'Publier';
   static const String addVideoSemantic = 'Publier une vid\u00e9o';
   static const String profile = 'Profil';
@@ -113,6 +132,32 @@ class VideoUiStrings {
       'Signalement impossible pour le moment.';
   static const String deleteOffline =
       'Connexion requise pour supprimer cette vid\u00e9o.';
+
+  static const String videoSearchOpen = 'Rechercher';
+  static const String videoSearchTitle = 'Recherche vid\u00e9o';
+  static const String videoSearchHint = 'Poste, joueur, club...';
+  static const String videoSearchClear = 'Effacer';
+  static const String videoSearchLoadingTitle = 'Recherche en cours';
+  static const String videoSearchLoadingMessage =
+      'Nous cherchons les vid\u00e9os correspondantes.';
+  static const String videoSearchEmptyTitle = 'Aucune vid\u00e9o trouv\u00e9e';
+  static const String videoSearchEmptyMessage =
+      'Essayez avec attaquant, d\u00e9fenseur, milieu, gardien ou un autre poste.';
+  static const String videoSearchUnavailable =
+      'Recherche indisponible pour le moment. R\u00e9essayez dans un instant.';
+  static const String videoSearchResultsTitle = 'R\u00e9sultats';
+  static const String videoSearchResultHint = 'Ouvrir cette vid\u00e9o';
+  static const String pendingVideosAction = 'Voir';
+
+  static String pendingVideosLabel(int count) {
+    return count > 1 ? '$count nouvelles vid\u00e9os' : '1 nouvelle vid\u00e9o';
+  }
+
+  static String pendingVideosSemantic(int count) {
+    return count > 1
+        ? '$count nouvelles vid\u00e9os disponibles'
+        : '1 nouvelle vid\u00e9o disponible';
+  }
 
   static const String uploadMissingRequiredFields =
       'Merci de renseigner une description et une l\u00e9gende.';

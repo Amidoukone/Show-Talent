@@ -105,8 +105,8 @@ class CallableAuthGuard {
     if (_appCheckEnabled && appCheckToken == null) {
       throw _DirectCallableException(
         code: 'failed-precondition',
-        message: 'Verification de securite indisponible. Verifiez App Check, '
-            "redemarrez l'application puis reessayez.",
+        message: 'Vérification de sécurité indisponible. Vérifiez App Check, '
+            "redémarrez l'application puis réessayez.",
       );
     }
 

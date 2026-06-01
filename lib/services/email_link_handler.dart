@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -10,6 +11,7 @@ import 'package:get/get.dart';
 import '../config/app_routes.dart';
 import '../config/app_environment.dart';
 import '../utils/email_action_link_parser.dart';
+import '../utils/video_share_links.dart';
 
 /// Handles Firebase email verification links and password reset links.
 /// Mobile listens to incoming app links. Web is handled elsewhere.
@@ -20,6 +22,8 @@ class EmailLinkHandler {
   static bool _initialized = false;
   static bool _isInitializing = false;
   static final Set<String> _handledOobCodes = <String>{};
+  static String? _lastVideoLinkKey;
+  static DateTime? _lastVideoLinkAt;
 
   static StreamController<void>? _verifiedCtrl;
   static Stream<void> get onEmailVerified {
@@ -86,6 +90,11 @@ class EmailLinkHandler {
   }
 
   static Future<bool> _handle(Uri link) async {
+    final videoId = VideoShareLinks.extractVideoId(link);
+    if (videoId != null) {
+      return _handleVideoShareLink(videoId, link);
+    }
+
     if (link.scheme != 'https' || !_allowedHosts.contains(link.host)) {
       _logDebug('EmailLinkHandler ignored link with unsupported host: $link');
       return false;
@@ -172,6 +181,67 @@ class EmailLinkHandler {
     }
   }
 
+  static Future<bool> _handleVideoShareLink(String videoId, Uri link) async {
+    final key = link.replace(queryParameters: null, fragment: null).toString();
+    final now = DateTime.now();
+    final lastAt = _lastVideoLinkAt;
+    if (_lastVideoLinkKey == key &&
+        lastAt != null &&
+        now.difference(lastAt) < const Duration(seconds: 2)) {
+      _logDebug('EmailLinkHandler ignored duplicate video share link: $link');
+      return false;
+    }
+
+    _lastVideoLinkKey = key;
+    _lastVideoLinkAt = now;
+
+    final routeArguments = <String, dynamic>{
+      'tab': 0,
+      'refresh': true,
+      'videoId': videoId,
+      'autoplay': true,
+      'source': 'video_share_link',
+    };
+
+    try {
+      final snapshot = await _authSessionService.resolveSessionSafely(
+        _authSessionService.currentUser,
+        waitForVerifiedUserDocument: true,
+        syncVerifiedUserRecord: false,
+        signOutOnInvalid: true,
+      );
+
+      if (Get.isRegistered<UserController>()) {
+        await Get.find<UserController>().applyResolvedSessionSnapshot(
+          snapshot,
+          routeArguments: routeArguments,
+        );
+      } else {
+        Get.offAllNamed(
+          snapshot.destination.routeName,
+          arguments: routeArguments,
+        );
+      }
+
+      return true;
+    } catch (e, stack) {
+      _logDebug('EmailLinkHandler video share route failed: $e\n$stack');
+      _openMainWithVideoArguments(routeArguments);
+      return true;
+    }
+  }
+
+  static void _openMainWithVideoArguments(Map<String, dynamic> arguments) {
+    if (Get.key.currentState != null) {
+      Get.offAllNamed(AppRoutes.main, arguments: arguments);
+      return;
+    }
+
+    Future.delayed(const Duration(milliseconds: 300), () {
+      Get.offAllNamed(AppRoutes.main, arguments: arguments);
+    });
+  }
+
   static Future<void> dispose() async {
     await _sub?.cancel();
     _sub = null;
@@ -179,6 +249,8 @@ class EmailLinkHandler {
     _initialized = false;
     _isInitializing = false;
     _handledOobCodes.clear();
+    _lastVideoLinkKey = null;
+    _lastVideoLinkAt = null;
     await _verifiedCtrl?.close();
     _verifiedCtrl = null;
   }

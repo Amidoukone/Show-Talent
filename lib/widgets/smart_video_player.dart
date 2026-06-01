@@ -20,6 +20,7 @@ import 'package:adfoot/services/video_observability_service.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/video_cache_manager.dart' as custom_cache;
+import 'package:adfoot/utils/video_share_links.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/tiktok_video_player.dart';
 import 'package:adfoot/models/video.dart';
@@ -95,7 +96,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   bool _isShareActionLoading = false;
   bool _isDeleteActionLoading = false;
   bool _isAddVideoActionLoading = false;
-  bool _isCaptionExpanded = false;
 
   Timer? _playDebounceTimer;
   static const Duration _playDebounce = Duration(milliseconds: 120);
@@ -119,7 +119,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   static const double _videoBottomMinimumOffset = 84;
   static const double _videoBottomSafeGap = 18;
   static const double _videoProgressReservedHeight = 36;
-  static const double _videoPublisherAvatarSize = 34;
   static const int _captionCollapsedMaxLines = 2;
   static const int _descriptionMaxLines = 1;
   static const List<Shadow> _videoMetadataTextShadow = <Shadow>[
@@ -188,10 +187,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   @override
   void didUpdateWidget(covariant SmartVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.video.id != widget.video.id && _isCaptionExpanded) {
-      _isCaptionExpanded = false;
-    }
 
     if (!identical(oldWidget.videoController, widget.videoController)) {
       _vc = widget.videoController;
@@ -974,9 +969,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     final caption = rawCaption;
     final publisher = widget.userController.usersCache[widget.video.uid];
     final publisherName = (publisher?.nom ?? '').trim();
-    final publisherPhoto =
-        (publisher?.photoProfil ?? widget.video.profilePhoto).trim();
-    final hasPublisher = publisherName.isNotEmpty || publisherPhoto.isNotEmpty;
+    final publisherRole = (publisher?.role ?? '').trim();
+    final hasPublisher = publisherName.isNotEmpty;
     final hasDescription = description.isNotEmpty;
 
     final publisherStyle = const TextStyle(
@@ -1020,26 +1014,13 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 style: captionStyle,
                 maxWidth: constraints.maxWidth,
               );
-          final isExpanded = _isCaptionExpanded && needsExpansion;
-          final expandedCaptionMaxHeight =
-              media.size.height * (media.size.height < 700 ? 0.22 : 0.28);
 
-          Widget captionText = Text(
+          final captionText = Text(
             caption,
             style: captionStyle,
-            maxLines: isExpanded ? null : _captionCollapsedMaxLines,
-            overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            maxLines: _captionCollapsedMaxLines,
+            overflow: TextOverflow.ellipsis,
           );
-
-          if (isExpanded) {
-            captionText = ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: expandedCaptionMaxHeight),
-              child: SingleChildScrollView(
-                physics: const ClampingScrollPhysics(),
-                child: captionText,
-              ),
-            );
-          }
 
           return AnimatedSize(
             duration: const Duration(milliseconds: 180),
@@ -1050,38 +1031,77 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (hasPublisher || hasDescription)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildPublisherAvatar(
-                        photoUrl: publisherPhoto,
-                        displayName: publisherName,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (hasPublisher)
-                              Text(
-                                publisherName.isNotEmpty
-                                    ? publisherName
-                                    : VideoUiStrings.defaultPublisherName,
-                                style: publisherStyle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            if (hasDescription)
-                              Text(
-                                description,
-                                style: descriptionStyle,
-                                maxLines: _descriptionMaxLines,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
+                      if (hasPublisher)
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            final currentUserId =
+                                widget.userController.user?.uid;
+                            if (currentUserId == null ||
+                                currentUserId.trim().isEmpty) {
+                              return;
+                            }
+                            unawaited(_openPublisherProfile(currentUserId));
+                          },
+                          child: Semantics(
+                            button: true,
+                            label: VideoUiStrings.videoPublisherProfileSemantic,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    publisherName,
+                                    style: publisherStyle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (publisherRole.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.32),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: Colors.white
+                                            .withValues(alpha: 0.18),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      publisherRole,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1.2,
+                                        shadows: _videoMetadataTextShadow,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
+                      if (hasDescription)
+                        Text(
+                          description,
+                          style: descriptionStyle,
+                          maxLines: _descriptionMaxLines,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                     ],
                   ),
                 if ((hasPublisher || hasDescription) && caption.isNotEmpty)
@@ -1090,21 +1110,18 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 if (needsExpansion)
                   Semantics(
                     button: true,
-                    label: isExpanded
-                        ? VideoUiStrings.seeLessCaption
-                        : VideoUiStrings.seeMoreCaption,
+                    label: VideoUiStrings.videoCaptionOpen,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        if (!mounted || _isDisposed) return;
-                        setState(() => _isCaptionExpanded = !isExpanded);
-                      },
+                      onTap: () => _showCaptionSheet(
+                        publisherName: publisherName,
+                        description: description,
+                        caption: caption,
+                      ),
                       child: Padding(
                         padding: const EdgeInsets.only(top: 6, bottom: 4),
                         child: Text(
-                          isExpanded
-                              ? VideoUiStrings.seeLess
-                              : VideoUiStrings.seeMore,
+                          VideoUiStrings.seeMore,
                           style: linkStyle,
                         ),
                       ),
@@ -1118,69 +1135,27 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     );
   }
 
-  Widget _buildPublisherAvatar({
-    required String photoUrl,
-    required String displayName,
+  void _showCaptionSheet({
+    required String publisherName,
+    required String description,
+    required String caption,
   }) {
-    final initials = _publisherInitials(displayName);
+    if (!mounted || _isDisposed) return;
 
-    return Container(
-      width: _videoPublisherAvatarSize,
-      height: _videoPublisherAvatarSize,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.black.withValues(alpha: 0.32),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.42),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.34),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: photoUrl.isNotEmpty
-          ? Image.network(
-              photoUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _buildPublisherInitials(initials),
-            )
-          : _buildPublisherInitials(initials),
-    );
-  }
-
-  Widget _buildPublisherInitials(String initials) {
-    return Center(
-      child: Text(
-        initials.isNotEmpty ? initials : 'A',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          shadows: _videoMetadataTextShadow,
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        useRootNavigator: true,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: 0.58),
+        builder: (_) => _VideoCaptionSheet(
+          publisherName: publisherName,
+          description: description,
+          caption: caption,
         ),
       ),
     );
-  }
-
-  String _publisherInitials(String displayName) {
-    final words = displayName
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((word) => word.isNotEmpty)
-        .toList(growable: false);
-    if (words.isEmpty) return '';
-    if (words.length == 1) return _firstLetter(words.first);
-    return '${_firstLetter(words.first)}${_firstLetter(words.last)}';
-  }
-
-  String _firstLetter(String word) {
-    if (word.isEmpty) return '';
-    return String.fromCharCode(word.runes.first).toUpperCase();
   }
 
   // ---------------------------------------------------------------------------
@@ -1442,8 +1417,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   Future<void> _shareVideo(VideoController controller) async {
     if (_isShareActionLoading) return;
 
-    final shareUrl = widget.video.effectiveUrl.trim();
-    if (shareUrl.isEmpty) {
+    final shareUrl = VideoShareLinks.buildVideoUrl(widget.video.id);
+    if (shareUrl == null || shareUrl.isEmpty) {
       unawaited(
         _observability.logActionFailure(
           action: 'shareVideo',
@@ -1761,6 +1736,115 @@ class _VideoActionConfirmationSheet extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _VideoCaptionSheet extends StatelessWidget {
+  const _VideoCaptionSheet({
+    required this.publisherName,
+    required this.description,
+    required this.caption,
+  });
+
+  final String publisherName;
+  final String description;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.42,
+      minChildSize: 0.28,
+      maxChildSize: 0.76,
+      expand: false,
+      builder: (context, scrollController) {
+        return Align(
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 540),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: AdColors.surfaceCard,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(AdRadius.xl),
+                ),
+                border: Border.all(color: AdColors.divider),
+                boxShadow: AdShadows.card(AdColors.black),
+              ),
+              child: SafeArea(
+                top: false,
+                child: SingleChildScrollView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(
+                    AdSpacing.xl,
+                    AdSpacing.md,
+                    AdSpacing.xl,
+                    AdSpacing.xl,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color:
+                                AdColors.onSurfaceMuted.withValues(alpha: .35),
+                            borderRadius: BorderRadius.circular(AdRadius.pill),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AdSpacing.xl),
+                      const Text(
+                        VideoUiStrings.videoCaptionSheetTitle,
+                        style: TextStyle(
+                          color: AdColors.onSurface,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      if (publisherName.isNotEmpty) ...[
+                        const SizedBox(height: AdSpacing.xs),
+                        Text(
+                          publisherName,
+                          style: const TextStyle(
+                            color: AdColors.brand,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                      if (description.isNotEmpty) ...[
+                        const SizedBox(height: AdSpacing.md),
+                        Text(
+                          description,
+                          style: const TextStyle(
+                            color: AdColors.onSurface,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            height: 1.32,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: AdSpacing.md),
+                      Text(
+                        caption,
+                        style: const TextStyle(
+                          color: AdColors.onSurfaceMuted,
+                          fontSize: 15,
+                          height: 1.48,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

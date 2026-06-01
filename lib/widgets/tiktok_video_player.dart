@@ -468,14 +468,37 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       return _buildThumbnailFallback();
     }
 
-    return CachedNetworkImage(
-      imageUrl: thumb,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.low,
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      placeholder: (_, __) => _buildThumbnailFallback(),
-      errorWidget: (_, __, ___) => _buildThumbnailFallback(),
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        CachedNetworkImage(
+          imageUrl: thumb,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.low,
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          placeholder: (_, __) => _buildThumbnailFallback(),
+          errorWidget: (_, __, ___) => _buildThumbnailFallback(),
+        ),
+        _buildPosterReadabilityScrim(),
+      ],
+    );
+  }
+
+  Widget _buildPosterReadabilityScrim() {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.black.withValues(alpha: 0.18),
+            Colors.black.withValues(alpha: 0.04),
+            Colors.black.withValues(alpha: 0.34),
+          ],
+          stops: const [0.0, 0.46, 1.0],
+        ),
+      ),
     );
   }
 

@@ -79,19 +79,6 @@ class VideoActionRail extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (showDeleteAction && isOwner)
-              _VideoRailActionButton(
-                icon: Icons.delete_forever_rounded,
-                color: isDeleteLoading
-                    ? Colors.redAccent.shade100
-                    : Colors.redAccent,
-                label: VideoUiStrings.delete,
-                onTap: isDeleteLoading ? null : () => _run(onDelete),
-                emphasized: true,
-                isLoading: isDeleteLoading,
-                semanticLabel: VideoUiStrings.deleteVideoSemantic,
-              ),
-            if (showDeleteAction && isOwner) SizedBox(height: sectionSpacing),
             _VideoRailActionButton(
               icon: isLiked
                   ? Icons.favorite_rounded
@@ -118,25 +105,6 @@ class VideoActionRail extends StatelessWidget {
               semanticLabel: VideoUiStrings.shareVideo,
               semanticValue: VideoUiStrings.shareCountValue(video.shareCount),
             ),
-            SizedBox(height: actionSpacing),
-            _VideoRailActionButton(
-              icon: hasReported
-                  ? Icons.outlined_flag_rounded
-                  : Icons.flag_rounded,
-              color: hasReported ? Colors.amberAccent : Colors.white,
-              label:
-                  hasReported ? VideoUiStrings.reported : VideoUiStrings.report,
-              onTap:
-                  hasReported || isReportLoading ? null : () => _run(onReport),
-              isLoading: isReportLoading,
-              semanticLabel: hasReported
-                  ? VideoUiStrings.reportedVideoSemantic
-                  : VideoUiStrings.reportVideoSemantic,
-            ),
-            if (currentUser.role == 'joueur') ...[
-              SizedBox(height: sectionSpacing),
-              _buildAddVideoAction(),
-            ],
             if (showProfileAction) ...[
               SizedBox(height: sectionSpacing),
               _buildProfileAction(
@@ -144,45 +112,15 @@ class VideoActionRail extends StatelessWidget {
                 isFollowing: isFollowing,
               ),
             ],
+            SizedBox(height: actionSpacing),
+            _buildMoreAction(
+              context: context,
+              isOwner: isOwner,
+              hasReported: hasReported,
+            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildAddVideoAction() {
-    return Column(
-      children: [
-        SizedBox.square(
-          dimension: buttonExtent,
-          child: FloatingActionButton(
-            heroTag: 'addVideo_${video.id}',
-            mini: true,
-            tooltip: VideoUiStrings.addVideoSemantic,
-            backgroundColor:
-                isAddVideoLoading ? Colors.white70 : AdColors.brand,
-            foregroundColor:
-                isAddVideoLoading ? Colors.black : AdColors.brandOn,
-            elevation: 3,
-            onPressed: isAddVideoLoading ? null : () => _run(onAddVideo),
-            child: isAddVideoLoading
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(Colors.black),
-                    ),
-                  )
-                : const Icon(Icons.add, size: iconSize),
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          VideoUiStrings.addVideo,
-          style: TextStyle(color: Colors.white, fontSize: 12),
-        ),
-      ],
     );
   }
 
@@ -278,6 +216,139 @@ class VideoActionRail extends StatelessWidget {
           style: TextStyle(color: Colors.white, fontSize: 12),
         ),
       ],
+    );
+  }
+
+  Widget _buildMoreAction({
+    required BuildContext context,
+    required bool isOwner,
+    required bool hasReported,
+  }) {
+    return _VideoRailActionButton(
+      icon: Icons.more_horiz_rounded,
+      color: Colors.white,
+      label: VideoUiStrings.moreVideoActions,
+      onTap: () => _showMoreActions(
+        context: context,
+        isOwner: isOwner,
+        hasReported: hasReported,
+      ),
+      semanticLabel: VideoUiStrings.moreVideoActionsSemantic,
+    );
+  }
+
+  void _showMoreActions({
+    required BuildContext context,
+    required bool isOwner,
+    required bool hasReported,
+  }) {
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: 0.54),
+        builder: (sheetContext) {
+          return SafeArea(
+            top: false,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AdColors.surfaceCard,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(22),
+                    ),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.36),
+                        blurRadius: 24,
+                        offset: const Offset(0, -10),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 42,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.22),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        const Text(
+                          VideoUiStrings.moreVideoActionsSemantic,
+                          style: TextStyle(
+                            color: AdColors.onSurface,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (currentUser.role == 'joueur')
+                          _VideoMoreActionTile(
+                            icon: Icons.add_rounded,
+                            label: VideoUiStrings.addVideoSemantic,
+                            color: AdColors.brand,
+                            isLoading: isAddVideoLoading,
+                            onTap: isAddVideoLoading
+                                ? null
+                                : () {
+                                    Navigator.of(sheetContext).pop();
+                                    _run(onAddVideo);
+                                  },
+                          ),
+                        _VideoMoreActionTile(
+                          icon: hasReported
+                              ? Icons.outlined_flag_rounded
+                              : Icons.flag_rounded,
+                          label: hasReported
+                              ? VideoUiStrings.reportedVideoSemantic
+                              : VideoUiStrings.reportVideoSemantic,
+                          color:
+                              hasReported ? Colors.amberAccent : Colors.white,
+                          isLoading: isReportLoading,
+                          onTap: hasReported || isReportLoading
+                              ? null
+                              : () {
+                                  Navigator.of(sheetContext).pop();
+                                  _run(onReport);
+                                },
+                        ),
+                        if (showDeleteAction && isOwner)
+                          _VideoMoreActionTile(
+                            icon: Icons.delete_forever_rounded,
+                            label: VideoUiStrings.deleteVideoSemantic,
+                            color: Colors.redAccent,
+                            isLoading: isDeleteLoading,
+                            onTap: isDeleteLoading
+                                ? null
+                                : () {
+                                    Navigator.of(sheetContext).pop();
+                                    _run(onDelete);
+                                  },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -409,6 +480,79 @@ class _VideoRailActionButton extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VideoMoreActionTile extends StatelessWidget {
+  const _VideoMoreActionTile({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.isLoading = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: onTap != null && !isLoading,
+      label: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: isLoading ? null : onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: isLoading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                        ),
+                      )
+                    : Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: onTap == null
+                        ? AdColors.onSurfaceMuted
+                        : AdColors.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color:
+                    Colors.white.withValues(alpha: onTap == null ? 0.18 : 0.5),
               ),
             ],
           ),

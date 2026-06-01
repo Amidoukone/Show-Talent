@@ -739,6 +739,7 @@ export {
   submitContactIntakeFeedback,
 } from "./admin_contact_intake_actions";
 export {completeEmailVerification} from "./account_verification_actions";
+export {videoSharePage} from "./video_share_page";
 
 /* -------------------------------------------------------------------------- */
 /* UPLOAD SESSION                                                              */

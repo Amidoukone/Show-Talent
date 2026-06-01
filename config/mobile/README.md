@@ -16,6 +16,10 @@ run without hardcoded values.
 Production templates set `APP_CHECK_ENABLED=true` so Android release builds use
 Play Integrity before backend App Check enforcement is enabled.
 
+`VIDEO_SHARE_BASE_URL` controls the public URL used when a user shares a video.
+Production should use `https://adfoot.org`; staging can use the staging Hosting
+domain so shared staging video IDs resolve against the staging project.
+
 Local files to create later:
 
 - `config/mobile/local.json`

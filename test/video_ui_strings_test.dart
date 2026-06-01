@@ -56,6 +56,11 @@ void main() {
 
   test('video action and empty-state copy is centralized', () {
     expect(VideoUiStrings.emptyVideoFeedTitle, contains('vidéo'));
+    expect(VideoUiStrings.emptyHomeVideoFeedTitle, contains('vidéo'));
+    expect(
+        VideoUiStrings.emptyHomeVideoFeedPlayerMessage, contains('première'));
+    expect(VideoUiStrings.noInternetMessage, contains('réseau'));
+    expect(VideoUiStrings.videoSearchUnavailable, contains('Réessayez'));
     expect(VideoUiStrings.emptyProfileVideoFeedMessage, contains('profil'));
     expect(VideoUiStrings.likeOffline, contains('hors connexion'));
     expect(VideoUiStrings.videoNotFound, 'Vidéo introuvable.');

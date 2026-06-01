@@ -18,21 +18,21 @@ const HELP_TEXT = `Usage:
 
 Options:
   --email <value>            E-mail du compte admin
-  --password <value>         Mot de passe initial. Si omis, un mot de passe temporaire est genere
-  --name <value>             Nom complet affiche dans Firebase Auth et Firestore
-  --claim <value>            admin | platformAdmin | superAdmin (defaut: admin)
-  --role <value>             Role Firestore (defaut: admin)
-  --phone <value>            Telephone optionnel
+  --password <value>         Mot de passe initial. Si omis, un mot de passe temporaire est généré
+  --name <value>             Nom complet affiché dans Firebase Auth et Firestore
+  --claim <value>            admin | platformAdmin | superAdmin (défaut: admin)
+  --role <value>             Rôle Firestore (défaut: admin)
+  --phone <value>            Téléphone optionnel
   --service-account <path>   Chemin absolu vers un JSON service account
-  --update-password          Met a jour aussi le mot de passe si le compte existe deja
+  --update-password          Met à jour aussi le mot de passe si le compte existe déjà
   --help                     Affiche cette aide
 
-Env supportes:
+Env supportés:
   FIREBASE_SERVICE_ACCOUNT_KEY_PATH
   GOOGLE_APPLICATION_CREDENTIALS
 
 Important:
-  google-services.json n'est pas un service account valide pour Firebase Admin SDK.
+  google-services.json n’est pas un service account valide pour Firebase Admin SDK.
 `;
 
 function parseArgs(argv) {
@@ -161,7 +161,7 @@ async function main() {
     return;
   }
 
-  const email = normalizeEmail(requireNonEmpty(options, "email", "L email"));
+  const email = normalizeEmail(requireNonEmpty(options, "email", "L’e-mail"));
   const displayName = requireNonEmpty(options, "name", "Le nom");
   const claim = (options.claim || "admin").trim();
   const role = (options.role || "admin").trim().toLowerCase();
@@ -298,13 +298,13 @@ async function main() {
 
   if (!userRecord.emailVerified) {
     process.stdout.write(
-      "Le compte admin a ete cree ou mis a jour, mais l email n est pas encore verifie.\n",
+      "Le compte admin a été créé ou mis à jour, mais l’e-mail n’est pas encore vérifié.\n",
     );
   }
 
   if (existingUser && options["update-password"] !== true) {
     process.stdout.write(
-      "Le compte existait deja: le mot de passe n a pas ete modifie. Ajoute --update-password pour le remplacer.\n",
+      "Le compte existait déjà : le mot de passe n’a pas été modifié. Ajoute --update-password pour le remplacer.\n",
     );
   }
 }

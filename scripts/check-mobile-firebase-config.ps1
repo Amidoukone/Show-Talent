@@ -137,6 +137,7 @@ if ($null -eq $config) {
         "FIREBASE_PROJECT_ID",
         "FIREBASE_MESSAGING_SENDER_ID",
         "FIREBASE_STORAGE_BUCKET",
+        "VIDEO_SHARE_BASE_URL",
         "FIREBASE_ANDROID_API_KEY",
         "FIREBASE_ANDROID_APP_ID",
         "FIREBASE_IOS_API_KEY",
@@ -180,6 +181,28 @@ if ($null -eq $config) {
 
         if ($rawAppCheckEnabled.Trim().ToLowerInvariant() -ne "true") {
             $errors.Add("APP_CHECK_ENABLED must be true in mobile config for '$Environment'.")
+        }
+    }
+
+    if ($config.Contains("VIDEO_SHARE_BASE_URL")) {
+        $shareBaseUrl = [string]$config["VIDEO_SHARE_BASE_URL"]
+        $shareUri = $null
+        if (
+            -not [System.Uri]::TryCreate($shareBaseUrl, [System.UriKind]::Absolute, [ref]$shareUri) -or
+            $shareUri.Scheme -ne "https" -or
+            [string]::IsNullOrWhiteSpace($shareUri.Host)
+        ) {
+            $errors.Add("VIDEO_SHARE_BASE_URL must be an absolute HTTPS URL.")
+        }
+
+        $expectedShareBaseUrl = if ($Environment -in @("production", "production-next")) {
+            "https://adfoot.org"
+        } else {
+            "https://adfoot-staging.firebaseapp.com"
+        }
+
+        if ($shareBaseUrl.TrimEnd("/") -ne $expectedShareBaseUrl) {
+            $errors.Add("VIDEO_SHARE_BASE_URL is '$shareBaseUrl' but expected '$expectedShareBaseUrl' for '$Environment'.")
         }
     }
 
@@ -266,7 +289,7 @@ Write-Host "iOS native file          : $iosFirebasePath"
 if ($null -ne $config) {
     Write-Host ""
     Write-Host "Config summary:"
-    foreach ($key in @("APP_ENV", "FIREBASE_PROJECT_ID", "FIREBASE_STORAGE_BUCKET", "FIREBASE_IOS_BUNDLE_ID")) {
+    foreach ($key in @("APP_ENV", "VIDEO_SHARE_BASE_URL", "FIREBASE_PROJECT_ID", "FIREBASE_STORAGE_BUCKET", "FIREBASE_IOS_BUNDLE_ID")) {
         if ($config.Contains($key) -and -not [string]::IsNullOrWhiteSpace([string]$config[$key])) {
             Write-Host ("- {0}={1}" -f $key, [string]$config[$key])
         }

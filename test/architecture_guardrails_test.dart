@@ -102,7 +102,7 @@ void main() {
       final content =
           File('lib/screens/video_feed_screen.dart').readAsStringSync();
       expect(content, contains('Obx(()'));
-      expect(content, contains('Aucune vidéo disponible'));
+      expect(content, contains('VideoUiStrings.emptyVideoFeedTitle'));
     });
 
     test('Sprint 4 phase C chat flow enforces single-send and no controller UI',

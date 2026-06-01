@@ -95,6 +95,7 @@ void main() {
 
     expect(manifest, contains('android:host="adfoot.org"'));
     expect(manifest, contains('android:pathPrefix="/__/auth/action"'));
+    expect(manifest, contains('android:pathPrefix="/v"'));
   });
 
   test('android signing setup command generates the upload keystore', () {

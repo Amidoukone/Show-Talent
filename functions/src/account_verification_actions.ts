@@ -130,7 +130,7 @@ export const completeEmailVerification = onCall(
       return {
         success: true,
         code: "email_verification_completed",
-        message: "Verification e-mail synchronisee.",
+        message: "Vérification e-mail synchronisée.",
         data: {
           uid,
           emailVerified: true,

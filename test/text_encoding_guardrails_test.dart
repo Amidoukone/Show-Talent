@@ -15,8 +15,15 @@ void main() {
       '\u{FFFD}',
     ];
 
-    const sourceRoots = <String>['lib', 'functions/src', 'site_pub'];
-    const sourceExtensions = <String>{'.dart', '.ts', '.js', '.html'};
+    const sourceRoots = <String>['lib', 'functions/src', 'site_pub', 'scripts'];
+    const sourceExtensions = <String>{
+      '.dart',
+      '.ts',
+      '.js',
+      '.html',
+      '.mjs',
+      '.ps1',
+    };
     final offenders = <String>[];
     for (final root in sourceRoots) {
       final directory = Directory(root);

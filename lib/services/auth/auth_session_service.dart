@@ -494,7 +494,7 @@ class AuthSessionService {
     } on FirebaseAuthException catch (error) {
       return EmailVerificationSendResult(
         sent: false,
-        errorMessage: error.message ?? 'Erreur d envoi.',
+        errorMessage: error.message ?? 'Erreur d\u2019envoi.',
       );
     }
   }

@@ -77,13 +77,26 @@ void main() {
       final controller =
           File('lib/controller/video_controller.dart').readAsStringSync();
       final rules = File('firestore.rules').readAsStringSync();
+      final hosting = File('firebase.json').readAsStringSync();
+      final functionsIndex = File('functions/src/index.ts').readAsStringSync();
+      final sharePage =
+          File('functions/src/video_share_page.ts').readAsStringSync();
+      final publicIndex = File('site_pub/index.html').readAsStringSync();
+      final androidDownloadPage =
+          File('site_pub/download/android/index.html').readAsStringSync();
+      final linkHandler =
+          File('lib/services/email_link_handler.dart').readAsStringSync();
+      final loginScreen =
+          File('lib/screens/login_screen.dart').readAsStringSync();
 
       expect(player, contains('ShareResultStatus.dismissed'));
       expect(player, contains('ShareResultStatus.unavailable'));
-      expect(player, contains('widget.video.effectiveUrl.trim()'));
+      expect(
+          player, contains('VideoShareLinks.buildVideoUrl(widget.video.id)'));
       expect(player, contains('_buildShareText(shareUrl)'));
       expect(player, contains('sharePositionOrigin: _sharePositionOrigin()'));
       expect(player, contains('controller.partagerVideo(widget.video.id)'));
+      expect(player, isNot(contains('widget.video.effectiveUrl.trim()')));
       expect(
           player, isNot(contains('ShareParams(text: \'Regarde cette vidéo :')));
       expect(player, isNot(contains('(widget.video.shareCount + 1)')));
@@ -98,6 +111,40 @@ void main() {
         rules,
         contains('allow update: if canIncrementVideoShareCount();'),
       );
+      expect(hosting, contains('"source": "/v/**"'));
+      expect(hosting, contains('"functionId": "videoSharePage"'));
+      expect(hosting, contains('"source": "/download/android"'));
+      expect(functionsIndex, contains('videoSharePage'));
+      expect(sharePage, contains('intent://'));
+      expect(sharePage, contains('ANDROID_APP_DOWNLOAD_URL'));
+      expect(sharePage, contains("Ouvrir dans l'application"));
+      expect(sharePage, contains('Vidéo de talent'));
+      expect(sharePage, contains('Télécharger l’application'));
+      expect(sharePage, isNot(contains('Regarde cette video')));
+      expect(sharePage, isNot(contains('Video de talent')));
+      expect(publicIndex, contains('href="/styles.css"'));
+      expect(publicIndex, contains('src="/images/hero.jpg"'));
+      expect(androidDownloadPage, contains("Application en accès contrôlé"));
+      expect(linkHandler, contains('VideoShareLinks.extractVideoId(link)'));
+      expect(linkHandler, contains("'videoId': videoId"));
+      expect(loginScreen, contains('_postLoginRouteArguments'));
+    });
+
+    test('public site image references exist in hosting assets', () {
+      final publicIndex = File('site_pub/index.html').readAsStringSync();
+      final imageRefs = RegExp(r'src="/(images/[^"]+)"')
+          .allMatches(publicIndex)
+          .map((match) => match.group(1)!)
+          .toSet();
+
+      expect(imageRefs, isNotEmpty);
+      for (final imageRef in imageRefs) {
+        expect(
+          File('site_pub/$imageRef').existsSync(),
+          isTrue,
+          reason: 'Missing public hosting image asset: $imageRef',
+        );
+      }
     });
 
     test('video action rail keeps modern guarded interactions', () {
@@ -113,8 +160,11 @@ void main() {
       expect(player, contains('VideoActionRail('));
       expect(actionRail, contains('class VideoActionRail'));
       expect(actionRail, contains('VideoUiStrings.delete'));
-      expect(actionRail, contains('VideoUiStrings.report'));
+      expect(actionRail, contains('VideoUiStrings.moreVideoActions'));
+      expect(actionRail, contains('VideoUiStrings.reportVideoSemantic'));
       expect(actionRail, contains('VideoUiStrings.profile'));
+      expect(actionRail, contains('_buildMoreAction'));
+      expect(actionRail, contains('_VideoMoreActionTile'));
       expect(actionRail, contains('formatActionCount(video.likes.length)'));
       expect(actionRail, contains('formatActionCount(video.shareCount)'));
       expect(player, contains('_confirmReport'));
@@ -173,6 +223,9 @@ void main() {
           tiktokPlayer, contains('VideoUiStrings.forwardTenSecondsFeedback'));
       expect(tiktokPlayer, contains('VideoUiStrings.rewindTenSecondsFeedback'));
       expect(videoStrings, contains('emptyVideoFeedTitle'));
+      expect(videoStrings, contains('emptyHomeVideoFeedTitle'));
+      expect(videoStrings, contains('noInternetMessage'));
+      expect(videoStrings, contains('videoSearchUnavailable'));
       expect(videoStrings, contains('reportUnavailable'));
     });
 
@@ -261,14 +314,18 @@ void main() {
       expect(player, isNot(contains('heightFactor: 0.46')));
       expect(player, isNot(contains('alpha: 0.74')));
       expect(player, contains('_buildVideoMetadataOverlay(context)'));
-      expect(player, contains('_buildPublisherAvatar'));
-      expect(player, contains('_publisherInitials'));
+      expect(player, isNot(contains('_buildPublisherAvatar')));
+      expect(player, isNot(contains('_publisherInitials')));
+      expect(player, isNot(contains('_videoPublisherAvatarSize')));
       expect(player, contains('VideoActionRail.reservedWidth'));
       expect(player, contains('media.viewPadding.bottom'));
       expect(player, contains('maxLines: _captionCollapsedMaxLines'));
-      expect(player, contains('VideoUiStrings.seeLess'));
+      expect(player, contains('_showCaptionSheet'));
+      expect(player, contains('_VideoCaptionSheet'));
+      expect(player, contains('VideoUiStrings.videoCaptionSheetTitle'));
       expect(player, contains('VideoUiStrings.seeMore'));
       expect(player, contains('SingleChildScrollView'));
+      expect(player, contains('VideoUiStrings.videoPublisherProfileSemantic'));
       expect(
         File('lib/widgets/video_action_rail.dart').readAsStringSync(),
         contains('static const double buttonExtent = 48'),
@@ -278,6 +335,10 @@ void main() {
       expect(tiktokPlayer, contains('viewPadding.bottom'));
 
       expect(home, isNot(contains('FadeTransition')));
+      expect(home, contains('_buildVideoSearchLauncher'));
+      expect(home, contains('_VideoSearchSheet'));
+      expect(home, contains('_openVideoSearchSheet'));
+      expect(home, contains('VideoUiStrings.videoSearchTitle'));
       expect(profileFeed, isNot(contains('bottom: 100')));
     });
 
@@ -369,9 +430,12 @@ void main() {
       expect(smartPlayer, contains("reason: 'runtime_value_error'"));
       expect(smartPlayer, contains('VideoUiStrings.playbackInterruptedRetry'));
       expect(tiktokPlayer, contains('Widget _buildSafeState'));
+      expect(tiktokPlayer, contains('_buildPosterReadabilityScrim'));
       expect(tiktokPlayer, contains('VideoStateOverlay.loading'));
       expect(tiktokPlayer, contains('VideoStateOverlay.error'));
       expect(stateOverlay, contains('VideoUiStrings.loadingMessage'));
+      expect(stateOverlay, contains('VideoUiStrings.slowLoadingDetail'));
+      expect(stateOverlay, contains('_publicErrorMessage'));
       expect(videoStrings, contains('Chargement de la vid'));
       expect(tiktokPlayer, contains('_slowLoadingDelay'));
       expect(tiktokPlayer, contains('_syncSlowLoadingState'));
@@ -434,6 +498,24 @@ void main() {
       expect(home, contains('_feedIndexBeforeSearch'));
       expect(home, contains('_jumpToPageSilently(restoreIndex)'));
       expect(home, contains('whereIn: batch'));
+      expect(home, contains('_isSearchSheetOpen'));
+    });
+
+    test('home pending live videos use a clear non-overlapping chip', () {
+      final home = File('lib/screens/home_screen.dart').readAsStringSync();
+      final videoStrings =
+          File('lib/utils/video_ui_strings.dart').readAsStringSync();
+
+      expect(home, contains('_buildPendingLiveVideosChip'));
+      expect(home, contains('VideoUiStrings.pendingVideosLabel(pending)'));
+      expect(home, contains('VideoUiStrings.pendingVideosSemantic(pending)'));
+      expect(home, contains('top: kToolbarHeight + 10'));
+      expect(home, contains('_isSearchSheetOpen'));
+      expect(home, contains('HapticFeedback.lightImpact'));
+      expect(home, isNot(contains("pending > 1 ? '\$pending nouvelles")));
+      expect(videoStrings, contains('pendingVideosLabel'));
+      expect(videoStrings, contains('pendingVideosSemantic'));
+      expect(videoStrings, contains('pendingVideosAction'));
     });
 
     test('home route refresh focuses uploaded video before autoplay', () {
