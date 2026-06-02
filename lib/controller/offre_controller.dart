@@ -287,6 +287,9 @@ class OffreController extends GetxController {
       final payload = offre.toMap();
       payload['statut'] = _normalizeStatus(offre.statut);
       payload['lastUpdated'] = FieldValue.serverTimestamp();
+      if (offre.pieceJointeUrl == null) {
+        payload.remove('pieceJointeUrl');
+      }
 
       await _firestore.collection('offres').doc(offre.id).set(payload);
 
@@ -367,6 +370,9 @@ class OffreController extends GetxController {
       final payload = offre.toMap();
       payload['statut'] = _normalizeStatus(offre.statut);
       payload['lastUpdated'] = FieldValue.serverTimestamp();
+      if (offre.pieceJointeUrl == null) {
+        payload['pieceJointeUrl'] = FieldValue.delete();
+      }
 
       await _firestore.collection('offres').doc(offre.id).update(payload);
       return const ActionResponse(

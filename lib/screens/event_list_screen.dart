@@ -414,7 +414,7 @@ class _EventListScreenState extends State<EventListScreen> {
           matchesUpcoming &&
           matchesMine;
     }).toList()
-      ..sort((a, b) => a.dateDebut.compareTo(b.dateDebut));
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   Widget _buildMissingUserState() {
@@ -911,8 +911,8 @@ class _EventListScreenState extends State<EventListScreen> {
                       createdAt: event.createdAt,
                       capaciteMax: event.capaciteMax,
                       tags: event.tags,
-                      streamingUrl: event.streamingUrl,
-                      flyerUrl: event.flyerUrl,
+                      streamingUrl: null,
+                      flyerUrl: null,
                       views: event.views,
                       archivedAt: value == 'archive'
                           ? DateTime.now()

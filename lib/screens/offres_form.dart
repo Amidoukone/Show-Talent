@@ -55,7 +55,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   final TextEditingController _remunerationController = TextEditingController();
   final TextEditingController _niveauController = TextEditingController();
   final TextEditingController _posteController = TextEditingController();
-  final TextEditingController _pieceJointeController = TextEditingController();
 
   DateTime? _dateDebut;
   DateTime? _dateFin;
@@ -87,7 +86,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     yield _remunerationController;
     yield _niveauController;
     yield _posteController;
-    yield _pieceJointeController;
   }
 
   @override
@@ -106,7 +104,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       _remunerationController.text = editingOffre!.remuneration ?? '';
       _niveauController.text = editingOffre!.niveau ?? '';
       _posteController.text = editingOffre!.posteRecherche ?? '';
-      _pieceJointeController.text = editingOffre!.pieceJointeUrl ?? '';
     }
 
     _initialTextValues = <TextEditingController, String>{
@@ -227,24 +224,12 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                       children: [
                         TextFormField(
                           controller: _remunerationController,
-                          textInputAction: TextInputAction.next,
+                          textInputAction: TextInputAction.done,
                           decoration: _buildInputDecoration(
                             'Rémunération (optionnel)',
                             'Ex: 2k-3k €/mois',
                             Icons.payments_outlined,
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _pieceJointeController,
-                          keyboardType: TextInputType.url,
-                          textInputAction: TextInputAction.done,
-                          decoration: _buildInputDecoration(
-                            'Lien document (optionnel)',
-                            'URL vers une fiche, un règlement ou un brief',
-                            Icons.attach_file_outlined,
-                          ),
-                          validator: _validateOptionalUrl,
                         ),
                       ],
                     ),
@@ -377,20 +362,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     return null;
   }
 
-  String? _validateOptionalUrl(String? value) {
-    final normalized = value?.trim() ?? '';
-    if (normalized.isEmpty) return null;
-
-    final uri = Uri.tryParse(normalized);
-    if (uri == null || !uri.hasScheme || uri.host.trim().isEmpty) {
-      return 'Entrez une URL valide.';
-    }
-    if (uri.scheme != 'https' && uri.scheme != 'http') {
-      return 'Utilisez une URL commençant par http ou https.';
-    }
-    return null;
-  }
-
   void _setStartDate(DateTime picked) {
     setState(() {
       _dateDebut = picked;
@@ -448,6 +419,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
 
         final pickedDate = await showDatePicker(
           context: context,
+          locale: const Locale('fr', 'FR'),
           initialDate: initialDate,
           firstDate: firstDate,
           lastDate: DateTime(2100),
@@ -477,7 +449,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
             ),
             Text(
               date != null
-                  ? DateFormat('dd MMM yyyy').format(date)
+                  ? DateFormat('dd MMM yyyy', 'fr_FR').format(date)
                   : 'Choisir une date',
               style: const TextStyle(
                 fontSize: 16,
@@ -591,9 +563,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       posteRecherche: _posteController.text.trim().isEmpty
           ? null
           : _posteController.text.trim(),
-      pieceJointeUrl: _pieceJointeController.text.trim().isEmpty
-          ? null
-          : _pieceJointeController.text.trim(),
+      pieceJointeUrl: null,
       vues: isEditing ? (editingOffre!.vues ?? 0) : 0,
       viewedBy: isEditing ? (editingOffre!.viewedBy ?? <String>[]) : <String>[],
       archivedAt: isEditing ? editingOffre!.archivedAt : null,
@@ -664,7 +634,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     _remunerationController.dispose();
     _niveauController.dispose();
     _posteController.dispose();
-    _pieceJointeController.dispose();
     super.dispose();
   }
 }

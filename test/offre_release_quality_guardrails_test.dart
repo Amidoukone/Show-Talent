@@ -29,7 +29,6 @@ void main() {
       expect(form, contains('width: double.infinity'));
       expect(form, contains('_validateTitle'));
       expect(form, contains('_validateDescription'));
-      expect(form, contains('_validateOptionalUrl'));
       expect(form, contains('maxLength: _maxTitleLength'));
       expect(form, contains('maxLength: _maxDescriptionLength'));
       expect(form, contains('bool get _hasUnsavedChanges'));
@@ -48,6 +47,11 @@ void main() {
       expect(form, contains('AppRoutes.main'));
       expect(form, contains("'tab': 1"));
       expect(form, contains('_resolveInitialDate('));
+      expect(form, contains("locale: const Locale('fr', 'FR')"));
+      expect(form, contains("DateFormat('dd MMM yyyy', 'fr_FR')"));
+      expect(form, isNot(contains('_pieceJointeController')));
+      expect(form, isNot(contains('Lien document')));
+      expect(form, contains('pieceJointeUrl: null'));
     });
 
     test('offre screen reacts to action responses for status, apply and delete',
@@ -121,6 +125,11 @@ void main() {
       expect(controller, contains('Future<ActionResponse> seDesinscrireOffre'));
       expect(controller, contains('runTransaction'));
       expect(controller, contains('_extractCandidateMaps'));
+      expect(controller, contains("payload.remove('pieceJointeUrl')"));
+      expect(
+        controller,
+        contains("payload['pieceJointeUrl'] = FieldValue.delete()"),
+      );
     });
 
     test(

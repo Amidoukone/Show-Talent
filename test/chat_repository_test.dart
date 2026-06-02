@@ -83,6 +83,17 @@ void main() {
     );
   });
 
+  test('chat repository chunks large message mutations below batch limits', () {
+    final repository =
+        File('lib/services/chat/chat_repository.dart').readAsStringSync();
+
+    expect(repository, contains('_messageWriteBatchLimit = 450'));
+    expect(repository, contains('.limit(_messageWriteBatchLimit)'));
+    expect(repository, contains('while (true)'));
+    expect(repository, contains('await batch.commit();'));
+    expect(repository, contains('await conversationRef.delete();'));
+  });
+
   test('chat repository stores admin-readable user snapshots', () {
     final repository =
         File('lib/services/chat/chat_repository.dart').readAsStringSync();

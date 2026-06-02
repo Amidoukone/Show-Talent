@@ -89,9 +89,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _isSendingMessage = false;
   bool _isSubmittingFeedback = false;
 
-  // ✅ Petit cache UI : regroupe l'affichage des dates
-  String? _lastDateHeaderKey;
-
   @override
   void initState() {
     super.initState();
@@ -303,6 +300,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       if (messages.isEmpty) {
                         return _emptyChatState(
                           otherUserName: otherUser.nom,
+                          canMessage: canMessage,
                         );
                       }
 
@@ -313,9 +311,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       WidgetsBinding.instance.addPostFrameCallback((_) {
                         _scrollToBottom();
                       });
-
-                      // reset date header state each build for correct grouping
-                      _lastDateHeaderKey = null;
 
                       return ListView.builder(
                         controller: _listScroll,
@@ -333,15 +328,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           final isSentByUser =
                               message.expediteurId == currentUser.uid;
 
-                          // ✅ Date grouping (UI only) - fonctionne avec reverse:true
-                          // On compare avec le message suivant (plus ancien visuellement)
-                          final String dateKey = _dayKey(message.dateEnvoi);
-                          bool showDateHeader = false;
-
-                          if (_lastDateHeaderKey != dateKey) {
-                            showDateHeader = true;
-                            _lastDateHeaderKey = dateKey;
-                          }
+                          final showDateHeader = _shouldShowDateHeader(
+                            messages,
+                            index,
+                          );
 
                           return Column(
                             children: [
@@ -599,6 +589,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // ------------------------------
   String _dayKey(DateTime dt) => "${dt.year}-${dt.month}-${dt.day}";
 
+  bool _shouldShowDateHeader(List<Message> messages, int index) {
+    if (index < 0 || index >= messages.length) {
+      return false;
+    }
+
+    final currentDay = _dayKey(messages[index].dateEnvoi);
+    final nextOlderIndex = index + 1;
+    if (nextOlderIndex >= messages.length) {
+      return true;
+    }
+
+    return _dayKey(messages[nextOlderIndex].dateEnvoi) != currentDay;
+  }
+
   String _formatDayLabel(DateTime dateTime) {
     final now = DateTime.now();
     final todayKey = _dayKey(now);
@@ -765,6 +769,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       } else {
         AdFeedback.error('Retour impossible', result.message);
       }
+    } catch (_) {
+      AdFeedback.error(
+        'Retour impossible',
+        'Le retour n’a pas pu être transmis. Merci de réessayer.',
+      );
     } finally {
       if (mounted) {
         setState(() => _isSubmittingFeedback = false);
@@ -796,14 +805,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _emptyChatState({required String otherUserName}) {
+  Widget _emptyChatState({
+    required String otherUserName,
+    required bool canMessage,
+  }) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: AdStatePanel(
           icon: Icons.chat_bubble_outline,
           title: 'Aucun message',
-          message: 'Envoyez un premier message à $otherUserName.',
+          message: canMessage
+              ? 'Envoyez un premier message à $otherUserName.'
+              : 'La conversation est ouverte, mais la messagerie est désactivée pour le moment.',
         ),
       ),
     );

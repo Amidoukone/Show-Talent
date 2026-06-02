@@ -45,8 +45,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
   final TextEditingController locationController = TextEditingController();
   final TextEditingController capacityController = TextEditingController();
   final TextEditingController tagsController = TextEditingController();
-  final TextEditingController streamingController = TextEditingController();
-  final TextEditingController flyerController = TextEditingController();
 
   DateTime? startDate;
   DateTime? endDate;
@@ -70,8 +68,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
     yield locationController;
     yield capacityController;
     yield tagsController;
-    yield streamingController;
-    yield flyerController;
   }
 
   bool get _hasUnsavedChanges {
@@ -99,8 +95,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
           ? widget.event!.capaciteMax.toString()
           : '';
       tagsController.text = widget.event!.tags?.join(', ') ?? '';
-      streamingController.text = widget.event!.streamingUrl ?? '';
-      flyerController.text = widget.event!.flyerUrl ?? '';
       startDate = widget.event!.dateDebut;
       endDate = widget.event!.dateFin;
       estPublic = widget.event!.estPublic;
@@ -271,24 +265,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
                             onChanged: (v) =>
                                 setState(() => statut = v ?? 'ouvert'),
                           ),
-                          const SizedBox(height: 16),
-                          _buildTextField(
-                            controller: streamingController,
-                            labelText: 'Lien streaming (optionnel)',
-                            hintText: 'URL du direct ou de la rediffusion',
-                            icon: Icons.live_tv_outlined,
-                            keyboardType: TextInputType.url,
-                            validator: _validateOptionalUrl,
-                          ),
-                          const SizedBox(height: 16),
-                          _buildTextField(
-                            controller: flyerController,
-                            labelText: 'Lien visuel (optionnel)',
-                            hintText: 'URL du flyer ou de l’affiche',
-                            icon: Icons.image_outlined,
-                            keyboardType: TextInputType.url,
-                            validator: _validateOptionalUrl,
-                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -416,12 +392,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
           createdAt: widget.event!.createdAt,
           capaciteMax: capacite,
           tags: tags.isEmpty ? null : tags,
-          streamingUrl: streamingController.text.trim().isEmpty
-              ? null
-              : streamingController.text.trim(),
-          flyerUrl: flyerController.text.trim().isEmpty
-              ? null
-              : flyerController.text.trim(),
+          streamingUrl: null,
+          flyerUrl: null,
         );
 
         final response =
@@ -452,12 +424,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
           createdAt: DateTime.now(),
           capaciteMax: capacite,
           tags: tags.isEmpty ? null : tags,
-          streamingUrl: streamingController.text.trim().isEmpty
-              ? null
-              : streamingController.text.trim(),
-          flyerUrl: flyerController.text.trim().isEmpty
-              ? null
-              : flyerController.text.trim(),
+          streamingUrl: null,
+          flyerUrl: null,
           views: 0,
         );
 
@@ -605,20 +573,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
     return null;
   }
 
-  String? _validateOptionalUrl(String? value) {
-    final normalized = value?.trim() ?? '';
-    if (normalized.isEmpty) return null;
-
-    final uri = Uri.tryParse(normalized);
-    if (uri == null || !uri.hasScheme || uri.host.trim().isEmpty) {
-      return 'Entrez une URL valide.';
-    }
-    if (uri.scheme != 'https' && uri.scheme != 'http') {
-      return 'Utilisez une URL commençant par http ou https.';
-    }
-    return null;
-  }
-
   void _setStartDate(DateTime picked) {
     setState(() {
       startDate = picked;
@@ -674,6 +628,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
         );
         final pickedDate = await showDatePicker(
           context: context,
+          locale: const Locale('fr', 'FR'),
           initialDate: initialDate,
           firstDate: firstDate,
           lastDate: DateTime(2100),
@@ -718,7 +673,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
             ),
             Text(
               date != null
-                  ? DateFormat('dd MMM yyyy').format(date)
+                  ? DateFormat('dd MMM yyyy', 'fr_FR').format(date)
                   : 'Choisir une date',
               style: const TextStyle(
                 fontSize: 16,
@@ -775,8 +730,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
     locationController.dispose();
     capacityController.dispose();
     tagsController.dispose();
-    streamingController.dispose();
-    flyerController.dispose();
     super.dispose();
   }
 }

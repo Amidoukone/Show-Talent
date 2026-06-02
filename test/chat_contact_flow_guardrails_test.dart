@@ -46,6 +46,28 @@ void main() {
       expect(repository, contains('_createAndLinkGuidedContactIntake'));
     });
 
+    test('chat date headers are derived from adjacent messages', () {
+      final chatScreen =
+          File('lib/screens/chat_screen.dart').readAsStringSync();
+
+      expect(chatScreen, contains('_shouldShowDateHeader'));
+      expect(chatScreen, contains('messages[nextOlderIndex]'));
+      expect(chatScreen, isNot(contains('_lastDateHeaderKey')));
+    });
+
+    test('empty chat and feedback failure states stay explicit', () {
+      final chatScreen =
+          File('lib/screens/chat_screen.dart').readAsStringSync();
+
+      expect(chatScreen, contains('required bool canMessage'));
+      expect(
+        chatScreen,
+        contains(
+            'La conversation est ouverte, mais la messagerie est désactivée'),
+      );
+      expect(chatScreen, contains('Le retour n’a pas pu être transmis'));
+    });
+
     test(
         'shared backend exposes an admin follow-up callable for contact intakes',
         () {

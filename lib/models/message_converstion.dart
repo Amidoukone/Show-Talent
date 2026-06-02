@@ -30,12 +30,13 @@ class Message {
 
   factory Message.fromMap(Map<String, dynamic> map) {
     return Message(
-      id: map['id'] ?? '',
-      expediteurId: map['expediteurId'] ?? '',
-      destinataireId: map['destinataireId'] ?? '',
-      contenu: map['contenu'] ?? '',
-      dateEnvoi: (map['dateEnvoi'] as Timestamp).toDate(),
-      estLu: map['estLu'] ?? false,
+      id: map['id']?.toString() ?? '',
+      expediteurId: map['expediteurId']?.toString() ?? '',
+      destinataireId: map['destinataireId']?.toString() ?? '',
+      contenu: map['contenu']?.toString() ?? '',
+      dateEnvoi: _parseDate(map['dateEnvoi']) ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      estLu: map['estLu'] == true,
     );
   }
 }
@@ -134,14 +135,19 @@ class Conversation {
         unreadMap[key.toString()] = parsed;
       });
     }
+    final participantIds = _normalizeParticipantIds(map);
+    final utilisateur1Id = _normalizeNullableString(map['utilisateur1Id']) ??
+        (participantIds.isNotEmpty ? participantIds.first : '');
+    final utilisateur2Id = _normalizeNullableString(map['utilisateur2Id']) ??
+        (participantIds.length > 1 ? participantIds[1] : '');
 
     return Conversation(
-      id: map['id'] ?? '',
-      utilisateur1Id: map['utilisateur1Id'] ?? '',
-      utilisateur2Id: map['utilisateur2Id'] ?? '',
-      utilisateurIds: List<String>.from(map['utilisateurIds'] ?? []),
+      id: map['id']?.toString() ?? '',
+      utilisateur1Id: utilisateur1Id,
+      utilisateur2Id: utilisateur2Id,
+      utilisateurIds: participantIds,
       unreadCountByUser: unreadMap,
-      lastMessage: map['lastMessage'] ?? '',
+      lastMessage: _normalizeNullableString(map['lastMessage']),
       lastMessageDate: _parseNullableDate(map['lastMessageDate']),
       createdVia: _normalizeNullableString(map['createdVia']),
       contextType: _normalizeNullableString(map['contextType']),
@@ -186,31 +192,50 @@ class Conversation {
   }
 
   static DateTime? _parseNullableDate(dynamic value) {
-    if (value == null) {
-      return null;
-    }
-
-    if (value is Timestamp) {
-      return value.toDate();
-    }
-
-    if (value is DateTime) {
-      return value;
-    }
-
-    if (value is int) {
-      return DateTime.fromMillisecondsSinceEpoch(value);
-    }
-
-    if (value is String) {
-      return DateTime.tryParse(value);
-    }
-
-    return null;
+    return _parseDate(value);
   }
 
   static String? _normalizeNullableString(dynamic value) {
     final normalized = value?.toString().trim();
     return normalized == null || normalized.isEmpty ? null : normalized;
   }
+
+  static List<String> _normalizeParticipantIds(Map<String, dynamic> map) {
+    final rawIds = map['utilisateurIds'];
+    if (rawIds is Iterable) {
+      return rawIds
+          .map((value) => value.toString().trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+    }
+
+    return <String>[
+      _normalizeNullableString(map['utilisateur1Id']) ?? '',
+      _normalizeNullableString(map['utilisateur2Id']) ?? '',
+    ]..removeWhere((value) => value.isEmpty);
+  }
+}
+
+DateTime? _parseDate(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+
+  if (value is Timestamp) {
+    return value.toDate();
+  }
+
+  if (value is DateTime) {
+    return value;
+  }
+
+  if (value is int) {
+    return DateTime.fromMillisecondsSinceEpoch(value);
+  }
+
+  if (value is String) {
+    return DateTime.tryParse(value);
+  }
+
+  return null;
 }

@@ -1,11 +1,17 @@
 import 'package:adfoot/config/app_routes.dart';
+import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/users/user_repository.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/services/account_cleanup_service.dart';
+import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -17,14 +23,19 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
+enum _InfoTone { neutral, success, danger }
+
 class _SettingsScreenState extends State<SettingsScreen> {
   final AuthSessionService _authSessionService = AuthSessionService();
   final UserRepository _userRepository = UserRepository();
   final AccountCleanupService _cleanupService = AccountCleanupService();
+  static const String _profilePublicKey = 'profilePublic';
+  static const String _allowMessagesKey = 'allowMessages';
 
   bool _isDeleting = false;
   bool _loadingRole = true;
   bool _sessionUnavailable = false;
+  final Set<String> _savingPrivacySettings = <String>{};
 
   String _role = 'fan';
 
@@ -49,16 +60,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       final settings = await _userRepository.fetchUserSettings(uid);
-      if (settings != null) {
+      if (!mounted) {
+        return;
+      }
+
+      if (settings == null) {
+        setState(() {
+          _loadingRole = false;
+          _sessionUnavailable = true;
+        });
+        return;
+      }
+
+      setState(() {
         _role = settings.role;
         _profilePublic = settings.profilePublic;
         _allowMessages = settings.allowMessages;
+        _loadingRole = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
       }
-    } catch (_) {}
-
-    if (mounted) {
-      setState(() => _loadingRole = false);
+      setState(() {
+        _loadingRole = false;
+        _sessionUnavailable = true;
+      });
+      return;
     }
+  }
+
+  Future<void> _retryLoadUserSettings() async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _loadingRole = true;
+      _sessionUnavailable = false;
+    });
+    await _loadUserSettings();
   }
 
   Future<bool> _updatePrivacySetting({
@@ -74,6 +115,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         profilePublic: profilePublic,
         allowMessages: allowMessages,
       );
+      if (Get.isRegistered<UserController>()) {
+        await Get.find<UserController>().refreshUser();
+      }
       return true;
     } catch (e) {
       AdFeedback.error(
@@ -84,305 +128,809 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  bool _isSavingPrivacySetting(String key) {
+    return _savingPrivacySettings.contains(key);
+  }
+
+  Future<void> _handleProfileVisibilityChange(bool value) async {
+    if (_isSavingPrivacySetting(_profilePublicKey)) {
+      return;
+    }
+
+    final previous = _profilePublic;
+    setState(() {
+      _profilePublic = value;
+      _savingPrivacySettings.add(_profilePublicKey);
+    });
+
+    final ok = await _updatePrivacySetting(profilePublic: value);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (!ok) {
+        _profilePublic = previous;
+      }
+      _savingPrivacySettings.remove(_profilePublicKey);
+    });
+
+    if (ok) {
+      AdFeedback.info(
+        'Confidentialité',
+        value
+            ? 'Votre profil est maintenant visible.'
+            : 'Votre profil est désormais restreint.',
+      );
+    }
+  }
+
+  Future<void> _handleMessagePermissionChange(bool value) async {
+    if (_isSavingPrivacySetting(_allowMessagesKey)) {
+      return;
+    }
+
+    final previous = _allowMessages;
+    setState(() {
+      _allowMessages = value;
+      _savingPrivacySettings.add(_allowMessagesKey);
+    });
+
+    final ok = await _updatePrivacySetting(allowMessages: value);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (!ok) {
+        _allowMessages = previous;
+      }
+      _savingPrivacySettings.remove(_allowMessagesKey);
+    });
+
+    if (ok) {
+      AdFeedback.info(
+        'Messages',
+        value
+            ? 'Les messages sont autorisés.'
+            : 'Les messages sont désactivés.',
+      );
+    }
+  }
+
+  Future<void> _handleSignOut() async {
+    final confirmed = await AdDialogs.confirm(
+      context: context,
+      title: 'Se déconnecter',
+      message: 'Voulez-vous fermer votre session Adfoot sur cet appareil ?',
+      confirmLabel: 'Se déconnecter',
+      cancelLabel: 'Annuler',
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    await _authSessionService.signOut();
+    Get.offAllNamed(AppRoutes.login);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     if (_loadingRole) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Outils'),
+          backgroundColor: cs.surface,
+          foregroundColor: cs.onSurface,
+        ),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: AdStatePanel.loading(
+              title: 'Chargement des outils',
+              message: 'Synchronisation des paramètres du compte.',
+            ),
+          ),
+        ),
       );
     }
 
     if (_sessionUnavailable) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Paramètres'),
+          title: const Text('Outils'),
+          backgroundColor: cs.surface,
+          foregroundColor: cs.onSurface,
         ),
-        body: const Center(
+        body: Center(
           child: Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: AdStatePanel.error(
               title: 'Session invalide',
               message: 'Impossible de charger les paramètres du compte.',
+              action: FilledButton.icon(
+                onPressed: _retryLoadUserSettings,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Réessayer'),
+              ),
             ),
           ),
         ),
       );
     }
 
-    final cs = Theme.of(context).colorScheme;
+    final currentUser = _currentUser;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Paramètres"),
+        title: const Text('Outils'),
         backgroundColor: cs.surface,
         foregroundColor: cs.onSurface,
+        actions: [
+          IconButton(
+            tooltip: 'Actualiser',
+            onPressed: _isDeleting ? null : _retryLoadUserSettings,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: 32),
-        children: [
-          // =====================================================
-          // 👤 COMPTE
-          // =====================================================
-          _sectionTitle("Compte"),
-
-          ListTile(
-            leading: Icon(Icons.person, color: cs.primary),
-            title: const Text('Voir le profil'),
-            enabled: !_isDeleting,
-            onTap: () {
-              final uid = _authSessionService.currentUser?.uid;
-              if (uid == null) return;
-
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ProfileScreen(uid: uid),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildToolsHeader(currentUser),
+                    const SizedBox(height: 16),
+                    _buildSectionCard(
+                      title: 'Compte',
+                      icon: Icons.manage_accounts_outlined,
+                      children: [
+                        _buildActionTile(
+                          icon: Icons.person_outline,
+                          title: 'Voir le profil',
+                          subtitle:
+                              'Contrôler les informations visibles par les autres utilisateurs.',
+                          enabled: !_isDeleting,
+                          onTap: _openProfile,
+                        ),
+                        _buildDivider(),
+                        _buildActionTile(
+                          icon: Icons.logout_rounded,
+                          title: 'Se déconnecter',
+                          subtitle: 'Fermer la session sur cet appareil.',
+                          enabled: !_isDeleting,
+                          onTap: _handleSignOut,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSectionCard(
+                      title: 'Confidentialité',
+                      icon: Icons.privacy_tip_outlined,
+                      children: [
+                        if (_role != 'fan')
+                          _buildSwitchTile(
+                            icon: Icons.visibility_outlined,
+                            title: 'Visibilité du profil',
+                            subtitle: _profileVisibilityLabel(),
+                            value: _profilePublic,
+                            loading: _isSavingPrivacySetting(_profilePublicKey),
+                            enabled: !_isDeleting,
+                            onChanged: _handleProfileVisibilityChange,
+                          )
+                        else
+                          _buildInfoBlock(
+                            icon: Icons.visibility_off_outlined,
+                            title: 'Profil fan',
+                            message:
+                                'La visibilité du profil fan reste limitée aux usages nécessaires de la plateforme.',
+                          ),
+                        if (_role == 'joueur' ||
+                            isOpportunityPublisherRole(_role)) ...[
+                          _buildDivider(),
+                          _buildSwitchTile(
+                            icon: Icons.message_outlined,
+                            title: 'Autoriser les messages',
+                            subtitle: _messagePermissionLabel(),
+                            value: _allowMessages,
+                            loading: _isSavingPrivacySetting(_allowMessagesKey),
+                            enabled: !_isDeleting,
+                            onChanged: _handleMessagePermissionChange,
+                          ),
+                        ],
+                        _buildDivider(),
+                        _buildActionTile(
+                          icon: Icons.info_outline_rounded,
+                          title: 'Utilisation des données',
+                          subtitle:
+                              'Scouting, opportunités sportives et mise en relation encadrée.',
+                          onTap: _showDataUsageNotice,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSectionCard(
+                      title: 'Sécurité et opportunités',
+                      icon: Icons.shield_outlined,
+                      children: [
+                        _buildInfoBlock(
+                          icon: Icons.verified_user_outlined,
+                          title: 'Règle officielle Adfoot',
+                          message:
+                              'Avant tout essai, contrat, voyage ou paiement, faites vérifier l’opportunité par l’équipe Adfoot.',
+                        ),
+                        _buildDivider(),
+                        _buildChecklistItem(
+                          'Ne payez jamais un agent ou intermédiaire sans validation officielle.',
+                        ),
+                        _buildChecklistItem(
+                          'Conservez les échanges importants dans les canaux Adfoot.',
+                        ),
+                        _buildChecklistItem(
+                          'Signalez toute promesse floue, pression ou demande suspecte.',
+                        ),
+                        _buildDivider(),
+                        _buildActionTile(
+                          icon: Icons.support_agent_outlined,
+                          title: 'Contacter l’équipe Adfoot',
+                          subtitle:
+                              'Vérification d’opportunités et accompagnement sécurisé.',
+                          onTap: _showSupportNotice,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSectionCard(
+                      title: 'Zone sensible',
+                      icon: Icons.warning_amber_rounded,
+                      children: [
+                        _buildInfoBlock(
+                          icon: Icons.delete_forever_outlined,
+                          title: 'Suppression du compte',
+                          message:
+                              'Cette action supprime définitivement votre compte et les données associées.',
+                          tone: _InfoTone.danger,
+                        ),
+                        const SizedBox(height: 12),
+                        AdButton(
+                          label: 'Supprimer mon compte',
+                          leading: Icons.delete_forever_outlined,
+                          kind: AdButtonKind.danger,
+                          loading: _isDeleting,
+                          onPressed: _isDeleting ? null : _confirmDeleteAccount,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              );
-            },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // =========================================================
+  // OUTILS UI HELPERS
+  // =========================================================
+
+  AppUser? get _currentUser {
+    if (!Get.isRegistered<UserController>()) {
+      return null;
+    }
+    return Get.find<UserController>().user;
+  }
+
+  Future<void> _openProfile() async {
+    final uid = _currentUser?.uid ?? _authSessionService.currentUser?.uid;
+    if (uid == null || uid.trim().isEmpty) {
+      AdFeedback.error(
+        'Profil indisponible',
+        'Impossible d’ouvrir le profil pour cette session.',
+      );
+      return;
+    }
+
+    await Get.to(() => ProfileScreen(uid: uid, isReadOnly: false));
+  }
+
+  void _showDataUsageNotice() {
+    AdFeedback.info(
+      'Utilisation des données',
+      'Les données servent à sécuriser le profil, les opportunités et les mises en relation Adfoot.',
+      duration: const Duration(seconds: 5),
+    );
+  }
+
+  void _showSupportNotice() {
+    AdFeedback.info(
+      'Equipe Adfoot',
+      'Faites vérifier toute opportunité via adfoot.org ou WhatsApp : +223 70 66 83 64.',
+      duration: const Duration(seconds: 5),
+    );
+  }
+
+  Widget _buildToolsHeader(AppUser? user) {
+    final userName = user?.nom.trim();
+    final userEmail = user?.email.trim();
+    final displayName =
+        userName != null && userName.isNotEmpty ? userName : 'Compte Adfoot';
+    final displayEmail = userEmail != null && userEmail.isNotEmpty
+        ? userEmail
+        : 'Session connectée';
+    final role = normalizeUserRole(user?.role).isNotEmpty
+        ? normalizeUserRole(user?.role)
+        : _role;
+
+    return AdSurfaceCard(
+      padding: const EdgeInsets.all(AdSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AdColors.brand.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(AdRadius.lg),
+                  border: Border.all(
+                    color: AdColors.brand.withValues(alpha: 0.22),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.tune_rounded,
+                  color: AdColors.brand,
+                  size: 25,
+                ),
+              ),
+              const SizedBox(width: AdSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AdColors.onSurface,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      displayEmail,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AdColors.onSurfaceMuted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-
-          ListTile(
-            leading: Icon(Icons.logout, color: cs.primary),
-            title: const Text('Se déconnecter'),
-            enabled: !_isDeleting,
-            onTap: () async {
-              await _authSessionService.signOut();
-              Get.offAllNamed(AppRoutes.login);
-            },
+          const SizedBox(height: AdSpacing.md),
+          Wrap(
+            spacing: AdSpacing.xs,
+            runSpacing: AdSpacing.xs,
+            children: [
+              _buildStatusPill(
+                icon: Icons.badge_outlined,
+                label: _roleDisplayLabel(role),
+                color: AdColors.info,
+              ),
+              _buildStatusPill(
+                icon: _profilePublic ? Icons.visibility : Icons.visibility_off,
+                label: _role == 'fan'
+                    ? 'Profil limité'
+                    : (_profilePublic ? 'Profil visible' : 'Profil restreint'),
+                color: _profilePublic ? AdColors.success : AdColors.warning,
+              ),
+              if (_role == 'joueur' || isOpportunityPublisherRole(_role))
+                _buildStatusPill(
+                  icon: _allowMessages
+                      ? Icons.mark_chat_read_outlined
+                      : Icons.chat_bubble_outline,
+                  label:
+                      _allowMessages ? 'Messages ouverts' : 'Messages fermés',
+                  color: _allowMessages ? AdColors.success : AdColors.warning,
+                ),
+            ],
           ),
-
-          const Divider(height: 32),
-
-          // =====================================================
-          // 🔐 CONFIDENTIALITÉ
-          // =====================================================
-          _sectionTitle("Confidentialité"),
-
-          if (_role != 'fan')
-            SwitchListTile(
-              secondary: const Icon(Icons.visibility),
-              title: const Text('Visibilité du profil'),
-              subtitle: Text(_profileVisibilityLabel()),
-              value: _profilePublic,
-              onChanged: _isDeleting
-                  ? null
-                  : (value) async {
-                      final previous = _profilePublic;
-                      setState(() => _profilePublic = value);
-
-                      final ok = await _updatePrivacySetting(
-                        profilePublic: value,
-                      );
-                      if (!ok && mounted) {
-                        setState(() => _profilePublic = previous);
-                        return;
-                      }
-
-                      AdFeedback.info(
-                        'Confidentialité',
-                        value
-                            ? 'Votre profil est maintenant visible.'
-                            : 'Votre profil est désormais restreint.',
-                      );
-                    },
-            ),
-
-          if (_role == 'joueur' || isOpportunityPublisherRole(_role))
-            SwitchListTile(
-              secondary: const Icon(Icons.message),
-              title: const Text('Autoriser les messages'),
-              subtitle: Text(_messagePermissionLabel()),
-              value: _allowMessages,
-              onChanged: _isDeleting
-                  ? null
-                  : (value) async {
-                      final previous = _allowMessages;
-                      setState(() => _allowMessages = value);
-
-                      final ok = await _updatePrivacySetting(
-                        allowMessages: value,
-                      );
-                      if (!ok && mounted) {
-                        setState(() => _allowMessages = previous);
-                        return;
-                      }
-
-                      AdFeedback.info(
-                        'Messages',
-                        value
-                            ? 'Les messages sont autorisés.'
-                            : 'Les messages sont désactivés.',
-                      );
-                    },
-            ),
-
-          ListTile(
-            leading: const Icon(Icons.info_outline),
-            title: const Text('Utilisation des données'),
-            subtitle: const Text(
-              'Vos données sont utilisées uniquement dans le cadre '
-              'du scouting et de la mise en relation.',
-            ),
-            onTap: () {
-              AdFeedback.info(
-                'Données personnelles',
-                "Adfoot ne vend jamais vos données.\n"
-                    'Elles servent uniquement à connecter les talents '
-                    'aux opportunités sportives.',
-                duration: const Duration(seconds: 5),
-              );
-            },
-          ),
-
-          const Divider(height: 32),
-
-          // =====================================================
-          // 🛡️ SÉCURITÉ & OPPORTUNITÉS PROFESSIONNELLES
-          // =====================================================
-          _sectionTitle("Sécurité & opportunités"),
-
-          _securityIntroCard(cs),
-          const SizedBox(height: 12),
-          _riskAwarenessCard(cs),
-          const SizedBox(height: 12),
-          _officialRuleCard(cs),
-          const SizedBox(height: 8),
-
-          ListTile(
-            leading: Icon(Icons.support_agent, color: cs.primary),
-            title: const Text('Contacter l’équipe Adfoot'),
-            subtitle: const Text(
-              'Vérification d’opportunités et accompagnement sécurisé',
-            ),
-            onTap: () {
-              AdFeedback.info(
-                'Équipe Adfoot',
-                "Avant toute décision, contactez-nous.\n\n"
-                    "adfoot.org\nWhatsApp : +223 70 66 83 64",
-                duration: const Duration(seconds: 6),
-              );
-            },
-          ),
-
-          const Divider(height: 32),
-
-          // =====================================================
-          // ❌ ZONE DANGEREUSE
-          // =====================================================
-          _sectionTitle("Zone dangereuse"),
-
-          ListTile(
-            leading: const Icon(Icons.delete_forever, color: Colors.red),
-            title: const Text(
-              'Supprimer mon compte',
-              style: TextStyle(color: Colors.red),
-            ),
-            subtitle: const Text(
-              'Suppression définitive du compte et de toutes les données.',
-            ),
-            enabled: !_isDeleting,
-            onTap: _isDeleting ? null : _confirmDeleteAccount,
+          const SizedBox(height: AdSpacing.md),
+          Wrap(
+            spacing: AdSpacing.xs,
+            runSpacing: AdSpacing.xs,
+            children: [
+              AdButton(
+                label: 'Voir profil',
+                leading: Icons.person_outline,
+                kind: AdButtonKind.tonal,
+                size: AdButtonSize.compact,
+                expanded: false,
+                onPressed: _isDeleting ? null : _openProfile,
+              ),
+              AdButton(
+                label: 'Actualiser',
+                leading: Icons.refresh_rounded,
+                kind: AdButtonKind.outline,
+                size: AdButtonSize.compact,
+                expanded: false,
+                onPressed: _isDeleting ? null : _retryLoadUserSettings,
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // =========================================================
-  // 🛡️ SECURITY UI BLOCKS
-  // =========================================================
-
-  Widget _securityIntroCard(ColorScheme cs) {
-    return Card(
-      elevation: 0,
-      color: cs.surfaceContainerHighest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: cs.primary.withValues(alpha: 0.15)),
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+    String? subtitle,
+  }) {
+    return AdSurfaceCard(
+      padding: const EdgeInsets.all(AdSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AdColors.surfaceCardAlt,
+                  borderRadius: BorderRadius.circular(AdRadius.md),
+                  border: Border.all(color: AdColors.divider),
+                ),
+                child: Icon(icon, color: AdColors.brand, size: 20),
+              ),
+              const SizedBox(width: AdSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AdColors.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: AdColors.onSurfaceMuted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AdSpacing.md),
+          ...children,
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    );
+  }
+
+  Widget _buildActionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool enabled = true,
+  }) {
+    final foreground =
+        enabled ? AdColors.onSurface : AdColors.onSurfaceDisabled;
+    final muted =
+        enabled ? AdColors.onSurfaceMuted : AdColors.onSurfaceDisabled;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(AdRadius.md),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AdSpacing.sm),
+          child: Row(
+            children: [
+              _buildTileIcon(
+                icon,
+                enabled ? AdColors.brand : AdColors.onSurfaceDisabled,
+              ),
+              const SizedBox(width: AdSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: muted,
+                        fontSize: 12,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: muted,
+                size: 22,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSwitchTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    bool enabled = true,
+    bool loading = false,
+  }) {
+    final canChange = enabled && !loading;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AdSpacing.sm),
+      child: Row(
+        children: [
+          _buildTileIcon(
+            icon,
+            canChange ? AdColors.brand : AdColors.onSurfaceDisabled,
+          ),
+          const SizedBox(width: AdSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.shield, color: cs.primary),
-                const SizedBox(width: 8),
-                const Text(
-                  "Votre sécurité avant tout",
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AdColors.onSurface,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AdColors.onSurfaceMuted,
+                    fontSize: 12,
+                    height: 1.25,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              "Adfoot facilite la mise en relation entre joueurs, clubs, "
-              "agents et recruteurs. Cependant, nous ne pouvons pas contrôler "
-              "chaque individu présent sur la plateforme.",
-              style: TextStyle(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(width: AdSpacing.sm),
+          if (loading) ...[
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
             ),
+            const SizedBox(width: AdSpacing.xs),
           ],
-        ),
+          Switch(
+            value: value,
+            activeColor: AdColors.brand,
+            onChanged: canChange ? onChanged : null,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _riskAwarenessCard(ColorScheme cs) {
-    return Card(
-      elevation: 0,
-      color: cs.surface,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              "⚠️ Risques fréquents",
-              style: TextStyle(fontWeight: FontWeight.w600),
+  Widget _buildTileIcon(IconData icon, Color color) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AdRadius.md),
+      ),
+      child: Icon(icon, color: color, size: 19),
+    );
+  }
+
+  Widget _buildInfoBlock({
+    required IconData icon,
+    required String title,
+    required String message,
+    _InfoTone tone = _InfoTone.neutral,
+  }) {
+    Color accent;
+    switch (tone) {
+      case _InfoTone.success:
+        accent = AdColors.success;
+        break;
+      case _InfoTone.danger:
+        accent = AdColors.error;
+        break;
+      case _InfoTone.neutral:
+        accent = AdColors.info;
+        break;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AdSpacing.md),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(AdRadius.md),
+        border: Border.all(color: accent.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: accent, size: 21),
+          const SizedBox(width: AdSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AdColors.onSurface,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: AdColors.onSurfaceMuted,
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
+              ],
             ),
-            SizedBox(height: 8),
-            Text('• Faux agents demandant de l’argent'),
-            Text("• Promesses de contrats sans documents officiels"),
-            Text("• Voyages non encadrés ou dangereux"),
-            Text("• Exploitation de jeunes joueurs"),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _officialRuleCard(ColorScheme cs) {
-    return Card(
-      elevation: 0,
-      color: cs.primary.withValues(alpha: 0.08),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              "Règle officielle Adfoot",
-              style: TextStyle(fontWeight: FontWeight.w700),
+  Widget _buildChecklistItem(String message) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AdSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.check_circle_outline_rounded,
+            color: AdColors.success,
+            size: 19,
+          ),
+          const SizedBox(width: AdSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: AdColors.onSurfaceMuted,
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            SizedBox(height: 8),
-            Text(
-              "Si un club, un agent ou un recruteur vous propose une opportunité, "
-              "contactez Adfoot avant toute décision.\n\n"
-              "Notre agence vérifie la fiabilité, sécurise les démarches "
-              "et vous accompagne de manière professionnelle.",
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _buildStatusPill({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AdSpacing.sm,
+        vertical: 7,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AdRadius.pill),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 15),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return const Divider(
+      height: AdSpacing.lg,
+      thickness: 1,
+      color: AdColors.divider,
+    );
+  }
+
+  String _roleDisplayLabel(String? role) {
+    switch (normalizeUserRole(role)) {
+      case 'joueur':
+        return 'Joueur';
+      case 'coach':
+        return 'Coach';
+      case 'club':
+        return 'Club';
+      case 'recruteur':
+        return 'Recruteur';
+      case 'agent':
+        return 'Agent';
+      case 'fan':
+        return 'Supporter';
+      default:
+        final fallback = role?.trim();
+        return fallback != null && fallback.isNotEmpty
+            ? fallback
+            : 'Utilisateur';
+    }
   }
 
   // =========================================================
-  // 🔥 SUPPRESSION COMPTE
+  // SUPPRESSION COMPTE
   // =========================================================
 
   Future<void> _confirmDeleteAccount() async {
@@ -487,6 +1035,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     switch (_role) {
       case 'joueur':
         return 'Visible par les clubs, recruteurs et agents.';
+      case 'coach':
+        return 'Visible par les clubs, joueurs et recruteurs.';
       case 'recruteur':
       case 'agent':
       case 'club':
@@ -502,22 +1052,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return 'Autoriser clubs et recruteurs à vous contacter.';
       case 'club':
         return 'Autoriser les joueurs à vous contacter.';
+      case 'recruteur':
+        return 'Autoriser les joueurs et clubs à vous contacter.';
+      case 'agent':
+        return 'Autoriser les talents et partenaires à vous contacter.';
       default:
-        return '';
+        return 'Contrôler les demandes de contact depuis Adfoot.';
     }
-  }
-
-  Widget _sectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.bold,
-          color: Colors.grey,
-        ),
-      ),
-    );
   }
 }

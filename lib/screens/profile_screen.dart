@@ -833,15 +833,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (!isOwnProfile) return const SizedBox.shrink();
     if (user.isFan) return const SizedBox.shrink();
 
-    final message = user.isPlayer
-        ? 'Complétez votre fiche joueur et votre dossier scout pour présenter un profil plus crédible aux clubs et recruteurs.'
-        : user.isClub
-            ? 'Complétez la présentation de votre club pour afficher clairement votre structure, vos catégories et vos besoins.'
-            : user.isRecruiter
-                ? user.isAgent
-                    ? 'Complétez votre cadre de représentation pour présenter votre agence, votre licence et vos zones d’intervention.'
-                    : 'Complétez vos références professionnelles pour présenter votre structure, vos licences et vos zones d’intervention.'
-                : 'Complétez les informations avancées du profil.';
+    final hasAdvancedProfile = user.hasAdvancedProfile;
+    final message = hasAdvancedProfile
+        ? user.isPlayer
+            ? 'Gardez votre dossier scout à jour pour que les recruteurs disposent d’informations fiables.'
+            : user.isClub
+                ? 'Maintenez la présentation de votre club, vos catégories et vos besoins à jour.'
+                : user.isRecruiter
+                    ? user.isAgent
+                        ? 'Maintenez votre cadre de représentation, votre licence et vos zones à jour.'
+                        : 'Maintenez vos références professionnelles et vos zones d’intervention à jour.'
+                    : 'Gardez les informations avancées du profil à jour.'
+        : user.isPlayer
+            ? 'Complétez votre fiche joueur et votre dossier scout pour présenter un profil plus crédible aux clubs et recruteurs.'
+            : user.isClub
+                ? 'Complétez la présentation de votre club pour afficher clairement votre structure, vos catégories et vos besoins.'
+                : user.isRecruiter
+                    ? user.isAgent
+                        ? 'Complétez votre cadre de représentation pour présenter votre agence, votre licence et vos zones d’intervention.'
+                        : 'Complétez vos références professionnelles pour présenter votre structure, vos licences et vos zones d’intervention.'
+                    : 'Complétez les informations avancées du profil.';
+
+    Future<void> openAdvancedEditor() async {
+      if (user.isPlayer || user.isClub || user.isRecruiter) {
+        final updated = await Get.to<bool>(
+          () => EditAdvancedProfileScreen(
+            user: user,
+            profileController: _profileController,
+          ),
+        );
+        if (updated == true) {
+          _profileController.update();
+        }
+      }
+    }
+
+    Widget buildActionButton({double? width}) {
+      return SizedBox(
+        width: width,
+        child: ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(backgroundColor: kPrimary),
+          onPressed: () => openAdvancedEditor(),
+          icon: Icon(
+            hasAdvancedProfile
+                ? Icons.edit_outlined
+                : Icons.add_circle_outline_rounded,
+          ),
+          label: Text(hasAdvancedProfile ? 'Mettre à jour' : 'Compléter'),
+        ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -850,35 +891,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: kPrimary.withValues(alpha: 0.2)),
       ),
-      child: Row(
-        children: [
-          const Icon(Icons.lightbulb_outline_rounded, color: kPrimary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: kPrimary),
-            onPressed: () async {
-              if (user.isPlayer || user.isClub || user.isRecruiter) {
-                final updated = await Get.to<bool>(
-                  () => EditAdvancedProfileScreen(
-                    user: user,
-                    profileController: _profileController,
-                  ),
-                );
-                if (updated == true) {
-                  _profileController.update();
-                }
-              }
-            },
-            child: Text(user.hasAdvancedProfile ? 'Modifier' : 'Compléter'),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final icon = Icon(
+            hasAdvancedProfile
+                ? Icons.manage_search_outlined
+                : Icons.lightbulb_outline_rounded,
+            color: kPrimary,
+          );
+          final text = Text(
+            message,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          );
+
+          if (constraints.maxWidth < 380) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    icon,
+                    const SizedBox(width: 10),
+                    Expanded(child: text),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                buildActionButton(width: double.infinity),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              icon,
+              const SizedBox(width: 10),
+              Expanded(child: text),
+              const SizedBox(width: 10),
+              buildActionButton(),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1569,6 +1622,18 @@ class _VideoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Widget fallback() {
+      return Container(
+        color: AdColors.surfaceCardAlt,
+        alignment: Alignment.center,
+        child: const Icon(
+          Icons.play_circle_outline_rounded,
+          color: AdColors.onSurfaceMuted,
+          size: 28,
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: ClipRRect(
@@ -1576,6 +1641,14 @@ class _VideoTile extends StatelessWidget {
         child: Image.network(
           video.thumbnailUrl,
           fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback(),
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) {
+              return child;
+            }
+
+            return fallback();
+          },
         ),
       ),
     );
@@ -1616,11 +1689,15 @@ class _SectionCard extends StatelessWidget {
             children: [
               Icon(icon, color: AdColors.brand),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -1647,6 +1724,8 @@ class _InfoPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedStyle = style;
+    final maxLabelWidth =
+        (MediaQuery.of(context).size.width - 120).clamp(80.0, 320.0);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -1666,11 +1745,16 @@ class _InfoPill extends StatelessWidget {
             color: resolvedStyle?.foregroundColor ?? AdColors.brand,
           ),
           const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: resolvedStyle?.foregroundColor,
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxLabelWidth),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: resolvedStyle?.foregroundColor,
+              ),
             ),
           ),
         ],

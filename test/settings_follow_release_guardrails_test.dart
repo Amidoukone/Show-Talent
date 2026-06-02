@@ -10,11 +10,51 @@ void main() {
 
       expect(settings, contains('bool _sessionUnavailable = false;'));
       expect(settings, contains('_authSessionService.currentUser?.uid'));
+      expect(settings, contains('settings == null'));
+      expect(settings, contains('_retryLoadUserSettings'));
       expect(settings, contains("title: 'Session invalide'"));
+      expect(settings, contains("label: const Text('Réessayer')"));
       expect(
         settings,
         contains('Impossible de charger les paramètres du compte.'),
       );
+    });
+
+    test('settings refresh shared user state after privacy changes', () {
+      final settings =
+          File('lib/screens/setting_screen.dart').readAsStringSync();
+
+      expect(settings,
+          contains("import 'package:adfoot/controller/user_controller.dart';"));
+      expect(settings, contains('Get.isRegistered<UserController>()'));
+      expect(settings, contains('Get.find<UserController>().refreshUser()'));
+      expect(settings, contains("case 'recruteur':"));
+      expect(settings, contains("case 'agent':"));
+      expect(
+        settings,
+        contains('Autoriser les talents et partenaires à vous contacter.'),
+      );
+    });
+
+    test('tools screen uses production-ready account sections', () {
+      final settings =
+          File('lib/screens/setting_screen.dart').readAsStringSync();
+
+      expect(settings, contains("title: const Text('Outils')"));
+      expect(settings, contains('AdSurfaceCard'));
+      expect(settings, contains('_buildToolsHeader'));
+      expect(settings, contains('_buildSectionCard'));
+      expect(settings, contains('_buildSwitchTile'));
+      expect(settings, contains('_savingPrivacySettings'));
+      expect(settings, contains('_handleSignOut'));
+      expect(
+        settings,
+        contains('Get.to(() => ProfileScreen(uid: uid, isReadOnly: false))'),
+      );
+      expect(settings, contains('_showDataUsageNotice'));
+      expect(settings, contains('_showSupportNotice'));
+      expect(settings, contains('AdButtonKind.danger'));
+      expect(settings, contains('Supprimer mon compte'));
     });
 
     test(

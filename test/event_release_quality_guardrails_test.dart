@@ -35,7 +35,14 @@ void main() {
       expect(form, contains('Publier l’événement'));
       expect(form, contains('maxLength: _maxTitleLength'));
       expect(form, contains('maxLength: _maxDescriptionLength'));
-      expect(form, contains('_validateOptionalUrl'));
+      expect(form, contains("locale: const Locale('fr', 'FR')"));
+      expect(form, contains("DateFormat('dd MMM yyyy', 'fr_FR')"));
+      expect(form, isNot(contains('streamingController')));
+      expect(form, isNot(contains('flyerController')));
+      expect(form, isNot(contains('Lien streaming')));
+      expect(form, isNot(contains('Lien visuel')));
+      expect(form, contains('streamingUrl: null'));
+      expect(form, contains('flyerUrl: null'));
     });
 
     test('event list reacts to action responses for register/unregister/delete',
@@ -73,6 +80,12 @@ void main() {
       expect(screen, contains('S’inscrire'));
       expect(screen, isNot(contains('AdFeedback.success(')));
       expect(screen, isNot(contains("const Text('Details')")));
+      expect(
+        screen,
+        contains('..sort((a, b) => b.createdAt.compareTo(a.createdAt))'),
+      );
+      expect(screen, contains('streamingUrl: null'));
+      expect(screen, contains('flyerUrl: null'));
     });
 
     test(
@@ -98,6 +111,11 @@ void main() {
       expect(repository, contains('already_registered'));
       expect(repository, contains('not_registered'));
       expect(repository, contains('event_closed'));
+      expect(
+        repository,
+        contains("payload['streamingUrl'] = FieldValue.delete()"),
+      );
+      expect(repository, contains("payload['flyerUrl'] = FieldValue.delete()"));
     });
 
     test('event details stay in-app and tolerate transient missing session',

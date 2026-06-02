@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
 import 'config/app_bootstrap.dart';
 import 'config/app_routes.dart';
@@ -10,6 +12,7 @@ import 'theme/app_theme.dart';
 
 Future<void> main() async {
   runZonedGuarded(() async {
+    Intl.defaultLocale = 'fr_FR';
     await AppBootstrap.initialize();
     runApp(const MyApp());
   }, AppBootstrap.reportZoneError);
@@ -25,6 +28,17 @@ class AdfootApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: Get.key,
       theme: AppTheme.light(),
+      locale: const Locale('fr', 'FR'),
+      fallbackLocale: const Locale('fr', 'FR'),
+      supportedLocales: const <Locale>[
+        Locale('fr', 'FR'),
+        Locale('en', 'US'),
+      ],
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       defaultTransition: Transition.fadeIn,
       color: AdColors.brand,
       builder: (context, child) {

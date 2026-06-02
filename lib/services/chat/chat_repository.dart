@@ -7,6 +7,8 @@ class ChatRepository {
   ChatRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
+  static const int _messageWriteBatchLimit = 450;
+
   final FirebaseFirestore _firestore;
 
   CollectionReference<Map<String, dynamic>> get _conversationsCollection =>
@@ -421,23 +423,31 @@ class ChatRepository {
     required String conversationId,
     required String userId,
   }) async {
-    final unreadMessages = await _conversationsCollection
-        .doc(conversationId)
-        .collection('messages')
-        .where('destinataireId', isEqualTo: userId)
-        .where('estLu', isEqualTo: false)
-        .get();
+    final messagesRef =
+        _conversationsCollection.doc(conversationId).collection('messages');
 
-    final batch = _firestore.batch();
-    for (final doc in unreadMessages.docs) {
-      batch.update(doc.reference, <String, dynamic>{'estLu': true});
+    while (true) {
+      final unreadMessages = await messagesRef
+          .where('destinataireId', isEqualTo: userId)
+          .where('estLu', isEqualTo: false)
+          .limit(_messageWriteBatchLimit)
+          .get();
+
+      if (unreadMessages.docs.isEmpty) {
+        break;
+      }
+
+      final batch = _firestore.batch();
+      for (final doc in unreadMessages.docs) {
+        batch.update(doc.reference, <String, dynamic>{'estLu': true});
+      }
+      await batch.commit();
     }
-    batch.set(
-      _conversationsCollection.doc(conversationId),
+
+    await _conversationsCollection.doc(conversationId).set(
       <String, dynamic>{'unreadCountByUser.$userId': 0},
       SetOptions(merge: true),
     );
-    await batch.commit();
   }
 
   Future<Map<String, dynamic>?> fetchConversationData(
@@ -503,17 +513,23 @@ class ChatRepository {
   }
 
   Future<void> deleteConversation(String conversationId) async {
-    final snapshot = await _conversationsCollection
-        .doc(conversationId)
-        .collection('messages')
-        .get();
+    final conversationRef = _conversationsCollection.doc(conversationId);
+    final messagesRef = conversationRef.collection('messages');
 
-    final batch = _firestore.batch();
-    for (final doc in snapshot.docs) {
-      batch.delete(doc.reference);
+    while (true) {
+      final snapshot = await messagesRef.limit(_messageWriteBatchLimit).get();
+      if (snapshot.docs.isEmpty) {
+        break;
+      }
+
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
     }
-    batch.delete(_conversationsCollection.doc(conversationId));
-    await batch.commit();
+
+    await conversationRef.delete();
   }
 
   Stream<AppUser?> watchUserById(String uid) {

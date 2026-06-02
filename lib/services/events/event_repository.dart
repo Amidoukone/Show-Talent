@@ -46,6 +46,12 @@ class EventRepository {
     } else {
       payload['archivedAt'] = FieldValue.delete();
     }
+    if (event.streamingUrl == null) {
+      payload['streamingUrl'] = FieldValue.delete();
+    }
+    if (event.flyerUrl == null) {
+      payload['flyerUrl'] = FieldValue.delete();
+    }
     return _eventsCollection.doc(event.id).update(payload);
   }
 
