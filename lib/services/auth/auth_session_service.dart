@@ -9,6 +9,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 enum AuthSessionDestination {
   login,
@@ -277,7 +278,7 @@ class AuthSessionService {
     } on FirebaseFunctionsException catch (error) {
       if (_isRetriableCallableSyncCode(error.code)) {
         if (kDebugMode) {
-          debugPrint(
+          AppLogger.debug(
             'AuthSessionService callable email verification sync skipped '
             '(${error.code}): ${error.message}',
           );
@@ -341,7 +342,7 @@ class AuthSessionService {
       }
 
       if (kDebugMode) {
-        debugPrint(
+        AppLogger.debug(
           'AuthSessionService local verified sync denied for '
           '${verifiedUser.uid}; fallback callable retry will continue.',
         );
@@ -371,7 +372,7 @@ class AuthSessionService {
         updateLastLogin: updateLastLogin,
       ).then((syncedUser) {
         if (kDebugMode && syncedUser != null) {
-          debugPrint(
+          AppLogger.debug(
             'AuthSessionService background verification sync '
             'for ${syncedUser.uid}: '
             'emailVerified=${syncedUser.emailVerified} estActif=${syncedUser.estActif}',
@@ -379,7 +380,7 @@ class AuthSessionService {
         }
       }).catchError((Object error) {
         if (kDebugMode) {
-          debugPrint(
+          AppLogger.debug(
             'AuthSessionService background verification sync error: $error',
           );
         }
@@ -676,7 +677,7 @@ class AuthSessionService {
           appUser;
 
       if (kDebugMode && appUser != null) {
-        debugPrint(
+        AppLogger.debug(
           'AuthSessionService synced verified user state for ${appUser.uid}: '
           'emailVerified=${appUser.emailVerified} estActif=${appUser.estActif}',
         );
@@ -728,7 +729,7 @@ class AuthSessionService {
 
       if (isTransientAuthFailure(error)) {
         if (kDebugMode) {
-          debugPrint(
+          AppLogger.debug(
             'AuthSessionService transient auth access check skipped '
             '(${error.code}): ${error.message}',
           );
@@ -740,7 +741,7 @@ class AuthSessionService {
     } on FirebaseException catch (error) {
       if (isTransientFirebaseFailure(error)) {
         if (kDebugMode) {
-          debugPrint(
+          AppLogger.debug(
             'AuthSessionService transient Firebase access check skipped '
             '(${error.code}): ${error.message}',
           );

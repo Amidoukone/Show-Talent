@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../theme/ad_colors.dart';
 import '../theme/ad_tokens.dart';
+import 'ad_system_notice.dart';
 
 class AdFeedback {
   AdFeedback._();
+
+  static OverlayEntry? _currentEntry;
+  static Timer? _dismissTimer;
 
   static void success(
     String title,
@@ -15,8 +20,7 @@ class AdFeedback {
     _show(
       title: title,
       message: message,
-      accentColor: AdColors.success,
-      icon: Icons.check_rounded,
+      tone: AdSystemNoticeTone.success,
       duration: duration,
     );
   }
@@ -29,8 +33,7 @@ class AdFeedback {
     _show(
       title: title,
       message: message,
-      accentColor: AdColors.error,
-      icon: Icons.close_rounded,
+      tone: AdSystemNoticeTone.error,
       duration: duration,
     );
   }
@@ -43,8 +46,7 @@ class AdFeedback {
     _show(
       title: title,
       message: message,
-      accentColor: AdColors.warning,
-      icon: Icons.priority_high_rounded,
+      tone: AdSystemNoticeTone.warning,
       duration: duration,
     );
   }
@@ -57,17 +59,22 @@ class AdFeedback {
     _show(
       title: title,
       message: message,
-      accentColor: AdColors.info,
-      icon: Icons.info_outline_rounded,
+      tone: AdSystemNoticeTone.info,
       duration: duration,
     );
+  }
+
+  static void dismissCurrent() {
+    _dismissTimer?.cancel();
+    _dismissTimer = null;
+    _currentEntry?.remove();
+    _currentEntry = null;
   }
 
   static void _show({
     required String title,
     required String message,
-    required Color accentColor,
-    required IconData icon,
+    required AdSystemNoticeTone tone,
     required Duration duration,
   }) {
     final resolvedTitle = title.trim();
@@ -76,71 +83,119 @@ class AdFeedback {
       return;
     }
 
-    Get.showSnackbar(GetSnackBar(
+    final notice = AdSystemNoticeData(
       title: resolvedTitle,
       message: resolvedMessage,
-      snackPosition: SnackPosition.BOTTOM,
-      snackStyle: SnackStyle.FLOATING,
-      backgroundColor: AdColors.surfaceCard.withValues(alpha: 0.96),
-      borderColor: accentColor.withValues(alpha: 0.42),
-      borderWidth: 1,
-      borderRadius: AdRadius.lg,
-      boxShadows: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.32),
-          blurRadius: 24,
-          offset: const Offset(0, 12),
-        ),
-      ],
-      duration: duration,
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-      padding: const EdgeInsets.symmetric(
-        horizontal: AdSpacing.md,
-        vertical: AdSpacing.sm,
+      tone: tone,
+    );
+
+    final overlay = _resolveOverlay();
+    if (overlay == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final retryOverlay = _resolveOverlay();
+        if (retryOverlay != null) {
+          _insertNotice(retryOverlay, notice, duration);
+        }
+      });
+      return;
+    }
+
+    _insertNotice(overlay, notice, duration);
+  }
+
+  static OverlayState? _resolveOverlay() {
+    final navigatorOverlay = Get.key.currentState?.overlay;
+    if (navigatorOverlay != null) return navigatorOverlay;
+
+    final context = Get.overlayContext ?? Get.context;
+    if (context == null) return null;
+
+    return Overlay.maybeOf(context, rootOverlay: true);
+  }
+
+  static void _insertNotice(
+    OverlayState overlay,
+    AdSystemNoticeData notice,
+    Duration duration,
+  ) {
+    dismissCurrent();
+
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => _AdFeedbackOverlay(
+        notice: notice,
+        onDismiss: () {
+          if (_currentEntry == entry) {
+            dismissCurrent();
+          }
+        },
       ),
-      maxWidth: 560,
-      isDismissible: true,
-      dismissDirection: DismissDirection.horizontal,
-      forwardAnimationCurve: Curves.easeOutCubic,
-      reverseAnimationCurve: Curves.easeInCubic,
-      animationDuration: AdMotion.normal,
-      icon: Container(
-        width: 34,
-        height: 34,
-        margin: const EdgeInsets.only(left: 2),
-        decoration: BoxDecoration(
-          color: accentColor.withValues(alpha: 0.16),
-          shape: BoxShape.circle,
-          border: Border.all(color: accentColor.withValues(alpha: 0.28)),
+    );
+
+    _currentEntry = entry;
+    overlay.insert(entry);
+
+    _dismissTimer = Timer(duration, () {
+      if (_currentEntry == entry) {
+        dismissCurrent();
+      }
+    });
+  }
+}
+
+class _AdFeedbackOverlay extends StatelessWidget {
+  const _AdFeedbackOverlay({
+    required this.notice,
+    required this.onDismiss,
+  });
+
+  final AdSystemNoticeData notice;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(
+          AdSpacing.md,
+          AdSpacing.sm,
+          AdSpacing.md,
+          0,
         ),
-        child: Icon(icon, color: accentColor, size: 19),
-      ),
-      shouldIconPulse: false,
-      titleText: Text(
-        resolvedTitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AdColors.onSurface,
-          fontSize: 14,
-          fontWeight: FontWeight.w800,
-          height: 1.18,
-        ),
-      ),
-      messageText: Padding(
-        padding: const EdgeInsets.only(top: 3),
-        child: Text(
-          resolvedMessage,
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: AdColors.onSurfaceMuted,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            height: 1.25,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Material(
+              color: Colors.transparent,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: 1),
+                duration: AdMotion.normal,
+                curve: Curves.easeOutCubic,
+                builder: (context, value, child) {
+                  return Opacity(
+                    opacity: value,
+                    child: Transform.translate(
+                      offset: Offset(0, -12 * (1 - value)),
+                      child: child,
+                    ),
+                  );
+                },
+                child: Semantics(
+                  liveRegion: true,
+                  child: AdSystemNotice(
+                    notice: notice,
+                    onDismiss: onDismiss,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
-    ));
+    );
   }
 }

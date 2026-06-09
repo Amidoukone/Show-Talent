@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +9,7 @@ import '../services/email_link_handler.dart';
 import '../services/notifications.dart';
 import 'app_bindings.dart';
 import 'firebase_bootstrap.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await FirebaseBootstrap.initialize();
@@ -49,7 +50,7 @@ class AppBootstrap {
       return;
     }
 
-    debugPrint('Uncaught zone error: $error\n$stack');
+    AppLogger.debug('Uncaught zone error: $error\n$stack');
   }
 
   static void _configureSystemUi() {
@@ -68,7 +69,7 @@ class AppBootstrap {
         return;
       }
 
-      debugPrint('EmailLinkHandler init error: $error\n$stack');
+      AppLogger.debug('EmailLinkHandler init error: $error\n$stack');
     }
   }
 

@@ -12,7 +12,58 @@ class EventRepositoryException implements Exception {
   final String message;
 }
 
+class EventFeedCursor {
+  const EventFeedCursor._(this.snapshot);
+
+  final DocumentSnapshot<Map<String, dynamic>> snapshot;
+}
+
+class EventFeedPage {
+  const EventFeedPage({
+    required this.events,
+    required this.cursor,
+    required this.fetchedCount,
+  });
+
+  final List<Event> events;
+  final EventFeedCursor? cursor;
+  final int fetchedCount;
+}
+
+class EventLiveBatch {
+  const EventLiveBatch({
+    required this.events,
+    required this.cursor,
+    required this.fetchedCount,
+  });
+
+  final List<Event> events;
+  final EventFeedCursor? cursor;
+  final int fetchedCount;
+}
+
+class EventQueryFilter {
+  const EventQueryFilter({
+    this.status,
+    this.endingAfter,
+  });
+
+  final String? status;
+  final DateTime? endingAfter;
+
+  bool get hasDateFilter => endingAfter != null;
+
+  String get cacheKey {
+    final normalizedStatus =
+        status == null ? 'all' : Event.normalizeStatus(status!).trim();
+    final dateKey = endingAfter?.millisecondsSinceEpoch.toString() ?? 'all';
+    return '$normalizedStatus:$dateKey';
+  }
+}
+
 class EventRepository {
+  static const int defaultPageSize = 40;
+
   EventRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
@@ -23,10 +74,40 @@ class EventRepository {
 
   String newEventId() => _eventsCollection.doc().id;
 
-  Stream<List<Event>> watchEvents() {
-    return _eventsCollection.snapshots().map((snapshot) {
-      return snapshot.docs.map(Event.fromDoc).toList(growable: false);
+  Stream<EventLiveBatch> watchEvents({
+    int limit = defaultPageSize,
+    EventQueryFilter filter = const EventQueryFilter(),
+  }) {
+    return _buildQuery(filter).limit(limit).snapshots().map((snapshot) {
+      return EventLiveBatch(
+        events: _eventsFromDocs(snapshot.docs),
+        cursor: snapshot.docs.isEmpty
+            ? null
+            : EventFeedCursor._(snapshot.docs.last),
+        fetchedCount: snapshot.docs.length,
+      );
     });
+  }
+
+  Future<EventFeedPage> fetchEventsPage({
+    int limit = defaultPageSize,
+    EventFeedCursor? startAfter,
+    EventQueryFilter filter = const EventQueryFilter(),
+  }) async {
+    Query<Map<String, dynamic>> query = _buildQuery(filter).limit(limit);
+
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter.snapshot);
+    }
+
+    final snapshot = await query.get();
+    return EventFeedPage(
+      events: _eventsFromDocs(snapshot.docs),
+      cursor: snapshot.docs.isEmpty
+          ? startAfter
+          : EventFeedCursor._(snapshot.docs.last),
+      fetchedCount: snapshot.docs.length,
+    );
   }
 
   Future<void> createEvent(Event event) {
@@ -181,5 +262,35 @@ class EventRepository {
         'lastUpdated': FieldValue.serverTimestamp(),
       });
     });
+  }
+
+  Query<Map<String, dynamic>> _buildQuery(EventQueryFilter filter) {
+    Query<Map<String, dynamic>> query = _eventsCollection;
+
+    final rawStatus = filter.status?.trim();
+    if (rawStatus != null && rawStatus.isNotEmpty) {
+      query = query.where(
+        'statut',
+        isEqualTo: Event.normalizeStatus(rawStatus),
+      );
+    }
+
+    if (filter.endingAfter != null) {
+      query = query.where(
+        'dateFin',
+        isGreaterThanOrEqualTo: Timestamp.fromDate(filter.endingAfter!),
+      );
+      query = query.orderBy('dateFin').orderBy('createdAt', descending: true);
+    } else {
+      query = query.orderBy('createdAt', descending: true);
+    }
+
+    return query;
+  }
+
+  static List<Event> _eventsFromDocs(
+    Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    return docs.map(Event.fromDoc).toList(growable: false);
   }
 }

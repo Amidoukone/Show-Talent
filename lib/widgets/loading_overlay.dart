@@ -45,10 +45,8 @@ class LoadingOverlay {
                   Flexible(
                     child: Text(
                       message ?? 'Chargement…',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleSmall
-                          ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface),
                     ),
                   ),
                 ],

@@ -5,8 +5,8 @@ import 'package:adfoot/services/notifications.dart';
 import 'package:adfoot/services/users/user_repository.dart';
 import 'package:adfoot/services/web_messaging_helper.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 /// AuthController ne navigue pas.
 /// - Maintient AppUser "metier" et sa synchronisation.
@@ -60,7 +60,7 @@ class AuthController extends GetxController {
       await _updateFcmToken(refreshed);
       await _ensureSystemNotificationPromptOnce(refreshed);
     } catch (error) {
-      debugPrint('AuthController _syncState error: $error');
+      AppLogger.debug('AuthController _syncState error: $error');
       _appUser.value = null;
     }
   }
@@ -82,7 +82,7 @@ class AuthController extends GetxController {
         await _userRepository.saveFcmToken(user.uid, token);
       }
     } catch (error) {
-      debugPrint('AuthController _updateFcmToken error: $error');
+      AppLogger.debug('AuthController _updateFcmToken error: $error');
     }
   }
 
@@ -95,7 +95,7 @@ class AuthController extends GetxController {
     try {
       await NotificationService.askPermissionAndUpdateToken(currentUser: user);
     } catch (error) {
-      debugPrint('AuthController notifications permission error: $error');
+      AppLogger.debug('AuthController notifications permission error: $error');
     }
   }
 

@@ -6,7 +6,9 @@ param(
 
     [switch]$RequireConfig,
 
-    [switch]$RequireNativeFiles
+    [switch]$RequireNativeFiles,
+
+    [switch]$RequirePlayIntegrityAppCheck
 )
 
 Set-StrictMode -Version Latest
@@ -86,6 +88,38 @@ function Get-PlannedMobileId {
         "staging" { return "org.adfoot.app.staging" }
         default { return "org.adfoot.app" }
     }
+}
+
+function Get-ConfigValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Config,
+        [Parameter(Mandatory = $true)]
+        [string]$Key
+    )
+
+    if ($Config.Contains($Key)) {
+        return [string]$Config[$Key]
+    }
+
+    return ""
+}
+
+function Test-AppCheckDebugProviderRequested {
+    param(
+        [Parameter(Mandatory = $true)]
+        $Config
+    )
+
+    $rawForceDebugProvider = Get-ConfigValue -Config $Config -Key "APP_CHECK_DEBUG_PROVIDER"
+    $rawAndroidProvider = Get-ConfigValue -Config $Config -Key "APP_CHECK_ANDROID_PROVIDER"
+    $rawAndroidDebugToken = Get-ConfigValue -Config $Config -Key "APP_CHECK_ANDROID_DEBUG_TOKEN"
+    $rawAppleDebugToken = Get-ConfigValue -Config $Config -Key "APP_CHECK_APPLE_DEBUG_TOKEN"
+
+    return $rawForceDebugProvider.Trim().ToLowerInvariant() -eq "true" -or
+        $rawAndroidProvider.Trim().ToLowerInvariant() -eq "debug" -or
+        -not [string]::IsNullOrWhiteSpace($rawAndroidDebugToken) -or
+        -not [string]::IsNullOrWhiteSpace($rawAppleDebugToken)
 }
 
 function Get-PlistStringValue {
@@ -173,14 +207,19 @@ if ($null -eq $config) {
     }
 
     if ($Environment -in @("production", "production-next")) {
-        $rawAppCheckEnabled = if ($config.Contains("APP_CHECK_ENABLED")) {
-            [string]$config["APP_CHECK_ENABLED"]
-        } else {
-            ""
-        }
+        $rawAppCheckEnabled = Get-ConfigValue -Config $config -Key "APP_CHECK_ENABLED"
 
         if ($rawAppCheckEnabled.Trim().ToLowerInvariant() -ne "true") {
             $errors.Add("APP_CHECK_ENABLED must be true in mobile config for '$Environment'.")
+        }
+
+        if (Test-AppCheckDebugProviderRequested -Config $config) {
+            $message = "App Check debug provider is configured for '$Environment'. This is allowed only for direct pre-Play-Store device validation; remove APP_CHECK_DEBUG_PROVIDER, APP_CHECK_ANDROID_PROVIDER=debug and debug tokens before the final Play Store build."
+            if ($RequirePlayIntegrityAppCheck) {
+                $errors.Add($message)
+            } else {
+                $warnings.Add($message)
+            }
         }
     }
 
@@ -285,6 +324,7 @@ Write-Host "Planned Android package  : $plannedMobileId"
 Write-Host "Planned iOS bundle ID    : $plannedMobileId"
 Write-Host "Android native file      : $androidFirebasePath"
 Write-Host "iOS native file          : $iosFirebasePath"
+Write-Host "Require Play Integrity   : $RequirePlayIntegrityAppCheck"
 
 if ($null -ne $config) {
     Write-Host ""

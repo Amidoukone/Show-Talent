@@ -4,7 +4,12 @@ import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
+import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 
 class FollowListScreen extends StatefulWidget {
@@ -94,17 +99,11 @@ class _FollowListScreenState extends State<FollowListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          widget.listType == 'followers' ? 'Abonnés' : 'Abonnements',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
-        centerTitle: true,
+      appBar: AdAppBar(
+        title: widget.listType == 'followers' ? 'Abonnés' : 'Abonnements',
+        subtitle: 'Relations du profil',
+        showBottomDivider: true,
       ),
       body: RefreshIndicator(
         onRefresh: _reloadFollowList,
@@ -113,9 +112,13 @@ class _FollowListScreenState extends State<FollowListScreen> {
             if (_isLoading) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(AdSpacing.md),
                 children: const [
-                  SizedBox(height: 240),
-                  Center(child: CircularProgressIndicator()),
+                  SizedBox(height: 120),
+                  AdStatePanel.loading(
+                    title: 'Chargement des profils',
+                    message: 'Synchronisation de la liste en cours.',
+                  ),
                 ],
               );
             }
@@ -123,12 +126,18 @@ class _FollowListScreenState extends State<FollowListScreen> {
             if (_hasLoadError) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
+                children: [
                   Padding(
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(16),
                     child: AdStatePanel.error(
                       title: 'Chargement impossible',
                       message: 'Une erreur est survenue. Veuillez réessayer.',
+                      action: AdButton(
+                        expanded: false,
+                        label: 'Réessayer',
+                        leading: Icons.refresh_rounded,
+                        onPressed: _reloadFollowList,
+                      ),
                     ),
                   ),
                 ],
@@ -163,39 +172,56 @@ class _FollowListScreenState extends State<FollowListScreen> {
                 final u = _items[index];
                 return Padding(
                   padding: const EdgeInsets.symmetric(
-                    vertical: 5.0,
-                    horizontal: 10.0,
+                    vertical: AdSpacing.xs,
+                    horizontal: AdSpacing.md,
                   ),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: u.photoProfil.isNotEmpty
-                          ? NetworkImage(u.photoProfil)
-                          : const AssetImage('assets/default_avatar.jpg')
-                              as ImageProvider,
-                      backgroundColor: Colors.grey.shade200,
-                    ),
-                    title: Text(
-                      u.nom,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                  child: AdSurfaceCard(
+                    padding: EdgeInsets.zero,
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AdSpacing.md,
+                        vertical: AdSpacing.xs,
                       ),
+                      leading: CircleAvatar(
+                        backgroundImage: u.photoProfil.isNotEmpty
+                            ? NetworkImage(u.photoProfil)
+                            : const AssetImage('assets/default_avatar.jpg')
+                                as ImageProvider,
+                        backgroundColor: AdColors.surfaceCardAlt,
+                      ),
+                      title: Text(
+                        u.nom,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AdColors.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      subtitle: Text(
+                        u.role,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AdColors.onSurfaceMuted,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      trailing: _FollowListButton(
+                        u: u,
+                        listOwnerUid: widget.uid,
+                        listType: widget.listType,
+                        onFollowStateChanged: (value) =>
+                            _updateItemFollowState(u.uid, value),
+                        onRemove: () => _removeItem(u.uid),
+                      ),
+                      onTap: () {
+                        Get.to(
+                          () => ProfileScreen(uid: u.uid, isReadOnly: true),
+                        );
+                      },
                     ),
-                    subtitle: Text(
-                      u.role,
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                    trailing: _FollowListButton(
-                      u: u,
-                      listOwnerUid: widget.uid,
-                      listType: widget.listType,
-                      onFollowStateChanged: (value) =>
-                          _updateItemFollowState(u.uid, value),
-                      onRemove: () => _removeItem(u.uid),
-                    ),
-                    onTap: () {
-                      Get.to(() => ProfileScreen(uid: u.uid, isReadOnly: true));
-                    },
                   ),
                 );
               },
@@ -244,7 +270,7 @@ class _FollowListButtonState extends State<_FollowListButton> {
 
     final bool isFollowing = widget.u.isFollowing;
 
-    return ElevatedButton(
+    return AdButton(
       onPressed: () async {
         if (_isLoading) return;
 
@@ -281,25 +307,14 @@ class _FollowListButtonState extends State<_FollowListButton> {
           }
         }
       },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: widget.u.isFollowing
-            ? const Color.fromARGB(255, 158, 50, 42)
-            : const Color.fromARGB(255, 7, 99, 79),
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-      ),
-      child: _isLoading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.white,
-              ),
-            )
-          : Text(
-              widget.u.isFollowing ? 'Se désabonner' : 'S’abonner',
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-            ),
+      expanded: false,
+      loading: _isLoading,
+      size: AdButtonSize.compact,
+      kind: widget.u.isFollowing ? AdButtonKind.outline : AdButtonKind.tonal,
+      leading: widget.u.isFollowing
+          ? Icons.person_remove_outlined
+          : Icons.person_add_alt_1_outlined,
+      label: widget.u.isFollowing ? 'Se désabonner' : 'S’abonner',
     );
   }
 }

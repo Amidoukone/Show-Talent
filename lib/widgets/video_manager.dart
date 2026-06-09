@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart'
     show HttpExceptionWithStatus;
 import 'package:http/http.dart' as http;
+import 'package:adfoot/services/app_logger.dart';
 
 enum VideoLoadState { loading, ready, errorTimeout, errorSource }
 
@@ -325,7 +326,7 @@ class VideoManager {
         return;
       }
       _networkProfileFuture = null;
-      debugPrint('[VideoManager] Network profile refresh failed: $error');
+      AppLogger.debug('[VideoManager] Network profile refresh failed: $error');
     });
 
     return future;
@@ -391,7 +392,7 @@ class VideoManager {
     _preloadTimeout = tuning.preloadTimeout;
     _activeTimeout = tuning.activeTimeout;
 
-    debugPrint(
+    AppLogger.debug(
       "[VideoManager] NetworkProfile applied ($reason): $profile -> "
       "radius=$_preloadRadius maxActive=$_maxActive concurrent=$_maxConcurrentInits",
     );
@@ -496,7 +497,7 @@ class VideoManager {
       case VideoMetricType.initSuccess:
         _initCount++;
         if (event.usedCache == true) _cacheHits++;
-        debugPrint(
+        AppLogger.debug(
           "[VideoManager][metrics] "
           "${event.isPreload ? 'preload' : 'active'} "
           "source=${event.sourceType} "
@@ -508,7 +509,7 @@ class VideoManager {
 
       case VideoMetricType.initError:
         _errorCount++;
-        debugPrint(
+        AppLogger.debug(
           "[VideoManager][metrics] error source=${event.sourceType} "
           "url=${event.url} "
           "cacheRate=${_cacheRateString()} "
@@ -641,7 +642,7 @@ class VideoManager {
       sources: sources,
     );
     if (currentSource == null) {
-      debugPrint(
+      AppLogger.debug(
         '[VideoManager] Refreshing active controller for $originalUrl '
         'because $effectiveResolvedUrl is outside the current playback contract '
         '(preferred=${preferredSource.url})',
@@ -654,7 +655,7 @@ class VideoManager {
       preferredSource: preferredSource,
     );
     if (shouldPromote) {
-      debugPrint(
+      AppLogger.debug(
         '[VideoManager] Refreshing active controller for $originalUrl '
         'to promote ${currentSource.quality ?? currentSource.height ?? 'current'} '
         '-> ${preferredSource.quality ?? preferredSource.height ?? 'preferred'}',
@@ -913,7 +914,7 @@ class VideoManager {
               rethrow;
             }
 
-            debugPrint(
+            AppLogger.debug(
               "[VideoManager] Primary init failed, trying local fallback -> "
               "$effectiveUrl ($streamError)",
             );
@@ -994,7 +995,7 @@ class VideoManager {
 
           stopwatch.stop();
 
-          debugPrint(
+          AppLogger.debug(
             "[VideoManager] Init ${isPreload ? 'preload' : 'active'} "
             "${kIsWeb ? 'web' : _playbackBranch(
                 usedCache: usedCache,
@@ -1053,7 +1054,7 @@ class VideoManager {
             lru.remove(cacheKey);
             return Future.error(e);
           }
-          debugPrint("❌ Video init error $effectiveUrl: $e\n$st");
+          AppLogger.debug("❌ Video init error $effectiveUrl: $e\n$st");
 
           if (!kIsWeb && file != null) {
             unawaited(_safeDeleteFile(file));
@@ -1218,7 +1219,7 @@ class VideoManager {
         );
 
         if (attempt > 1) {
-          debugPrint(
+          AppLogger.debug(
             "[VideoManager] Firebase download recovered on attempt "
             "$attempt/$maxAttempts -> $url",
           );
@@ -1242,7 +1243,7 @@ class VideoManager {
         }
 
         final delay = _firebaseRetryDelay(attempt);
-        debugPrint(
+        AppLogger.debug(
           "[VideoManager] Firebase download retry $attempt/$maxAttempts "
           "in ${delay.inMilliseconds}ms -> $url ($e)",
         );
@@ -1260,7 +1261,7 @@ class VideoManager {
     try {
       await _downloadVideo(url);
     } catch (e) {
-      debugPrint(
+      AppLogger.debug(
         "[VideoManager] Background cache warmup failed for $url: $e",
       );
     }
@@ -1320,7 +1321,7 @@ class VideoManager {
     if (!kIsWeb) {
       final size = await _cacheSizeProvider();
       if (size > custom_cache.VideoCacheManager.maxCacheSizeMB) {
-        debugPrint("⚠️ Cache >300MB: ${size}MB");
+        AppLogger.debug("⚠️ Cache >300MB: ${size}MB");
       }
     }
   }
@@ -1354,7 +1355,7 @@ class VideoManager {
         _removeUiTracking(contextKey, original);
       }
 
-      debugPrint("[VideoManager] Disposed LRU controller: $oldestKey");
+      AppLogger.debug("[VideoManager] Disposed LRU controller: $oldestKey");
     }
   }
 
@@ -1433,7 +1434,7 @@ class VideoManager {
         activeUrl: activeUrl,
       );
     } catch (error) {
-      debugPrint(
+      AppLogger.debug(
           '[VideoManager] Preload skipped for ${video.videoUrl}: $error');
     }
   }

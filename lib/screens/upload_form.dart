@@ -9,8 +9,12 @@ import 'package:adfoot/controller/upload_video_controller.dart';
 import 'package:adfoot/widgets/progress_full_screen_loader.dart';
 import 'package:video_player/video_player.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
+import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 
 class UploadForm extends StatefulWidget {
   final File videoFile;
@@ -155,10 +159,10 @@ class _UploadFormState extends State<UploadForm> {
     final previewController = _videoPlayerController;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(VideoUiStrings.uploadFormTitle),
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
+      appBar: const AdAppBar(
+        title: VideoUiStrings.uploadFormTitle,
+        subtitle: 'Prévisualisation et détails',
+        showBottomDivider: true,
       ),
       body: Obx(() {
         final isPreparing = uploadVideoController.isPreparing.value;
@@ -187,159 +191,161 @@ class _UploadFormState extends State<UploadForm> {
           },
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Player
-                Container(
-                  height: 220,
-                  decoration: BoxDecoration(
-                    color: Colors.black,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: previewController != null &&
-                          previewController.value.isInitialized
-                      ? Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            AspectRatio(
-                              aspectRatio: previewController.value.aspectRatio,
-                              child: VideoPlayer(previewController),
-                            ),
-                            // Bouton play/pause au centre
-                            GestureDetector(
-                              onTap: toggleVideoPlayback,
-                              child: AnimatedOpacity(
-                                opacity: _isPlaying ? 0.0 : 1.0,
-                                duration: const Duration(milliseconds: 150),
-                                child: const Icon(
-                                  Icons.play_circle_outline,
-                                  color: Colors.white,
-                                  size: 64,
-                                ),
-                              ),
-                            ),
-                            // Durée en haut à droite
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  _formatDuration(_duration),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: AdSurfaceCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Player
+                      Container(
+                        height: 220,
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          borderRadius: BorderRadius.circular(AdRadius.lg),
+                          border: Border.all(color: AdColors.divider),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: previewController != null &&
+                                previewController.value.isInitialized
+                            ? Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  AspectRatio(
+                                    aspectRatio:
+                                        previewController.value.aspectRatio,
+                                    child: VideoPlayer(previewController),
                                   ),
+                                  // Bouton play/pause au centre
+                                  GestureDetector(
+                                    onTap: toggleVideoPlayback,
+                                    child: AnimatedOpacity(
+                                      opacity: _isPlaying ? 0.0 : 1.0,
+                                      duration:
+                                          const Duration(milliseconds: 150),
+                                      child: const Icon(
+                                        Icons.play_circle_outline,
+                                        color: Colors.white,
+                                        size: 64,
+                                      ),
+                                    ),
+                                  ),
+                                  // Durée en haut à droite
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black54,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        _formatDuration(_duration),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : const Center(child: CircularProgressIndicator()),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Form
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            TextFormField(
+                              focusNode: _descriptionFocus,
+                              controller: descriptionController,
+                              textInputAction: TextInputAction.next,
+                              maxLength: 80,
+                              style: const TextStyle(color: AdColors.onSurface),
+                              decoration: const InputDecoration(
+                                labelText: VideoUiStrings.descriptionLabel,
+                                counterText: '',
+                                filled: true,
+                                fillColor: AdColors.surfaceCard,
+                                border: OutlineInputBorder(
+                                  borderRadius:
+                                      BorderRadius.all(Radius.circular(10)),
                                 ),
+                                hintText: VideoUiStrings.descriptionHint,
                               ),
+                              validator: (val) {
+                                final v = (val ?? '').trim();
+                                if (v.isEmpty) {
+                                  return VideoUiStrings.descriptionRequired;
+                                }
+                                if (v.length < 3) {
+                                  return VideoUiStrings.minThreeChars;
+                                }
+                                return null;
+                              },
+                              onFieldSubmitted: (_) {
+                                FocusScope.of(context)
+                                    .requestFocus(_captionFocus);
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              focusNode: _captionFocus,
+                              controller: captionController,
+                              textInputAction: TextInputAction.done,
+                              maxLines: 2,
+                              maxLength: 140,
+                              style: const TextStyle(color: AdColors.onSurface),
+                              decoration: InputDecoration(
+                                labelText: VideoUiStrings.captionLabel,
+                                counterText: '',
+                                filled: true,
+                                fillColor: AdColors.surfaceCard,
+                                border: const OutlineInputBorder(
+                                  borderRadius:
+                                      BorderRadius.all(Radius.circular(10)),
+                                ),
+                                hintText: VideoUiStrings.captionHint,
+                              ),
+                              validator: (val) {
+                                final v = (val ?? '').trim();
+                                if (v.isEmpty) {
+                                  return VideoUiStrings.captionRequired;
+                                }
+                                return null;
+                              },
+                              onFieldSubmitted: (_) => _handleUpload(),
                             ),
                           ],
-                        )
-                      : const Center(child: CircularProgressIndicator()),
-                ),
-                const SizedBox(height: 20),
-
-                // Form
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        focusNode: _descriptionFocus,
-                        controller: descriptionController,
-                        textInputAction: TextInputAction.next,
-                        maxLength: 80,
-                        style: const TextStyle(color: AdColors.onSurface),
-                        decoration: const InputDecoration(
-                          labelText: VideoUiStrings.descriptionLabel,
-                          counterText: '',
-                          filled: true,
-                          fillColor: AdColors.surfaceCard,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(10)),
-                          ),
-                          hintText: VideoUiStrings.descriptionHint,
                         ),
-                        validator: (val) {
-                          final v = (val ?? '').trim();
-                          if (v.isEmpty) {
-                            return VideoUiStrings.descriptionRequired;
-                          }
-                          if (v.length < 3) {
-                            return VideoUiStrings.minThreeChars;
-                          }
-                          return null;
-                        },
-                        onFieldSubmitted: (_) {
-                          FocusScope.of(context).requestFocus(_captionFocus);
-                        },
                       ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        focusNode: _captionFocus,
-                        controller: captionController,
-                        textInputAction: TextInputAction.done,
-                        maxLines: 2,
-                        maxLength: 140,
-                        style: const TextStyle(color: AdColors.onSurface),
-                        decoration: InputDecoration(
-                          labelText: VideoUiStrings.captionLabel,
-                          counterText: '',
-                          filled: true,
-                          fillColor: AdColors.surfaceCard,
-                          border: const OutlineInputBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(10)),
-                          ),
-                          hintText: VideoUiStrings.captionHint,
-                        ),
-                        validator: (val) {
-                          final v = (val ?? '').trim();
-                          if (v.isEmpty) {
-                            return VideoUiStrings.captionRequired;
-                          }
-                          return null;
-                        },
-                        onFieldSubmitted: (_) => _handleUpload(),
+                      const SizedBox(height: 20),
+
+                      // Bouton d’upload
+                      AdButton(
+                        onPressed: isBusy ? null : _handleUpload,
+                        leading: Icons.cloud_upload_rounded,
+                        label: VideoUiStrings.uploadVideoButton,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        VideoUiStrings.uploadReminder,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.7),
+                            fontSize: 12),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                // Bouton d’upload
-                ElevatedButton.icon(
-                  onPressed: isBusy ? null : _handleUpload,
-                  icon: const Icon(Icons.cloud_upload, color: Colors.white),
-                  label: const Text(
-                    VideoUiStrings.uploadVideoButton,
-                    style: TextStyle(fontSize: 16, color: Colors.white),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AdColors.brand,
-                    foregroundColor: AdColors.brandOn,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    textStyle: theme.textTheme.titleMedium?.copyWith(
-                      color: AdColors.brandOn,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  VideoUiStrings.uploadReminder,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.7), fontSize: 12),
-                ),
-              ],
+              ),
             ),
           ),
         );

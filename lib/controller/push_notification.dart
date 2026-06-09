@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import '../config/app_environment.dart';
 import '../models/action_response.dart';
 import '../services/callable_auth_guard.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class PushNotificationService {
   static final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
@@ -45,13 +46,13 @@ class PushNotificationService {
       });
     } on FirebaseFunctionsException catch (e) {
       if (kDebugMode) {
-        debugPrint(
+        AppLogger.debug(
           'PushNotificationService error ${e.code}: ${e.message}',
         );
       }
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('PushNotificationService unexpected error: $e');
+        AppLogger.debug('PushNotificationService unexpected error: $e');
       }
     }
   }
@@ -70,7 +71,7 @@ class PushNotificationService {
       return ActionResponse.fromMap(response, toastOverride: ToastLevel.none);
     } on FirebaseFunctionsException catch (e) {
       if (kDebugMode) {
-        debugPrint('sendOfferFanout error ${e.code}: ${e.message}');
+        AppLogger.debug('sendOfferFanout error ${e.code}: ${e.message}');
       }
       return ActionResponse.failure(
         message: e.message ?? 'Envoi des notifications indisponible.',
@@ -80,7 +81,7 @@ class PushNotificationService {
       );
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('sendOfferFanout unexpected error: $e');
+        AppLogger.debug('sendOfferFanout unexpected error: $e');
       }
       return ActionResponse.failure(
         message: 'Envoi des notifications indisponible.',
@@ -105,7 +106,7 @@ class PushNotificationService {
       return ActionResponse.fromMap(response, toastOverride: ToastLevel.none);
     } on FirebaseFunctionsException catch (e) {
       if (kDebugMode) {
-        debugPrint('sendEventFanout error ${e.code}: ${e.message}');
+        AppLogger.debug('sendEventFanout error ${e.code}: ${e.message}');
       }
       return ActionResponse.failure(
         message: e.message ?? 'Envoi des notifications indisponible.',
@@ -115,7 +116,7 @@ class PushNotificationService {
       );
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('sendEventFanout unexpected error: $e');
+        AppLogger.debug('sendEventFanout unexpected error: $e');
       }
       return ActionResponse.failure(
         message: 'Envoi des notifications indisponible.',

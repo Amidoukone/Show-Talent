@@ -35,7 +35,7 @@ class AdAppBar extends StatelessWidget implements PreferredSizeWidget {
             style: const TextStyle(
               fontWeight: FontWeight.w800,
               fontSize: 20,
-              letterSpacing: -0.1,
+              letterSpacing: 0,
             ),
           )
         : Column(
@@ -51,7 +51,7 @@ class AdAppBar extends StatelessWidget implements PreferredSizeWidget {
                 style: const TextStyle(
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
-                  letterSpacing: -0.1,
+                  letterSpacing: 0,
                 ),
               ),
               const SizedBox(height: AdSpacing.xxs),

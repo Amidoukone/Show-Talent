@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/widgets/immersive_video_chrome.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 import 'package:adfoot/widgets/video_page_scroll_physics.dart';
@@ -190,59 +191,52 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
               else if (_currentIndex >= videos.length)
                 const SizedBox.shrink()
               else
-                PageView.builder(
-                  controller: _pageController,
-                  scrollDirection: Axis.vertical,
-                  physics: const VideoPageScrollPhysics(),
-                  dragStartBehavior: DragStartBehavior.down,
-                  allowImplicitScrolling: false,
-                  itemCount: videos.length,
-                  onPageChanged: (idx) {
-                    if (idx < 0 || idx >= videos.length) return;
-                    if (idx != _currentIndex) {
-                      _triggerPageChangeHaptic();
-                    }
-                    unawaited(_handleIndexChange(idx));
-                  },
-                  itemBuilder: (_, idx) {
-                    final video = videos[idx];
-                    final player = _videoManager.getController(
-                      widget.contextKey,
-                      video.videoUrl,
-                    );
+                Positioned.fill(
+                  child: PageView.builder(
+                    controller: _pageController,
+                    scrollDirection: Axis.vertical,
+                    physics: const VideoPageScrollPhysics(),
+                    dragStartBehavior: DragStartBehavior.down,
+                    allowImplicitScrolling: false,
+                    itemCount: videos.length,
+                    onPageChanged: (idx) {
+                      if (idx < 0 || idx >= videos.length) return;
+                      if (idx != _currentIndex) {
+                        _triggerPageChangeHaptic();
+                      }
+                      unawaited(_handleIndexChange(idx));
+                    },
+                    itemBuilder: (_, idx) {
+                      final video = videos[idx];
+                      final player = _videoManager.getController(
+                        widget.contextKey,
+                        video.videoUrl,
+                      );
 
-                    return SmartVideoPlayer(
-                      key: ValueKey(video.id),
-                      player: player,
-                      videoController: _vc,
-                      userController: _userController,
-                      followController: _followController,
-                      contextKey: widget.contextKey,
-                      videoUrl: video.videoUrl,
-                      video: video,
-                      currentIndex: idx,
-                      videoList: videos,
-                      enableTapToPlay: true,
-                      autoPlay: true,
-                      showControls: true,
-                      showProgressBar: true,
-                      showProfileAction: false,
-                    );
-                  },
-                ),
-              SafeArea(
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-                    onPressed: _isExiting ? null : _safeExit,
+                      return SmartVideoPlayer(
+                        key: ValueKey(video.id),
+                        player: player,
+                        videoController: _vc,
+                        userController: _userController,
+                        followController: _followController,
+                        contextKey: widget.contextKey,
+                        videoUrl: video.videoUrl,
+                        video: video,
+                        currentIndex: idx,
+                        videoList: videos,
+                        enableTapToPlay: true,
+                        autoPlay: true,
+                        showControls: true,
+                        showProgressBar: true,
+                        showProfileAction: false,
+                      );
+                    },
                   ),
                 ),
-              ),
+              if (!_isExiting && videos.isNotEmpty)
+                ImmersiveVideoBackButton(
+                  onPressed: () => unawaited(_safeExit()),
+                ),
             ],
           );
         }),

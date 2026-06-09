@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class AccountCleanupException implements Exception {
   const AccountCleanupException({
@@ -124,7 +124,7 @@ class AccountCleanupService {
         await doc.reference.delete();
       }
     } catch (error) {
-      debugPrint('AccountCleanup _deleteVideos error: $error');
+      AppLogger.debug('AccountCleanup _deleteVideos error: $error');
     }
   }
 
@@ -139,7 +139,7 @@ class AccountCleanupService {
         await doc.reference.delete();
       }
     } catch (error) {
-      debugPrint('AccountCleanup _deleteOffres error: $error');
+      AppLogger.debug('AccountCleanup _deleteOffres error: $error');
     }
   }
 
@@ -154,7 +154,7 @@ class AccountCleanupService {
         await doc.reference.delete();
       }
     } catch (error) {
-      debugPrint('AccountCleanup _deleteEvents error: $error');
+      AppLogger.debug('AccountCleanup _deleteEvents error: $error');
     }
   }
 
@@ -172,7 +172,7 @@ class AccountCleanupService {
         await doc.reference.delete();
       }
     } catch (error) {
-      debugPrint('AccountCleanup _deleteConversations error: $error');
+      AppLogger.debug('AccountCleanup _deleteConversations error: $error');
     }
   }
 
@@ -198,7 +198,7 @@ class AccountCleanupService {
         });
       }
     } catch (error) {
-      debugPrint('AccountCleanup _cleanupFollowReferences error: $error');
+      AppLogger.debug('AccountCleanup _cleanupFollowReferences error: $error');
     }
   }
 

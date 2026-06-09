@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
 import '../../models/user.dart';
+import '../ad_button.dart';
+import '../ad_feedback.dart';
 
 class ClubAdvancedForm extends StatefulWidget {
   final AppUser user;
@@ -84,17 +86,16 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
   }
 
   List<Map<String, String?>> _parseNeeds(String raw) {
-    return raw
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .map((entry) {
-          final parts = entry.split(':');
-          return {
-            'position': parts[0].trim(),
-            'priority': parts.length > 1 ? parts[1].trim() : null,
-          };
-        }).toList();
+    final entries =
+        raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+
+    return entries.map((entry) {
+      final parts = entry.split(':');
+      return {
+        'position': parts[0].trim(),
+        'priority': parts.length > 1 ? parts[1].trim() : null,
+      };
+    }).toList();
   }
 
   Future<bool> save({bool showFeedback = true}) async {
@@ -129,7 +130,10 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
       }
 
       if (showFeedback) {
-        Get.snackbar('Succès', 'Profil club avancé mis à jour');
+        AdFeedback.success(
+          'Profil mis à jour',
+          'Les informations avancées du club ont été enregistrées.',
+        );
       }
 
       return true;
@@ -177,15 +181,16 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
               controller: _needsController,
               decoration: const InputDecoration(
                 labelText: 'Besoins de recrutement prioritaires',
-                hintText:
-                    'Ex : Défenseur central:haute, avant-centre:moyenne',
+                hintText: 'Ex : Défenseur central:haute, avant-centre:moyenne',
               ),
             ),
             if (widget.showSubmitButton) ...[
               const SizedBox(height: 20),
-              ElevatedButton(
+              AdButton(
+                leading: Icons.save_rounded,
+                loading: _saving,
+                label: 'Sauvegarder',
                 onPressed: _saving ? null : () => save(),
-                child: Text(_saving ? 'Sauvegarde...' : 'Sauvegarder'),
               ),
             ],
           ],

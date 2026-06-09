@@ -10,8 +10,8 @@ import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/chat/chat_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 typedef ChatNotificationSender = Future<void> Function({
   required String title,
@@ -118,7 +118,7 @@ class ChatController extends GetxController {
         _bindConversationsFor(user.uid);
       },
       onError: (error) =>
-          debugPrint("ChatController auth listen error: $error"),
+          AppLogger.debug("ChatController auth listen error: $error"),
     );
 
     final uid = _resolvedCurrentUid();
@@ -219,11 +219,12 @@ class ChatController extends GetxController {
           _conversations.refresh();
           update();
         } catch (error) {
-          debugPrint("Erreur lors du chargement des conversations : $error");
+          AppLogger.debug(
+              "Erreur lors du chargement des conversations : $error");
         }
       },
       onError: (error) {
-        debugPrint("Erreur ecoute conversations : $error");
+        AppLogger.debug("Erreur ecoute conversations : $error");
         if (_isPermissionDenied(error)) {
           _resetLocalState();
           unawaited(_handleProtectedAccessDenied());
@@ -279,7 +280,7 @@ class ChatController extends GetxController {
         otherUserId: otherUserId,
       );
     } on FirebaseException catch (error) {
-      debugPrint("Erreur création conversation firebase : $error");
+      AppLogger.debug("Erreur création conversation firebase : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ChatFlowException(
@@ -290,7 +291,7 @@ class ChatController extends GetxController {
         'Impossible de démarrer la conversation pour le moment.',
       );
     } catch (error) {
-      debugPrint("Erreur création conversation : $error");
+      AppLogger.debug("Erreur création conversation : $error");
       throw const ChatFlowException(
         'Impossible de démarrer la conversation pour le moment.',
       );
@@ -307,13 +308,13 @@ class ChatController extends GetxController {
         otherUserId: otherUserId,
       );
     } on FirebaseException catch (error) {
-      debugPrint("Erreur recherche conversation firebase : $error");
+      AppLogger.debug("Erreur recherche conversation firebase : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
       return null;
     } catch (error) {
-      debugPrint("Erreur recherche conversation : $error");
+      AppLogger.debug("Erreur recherche conversation : $error");
       return null;
     }
   }
@@ -334,7 +335,7 @@ class ChatController extends GetxController {
         introMessage: introMessage,
       );
     } on FirebaseException catch (error) {
-      debugPrint("Erreur création contact guide firebase : $error");
+      AppLogger.debug("Erreur création contact guide firebase : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ChatFlowException(
@@ -345,7 +346,7 @@ class ChatController extends GetxController {
         'Impossible de lancer ce premier contact pour le moment.',
       );
     } catch (error) {
-      debugPrint("Erreur création contact guide : $error");
+      AppLogger.debug("Erreur création contact guide : $error");
       throw const ChatFlowException(
         'Impossible de lancer ce premier contact pour le moment.',
       );
@@ -354,7 +355,7 @@ class ChatController extends GetxController {
 
   Stream<List<Message>> getMessages(String conversationId) {
     if (conversationId.isEmpty) {
-      debugPrint("Erreur : conversationId vide");
+      AppLogger.debug("Erreur : conversationId vide");
       return const Stream<List<Message>>.empty();
     }
 
@@ -455,7 +456,7 @@ class ChatController extends GetxController {
           contextData: normalizedConversationId,
         );
       } catch (notificationError, notificationStackTrace) {
-        debugPrint(
+        AppLogger.debug(
           'Notification message non bloquante: '
           '$notificationError\n$notificationStackTrace',
         );
@@ -463,7 +464,7 @@ class ChatController extends GetxController {
     } on ChatFlowException {
       rethrow;
     } on FirebaseException catch (error) {
-      debugPrint(
+      AppLogger.debug(
           "Erreur envoi message firebase : ${error.code} ${error.message}");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
@@ -475,7 +476,7 @@ class ChatController extends GetxController {
         'Envoi impossible pour le moment. Vérifiez votre connexion.',
       );
     } catch (error) {
-      debugPrint("Erreur envoi message : $error");
+      AppLogger.debug("Erreur envoi message : $error");
       throw const ChatFlowException(
         'Envoi impossible pour le moment. Merci de réessayer.',
       );
@@ -492,7 +493,7 @@ class ChatController extends GetxController {
         recipientId: recipientId,
       );
     } on FirebaseException catch (error) {
-      debugPrint("Erreur vérification messagerie firebase : $error");
+      AppLogger.debug("Erreur vérification messagerie firebase : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -520,7 +521,7 @@ class ChatController extends GetxController {
         );
       }
     } catch (error) {
-      debugPrint("Erreur mise à jour message lu : $error");
+      AppLogger.debug("Erreur mise à jour message lu : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -544,7 +545,7 @@ class ChatController extends GetxController {
         update();
       }
     } catch (error) {
-      debugPrint("Erreur mise à jour messages lus : $error");
+      AppLogger.debug("Erreur mise à jour messages lus : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -581,7 +582,8 @@ class ChatController extends GetxController {
           userId: userId,
         );
       } catch (error) {
-        debugPrint("Erreur markAllAsReadOnServer conv ${conv.id} : $error");
+        AppLogger.debug(
+            "Erreur markAllAsReadOnServer conv ${conv.id} : $error");
         if (_isPermissionDenied(error)) {
           unawaited(_handleProtectedAccessDenied());
           return;
@@ -623,7 +625,7 @@ class ChatController extends GetxController {
         await _syncUnreadFromConversation(conversationId, currentUid);
       }
     } catch (error) {
-      debugPrint("Erreur suppression message : $error");
+      AppLogger.debug("Erreur suppression message : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -638,7 +640,7 @@ class ChatController extends GetxController {
       _conversations.refresh();
       update();
     } catch (error) {
-      debugPrint("Erreur suppression conversation : $error");
+      AppLogger.debug("Erreur suppression conversation : $error");
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }

@@ -2,10 +2,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter/material.dart';
 
 import 'users/user_repository.dart';
 import 'web_messaging_helper.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class NotificationService {
   NotificationService._();
@@ -70,7 +70,7 @@ class NotificationService {
     final token = await WebMessagingHelper.getTokenWithRetry(retries: 3);
 
     if (token == null) {
-      debugPrint('NotificationService: aucun token FCM obtenu.');
+      AppLogger.debug('NotificationService: aucun token FCM obtenu.');
       return;
     }
 

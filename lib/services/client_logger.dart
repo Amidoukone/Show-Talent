@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 
 import '../config/app_environment.dart';
 import 'callable_auth_guard.dart';
@@ -104,9 +104,16 @@ class ClientLogger {
     if (kIsWeb) {
       return {'platform': 'web'};
     }
+    final platformName = switch (defaultTargetPlatform) {
+      TargetPlatform.android => 'android',
+      TargetPlatform.iOS => 'ios',
+      TargetPlatform.macOS => 'macos',
+      TargetPlatform.windows => 'windows',
+      TargetPlatform.linux => 'linux',
+      TargetPlatform.fuchsia => 'fuchsia',
+    };
     return {
-      'platform': Platform.operatingSystem,
-      'version': Platform.operatingSystemVersion,
+      'platform': platformName,
     };
   }
 }

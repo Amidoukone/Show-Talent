@@ -12,6 +12,7 @@ import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
+import 'package:adfoot/widgets/immersive_video_chrome.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 import 'package:adfoot/widgets/video_page_scroll_physics.dart';
@@ -105,6 +106,13 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
     await videoManager.pauseAll(widget.contextKey);
   }
 
+  Future<void> _closeFeed() async {
+    await _pauseAllVideos();
+    if (mounted) {
+      Get.back<void>();
+    }
+  }
+
   void _triggerPageChangeHaptic() {
     unawaited(HapticFeedback.selectionClick().catchError((_) {}));
   }
@@ -146,53 +154,12 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
   }
 
   Widget _buildEmptyFeedState(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.video_library_outlined,
-                color: Colors.white70,
-                size: 42,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                VideoUiStrings.emptyVideoFeedTitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                VideoUiStrings.emptyVideoFeedMessage,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontSize: 13,
-                ),
-              ),
-              const SizedBox(height: 18),
-              OutlinedButton.icon(
-                onPressed: () => Get.back<void>(),
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                label: const Text(
-                  VideoUiStrings.back,
-                  style: TextStyle(color: Colors.white),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white54),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return ImmersiveVideoEmptyState(
+      icon: Icons.video_library_outlined,
+      title: VideoUiStrings.emptyVideoFeedTitle,
+      message: VideoUiStrings.emptyVideoFeedMessage,
+      actionLabel: VideoUiStrings.back,
+      onAction: () => unawaited(_closeFeed()),
     );
   }
 
@@ -219,45 +186,56 @@ class _VideoFeedScreenState extends State<VideoFeedScreen>
           return const SizedBox.shrink();
         }
 
-        return PageView.builder(
-          controller: _pageController,
-          scrollDirection: Axis.vertical,
-          physics: const VideoPageScrollPhysics(),
-          dragStartBehavior: DragStartBehavior.down,
-          allowImplicitScrolling: false,
-          itemCount: videos.length,
-          onPageChanged: (index) {
-            if (index < 0 || index >= videos.length) {
-              return;
-            }
-            if (index != _currentIndex) {
-              _triggerPageChangeHaptic();
-            }
-            _currentIndex = index;
-            unawaited(_handlePageChanged(index));
-          },
-          itemBuilder: (context, index) {
-            final video = videos[index];
-            final player =
-                videoManager.getController(widget.contextKey, video.videoUrl);
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: PageView.builder(
+                controller: _pageController,
+                scrollDirection: Axis.vertical,
+                physics: const VideoPageScrollPhysics(),
+                dragStartBehavior: DragStartBehavior.down,
+                allowImplicitScrolling: false,
+                itemCount: videos.length,
+                onPageChanged: (index) {
+                  if (index < 0 || index >= videos.length) {
+                    return;
+                  }
+                  if (index != _currentIndex) {
+                    _triggerPageChangeHaptic();
+                  }
+                  _currentIndex = index;
+                  unawaited(_handlePageChanged(index));
+                },
+                itemBuilder: (context, index) {
+                  final video = videos[index];
+                  final player = videoManager.getController(
+                    widget.contextKey,
+                    video.videoUrl,
+                  );
 
-            return SmartVideoPlayer(
-              key: ValueKey(video.id),
-              player: player,
-              videoController: videoController,
-              userController: _userController,
-              followController: _followController,
-              contextKey: widget.contextKey,
-              videoUrl: video.videoUrl,
-              video: video,
-              currentIndex: index,
-              videoList: videos,
-              autoPlay: true,
-              enableTapToPlay: true,
-              showControls: true,
-              showProgressBar: true,
-            );
-          },
+                  return SmartVideoPlayer(
+                    key: ValueKey(video.id),
+                    player: player,
+                    videoController: videoController,
+                    userController: _userController,
+                    followController: _followController,
+                    contextKey: widget.contextKey,
+                    videoUrl: video.videoUrl,
+                    video: video,
+                    currentIndex: index,
+                    videoList: videos,
+                    autoPlay: true,
+                    enableTapToPlay: true,
+                    showControls: true,
+                    showProgressBar: true,
+                  );
+                },
+              ),
+            ),
+            ImmersiveVideoBackButton(
+              onPressed: () => unawaited(_closeFeed()),
+            ),
+          ],
         );
       }),
     );

@@ -12,6 +12,7 @@ import '../config/app_routes.dart';
 import '../config/app_environment.dart';
 import '../utils/email_action_link_parser.dart';
 import '../utils/video_share_links.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 /// Handles Firebase email verification links and password reset links.
 /// Mobile listens to incoming app links. Web is handled elsewhere.
@@ -42,7 +43,7 @@ class EmailLinkHandler {
 
   static void _logDebug(String message) {
     if (kDebugMode) {
-      debugPrint(message);
+      AppLogger.debug(message);
     }
   }
 

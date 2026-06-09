@@ -28,11 +28,10 @@ void main() {
       conversationId: 'conversation_secure_presence',
     );
 
-    final ownUserDoc =
-        await harness.firestore
-            .collection('users')
-            .doc(harness.currentUser.uid)
-            .get();
+    final ownUserDoc = await harness.firestore
+        .collection('users')
+        .doc(harness.currentUser.uid)
+        .get();
 
     expect(
       ownUserDoc.data()?['activeConversationId'],
@@ -66,11 +65,10 @@ void main() {
       introMessage: 'Je souhaite prendre contact.',
     );
 
-    final intakeDoc =
-        await harness.firestore
-            .collection('contact_intakes')
-            .doc(result.contactIntake!.id)
-            .get();
+    final intakeDoc = await harness.firestore
+        .collection('contact_intakes')
+        .doc(result.contactIntake!.id)
+        .get();
 
     expect(intakeDoc.exists, isTrue);
     expect(intakeDoc.data()?['requesterUid'], harness.currentUser.uid);

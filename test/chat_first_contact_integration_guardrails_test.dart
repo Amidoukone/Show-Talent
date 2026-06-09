@@ -108,6 +108,9 @@ void main() {
           File('lib/widgets/contact_intake_sheet.dart').readAsStringSync();
       final chatScreen =
           File('lib/screens/chat_screen.dart').readAsStringSync();
+      final chatWidgets =
+          File('lib/screens/chat_screen_widgets.dart').readAsStringSync();
+      final chatSurface = '$chatScreen\n$chatWidgets';
       final adButton = File('lib/widgets/ad_button.dart').readAsStringSync();
 
       expect(contactIntakeSheet, contains('ConstrainedBox('));
@@ -123,13 +126,13 @@ void main() {
         contains('scrollPadding: const EdgeInsets.only(bottom: 120)'),
       );
 
-      expect(chatScreen, contains('class MessageInputBar'));
+      expect(chatSurface, contains('class MessageInputBar'));
       expect(
-        chatScreen,
+        chatSurface,
         contains('minimum: const EdgeInsets.only(bottom: 8)'),
       );
       expect(
-        chatScreen,
+        chatSurface,
         contains(
           'keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag',
         ),

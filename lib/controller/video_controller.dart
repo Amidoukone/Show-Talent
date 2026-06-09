@@ -1,23 +1,20 @@
 import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:get/get.dart';
 
 import '../models/action_response.dart';
 import '../models/video.dart';
-import '../config/app_environment.dart';
-import '../services/callable_auth_guard.dart';
 import '../services/feature_flag_service.dart';
+import '../services/videos/video_action_service.dart';
+import '../services/videos/video_repository.dart';
 import '../services/video_observability_service.dart';
 import '../utils/video_ui_strings.dart';
 import '../widgets/video_manager.dart';
 import '../screens/success_toast.dart';
 import 'user_controller.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class VideoController extends GetxController {
   final String contextKey;
@@ -28,7 +25,14 @@ class VideoController extends GetxController {
     required this.contextKey,
     this.enableLiveStream = true,
     bool? enableFeedFetch,
-  }) : enableFeedFetch = enableFeedFetch ?? enableLiveStream;
+    VideoRepository? videoRepository,
+    VideoActionService? videoActionService,
+  })  : enableFeedFetch = enableFeedFetch ?? enableLiveStream,
+        _videoRepository = videoRepository ?? VideoRepository(),
+        _videoActionService = videoActionService ?? VideoActionService();
+
+  final VideoRepository _videoRepository;
+  final VideoActionService _videoActionService;
 
   // ------------------------------------------------------------------
   // UI STATE
@@ -42,7 +46,7 @@ class VideoController extends GetxController {
   // PAGINATION
   // ------------------------------------------------------------------
 
-  DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
+  VideoFeedCursor? _lastCursor;
   bool _hasMore = true;
   bool _isLoading = false;
   static const int _limit = 10;
@@ -82,20 +86,16 @@ class VideoController extends GetxController {
       _adaptivePlaybackEnabled = service.isAdaptiveEnabledForUser(uid);
       _videoManager.updateAdaptiveFlag(_adaptivePlaybackEnabled);
     } catch (e) {
-      debugPrint('❌ Feature flag load error: $e');
+      AppLogger.debug('❌ Feature flag load error: $e');
       _adaptivePlaybackEnabled = false;
       _videoManager.updateAdaptiveFlag(false);
     }
   }
 
   // ------------------------------------------------------------------
-  // CLOUD FUNCTIONS / CONNECTIVITY
+  // BACKEND SERVICES
   // ------------------------------------------------------------------
 
-  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
-    region: AppEnvironmentConfig.functionsRegion,
-  );
-  final Connectivity _connectivity = Connectivity();
   final VideoObservabilityService _observability =
       VideoObservabilityService.instance;
 
@@ -104,7 +104,7 @@ class VideoController extends GetxController {
   // ------------------------------------------------------------------
 
   Completer<void>? _fetchLock;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _videoSubscription;
+  StreamSubscription<VideoLiveBatch>? _videoSubscription;
   Timer? _streamDebouncer;
   final Set<String> _thumbnailPrefetchInFlight = <String>{};
   final Set<String> _thumbnailPrefetched = <String>{};
@@ -112,24 +112,7 @@ class VideoController extends GetxController {
   Future<void> Function(String thumbUrl)? _thumbnailPrefetchOverride;
 
   bool _isPermissionDenied(Object error) =>
-      error is FirebaseException && error.code == 'permission-denied';
-
-  bool _isAuthAccessFailure(Object error) {
-    if (error is! FirebaseException) {
-      return false;
-    }
-
-    final code = _normalizeAuthErrorToken(error.code);
-    final message = _normalizeAuthErrorToken(error.message ?? '');
-    return code == 'unauthenticated' ||
-        code == 'unauthentificated' ||
-        message.contains('unauthenticated') ||
-        message.contains('unauthentificated');
-  }
-
-  String _normalizeAuthErrorToken(String raw) {
-    return raw.trim().toLowerCase().replaceAll('_', '-');
-  }
+      VideoRepository.isPermissionDenied(error);
 
   Future<void> _handleProtectedAccessDenied() async {
     if (!Get.isRegistered<UserController>()) {
@@ -139,25 +122,6 @@ class VideoController extends GetxController {
     await Get.find<UserController>().handleProtectedAccessDenied(
       fallbackTitle: VideoUiStrings.protectedAccessTitle,
       fallbackMessage: VideoUiStrings.protectedAccessMessage,
-    );
-  }
-
-  ActionResponse _sessionRevokedResponse() {
-    return const ActionResponse(
-      success: false,
-      code: 'session_revoked',
-      message: VideoUiStrings.sessionRevokedMessage,
-      toast: ToastLevel.none,
-    );
-  }
-
-  ActionResponse _authRequiredResponse() {
-    return const ActionResponse(
-      success: false,
-      code: 'unauthenticated',
-      message: VideoUiStrings.authRequiredMessage,
-      toast: ToastLevel.info,
-      retriable: true,
     );
   }
 
@@ -191,39 +155,33 @@ class VideoController extends GetxController {
 
   void listenToVideos() {
     _videoSubscription?.cancel();
-    _videoSubscription = FirebaseFirestore.instance
-        .collection('videos')
-        .where('status', isEqualTo: 'ready')
-        .orderBy('updatedAt', descending: true)
-        .limit(_liveWindowLimit)
-        .snapshots()
-        .listen((snapshot) {
+    _videoSubscription =
+        _videoRepository.watchReadyVideos(limit: _liveWindowLimit).listen((
+      batch,
+    ) {
       _streamDebouncer?.cancel();
       _streamDebouncer = Timer(const Duration(milliseconds: 120), () {
         try {
-          final incoming = snapshot.docs
-              .map(Video.fromDoc)
-              .where((v) => v.videoUrl.isNotEmpty)
-              .toList();
+          final incoming = batch.videos;
 
           if (incoming.isEmpty) return;
 
           final merged = _applyLiveWindow(incoming);
           if (merged.isEmpty) return;
 
-          if (_lastDoc == null && snapshot.docs.isNotEmpty) {
-            _lastDoc = snapshot.docs.last;
+          if (_lastCursor == null && batch.cursor != null) {
+            _lastCursor = batch.cursor;
           }
 
           final safeIndex =
               currentIndex.value.clamp(0, merged.length - 1).toInt();
           _prefetchThumbnailsAround(safeIndex);
         } catch (e) {
-          debugPrint('❌ listenToVideos merge error: $e');
+          AppLogger.debug('❌ listenToVideos merge error: $e');
         }
       });
     }, onError: (e) {
-      debugPrint('Video stream error: $e');
+      AppLogger.debug('Video stream error: $e');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -248,19 +206,17 @@ class VideoController extends GetxController {
     _fetchLock = Completer<void>();
 
     try {
-      final snap = await _loadReadyVideosPage(
-        startAfter: !isRefresh ? _lastDoc : null,
+      final page = await _videoRepository.fetchReadyVideosPage(
+        limit: _limit,
+        startAfter: !isRefresh ? _lastCursor : null,
       );
-      if (snap.docs.isEmpty) {
+      if (page.fetchedCount == 0) {
         _hasMore = false;
         _fetchLock?.complete();
         return false;
       }
 
-      final fetched = snap.docs
-          .map(Video.fromDoc)
-          .where((v) => v.videoUrl.isNotEmpty)
-          .toList();
+      final fetched = page.videos;
 
       if (isRefresh) {
         _clearPendingLiveHead();
@@ -278,13 +234,13 @@ class VideoController extends GetxController {
         );
       }
 
-      _lastDoc = snap.docs.last;
+      _lastCursor = page.cursor;
       if (fetched.length < _limit) _hasMore = false;
 
       _fetchLock?.complete();
       return true;
     } catch (e) {
-      debugPrint('fetchPaginatedVideos error: $e');
+      AppLogger.debug('fetchPaginatedVideos error: $e');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -306,13 +262,13 @@ class VideoController extends GetxController {
     try {
       await videoManager.disposeAllForContext(contextKey);
       _clearPendingLiveHead();
-      _lastDoc = null;
+      _lastCursor = null;
       _hasMore = true;
       currentIndex.value = -1;
       videoList.clear();
       return await fetchPaginatedVideos(isRefresh: true);
     } catch (e) {
-      debugPrint('❌ refreshVideos error: $e');
+      AppLogger.debug('❌ refreshVideos error: $e');
       return false;
     }
   }
@@ -329,15 +285,12 @@ class VideoController extends GetxController {
     _fetchLock = Completer<void>();
 
     try {
-      final snap = await _loadReadyVideosPage();
-      final fetched = snap.docs
-          .map(Video.fromDoc)
-          .where((v) => v.videoUrl.isNotEmpty)
-          .toList();
+      final page = await _videoRepository.fetchReadyVideosPage(limit: _limit);
+      final fetched = page.videos;
 
       await videoManager.disposeAllForContext(contextKey);
       _clearPendingLiveHead();
-      _lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+      _lastCursor = page.cursor;
       _hasMore = fetched.length >= _limit;
 
       if (fetched.isEmpty) {
@@ -353,7 +306,7 @@ class VideoController extends GetxController {
       _fetchLock?.complete();
       return true;
     } catch (e) {
-      debugPrint('refreshVideosKeepingFeed error: $e');
+      AppLogger.debug('refreshVideosKeepingFeed error: $e');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -590,282 +543,50 @@ class VideoController extends GetxController {
     Map<String, dynamic> payload, {
     String? offlineMessage,
   }) async {
-    try {
-      if (await _isOffline()) {
-        return ActionResponse.offline(offlineMessage);
-      }
-
-      final callable = _functions.httpsCallable(
-        functionName,
-        options: HttpsCallableOptions(
-          timeout: const Duration(seconds: 10),
-        ),
-      );
-
-      final data = await CallableAuthGuard.callDataWithHttpFallback<
-          Map<String, dynamic>>(
-        callable,
-        functionName,
-        payload,
-      );
-      return ActionResponse.fromMap(data);
-    } on FirebaseFunctionsException catch (e) {
-      if (_isAuthAccessFailure(e)) {
-        return _authRequiredResponse();
-      }
-
-      if (e.code == 'permission-denied') {
-        unawaited(_handleProtectedAccessDenied());
-        return _sessionRevokedResponse();
-      }
-
-      return ActionResponse.failure(
-        message: e.message ?? VideoUiStrings.genericActionImpossible,
-        code: e.code,
-        retriable: e.code == 'unavailable',
-      );
-    } catch (e) {
-      if (_isPermissionDenied(e)) {
-        unawaited(_handleProtectedAccessDenied());
-        return _sessionRevokedResponse();
-      }
-
-      return ActionResponse.failure(
-        message: VideoUiStrings.genericActionRetry,
-        retriable: true,
-      );
-    }
-  }
-
-  Future<bool> _isOffline() async {
-    try {
-      final dynamic res = await _connectivity.checkConnectivity();
-      if (res is ConnectivityResult) {
-        return res == ConnectivityResult.none;
-      }
-      if (res is List<ConnectivityResult>) {
-        return res.every((r) => r == ConnectivityResult.none);
-      }
-      return false;
-    } catch (_) {
-      return false;
-    }
+    final response = await _videoActionService.callAction(
+      functionName,
+      payload,
+      offlineMessage: offlineMessage,
+    );
+    return _handleProtectedResponse(response);
   }
 
   Future<ActionResponse> _reportVideoWithFirestoreFallback(
     String videoId,
     String userId,
   ) async {
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (authUser == null || authUser.uid != userId) {
-      return _authRequiredResponse();
-    }
-
-    try {
-      await authUser.getIdToken();
-
-      final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
-      return FirebaseFirestore.instance
-          .runTransaction<ActionResponse>((tx) async {
-        final snap = await tx.get(ref);
-        if (!snap.exists) {
-          return ActionResponse.failure(
-            message: VideoUiStrings.videoNotFound,
-            code: 'not-found',
-          );
-        }
-
-        final data = snap.data() ?? const <String, dynamic>{};
-        final reports = _asStringList(data['reports']);
-        final reportCount = _asInt(data['reportCount']) ?? reports.length;
-
-        if (reports.contains(userId)) {
-          return ActionResponse.failure(
-            message: VideoUiStrings.videoAlreadyReported,
-            code: 'already_reported',
-            toast: ToastLevel.info,
-          );
-        }
-
-        final nextReportCount = reportCount >= reports.length
-            ? reportCount + 1
-            : reports.length + 1;
-        tx.update(ref, {
-          'reports': FieldValue.arrayUnion([userId]),
-          'reportCount': FieldValue.increment(1),
-        });
-
-        return ActionResponse(
-          success: true,
-          code: 'reported',
-          message: VideoUiStrings.reportSent,
-          data: {'reportCount': nextReportCount},
-        );
-      });
-    } on FirebaseException catch (e) {
-      if (_isAuthAccessFailure(e)) {
-        return _authRequiredResponse();
-      }
-
-      return ActionResponse.failure(
-        message: VideoUiStrings.reportUnavailable,
-        code: e.code,
-        retriable: true,
-      );
-    } catch (_) {
-      return ActionResponse.failure(
-        message: VideoUiStrings.reportUnavailable,
-        retriable: true,
-      );
-    }
+    final response = await _videoRepository.reportVideoWithFirestoreFallback(
+      videoId,
+      userId,
+    );
+    return _handleProtectedResponse(response);
   }
 
   Future<ActionResponse> _likeVideoWithFirestoreFallback(
     String videoId,
     String userId,
   ) async {
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (authUser == null || authUser.uid != userId) {
-      return _authRequiredResponse();
-    }
-
-    try {
-      await authUser.getIdToken(true);
-
-      final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
-      return FirebaseFirestore.instance
-          .runTransaction<ActionResponse>((tx) async {
-        final snap = await tx.get(ref);
-        if (!snap.exists) {
-          return ActionResponse.failure(
-            message: VideoUiStrings.videoNotFound,
-            code: 'not-found',
-          );
-        }
-
-        final data = snap.data() ?? const <String, dynamic>{};
-        final likes = _asStringList(data['likes']);
-        final hasLiked = likes.contains(userId);
-        final liked = !hasLiked;
-
-        tx.update(ref, {
-          'likes': liked
-              ? FieldValue.arrayUnion([userId])
-              : FieldValue.arrayRemove([userId]),
-        });
-
-        return ActionResponse(
-          success: true,
-          code: 'like-toggled',
-          message:
-              liked ? VideoUiStrings.likeAdded : VideoUiStrings.likeRemoved,
-          data: {
-            'liked': liked,
-            'likes': liked
-                ? likes.length + 1
-                : (likes.isNotEmpty ? likes.length - 1 : 0),
-          },
-        );
-      });
-    } on FirebaseException catch (e) {
-      if (_isAuthAccessFailure(e)) {
-        return _authRequiredResponse();
-      }
-
-      if (e.code == 'permission-denied') {
-        unawaited(_handleProtectedAccessDenied());
-        return _sessionRevokedResponse();
-      }
-
-      return ActionResponse.failure(
-        message: VideoUiStrings.likeUnavailable,
-        code: e.code,
-        retriable: true,
-      );
-    } catch (_) {
-      return ActionResponse.failure(
-        message: VideoUiStrings.likeUnavailable,
-        retriable: true,
-      );
-    }
+    final response = await _videoRepository.likeVideoWithFirestoreFallback(
+      videoId,
+      userId,
+    );
+    return _handleProtectedResponse(response);
   }
 
   Future<ActionResponse> _shareVideoWithFirestoreFallback(
     String videoId,
   ) async {
-    final authUser = FirebaseAuth.instance.currentUser;
-    if (authUser == null) {
-      return _authRequiredResponse();
-    }
-
-    try {
-      await authUser.getIdToken(true);
-
-      final ref = FirebaseFirestore.instance.collection('videos').doc(videoId);
-      return FirebaseFirestore.instance
-          .runTransaction<ActionResponse>((tx) async {
-        final snap = await tx.get(ref);
-        if (!snap.exists) {
-          return ActionResponse.failure(
-            message: VideoUiStrings.videoNotFound,
-            code: 'not-found',
-          );
-        }
-
-        final data = snap.data() ?? const <String, dynamic>{};
-        final currentShareCount = _asInt(data['shareCount']) ?? 0;
-        final nextShareCount = currentShareCount + 1;
-
-        tx.update(ref, {
-          'shareCount': FieldValue.increment(1),
-        });
-
-        return ActionResponse(
-          success: true,
-          code: 'shared',
-          message: VideoUiStrings.shareRecorded,
-          data: {'shareCount': nextShareCount},
-        );
-      });
-    } on FirebaseException catch (e) {
-      if (_isAuthAccessFailure(e)) {
-        return _authRequiredResponse();
-      }
-
-      if (e.code == 'permission-denied') {
-        unawaited(_handleProtectedAccessDenied());
-        return _sessionRevokedResponse();
-      }
-
-      return ActionResponse.failure(
-        message: VideoUiStrings.shareUnavailable,
-        code: e.code,
-        retriable: true,
-      );
-    } catch (_) {
-      return ActionResponse.failure(
-        message: VideoUiStrings.shareUnavailable,
-        retriable: true,
-      );
-    }
+    final response = await _videoRepository.shareVideoWithFirestoreFallback(
+      videoId,
+    );
+    return _handleProtectedResponse(response);
   }
 
-  List<String> _asStringList(dynamic raw) {
-    if (raw is! List) {
-      return const <String>[];
+  ActionResponse _handleProtectedResponse(ActionResponse response) {
+    if (response.code == 'session_revoked') {
+      unawaited(_handleProtectedAccessDenied());
     }
-
-    return raw.map((value) => value.toString()).toList(growable: false);
-  }
-
-  int? _asInt(dynamic raw) {
-    if (raw is int) {
-      return raw;
-    }
-    if (raw is num) {
-      return raw.toInt();
-    }
-    return null;
+    return response;
   }
 
   void _applyLikeState(String videoId, String userId, bool liked) {
@@ -935,22 +656,6 @@ class VideoController extends GetxController {
         ...?extra,
       },
     );
-  }
-
-  Future<QuerySnapshot<Map<String, dynamic>>> _loadReadyVideosPage({
-    DocumentSnapshot<Map<String, dynamic>>? startAfter,
-  }) {
-    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
-        .collection('videos')
-        .where('status', isEqualTo: 'ready')
-        .orderBy('updatedAt', descending: true)
-        .limit(_limit);
-
-    if (startAfter != null) {
-      query = query.startAfterDocument(startAfter);
-    }
-
-    return query.get();
   }
 
   List<Video> _applyLiveWindow(List<Video> incoming) {

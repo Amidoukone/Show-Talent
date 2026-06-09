@@ -2,9 +2,9 @@
 
 import 'dart:io';
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class VideoCacheManager extends CacheManager {
   static const key = 'videoCache';
@@ -42,7 +42,7 @@ class VideoCacheManager extends CacheManager {
 
     if (!await videoCacheDir.exists()) {
       await videoCacheDir.create(recursive: true);
-      debugPrint(
+      AppLogger.debug(
           '[VideoCacheManager] Created directory at ${videoCacheDir.path}');
     }
     return videoCacheDir.path;
@@ -78,7 +78,7 @@ class VideoCacheManager extends CacheManager {
   }) async {
     final fileInfo = await super
         .downloadFile(url, authHeaders: authHeaders, force: force, key: key);
-    debugPrint('[VideoCacheManager] Cached: $url');
+    AppLogger.debug('[VideoCacheManager] Cached: $url');
     unawaited(_autoPurgeIfNeeded());
     return fileInfo;
   }
@@ -89,11 +89,11 @@ class VideoCacheManager extends CacheManager {
       final manager = await getInstance();
       final fileInfo = await manager.getFileFromCache(url);
       if (fileInfo != null && await fileInfo.file.exists()) {
-        debugPrint('[VideoCacheManager] File found in cache: $url');
+        AppLogger.debug('[VideoCacheManager] File found in cache: $url');
         return fileInfo.file;
       }
     } catch (e) {
-      debugPrint('[VideoCacheManager] getFileIfCached error: $e');
+      AppLogger.debug('[VideoCacheManager] getFileIfCached error: $e');
     }
     return null;
   }
@@ -103,9 +103,9 @@ class VideoCacheManager extends CacheManager {
     try {
       final manager = await getInstance();
       await manager.removeFile(url);
-      debugPrint('[VideoCacheManager] Removed cached file: $url');
+      AppLogger.debug('[VideoCacheManager] Removed cached file: $url');
     } catch (e) {
-      debugPrint('[VideoCacheManager] removeCachedFile error: $e');
+      AppLogger.debug('[VideoCacheManager] removeCachedFile error: $e');
     }
   }
 
@@ -121,10 +121,10 @@ class VideoCacheManager extends CacheManager {
         if (f is File) total += await f.length();
       }
       final sizeMB = total ~/ (1024 * 1024);
-      debugPrint('[VideoCacheManager] Cache size: $sizeMB MB');
+      AppLogger.debug('[VideoCacheManager] Cache size: $sizeMB MB');
       return sizeMB;
     } catch (e) {
-      debugPrint('[VideoCacheManager] getCacheSizeInMB error: $e');
+      AppLogger.debug('[VideoCacheManager] getCacheSizeInMB error: $e');
       return 0;
     }
   }
@@ -155,11 +155,12 @@ class VideoCacheManager extends CacheManager {
       }
 
       final totalMB = totalSize ~/ (1024 * 1024);
-      debugPrint('[VideoCacheManager] Cache size before purge: $totalMB MB');
+      AppLogger.debug(
+          '[VideoCacheManager] Cache size before purge: $totalMB MB');
 
       if (totalMB <= maxCacheSizeMB) return;
 
-      debugPrint('[VideoCacheManager] Purging cache...');
+      AppLogger.debug('[VideoCacheManager] Purging cache...');
       final sorted = fileData.entries.toList()
         ..sort((a, b) {
           final aTime = _safeModifiedTime(a.key);
@@ -178,7 +179,7 @@ class VideoCacheManager extends CacheManager {
       }
 
       final freedMB = freed ~/ (1024 * 1024);
-      debugPrint('[VideoCacheManager] Freed $freedMB MB from cache');
+      AppLogger.debug('[VideoCacheManager] Freed $freedMB MB from cache');
     } finally {
       _purgeLock = false;
     }

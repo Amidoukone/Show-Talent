@@ -1,5 +1,6 @@
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -18,85 +19,77 @@ class SignUpScreen extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
-            child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Align(
-                      alignment: Alignment.center,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.asset(
-                          'assets/logo.png',
-                          height: 80,
-                          fit: BoxFit.contain,
-                        ),
+            child: AdSurfaceCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.center,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.asset(
+                        'assets/logo.png',
+                        height: 80,
+                        fit: BoxFit.contain,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Création de compte centralisée',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: cs.onSurface,
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'L’application mobile ne crée plus de comptes directement.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: cs.onSurface.withValues(alpha: 0.7),
-                            fontWeight: FontWeight.w600,
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    _InfoCard(
-                      icon: Icons.admin_panel_settings_outlined,
-                      color: cs.primary,
-                      title: 'Règle active',
-                      message: publicSignupDisabledMessage,
-                    ),
-                    const SizedBox(height: 14),
-                    _InfoCard(
-                      icon: Icons.groups_outlined,
-                      color: cs.secondary,
-                      title: 'Rôles concernés',
-                      message:
-                          'Tous les comptes sont maintenant provisionnés dans le portail admin : $roleLabels.',
-                    ),
-                    const SizedBox(height: 14),
-                    _InfoCard(
-                      icon: Icons.list_alt_outlined,
-                      color: cs.tertiary,
-                      title: 'Parcours utilisateur',
-                      message: '1. Contacter l’administration Adfoot.\n'
-                          '2. Recevoir le lien de définition du mot de passe.\n'
-                          '3. Valider l’adresse e-mail.\n'
-                          '4. Se connecter ensuite dans l’application mobile.',
-                    ),
-                    const SizedBox(height: 24),
-                    AdButton(
-                      label: 'Retour à la connexion',
-                      onPressed: () => Get.back(),
-                      leading: Icons.arrow_back_rounded,
-                      kind: AdButtonKind.primary,
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: () => Get.back(),
-                      child: const Text('J’ai déjà un compte'),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Création de compte centralisée',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: cs.onSurface,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'L’application mobile ne crée plus de comptes directement.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.7),
+                          fontWeight: FontWeight.w600,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  _InfoCard(
+                    icon: Icons.admin_panel_settings_outlined,
+                    color: cs.primary,
+                    title: 'Règle active',
+                    message: publicSignupDisabledMessage,
+                  ),
+                  const SizedBox(height: 14),
+                  _InfoCard(
+                    icon: Icons.groups_outlined,
+                    color: cs.secondary,
+                    title: 'Rôles concernés',
+                    message:
+                        'Tous les comptes sont maintenant provisionnés dans le portail admin : $roleLabels.',
+                  ),
+                  const SizedBox(height: 14),
+                  _InfoCard(
+                    icon: Icons.list_alt_outlined,
+                    color: cs.tertiary,
+                    title: 'Parcours utilisateur',
+                    message: '1. Contacter l’administration Adfoot.\n'
+                        '2. Recevoir le lien de définition du mot de passe.\n'
+                        '3. Valider l’adresse e-mail.\n'
+                        '4. Se connecter ensuite dans l’application mobile.',
+                  ),
+                  const SizedBox(height: 24),
+                  AdButton(
+                    label: 'Retour à la connexion',
+                    onPressed: () => Get.back(),
+                    leading: Icons.arrow_back_rounded,
+                    kind: AdButtonKind.primary,
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => Get.back(),
+                    child: const Text('J’ai déjà un compte'),
+                  ),
+                ],
               ),
             ),
           ),

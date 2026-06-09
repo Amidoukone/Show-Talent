@@ -41,6 +41,8 @@ void main() {
     expect(script, contains('assetlinks.json fingerprint for org.adfoot.app'));
     expect(script, contains('storeFile relative to the android rootProject'));
     expect(script, contains('UTF-8 BOM'));
+    expect(script, contains('RequirePlayIntegrityAppCheck'));
+    expect(script, contains('App Check debug provider is configured'));
   });
 
   test('production release config keeps App Check enabled', () {
@@ -68,9 +70,14 @@ void main() {
     expect(productionNextTemplate, contains('"APP_CHECK_ENABLED": "true"'));
     expect(productionEnv, contains('ENFORCE_APPCHECK=true'));
     expect(mobileConfigCheck, contains('APP_CHECK_ENABLED must be true'));
+    expect(mobileConfigCheck, contains('RequirePlayIntegrityAppCheck'));
+    expect(
+        mobileConfigCheck, contains('App Check debug provider is configured'));
     expect(buildScript, contains('Missing required mobile config file'));
     expect(buildScript, contains('Mobile config APP_ENV'));
     expect(buildScript, contains('APP_CHECK_ENABLED must be true'));
+    expect(buildScript, contains('RequirePlayIntegrityAppCheck'));
+    expect(buildScript, contains('Test-MobileConfigUsesAppCheckDebugProvider'));
     expect(buildScript, contains(r'$dartDefines["APP_ENV"] = $Environment'));
     expect(runScript, contains('function Mask-PreviewArg'));
     expect(runScript, contains('KEY|SECRET|TOKEN|PASSWORD'));
@@ -79,6 +86,9 @@ void main() {
     expect(appCheckService, contains('AndroidDebugProvider'));
     expect(appCheckService, contains('AndroidPlayIntegrityProvider'));
     expect(packageJson, contains('mobile:appcheck:debug:production'));
+    expect(packageJson, contains('release:config:validate:playstore'));
+    expect(packageJson, contains('release:android:check:playstore'));
+    expect(packageJson, contains('release:android:bundle:playstore'));
     expect(appCheckDebugScript, contains('firebaseappcheck.googleapis.com'));
     expect(appCheckDebugScript, contains('APP_CHECK_ANDROID_DEBUG_TOKEN'));
     expect(appCheckDebugScript, contains('--write-config'));
@@ -86,6 +96,8 @@ void main() {
         contains('Debug token: <written to ignored local config>'));
     expect(appCheckDebugScript, isNot(contains('Debug token: \${token}')));
     expect(mobileConfigReadme, contains('Pre-Play-Store App Check validation'));
+    expect(mobileConfigReadme, contains('Final Play Store guard'));
+    expect(mobileConfigReadme, contains('release:android:bundle:playstore'));
     expect(gitignore, contains('/config/mobile/*.json'));
   });
 

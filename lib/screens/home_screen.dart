@@ -1,9 +1,9 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:adfoot/screens/add_video.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +16,7 @@ import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/connectivity_controller.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/services/home/home_feed_repository.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/utils/video_search_matcher.dart';
@@ -27,9 +28,17 @@ import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 import 'package:adfoot/widgets/video_page_scroll_physics.dart';
+import 'package:adfoot/services/app_logger.dart';
+
+part 'home_screen_search_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({
+    super.key,
+    this.homeFeedRepository = const HomeFeedRepository(),
+  });
+
+  final HomeFeedRepository homeFeedRepository;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -80,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       enable ? await WakelockPlus.enable() : await WakelockPlus.disable();
     } catch (e) {
-      debugPrint('⚠️ Wakelock error: $e');
+      AppLogger.debug('⚠️ Wakelock error: $e');
     }
   }
 
@@ -153,14 +162,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('videos')
-          .doc(targetId)
-          .get();
-      if (!mounted || !doc.exists) return 0;
-
-      final video = Video.fromDoc(doc);
-      if (video.status != 'ready' || video.videoUrl.isEmpty) {
+      final video =
+          await widget.homeFeedRepository.fetchReadyVideoById(targetId);
+      if (!mounted || video == null) {
         return 0;
       }
 
@@ -171,7 +175,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _refreshFocusVideos();
       return 0;
     } catch (error) {
-      debugPrint('[HomeScreen] focused video lookup failed: $error');
+      AppLogger.debug('[HomeScreen] focused video lookup failed: $error');
       return 0;
     }
   }
@@ -505,7 +509,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             matchesById: matchesById,
           );
         } catch (error) {
-          debugPrint('Video search author query fallback: $error');
+          AppLogger.debug('Video search author query fallback: $error');
         }
       }
 
@@ -550,21 +554,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .where('role', isEqualTo: 'joueur')
-        .limit(300)
-        .get();
-
-    for (final doc in snapshot.docs) {
-      final data = doc.data();
-      final user = AppUser.fromMap({
-        ...data,
-        'uid': data['uid'] ?? doc.id,
-      });
-      if (user.uid.trim().isNotEmpty) {
-        userController.usersCache[user.uid] = user;
-      }
+    final players =
+        await widget.homeFeedRepository.fetchSearchablePlayers(limit: 300);
+    for (final user in players) {
+      userController.usersCache[user.uid] = user;
     }
 
     _searchUsersHydrated = true;
@@ -606,18 +599,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       final end = (start + _searchUidBatchSize).clamp(0, ids.length).toInt();
       final batch = ids.sublist(start, end);
-      final snapshot = await FirebaseFirestore.instance
-          .collection('videos')
-          .where('status', isEqualTo: 'ready')
-          .where('uid', whereIn: batch)
-          .limit(_searchResultLimit)
-          .get();
+      final videos = await widget.homeFeedRepository.fetchReadyVideosForAuthors(
+        batch,
+        limit: _searchResultLimit,
+      );
 
-      for (final doc in snapshot.docs) {
-        final video = Video.fromDoc(doc);
+      for (final video in videos) {
         final author = userController.usersCache[video.uid];
-        if (video.videoUrl.isEmpty ||
-            !matchesVideoSearch(video, author, query)) {
+        if (!matchesVideoSearch(video, author, query)) {
           continue;
         }
         matchesById[video.id] = video;
@@ -632,21 +621,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     String query, {
     required Map<String, Video> matchesById,
   }) async {
-    final snapshot = await FirebaseFirestore.instance
-        .collection('videos')
-        .where('status', isEqualTo: 'ready')
-        .orderBy('updatedAt', descending: true)
-        .limit(_searchRecentScanLimit)
-        .get();
+    final videos = await widget.homeFeedRepository.fetchRecentReadyVideos(
+      limit: _searchRecentScanLimit,
+    );
 
-    for (final doc in snapshot.docs) {
+    for (final video in videos) {
       if (matchesById.length >= _searchResultLimit) {
         return;
       }
 
-      final video = Video.fromDoc(doc);
       final author = userController.usersCache[video.uid];
-      if (video.videoUrl.isEmpty || !matchesVideoSearch(video, author, query)) {
+      if (!matchesVideoSearch(video, author, query)) {
         continue;
       }
       matchesById[video.id] = video;
@@ -805,16 +790,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildProfileInitialsSurface(AppUser user) {
     return Container(
       alignment: Alignment.center,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AdColors.surfaceCardAlt,
-            AdColors.surfaceCard,
-          ],
-        ),
-      ),
+      color: AdColors.surfaceCardAlt,
       child: Text(
         _profileInitials(user),
         textAlign: TextAlign.center,
@@ -840,13 +816,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           color: AdColors.brand,
           width: 1.4,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.28),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Icon(
         _profileRoleIcon(user),
@@ -873,21 +842,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AdColors.brand,
-                      AdColors.info,
-                    ],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AdColors.brand.withValues(alpha: 0.2),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  color: AdColors.brand,
                 ),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -1084,13 +1039,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   border: Border.all(
                     color: AdColors.brand.withValues(alpha: 0.44),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
                 ),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -1214,13 +1162,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           decoration: BoxDecoration(
                             color: AdColors.brand,
                             shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AdColors.brand.withValues(alpha: 0.24),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
                           ),
                           child: const Icon(
                             Icons.add_rounded,
@@ -1394,353 +1335,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             leading: Icons.refresh_rounded,
             label: VideoUiStrings.retry,
             onPressed: () => unawaited(_retryHomeFeed()),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VideoSearchSheet extends StatelessWidget {
-  const _VideoSearchSheet({
-    required this.controller,
-    required this.focusNode,
-    required this.query,
-    required this.isLoading,
-    required this.error,
-    required this.results,
-    required this.userController,
-    required this.onChanged,
-    required this.onClear,
-    required this.onResultSelected,
-  });
-
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final String query;
-  final bool isLoading;
-  final String? error;
-  final List<Video> results;
-  final UserController userController;
-  final ValueChanged<String> onChanged;
-  final VoidCallback onClear;
-  final ValueChanged<Video> onResultSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final viewInsets = MediaQuery.of(context).viewInsets;
-    final active = query.trim().isNotEmpty;
-
-    return Padding(
-      padding: EdgeInsets.only(bottom: viewInsets.bottom),
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 620,
-            maxHeight: MediaQuery.of(context).size.height * 0.82,
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: AdColors.surfaceCard,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(24),
-              ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.38),
-                  blurRadius: 28,
-                  offset: const Offset(0, -12),
-                ),
-              ],
-            ),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 42,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.22),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            VideoUiStrings.videoSearchTitle,
-                            style: TextStyle(
-                              color: AdColors.onSurface,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                        if (active)
-                          TextButton.icon(
-                            onPressed: onClear,
-                            icon: const Icon(Icons.close_rounded, size: 18),
-                            label: const Text(VideoUiStrings.videoSearchClear),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: controller,
-                      focusNode: focusNode,
-                      autofocus: true,
-                      onChanged: onChanged,
-                      textInputAction: TextInputAction.search,
-                      style: const TextStyle(
-                        color: AdColors.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      cursorColor: AdColors.brand,
-                      decoration: InputDecoration(
-                        hintText: VideoUiStrings.videoSearchHint,
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        suffixIcon: isLoading
-                            ? const Padding(
-                                padding: EdgeInsets.all(14),
-                                child: SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                ),
-                              )
-                            : null,
-                        filled: true,
-                        fillColor: AdColors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(
-                            color: AdColors.divider,
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(
-                            color: AdColors.divider,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(
-                            color: AdColors.brand,
-                            width: 1.4,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Flexible(
-                      child: _buildContent(active),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContent(bool active) {
-    if (!active) {
-      return const _VideoSearchEmptyHint(
-        icon: Icons.manage_search_rounded,
-        title: VideoUiStrings.videoSearchOpen,
-        message: VideoUiStrings.videoSearchEmptyMessage,
-      );
-    }
-
-    if (isLoading && results.isEmpty) {
-      return const _VideoSearchEmptyHint(
-        icon: Icons.search_rounded,
-        title: VideoUiStrings.videoSearchLoadingTitle,
-        message: VideoUiStrings.videoSearchLoadingMessage,
-      );
-    }
-
-    if (results.isEmpty) {
-      return _VideoSearchEmptyHint(
-        icon: Icons.search_off_rounded,
-        title: VideoUiStrings.videoSearchEmptyTitle,
-        message: error ?? VideoUiStrings.videoSearchEmptyMessage,
-      );
-    }
-
-    return ListView.separated(
-      shrinkWrap: true,
-      itemCount: results.length,
-      separatorBuilder: (_, __) => const Divider(
-        color: AdColors.divider,
-        height: 1,
-      ),
-      itemBuilder: (context, index) {
-        final video = results[index];
-        final author = userController.usersCache[video.uid];
-        return _VideoSearchResultTile(
-          video: video,
-          authorName: (author?.nom ?? '').trim(),
-          onTap: () => onResultSelected(video),
-        );
-      },
-    );
-  }
-}
-
-class _VideoSearchEmptyHint extends StatelessWidget {
-  const _VideoSearchEmptyHint({
-    required this.icon,
-    required this.title,
-    required this.message,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: AdColors.brand, size: 34),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AdColors.onSurface,
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AdColors.onSurfaceMuted,
-              fontSize: 14,
-              height: 1.35,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _VideoSearchResultTile extends StatelessWidget {
-  const _VideoSearchResultTile({
-    required this.video,
-    required this.authorName,
-    required this.onTap,
-  });
-
-  final Video video;
-  final String authorName;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final title = authorName.isNotEmpty
-        ? authorName
-        : VideoUiStrings.defaultPublisherName;
-    final subtitle = video.caption.trim().isNotEmpty
-        ? video.caption.trim()
-        : video.description.trim();
-
-    return Semantics(
-      button: true,
-      label: VideoUiStrings.videoSearchResultHint,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 48,
-                  height: 68,
-                  child: video.thumbnailUrl.trim().isEmpty
-                      ? const ColoredBox(
-                          color: AdColors.surface,
-                          child: Icon(
-                            Icons.play_arrow_rounded,
-                            color: AdColors.brand,
-                          ),
-                        )
-                      : Image.network(
-                          video.thumbnailUrl.trim(),
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const ColoredBox(
-                            color: AdColors.surface,
-                            child: Icon(
-                              Icons.play_arrow_rounded,
-                              color: AdColors.brand,
-                            ),
-                          ),
-                        ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AdColors.onSurface,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AdColors.onSurfaceMuted,
-                          fontSize: 13,
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(
-                Icons.play_circle_fill_rounded,
-                color: AdColors.brand,
-                size: 28,
-              ),
-            ],
           ),
         ),
       ),

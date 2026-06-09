@@ -3,19 +3,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:adfoot/controller/user_controller.dart';
-import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/services/users/profile_repository.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/video_manager.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-class ProfileFieldDelete {
-  const ProfileFieldDelete._();
-}
+import 'package:adfoot/services/app_logger.dart';
 
 class ProfileAccessRevokedException implements Exception {
   const ProfileAccessRevokedException();
@@ -28,18 +22,17 @@ class ProfileLoadException implements Exception {
 }
 
 class ProfileController extends GetxController {
-  static const ProfileFieldDelete deleteField = ProfileFieldDelete._();
-  static const Duration _firestoreReadTimeout = Duration(seconds: 12);
-  static const Duration _firestoreWriteTimeout = Duration(seconds: 15);
-  static const Duration _storageWriteTimeout = Duration(seconds: 45);
+  static const ProfileFieldDelete deleteField = ProfileRepository.deleteField;
   static const Duration _userRefreshTimeout = Duration(seconds: 8);
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  ProfileController({ProfileRepository? profileRepository})
+      : _profileRepository = profileRepository ?? ProfileRepository();
+
+  final ProfileRepository _profileRepository;
   final VideoManager _videoManager = VideoManager();
 
   AppUser? user;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userSubscription;
+  StreamSubscription<AppUser?>? _userSubscription;
 
   final isLoadingPhoto = false.obs;
   final videoList = <Video>[].obs;
@@ -47,7 +40,7 @@ class ProfileController extends GetxController {
   String? profileLoadErrorTitle;
   String? profileLoadErrorMessage;
 
-  DocumentSnapshot<Map<String, dynamic>>? _lastVideoDoc;
+  ProfileVideoCursor? _lastVideoCursor;
   static const int _videoFetchLimit = 20;
   static const int _videoMemoryLimit = 25;
 
@@ -59,31 +52,10 @@ class ProfileController extends GetxController {
   bool get isLoadingVideos => _isLoadingVideos;
 
   bool _isPermissionDenied(Object error) =>
-      error is FirebaseException && error.code == 'permission-denied';
+      ProfileRepository.isPermissionDenied(error);
 
-  bool _isTransientFirestoreError(Object error) {
-    if (error is! FirebaseException) {
-      return false;
-    }
-
-    switch (error.code) {
-      case 'unavailable':
-      case 'deadline-exceeded':
-      case 'aborted':
-      case 'cancelled':
-      case 'resource-exhausted':
-      case 'internal':
-        return true;
-    }
-
-    final message = error.message?.toLowerCase() ?? '';
-    return message.contains('i/o error') ||
-        message.contains('software caused connection abort') ||
-        message.contains('connection abort') ||
-        message.contains('network') ||
-        message.contains('socket') ||
-        message.contains('timeout');
-  }
+  bool _isTransientFirestoreError(Object error) =>
+      ProfileRepository.isTransientFirestoreError(error);
 
   String _profileLoadErrorMessage(Object error) {
     if (error is ProfileLoadException) {
@@ -121,24 +93,6 @@ class ProfileController extends GetxController {
     super.onClose();
   }
 
-  Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(
-    DocumentReference<Map<String, dynamic>> ref,
-  ) async {
-    int attempt = 0;
-    while (attempt < 3) {
-      try {
-        return await ref.get().timeout(_firestoreReadTimeout);
-      } catch (_) {
-        attempt++;
-        if (attempt >= 3) {
-          rethrow;
-        }
-        await Future.delayed(Duration(milliseconds: 300 * attempt));
-      }
-    }
-    throw Exception('Firestore retry failed');
-  }
-
   Future<void> _safeRefreshCurrentUser() async {
     if (!Get.isRegistered<UserController>()) {
       return;
@@ -149,7 +103,7 @@ class ProfileController extends GetxController {
           .refreshUser()
           .timeout(_userRefreshTimeout);
     } catch (refreshError, refreshStackTrace) {
-      debugPrint(
+      AppLogger.debug(
         'ProfileController refreshUser warning: '
         '$refreshError\n$refreshStackTrace',
       );
@@ -163,19 +117,19 @@ class ProfileController extends GetxController {
     update();
 
     try {
-      final doc = await _getWithRetry(_firestore.collection('users').doc(uid));
-      if (!doc.exists) {
+      final fetchedUser = await _profileRepository.fetchUser(uid);
+      if (fetchedUser == null) {
         throw const ProfileLoadException('Profil introuvable.');
       }
 
-      user = AppUser.fromMap(doc.data()!);
+      user = fetchedUser;
       isLoadingUser = false;
       update();
 
       _startUserListener(uid);
       await fetchUserVideos(uid, isRefresh: true);
     } catch (e, st) {
-      debugPrint('updateUserId error: $e\n$st');
+      AppLogger.debug('updateUserId error: $e\n$st');
       isLoadingUser = false;
       profileLoadErrorTitle = 'Profil indisponible';
       profileLoadErrorMessage = _profileLoadErrorMessage(e);
@@ -184,32 +138,25 @@ class ProfileController extends GetxController {
         unawaited(_handleProtectedAccessDenied());
         return;
       }
-      Get.snackbar(
-        'Erreur',
+      AdFeedback.error(
+        'Profil indisponible',
         'Chargement du profil impossible.',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
       );
     }
   }
 
   void _startUserListener(String uid) {
     _userSubscription?.cancel();
-    _userSubscription =
-        _firestore.collection('users').doc(uid).snapshots().listen(
-      (snapshot) {
-        if (!snapshot.exists) {
+    _userSubscription = _profileRepository.watchUser(uid).listen(
+      (updatedUser) {
+        if (updatedUser == null) {
           return;
         }
-        final data = snapshot.data();
-        if (data == null) {
-          return;
-        }
-        user = AppUser.fromMap(data);
+        user = updatedUser;
         update();
       },
       onError: (error, stackTrace) {
-        debugPrint('profile user listener error: $error\n$stackTrace');
+        AppLogger.debug('profile user listener error: $error\n$stackTrace');
         if (user == null) {
           profileLoadErrorTitle = 'Profil indisponible';
           profileLoadErrorMessage = _profileLoadErrorMessage(error);
@@ -224,17 +171,13 @@ class ProfileController extends GetxController {
 
   Future<void> updateUserProfile(AppUser updatedUser) async {
     try {
-      await _firestore
-          .collection('users')
-          .doc(updatedUser.uid)
-          .set(updatedUser.toMap(), SetOptions(merge: true))
-          .timeout(_firestoreWriteTimeout);
+      await _profileRepository.saveUserProfile(updatedUser);
 
       try {
         user = updatedUser;
         update();
       } catch (localSyncError, localSyncStackTrace) {
-        debugPrint(
+        AppLogger.debug(
           'updateUserProfile local sync warning: '
           '$localSyncError\n$localSyncStackTrace',
         );
@@ -242,16 +185,14 @@ class ProfileController extends GetxController {
 
       await _safeRefreshCurrentUser();
     } catch (e, st) {
-      debugPrint('updateUserProfile error: $e\n$st');
+      AppLogger.debug('updateUserProfile error: $e\n$st');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
-      Get.snackbar(
-        'Erreur',
+      AdFeedback.error(
+        'Mise à jour impossible',
         'Impossible de mettre à jour le profil.',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
       );
       rethrow;
     }
@@ -268,63 +209,21 @@ class ProfileController extends GetxController {
         return;
       }
 
-      final sanitized = _sanitizePatch(patch);
-      if (sanitized.isEmpty) {
+      final writeResult = await _profileRepository.updateProfilePatch(
+        uid,
+        patch,
+      );
+      final finalPatch = writeResult.appliedPatch;
+      if (finalPatch.isEmpty) {
         return;
       }
-
-      final advancedKeys = <String>{
-        'playerProfile',
-        'clubProfile',
-        'agentProfile',
-        'eventOrganizerProfile',
-      };
-
-      final finalPatch = Map<String, dynamic>.from(sanitized);
-      final needsDeepMerge = finalPatch.keys.any(advancedKeys.contains);
-
-      if (needsDeepMerge) {
-        final doc =
-            await _getWithRetry(_firestore.collection('users').doc(uid));
-        final existing = doc.data() ?? <String, dynamic>{};
-
-        for (final key in advancedKeys) {
-          if (!finalPatch.containsKey(key)) {
-            continue;
-          }
-
-          final incoming = finalPatch[key];
-          if (incoming is FieldValue) {
-            continue;
-          }
-          if (incoming is! Map) {
-            continue;
-          }
-
-          final old = existing[key];
-          if (old is Map) {
-            finalPatch[key] = _deepMergeMap(
-              Map<String, dynamic>.from(old),
-              Map<String, dynamic>.from(incoming),
-            );
-          } else {
-            finalPatch[key] = Map<String, dynamic>.from(incoming);
-          }
-        }
-      }
-
-      await _firestore
-          .collection('users')
-          .doc(uid)
-          .update(finalPatch)
-          .timeout(_firestoreWriteTimeout);
 
       if (alsoUpdateLocalUser && user != null && user!.uid == uid) {
         try {
           _applyPatchToLocalUser(finalPatch);
           update();
         } catch (localSyncError, localSyncStackTrace) {
-          debugPrint(
+          AppLogger.debug(
             'updateProfilePatch local sync warning: '
             '$localSyncError\n$localSyncStackTrace\n'
             'patch=$finalPatch',
@@ -336,93 +235,17 @@ class ProfileController extends GetxController {
         await _safeRefreshCurrentUser();
       }
     } catch (e, st) {
-      debugPrint('updateProfilePatch error: $e\n$st');
+      AppLogger.debug('updateProfilePatch error: $e\n$st');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
-      Get.snackbar(
-        'Erreur',
+      AdFeedback.error(
+        'Mise à jour impossible',
         'Impossible de mettre à jour le profil.',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
       );
       rethrow;
     }
-  }
-
-  Map<String, dynamic> _sanitizePatch(Map<String, dynamic> patch) {
-    final out = <String, dynamic>{};
-
-    void addIfValid(String key, dynamic value) {
-      if (value == null) {
-        return;
-      }
-
-      if (value is ProfileFieldDelete) {
-        out[key] = FieldValue.delete();
-        return;
-      }
-
-      if (value is FieldValue) {
-        out[key] = value;
-        return;
-      }
-
-      if (value is String) {
-        final trimmed = value.trim();
-        if (trimmed.isEmpty) {
-          return;
-        }
-        out[key] = trimmed;
-        return;
-      }
-
-      if (value is List) {
-        if (value.isEmpty) {
-          return;
-        }
-        out[key] = value;
-        return;
-      }
-
-      if (value is Map) {
-        if (value.isEmpty) {
-          return;
-        }
-        out[key] = value;
-        return;
-      }
-
-      out[key] = value;
-    }
-
-    patch.forEach(addIfValid);
-    return out;
-  }
-
-  Map<String, dynamic> _deepMergeMap(
-    Map<String, dynamic> base,
-    Map<String, dynamic> incoming,
-  ) {
-    final result = Map<String, dynamic>.from(base);
-
-    incoming.forEach((key, value) {
-      if (value == null) {
-        return;
-      }
-      final old = result[key];
-      if (old is Map && value is Map) {
-        result[key] = _deepMergeMap(
-          Map<String, dynamic>.from(old),
-          Map<String, dynamic>.from(value),
-        );
-      } else {
-        result[key] = value;
-      }
-    });
-
-    return result;
   }
 
   void _applyPatchToLocalUser(Map<String, dynamic> patch) {
@@ -436,7 +259,7 @@ class ProfileController extends GetxController {
     }
     if (patch.containsKey('photoProfil')) {
       final value = patch['photoProfil'];
-      if (value is! FieldValue) {
+      if (value is! ProfileFieldDelete) {
         u.photoProfil = value as String;
       }
     }
@@ -446,7 +269,7 @@ class ProfileController extends GetxController {
         return;
       }
       final value = patch[key];
-      if (value is FieldValue) {
+      if (value is ProfileFieldDelete) {
         setter(null);
       } else {
         setter(value as String?);
@@ -458,7 +281,7 @@ class ProfileController extends GetxController {
         return;
       }
       final value = patch[key];
-      if (value is FieldValue) {
+      if (value is ProfileFieldDelete) {
         setter(null);
         return;
       }
@@ -488,7 +311,7 @@ class ProfileController extends GetxController {
 
     if (patch.containsKey('performances')) {
       final value = patch['performances'];
-      if (value is FieldValue) {
+      if (value is ProfileFieldDelete) {
         u.performances = null;
       } else if (value is Map) {
         u.performances = Map<String, double>.from(
@@ -499,7 +322,7 @@ class ProfileController extends GetxController {
 
     if (patch.containsKey('cvUrl')) {
       final value = patch['cvUrl'];
-      if (value is FieldValue) {
+      if (value is ProfileFieldDelete) {
         u.cvUrl = null;
       } else {
         u.cvUrl = value as String?;
@@ -508,10 +331,8 @@ class ProfileController extends GetxController {
 
     if (patch.containsKey('birthDate')) {
       final value = patch['birthDate'];
-      if (value is FieldValue) {
+      if (value is ProfileFieldDelete) {
         u.birthDate = null;
-      } else if (value is Timestamp) {
-        u.birthDate = value.toDate();
       } else if (value is DateTime) {
         u.birthDate = value;
       }
@@ -519,7 +340,7 @@ class ProfileController extends GetxController {
 
     if (patch.containsKey('languages')) {
       final value = patch['languages'];
-      if (value is FieldValue) {
+      if (value is ProfileFieldDelete) {
         u.languages = null;
       } else if (value is List) {
         u.languages = value.map((e) => e.toString()).toList();
@@ -541,7 +362,7 @@ class ProfileController extends GetxController {
         return;
       }
       final value = patch[key];
-      if (value is FieldValue) {
+      if (value is ProfileFieldDelete) {
         setter(<String, dynamic>{});
         return;
       }
@@ -558,41 +379,26 @@ class ProfileController extends GetxController {
   Future<void> updateProfilePhoto(String uid, String photoPath) async {
     isLoadingPhoto.value = true;
     try {
-      final ref = _storage.ref('profilePhotos/$uid');
-      await ref
-          .putFile(
-            File(photoPath),
-            SettableMetadata(contentType: 'image/jpeg'),
-          )
-          .timeout(_storageWriteTimeout);
-      final url = await ref.getDownloadURL().timeout(_firestoreReadTimeout);
-
-      await _firestore.collection('users').doc(uid).update({
-        'photoProfil': url,
-      }).timeout(_firestoreWriteTimeout);
+      final url = await _profileRepository.updateProfilePhoto(uid, photoPath);
 
       user?.photoProfil = url;
       update();
 
       await _safeRefreshCurrentUser();
 
-      Get.snackbar(
-        'Succès',
-        'Photo mise à jour.',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
+      AdFeedback.success(
+        'Photo mise à jour',
+        'Votre photo de profil a été enregistrée.',
       );
     } catch (e, st) {
-      debugPrint('updateProfilePhoto error: $e\n$st');
+      AppLogger.debug('updateProfilePhoto error: $e\n$st');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
-      Get.snackbar(
-        'Erreur',
+      AdFeedback.error(
+        'Photo non mise à jour',
         'Impossible de mettre à jour la photo.',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
       );
     } finally {
       isLoadingPhoto.value = false;
@@ -614,7 +420,7 @@ class ProfileController extends GetxController {
       if (isRefresh) {
         await _videoManager.disposeAllForContext(ctx);
         videoList.clear();
-        _lastVideoDoc = null;
+        _lastVideoCursor = null;
         _hasMoreVideos = true;
       }
 
@@ -622,32 +428,21 @@ class ProfileController extends GetxController {
         return;
       }
 
-      Query<Map<String, dynamic>> query = _firestore
-          .collection('videos')
-          .where('uid', isEqualTo: uid)
-          .where('status', isEqualTo: 'ready')
-          .orderBy('updatedAt', descending: true)
-          .limit(_videoFetchLimit);
-
-      if (!isRefresh && _lastVideoDoc != null) {
-        query = query.startAfter([_lastVideoDoc!.get('updatedAt')]);
-      }
-
-      final snap = await query.get();
-      if (snap.docs.isEmpty) {
+      final page = await _profileRepository.fetchUserVideos(
+        uid: uid,
+        limit: _videoFetchLimit,
+        after: isRefresh ? null : _lastVideoCursor,
+      );
+      if (page.fetchedCount == 0) {
         _hasMoreVideos = false;
       } else {
-        final newVideos = snap.docs
-            .map((d) => Video.fromDoc(d))
-            .where((v) => v.videoUrl.isNotEmpty)
-            .toList();
-
+        final newVideos = page.videos;
         final existingIds = videoList.map((v) => v.id).toSet();
         final unique =
             newVideos.where((v) => !existingIds.contains(v.id)).toList();
 
         videoList.addAll(unique);
-        _lastVideoDoc = snap.docs.last;
+        _lastVideoCursor = page.cursor;
 
         if (videoList.length > _videoMemoryLimit) {
           final toRemove = videoList.length - _videoMemoryLimit;
@@ -664,17 +459,15 @@ class ProfileController extends GetxController {
         }
       }
     } catch (e, st) {
-      debugPrint('fetchUserVideos error: $e\n$st');
+      AppLogger.debug('fetchUserVideos error: $e\n$st');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         return;
       }
       if (videoList.isEmpty) {
-        Get.snackbar(
-          'Erreur',
+        AdFeedback.error(
+          'Vidéos indisponibles',
           'Chargement des vidéos impossible.',
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
         );
       }
     } finally {
@@ -704,112 +497,70 @@ class ProfileController extends GetxController {
         throw ArgumentError('CV payload is empty.');
       }
 
-      final targetFileName = fileName?.trim().isNotEmpty == true
-          ? fileName!.trim()
-          : 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf';
-      final storagePath = 'cvs/$uid/$targetFileName';
-      final ref = _storage.ref(storagePath);
       final previousCvUrl = user?.cvUrl;
-      final metadata = SettableMetadata(contentType: 'application/pdf');
-      final uploadTask = pdfBytes != null
-          ? await ref.putData(pdfBytes, metadata).timeout(_storageWriteTimeout)
-          : await ref.putFile(pdfFile!, metadata).timeout(_storageWriteTimeout);
-      final url =
-          await uploadTask.ref.getDownloadURL().timeout(_firestoreReadTimeout);
-
-      await _firestore
-          .collection('users')
-          .doc(uid)
-          .update({'cvUrl': url}).timeout(_firestoreWriteTimeout);
+      final url = await _profileRepository.uploadCvPdf(
+        uid,
+        pdfFile: pdfFile,
+        pdfBytes: pdfBytes,
+        fileName: fileName,
+        previousCvUrl: previousCvUrl,
+      );
       user?.cvUrl = url;
       update();
 
       await _safeRefreshCurrentUser();
 
-      if (previousCvUrl != null &&
-          previousCvUrl.isNotEmpty &&
-          previousCvUrl != url) {
-        try {
-          await _storage.refFromURL(previousCvUrl).delete();
-        } catch (cleanupError, cleanupStackTrace) {
-          debugPrint(
-            'uploadCvPdf previous CV cleanup warning: '
-            '$cleanupError\n$cleanupStackTrace',
-          );
-        }
-      }
-
-      Get.snackbar(
-        'Succès',
-        'CV ajouté ou mis à jour.',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
+      AdFeedback.success(
+        'CV enregistré',
+        'Votre CV a été ajouté ou mis à jour.',
       );
     } catch (e, st) {
-      debugPrint(
+      AppLogger.debug(
         'uploadCvPdf error: $e\n'
-        'bucket=${AppEnvironmentConfig.firebaseOptions.storageBucket} '
         'uid=$uid '
-        'authUid=${FirebaseAuth.instance.currentUser?.uid} '
+        'authUid=${_profileRepository.currentAuthUid} '
         'fileName=$fileName\n$st',
       );
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
-      if (e is FirebaseException && e.code == 'unauthorized') {
-        Get.snackbar(
+      if (ProfileRepository.isUnauthorized(e)) {
+        AdFeedback.error(
           'Autorisation refusée',
           'Le stockage Firebase refuse actuellement l’ajout du CV pour cette session.',
-          backgroundColor: Colors.red,
-          colorText: Colors.white,
         );
         return;
       }
-      Get.snackbar(
-        'Erreur',
+      AdFeedback.error(
+        'Ajout impossible',
         'Impossible d’ajouter le CV.',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
       );
     }
   }
 
   Future<void> deleteCv(String uid) async {
     try {
-      if (user?.cvUrl != null) {
-        await _storage
-            .refFromURL(user!.cvUrl!)
-            .delete()
-            .timeout(_storageWriteTimeout);
-      }
-
-      await _firestore.collection('users').doc(uid).update({
-        'cvUrl': FieldValue.delete(),
-      }).timeout(_firestoreWriteTimeout);
+      await _profileRepository.deleteCv(uid, cvUrl: user?.cvUrl);
 
       user?.cvUrl = null;
       update();
 
       await _safeRefreshCurrentUser();
 
-      Get.snackbar(
-        'Succès',
-        'CV supprimé.',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
+      AdFeedback.success(
+        'CV supprimé',
+        'Le CV a été retiré du profil.',
       );
     } catch (e) {
-      debugPrint('deleteCv error: $e');
+      AppLogger.debug('deleteCv error: $e');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
-      Get.snackbar(
-        'Erreur',
+      AdFeedback.error(
+        'Suppression impossible',
         'Impossible de supprimer le CV.',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
       );
     }
   }
@@ -820,7 +571,7 @@ class ProfileController extends GetxController {
   }
 
   bool get isOwnProfile {
-    final current = FirebaseAuth.instance.currentUser?.uid;
+    final current = _profileRepository.currentAuthUid;
     return current != null && current == user?.uid;
   }
 

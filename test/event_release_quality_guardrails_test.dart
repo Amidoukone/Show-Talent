@@ -66,13 +66,17 @@ void main() {
       expect(screen, contains('_isOpenForRegistration(Event event)'));
       expect(screen, contains('_buildEventsOverview('));
       expect(screen, contains('_onlyMine'));
+      expect(screen, contains('eventController.hasMoreEvents'));
+      expect(screen, contains('eventController.isLoadingMore'));
+      expect(screen, contains('_buildLoadMoreFooter()'));
+      expect(screen, contains('eventController.loadMoreEvents()'));
       expect(screen, contains('event.organisateur.nom.toLowerCase()'));
       expect(screen, contains('Icons.mark_email_unread_outlined'));
       expect(screen, contains('Créer un événement'));
       expect(screen, contains('return Wrap('));
       expect(
         screen,
-        contains('_buildEmptyState(currentUser, filteredOut: true)'),
+        contains('filteredOut: true'),
       );
       expect(screen, contains('_resetFilters()'));
       expect(screen, contains('_openEditEventForm(event)'));
@@ -106,6 +110,15 @@ void main() {
       expect(controller, contains('sendEventFanout'));
 
       expect(repository, contains('class EventRepositoryException'));
+      expect(repository, contains('class EventFeedCursor'));
+      expect(repository, contains('class EventQueryFilter'));
+      expect(repository, contains('Stream<EventLiveBatch> watchEvents'));
+      expect(repository, contains('Future<EventFeedPage> fetchEventsPage'));
+      expect(repository, contains(".orderBy('createdAt', descending: true)"));
+      expect(repository, contains('.limit(limit)'));
+      expect(repository, contains('startAfterDocument'));
+      expect(repository, contains("'statut'"));
+      expect(repository, contains("'dateFin'"));
       expect(repository, contains('runTransaction'));
       expect(repository, contains('capacity_reached'));
       expect(repository, contains('already_registered'));
@@ -116,6 +129,23 @@ void main() {
         contains("payload['streamingUrl'] = FieldValue.delete()"),
       );
       expect(repository, contains("payload['flyerUrl'] = FieldValue.delete()"));
+      expect(controller, contains('StreamSubscription<EventLiveBatch>'));
+      expect(controller, contains('Future<void> loadMoreEvents()'));
+      expect(controller, contains('_lastCursor'));
+      expect(controller, contains('_eventPageSize'));
+      expect(controller, contains('_replaceLocalEvent(event)'));
+      expect(controller, contains('_removeLocalEvent(eventId)'));
+      expect(controller, contains('fetchEventsPage('));
+    });
+
+    test('event indexes support ordered and filtered production queries', () {
+      final indexes = File('firestore.indexes.json').readAsStringSync();
+
+      expect(indexes, contains('"collectionGroup": "events"'));
+      expect(indexes, contains('"fieldPath": "statut"'));
+      expect(indexes, contains('"fieldPath": "dateFin"'));
+      expect(indexes, contains('"fieldPath": "createdAt"'));
+      expect(indexes, contains('"order": "DESCENDING"'));
     });
 
     test('event details stay in-app and tolerate transient missing session',

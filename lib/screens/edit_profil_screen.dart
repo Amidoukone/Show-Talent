@@ -4,11 +4,13 @@ import 'dart:typed_data';
 import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
+import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../models/user.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final AppUser user;
@@ -26,8 +28,6 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   static const kPrimary = AdColors.brand;
-  static const kAccent = AdColors.accent;
-  static const kDanger = AdColors.error;
   static const kSurface = AdColors.surface;
 
   final _formKey = GlobalKey<FormState>();
@@ -407,7 +407,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     } on ProfileAccessRevokedException {
       return;
     } catch (e) {
-      debugPrint('EditProfile _save error: $e');
+      AppLogger.debug('EditProfile _save error: $e');
       AdFeedback.error(
         'Erreur',
         'Impossible de sauvegarder les modifications.',
@@ -666,25 +666,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: ElevatedButton.icon(
+          child: AdButton(
             onPressed: _saving ? null : _save,
-            icon: _saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.save_rounded),
-            label: Text(
-              _saving ? 'Sauvegarde...' : 'Enregistrer',
-              style: const TextStyle(fontSize: 16, color: Colors.white),
-            ),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size.fromHeight(54),
-            ),
+            loading: _saving,
+            leading: Icons.save_rounded,
+            label: _saving ? 'Sauvegarde...' : 'Enregistrer',
           ),
         ),
       ),
@@ -697,9 +683,6 @@ class CvUploaderSection extends StatefulWidget {
   final ProfileController profileController;
 
   static const kPrimary = _EditProfileScreenState.kPrimary;
-  static const kAccent = _EditProfileScreenState.kAccent;
-  static const kDanger = _EditProfileScreenState.kDanger;
-
   const CvUploaderSection({
     super.key,
     required this.initialUser,
@@ -761,7 +744,7 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ElevatedButton.icon(
+          AdButton(
             onPressed: _isUploading || _isDeleting
                 ? null
                 : () async {
@@ -804,32 +787,18 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
                       }
                     }
                   },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: CvUploaderSection.kAccent,
-              foregroundColor: Colors.white,
-            ),
-            icon: _isUploading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.upload_file_rounded),
-            label: Text(
-              _isUploading
-                  ? 'Ajout du CV...'
-                  : hasCv
-                      ? 'Remplacer le CV'
-                      : 'Ajouter un CV',
-              style: const TextStyle(color: Colors.white),
-            ),
+            loading: _isUploading,
+            leading: Icons.upload_file_rounded,
+            label: _isUploading
+                ? 'Ajout du CV...'
+                : hasCv
+                    ? 'Remplacer le CV'
+                    : 'Ajouter un CV',
+            kind: AdButtonKind.tonal,
           ),
           if (hasCv) ...[
             const SizedBox(height: 10),
-            ElevatedButton.icon(
+            AdButton(
               onPressed: _isUploading || _isDeleting
                   ? null
                   : () async {
@@ -848,24 +817,10 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
                         }
                       }
                     },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: CvUploaderSection.kDanger,
-                foregroundColor: Colors.white,
-              ),
-              icon: _isDeleting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.delete_forever_rounded),
-              label: Text(
-                _isDeleting ? 'Suppression...' : 'Supprimer le CV',
-                style: const TextStyle(color: Colors.white),
-              ),
+              loading: _isDeleting,
+              leading: Icons.delete_forever_rounded,
+              label: _isDeleting ? 'Suppression...' : 'Supprimer le CV',
+              kind: AdButtonKind.danger,
             ),
           ],
         ],

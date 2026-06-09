@@ -5,7 +5,8 @@ param(
     [switch]$SkipProduction,
     [switch]$IncludeProductionNext,
     [switch]$SkipMobileChecks,
-    [switch]$SkipFunctionsChecks
+    [switch]$SkipFunctionsChecks,
+    [switch]$RequirePlayIntegrityAppCheck
 )
 
 Set-StrictMode -Version Latest
@@ -171,6 +172,7 @@ $checkMobileIdsScript = Join-Path $scriptsRoot "check-mobile-identifiers.ps1"
 
 Write-Host "Selected environments: $($selectedEnvironments -join ', ')"
 Write-Host "Strict mode          : $Strict"
+Write-Host "Require PlayIntegrity: $RequirePlayIntegrityAppCheck"
 
 Invoke-Step -Name "Mobile identifiers baseline" -Action {
     & powershell -ExecutionPolicy Bypass -File $checkMobileIdsScript
@@ -188,6 +190,10 @@ if (-not $SkipMobileChecks) {
             if ($Strict -and $environment -ne "local") {
                 $args += "-RequireConfig"
                 $args += "-RequireNativeFiles"
+            }
+
+            if ($RequirePlayIntegrityAppCheck -and $environment -in @("production", "production-next")) {
+                $args += "-RequirePlayIntegrityAppCheck"
             }
 
             & powershell @args

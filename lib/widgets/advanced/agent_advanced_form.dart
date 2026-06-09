@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
 import '../../models/user.dart';
+import '../ad_button.dart';
+import '../ad_feedback.dart';
 
 class AgentAdvancedForm extends StatefulWidget {
   final AppUser user;
@@ -104,11 +106,11 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
       }
 
       if (showFeedback) {
-        Get.snackbar(
-          'Succès',
+        AdFeedback.success(
+          'Profil mis à jour',
           _isAgent
-              ? 'Profil agent avancé mis à jour'
-              : 'Profil recruteur avancé mis à jour',
+              ? 'Les informations avancées de l’agent ont été enregistrées.'
+              : 'Les informations avancées du recruteur ont été enregistrées.',
         );
       }
 
@@ -172,9 +174,11 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
             ),
             if (widget.showSubmitButton) ...[
               const SizedBox(height: 20),
-              ElevatedButton(
+              AdButton(
+                leading: Icons.save_rounded,
+                loading: _saving,
+                label: 'Sauvegarder',
                 onPressed: _saving ? null : () => save(),
-                child: Text(_saving ? 'Sauvegarde...' : 'Sauvegarder'),
               ),
             ],
           ],

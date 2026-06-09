@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class FeatureFlagConfig {
   final bool adaptiveEnabled;
@@ -62,7 +62,7 @@ class FeatureFlagService {
       _cached = FeatureFlagConfig.fromData(data);
       _lastFetch = now;
     } catch (e) {
-      debugPrint('FeatureFlagService fetch error: $e');
+      AppLogger.debug('FeatureFlagService fetch error: $e');
     }
 
     return _cached;

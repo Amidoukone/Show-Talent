@@ -11,13 +11,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:adfoot/controller/upload_video_controller.dart';
 import 'upload_form.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
+import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'success_toast.dart';
-
-/// 🎨 Couleurs de marque centralisées (évite les doublons + warnings)
-const Color kBrand = Color(0xFF2ED573); // vert lumineux (action)
-const Color kBrandDark = Color(0xFF26C165); // variante plus sombre
 
 class AddVideo extends StatefulWidget {
   const AddVideo({super.key});
@@ -69,40 +69,19 @@ class _AddVideoState extends State<AddVideo> {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      // ❌ On n’étend plus derrière l’AppBar pour garantir lisibilité
       extendBodyBehindAppBar: false,
-      appBar: AppBar(
-        title: const Text(VideoUiStrings.addVideoScreenTitle),
-        backgroundColor: cs.surface, // ✅ fond sombre cohérent
-        foregroundColor: cs.onSurface, // ✅ icônes + texte lisibles
-        elevation: 0,
-        centerTitle: true,
-        scrolledUnderElevation: 0,
-        systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness:
-              Brightness.light, // ✅ icônes de statut en clair
-          statusBarBrightness: Brightness.dark, // iOS
-        ),
+      appBar: const AdAppBar(
+        title: VideoUiStrings.addVideoScreenTitle,
+        subtitle: 'Publication vidéo',
+        showBottomDivider: true,
       ),
       body: Container(
         width: double.infinity,
         height: double.infinity,
-        decoration: BoxDecoration(
-            // Dégradé sombre et immersif
-            gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AdColors.surface,
-            AdColors.surfaceAlt,
-            AdColors.surfaceCard,
-          ],
-        )),
+        color: cs.surface,
         child: SafeArea(
           child: Obx(() {
             final uploading = uploadVideoController.isUploading.value;
@@ -119,100 +98,31 @@ class _AddVideoState extends State<AddVideo> {
 
             return Stack(
               children: [
-                // Header décoratif
-                const _Header(),
-                // Contenu avec animations douces
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      top: media.size.height * 0.18,
-                      left: 20,
-                      right: 20,
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 350),
-                      switchInCurve: Curves.easeOut,
-                      switchOutCurve: Curves.easeIn,
-                      child: content,
+                SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AdSpacing.md,
+                    AdSpacing.lg,
+                    AdSpacing.md,
+                    AdSpacing.xxl,
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 280),
+                        switchInCurve: Curves.easeOut,
+                        switchOutCurve: Curves.easeIn,
+                        child: content,
+                      ),
                     ),
                   ),
                 ),
-
                 if (showOverlay)
                   _ProgressOverlay(
                       controller: uploadVideoController, waiting: loading),
               ],
             );
           }),
-        ),
-      ),
-    );
-  }
-}
-
-/// En-tête décoratif avec gradient et icône
-class _Header extends StatelessWidget {
-  const _Header();
-
-  @override
-  Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
-    return Container(
-      height: media.size.height * 0.26,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [kBrand, kBrandDark], // ✅ cohérent avec la charte
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(28),
-        ),
-      ),
-      child: const Stack(
-        children: [
-          Positioned(
-            right: -30,
-            top: -30,
-            child: _Bubble(size: 110, opacity: .08),
-          ),
-          Positioned(
-            left: -40,
-            bottom: -40,
-            child: _Bubble(size: 160, opacity: .06),
-          ),
-          Align(
-            alignment: Alignment.center,
-            child: Icon(
-              Icons.video_collection_rounded,
-              color: Colors.white,
-              size: 64,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Petite bulle décorative
-class _Bubble extends StatelessWidget {
-  final double size;
-  final double opacity;
-  const _Bubble({required this.size, required this.opacity});
-
-  @override
-  Widget build(BuildContext context) {
-    return Opacity(
-      opacity: opacity,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.white,
         ),
       ),
     );
@@ -227,100 +137,81 @@ class _BodyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 10,
-      shadowColor: kBrand.withValues(alpha: .15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Illustration cercle + icône
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: kBrand.withValues(alpha: .08),
-                shape: BoxShape.circle,
-              ),
-              child: const Center(
-                child:
-                    Icon(Icons.video_library_rounded, size: 42, color: kBrand),
+    return AdSurfaceCard(
+      padding: const EdgeInsets.all(AdSpacing.xl),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Illustration cercle + icône
+          Container(
+            width: 88,
+            height: 88,
+            decoration: BoxDecoration(
+              color: AdColors.brand.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(AdRadius.xl),
+              border: Border.all(
+                color: AdColors.brand.withValues(alpha: .24),
               ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              VideoUiStrings.addVideoPickTitle,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontSize: 18,
-                    letterSpacing: .2,
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              VideoUiStrings.uploadConstraintsHint,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontSize: 13,
-                    color: AdColors.onSurfaceMuted,
-                  ),
-            ),
-            const SizedBox(height: 22),
-
-            // Bouton principal
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onPick,
-                icon: const Icon(Icons.photo_library_rounded,
-                    color: Colors.white),
-                label: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    VideoUiStrings.chooseFromGallery,
-                    style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600),
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kBrand,
-                  elevation: 3,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
+            child: const Center(
+              child: Icon(
+                Icons.video_library_rounded,
+                size: 42,
+                color: AdColors.brand,
               ),
             ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            VideoUiStrings.addVideoPickTitle,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontSize: 18,
+                  letterSpacing: .2,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            VideoUiStrings.uploadConstraintsHint,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  color: AdColors.onSurfaceMuted,
+                ),
+          ),
+          const SizedBox(height: 22),
 
-            const SizedBox(height: 14),
+          AdButton(
+            label: VideoUiStrings.chooseFromGallery,
+            leading: Icons.photo_library_rounded,
+            onPressed: onPick,
+          ),
 
-            // Tips + puces
-            const Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _TipChip(
-                  icon: Icons.timer_rounded,
-                  label: VideoUiStrings.maxDurationChip,
-                ),
-                _TipChip(
-                  icon: Icons.hd_rounded,
-                  label: VideoUiStrings.minQualityChip,
-                ),
-                _TipChip(
-                  icon: Icons.data_saver_on_rounded,
-                  label: VideoUiStrings.autoOptimizationChip,
-                ),
-              ],
-            ),
-          ],
-        ),
+          const SizedBox(height: 14),
+
+          // Tips + puces
+          const Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _TipChip(
+                icon: Icons.timer_rounded,
+                label: VideoUiStrings.maxDurationChip,
+              ),
+              _TipChip(
+                icon: Icons.hd_rounded,
+                label: VideoUiStrings.minQualityChip,
+              ),
+              _TipChip(
+                icon: Icons.data_saver_on_rounded,
+                label: VideoUiStrings.autoOptimizationChip,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

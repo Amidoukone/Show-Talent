@@ -6,6 +6,7 @@ import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/utils/auth_error_mapper.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:adfoot/widgets/ad_text_field.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -256,169 +257,159 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
-            child: Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                child: Form(
-                  key: _formKey,
-                  autovalidateMode: AutovalidateMode.disabled,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (_sessionNoticeMessage != null) ...[
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: noticeBackground,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: noticeBorder,
-                            ),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                noticeIcon,
-                                color: noticeForeground,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _sessionNoticeTitle ??
-                                          'Information importante',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            color: noticeForeground,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      _sessionNoticeMessage!,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: noticeForeground.withValues(
-                                                alpha: .92),
-                                            height: 1.35,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
-                      Align(
-                        alignment: Alignment.center,
-                        child: ClipRRect(
+            child: AdSurfaceCard(
+              child: Form(
+                key: _formKey,
+                autovalidateMode: AutovalidateMode.disabled,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_sessionNoticeMessage != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: noticeBackground,
                           borderRadius: BorderRadius.circular(16),
-                          child: Image.asset(
-                            'assets/logo.png',
-                            height: 80,
-                            fit: BoxFit.contain,
+                          border: Border.all(
+                            color: noticeBorder,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Connectez-vous',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: cs.onSurface,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              noticeIcon,
+                              color: noticeForeground,
                             ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Ravi de vous revoir !',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: cs.onSurface.withValues(alpha: .7),
-                              fontWeight: FontWeight.w600,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _sessionNoticeTitle ??
+                                        'Information importante',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          color: noticeForeground,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _sessionNoticeMessage!,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: noticeForeground.withValues(
+                                              alpha: .92),
+                                          height: 1.35,
+                                        ),
+                                  ),
+                                ],
+                              ),
                             ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      AdTextField(
-                        controller: _emailController,
-                        label: 'Adresse e-mail',
-                        keyboardType: TextInputType.emailAddress,
-                        prefixIcon: const Icon(Icons.email_outlined),
-                        validator: (v) => _validateEmailValue(v ?? ''),
-                      ),
-                      const SizedBox(height: 16),
-                      AdTextField(
-                        controller: _passwordController,
-                        label: 'Mot de passe',
-                        isPassword: true,
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        validator: (v) => (v == null || v.isEmpty)
-                            ? 'Mot de passe requis'
-                            : null,
-                        onSubmitted: _login,
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _isBusy ? null : _resetPassword,
-                          child: const Text('Mot de passe oublié ?'),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      AdButton(
-                        label: 'Se connecter',
-                        onPressed: _isBusy ? null : _login,
-                        loading: _isLoading,
-                        leading: Icons.login_rounded,
-                        kind: AdButtonKind.primary,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Tous les comptes sont maintenant créés par l’administration Adfoot.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: cs.onSurface.withValues(alpha: .7),
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'Nouveau ici ?',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: cs.onSurface.withValues(alpha: .8),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                          TextButton(
-                            onPressed: _isBusy
-                                ? null
-                                : () => Get.to(() => const SignUpScreen()),
-                            child: const Text('Obtenir un accès'),
-                          ),
-                        ],
-                      ),
+                      const SizedBox(height: 20),
                     ],
-                  ),
+                    Align(
+                      alignment: Alignment.center,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.asset(
+                          'assets/logo.png',
+                          height: 80,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Connectez-vous',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Ravi de vous revoir !',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurface.withValues(alpha: .7),
+                            fontWeight: FontWeight.w600,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    AdTextField(
+                      controller: _emailController,
+                      label: 'Adresse e-mail',
+                      keyboardType: TextInputType.emailAddress,
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      validator: (v) => _validateEmailValue(v ?? ''),
+                    ),
+                    const SizedBox(height: 16),
+                    AdTextField(
+                      controller: _passwordController,
+                      label: 'Mot de passe',
+                      isPassword: true,
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      validator: (v) => (v == null || v.isEmpty)
+                          ? 'Mot de passe requis'
+                          : null,
+                      onSubmitted: _login,
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _isBusy ? null : _resetPassword,
+                        child: const Text('Mot de passe oublié ?'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    AdButton(
+                      label: 'Se connecter',
+                      onPressed: _isBusy ? null : _login,
+                      loading: _isLoading,
+                      leading: Icons.login_rounded,
+                      kind: AdButtonKind.primary,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Tous les comptes sont maintenant créés par l’administration Adfoot.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSurface.withValues(alpha: .7),
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Nouveau ici ?',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: cs.onSurface.withValues(alpha: .8),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                        TextButton(
+                          onPressed: _isBusy
+                              ? null
+                              : () => Get.to(() => const SignUpScreen()),
+                          child: const Text('Obtenir un accès'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),

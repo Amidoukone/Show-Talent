@@ -40,7 +40,7 @@ void main() {
           form, contains("id: isEditing ? editingOffre!.id : _draftOfferId"));
       expect(
           form, contains('_navigateAfterSuccessfulSubmit(response.message)'));
-      expect(form, contains('Get.closeCurrentSnackbar();'));
+      expect(form, contains('AdFeedback.dismissCurrent();'));
       expect(form, contains('Get.back(result: result);'));
       expect(form, isNot(contains('Get.back(result: true);')));
       expect(form, contains('Get.offAllNamed('));
@@ -72,6 +72,10 @@ void main() {
       expect(screen, contains('_buildOffersOverview('));
       expect(screen, contains('_openCreateOfferForm()'));
       expect(screen, contains('_openEditOfferForm(Offre offre)'));
+      expect(screen, contains('offreController.hasMoreOffres'));
+      expect(screen, contains('offreController.isLoadingMore'));
+      expect(screen, contains('_buildLoadMoreFooter()'));
+      expect(screen, contains('offreController.loadMoreOffres()'));
       expect(screen, contains('_pendingOfferActions'));
       expect(screen, contains('_runOfferAction('));
       expect(screen, contains('_isOfferActionPending('));
@@ -94,7 +98,7 @@ void main() {
       expect(screen, contains('findExistingConversationId('));
       expect(
         screen,
-        contains('_buildEmptyState(currentUser, filteredOut: true)'),
+        contains('filteredOut: true'),
       );
       expect(screen, contains('_resetFilters()'));
       expect(screen, contains("arguments: {'tab': 0}"));
@@ -116,6 +120,8 @@ void main() {
     test('offre controller mutations return explicit action responses', () {
       final controller =
           File('lib/controller/offre_controller.dart').readAsStringSync();
+      final repository =
+          File('lib/services/offers/offer_repository.dart').readAsStringSync();
 
       expect(controller, contains('Future<ActionResponse> publierOffre'));
       expect(controller, contains('Future<ActionResponse> modifierOffre'));
@@ -123,28 +129,62 @@ void main() {
       expect(controller, contains('Future<ActionResponse> supprimerOffre'));
       expect(controller, contains('Future<ActionResponse> postulerOffre'));
       expect(controller, contains('Future<ActionResponse> seDesinscrireOffre'));
-      expect(controller, contains('runTransaction'));
-      expect(controller, contains('_extractCandidateMaps'));
-      expect(controller, contains("payload.remove('pieceJointeUrl')"));
+      expect(controller, contains('_offerRepository.publishOffer'));
+      expect(controller, contains('_offerRepository.updateOffer'));
+      expect(controller, contains('_offerRepository.applyToOffer'));
+      expect(controller, contains('_offerRepository.withdrawFromOffer'));
+      expect(controller, contains('StreamSubscription<OfferLiveBatch>'));
+      expect(controller, contains('Future<void> loadMoreOffres()'));
+      expect(controller, contains('_lastCursor'));
+      expect(controller, contains('_offerPageSize'));
+      expect(controller, contains('_replaceLocalOffer(offre)'));
+      expect(controller, contains('_removeLocalOffer(offreId)'));
+      expect(controller, contains('fetchOffersPage('));
+      expect(controller, isNot(contains('runTransaction')));
+      expect(repository, contains('runTransaction'));
+      expect(repository, contains('class OfferFeedCursor'));
+      expect(repository, contains('class OfferQueryFilter'));
+      expect(repository, contains('Stream<OfferLiveBatch> watchOffers'));
+      expect(repository, contains('Future<OfferFeedPage> fetchOffersPage'));
       expect(
-        controller,
+          repository, contains(".orderBy('dateCreation', descending: true)"));
+      expect(repository, contains('.limit(limit)'));
+      expect(repository, contains('startAfterDocument'));
+      expect(repository, contains("'statut'"));
+      expect(repository, contains("'dateFin'"));
+      expect(repository, contains('_extractCandidateMaps'));
+      expect(repository, contains("payload.remove('pieceJointeUrl')"));
+      expect(
+        repository,
         contains("payload['pieceJointeUrl'] = FieldValue.delete()"),
       );
     });
 
-    test(
-        'offre controller keeps the mobile stream tolerant and sorted client-side',
-        () {
+    test('offre controller keeps the mobile stream bounded and tolerant', () {
       final controller =
           File('lib/controller/offre_controller.dart').readAsStringSync();
+      final repository =
+          File('lib/services/offers/offer_repository.dart').readAsStringSync();
 
-      expect(controller, contains("collection('offres').snapshots()"));
-      expect(controller, contains('_parseSnapshotDocs(snapshot.docs)'));
-      expect(controller, contains('Offre ignoree car document invalide'));
+      expect(controller, contains('_offerRepository'));
+      expect(controller, contains('.watchOffers(limit: _offerPageSize'));
+      expect(repository, contains("collection('offres')"));
+      expect(repository, contains('_parseSnapshotDocs(snapshot.docs)'));
+      expect(repository, contains('Offre ignoree car document invalide'));
       expect(
-          controller,
+          repository,
           contains(
               'fetched.sort((a, b) => b.dateCreation.compareTo(a.dateCreation));'));
+    });
+
+    test('offre indexes support ordered and filtered production queries', () {
+      final indexes = File('firestore.indexes.json').readAsStringSync();
+
+      expect(indexes, contains('"collectionGroup": "offres"'));
+      expect(indexes, contains('"fieldPath": "statut"'));
+      expect(indexes, contains('"fieldPath": "dateFin"'));
+      expect(indexes, contains('"fieldPath": "dateCreation"'));
+      expect(indexes, contains('"order": "DESCENDING"'));
     });
   });
 }

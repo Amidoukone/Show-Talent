@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 class ColorManager {
-  static Color primaryColor = HexColor.fromHex('#010205'); // Couleur primaire (noir profond)
-  static Color secondaryColor = HexColor.fromHex('#540f11'); // Couleur secondaire (rouge sombre)
+  static Color primaryColor =
+      HexColor.fromHex('#010205'); // Couleur primaire (noir profond)
+  static Color secondaryColor =
+      HexColor.fromHex('#540f11'); // Couleur secondaire (rouge sombre)
   static Color white = HexColor.fromHex('#ffffff'); // Blanc
   static Color grey = HexColor.fromHex('#989c98'); // Gris
   static Color red = HexColor.fromHex('#bf0f02'); // Rouge vif

@@ -10,6 +10,7 @@ import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/offres_form.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
@@ -23,6 +24,8 @@ import 'package:intl/intl.dart';
 // Palette
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
+
+part 'offre_screen_widgets.dart';
 
 class OffreScreen extends StatefulWidget {
   const OffreScreen({super.key});
@@ -85,22 +88,17 @@ class _OffreScreenState extends State<OffreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Liste des Offres',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
+      appBar: const AdAppBar(
+        title: 'Offres',
+        subtitle: 'Opportunites, candidatures et suivi',
+        showBottomDivider: true,
       ),
       body: Obx(() {
         final currentUser = userController.user;
         final allOffres = offreController.offres;
         final offres = _filteredOffres(allOffres, currentUser);
+        final canLoadMoreOffres = offreController.hasMoreOffres;
 
         if (offreController.isLoading && allOffres.isEmpty) {
           return _buildSkeletons();
@@ -124,11 +122,21 @@ class _OffreScreenState extends State<OffreScreen> {
             _buildFilters(currentUser),
             Expanded(
               child: offres.isEmpty
-                  ? _buildEmptyState(currentUser, filteredOut: true)
+                  ? _buildEmptyState(
+                      currentUser,
+                      filteredOut: true,
+                      canLoadMore: canLoadMoreOffres,
+                      isLoadingMore: offreController.isLoadingMore,
+                    )
                   : ListView.builder(
-                      itemCount: offres.length,
-                      padding: const EdgeInsets.all(8.0),
+                      itemCount: offres.length + (canLoadMoreOffres ? 1 : 0),
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 96),
                       itemBuilder: (context, index) {
+                        if (index == offres.length) {
+                          return _buildLoadMoreFooter();
+                        }
+
+                        final cs = Theme.of(context).colorScheme;
                         final offre = offres[index];
 
                         // =========================================================
@@ -153,13 +161,12 @@ class _OffreScreenState extends State<OffreScreen> {
                         return Card(
                           color: AdColors.surfaceCard,
                           clipBehavior: Clip.antiAlias,
-                          margin: const EdgeInsets.symmetric(
-                              vertical: 8, horizontal: 8),
+                          margin: const EdgeInsets.only(bottom: 12),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(8),
                             side: const BorderSide(color: AdColors.divider),
                           ),
-                          elevation: 2,
+                          elevation: 0,
                           child: InkWell(
                             onTap: () => _showOfferDetails(
                               context,
@@ -169,7 +176,7 @@ class _OffreScreenState extends State<OffreScreen> {
                               currentUser,
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.all(12.0),
+                              padding: const EdgeInsets.all(16.0),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -187,9 +194,10 @@ class _OffreScreenState extends State<OffreScreen> {
                                             Text(
                                               offre.titre,
                                               style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
+                                                fontSize: 17,
+                                                fontWeight: FontWeight.w800,
                                                 color: cs.onSurface,
+                                                height: 1.18,
                                               ),
                                             ),
                                             const SizedBox(height: 8),
@@ -253,24 +261,18 @@ class _OffreScreenState extends State<OffreScreen> {
                                   const SizedBox(height: 8),
                                   _buildValidityRow(offre),
                                   const SizedBox(height: 8),
-                                  Row(
+                                  Wrap(
+                                    spacing: 10,
+                                    runSpacing: 8,
                                     children: [
-                                      Icon(Icons.remove_red_eye_outlined,
-                                          size: 16,
-                                          color: AdColors.onSurfaceMuted),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${offre.vues ?? 0} vues',
-                                        style: TextStyle(color: cs.onSurface),
+                                      _OfferInlineStat(
+                                        icon: Icons.remove_red_eye_outlined,
+                                        label: '${offre.vues ?? 0} vues',
                                       ),
-                                      const SizedBox(width: 12),
-                                      Icon(Icons.group_outlined,
-                                          size: 16,
-                                          color: AdColors.onSurfaceMuted),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${offre.candidats.length} candidatures',
-                                        style: TextStyle(color: cs.onSurface),
+                                      _OfferInlineStat(
+                                        icon: Icons.group_outlined,
+                                        label:
+                                            '${offre.candidats.length} candidatures',
                                       ),
                                     ],
                                   ),
@@ -640,126 +642,146 @@ class _OffreScreenState extends State<OffreScreen> {
           bottom: BorderSide(color: AdColors.divider),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AdColors.brand.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(AdRadius.md),
-                  border: Border.all(
-                    color: AdColors.brand.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.local_offer_outlined,
-                  color: AdColors.brand,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Offres disponibles',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: AdColors.onSurface,
-                            fontWeight: FontWeight.w800,
-                          ),
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AdColors.brand.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(AdRadius.md),
+                      border: Border.all(
+                        color: AdColors.brand.withValues(alpha: 0.25),
+                      ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      isPublisher
-                          ? 'Gérez vos publications et suivez les candidatures.'
-                          : 'Repérez rapidement les opportunités ouvertes.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AdColors.onSurfaceMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
+                    child: const Icon(
+                      Icons.local_offer_outlined,
+                      color: AdColors.brand,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Offres disponibles',
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: AdColors.onSurface,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          isPublisher
+                              ? 'Gérez vos publications et suivez les candidatures.'
+                              : 'Repérez rapidement les opportunités ouvertes.',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AdColors.onSurfaceMuted,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _OfferMetric(
+                    icon: Icons.filter_list_rounded,
+                    label: 'Affichées',
+                    value: '${filteredOffres.length}/${allOffres.length}',
+                  ),
+                  _OfferMetric(
+                    icon: Icons.check_circle_outline_rounded,
+                    label: 'Ouvertes',
+                    value: '$openCount',
+                  ),
+                  _OfferMetric(
+                    icon: Icons.schedule_rounded,
+                    label: 'Urgentes',
+                    value: '$expiringCount',
+                  ),
+                  _OfferMetric(
+                    icon: isPublisher
+                        ? Icons.manage_accounts_outlined
+                        : Icons.group_outlined,
+                    label: isPublisher ? 'Mes offres' : 'Candidatures',
+                    value: '${isPublisher ? myOffers : totalCandidates}',
+                  ),
+                  if (isPublisher)
+                    _OfferMetric(
+                      icon: Icons.mark_email_unread_outlined,
+                      label: 'Reçues',
+                      value: '$myCandidates',
+                    ),
+                ],
+              ),
+              if (isPublisher) ...[
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    AdButton(
+                      onPressed: () => setState(() => _onlyMine = !_onlyMine),
+                      leading: _onlyMine
+                          ? Icons.public_rounded
+                          : Icons.manage_accounts_outlined,
+                      label: _onlyMine ? 'Toutes les offres' : 'Mes offres',
+                      kind: AdButtonKind.outline,
+                      size: AdButtonSize.compact,
+                      expanded: false,
+                    ),
+                    AdButton(
+                      onPressed: () {
+                        _openCreateOfferForm();
+                      },
+                      leading: Icons.add_rounded,
+                      label: 'Créer une offre',
+                      size: AdButtonSize.compact,
+                      expanded: false,
                     ),
                   ],
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _OfferMetric(
-                icon: Icons.filter_list_rounded,
-                label: 'Affichées',
-                value: '${filteredOffres.length}/${allOffres.length}',
-              ),
-              _OfferMetric(
-                icon: Icons.check_circle_outline_rounded,
-                label: 'Ouvertes',
-                value: '$openCount',
-              ),
-              _OfferMetric(
-                icon: Icons.schedule_rounded,
-                label: 'Urgentes',
-                value: '$expiringCount',
-              ),
-              _OfferMetric(
-                icon: isPublisher
-                    ? Icons.manage_accounts_outlined
-                    : Icons.group_outlined,
-                label: isPublisher ? 'Mes offres' : 'Candidatures',
-                value: '${isPublisher ? myOffers : totalCandidates}',
-              ),
-              if (isPublisher)
-                _OfferMetric(
-                  icon: Icons.mark_email_unread_outlined,
-                  label: 'Reçues',
-                  value: '$myCandidates',
-                ),
-            ],
-          ),
-          if (isPublisher) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: () => setState(() => _onlyMine = !_onlyMine),
-                  icon: Icon(
-                    _onlyMine
-                        ? Icons.public_rounded
-                        : Icons.manage_accounts_outlined,
-                  ),
-                  label: Text(_onlyMine ? 'Toutes les offres' : 'Mes offres'),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    _openCreateOfferForm();
-                  },
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Créer une offre'),
-                ),
               ],
-            ),
-          ],
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildEmptyState(dynamic currentUser, {required bool filteredOut}) {
+  Widget _buildEmptyState(
+    dynamic currentUser, {
+    required bool filteredOut,
+    bool canLoadMore = false,
+    bool isLoadingMore = false,
+  }) {
     final isPublisher = isOpportunityPublisherRole(currentUser?.role);
-    final actionLabel = filteredOut
-        ? 'Réinitialiser les filtres'
-        : isPublisher
-            ? 'Créer une offre'
-            : 'Explorer les vidéos';
+    final shouldLoadMore = filteredOut && canLoadMore;
+    final actionLabel = shouldLoadMore
+        ? isLoadingMore
+            ? 'Chargement...'
+            : 'Charger plus d’offres'
+        : filteredOut
+            ? 'Réinitialiser les filtres'
+            : isPublisher
+                ? 'Créer une offre'
+                : 'Explorer les vidéos';
 
     return Center(
       child: Padding(
@@ -775,23 +797,55 @@ class _OffreScreenState extends State<OffreScreen> {
           action: AdButton(
             expanded: false,
             label: actionLabel,
-            onPressed: () {
-              if (filteredOut) {
-                _resetFilters();
-                return;
-              }
+            loading: shouldLoadMore && isLoadingMore,
+            leading: shouldLoadMore ? Icons.expand_more_rounded : null,
+            onPressed: isLoadingMore
+                ? null
+                : () {
+                    if (shouldLoadMore) {
+                      offreController.loadMoreOffres();
+                      return;
+                    }
 
-              if (isPublisher) {
-                _openCreateOfferForm();
-                return;
-              }
+                    if (filteredOut) {
+                      _resetFilters();
+                      return;
+                    }
 
-              Get.offAllNamed(
-                AppRoutes.main,
-                arguments: {'tab': 0},
-              );
-            },
+                    if (isPublisher) {
+                      _openCreateOfferForm();
+                      return;
+                    }
+
+                    Get.offAllNamed(
+                      AppRoutes.main,
+                      arguments: {'tab': 0},
+                    );
+                  },
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadMoreFooter() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 4, 18),
+      child: Center(
+        child: AdButton(
+          expanded: false,
+          kind: AdButtonKind.outline,
+          size: AdButtonSize.compact,
+          leading: Icons.expand_more_rounded,
+          loading: offreController.isLoadingMore,
+          label: offreController.isLoadingMore
+              ? 'Chargement...'
+              : 'Charger plus d’offres',
+          onPressed: offreController.isLoadingMore
+              ? null
+              : () {
+                  offreController.loadMoreOffres();
+                },
         ),
       ),
     );
@@ -808,95 +862,113 @@ class _OffreScreenState extends State<OffreScreen> {
           bottom: BorderSide(color: AdColors.divider),
         ),
       ),
-      child: Column(
-        children: [
-          TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(() {}),
-            style: TextStyle(color: cs.onSurface),
-            decoration: InputDecoration(
-              hintText: 'Rechercher titre, poste, lieu, recruteur...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchController.text.trim().isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Effacer la recherche',
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() {});
-                      },
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            children: [
+              TextField(
+                controller: _searchController,
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(color: cs.onSurface),
+                decoration: InputDecoration(
+                  hintText: 'Rechercher titre, poste, lieu, recruteur...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchController.text.trim().isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Effacer la recherche',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                        ),
+                  // Keep theme-driven input styling.
+                ),
+              ),
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterChip(
+                      label: 'Toutes',
+                      selected: _selectedStatus == 'tous',
+                      onTap: () => setState(() => _selectedStatus = 'tous'),
                     ),
-              // Keep theme-driven input styling.
-            ),
-          ),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: 'Toutes',
-                  selected: _selectedStatus == 'tous',
-                  onTap: () => setState(() => _selectedStatus = 'tous'),
-                ),
-                _FilterChip(
-                  label: 'Ouvertes',
-                  selected: _selectedStatus == 'ouverte',
-                  onTap: () => setState(() => _selectedStatus = 'ouverte'),
-                ),
-                _FilterChip(
-                  label: 'Fermées',
-                  selected: _selectedStatus == 'fermee',
-                  onTap: () => setState(() => _selectedStatus = 'fermee'),
-                ),
-                _FilterChip(
-                  label: 'Archivées',
-                  selected: _selectedStatus == 'archivee',
-                  onTap: () => setState(() => _selectedStatus = 'archivee'),
-                ),
-                if (currentUser != null) ...[
-                  const SizedBox(width: 8),
-                  _FilterChip(
-                    label: 'Mes offres',
-                    selected: _onlyMine,
-                    onTap: () => setState(() => _onlyMine = !_onlyMine),
-                  ),
-                ],
-                _FilterChip(
-                  label: 'Expire bientôt',
-                  selected: _onlyExpiringSoon,
-                  onTap: () => setState(
-                    () => _onlyExpiringSoon = !_onlyExpiringSoon,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                DropdownButton<String>(
-                  value: _sort,
-                  underline: const SizedBox.shrink(),
-                  dropdownColor: AdColors.surfaceCard,
-                  style: TextStyle(
-                      color: cs.onSurface, fontWeight: FontWeight.w600),
-                  items: const [
-                    DropdownMenuItem(
-                        value: 'recentes', child: Text('Plus récentes')),
-                    DropdownMenuItem(
-                        value: 'fin', child: Text('Se terminant bientôt')),
+                    _FilterChip(
+                      label: 'Ouvertes',
+                      selected: _selectedStatus == 'ouverte',
+                      onTap: () => setState(() => _selectedStatus = 'ouverte'),
+                    ),
+                    _FilterChip(
+                      label: 'Fermées',
+                      selected: _selectedStatus == 'fermee',
+                      onTap: () => setState(() => _selectedStatus = 'fermee'),
+                    ),
+                    _FilterChip(
+                      label: 'Archivées',
+                      selected: _selectedStatus == 'archivee',
+                      onTap: () => setState(() => _selectedStatus = 'archivee'),
+                    ),
+                    if (currentUser != null) ...[
+                      const SizedBox(width: 8),
+                      _FilterChip(
+                        label: 'Mes offres',
+                        selected: _onlyMine,
+                        onTap: () => setState(() => _onlyMine = !_onlyMine),
+                      ),
+                    ],
+                    _FilterChip(
+                      label: 'Expire bientôt',
+                      selected: _onlyExpiringSoon,
+                      onTap: () => setState(
+                        () => _onlyExpiringSoon = !_onlyExpiringSoon,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Container(
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: AdColors.surfaceCard,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AdColors.divider),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _sort,
+                          underline: const SizedBox.shrink(),
+                          dropdownColor: AdColors.surfaceCard,
+                          style: TextStyle(
+                              color: cs.onSurface, fontWeight: FontWeight.w600),
+                          items: const [
+                            DropdownMenuItem(
+                                value: 'recentes',
+                                child: Text('Plus récentes')),
+                            DropdownMenuItem(
+                                value: 'fin',
+                                child: Text('Se terminant bientôt')),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) setState(() => _sort = v);
+                          },
+                        ),
+                      ),
+                    ),
+                    if (_hasActiveFilters)
+                      TextButton.icon(
+                        onPressed: _resetFilters,
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        label: const Text('Réinitialiser'),
+                      ),
                   ],
-                  onChanged: (v) {
-                    if (v != null) setState(() => _sort = v);
-                  },
                 ),
-                if (_hasActiveFilters)
-                  TextButton.icon(
-                    onPressed: _resetFilters,
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    label: const Text('Réinitialiser'),
-                  ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -932,27 +1004,37 @@ class _OffreScreenState extends State<OffreScreen> {
             ? AdColors.warning
             : AdColors.onSurfaceMuted;
 
-    return Row(
-      children: [
-        Icon(
-          expired ? Icons.timer_off_outlined : Icons.event,
-          size: 16,
-          color: color,
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            "Valide jusqu’au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)} · ${_expirySummary(offre)}",
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 14,
-              color: color,
-              fontWeight: expired || expiringSoon ? FontWeight.w700 : null,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: AdColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdColors.divider),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            expired ? Icons.timer_off_outlined : Icons.event,
+            size: 16,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              "Valide jusqu’au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)} · ${_expirySummary(offre)}",
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: color,
+                fontWeight: expired || expiringSoon ? FontWeight.w700 : null,
+                height: 1.25,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -962,7 +1044,7 @@ class _OffreScreenState extends State<OffreScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: AdColors.surfaceCard,
-        borderRadius: BorderRadius.circular(AdRadius.md),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AdColors.divider),
       ),
       child: Row(
@@ -1145,10 +1227,12 @@ class _OffreScreenState extends State<OffreScreen> {
                 : const Icon(Icons.delete, color: Colors.red),
             label: Text(deletePending ? 'Suppression...' : 'Supprimer'),
           ),
-          ElevatedButton.icon(
+          AdButton(
             onPressed: () => _showCandidats(context, offre),
-            icon: const Icon(Icons.group),
-            label: const Text('Voir candidats'),
+            leading: Icons.group,
+            label: 'Voir candidats',
+            size: AdButtonSize.compact,
+            expanded: false,
           ),
         ],
       );
@@ -1166,7 +1250,7 @@ class _OffreScreenState extends State<OffreScreen> {
         spacing: 8,
         runSpacing: 8,
         children: [
-          ElevatedButton(
+          AdButton(
             onPressed: canSubmitCandidateAction
                 ? () async {
                     if (currentUser == null) {
@@ -1198,34 +1282,38 @@ class _OffreScreenState extends State<OffreScreen> {
                     }
                   }
                 : null,
-            child: candidatePending
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Text(
-                    inscrit
-                        ? 'Se désinscrire'
-                        : expired
-                            ? 'Offre expirée'
-                            : 'Postuler',
-                  ),
+            loading: candidatePending,
+            leading:
+                inscrit ? Icons.person_remove_outlined : Icons.send_outlined,
+            label: inscrit
+                ? 'Se désinscrire'
+                : expired
+                    ? 'Offre expirée'
+                    : 'Postuler',
+            kind: inscrit ? AdButtonKind.outline : AdButtonKind.primary,
+            size: AdButtonSize.compact,
+            expanded: false,
           ),
-          OutlinedButton.icon(
+          AdButton(
             onPressed: () => _openOfferChat(offre.recruteur, offre),
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('Contacter'),
+            leading: Icons.chat_bubble_outline,
+            label: 'Contacter',
+            kind: AdButtonKind.tonal,
+            size: AdButtonSize.compact,
+            expanded: false,
           ),
         ],
       );
     }
 
     if (currentUser != null && currentUser.uid != offre.recruteur.uid) {
-      return OutlinedButton.icon(
+      return AdButton(
         onPressed: () => _openOfferChat(offre.recruteur, offre),
-        icon: const Icon(Icons.chat_bubble_outline),
-        label: const Text('Contacter'),
+        leading: Icons.chat_bubble_outline,
+        label: 'Contacter',
+        kind: AdButtonKind.tonal,
+        size: AdButtonSize.compact,
+        expanded: false,
       );
     }
 
@@ -1680,155 +1768,4 @@ class _OffreScreenState extends State<OffreScreen> {
       backgroundColor: Colors.transparent,
     );
   }
-}
-
-class _OfferMetric extends StatelessWidget {
-  const _OfferMetric({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 38),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AdColors.surfaceCard,
-        borderRadius: BorderRadius.circular(AdRadius.md),
-        border: Border.all(color: AdColors.divider),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AdColors.brand),
-          const SizedBox(width: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AdColors.onSurface,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AdColors.onSurfaceMuted,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
-  final String status;
-
-  String _labelFor(String normalized) {
-    switch (normalized) {
-      case 'ouverte':
-        return 'Ouverte';
-      case 'fermee':
-      case 'fermée':
-        return 'Fermée';
-      case 'archivee':
-      case 'archivée':
-        return 'Archivée';
-      case 'brouillon':
-        return 'Brouillon';
-      default:
-        return normalized;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    Color bg;
-    Color fg;
-
-    final normalized = status.trim().toLowerCase();
-
-    switch (normalized) {
-      case 'ouverte':
-        bg = cs.primary.withValues(alpha: 0.14);
-        fg = cs.primary;
-        break;
-      case 'fermee':
-      case 'fermée':
-        bg = AdColors.error.withValues(alpha: 0.14);
-        fg = AdColors.error;
-        break;
-      case 'archivee':
-      case 'archivée':
-        bg = AdColors.onSurfaceMuted.withValues(alpha: 0.14);
-        fg = AdColors.onSurfaceMuted;
-        break;
-      default:
-        bg = cs.secondary.withValues(alpha: 0.14);
-        fg = cs.secondary;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-        border: const BorderSide(color: AdColors.divider).toBorder(),
-      ),
-      child: Text(
-        _labelFor(normalized),
-        style: TextStyle(fontWeight: FontWeight.bold, color: fg),
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => onTap(),
-        selectedColor: cs.primary.withValues(alpha: 0.18),
-        backgroundColor: AdColors.surfaceCard,
-        labelStyle: TextStyle(
-          color: selected ? cs.primary : cs.onSurface,
-          fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-        ),
-        side: const BorderSide(color: AdColors.divider),
-      ),
-    );
-  }
-}
-
-extension _BorderSideX on BorderSide {
-  Border toBorder() => Border.fromBorderSide(this);
 }

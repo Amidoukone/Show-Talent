@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 enum NetworkProfileTier { high, medium, low }
 
@@ -84,7 +84,7 @@ class NetworkProfileService {
 
     if (connectivityResult == ConnectivityResult.none &&
         probeUriResolved == null) {
-      debugPrint(
+      AppLogger.debug(
         '[NetworkProfile] Connectivity=none and probe disabled → offline',
       );
 
@@ -101,7 +101,7 @@ class NetworkProfileService {
       final cdnReachable = await _probeCdn(probeUriResolved);
 
       if (!cdnReachable && !softProbeFallback) {
-        debugPrint(
+        AppLogger.debug(
           '[NetworkProfile] CDN probe failed → offline (transport=$transport)',
         );
 
@@ -115,16 +115,17 @@ class NetworkProfileService {
       }
 
       if (!cdnReachable && softProbeFallback) {
-        debugPrint(
+        AppLogger.debug(
           '[NetworkProfile] CDN probe failed → soft fallback (transport=$transport)',
         );
       }
     } else {
-      debugPrint('[NetworkProfile] Probe disabled by policy → soft fallback');
+      AppLogger.debug(
+          '[NetworkProfile] Probe disabled by policy → soft fallback');
     }
 
     if (isCacheFresh) {
-      debugPrint(
+      AppLogger.debug(
         '[NetworkProfile] Using cached profile ${cached.profile} (transport=$transport)',
       );
       return cached.profile;
@@ -135,11 +136,11 @@ class NetworkProfileService {
 
     if (throughput != null) {
       tier = _tierFromThroughput(throughput);
-      debugPrint(
+      AppLogger.debug(
         '[NetworkProfile] Measured ${throughput.toStringAsFixed(0)} kbps → $tier',
       );
     } else {
-      debugPrint(
+      AppLogger.debug(
         '[NetworkProfile] Throughput probe failed, fallback tier $tier',
       );
     }
@@ -245,7 +246,7 @@ class NetworkProfileService {
     try {
       final uri = _resolveDownloadUri();
       if (uri == null) {
-        debugPrint(
+        AppLogger.debug(
           '[NetworkProfile] Throughput probe disabled by policy → skip',
         );
         return null;

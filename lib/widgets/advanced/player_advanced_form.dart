@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
 import '../../models/user.dart';
+import '../ad_button.dart';
+import '../ad_feedback.dart';
 
 class PlayerAdvancedForm extends StatefulWidget {
   final AppUser user;
@@ -108,7 +110,10 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
       }
 
       if (showFeedback) {
-        Get.snackbar('Succès', 'Profil joueur avancé mis à jour');
+        AdFeedback.success(
+          'Profil mis à jour',
+          'Les informations avancées du joueur ont été enregistrées.',
+        );
       }
 
       return true;
@@ -205,9 +210,11 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             ),
             if (widget.showSubmitButton) ...[
               const SizedBox(height: 20),
-              ElevatedButton(
+              AdButton(
+                leading: Icons.save_rounded,
+                loading: _saving,
+                label: 'Sauvegarder',
                 onPressed: _saving ? null : () => save(),
-                child: Text(_saving ? 'Sauvegarde...' : 'Sauvegarder'),
               ),
             ],
           ],

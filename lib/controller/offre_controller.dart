@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 
@@ -11,24 +10,20 @@ import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
-
-class _OffreFlowException implements Exception {
-  const _OffreFlowException({
-    required this.code,
-    required this.message,
-    this.toast = ToastLevel.error,
-  });
-
-  final String code;
-  final String message;
-  final ToastLevel toast;
-}
+import 'package:adfoot/services/offers/offer_repository.dart';
 
 class OffreController extends GetxController {
   static OffreController instance = Get.find();
+  static const int _offerPageSize = OfferRepository.defaultPageSize;
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final AuthSessionService _authSessionService = AuthSessionService();
+  OffreController({
+    OfferRepository? offerRepository,
+    AuthSessionService? authSessionService,
+  })  : _offerRepository = offerRepository ?? OfferRepository(),
+        _authSessionService = authSessionService ?? AuthSessionService();
+
+  final OfferRepository _offerRepository;
+  final AuthSessionService _authSessionService;
 
   final Rx<List<Offre>> _offres = Rx<List<Offre>>([]);
   List<Offre> get offres => _offres.value;
@@ -36,9 +31,19 @@ class OffreController extends GetxController {
   final RxBool _isLoading = true.obs;
   bool get isLoading => _isLoading.value;
 
+  final RxBool _isLoadingMore = false.obs;
+  bool get isLoadingMore => _isLoadingMore.value;
+
+  final RxBool _hasMoreOffres = false.obs;
+  bool get hasMoreOffres => _hasMoreOffres.value;
+
   StreamSubscription<User?>? _authSub;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _offresSubscription;
+  StreamSubscription<OfferLiveBatch>? _offresSubscription;
+  OfferFeedCursor? _lastCursor;
+  OfferQueryFilter _activeFilter = const OfferQueryFilter();
   String? _activeAuthUid;
+  String? _activeOffersQueryKey;
+  bool _hasLoadedAdditionalPages = false;
 
   bool _isPermissionDenied(Object error) =>
       error is FirebaseException && error.code == 'permission-denied';
@@ -61,6 +66,19 @@ class OffreController extends GetxController {
       code: 'session_revoked',
       message: 'Votre session a été fermée. Veuillez vous reconnecter.',
       toast: ToastLevel.none,
+    );
+  }
+
+  ActionResponse _offerRepositoryExceptionResponse(
+    OfferRepositoryException exception,
+  ) {
+    return ActionResponse.failure(
+      code: exception.code,
+      message: exception.message,
+      toast: switch (exception.code) {
+        'offer_closed' || 'already_applied' || 'not_applied' => ToastLevel.info,
+        _ => ToastLevel.error,
+      },
     );
   }
 
@@ -99,102 +117,44 @@ class OffreController extends GetxController {
     super.onClose();
   }
 
-  String _normalizeStatus(String rawStatus) {
-    final value = rawStatus.trim().toLowerCase();
-    switch (value) {
-      case 'ouverte':
-        return 'ouverte';
-      case 'fermee':
-      case 'fermée':
-        return 'fermee';
-      case 'archivee':
-      case 'archivée':
-        return 'archivee';
-      case 'brouillon':
-        return 'brouillon';
-      default:
-        return value;
-    }
-  }
-
-  bool _isOpenStatus(String status) => _normalizeStatus(status) == 'ouverte';
-
-  List<Map<String, dynamic>> _extractCandidateMaps(dynamic raw) {
-    if (raw is! List) {
-      return <Map<String, dynamic>>[];
-    }
-
-    return raw
-        .whereType<Map>()
-        .map((entry) => Map<String, dynamic>.from(entry))
-        .toList();
-  }
-
-  List<Offre> _parseSnapshotDocs(
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-  ) {
-    final now = DateTime.now();
-    final fetched = <Offre>[];
-
-    for (final doc in docs) {
-      try {
-        final offre = Offre.fromDoc(doc);
-        final normalizedStatus = _normalizeStatus(offre.statut);
-        if (offre.statut != normalizedStatus) {
-          offre.statut = normalizedStatus;
-        }
-
-        if (offre.dateFin.isBefore(now) && _isOpenStatus(offre.statut)) {
-          unawaited(
-            doc.reference.update({
-              'statut': 'fermee',
-              'lastUpdated': FieldValue.serverTimestamp(),
-            }).catchError((error, stackTrace) {
-              developer.log(
-                'Erreur lors de la mise à jour auto du statut offre: $error',
-                name: 'OffreController._parseSnapshotDocs',
-                error: error,
-                stackTrace: stackTrace,
-              );
-            }),
-          );
-
-          offre.statut = 'fermee';
-          offre.lastUpdated = now;
-        }
-
-        fetched.add(offre);
-      } catch (error, stackTrace) {
-        developer.log(
-          'Offre ignoree car document invalide: ${doc.id}',
-          name: 'OffreController._parseSnapshotDocs',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      }
-    }
-
-    fetched.sort((a, b) => b.dateCreation.compareTo(a.dateCreation));
-    return fetched;
-  }
-
   void _fetchOffres() {
     final currentUid = _authSessionService.currentUser?.uid;
-    final hasActiveStream =
-        _offresSubscription != null && _activeAuthUid == currentUid;
+    final queryKey = _activeFilter.cacheKey;
+    final hasActiveStream = _offresSubscription != null &&
+        _activeAuthUid == currentUid &&
+        _activeOffersQueryKey == queryKey;
     if (hasActiveStream) {
       return;
     }
 
     _activeAuthUid = currentUid;
+    _activeOffersQueryKey = queryKey;
+    _lastCursor = null;
+    _hasLoadedAdditionalPages = false;
+    _hasMoreOffres.value = false;
+    _isLoadingMore.value = false;
     if (_offres.value.isEmpty) {
       _isLoading.value = true;
     }
     _offresSubscription?.cancel();
 
-    _offresSubscription =
-        _firestore.collection('offres').snapshots().listen((snapshot) {
-      _offres.value = _parseSnapshotDocs(snapshot.docs);
+    _offresSubscription = _offerRepository
+        .watchOffers(limit: _offerPageSize, filter: _activeFilter)
+        .listen((batch) {
+      _lastCursor = batch.cursor;
+      _hasMoreOffres.value =
+          batch.cursor != null && batch.fetchedCount >= _offerPageSize;
+      if (_hasLoadedAdditionalPages) {
+        final mergedById = <String, Offre>{
+          for (final offer in _offres.value) offer.id: offer,
+        };
+        for (final offer in batch.offers) {
+          mergedById[offer.id] = offer;
+        }
+        _offres.value = _sortOffers(mergedById.values);
+      } else {
+        _offres.value = _sortOffers(batch.offers);
+      }
       update();
       _isLoading.value = false;
     }, onError: (error, stackTrace) {
@@ -216,10 +176,72 @@ class OffreController extends GetxController {
     });
   }
 
+  Future<void> loadMoreOffres() async {
+    if (_isLoadingMore.value || !_hasMoreOffres.value) {
+      return;
+    }
+
+    final cursor = _lastCursor;
+    if (cursor == null) {
+      _hasMoreOffres.value = false;
+      return;
+    }
+
+    _isLoadingMore.value = true;
+    try {
+      final page = await _offerRepository.fetchOffersPage(
+        limit: _offerPageSize,
+        startAfter: cursor,
+        filter: _activeFilter,
+      );
+
+      final mergedById = <String, Offre>{
+        for (final offer in _offres.value) offer.id: offer,
+      };
+      for (final offer in page.offers) {
+        mergedById[offer.id] = offer;
+      }
+
+      _lastCursor = page.cursor;
+      _hasMoreOffres.value =
+          page.cursor != null && page.fetchedCount >= _offerPageSize;
+      if (page.fetchedCount > 0) {
+        _hasLoadedAdditionalPages = true;
+      }
+      _offres.value = _sortOffers(mergedById.values);
+      update();
+    } on FirebaseException catch (error, stackTrace) {
+      developer.log(
+        'Erreur pagination Firestore pour les offres: $error',
+        name: 'OffreController.loadMoreOffres',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
+    } catch (error, stackTrace) {
+      developer.log(
+        'Erreur pagination offres: $error',
+        name: 'OffreController.loadMoreOffres',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } finally {
+      _isLoadingMore.value = false;
+    }
+  }
+
   Future<void> _stopOffresStream({bool clearData = false}) async {
     await _offresSubscription?.cancel();
     _offresSubscription = null;
     _activeAuthUid = null;
+    _activeOffersQueryKey = null;
+    _activeFilter = const OfferQueryFilter();
+    _lastCursor = null;
+    _hasLoadedAdditionalPages = false;
+    _hasMoreOffres.value = false;
+    _isLoadingMore.value = false;
 
     if (clearData) {
       _offres.value = const <Offre>[];
@@ -235,34 +257,7 @@ class OffreController extends GetxController {
     if (viewer.uid == offre.recruteur.uid) return;
 
     try {
-      final docRef = _firestore.collection('offres').doc(offre.id);
-
-      await _firestore.runTransaction((txn) async {
-        final snap = await txn.get(docRef);
-        final data = snap.data();
-        if (data == null) return;
-
-        final rawRecruteur = data['recruteur'];
-        final recruteurMap = rawRecruteur is Map
-            ? Map<String, dynamic>.from(rawRecruteur)
-            : null;
-        final recruteurId = recruteurMap?['uid']?.toString();
-
-        final viewedByRaw = data['viewedBy'];
-        final viewedBy = viewedByRaw is List
-            ? viewedByRaw.map((e) => e.toString()).toList()
-            : <String>[];
-
-        if (viewer.uid == recruteurId || viewedBy.contains(viewer.uid)) {
-          return;
-        }
-
-        txn.update(docRef, {
-          'vues': FieldValue.increment(1),
-          'viewedBy': FieldValue.arrayUnion([viewer.uid]),
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
-      });
+      await _offerRepository.incrementViews(offer: offre, viewer: viewer);
     } catch (e, st) {
       developer.log(
         'Erreur incrementation vues: $e',
@@ -284,14 +279,7 @@ class OffreController extends GetxController {
     }
 
     try {
-      final payload = offre.toMap();
-      payload['statut'] = _normalizeStatus(offre.statut);
-      payload['lastUpdated'] = FieldValue.serverTimestamp();
-      if (offre.pieceJointeUrl == null) {
-        payload.remove('pieceJointeUrl');
-      }
-
-      await _firestore.collection('offres').doc(offre.id).set(payload);
+      await _offerRepository.publishOffer(offre);
 
       final fanoutResult = await _notifierJoueurs(offre, utilisateur);
       if (!fanoutResult.success) {
@@ -367,14 +355,8 @@ class OffreController extends GetxController {
     }
 
     try {
-      final payload = offre.toMap();
-      payload['statut'] = _normalizeStatus(offre.statut);
-      payload['lastUpdated'] = FieldValue.serverTimestamp();
-      if (offre.pieceJointeUrl == null) {
-        payload['pieceJointeUrl'] = FieldValue.delete();
-      }
-
-      await _firestore.collection('offres').doc(offre.id).update(payload);
+      await _offerRepository.updateOffer(offre);
+      _replaceLocalOffer(offre);
       return const ActionResponse(
         success: true,
         code: 'updated',
@@ -426,7 +408,7 @@ class OffreController extends GetxController {
       );
     }
 
-    final normalized = _normalizeStatus(nouveauStatut);
+    final normalized = Offre.normalizeStatus(nouveauStatut);
     const allowed = <String>{'brouillon', 'ouverte', 'fermee', 'archivee'};
     if (!allowed.contains(normalized)) {
       return ActionResponse.failure(
@@ -437,14 +419,13 @@ class OffreController extends GetxController {
     }
 
     try {
-      await _firestore.collection('offres').doc(offre.id).update({
-        'statut': normalized,
-        'lastUpdated': FieldValue.serverTimestamp(),
-        if (normalized == 'archivee')
-          'archivedAt': FieldValue.serverTimestamp()
-        else
-          'archivedAt': FieldValue.delete(),
-      });
+      await _offerRepository.updateStatus(
+        offerId: offre.id,
+        status: normalized,
+      );
+      offre.statut = normalized;
+      offre.lastUpdated = DateTime.now();
+      _replaceLocalOffer(offre);
 
       return ActionResponse(
         success: true,
@@ -498,7 +479,8 @@ class OffreController extends GetxController {
     }
 
     try {
-      await _firestore.collection('offres').doc(offreId).delete();
+      await _offerRepository.deleteOffer(offreId);
+      _removeLocalOffer(offreId);
       return const ActionResponse(
         success: true,
         code: 'deleted',
@@ -546,47 +528,12 @@ class OffreController extends GetxController {
       );
     }
 
-    final docRef = _firestore.collection('offres').doc(offre.id);
-
     try {
-      await _firestore.runTransaction((txn) async {
-        final snap = await txn.get(docRef);
-        if (!snap.exists) {
-          throw const _OffreFlowException(
-            code: 'not-found',
-            message: 'Offre introuvable.',
-          );
-        }
-
-        final data = snap.data() ?? <String, dynamic>{};
-        final status =
-            _normalizeStatus(data['statut']?.toString() ?? offre.statut);
-        if (!_isOpenStatus(status)) {
-          throw const _OffreFlowException(
-            code: 'offer_closed',
-            message: 'Vous ne pouvez pas postuler à cette offre.',
-            toast: ToastLevel.info,
-          );
-        }
-
-        final candidats = _extractCandidateMaps(data['candidats']);
-        final dejaPostule = candidats
-            .any((candidate) => candidate['uid']?.toString() == joueur.uid);
-        if (dejaPostule) {
-          throw const _OffreFlowException(
-            code: 'already_applied',
-            message: 'Vous avez déjà postulé à cette offre.',
-            toast: ToastLevel.info,
-          );
-        }
-
-        candidats.add(joueur.toEmbeddedMap());
-
-        txn.update(docRef, {
-          'candidats': candidats,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
-      });
+      await _offerRepository.applyToOffer(player: joueur, offer: offre);
+      if (!offre.candidats.any((candidate) => candidate.uid == joueur.uid)) {
+        offre.candidats.add(joueur);
+        _replaceLocalOffer(offre);
+      }
 
       return const ActionResponse(
         success: true,
@@ -594,12 +541,8 @@ class OffreController extends GetxController {
         message: 'Vous avez postulé à l’offre.',
         toast: ToastLevel.success,
       );
-    } on _OffreFlowException catch (e) {
-      return ActionResponse.failure(
-        code: e.code,
-        message: e.message,
-        toast: e.toast,
-      );
+    } on OfferRepositoryException catch (e) {
+      return _offerRepositoryExceptionResponse(e);
     } on FirebaseException catch (error, st) {
       developer.log(
         'Erreur lors de la postulation offre: $error',
@@ -641,40 +584,10 @@ class OffreController extends GetxController {
       );
     }
 
-    final docRef = _firestore.collection('offres').doc(offre.id);
-
     try {
-      await _firestore.runTransaction((txn) async {
-        final snap = await txn.get(docRef);
-        if (!snap.exists) {
-          throw const _OffreFlowException(
-            code: 'not-found',
-            message: 'Offre introuvable.',
-          );
-        }
-
-        final data = snap.data() ?? <String, dynamic>{};
-        final candidats = _extractCandidateMaps(data['candidats']);
-        final estCandidat = candidats
-            .any((candidate) => candidate['uid']?.toString() == joueur.uid);
-
-        if (!estCandidat) {
-          throw const _OffreFlowException(
-            code: 'not_applied',
-            message: 'Vous n’êtes pas inscrit à cette offre.',
-            toast: ToastLevel.info,
-          );
-        }
-
-        final candidatsRestants = candidats
-            .where((candidate) => candidate['uid']?.toString() != joueur.uid)
-            .toList();
-
-        txn.update(docRef, {
-          'candidats': candidatsRestants,
-          'lastUpdated': FieldValue.serverTimestamp(),
-        });
-      });
+      await _offerRepository.withdrawFromOffer(player: joueur, offer: offre);
+      offre.candidats.removeWhere((candidate) => candidate.uid == joueur.uid);
+      _replaceLocalOffer(offre);
 
       return const ActionResponse(
         success: true,
@@ -682,12 +595,8 @@ class OffreController extends GetxController {
         message: 'Vous vous êtes désinscrit de l’offre.',
         toast: ToastLevel.success,
       );
-    } on _OffreFlowException catch (e) {
-      return ActionResponse.failure(
-        code: e.code,
-        message: e.message,
-        toast: e.toast,
-      );
+    } on OfferRepositoryException catch (e) {
+      return _offerRepositoryExceptionResponse(e);
     } on FirebaseException catch (error, st) {
       developer.log(
         'Erreur lors de la désinscription offre: $error',
@@ -718,5 +627,35 @@ class OffreController extends GetxController {
         message: 'Impossible de se désinscrire pour le moment.',
       );
     }
+  }
+
+  List<Offre> _sortOffers(Iterable<Offre> offers) {
+    return offers.toList(growable: false)
+      ..sort((a, b) => b.dateCreation.compareTo(a.dateCreation));
+  }
+
+  void _replaceLocalOffer(Offre offer) {
+    final existing = _offres.value;
+    final index = existing.indexWhere((candidate) => candidate.id == offer.id);
+    if (index == -1) {
+      return;
+    }
+
+    final next = List<Offre>.from(existing);
+    next[index] = offer;
+    _offres.value = _sortOffers(next);
+    update();
+  }
+
+  void _removeLocalOffer(String offerId) {
+    final next = _offres.value
+        .where((offer) => offer.id != offerId)
+        .toList(growable: false);
+    if (next.length == _offres.value.length) {
+      return;
+    }
+
+    _offres.value = next;
+    update();
   }
 }

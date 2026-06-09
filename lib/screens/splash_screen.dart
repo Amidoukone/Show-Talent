@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 
 import '../controller/auth_controller.dart';
 import '../controller/user_controller.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({
@@ -67,7 +68,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
       return _safeOffAll(_pageForDestination(snapshot.destination));
     } catch (error) {
-      debugPrint('Splash fallback error: $error');
+      AppLogger.debug('Splash fallback error: $error');
       try {
         await _authSessionService.signOut();
       } catch (_) {}

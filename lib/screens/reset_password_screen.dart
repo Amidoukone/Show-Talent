@@ -4,6 +4,7 @@ import 'package:adfoot/utils/auth_error_mapper.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:adfoot/widgets/ad_text_field.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -138,57 +139,50 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       kind: AdButtonKind.primary,
                     ),
                   )
-                : Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    elevation: 0,
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Form(
-                        key: _formKey,
-                        autovalidateMode: AutovalidateMode.disabled,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              'Réinitialiser le mot de passe',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: cs.onSurface,
-                                  ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 24),
-                            AdTextField(
-                              controller: _passwordController,
-                              label: 'Nouveau mot de passe',
-                              isPassword: true,
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              validator: _validatePassword,
-                            ),
-                            const SizedBox(height: 16),
-                            AdTextField(
-                              controller: _confirmController,
-                              label: 'Confirmer le mot de passe',
-                              isPassword: true,
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              validator: _validateConfirmation,
-                              onSubmitted: _resetPassword,
-                            ),
-                            const SizedBox(height: 24),
-                            AdButton(
-                              label: 'Valider',
-                              onPressed: _isLoading ? null : _resetPassword,
-                              loading: _isLoading,
-                              kind: AdButtonKind.primary,
-                              leading: Icons.check_rounded,
-                            ),
-                          ],
-                        ),
+                : AdSurfaceCard(
+                    child: Form(
+                      key: _formKey,
+                      autovalidateMode: AutovalidateMode.disabled,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Réinitialiser le mot de passe',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: cs.onSurface,
+                                ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          AdTextField(
+                            controller: _passwordController,
+                            label: 'Nouveau mot de passe',
+                            isPassword: true,
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            validator: _validatePassword,
+                          ),
+                          const SizedBox(height: 16),
+                          AdTextField(
+                            controller: _confirmController,
+                            label: 'Confirmer le mot de passe',
+                            isPassword: true,
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            validator: _validateConfirmation,
+                            onSubmitted: _resetPassword,
+                          ),
+                          const SizedBox(height: 24),
+                          AdButton(
+                            label: 'Valider',
+                            onPressed: _isLoading ? null : _resetPassword,
+                            loading: _isLoading,
+                            kind: AdButtonKind.primary,
+                            leading: Icons.check_rounded,
+                          ),
+                        ],
                       ),
                     ),
                   ),

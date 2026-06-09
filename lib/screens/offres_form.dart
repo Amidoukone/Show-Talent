@@ -9,8 +9,11 @@ import 'package:adfoot/models/offre.dart';
 import 'package:intl/intl.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
+import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 
 class OffreFormResult {
   const OffreFormResult({
@@ -133,11 +136,10 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       },
       child: Scaffold(
         backgroundColor: cs.surface,
-        appBar: AppBar(
-          elevation: 0,
-          backgroundColor: cs.surface,
-          foregroundColor: cs.onSurface,
-          title: Text(isEditing ? 'Modifier l’offre' : 'Nouvelle offre'),
+        appBar: AdAppBar(
+          title: isEditing ? 'Modifier l’offre' : 'Nouvelle offre',
+          subtitle: 'Opportunité sportive',
+          showBottomDivider: true,
           leading: IconButton(
             icon: Icon(Icons.arrow_back, color: cs.onSurface),
             onPressed: _handleBackNavigation,
@@ -252,26 +254,13 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: _submitLocked ? null : _submitForm,
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Text(
-                                isEditing ? 'Mettre à jour' : 'Publier l’offre',
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                      ),
+                    AdButton(
+                      onPressed: _submitLocked ? null : _submitForm,
+                      loading: _isSubmitting,
+                      leading: isEditing
+                          ? Icons.save_rounded
+                          : Icons.publish_rounded,
+                      label: isEditing ? 'Mettre à jour' : 'Publier l’offre',
                     ),
                   ],
                 ),
@@ -302,21 +291,18 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     required String title,
     required List<Widget> children,
   }) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(AdSpacing.md),
-      decoration: BoxDecoration(
-        color: AdColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(AdRadius.lg),
-        border: Border.all(color: AdColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionTitle(title, Theme.of(context).colorScheme),
-          const SizedBox(height: 16),
-          ...children,
-        ],
+      child: AdSurfaceCard(
+        padding: const EdgeInsets.all(AdSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle(title, Theme.of(context).colorScheme),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
       ),
     );
   }
@@ -601,9 +587,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   }
 
   void _navigateAfterSuccessfulSubmit(String message) {
-    if (Get.isSnackbarOpen) {
-      Get.closeCurrentSnackbar();
-    }
+    AdFeedback.dismissCurrent();
 
     final result = OffreFormResult(
       title: isEditing ? 'Offre mise à jour' : 'Offre publiée',

@@ -6,6 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import 'app_environment.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class FirebaseBootstrap {
   FirebaseBootstrap._();
@@ -22,7 +23,7 @@ class FirebaseBootstrap {
     await configureEmulatorsIfNeeded();
 
     if (kDebugMode) {
-      debugPrint(
+      AppLogger.debug(
         '[FirebaseBootstrap] env=${AppEnvironmentConfig.environmentName} '
         'project=${AppEnvironmentConfig.firebaseProjectId} '
         'emulators=${AppEnvironmentConfig.useFirebaseEmulators}',
@@ -60,7 +61,7 @@ class FirebaseBootstrap {
     _emulatorsConfigured = true;
 
     if (kDebugMode) {
-      debugPrint(
+      AppLogger.debug(
         '[FirebaseBootstrap] Firebase emulators enabled on '
         '$host:${AppEnvironmentConfig.functionsEmulatorPort}',
       );

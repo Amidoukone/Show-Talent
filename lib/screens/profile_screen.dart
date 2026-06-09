@@ -17,10 +17,14 @@ import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/edit_advanced_profile_screen.dart';
 import 'package:adfoot/screens/edit_profil_screen.dart';
 import 'package:adfoot/screens/follow_list_screen.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
+import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+
+part 'profile_screen_widgets.dart';
 
 String _profileRoleLabel(AppUser user) {
   switch (user.role) {
@@ -39,6 +43,22 @@ String _profileRoleLabel(AppUser user) {
     default:
       return user.role;
   }
+}
+
+String _profileInitials(AppUser user) {
+  final parts = user.nom
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  if (parts.isEmpty) {
+    return '?';
+  }
+
+  final first = parts.first.characters.first.toUpperCase();
+  final second =
+      parts.length > 1 ? parts.last.characters.first.toUpperCase() : '';
+  return '$first$second';
 }
 
 class _ProfileLevelStyle {
@@ -106,8 +126,6 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   // Palette officielle
   static const kPrimary = AdColors.brand;
-  static const kAccent = AdColors.accent;
-  static const kDanger = AdColors.error;
   static const kSurface = AdColors.surface;
 
   bool _isFollowActionLoading = false;
@@ -198,20 +216,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         return Scaffold(
           backgroundColor: kSurface,
-          appBar: AppBar(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            foregroundColor: Theme.of(context).colorScheme.onSurface,
-            centerTitle: true,
-            elevation: 0,
-            title: Text(
-              user.nom.isNotEmpty ? user.nom : 'Profil',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-              ),
-            ),
+          appBar: AdAppBar(
+            title: user.nom.isNotEmpty ? user.nom : 'Profil',
+            subtitle: _profileRoleLabel(user),
+            showBottomDivider: true,
             actions: [
               if (isOwnProfile && !widget.isReadOnly)
                 IconButton(
@@ -462,12 +470,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: kSurface,
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        centerTitle: true,
-        elevation: 0,
-        title: const Text('Profil'),
+      appBar: const AdAppBar(
+        title: 'Profil',
+        showBottomDivider: true,
       ),
       body: SafeArea(
         child: Center(
@@ -670,20 +675,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }) {
     return Scaffold(
       backgroundColor: kSurface,
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        centerTitle: true,
-        elevation: 0,
-        title: Text(
-          user.nom.isNotEmpty ? user.nom : 'Profil',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 20,
-          ),
-        ),
+      appBar: AdAppBar(
+        title: user.nom.isNotEmpty ? user.nom : 'Profil',
+        subtitle: _profileRoleLabel(user),
+        showBottomDivider: true,
         actions: [
           if (!isOwnProfile && _authController.currentUid != null)
             IconButton(
@@ -715,12 +710,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 16),
               if (canMessage)
-                ElevatedButton.icon(
+                AdButton(
                   onPressed: _isMessageActionLoading
                       ? null
                       : () => _handleSendMessage(user),
-                  icon: const Icon(Icons.message_outlined),
-                  label: const Text('Contacter'),
+                  loading: _isMessageActionLoading,
+                  leading: Icons.message_outlined,
+                  label: 'Contacter',
+                  expanded: false,
                 )
               else
                 Text(
@@ -807,7 +804,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: style.backgroundColor,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -871,15 +868,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Widget buildActionButton({double? width}) {
       return SizedBox(
         width: width,
-        child: ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(backgroundColor: kPrimary),
+        child: AdButton(
           onPressed: () => openAdvancedEditor(),
-          icon: Icon(
-            hasAdvancedProfile
-                ? Icons.edit_outlined
-                : Icons.add_circle_outline_rounded,
-          ),
-          label: Text(hasAdvancedProfile ? 'Mettre à jour' : 'Compléter'),
+          leading: hasAdvancedProfile
+              ? Icons.edit_outlined
+              : Icons.add_circle_outline_rounded,
+          label: hasAdvancedProfile ? 'Mettre à jour' : 'Compléter',
+          expanded: width == null,
         ),
       );
     }
@@ -888,7 +883,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: kPrimary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: kPrimary.withValues(alpha: 0.2)),
       ),
       child: LayoutBuilder(
@@ -1279,16 +1274,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Row(
       children: [
         Expanded(
-          child: ElevatedButton.icon(
-            icon: Icon(
-              isFollowing ? Icons.person_remove_alt_1 : Icons.person_add_alt,
-            ),
-            label: Text(
-              isFollowing ? 'Se désabonner' : 'S’abonner',
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: isFollowing ? kDanger : kAccent,
-            ),
+          child: AdButton(
+            leading:
+                isFollowing ? Icons.person_remove_alt_1 : Icons.person_add_alt,
+            label: isFollowing ? 'Se désabonner' : 'S’abonner',
+            kind: isFollowing ? AdButtonKind.outline : AdButtonKind.tonal,
+            loading: _isFollowActionLoading,
             onPressed: _isFollowActionLoading
                 ? null
                 : () async {
@@ -1341,9 +1332,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.message_outlined),
-            label: const Text('Contacter'),
+          child: AdButton(
+            leading: Icons.message_outlined,
+            label: 'Contacter',
+            kind: AdButtonKind.tonal,
+            loading: _isMessageActionLoading,
             onPressed: canMessage && !_isMessageActionLoading
                 ? () => _handleSendMessage(user)
                 : null,
@@ -1372,7 +1365,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: AdColors.surfaceCardAlt,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AdColors.divider),
       ),
       child: Row(
@@ -1424,365 +1417,3 @@ class _ProfileScreenState extends State<ProfileScreen> {
 // =======================
 // Widgets secondaires
 // =======================
-
-class _HeaderCard extends StatelessWidget {
-  final AppUser user;
-  final bool isOwnProfile;
-  final bool isReadOnly;
-  final VoidCallback onViewPhoto;
-  final VoidCallback onChangePhoto;
-  final ProfileController profileController;
-
-  const _HeaderCard({
-    required this.user,
-    required this.isOwnProfile,
-    required this.isReadOnly,
-    required this.onViewPhoto,
-    required this.onChangePhoto,
-    required this.profileController,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final location = user.city ?? user.region ?? user.country;
-    final teamLabel =
-        user.team?.isNotEmpty == true ? user.team : user.clubActuel;
-
-    return Stack(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [
-                AdColors.surfaceCardAlt,
-                AdColors.surfaceCard,
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AdColors.divider),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black26,
-                blurRadius: 12,
-                offset: Offset(0, 6),
-              )
-            ],
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Obx(
-                () => GestureDetector(
-                  onTap: user.photoProfil.isNotEmpty ? onViewPhoto : null,
-                  child: Hero(
-                    tag: 'profile-photo-${user.uid}',
-                    child: CircleAvatar(
-                      radius: 48,
-                      backgroundColor: AdColors.surfaceCard,
-                      backgroundImage: user.photoProfil.isNotEmpty
-                          ? NetworkImage(user.photoProfil)
-                          : null,
-                      child: profileController.isLoadingPhoto.value
-                          ? const CircularProgressIndicator()
-                          : (user.photoProfil.isEmpty
-                              ? const Icon(Icons.person, size: 32)
-                              : null),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.nom,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _profileRoleLabel(user).toUpperCase(),
-                      style: const TextStyle(
-                        color: AdColors.onSurfaceMuted,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _InfoPill(
-                          icon: Icons.military_tech_outlined,
-                          label: user.profileLevelLabel,
-                          style: _profileLevelStyle(user.profileLevelLabel),
-                        ),
-                        if (user.age != null)
-                          _InfoPill(
-                            icon: Icons.cake_outlined,
-                            label: '${user.age} ans',
-                          ),
-                        if (teamLabel?.isNotEmpty == true)
-                          _InfoPill(
-                            icon: Icons.flag_outlined,
-                            label: teamLabel!,
-                          ),
-                        if (location?.isNotEmpty == true)
-                          _InfoPill(
-                            icon: Icons.place_outlined,
-                            label: location!,
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Bouton photo positionne proprement, sans overflow
-        if (isOwnProfile && !isReadOnly)
-          Positioned(
-            top: 10,
-            right: 10,
-            child: IconButton(
-              tooltip: 'Changer la photo',
-              icon: const Icon(Icons.camera_alt_outlined),
-              color: AdColors.brand,
-              onPressed: onChangePhoto,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  final String label;
-  final int value;
-  final VoidCallback onTap;
-
-  const _StatChip({
-    required this.label,
-    required this.value,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: AdColors.surfaceCardAlt,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AdColors.divider),
-        ),
-        child: Column(
-          children: [
-            Text(
-              '$value',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(color: AdColors.onSurfaceMuted),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VideoTile extends StatelessWidget {
-  final Video video;
-  final VoidCallback onTap;
-
-  const _VideoTile({
-    required this.video,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    Widget fallback() {
-      return Container(
-        color: AdColors.surfaceCardAlt,
-        alignment: Alignment.center,
-        child: const Icon(
-          Icons.play_circle_outline_rounded,
-          color: AdColors.onSurfaceMuted,
-          size: 28,
-        ),
-      );
-    }
-
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(10),
-        child: Image.network(
-          video.thumbnailUrl,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => fallback(),
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) {
-              return child;
-            }
-
-            return fallback();
-          },
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Widget child;
-
-  const _SectionCard({
-    required this.title,
-    required this.icon,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AdColors.surfaceCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AdColors.divider),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: AdColors.brand),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final _ProfileLevelStyle? style;
-
-  const _InfoPill({
-    required this.label,
-    required this.icon,
-    this.style,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final resolvedStyle = style;
-    final maxLabelWidth =
-        (MediaQuery.of(context).size.width - 120).clamp(80.0, 320.0);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: resolvedStyle?.backgroundColor ?? AdColors.surfaceCard,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: resolvedStyle?.borderColor ?? AdColors.divider,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            resolvedStyle?.icon ?? icon,
-            size: 18,
-            color: resolvedStyle?.foregroundColor ?? AdColors.brand,
-          ),
-          const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxLabelWidth),
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: resolvedStyle?.foregroundColor,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final IconData icon;
-  final String title;
-
-  const _SectionHeader({
-    required this.icon,
-    required this.title,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon),
-        const SizedBox(width: 6),
-        Text(
-          title,
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-      ],
-    );
-  }
-}

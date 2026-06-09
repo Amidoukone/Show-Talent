@@ -1,7 +1,5 @@
-
 // Le chemin racine des images dans le projet
 const String imagePath = "assets/images";
-
 
 class ImageAssets {
   /// 🖼️ Logo principal de l’application

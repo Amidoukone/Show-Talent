@@ -1,6 +1,7 @@
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:adfoot/services/app_logger.dart';
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, debugPrint, defaultTargetPlatform, kDebugMode, kIsWeb;
+    show TargetPlatform, defaultTargetPlatform, kDebugMode, kIsWeb;
 
 /// Progressive App Check bootstrap.
 /// Disabled by default so development is not blocked.
@@ -38,7 +39,7 @@ class AppCheckService {
 
     if (!shouldActivate) {
       if (kDebugMode) {
-        debugPrint('[AppCheck] disabled (APP_CHECK_ENABLED=false)');
+        AppLogger.debug('[AppCheck] disabled (APP_CHECK_ENABLED=false)');
       }
       return;
     }
@@ -49,7 +50,7 @@ class AppCheckService {
       if (kIsWeb) {
         if (_webRecaptchaSiteKey.isEmpty) {
           if (kDebugMode) {
-            debugPrint(
+            AppLogger.debug(
               '[AppCheck] web site key missing. '
               'Set APP_CHECK_WEB_RECAPTCHA_SITE_KEY.',
             );
@@ -62,7 +63,7 @@ class AppCheckService {
         );
       } else {
         if (_useAndroidDebugProvider || _useAppleDebugProvider) {
-          debugPrint(
+          AppLogger.debug(
             '[AppCheck] enabling debug provider for this build.',
           );
         }
@@ -87,12 +88,12 @@ class AppCheckService {
 
       if (kDebugMode) {
         final token = await appCheck.getToken(true);
-        debugPrint('[AppCheck] active, token fetched: ${token != null}');
+        AppLogger.debug('[AppCheck] active, token fetched: ${token != null}');
       }
     } catch (e) {
       // Keep bootstrap non-blocking while rollout is progressive.
       if (kDebugMode) {
-        debugPrint('[AppCheck] init failed (non-blocking): $e');
+        AppLogger.debug('[AppCheck] init failed (non-blocking): $e');
       }
     }
   }

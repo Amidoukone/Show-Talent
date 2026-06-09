@@ -7,7 +7,10 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:adfoot/widgets/contact_intake_sheet.dart';
 
@@ -46,9 +49,10 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
     final cs = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nouvelle conversation'),
-        centerTitle: true,
+      appBar: const AdAppBar(
+        title: 'Nouvelle conversation',
+        subtitle: 'Choisir un contact',
+        showBottomDivider: true,
       ),
       body: Obx(() {
         final currentUser = _resolvedCurrentUser();
@@ -95,13 +99,24 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                 ),
                 child: TextField(
                   controller: searchController,
-                  onChanged: (value) => searchTerm.value = value.toLowerCase(),
+                  onChanged: (value) =>
+                      searchTerm.value = value.trim().toLowerCase(),
                   decoration: InputDecoration(
                     hintText: 'Rechercher un utilisateur...',
                     prefixIcon: Icon(
                       Icons.search,
                       color: cs.onSurface.withValues(alpha: 0.6),
                     ),
+                    suffixIcon: searchTerm.value.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Effacer',
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              searchController.clear();
+                              searchTerm.value = '';
+                            },
+                          ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 14,
@@ -286,71 +301,68 @@ class _UserCard extends StatelessWidget {
     final initial =
         user.nom.trim().isNotEmpty ? user.nom.trim()[0].toUpperCase() : '?';
 
-    return Material(
-      color: cs.surface,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: theme.dividerColor.withValues(alpha: 0.6),
-            ),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 26,
-                backgroundColor: cs.surfaceContainerHighest,
-                backgroundImage: user.photoProfil.isNotEmpty
-                    ? NetworkImage(user.photoProfil)
-                    : null,
-                child: user.photoProfil.isEmpty
-                    ? Text(
-                        initial,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 18,
-                        ),
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user.nom,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      user.role.isNotEmpty ? user.role : 'Rôle non renseigné',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.65),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+    return AdSurfaceCard(
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AdRadius.lg),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AdRadius.lg),
+          child: Padding(
+            padding: const EdgeInsets.all(AdSpacing.md),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  backgroundImage: user.photoProfil.isNotEmpty
+                      ? NetworkImage(user.photoProfil)
+                      : null,
+                  child: user.photoProfil.isEmpty
+                      ? Text(
+                          initial,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                          ),
+                        )
+                      : null,
                 ),
-              ),
-              Icon(
-                isLoading ? Icons.hourglass_top : Icons.chevron_right,
-                color: isLoading
-                    ? cs.primary
-                    : cs.onSurface.withValues(alpha: 0.5),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user.nom,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        user.role.isNotEmpty ? user.role : 'Rôle non renseigné',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.65),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  isLoading ? Icons.hourglass_top : Icons.chevron_right,
+                  color: isLoading
+                      ? cs.primary
+                      : cs.onSurface.withValues(alpha: 0.5),
+                ),
+              ],
+            ),
           ),
         ),
       ),

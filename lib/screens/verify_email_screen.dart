@@ -12,6 +12,7 @@ import '../widgets/ad_button.dart';
 import '../widgets/ad_feedback.dart';
 import '../widgets/ad_state_panel.dart';
 import '../widgets/ad_surface_card.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   const VerifyEmailScreen({super.key});
@@ -117,7 +118,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           );
           return;
         } on FirebaseAuthException catch (error) {
-          debugPrint('applyActionCode error: ${error.code} - ${error.message}');
+          AppLogger.debug(
+              'applyActionCode error: ${error.code} - ${error.message}');
           if (mounted) {
             setState(() {
               _message =

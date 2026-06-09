@@ -5,8 +5,11 @@ import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
+import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -131,23 +134,18 @@ class _EventFormScreenState extends State<EventFormScreen> {
       child: Scaffold(
         backgroundColor: cs.surface,
         resizeToAvoidBottomInset: true,
-        appBar: AppBar(
-          elevation: 0,
-          title: Text(
-            widget.event != null
-                ? 'Modifier l’événement'
-                : 'Créer un événement',
-            style: const TextStyle(fontWeight: FontWeight.bold),
-          ),
+        appBar: AdAppBar(
+          title: widget.event != null
+              ? 'Modifier l’événement'
+              : 'Créer un événement',
+          subtitle: 'Publication encadrée',
+          showBottomDivider: true,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () async {
               await _handleBackNavigation();
             },
           ),
-          backgroundColor: cs.surface,
-          foregroundColor: cs.onSurface,
-          centerTitle: true,
         ),
         body: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(),
@@ -286,35 +284,15 @@ class _EventFormScreenState extends State<EventFormScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: _submitLocked ? null : _handleSubmit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AdColors.brand,
-                            foregroundColor: AdColors.brandOn,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AdRadius.md),
-                            ),
-                          ),
-                          child: _isSubmitting
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : Text(
-                                  widget.event != null
-                                      ? 'Mettre à jour'
-                                      : 'Publier l’événement',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                        ),
+                      AdButton(
+                        onPressed: _submitLocked ? null : _handleSubmit,
+                        loading: _isSubmitting,
+                        leading: widget.event != null
+                            ? Icons.save_rounded
+                            : Icons.publish_rounded,
+                        label: widget.event != null
+                            ? 'Mettre à jour'
+                            : 'Publier l’événement',
                       ),
                     ],
                   ),
@@ -451,9 +429,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   }
 
   void _completeSubmit(String message) {
-    if (Get.isSnackbarOpen) {
-      Get.closeCurrentSnackbar();
-    }
+    AdFeedback.dismissCurrent();
 
     if (mounted) {
       setState(() => _hasCompletedSubmit = true);
@@ -485,21 +461,18 @@ class _EventFormScreenState extends State<EventFormScreen> {
     required String title,
     required List<Widget> children,
   }) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(AdSpacing.md),
-      decoration: BoxDecoration(
-        color: AdColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(AdRadius.lg),
-        border: Border.all(color: AdColors.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionTitle(title),
-          const SizedBox(height: 16),
-          ...children,
-        ],
+      child: AdSurfaceCard(
+        padding: const EdgeInsets.all(AdSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle(title),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
       ),
     );
   }

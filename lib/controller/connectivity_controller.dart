@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:adfoot/services/app_logger.dart';
 
 class ConnectivityService {
   static final ConnectivityService _instance = ConnectivityService._internal();
@@ -73,8 +74,7 @@ class ConnectivityService {
 
   void _debugLog(String msg, [Object? error, StackTrace? st]) {
     if (!kDebugMode) return;
-    // ignore: avoid_print
-    print('[ConnectivityService] $msg'
+    AppLogger.debug('[ConnectivityService] $msg'
         '${error != null ? ' | error: $error' : ''}'
         '${st != null ? '\n$st' : ''}');
   }

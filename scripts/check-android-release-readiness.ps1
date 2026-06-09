@@ -6,7 +6,8 @@ param(
     [switch]$RequireSigning,
     [switch]$RequireLegalUrls,
     [switch]$RequireNativeFirebase,
-    [switch]$RequireVersionBump
+    [switch]$RequireVersionBump,
+    [switch]$RequirePlayIntegrityAppCheck
 )
 
 Set-StrictMode -Version Latest
@@ -95,6 +96,77 @@ function Read-KeyValueFile {
     }
 
     return $result
+}
+
+function Read-FlatJsonFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $result = [ordered]@{}
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+
+    try {
+        $json = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    } catch {
+        throw "Invalid JSON in '$Path'. $($_.Exception.Message)"
+    }
+
+    if ($null -eq $json) {
+        return $result
+    }
+
+    foreach ($property in $json.PSObject.Properties) {
+        $value = $property.Value
+        if ($null -eq $value) {
+            continue
+        }
+
+        if (
+            $value -is [System.Management.Automation.PSCustomObject] -or
+            $value -is [System.Collections.IList] -or
+            $value -is [hashtable]
+        ) {
+            throw "Unsupported nested value for key '$($property.Name)' in '$Path'."
+        }
+
+        $result[$property.Name] = [string]$value
+    }
+
+    return $result
+}
+
+function Get-ConfigValue {
+    param(
+        $Config,
+        [Parameter(Mandatory = $true)]
+        [string]$Key
+    )
+
+    if ($null -ne $Config -and $Config.Contains($Key)) {
+        return [string]$Config[$Key]
+    }
+
+    return ""
+}
+
+function Test-AppCheckDebugProviderRequested {
+    param(
+        $Config
+    )
+
+    $rawForceDebugProvider = Get-ConfigValue -Config $Config -Key "APP_CHECK_DEBUG_PROVIDER"
+    $rawAndroidProvider = Get-ConfigValue -Config $Config -Key "APP_CHECK_ANDROID_PROVIDER"
+    $rawAndroidDebugToken = Get-ConfigValue -Config $Config -Key "APP_CHECK_ANDROID_DEBUG_TOKEN"
+    $rawAppleDebugToken = Get-ConfigValue -Config $Config -Key "APP_CHECK_APPLE_DEBUG_TOKEN"
+
+    return $rawForceDebugProvider.Trim().ToLowerInvariant() -eq "true" -or
+        $rawAndroidProvider.Trim().ToLowerInvariant() -eq "debug" -or
+        -not [string]::IsNullOrWhiteSpace($rawAndroidDebugToken) -or
+        -not [string]::IsNullOrWhiteSpace($rawAppleDebugToken)
 }
 
 function Get-ConfiguredJavaHome {
@@ -300,6 +372,7 @@ $manifestPath = Join-Path $repoRoot "android/app/src/main/AndroidManifest.xml"
 $settingsGradlePath = Join-Path $repoRoot "android/settings.gradle"
 $gradleWrapperPath = Join-Path $repoRoot "android/gradle/wrapper/gradle-wrapper.properties"
 $keyPropertiesPath = Join-Path $repoRoot "android/key.properties"
+$mobileConfigPath = Join-Path $repoRoot "config/mobile/$Environment.json"
 $pubspecPath = Join-Path $repoRoot "pubspec.yaml"
 $androidFirebasePath = Join-Path $repoRoot "android/app/src/$effectiveNativeEnvironment/google-services.json"
 $privacyPagePath = Join-Path $repoRoot "site_pub/legal/privacy-policy.html"
@@ -559,6 +632,29 @@ if (Test-Path -LiteralPath $androidFirebasePath) {
     }
 }
 
+if ($Environment -in @("production", "production-next")) {
+    try {
+        $mobileConfig = Read-FlatJsonFile -Path $mobileConfigPath
+        if ($null -eq $mobileConfig) {
+            $message = "Missing mobile config file: $mobileConfigPath"
+            if ($ReleaseGate) {
+                $errors.Add($message)
+            } else {
+                $warnings.Add($message)
+            }
+        } elseif (Test-AppCheckDebugProviderRequested -Config $mobileConfig) {
+            $message = "App Check debug provider is configured for '$Environment'. This is allowed only for direct pre-Play-Store device validation; remove APP_CHECK_DEBUG_PROVIDER, APP_CHECK_ANDROID_PROVIDER=debug and debug tokens before the final Play Store build."
+            if ($RequirePlayIntegrityAppCheck) {
+                $errors.Add($message)
+            } else {
+                $warnings.Add($message)
+            }
+        }
+    } catch {
+        $errors.Add("Could not validate mobile App Check config '$mobileConfigPath'. $($_.Exception.Message)")
+    }
+}
+
 if (Test-Path -LiteralPath $keyPropertiesPath) {
     if (Test-FileStartsWithUtf8Bom -Path $keyPropertiesPath) {
         $errors.Add("android/key.properties starts with a UTF-8 BOM. Regenerate it with npm.cmd run release:android:signing:setup so Gradle can read storePassword correctly.")
@@ -715,6 +811,7 @@ Write-Host "Require signing             : $RequireSigning"
 Write-Host "Require legal URLs          : $RequireLegalUrls"
 Write-Host "Require native Firebase     : $RequireNativeFirebase"
 Write-Host "Require version bump        : $RequireVersionBump"
+Write-Host "Require Play Integrity      : $RequirePlayIntegrityAppCheck"
 
 if ($warnings.Count -gt 0) {
     Write-Host ""

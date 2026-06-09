@@ -8,6 +8,7 @@ param(
 
     [switch]$ReleaseGate,
     [switch]$RequireSigning,
+    [switch]$RequirePlayIntegrityAppCheck,
     [switch]$SkipPreflight,
     [switch]$Clean,
     [switch]$PrintOnly,
@@ -75,6 +76,36 @@ function Read-MobileConfig {
     }
 
     return $result
+}
+
+function Get-MobileConfigValue {
+    param(
+        $MobileConfig,
+        [Parameter(Mandatory = $true)]
+        [string]$Key
+    )
+
+    if ($null -ne $MobileConfig -and $MobileConfig.Contains($Key)) {
+        return [string]$MobileConfig[$Key]
+    }
+
+    return ""
+}
+
+function Test-MobileConfigUsesAppCheckDebugProvider {
+    param(
+        $MobileConfig
+    )
+
+    $rawForceDebugProvider = Get-MobileConfigValue -MobileConfig $MobileConfig -Key "APP_CHECK_DEBUG_PROVIDER"
+    $rawAndroidProvider = Get-MobileConfigValue -MobileConfig $MobileConfig -Key "APP_CHECK_ANDROID_PROVIDER"
+    $rawAndroidDebugToken = Get-MobileConfigValue -MobileConfig $MobileConfig -Key "APP_CHECK_ANDROID_DEBUG_TOKEN"
+    $rawAppleDebugToken = Get-MobileConfigValue -MobileConfig $MobileConfig -Key "APP_CHECK_APPLE_DEBUG_TOKEN"
+
+    return $rawForceDebugProvider.Trim().ToLowerInvariant() -eq "true" -or
+        $rawAndroidProvider.Trim().ToLowerInvariant() -eq "debug" -or
+        -not [string]::IsNullOrWhiteSpace($rawAndroidDebugToken) -or
+        -not [string]::IsNullOrWhiteSpace($rawAppleDebugToken)
 }
 
 function Mask-PreviewArg {
@@ -408,14 +439,19 @@ try {
     }
 
     if ($Environment -in @("production", "production-next")) {
-        $rawAppCheckEnabled = if ($null -ne $mobileConfig -and $mobileConfig.Contains("APP_CHECK_ENABLED")) {
-            [string]$mobileConfig["APP_CHECK_ENABLED"]
-        } else {
-            ""
-        }
+        $rawAppCheckEnabled = Get-MobileConfigValue -MobileConfig $mobileConfig -Key "APP_CHECK_ENABLED"
 
         if ($rawAppCheckEnabled.Trim().ToLowerInvariant() -ne "true") {
             throw "APP_CHECK_ENABLED must be true in mobile config for '$Environment'."
+        }
+
+        if (Test-MobileConfigUsesAppCheckDebugProvider -MobileConfig $mobileConfig) {
+            $message = "App Check debug provider is configured for '$Environment'. This is allowed only for direct pre-Play-Store device validation; remove APP_CHECK_DEBUG_PROVIDER, APP_CHECK_ANDROID_PROVIDER=debug and debug tokens before the final Play Store build."
+            if ($RequirePlayIntegrityAppCheck) {
+                throw $message
+            }
+
+            Write-Warning $message
         }
     }
 
@@ -459,6 +495,7 @@ try {
     $preview = "flutter " + ($previewArgs -join " ")
     Write-Host $preview
     Write-Host "Effective native flavor: $effectiveNativeEnvironment"
+    Write-Host "Require Play Integrity App Check: $RequirePlayIntegrityAppCheck"
     if ($null -ne $mobileConfig) {
         Write-Host "Mobile config file: $mobileConfigPath"
     } else {

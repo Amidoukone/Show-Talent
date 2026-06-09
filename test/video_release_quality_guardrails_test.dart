@@ -29,6 +29,9 @@ void main() {
     test('upload controller keeps strict ready+optimized gate', () {
       final content = File('lib/controller/upload_video_controller.dart')
           .readAsStringSync();
+      final errorMapper =
+          File('lib/services/videos/upload_video_error_mapper.dart')
+              .readAsStringSync();
 
       expect(content, contains("status == 'ready' && optimized"));
       expect(content,
@@ -37,10 +40,11 @@ void main() {
           contains('await _waitForVideoStatusReady(session.sessionId);'));
       expect(content, contains("'videoId': videoId"));
       expect(content, contains("'autoplay': true"));
-      expect(content, contains("if (error.code == 'unauthenticated')"));
+      expect(content, contains('UploadVideoErrorMapper.toUserMessage(error)'));
+      expect(errorMapper, contains("if (error.code == 'unauthenticated')"));
       expect(
-        content.indexOf("if (error.code == 'unauthenticated')"),
-        lessThan(content.indexOf("final message = (error.message ?? '')")),
+        errorMapper.indexOf("if (error.code == 'unauthenticated')"),
+        lessThan(errorMapper.indexOf("final message = (error.message ?? '')")),
       );
     });
 
@@ -76,6 +80,8 @@ void main() {
           File('lib/widgets/smart_video_player.dart').readAsStringSync();
       final controller =
           File('lib/controller/video_controller.dart').readAsStringSync();
+      final repository =
+          File('lib/services/videos/video_repository.dart').readAsStringSync();
       final rules = File('firestore.rules').readAsStringSync();
       final hosting = File('firebase.json').readAsStringSync();
       final functionsIndex = File('functions/src/index.ts').readAsStringSync();
@@ -103,6 +109,8 @@ void main() {
 
       expect(controller, contains("'shareVideo'"));
       expect(controller, contains('_shareVideoWithFirestoreFallback'));
+      expect(repository, contains('shareVideoWithFirestoreFallback'));
+      expect(repository, contains('FieldValue.increment(1)'));
       expect(controller, contains("response.code == 'resource-exhausted'"));
       expect(controller, contains('response.copyWith(toast: ToastLevel.info)'));
       expect(rules, contains('function canIncrementVideoShareCount()'));
@@ -176,19 +184,22 @@ void main() {
     test('video sensitive confirmations use a modern bottom sheet', () {
       final player =
           File('lib/widgets/smart_video_player.dart').readAsStringSync();
+      final playerSheets =
+          File('lib/widgets/smart_video_player_sheets.dart').readAsStringSync();
+      final playerSurface = '$player\n$playerSheets';
       final videoStrings =
           File('lib/utils/video_ui_strings.dart').readAsStringSync();
 
       expect(player, contains('showModalBottomSheet<void>'));
-      expect(player, contains('_VideoActionConfirmationSheet'));
-      expect(player, contains('DraggableScrollableSheet'));
-      expect(player, contains('SafeArea('));
-      expect(player, contains('FilledButton.icon'));
-      expect(player, contains('OutlinedButton'));
+      expect(playerSurface, contains('_VideoActionConfirmationSheet'));
+      expect(playerSurface, contains('DraggableScrollableSheet'));
+      expect(playerSurface, contains('SafeArea('));
+      expect(playerSurface, contains('FilledButton.icon'));
+      expect(playerSurface, contains('OutlinedButton'));
       expect(player, contains('VideoUiStrings.deleteVideoSheetMessage'));
       expect(player, contains('VideoUiStrings.reportVideoSheetMessage'));
-      expect(player, isNot(contains('AlertDialog(')));
-      expect(player, isNot(contains('Get.dialog(')));
+      expect(playerSurface, isNot(contains('AlertDialog(')));
+      expect(playerSurface, isNot(contains('Get.dialog(')));
       expect(videoStrings, contains('deleteVideoPrimaryAction'));
       expect(videoStrings, contains('reportVideoPrimaryAction'));
       expect(videoStrings, contains('sensitiveActionWarning'));
@@ -197,6 +208,8 @@ void main() {
     test('video user-facing strings stay centralized', () {
       final controller =
           File('lib/controller/video_controller.dart').readAsStringSync();
+      final repository =
+          File('lib/services/videos/video_repository.dart').readAsStringSync();
       final videoFeed =
           File('lib/screens/video_feed_screen.dart').readAsStringSync();
       final profileFeed =
@@ -217,8 +230,8 @@ void main() {
       expect(controller, contains('VideoUiStrings.reportOffline'));
       expect(controller, contains('VideoUiStrings.deleteOffline'));
       expect(controller, contains('VideoUiStrings.shareOffline'));
-      expect(controller, contains('VideoUiStrings.videoNotFound'));
-      expect(controller, contains('VideoUiStrings.reportUnavailable'));
+      expect(repository, contains('VideoUiStrings.videoNotFound'));
+      expect(repository, contains('VideoUiStrings.reportUnavailable'));
       expect(
           tiktokPlayer, contains('VideoUiStrings.forwardTenSecondsFeedback'));
       expect(tiktokPlayer, contains('VideoUiStrings.rewindTenSecondsFeedback'));
@@ -236,12 +249,18 @@ void main() {
       final actionResponse =
           File('lib/models/action_response.dart').readAsStringSync();
 
-      expect(feedback, contains('Get.showSnackbar'));
-      expect(feedback, contains('GetSnackBar'));
-      expect(feedback, contains('SnackStyle.FLOATING'));
-      expect(feedback, contains('AdColors.surfaceCard'));
-      expect(feedback, contains('titleText: Text('));
-      expect(feedback, contains('messageText: Padding('));
+      expect(feedback, contains('OverlayEntry'));
+      expect(feedback, contains('AdSystemNotice('));
+      expect(feedback, contains('AdSystemNoticeData('));
+      expect(feedback, contains('AdSystemNoticeTone.success'));
+      expect(feedback, contains('AdSystemNoticeTone.info'));
+      expect(feedback, contains('AdSystemNoticeTone.warning'));
+      expect(feedback, contains('AdSystemNoticeTone.error'));
+      expect(feedback, contains('Semantics('));
+      expect(feedback, contains('liveRegion: true'));
+      expect(feedback, isNot(contains('Get.showSnackbar')));
+      expect(feedback, isNot(contains('GetSnackBar')));
+      expect(feedback, isNot(contains('SnackStyle.FLOATING')));
       expect(feedback, isNot(contains('Get.snackbar(')));
       expect(toastWrappers, contains('Action confirmée'));
       expect(toastWrappers, contains('Action impossible'));
@@ -254,13 +273,15 @@ void main() {
     test('video like flow falls back to narrow Firestore toggle', () {
       final controller =
           File('lib/controller/video_controller.dart').readAsStringSync();
+      final repository =
+          File('lib/services/videos/video_repository.dart').readAsStringSync();
       final rules = File('firestore.rules').readAsStringSync();
 
       expect(controller, contains("'likeVideo'"));
       expect(controller, contains('_likeVideoWithFirestoreFallback'));
       expect(controller, contains("response.code == 'unauthenticated'"));
-      expect(controller, contains('FieldValue.arrayUnion([userId])'));
-      expect(controller, contains('FieldValue.arrayRemove([userId])'));
+      expect(repository, contains('FieldValue.arrayUnion([userId])'));
+      expect(repository, contains('FieldValue.arrayRemove([userId])'));
       expect(rules, contains('function canToggleVideoLike()'));
       expect(rules, contains('function canAddVideoLike()'));
       expect(rules, contains('function canRemoveVideoLike()'));
@@ -271,14 +292,17 @@ void main() {
     test('video report flow keeps auth failures controlled', () {
       final controller =
           File('lib/controller/video_controller.dart').readAsStringSync();
+      final actionService =
+          File('lib/services/videos/video_action_service.dart')
+              .readAsStringSync();
       final rules = File('firestore.rules').readAsStringSync();
 
       expect(controller, contains("'reportVideo'"));
-      expect(controller, contains('callDataWithHttpFallback'));
+      expect(actionService, contains('callDataWithHttpFallback'));
       expect(controller, contains('_reportVideoWithFirestoreFallback'));
-      expect(controller, contains('_isAuthAccessFailure'));
-      expect(controller, contains('_authRequiredResponse'));
-      expect(controller, contains("code: 'unauthenticated'"));
+      expect(actionService, contains('isAuthAccessFailure'));
+      expect(actionService, contains('authRequiredResponse'));
+      expect(actionService, contains("code: 'unauthenticated'"));
       expect(controller, contains("response.code == 'unauthenticated'"));
       expect(
         controller,
@@ -302,6 +326,9 @@ void main() {
         () {
       final player =
           File('lib/widgets/smart_video_player.dart').readAsStringSync();
+      final playerSheets =
+          File('lib/widgets/smart_video_player_sheets.dart').readAsStringSync();
+      final playerSurface = '$player\n$playerSheets';
       final tiktokPlayer =
           File('lib/widgets/tiktok_video_player.dart').readAsStringSync();
       final playbackControls =
@@ -321,10 +348,10 @@ void main() {
       expect(player, contains('media.viewPadding.bottom'));
       expect(player, contains('maxLines: _captionCollapsedMaxLines'));
       expect(player, contains('_showCaptionSheet'));
-      expect(player, contains('_VideoCaptionSheet'));
-      expect(player, contains('VideoUiStrings.videoCaptionSheetTitle'));
+      expect(playerSurface, contains('_VideoCaptionSheet'));
+      expect(playerSurface, contains('VideoUiStrings.videoCaptionSheetTitle'));
       expect(player, contains('VideoUiStrings.seeMore'));
-      expect(player, contains('SingleChildScrollView'));
+      expect(playerSurface, contains('SingleChildScrollView'));
       expect(player, contains('VideoUiStrings.videoPublisherProfileSemantic'));
       expect(
         File('lib/widgets/video_action_rail.dart').readAsStringSync(),
@@ -487,6 +514,8 @@ void main() {
 
     test('home video search stays separate from the live feed state', () {
       final home = File('lib/screens/home_screen.dart').readAsStringSync();
+      final repository = File('lib/services/home/home_feed_repository.dart')
+          .readAsStringSync();
 
       expect(
           home, contains('List<Video> get _currentVideos => _isSearchActive'));
@@ -497,7 +526,8 @@ void main() {
       expect(home, contains('return;'));
       expect(home, contains('_feedIndexBeforeSearch'));
       expect(home, contains('_jumpToPageSilently(restoreIndex)'));
-      expect(home, contains('whereIn: batch'));
+      expect(home, contains('fetchReadyVideosForAuthors'));
+      expect(repository, contains('whereIn: ids'));
       expect(home, contains('_isSearchSheetOpen'));
     });
 
@@ -520,12 +550,15 @@ void main() {
 
     test('home route refresh focuses uploaded video before autoplay', () {
       final home = File('lib/screens/home_screen.dart').readAsStringSync();
+      final repository = File('lib/services/home/home_feed_repository.dart')
+          .readAsStringSync();
 
       expect(home, contains('_captureRoutePlaybackRequest'));
       expect(home, contains("_routeFocusVideoId = rawVideoId.trim();"));
       expect(home, contains('_ensureFocusedVideoVisible'));
       expect(home, contains('focusVideoId: _routeFocusVideoId'));
-      expect(home, contains('Video.fromDoc(doc)'));
+      expect(home, contains('fetchReadyVideoById(targetId)'));
+      expect(repository, contains('Video.fromDoc(doc)'));
       expect(home, contains('_activateHomeIndex(targetIndex'));
     });
 

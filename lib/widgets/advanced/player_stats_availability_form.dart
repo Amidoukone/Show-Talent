@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
 import '../../models/user.dart';
+import '../ad_button.dart';
+import '../ad_feedback.dart';
 
 class PlayerStatsAvailabilityForm extends StatefulWidget {
   final AppUser user;
@@ -129,7 +131,10 @@ class PlayerStatsAvailabilityFormState
       }
 
       if (showFeedback) {
-        Get.snackbar('Succès', 'Dossier scout mis à jour');
+        AdFeedback.success(
+          'Dossier scout mis à jour',
+          'Les statistiques et disponibilités ont été enregistrées.',
+        );
       }
 
       return true;
@@ -192,9 +197,11 @@ class PlayerStatsAvailabilityFormState
             ),
             if (widget.showSubmitButton) ...[
               const SizedBox(height: 20),
-              ElevatedButton(
+              AdButton(
+                leading: Icons.save_rounded,
+                loading: _saving,
+                label: 'Sauvegarder',
                 onPressed: _saving ? null : () => save(),
-                child: Text(_saving ? 'Sauvegarde...' : 'Sauvegarder'),
               ),
             ],
           ],

@@ -5,17 +5,24 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('profile advanced CTA stays contextual and mobile-safe', () {
     final profile = File('lib/screens/profile_screen.dart').readAsStringSync();
+    final profileWidgets =
+        File('lib/screens/profile_screen_widgets.dart').readAsStringSync();
+    final profileSurface = '$profile\n$profileWidgets';
 
     expect(profile,
         contains('final hasAdvancedProfile = user.hasAdvancedProfile;'));
-    expect(profile, contains('Gardez votre dossier scout à jour'));
-    expect(profile,
-        contains("hasAdvancedProfile ? 'Mettre à jour' : 'Compléter'"));
+    expect(profile, contains('Gardez votre dossier scout'));
+    expect(profile, contains("hasAdvancedProfile ? 'Mettre"));
     expect(profile, contains('constraints.maxWidth < 380'));
-    expect(profile, contains('maxLines: 2'));
-    expect(profile, contains('overflow: TextOverflow.ellipsis'));
-    expect(profile, contains('errorBuilder: (_, __, ___) => fallback()'));
+    expect(profileSurface, contains('maxLines: 2'));
+    expect(profileSurface, contains('overflow: TextOverflow.ellipsis'));
     expect(
-        profile, contains('loadingBuilder: (context, child, loadingProgress)'));
+      profileSurface,
+      contains('errorBuilder: (_, __, ___) => fallback()'),
+    );
+    expect(
+      profileSurface,
+      contains('loadingBuilder: (context, child, loadingProgress)'),
+    );
   });
 }

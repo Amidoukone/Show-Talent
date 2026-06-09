@@ -1,20 +1,19 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:dio/dio.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/services/video_observability_service.dart';
 import 'package:adfoot/services/videos/data/upload_client.dart';
+import 'package:adfoot/services/videos/upload_video_error_mapper.dart';
+import 'package:adfoot/services/videos/upload_video_repository.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/utils/video_tools.dart';
 import 'package:adfoot/screens/success_toast.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class UploadVideoController extends GetxController {
   static const Duration _optimizationOverallTimeout = Duration(seconds: 45);
@@ -26,15 +25,23 @@ class UploadVideoController extends GetxController {
   final uploadProgress = 0.0.obs;
   final uploadStage = ''.obs;
 
+  UploadVideoController({
+    UploadClient? uploadClient,
+    VideoObservabilityService? observability,
+    UploadVideoRepository? uploadRepository,
+  })  : _uploadClient = uploadClient ?? UploadClient(),
+        _observability = observability ?? VideoObservabilityService.instance,
+        _uploadRepository = uploadRepository ?? UploadVideoRepository();
+
   File? selectedVideo;
   File? thumbnail;
   String? description;
   String? caption;
   String? originalVideoPath;
 
-  final UploadClient _uploadClient = UploadClient();
-  final VideoObservabilityService _observability =
-      VideoObservabilityService.instance;
+  final UploadClient _uploadClient;
+  final VideoObservabilityService _observability;
+  final UploadVideoRepository _uploadRepository;
   CancelToken? _cancelToken;
 
   UploadSessionState? _activeSession;
@@ -386,7 +393,7 @@ class UploadVideoController extends GetxController {
 
   Future<void> _waitForVideoStatusReady(String videoId) async {
     final completer = Completer<void>();
-    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? subscription;
+    StreamSubscription<UploadVideoProcessingState>? subscription;
     Timer? fallbackTimer;
     Timer? timeoutTimer;
     const failureStatuses = {'error', 'failed', 'failure'};
@@ -454,9 +461,9 @@ class UploadVideoController extends GetxController {
       }
     }
 
-    Future<void> inspectVideoState(Map<String, dynamic>? data) async {
-      final status = data?['status'];
-      final optimized = data?['optimized'] == true;
+    Future<void> inspectVideoState(UploadVideoProcessingState state) async {
+      final status = state.status;
+      final optimized = state.optimized;
 
       if (status is String && failureStatuses.contains(status)) {
         await closeOptimizationFlow(() => finalizeFailureFlow(status));
@@ -470,28 +477,21 @@ class UploadVideoController extends GetxController {
 
     fallbackTimer = Timer.periodic(_pollInterval, (_) async {
       try {
-        final doc = await FirebaseFirestore.instance
-            .collection('videos')
-            .doc(videoId)
-            .get();
-        await inspectVideoState(doc.data());
+        final state = await _uploadRepository.fetchProcessingState(videoId);
+        await inspectVideoState(state);
       } catch (error) {
-        debugPrint(
+        AppLogger.debug(
           '[UploadVideoController] fallback optimization poll error: $error',
         );
       }
     });
 
-    subscription = FirebaseFirestore.instance
-        .collection('videos')
-        .doc(videoId)
-        .snapshots()
-        .listen(
-      (doc) {
-        unawaited(inspectVideoState(doc.data()));
+    subscription = _uploadRepository.watchProcessingState(videoId).listen(
+      (state) {
+        unawaited(inspectVideoState(state));
       },
       onError: (error) {
-        debugPrint(
+        AppLogger.debug(
           '[UploadVideoController] optimization snapshot error: $error',
         );
       },
@@ -571,53 +571,11 @@ class UploadVideoController extends GetxController {
   }
 
   String _uploadFailureCode(Object error) {
-    if (error is FirebaseFunctionsException) {
-      return error.code;
-    }
-    if (error is DioException) {
-      final statusCode = error.response?.statusCode;
-      if (statusCode != null) return 'http-$statusCode';
-      return error.type.name;
-    }
-    if (error is UploadClientException) {
-      return error.statusCode != null
-          ? 'upload-client-${error.statusCode}'
-          : 'upload-client';
-    }
-    return 'upload-error';
+    return UploadVideoErrorMapper.failureCode(error);
   }
 
   String _toUserMessage(Object error) {
-    if (error is FirebaseFunctionsException) {
-      if (error.code == 'unauthenticated') {
-        return VideoUiStrings.uploadAuthRequired;
-      }
-
-      final message = (error.message ?? '').trim();
-      if (message.isNotEmpty) {
-        return message;
-      }
-
-      switch (error.code) {
-        case 'permission-denied':
-          return VideoUiStrings.uploadPermissionDenied;
-        case 'resource-exhausted':
-          return VideoUiStrings.uploadServiceUnavailable;
-        case 'failed-precondition':
-          return VideoUiStrings.uploadPreconditionFailed;
-        default:
-          return VideoUiStrings.uploadServerError;
-      }
-    }
-
-    final normalized = error.toString();
-    if (normalized.startsWith('Exception: ')) {
-      return normalized.substring('Exception: '.length);
-    }
-    if (normalized.trim().isEmpty) {
-      return VideoUiStrings.uploadUnknownError;
-    }
-    return normalized;
+    return UploadVideoErrorMapper.toUserMessage(error);
   }
 
   Future<void> _cleanupLocalFiles() async {
@@ -638,12 +596,7 @@ class UploadVideoController extends GetxController {
 
   Future<void> _deletePartialUpload(String videoPath, String thumbPath) async {
     try {
-      final videoRef = FirebaseStorage.instance.ref(videoPath);
-      final thumbRef = FirebaseStorage.instance.ref(thumbPath);
-      await Future.wait([
-        videoRef.delete().catchError((_) {}),
-        thumbRef.delete().catchError((_) {}),
-      ]);
+      await _uploadRepository.deletePartialUpload(videoPath, thumbPath);
     } catch (_) {}
   }
 }

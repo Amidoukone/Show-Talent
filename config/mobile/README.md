@@ -104,3 +104,14 @@ and writes these keys only to the ignored local config file:
 Do not commit or share the generated token. Before the final Play Store build,
 remove those debug keys from the local config and verify that Play Integrity is
 registered in Firebase App Check with the release signing SHA-256 fingerprint.
+
+Final Play Store guard:
+
+```powershell
+npm.cmd run release:config:validate:playstore
+npm.cmd run release:android:check:playstore
+npm.cmd run release:android:bundle:playstore
+```
+
+Those commands fail if the production mobile config still requests the App
+Check debug provider or contains a debug App Check token.

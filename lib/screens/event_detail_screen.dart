@@ -14,6 +14,7 @@ import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/contact_intake_sheet.dart';
 
@@ -43,14 +44,10 @@ class EventDetailsScreen extends StatelessWidget {
 
         return Scaffold(
           backgroundColor: cs.surface,
-          appBar: AppBar(
-            title: const Text(
-              'Détails de l’événement',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
-            backgroundColor: cs.surface,
-            foregroundColor: cs.onSurface,
-            centerTitle: true,
+          appBar: AdAppBar(
+            title: 'Détails de l’événement',
+            subtitle: 'Informations et participants',
+            showBottomDivider: true,
             actions: isOrganisateur
                 ? [
                     IconButton(

@@ -8,6 +8,7 @@ import 'package:adfoot/services/account_cleanup_service.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
@@ -216,14 +217,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     if (_loadingRole) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Outils'),
-          backgroundColor: cs.surface,
-          foregroundColor: cs.onSurface,
+        appBar: const AdAppBar(
+          title: 'Outils',
+          subtitle: 'Chargement du compte',
+          showBottomDivider: true,
         ),
         body: const Center(
           child: Padding(
@@ -239,10 +238,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (_sessionUnavailable) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Outils'),
-          backgroundColor: cs.surface,
-          foregroundColor: cs.onSurface,
+        appBar: const AdAppBar(
+          title: 'Outils',
+          subtitle: 'Session du compte',
+          showBottomDivider: true,
         ),
         body: Center(
           child: Padding(
@@ -264,10 +263,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final currentUser = _currentUser;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Outils'),
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
+      appBar: AdAppBar(
+        title: 'Outils',
+        subtitle: 'Compte et sécurité',
+        showBottomDivider: true,
         actions: [
           IconButton(
             tooltip: 'Actualiser',

@@ -129,8 +129,7 @@ void main() {
     );
   });
 
-  test('storage rules keep thumbnail writes scoped to owned video sessions',
-      () {
+  test('storage rules disable direct thumbnail writes and scope deletes', () {
     final rules = File('storage.rules').readAsStringSync();
 
     expect(rules, contains('function isOwnedThumbnail(fileName)'));
@@ -138,8 +137,9 @@ void main() {
         contains("fileName.matches('^thumbnail_[A-Za-z0-9_-]+\\\\.jpg\$')"));
     expect(rules,
         contains('isOwnedVideoDoc(thumbnailDocIdFromJpgFileName(fileName))'));
+    expect(rules, contains('allow create, update: if false;'));
     expect(rules,
-        contains('allow write: if signedIn() && isOwnedThumbnail(fileName);'));
+        contains('allow delete: if signedIn() && isOwnedThumbnail(fileName);'));
     expect(rules, isNot(contains('allow write: if signedIn();')));
   });
 }

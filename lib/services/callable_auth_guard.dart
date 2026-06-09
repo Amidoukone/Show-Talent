@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/app_environment.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class CallableAuthGuard {
   CallableAuthGuard._();
@@ -232,7 +233,8 @@ class CallableAuthGuard {
       return trimmed.isEmpty ? null : trimmed;
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('[CallableAuthGuard] App Check token unavailable: $error');
+        AppLogger.debug(
+            '[CallableAuthGuard] App Check token unavailable: $error');
       }
       return null;
     }

@@ -7,6 +7,7 @@ import '../controller/chat_controller.dart';
 import '../controller/user_controller.dart';
 import '../models/user.dart';
 import '../services/auth/auth_session_service.dart';
+import '../widgets/ad_app_bar.dart';
 import '../widgets/ad_dialogs.dart';
 import '../widgets/ad_feedback.dart';
 import '../widgets/ad_state_panel.dart';
@@ -53,47 +54,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     final cs = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 0,
-        title: Row(
-          children: [
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: theme.dividerColor.withValues(alpha: 0.6)),
-              ),
-              child: const Icon(Icons.messenger_outline, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Conversations',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  Text(
-                    'Messages et mises en relation',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.6),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      appBar: AdAppBar(
+        title: 'Conversations',
+        subtitle: 'Messages et mises en relation',
+        centerTitle: false,
+        showBottomDivider: true,
         actions: [
           // ✅ Refresh manuel (optionnel, non destructif)
           IconButton(
@@ -106,23 +71,17 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Get.to(() => const SelectUserScreen()),
         backgroundColor: cs.primary,
-        icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
+        foregroundColor: cs.onPrimary,
+        icon: const Icon(Icons.chat_bubble_outline),
         label: const Text(
           'Nouveau',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style: TextStyle(fontWeight: FontWeight.w700),
         ),
-        elevation: 3,
+        elevation: 0,
       ),
       body: DecoratedBox(
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              cs.surface,
-              cs.surfaceContainerHigh,
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+          color: cs.surface,
         ),
         child: SafeArea(
           child: Obx(() {
@@ -150,19 +109,25 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             final conversations = chatController.conversations;
 
             if (conversations.isEmpty) {
-              return RefreshIndicator.adaptive(
-                onRefresh: _handleRefresh,
-                color: cs.primary,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics(),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(16, 22, 16, 80),
-                  children: [
-                    _EmptyState(
-                      onNewChat: () => Get.to(() => const SelectUserScreen()),
+              return Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 760),
+                  child: RefreshIndicator.adaptive(
+                    onRefresh: _handleRefresh,
+                    color: cs.primary,
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 22, 16, 80),
+                      children: [
+                        _EmptyState(
+                          onNewChat: () =>
+                              Get.to(() => const SelectUserScreen()),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               );
             }
@@ -177,89 +142,97 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
               for (final u in userController.userList) u.uid: u,
             };
 
-            return RefreshIndicator.adaptive(
-              onRefresh: _handleRefresh,
-              color: cs.primary,
-              edgeOffset: 6,
-              child: ListView.separated(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 86),
-                itemCount: sorted.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final conversation = sorted[index];
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: RefreshIndicator.adaptive(
+                  onRefresh: _handleRefresh,
+                  color: cs.primary,
+                  edgeOffset: 6,
+                  child: ListView.separated(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 86),
+                    itemCount: sorted.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final conversation = sorted[index];
 
-                  final otherUserId = conversation.utilisateurIds.firstWhere(
-                    (id) => id != currentUserId,
-                    orElse: () => '',
-                  );
+                      final otherUserId =
+                          conversation.utilisateurIds.firstWhere(
+                        (id) => id != currentUserId,
+                        orElse: () => '',
+                      );
 
-                  if (otherUserId.isEmpty) {
-                    return _InfoCard(
-                      title: "Utilisateur inconnu",
-                      subtitle: "Impossible d’identifier l’autre participant.",
-                      icon: Icons.help_outline,
-                    );
-                  }
-
-                  final otherUser = usersById[otherUserId];
-
-                  // ✅ Placeholder stable si la liste users n’est pas encore prête
-                  if (otherUser == null) {
-                    return const _SkeletonConversationTile();
-                  }
-
-                  // ✅ On conserve la logique de filtrage
-                  if (!otherUser.canAppearInMessagingDirectory) {
-                    return _InfoCard(
-                      title: "Utilisateur inactif ou non vérifié",
-                      subtitle: "Cette conversation n’est pas disponible.",
-                      icon: Icons.lock_outline,
-                    );
-                  }
-
-                  final unreadCount = conversation.unreadMessagesCount;
-                  final isUnread = unreadCount > 0;
-
-                  return _ConversationCard(
-                    colorScheme: cs,
-                    user: otherUser,
-                    lastMessage: (conversation.lastMessage != null &&
-                            conversation.lastMessage!.trim().isNotEmpty)
-                        ? conversation.lastMessage!
-                        : "Aucun message",
-                    dateLabel: _formatDateOrTime(conversation.lastMessageDate),
-                    isUnread: isUnread,
-                    unreadCount: unreadCount,
-                    onTap: () async {
-                      if (_isOpeningConversation) {
-                        return;
+                      if (otherUserId.isEmpty) {
+                        return _InfoCard(
+                          title: "Utilisateur inconnu",
+                          subtitle:
+                              "Impossible d’identifier l’autre participant.",
+                          icon: Icons.help_outline,
+                        );
                       }
 
-                      setState(() => _isOpeningConversation = true);
-                      try {
-                        if (unreadCount > 0) {
-                          await chatController.markMessagesAsRead(
-                            conversation.id,
-                            currentUserId,
-                          );
-                        }
+                      final otherUser = usersById[otherUserId];
 
-                        await Get.to(() => ChatScreen(
-                              conversationId: conversation.id,
-                              otherUser: otherUser,
-                            ));
-                      } finally {
-                        if (mounted) {
-                          setState(() => _isOpeningConversation = false);
-                        }
+                      // ✅ Placeholder stable si la liste users n’est pas encore prête
+                      if (otherUser == null) {
+                        return const _SkeletonConversationTile();
                       }
+
+                      // ✅ On conserve la logique de filtrage
+                      if (!otherUser.canAppearInMessagingDirectory) {
+                        return _InfoCard(
+                          title: "Utilisateur inactif ou non vérifié",
+                          subtitle: "Cette conversation n’est pas disponible.",
+                          icon: Icons.lock_outline,
+                        );
+                      }
+
+                      final unreadCount = conversation.unreadMessagesCount;
+                      final isUnread = unreadCount > 0;
+
+                      return _ConversationCard(
+                        colorScheme: cs,
+                        user: otherUser,
+                        lastMessage: (conversation.lastMessage != null &&
+                                conversation.lastMessage!.trim().isNotEmpty)
+                            ? conversation.lastMessage!
+                            : "Aucun message",
+                        dateLabel:
+                            _formatDateOrTime(conversation.lastMessageDate),
+                        isUnread: isUnread,
+                        unreadCount: unreadCount,
+                        onTap: () async {
+                          if (_isOpeningConversation) {
+                            return;
+                          }
+
+                          setState(() => _isOpeningConversation = true);
+                          try {
+                            if (unreadCount > 0) {
+                              await chatController.markMessagesAsRead(
+                                conversation.id,
+                                currentUserId,
+                              );
+                            }
+
+                            await Get.to(() => ChatScreen(
+                                  conversationId: conversation.id,
+                                  otherUser: otherUser,
+                                ));
+                          } finally {
+                            if (mounted) {
+                              setState(() => _isOpeningConversation = false);
+                            }
+                          }
+                        },
+                        onLongPress: () => _confirmDelete(conversation.id),
+                        // ✅ Swipe to delete (moderne) sans supprimer le long-press
+                        onSwipeDelete: () => _confirmDelete(conversation.id),
+                      );
                     },
-                    onLongPress: () => _confirmDelete(conversation.id),
-                    // ✅ Swipe to delete (moderne) sans supprimer le long-press
-                    onSwipeDelete: () => _confirmDelete(conversation.id),
-                  );
-                },
+                  ),
+                ),
               ),
             );
           }),
@@ -349,14 +322,14 @@ class _ConversationCard extends StatelessWidget {
 
     final titleStyle = theme.textTheme.titleMedium?.copyWith(
       fontWeight: isUnread ? FontWeight.w900 : FontWeight.w700,
-      letterSpacing: 0.15,
+      letterSpacing: 0,
     );
 
     final subtitleStyle = theme.textTheme.bodyMedium?.copyWith(
       color:
           theme.colorScheme.onSurface.withValues(alpha: isUnread ? 0.92 : 0.68),
       fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
-      letterSpacing: 0.05,
+      letterSpacing: 0,
     );
 
     final dateStyle = theme.textTheme.bodySmall?.copyWith(
@@ -371,27 +344,20 @@ class _ConversationCard extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(16),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isUnread
               ? theme.colorScheme.primary.withValues(alpha: 0.5)
               : theme.dividerColor.withValues(alpha: 0.8),
           width: 1.1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.26),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(8),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
           onTap: onTap,
           onLongPress: onLongPress,
           child: Padding(
@@ -462,7 +428,7 @@ class _ConversationCard extends StatelessWidget {
         padding: const EdgeInsets.only(right: 18),
         decoration: BoxDecoration(
           color: theme.colorScheme.error.withValues(alpha: 0.85),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
@@ -514,7 +480,9 @@ class _Avatar extends StatelessWidget {
               shape: BoxShape.circle,
               color: Theme.of(context).colorScheme.primary,
               border: Border.all(
-                  color: Colors.black.withValues(alpha: 0.65), width: 1.5),
+                color: Theme.of(context).colorScheme.surface,
+                width: 1.5,
+              ),
             ),
           ),
         ),
@@ -538,13 +506,6 @@ class _UnreadBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: theme.colorScheme.primary,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.primary.withValues(alpha: 0.4),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          )
-        ],
       ),
       child: Text(
         shown,
@@ -599,12 +560,12 @@ class _InfoCard extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Material(
-      color: theme.colorScheme.surface.withValues(alpha: 0.92),
-      borderRadius: BorderRadius.circular(16),
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
         ),
         child: Row(
@@ -662,11 +623,11 @@ class _SkeletonConversationTile extends StatelessWidget {
 
     return Material(
       color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
         ),
         child: Row(

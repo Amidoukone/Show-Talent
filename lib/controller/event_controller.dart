@@ -8,10 +8,12 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/events/event_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 class EventController extends GetxController {
+  static const int _eventPageSize = EventRepository.defaultPageSize;
+
   final EventRepository _eventRepository = EventRepository();
   final AuthSessionService _authSessionService = AuthSessionService();
 
@@ -21,9 +23,19 @@ class EventController extends GetxController {
   final RxBool _isLoading = true.obs;
   bool get isLoading => _isLoading.value;
 
+  final RxBool _isLoadingMore = false.obs;
+  bool get isLoadingMore => _isLoadingMore.value;
+
+  final RxBool _hasMoreEvents = false.obs;
+  bool get hasMoreEvents => _hasMoreEvents.value;
+
   StreamSubscription<User?>? _authSub;
-  StreamSubscription<List<Event>>? _eventsSub;
+  StreamSubscription<EventLiveBatch>? _eventsSub;
+  EventFeedCursor? _lastCursor;
+  EventQueryFilter _activeFilter = const EventQueryFilter();
   String? _activeAuthUid;
+  String? _activeEventsQueryKey;
+  bool _hasLoadedAdditionalPages = false;
 
   bool _isPermissionDenied(Object error) =>
       error is FirebaseException && error.code == 'permission-denied';
@@ -62,7 +74,7 @@ class EventController extends GetxController {
         fetchEvents();
       },
       onError: (error) {
-        debugPrint('EventController auth listen error: $error');
+        AppLogger.debug('EventController auth listen error: $error');
       },
     );
 
@@ -73,54 +85,57 @@ class EventController extends GetxController {
     }
   }
 
-  Future<void> fetchEvents() async {
+  Future<void> fetchEvents({
+    EventQueryFilter filter = const EventQueryFilter(),
+    bool forceRefresh = false,
+  }) async {
     final currentUid = _authSessionService.currentUser?.uid;
-    final hasActiveStream = _eventsSub != null && _activeAuthUid == currentUid;
+    final queryKey = filter.cacheKey;
+    final hasActiveStream = _eventsSub != null &&
+        _activeAuthUid == currentUid &&
+        _activeEventsQueryKey == queryKey &&
+        !forceRefresh;
     if (hasActiveStream) {
       return;
     }
 
     _activeAuthUid = currentUid;
+    _activeEventsQueryKey = queryKey;
+    _activeFilter = filter;
+    _lastCursor = null;
+    _hasLoadedAdditionalPages = false;
+    _hasMoreEvents.value = false;
+    _isLoadingMore.value = false;
     if (_events.value.isEmpty) {
       _isLoading.value = true;
     }
     await _eventsSub?.cancel();
 
-    _eventsSub = _eventRepository.watchEvents().listen(
-      (fetchedEvents) {
-        final now = DateTime.now();
-        final updatedEvents = <Event>[];
-
-        for (final event in fetchedEvents) {
-          final normalizedStatus = Event.normalizeStatus(event.statut);
-          if (event.statut != normalizedStatus) {
-            event.statut = normalizedStatus;
+    _eventsSub = _eventRepository
+        .watchEvents(limit: _eventPageSize, filter: filter)
+        .listen(
+      (batch) {
+        final updatedEvents = _prepareEvents(batch.events);
+        _lastCursor = batch.cursor;
+        _hasMoreEvents.value =
+            batch.cursor != null && batch.fetchedCount >= _eventPageSize;
+        if (_hasLoadedAdditionalPages) {
+          final mergedById = <String, Event>{
+            for (final event in _events.value) event.id: event,
+          };
+          for (final event in updatedEvents) {
+            mergedById[event.id] = event;
           }
-
-          if (event.dateFin.isBefore(now) && normalizedStatus == 'ouvert') {
-            unawaited(
-              _eventRepository
-                  .updateEventStatus(eventId: event.id, status: 'ferme')
-                  .catchError((error, stack) {
-                debugPrint('Auto close event status update failed: $error');
-              }),
-            );
-
-            event.statut = 'ferme';
-            event.lastUpdated = now;
-          }
-
-          updatedEvents.add(event);
+          _events.value = _sortEvents(mergedById.values);
+        } else {
+          _events.value = _sortEvents(updatedEvents);
         }
-
-        _events.value = updatedEvents
-          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         update();
         _isLoading.value = false;
       },
       onError: (error) {
         _isLoading.value = false;
-        debugPrint('Firestore events stream failed: $error');
+        AppLogger.debug('Firestore events stream failed: $error');
         if (_isPermissionDenied(error)) {
           _events.value = const <Event>[];
           final hasResolvedSession = Get.isRegistered<UserController>() &&
@@ -133,10 +148,61 @@ class EventController extends GetxController {
     );
   }
 
+  Future<void> loadMoreEvents() async {
+    if (_isLoadingMore.value || !_hasMoreEvents.value) {
+      return;
+    }
+
+    final cursor = _lastCursor;
+    if (cursor == null) {
+      _hasMoreEvents.value = false;
+      return;
+    }
+
+    _isLoadingMore.value = true;
+    try {
+      final page = await _eventRepository.fetchEventsPage(
+        limit: _eventPageSize,
+        startAfter: cursor,
+        filter: _activeFilter,
+      );
+      final mergedById = <String, Event>{
+        for (final event in _events.value) event.id: event,
+      };
+      for (final event in _prepareEvents(page.events)) {
+        mergedById[event.id] = event;
+      }
+
+      _lastCursor = page.cursor;
+      _hasMoreEvents.value =
+          page.cursor != null && page.fetchedCount >= _eventPageSize;
+      if (page.fetchedCount > 0) {
+        _hasLoadedAdditionalPages = true;
+      }
+      _events.value = _sortEvents(mergedById.values);
+      update();
+    } on FirebaseException catch (error) {
+      AppLogger.debug('Firestore events pagination failed: $error');
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+      }
+    } catch (error) {
+      AppLogger.debug('Event pagination failed: $error');
+    } finally {
+      _isLoadingMore.value = false;
+    }
+  }
+
   Future<void> _stopEventsStream({bool clearData = false}) async {
     await _eventsSub?.cancel();
     _eventsSub = null;
     _activeAuthUid = null;
+    _activeEventsQueryKey = null;
+    _activeFilter = const EventQueryFilter();
+    _lastCursor = null;
+    _hasLoadedAdditionalPages = false;
+    _hasMoreEvents.value = false;
+    _isLoadingMore.value = false;
 
     if (clearData) {
       _events.value = const <Event>[];
@@ -200,7 +266,7 @@ class EventController extends GetxController {
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error) {
-      debugPrint('Event creation failed: $error');
+      AppLogger.debug('Event creation failed: $error');
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -210,7 +276,7 @@ class EventController extends GetxController {
         message: 'Échec de la création de l’événement.',
       );
     } catch (e) {
-      debugPrint('Event creation failed: $e');
+      AppLogger.debug('Event creation failed: $e');
       return ActionResponse.failure(
         code: 'create_failed',
         message: 'Échec de la création de l’événement.',
@@ -232,6 +298,7 @@ class EventController extends GetxController {
 
     try {
       await _eventRepository.updateEvent(event);
+      _replaceLocalEvent(event);
       return const ActionResponse(
         success: true,
         code: 'updated',
@@ -239,7 +306,7 @@ class EventController extends GetxController {
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error) {
-      debugPrint('Event update failed: $error');
+      AppLogger.debug('Event update failed: $error');
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -249,7 +316,7 @@ class EventController extends GetxController {
         message: 'Échec de la mise à jour de l’événement.',
       );
     } catch (e) {
-      debugPrint('Event update failed: $e');
+      AppLogger.debug('Event update failed: $e');
       return ActionResponse.failure(
         code: 'update_failed',
         message: 'Échec de la mise à jour de l’événement.',
@@ -281,6 +348,7 @@ class EventController extends GetxController {
       }
 
       await _eventRepository.deleteEvent(eventId);
+      _removeLocalEvent(eventId);
       return const ActionResponse(
         success: true,
         code: 'deleted',
@@ -288,7 +356,7 @@ class EventController extends GetxController {
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error) {
-      debugPrint('Event deletion failed: $error');
+      AppLogger.debug('Event deletion failed: $error');
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -298,7 +366,7 @@ class EventController extends GetxController {
         message: 'Échec de la suppression de l’événement.',
       );
     } catch (e) {
-      debugPrint('Event deletion failed: $e');
+      AppLogger.debug('Event deletion failed: $e');
       return ActionResponse.failure(
         code: 'delete_failed',
         message: 'Échec de la suppression de l’événement.',
@@ -346,7 +414,7 @@ class EventController extends GetxController {
         toast: ToastLevel.info,
       );
     } on FirebaseException catch (error) {
-      debugPrint('Event registration failed: $error');
+      AppLogger.debug('Event registration failed: $error');
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -356,7 +424,7 @@ class EventController extends GetxController {
         message: 'Échec de l’inscription.',
       );
     } catch (e) {
-      debugPrint('Event registration failed: $e');
+      AppLogger.debug('Event registration failed: $e');
       return ActionResponse.failure(
         code: 'registration_failed',
         message: 'Échec de l’inscription.',
@@ -402,7 +470,7 @@ class EventController extends GetxController {
         toast: ToastLevel.info,
       );
     } on FirebaseException catch (error) {
-      debugPrint('Event unregistration failed: $error');
+      AppLogger.debug('Event unregistration failed: $error');
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -412,7 +480,7 @@ class EventController extends GetxController {
         message: 'Échec de la désinscription.',
       );
     } catch (e) {
-      debugPrint('Event unregistration failed: $e');
+      AppLogger.debug('Event unregistration failed: $e');
       return ActionResponse.failure(
         code: 'unregistration_failed',
         message: 'Échec de la désinscription.',
@@ -430,6 +498,65 @@ class EventController extends GetxController {
       );
     }
     return null;
+  }
+
+  List<Event> _prepareEvents(Iterable<Event> fetchedEvents) {
+    final now = DateTime.now();
+    final updatedEvents = <Event>[];
+
+    for (final event in fetchedEvents) {
+      final normalizedStatus = Event.normalizeStatus(event.statut);
+      if (event.statut != normalizedStatus) {
+        event.statut = normalizedStatus;
+      }
+
+      if (event.dateFin.isBefore(now) && normalizedStatus == 'ouvert') {
+        unawaited(
+          _eventRepository
+              .updateEventStatus(eventId: event.id, status: 'ferme')
+              .catchError((error, stack) {
+            AppLogger.debug('Auto close event status update failed: $error');
+          }),
+        );
+
+        event.statut = 'ferme';
+        event.lastUpdated = now;
+      }
+
+      updatedEvents.add(event);
+    }
+
+    return updatedEvents;
+  }
+
+  List<Event> _sortEvents(Iterable<Event> events) {
+    return events.toList(growable: false)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  void _replaceLocalEvent(Event event) {
+    final existing = _events.value;
+    final index = existing.indexWhere((candidate) => candidate.id == event.id);
+    if (index == -1) {
+      return;
+    }
+
+    final next = List<Event>.from(existing);
+    next[index] = event;
+    _events.value = _sortEvents(next);
+    update();
+  }
+
+  void _removeLocalEvent(String eventId) {
+    final next = _events.value
+        .where((event) => event.id != eventId)
+        .toList(growable: false);
+    if (next.length == _events.value.length) {
+      return;
+    }
+
+    _events.value = next;
+    update();
   }
 
   Future<ActionResponse> _notifyPlayersOfNewEvent(

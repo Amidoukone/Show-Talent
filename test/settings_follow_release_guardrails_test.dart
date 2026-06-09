@@ -40,7 +40,11 @@ void main() {
       final settings =
           File('lib/screens/setting_screen.dart').readAsStringSync();
 
-      expect(settings, contains("title: const Text('Outils')"));
+      expect(settings,
+          contains("import 'package:adfoot/widgets/ad_app_bar.dart';"));
+      expect(settings, contains('appBar: const AdAppBar('));
+      expect(settings, contains("title: 'Outils'"));
+      expect(settings, contains("subtitle: 'Compte et sécurité'"));
       expect(settings, contains('AdSurfaceCard'));
       expect(settings, contains('_buildToolsHeader'));
       expect(settings, contains('_buildSectionCard'));
@@ -79,17 +83,21 @@ void main() {
     test('follow controller delegates mutations to callable backend', () {
       final controller =
           File('lib/controller/follow_controller.dart').readAsStringSync();
+      final repository =
+          File('lib/services/users/follow_repository.dart').readAsStringSync();
       final backend =
           File('functions/src/follow_actions.ts').readAsStringSync();
       final exports = File('functions/src/index.ts').readAsStringSync();
 
-      expect(controller, contains("httpsCallable("));
+      expect(controller, contains('_followRepository.followUser'));
+      expect(controller, contains('_followRepository.unfollowUser'));
+      expect(repository, contains("httpsCallable("));
       expect(
-        controller,
+        repository,
         contains("CallableAuthGuard.callDataWithHttpFallback"),
       );
-      expect(controller, contains("'followUser'"));
-      expect(controller, contains("'unfollowUser'"));
+      expect(repository, contains("'followUser'"));
+      expect(repository, contains("'unfollowUser'"));
       expect(backend, contains('export const followUser = onCall('));
       expect(backend, contains('export const unfollowUser = onCall('));
       expect(exports, contains('export {followUser, unfollowUser}'));

@@ -5,9 +5,11 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/users/user_repository.dart';
 import 'package:adfoot/utils/auth_error_mapper.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:adfoot/services/app_logger.dart';
 
 /// UserController
 /// - Source de vérité pour l’état utilisateur et la navigation auth.
@@ -52,7 +54,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         await _routeFromAuth(firebaseUser);
       },
       onError: (error) =>
-          debugPrint('UserController idTokenChanges error: $error'),
+          AppLogger.debug('UserController idTokenChanges error: $error'),
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -117,7 +119,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
       await _applySessionSnapshot(snapshot, requestVersion: requestVersion);
     } on FirebaseAuthException catch (error) {
       if (AuthSessionService.isTransientAuthFailure(error)) {
-        debugPrint(
+        AppLogger.debug(
           'UserController route auth check kept current session '
           'after transient auth error (${error.code}): ${error.message}',
         );
@@ -128,14 +130,14 @@ class UserController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
-      debugPrint('UserController _routeFromAuth auth error: $error');
+      AppLogger.debug('UserController _routeFromAuth auth error: $error');
       await _syncCurrentUserAccessWatch(null);
       await _stopAllUsersWatch();
       _user.value = null;
       await _safeOffAllNamed(AppRoutes.login);
     } on FirebaseException catch (error) {
       if (AuthSessionService.isTransientFirebaseFailure(error)) {
-        debugPrint(
+        AppLogger.debug(
           'UserController route auth check kept current session '
           'after transient Firebase error (${error.code}): ${error.message}',
         );
@@ -146,7 +148,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
-      debugPrint('UserController _routeFromAuth Firebase error: $error');
+      AppLogger.debug('UserController _routeFromAuth Firebase error: $error');
       await _syncCurrentUserAccessWatch(null);
       await _stopAllUsersWatch();
       _user.value = null;
@@ -156,7 +158,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
-      debugPrint('UserController _routeFromAuth error: $error');
+      AppLogger.debug('UserController _routeFromAuth error: $error');
       await _syncCurrentUserAccessWatch(null);
       await _stopAllUsersWatch();
       _user.value = null;
@@ -190,7 +192,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         update();
       },
       onError: (error) {
-        debugPrint('Erreur fetch users : $error');
+        AppLogger.debug('Erreur fetch users : $error');
         _usersSub = null;
 
         if (_isPermissionDenied(error)) {
@@ -231,13 +233,10 @@ class UserController extends GetxController with WidgetsBindingObserver {
       await _authSessionService.signOut();
       _user.value = null;
     } catch (error) {
-      Get.snackbar(
-        'Erreur',
-        'Échec de déconnexion : $error',
-        backgroundColor: Colors.red,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 3),
+      AppLogger.debug('signOut error: $error');
+      AdFeedback.error(
+        'Déconnexion impossible',
+        'La session n’a pas pu être fermée. Réessayez dans quelques instants.',
       );
     }
   }
@@ -268,7 +267,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
       },
       onError: (error) {
         _currentUserAccessSub = null;
-        debugPrint('UserController watchUserAccess error: $error');
+        AppLogger.debug('UserController watchUserAccess error: $error');
 
         if (_isPermissionDenied(error)) {
           unawaited(_enforceCurrentSessionAccess());
@@ -321,7 +320,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         arguments: notice,
       );
     } catch (error) {
-      debugPrint('UserController forced sign-out error: $error');
+      AppLogger.debug('UserController forced sign-out error: $error');
     } finally {
       _accessRevocationInProgress = false;
     }
@@ -363,7 +362,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
       );
     } on FirebaseAuthException catch (error) {
       if (!AuthSessionService.isDisabledAuthFailure(error)) {
-        debugPrint(
+        AppLogger.debug(
           'UserController enforceCurrentSessionAccess ignored auth error '
           '(${error.code}): ${error.message}',
         );
@@ -380,18 +379,19 @@ class UserController extends GetxController with WidgetsBindingObserver {
       );
     } on FirebaseException catch (error) {
       if (AuthSessionService.isTransientFirebaseFailure(error)) {
-        debugPrint(
+        AppLogger.debug(
           'UserController enforceCurrentSessionAccess ignored transient '
           'Firebase error (${error.code}): ${error.message}',
         );
         return;
       }
 
-      debugPrint(
+      AppLogger.debug(
         'UserController enforceCurrentSessionAccess Firebase error: $error',
       );
     } catch (error) {
-      debugPrint('UserController enforceCurrentSessionAccess error: $error');
+      AppLogger.debug(
+          'UserController enforceCurrentSessionAccess error: $error');
     }
   }
 
@@ -426,7 +426,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
       );
 
       if (snapshot.destination == AuthSessionDestination.main) {
-        debugPrint(
+        AppLogger.debug(
           'UserController protected access denied but session remains valid; '
           'keeping the user signed in.',
         );
@@ -445,7 +445,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
         ),
       );
     } catch (error) {
-      debugPrint('UserController handleProtectedAccessDenied error: $error');
+      AppLogger.debug(
+          'UserController handleProtectedAccessDenied error: $error');
       await _handleCurrentUserAccessRevoked(
         UserAccessDecision(
           exists: true,
@@ -632,7 +633,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
       await (navFuture ?? Future<void>.value()).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          debugPrint(
+          AppLogger.debug(
             'UserController navigation timeout for route=$route',
           );
         },

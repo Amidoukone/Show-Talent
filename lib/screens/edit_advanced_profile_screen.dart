@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../controller/profile_controller.dart';
 import '../models/user.dart';
+import '../widgets/ad_app_bar.dart';
+import '../widgets/ad_button.dart';
 import '../widgets/ad_feedback.dart';
 import '../widgets/advanced/agent_advanced_form.dart';
 import '../widgets/advanced/club_advanced_form.dart';
@@ -342,28 +344,21 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Informations avancées'),
-        centerTitle: true,
+      appBar: const AdAppBar(
+        title: 'Informations avancées',
+        subtitle: 'Dossier professionnel',
+        showBottomDivider: true,
       ),
       body: SafeArea(child: body),
       bottomNavigationBar: SafeArea(
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: ElevatedButton.icon(
+          child: AdButton(
             onPressed: _saving ? null : _save,
-            icon: _saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.save_outlined),
-            label: Text(_saving ? 'Sauvegarde...' : 'Enregistrer'),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size.fromHeight(54),
-            ),
+            loading: _saving,
+            leading: Icons.save_outlined,
+            label: _saving ? 'Sauvegarde...' : 'Enregistrer',
           ),
         ),
       ),

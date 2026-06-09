@@ -9,6 +9,7 @@ import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
@@ -66,14 +67,10 @@ class _EventListScreenState extends State<EventListScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Événements',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
-        centerTitle: true,
+      appBar: const AdAppBar(
+        title: 'Événements',
+        subtitle: 'Opportunités et rencontres',
+        showBottomDivider: true,
       ),
       body: Obx(() {
         final currentUser = userController.user;
@@ -87,6 +84,7 @@ class _EventListScreenState extends State<EventListScreen> {
         }
 
         final events = _filterEvents(allEvents, currentUser);
+        final canLoadMoreEvents = eventController.hasMoreEvents;
 
         if (allEvents.isEmpty) {
           return Column(
@@ -106,11 +104,20 @@ class _EventListScreenState extends State<EventListScreen> {
             _buildFilters(currentUser),
             Expanded(
               child: events.isEmpty
-                  ? _buildEmptyState(currentUser, filteredOut: true)
+                  ? _buildEmptyState(
+                      currentUser,
+                      filteredOut: true,
+                      canLoadMore: canLoadMoreEvents,
+                      isLoadingMore: eventController.isLoadingMore,
+                    )
                   : ListView.builder(
                       padding: const EdgeInsets.all(8),
-                      itemCount: events.length,
+                      itemCount: events.length + (canLoadMoreEvents ? 1 : 0),
                       itemBuilder: (context, index) {
+                        if (index == events.length) {
+                          return _buildLoadMoreFooter();
+                        }
+
                         final event = events[index];
                         final organiser = event.organisateur;
                         final isParticipant = event.participants
@@ -595,23 +602,24 @@ class _EventListScreenState extends State<EventListScreen> {
               spacing: 8,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(
+                AdButton(
                   onPressed: () => setState(() => _onlyMine = !_onlyMine),
-                  icon: Icon(
-                    _onlyMine
-                        ? Icons.public_rounded
-                        : Icons.manage_accounts_outlined,
-                  ),
-                  label: Text(
-                    _onlyMine ? 'Tous les événements' : 'Mes événements',
-                  ),
+                  leading: _onlyMine
+                      ? Icons.public_rounded
+                      : Icons.manage_accounts_outlined,
+                  label: _onlyMine ? 'Tous les événements' : 'Mes événements',
+                  kind: AdButtonKind.outline,
+                  size: AdButtonSize.compact,
+                  expanded: false,
                 ),
-                ElevatedButton.icon(
+                AdButton(
                   onPressed: () {
                     _openCreateEventForm();
                   },
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Créer un événement'),
+                  leading: Icons.add_rounded,
+                  label: 'Créer un événement',
+                  size: AdButtonSize.compact,
+                  expanded: false,
                 ),
               ],
             ),
@@ -624,13 +632,20 @@ class _EventListScreenState extends State<EventListScreen> {
   Widget _buildEmptyState(
     AppUser currentUser, {
     required bool filteredOut,
+    bool canLoadMore = false,
+    bool isLoadingMore = false,
   }) {
     final isOrganizer = isOpportunityPublisherRole(currentUser.role);
-    final actionLabel = filteredOut
-        ? 'Réinitialiser les filtres'
-        : isOrganizer
-            ? 'Créer un événement'
-            : 'Explorer les vidéos';
+    final shouldLoadMore = filteredOut && canLoadMore;
+    final actionLabel = shouldLoadMore
+        ? isLoadingMore
+            ? 'Chargement...'
+            : 'Charger plus d’événements'
+        : filteredOut
+            ? 'Réinitialiser les filtres'
+            : isOrganizer
+                ? 'Créer un événement'
+                : 'Explorer les vidéos';
 
     return Center(
       child: Padding(
@@ -646,23 +661,55 @@ class _EventListScreenState extends State<EventListScreen> {
           action: AdButton(
             expanded: false,
             label: actionLabel,
-            onPressed: () {
-              if (filteredOut) {
-                _resetFilters();
-                return;
-              }
+            loading: shouldLoadMore && isLoadingMore,
+            leading: shouldLoadMore ? Icons.expand_more_rounded : null,
+            onPressed: isLoadingMore
+                ? null
+                : () {
+                    if (shouldLoadMore) {
+                      eventController.loadMoreEvents();
+                      return;
+                    }
 
-              if (isOrganizer) {
-                _openCreateEventForm();
-                return;
-              }
+                    if (filteredOut) {
+                      _resetFilters();
+                      return;
+                    }
 
-              Get.offAllNamed(
-                AppRoutes.main,
-                arguments: {'tab': 0},
-              );
-            },
+                    if (isOrganizer) {
+                      _openCreateEventForm();
+                      return;
+                    }
+
+                    Get.offAllNamed(
+                      AppRoutes.main,
+                      arguments: {'tab': 0},
+                    );
+                  },
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadMoreFooter() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      child: Center(
+        child: AdButton(
+          expanded: false,
+          kind: AdButtonKind.outline,
+          size: AdButtonSize.compact,
+          leading: Icons.expand_more_rounded,
+          loading: eventController.isLoadingMore,
+          label: eventController.isLoadingMore
+              ? 'Chargement...'
+              : 'Charger plus d’événements',
+          onPressed: eventController.isLoadingMore
+              ? null
+              : () {
+                  eventController.loadMoreEvents();
+                },
         ),
       ),
     );
@@ -972,7 +1019,7 @@ class _EventListScreenState extends State<EventListScreen> {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        ElevatedButton.icon(
+        AdButton(
           onPressed:
               (!isParticipant && !isClosed && !isFull && !registerPending)
                   ? () async {
@@ -992,29 +1039,37 @@ class _EventListScreenState extends State<EventListScreen> {
                       }
                     }
                   : null,
-          icon: const Icon(Icons.event_available),
-          label: Text(registerPending
+          loading: registerPending,
+          leading: Icons.event_available,
+          label: registerPending
               ? 'Inscription...'
               : isClosed
                   ? 'Événement fermé'
                   : isFull
                       ? 'Complet'
-                      : 'S’inscrire'),
+                      : 'S’inscrire',
+          size: AdButtonSize.compact,
+          expanded: false,
         ),
         if (isParticipant && !isClosed)
-          OutlinedButton(
+          AdButton(
             onPressed: registerPending
                 ? null
                 : () => _confirmUnregisterEvent(context, event, currentUser),
-            child: const Text(
-              'Se désinscrire',
-              style: TextStyle(color: Colors.red),
-            ),
+            leading: Icons.person_remove_outlined,
+            label: 'Se désinscrire',
+            kind: AdButtonKind.outline,
+            size: AdButtonSize.compact,
+            expanded: false,
           )
         else
-          OutlinedButton(
+          AdButton(
             onPressed: () => _openEventDetails(event),
-            child: const Text('Détails'),
+            leading: Icons.info_outline,
+            label: 'Détails',
+            kind: AdButtonKind.tonal,
+            size: AdButtonSize.compact,
+            expanded: false,
           ),
       ],
     );
