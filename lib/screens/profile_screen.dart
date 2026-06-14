@@ -92,7 +92,14 @@ _ProfileLevelStyle _profileLevelStyle(String label) {
         borderColor: AdColors.accent,
         icon: Icons.auto_awesome_rounded,
       );
-    case 'Profil vérifié':
+    case 'Vérifié par Adfoot':
+      return const _ProfileLevelStyle(
+        backgroundColor: Color(0xFF0F766E),
+        foregroundColor: Colors.white,
+        borderColor: Color(0xFF0F766E),
+        icon: Icons.verified_rounded,
+      );
+    case 'Profil complet':
       return const _ProfileLevelStyle(
         backgroundColor: Color(0xFF2E7D32),
         foregroundColor: Colors.white,

@@ -60,6 +60,41 @@ class ProfileRepository {
   static const Duration firestoreReadTimeout = Duration(seconds: 12);
   static const Duration firestoreWriteTimeout = Duration(seconds: 15);
   static const Duration storageWriteTimeout = Duration(seconds: 45);
+  static const String _profileInvalidationReason = 'profile_updated_by_user';
+  static const Set<String> _advancedProfileKeys = {
+    'playerProfile',
+    'clubProfile',
+    'agentProfile',
+    'eventOrganizerProfile',
+  };
+  static const Set<String> _trustSensitiveProfileKeys = {
+    'nom',
+    'phone',
+    'languages',
+    'bio',
+    'birthDate',
+    'position',
+    'team',
+    'clubActuel',
+    'nombreDeMatchs',
+    'buts',
+    'assistances',
+    'performances',
+    'nomClub',
+    'ligue',
+    'entreprise',
+    'nombreDeRecrutements',
+    'country',
+    'city',
+    'region',
+    'openToOpportunities',
+    'playerProfile',
+    'clubProfile',
+    'agentProfile',
+    'eventOrganizerProfile',
+    'photoProfil',
+    'cvUrl',
+  };
 
   final FirebaseFirestore _firestore;
   final FirebaseStorage? _storageOverride;
@@ -133,10 +168,16 @@ class ProfileRepository {
     });
   }
 
-  Future<void> saveUserProfile(AppUser updatedUser) {
+  Future<void> saveUserProfile(AppUser updatedUser) async {
+    final data = updatedUser.toMap();
+    await _appendVerificationInvalidationIfCurrentProfileIsVerified(
+      uid: updatedUser.uid,
+      firestorePatch: data,
+    );
+
     return _usersCollection
         .doc(updatedUser.uid)
-        .set(updatedUser.toMap(), SetOptions(merge: true))
+        .set(data, SetOptions(merge: true))
         .timeout(firestoreWriteTimeout);
   }
 
@@ -155,19 +196,23 @@ class ProfileRepository {
 
     final firestorePatch = Map<String, dynamic>.from(sanitized.firestorePatch);
     final localPatch = Map<String, dynamic>.from(sanitized.localPatch);
-    const advancedKeys = <String>{
-      'playerProfile',
-      'clubProfile',
-      'agentProfile',
-      'eventOrganizerProfile',
-    };
+    Map<String, dynamic>? existingData;
+    Future<Map<String, dynamic>> loadExistingData() async {
+      if (existingData != null) {
+        return existingData!;
+      }
 
-    final needsDeepMerge = firestorePatch.keys.any(advancedKeys.contains);
-    if (needsDeepMerge) {
       final doc = await _getWithRetry(_usersCollection.doc(uid));
-      final existing = doc.data() ?? <String, dynamic>{};
+      existingData = doc.data() ?? <String, dynamic>{};
+      return existingData!;
+    }
 
-      for (final key in advancedKeys) {
+    final needsDeepMerge =
+        firestorePatch.keys.any(_advancedProfileKeys.contains);
+    if (needsDeepMerge) {
+      final existing = await loadExistingData();
+
+      for (final key in _advancedProfileKeys) {
         if (!firestorePatch.containsKey(key)) {
           continue;
         }
@@ -189,6 +234,15 @@ class ProfileRepository {
       }
     }
 
+    if (firestorePatch.keys.any(_trustSensitiveProfileKeys.contains)) {
+      await _appendVerificationInvalidationIfCurrentProfileIsVerified(
+        uid: uid,
+        firestorePatch: firestorePatch,
+        localPatch: localPatch,
+        existingData: await loadExistingData(),
+      );
+    }
+
     await _usersCollection
         .doc(uid)
         .update(firestorePatch)
@@ -207,9 +261,18 @@ class ProfileRepository {
         .timeout(storageWriteTimeout);
     final url = await ref.getDownloadURL().timeout(firestoreReadTimeout);
 
-    await _usersCollection.doc(uid).update({
+    final patch = <String, dynamic>{
       'photoProfil': url,
-    }).timeout(firestoreWriteTimeout);
+    };
+    await _appendVerificationInvalidationIfCurrentProfileIsVerified(
+      uid: uid,
+      firestorePatch: patch,
+    );
+
+    await _usersCollection
+        .doc(uid)
+        .update(patch)
+        .timeout(firestoreWriteTimeout);
 
     return url;
   }
@@ -267,9 +330,16 @@ class ProfileRepository {
     final url =
         await uploadTask.ref.getDownloadURL().timeout(firestoreReadTimeout);
 
+    final patch = <String, dynamic>{'cvUrl': url};
+    await _appendVerificationInvalidationIfCurrentProfileIsVerified(
+      uid: uid,
+      firestorePatch: patch,
+    );
+
     await _usersCollection
         .doc(uid)
-        .update({'cvUrl': url}).timeout(firestoreWriteTimeout);
+        .update(patch)
+        .timeout(firestoreWriteTimeout);
 
     if (previousCvUrl != null &&
         previousCvUrl.isNotEmpty &&
@@ -294,9 +364,18 @@ class ProfileRepository {
       await _storage.refFromURL(cvUrl).delete().timeout(storageWriteTimeout);
     }
 
-    await _usersCollection.doc(uid).update({
+    final patch = <String, dynamic>{
       'cvUrl': FieldValue.delete(),
-    }).timeout(firestoreWriteTimeout);
+    };
+    await _appendVerificationInvalidationIfCurrentProfileIsVerified(
+      uid: uid,
+      firestorePatch: patch,
+    );
+
+    await _usersCollection
+        .doc(uid)
+        .update(patch)
+        .timeout(firestoreWriteTimeout);
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(
@@ -315,6 +394,48 @@ class ProfileRepository {
       }
     }
     throw Exception('Firestore retry failed');
+  }
+
+  Future<void> _appendVerificationInvalidationIfCurrentProfileIsVerified({
+    required String uid,
+    required Map<String, dynamic> firestorePatch,
+    Map<String, dynamic>? localPatch,
+    Map<String, dynamic>? existingData,
+  }) async {
+    final data = existingData ??
+        (await _getWithRetry(_usersCollection.doc(uid))).data() ??
+        <String, dynamic>{};
+
+    if (!_isProfileCurrentlyVerified(data)) {
+      return;
+    }
+
+    final localNow = DateTime.now();
+    firestorePatch.addAll({
+      'profileVerified': false,
+      'profileVerificationStatus': 'pending',
+      'profileVerificationUpdatedAt': FieldValue.serverTimestamp(),
+      'profileVerificationUpdatedBy': uid,
+      'profileVerificationInvalidatedAt': FieldValue.serverTimestamp(),
+      'profileVerificationInvalidatedBy': uid,
+      'profileVerificationInvalidationReason': _profileInvalidationReason,
+    });
+
+    localPatch?.addAll({
+      'profileVerified': false,
+      'profileVerificationStatus': 'pending',
+      'profileVerificationUpdatedAt': localNow,
+      'profileVerificationUpdatedBy': uid,
+      'profileVerificationInvalidatedAt': localNow,
+      'profileVerificationInvalidatedBy': uid,
+      'profileVerificationInvalidationReason': _profileInvalidationReason,
+    });
+  }
+
+  static bool _isProfileCurrentlyVerified(Map<String, dynamic> data) {
+    final status =
+        data['profileVerificationStatus']?.toString().trim().toLowerCase();
+    return data['profileVerified'] == true || status == 'verified';
   }
 
   static _SanitizedProfilePatch _sanitizePatch(Map<String, dynamic> patch) {

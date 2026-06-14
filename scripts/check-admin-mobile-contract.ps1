@@ -154,13 +154,8 @@ $msg = Assert-ContainsRegex `
     -Message "provisionManagedAccount no longer rejects existing Auth users with admin claims."
 if ($null -ne $msg) { $errors.Add($msg) }
 
-$msg = Assert-ContainsRegex `
-    -Raw $firestoreRulesRaw `
-    -Pattern 'function isPublicSignupRole\(role\)\s*\{\s*return false;\s*\}' `
-    -Message "firestore.rules does not disable public self-signup anymore."
-if ($null -ne $msg) { $errors.Add($msg) }
-
-if ($firestoreRulesRaw -match 'allow create: if false;') {
+$userCreateDisabledPattern = 'match\s+/users/\{userId\}\s*\{[\s\S]*?allow create:\s*if false;'
+if ($firestoreRulesRaw -match $userCreateDisabledPattern) {
     # expected rule
 } else {
     $errors.Add(

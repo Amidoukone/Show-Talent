@@ -356,6 +356,37 @@ class ProfileController extends GetxController {
     if (patch.containsKey('allowMessages')) {
       u.allowMessages = patch['allowMessages'] as bool;
     }
+    if (patch.containsKey('profileVerified')) {
+      u.profileVerified = patch['profileVerified'] == true;
+    }
+    if (patch.containsKey('profileVerificationStatus')) {
+      u.profileVerificationStatus =
+          patch['profileVerificationStatus']?.toString() ?? 'unverified';
+    }
+    if (patch.containsKey('profileVerificationUpdatedAt')) {
+      final value = patch['profileVerificationUpdatedAt'];
+      if (value is DateTime) {
+        u.profileVerificationUpdatedAt = value;
+      }
+    }
+    applyNullableString(
+      'profileVerificationUpdatedBy',
+      (v) => u.profileVerificationUpdatedBy = v,
+    );
+    if (patch.containsKey('profileVerificationInvalidatedAt')) {
+      final value = patch['profileVerificationInvalidatedAt'];
+      if (value is DateTime) {
+        u.profileVerificationInvalidatedAt = value;
+      }
+    }
+    applyNullableString(
+      'profileVerificationInvalidatedBy',
+      (v) => u.profileVerificationInvalidatedBy = v,
+    );
+    applyNullableString(
+      'profileVerificationInvalidationReason',
+      (v) => u.profileVerificationInvalidationReason = v,
+    );
 
     void applyMap(String key, void Function(Map<String, dynamic>) setter) {
       if (!patch.containsKey(key)) {

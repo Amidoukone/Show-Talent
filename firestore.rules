@@ -37,10 +37,6 @@ service cloud.firestore {
       return role == "recruteur" || role == "club" || role == "agent";
     }
 
-    function isPublicSignupRole(role) {
-      return false;
-    }
-
     function isRecruiterOrClub() {
       return signedInAndActive() && isOpportunityPublisherRole(userRole());
     }
@@ -80,6 +76,70 @@ service cloud.firestore {
         request.resource.data.activeAt == request.time;
     }
 
+    function ownerProfileTrustFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        "nom",
+        "phone",
+        "languages",
+        "bio",
+        "birthDate",
+        "position",
+        "team",
+        "clubActuel",
+        "nombreDeMatchs",
+        "buts",
+        "assistances",
+        "performances",
+        "nomClub",
+        "ligue",
+        "entreprise",
+        "nombreDeRecrutements",
+        "country",
+        "city",
+        "region",
+        "openToOpportunities",
+        "playerProfile",
+        "clubProfile",
+        "agentProfile",
+        "eventOrganizerProfile",
+        "photoProfil",
+        "cvUrl",
+      ]);
+    }
+
+    function ownerVerificationResetFieldsChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        "profileVerified",
+        "profileVerificationStatus",
+        "profileVerificationUpdatedAt",
+        "profileVerificationUpdatedBy",
+        "profileVerificationInvalidatedAt",
+        "profileVerificationInvalidatedBy",
+        "profileVerificationInvalidationReason",
+      ]);
+    }
+
+    function ownerProfileVerificationResetIsValid() {
+      return request.resource.data.profileVerified == false &&
+        request.resource.data.profileVerificationStatus == "pending" &&
+        request.resource.data.profileVerificationUpdatedAt == request.time &&
+        request.resource.data.profileVerificationUpdatedBy == request.auth.uid &&
+        request.resource.data.profileVerificationInvalidatedAt == request.time &&
+        request.resource.data.profileVerificationInvalidatedBy == request.auth.uid &&
+        request.resource.data.profileVerificationInvalidationReason == "profile_updated_by_user";
+    }
+
+    function ownerProfileVerificationChangesAreSafe() {
+      return !ownerVerificationResetFieldsChanged() ||
+        ownerProfileVerificationResetIsValid();
+    }
+
+    function verifiedOwnerProfileChangeIsInvalidated() {
+      return resource.data.profileVerified != true ||
+        !ownerProfileTrustFieldsChanged() ||
+        ownerProfileVerificationResetIsValid();
+    }
+
     function canUpdateOwnProfile() {
       return changesOnly([
         "nom",
@@ -110,8 +170,17 @@ service cloud.firestore {
         "eventOrganizerProfile",
         "photoProfil",
         "cvUrl",
+        "profileVerified",
+        "profileVerificationStatus",
+        "profileVerificationUpdatedAt",
+        "profileVerificationUpdatedBy",
+        "profileVerificationInvalidatedAt",
+        "profileVerificationInvalidatedBy",
+        "profileVerificationInvalidationReason",
         "updatedAt",
-      ]);
+      ]) &&
+      ownerProfileVerificationChangesAreSafe() &&
+      verifiedOwnerProfileChangeIsInvalidated();
     }
 
     function canMutateOfferCandidates() {

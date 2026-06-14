@@ -384,6 +384,7 @@ function sanitizeManagedProfilePatch(
     "profilePublic",
     "allowMessages",
     "openToOpportunities",
+    "profileVerified",
   ];
 
   const mapFields = ["clubProfile", "agentProfile"];
@@ -410,6 +411,24 @@ function sanitizeManagedProfilePatch(
     const value = patch[field];
     if (typeof value === "boolean") {
       updates[field] = value;
+    }
+  }
+
+  const rawVerificationStatus = patch["profileVerificationStatus"];
+  if (typeof rawVerificationStatus === "string") {
+    const normalized = rawVerificationStatus.trim().toLowerCase();
+    if (["verified", "unverified", "pending", "rejected"].includes(normalized)) {
+      updates["profileVerificationStatus"] = normalized;
+    }
+  }
+
+  const rawVerificationNote = patch["profileVerificationNote"];
+  if (rawVerificationNote === null) {
+    updates["profileVerificationNote"] = null;
+  } else if (typeof rawVerificationNote === "string") {
+    const normalized = rawVerificationNote.trim();
+    if (normalized) {
+      updates["profileVerificationNote"] = normalized.slice(0, 500);
     }
   }
 
@@ -656,6 +675,24 @@ export const updateManagedAccountProfile = onCall(
         "invalid-argument",
         "Aucun champ profil autorisé n’a été fourni.",
       );
+    }
+
+    if (updates["profileVerified"] === true) {
+      updates["profileVerificationStatus"] = "verified";
+      updates["profileVerifiedBy"] = adminUid;
+      updates["profileVerifiedAt"] = fieldValue.serverTimestamp();
+      updates["profileVerificationUpdatedBy"] = adminUid;
+      updates["profileVerificationUpdatedAt"] = fieldValue.serverTimestamp();
+      updates["profileVerificationInvalidatedAt"] = fieldValue.delete();
+      updates["profileVerificationInvalidatedBy"] = fieldValue.delete();
+      updates["profileVerificationInvalidationReason"] = fieldValue.delete();
+    } else if (updates["profileVerified"] === false) {
+      updates["profileVerificationStatus"] =
+        updates["profileVerificationStatus"] ?? "unverified";
+      updates["profileVerifiedBy"] = fieldValue.delete();
+      updates["profileVerifiedAt"] = fieldValue.delete();
+      updates["profileVerificationUpdatedBy"] = adminUid;
+      updates["profileVerificationUpdatedAt"] = fieldValue.serverTimestamp();
     }
 
     await target.userRef.set({

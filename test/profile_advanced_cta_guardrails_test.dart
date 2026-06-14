@@ -16,6 +16,8 @@ void main() {
     expect(profile, contains('constraints.maxWidth < 380'));
     expect(profileSurface, contains('maxLines: 2'));
     expect(profileSurface, contains('overflow: TextOverflow.ellipsis'));
+    expect(profileSurface, contains('user.isProfileTrusted'));
+    expect(profileSurface, contains('Vérifié par Adfoot'));
     expect(
       profileSurface,
       contains('errorBuilder: (_, __, ___) => fallback()'),

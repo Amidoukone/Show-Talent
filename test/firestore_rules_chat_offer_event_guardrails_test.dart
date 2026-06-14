@@ -65,6 +65,23 @@ void main() {
       final rules = File('firestore.rules').readAsStringSync();
 
       expect(rules, contains('function canUpdateOwnProfile() {'));
+      expect(rules, contains('function ownerProfileTrustFieldsChanged() {'));
+      expect(
+          rules, contains('function ownerProfileVerificationResetIsValid() {'));
+      expect(
+        rules,
+        contains('verifiedOwnerProfileChangeIsInvalidated()'),
+      );
+      expect(
+        rules,
+        contains('"profileVerificationInvalidationReason"'),
+      );
+      expect(
+        rules,
+        contains(
+          'request.resource.data.profileVerificationInvalidationReason == "profile_updated_by_user"',
+        ),
+      );
       expect(rules, contains('"cvUrl"'));
       expect(rules, contains('"photoProfil"'));
       expect(rules, contains('"playerProfile"'));

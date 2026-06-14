@@ -100,6 +100,12 @@ class _HeaderCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+                        if (user.isProfileTrusted)
+                          _InfoPill(
+                            icon: Icons.verified_rounded,
+                            label: user.profileTrustLabel,
+                            style: _profileLevelStyle(user.profileTrustLabel),
+                          ),
                         _InfoPill(
                           icon: Icons.military_tech_outlined,
                           label: user.profileLevelLabel,

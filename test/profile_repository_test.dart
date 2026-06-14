@@ -23,6 +23,45 @@ void main() {
       expect(user?.nom, 'Awa Traore');
     });
 
+    test('fetchUser parses admin profile verification metadata', () async {
+      final firestore = FakeFirebaseFirestore();
+      final repository = ProfileRepository(firestore: firestore);
+
+      await firestore.collection('users').doc('player-verified').set({
+        ..._user(uid: 'player-verified', name: 'Verified Player').toMap(),
+        'position': 'Milieu',
+        'team': 'Academy A',
+        'profileVerified': true,
+        'profileVerificationStatus': 'verified',
+        'profileVerifiedAt': Timestamp.fromDate(DateTime.utc(2026, 6, 1)),
+        'profileVerifiedBy': 'admin-1',
+        'profileVerificationNote': 'Identité contrôlée',
+        'profileVerificationInvalidatedAt':
+            Timestamp.fromDate(DateTime.utc(2026, 6, 5)),
+        'profileVerificationInvalidatedBy': 'player-verified',
+        'profileVerificationInvalidationReason': 'profile_updated_by_user',
+      });
+
+      final user = await repository.fetchUser('player-verified');
+
+      expect(user?.profileLevelLabel, 'Profil complet');
+      expect(user?.profileVerified, isTrue);
+      expect(user?.isProfileTrusted, isTrue);
+      expect(user?.profileTrustLabel, 'Vérifié par Adfoot');
+      expect(user?.profileVerificationStatusLabel, 'Vérifié par admin');
+      expect(user?.profileVerifiedBy, 'admin-1');
+      expect(user?.profileVerificationNote, 'Identité contrôlée');
+      expect(
+        user?.profileVerificationInvalidatedAt?.toUtc(),
+        DateTime.utc(2026, 6, 5),
+      );
+      expect(user?.profileVerificationInvalidatedBy, 'player-verified');
+      expect(
+        user?.profileVerificationInvalidationReason,
+        'profile_updated_by_user',
+      );
+    });
+
     test('updateProfilePatch sanitizes values and deep merges advanced profile',
         () async {
       final firestore = FakeFirebaseFirestore();
@@ -67,6 +106,73 @@ void main() {
       expect(playerProfile['availability'], {'open': true});
       expect(result.appliedPatch['phone'], isA<ProfileFieldDelete>());
       expect(result.appliedPatch['bio'], isNull);
+    });
+
+    test('updateProfilePatch invalidates verified trust profile changes',
+        () async {
+      final firestore = FakeFirebaseFirestore();
+      final repository = ProfileRepository(firestore: firestore);
+      final user = _user(uid: 'player-verified', name: 'Original');
+
+      await firestore.collection('users').doc(user.uid).set({
+        ...user.toMap(),
+        'position': 'Milieu',
+        'team': 'Academy A',
+        'profileVerified': true,
+        'profileVerificationStatus': 'verified',
+        'profileVerifiedAt': Timestamp.fromDate(DateTime.utc(2026, 6, 1)),
+        'profileVerifiedBy': 'admin-1',
+      });
+
+      final result = await repository.updateProfilePatch(user.uid, {
+        'nom': '  Nouveau nom  ',
+      });
+
+      final data =
+          (await firestore.collection('users').doc(user.uid).get()).data()!;
+
+      expect(data['nom'], 'Nouveau nom');
+      expect(data['profileVerified'], isFalse);
+      expect(data['profileVerificationStatus'], 'pending');
+      expect(data['profileVerificationUpdatedBy'], user.uid);
+      expect(data['profileVerificationInvalidatedBy'], user.uid);
+      expect(
+        data['profileVerificationInvalidationReason'],
+        'profile_updated_by_user',
+      );
+      expect(result.appliedPatch['profileVerified'], isFalse);
+      expect(result.appliedPatch['profileVerificationStatus'], 'pending');
+    });
+
+    test('updateProfilePatch keeps verification for privacy-only changes',
+        () async {
+      final firestore = FakeFirebaseFirestore();
+      final repository = ProfileRepository(firestore: firestore);
+      final user = _user(uid: 'player-private', name: 'Private Player');
+
+      await firestore.collection('users').doc(user.uid).set({
+        ...user.toMap(),
+        'position': 'Milieu',
+        'team': 'Academy A',
+        'profileVerified': true,
+        'profileVerificationStatus': 'verified',
+        'profileVerifiedAt': Timestamp.fromDate(DateTime.utc(2026, 6, 1)),
+        'profileVerifiedBy': 'admin-1',
+      });
+
+      await repository.updateProfilePatch(user.uid, {
+        'profilePublic': false,
+        'allowMessages': false,
+      });
+
+      final data =
+          (await firestore.collection('users').doc(user.uid).get()).data()!;
+
+      expect(data['profilePublic'], isFalse);
+      expect(data['allowMessages'], isFalse);
+      expect(data['profileVerified'], isTrue);
+      expect(data['profileVerificationStatus'], 'verified');
+      expect(data['profileVerificationInvalidatedAt'], isNull);
     });
 
     test('fetchUserVideos returns ready playable videos by update date',
