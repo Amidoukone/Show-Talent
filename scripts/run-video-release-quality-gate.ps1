@@ -46,7 +46,7 @@ try {
   }
 
   if ($RunRemoteSmoke.IsPresent) {
-    Invoke-ExternalStep -Name "Remote upload->ready->playback->delete smoke flow" -Command {
+    Invoke-ExternalStep -Name "Remote upload->review->playback->delete smoke flow" -Command {
       $smokeArgs = @(
         "-ExecutionPolicy", "Bypass",
         "-File", ".\scripts\smoke-upload-flow.ps1",

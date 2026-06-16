@@ -1,25 +1,32 @@
-﻿/* eslint-disable linebreak-style */
+/* eslint-disable linebreak-style */
 /* eslint-disable max-len */
 /* eslint-disable require-jsdoc */
 
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 
-import {db, fieldValue, storage} from "./firebase";
+import {db, fieldValue, messaging, storage} from "./firebase";
 import {
   LOW_CPU_CALLABLE_OPTIONS,
   assertAdminCaller,
   getString,
 } from "./admin_account_support";
+import {normalizeNotificationText} from "./notification_text";
 
 const OFFER_STATUSES = new Set(["brouillon", "ouverte", "fermee", "archivee"]);
 const EVENT_STATUSES = new Set(["brouillon", "ouvert", "ferme", "archive"]);
 const VIDEO_MODERATION_STATUSES = new Set([
-  "ready",
+  "approved",
+  "pending",
   "under_review",
   "hidden",
   "removed",
+  "rejected",
 ]);
+const MAX_PUBLIC_PLAYER_VIDEOS = parsePositiveIntEnv(
+  process.env.MAX_PUBLIC_PLAYER_VIDEOS,
+  10,
+);
 
 type AdminContentCallableRequest = {
   auth?: {uid?: string; token?: Record<string, unknown> | null} | null;
@@ -28,6 +35,11 @@ type AdminContentCallableRequest = {
   } | null;
   data: unknown;
 };
+
+function parsePositiveIntEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 type DeleteContentConfig = {
   collectionName: "offres" | "events";
@@ -85,11 +97,17 @@ function normalizeVideoModerationStatus(rawStatus: string): string {
   case "published":
   case "publiee":
   case "publiée":
-    return "ready";
+  case "approved":
+  case "approve":
+  case "validee":
+  case "validée":
+    return "approved";
+  case "pending":
   case "under_review":
   case "review":
   case "a_revoir":
-    return "under_review";
+  case "en_attente":
+    return "pending";
   case "hidden":
   case "masquee":
   case "masquée":
@@ -98,6 +116,11 @@ function normalizeVideoModerationStatus(rawStatus: string): string {
   case "supprimee":
   case "supprimée":
     return "removed";
+  case "rejected":
+  case "reject":
+  case "refusee":
+  case "refusée":
+    return "rejected";
   default:
     return value;
   }
@@ -477,6 +500,212 @@ const EVENT_DELETE_CONFIG: DeleteContentConfig = {
   collectStoragePaths: collectEventStoragePaths,
 };
 
+
+function resolveVideoTitle(data: Record<string, unknown>): string {
+  return getString(data, "caption") ||
+    getString(data, "captionText") ||
+    getString(data, "description") ||
+    getString(data, "songName") ||
+    "Video";
+}
+
+function isPublicPlayerVideoData(
+  data: Record<string, unknown>,
+  excludeVideoId?: string,
+): boolean {
+  if (excludeVideoId && getString(data, "id") === excludeVideoId) {
+    return false;
+  }
+
+  if (getString(data, "status") !== "ready") {
+    return false;
+  }
+
+  const moderationStatus = getString(data, "moderationStatus");
+  return moderationStatus === "" ||
+    moderationStatus === "approved" ||
+    getString(data, "visibility") === "public" ||
+    data["isPublic"] === true;
+}
+
+async function countPublicPlayerVideos(
+  ownerUid: string,
+  excludeVideoId: string,
+): Promise<number> {
+  if (!ownerUid) {
+    return 0;
+  }
+
+  const snapshot = await db.collection("videos")
+    .where("uid", "==", ownerUid)
+    .where("status", "==", "ready")
+    .get();
+
+  let count = 0;
+  for (const doc of snapshot.docs) {
+    const data = {id: doc.id, ...(doc.data() ?? {})};
+    if (isPublicPlayerVideoData(data, excludeVideoId)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+async function notifyVideoOwner(params: {
+  ownerUid: string;
+  videoId: string;
+  decision: "approved" | "rejected";
+  title: string;
+  body: string;
+}): Promise<boolean> {
+  if (!params.ownerUid) {
+    return false;
+  }
+
+  try {
+    const userSnap = await db.collection("users").doc(params.ownerUid).get();
+    if (!userSnap.exists) {
+      return false;
+    }
+
+    const token = getString(userSnap.data(), "fcmToken");
+    if (!token) {
+      return false;
+    }
+
+    await messaging.send({
+      token,
+      notification: {
+        title: normalizeNotificationText(params.title, 120),
+        body: normalizeNotificationText(params.body, 300),
+      },
+      data: {
+        type: "video_moderation",
+        videoId: params.videoId,
+        decision: params.decision,
+      },
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "high_importance_channel",
+          sound: "default",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+          },
+        },
+      },
+    });
+
+    return true;
+  } catch (error) {
+    logger.warn("video moderation notification skipped", {
+      videoId: params.videoId,
+      ownerUid: params.ownerUid,
+      decision: params.decision,
+      error,
+    });
+    return false;
+  }
+}
+
+async function recordVideoModerationDecision(params: {
+  videoId: string;
+  ownerUid: string;
+  decision: string;
+  reason?: string;
+  adminUid: string;
+  videoData: Record<string, unknown>;
+  deletedAssetPaths?: string[];
+}): Promise<void> {
+  await db.collection("videoModerationDecisions").doc(params.videoId).set({
+    videoId: params.videoId,
+    ownerUid: params.ownerUid || null,
+    decision: params.decision,
+    reason: params.reason?.trim() || null,
+    title: resolveVideoTitle(params.videoData),
+    reviewedBy: params.adminUid,
+    reviewedAt: fieldValue.serverTimestamp(),
+    updatedAt: fieldValue.serverTimestamp(),
+    deletedAssetPaths: params.deletedAssetPaths ?? [],
+  }, {merge: true});
+}
+
+async function rejectVideoWithAdminRights(params: {
+  videoId: string;
+  adminUid: string;
+  reason?: string;
+}) {
+  const videoRef = db.collection("videos").doc(params.videoId);
+  const videoSnap = await videoRef.get();
+
+  if (!videoSnap.exists) {
+    return {
+      success: true,
+      code: "video_already_deleted",
+      message: "Video deja supprimee.",
+      data: {
+        videoId: params.videoId,
+        deletedBy: params.adminUid,
+        alreadyDeleted: true,
+        deletedAssetPaths: [],
+      },
+    };
+  }
+
+  const videoData = videoSnap.data() ?? {};
+  const ownerUid = getString(videoData, "uid");
+  const assetPaths = collectVideoStoragePaths(params.videoId, videoData);
+  const deletedAssetPaths = await deleteStoragePaths(assetPaths, {
+    collectionName: "videos",
+    contentId: params.videoId,
+  });
+
+  await recordVideoModerationDecision({
+    videoId: params.videoId,
+    ownerUid,
+    decision: "rejected",
+    reason: params.reason,
+    adminUid: params.adminUid,
+    videoData,
+    deletedAssetPaths,
+  });
+
+  await videoRef.delete();
+
+  const notified = await notifyVideoOwner({
+    ownerUid,
+    videoId: params.videoId,
+    decision: "rejected",
+    title: "Video refusee",
+    body: params.reason?.trim() ||
+      "Votre video n'a pas ete retenue apres revue admin.",
+  });
+
+  logger.info("admin video rejected and deleted", {
+    videoId: params.videoId,
+    ownerUid: ownerUid || null,
+    deletedBy: params.adminUid,
+    deletedAssetCount: deletedAssetPaths.length,
+    notified,
+  });
+
+  return {
+    success: true,
+    code: "video_rejected_deleted",
+    message: "Video refusee, fichiers supprimes et decision enregistree.",
+    data: {
+      videoId: params.videoId,
+      ownerUid: ownerUid || null,
+      deletedBy: params.adminUid,
+      deletedAssetPaths,
+      notified,
+    },
+  };
+}
 export const adminSetVideoStatus = onCall(
   LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {
@@ -495,34 +724,76 @@ export const adminSetVideoStatus = onCall(
     if (!VIDEO_MODERATION_STATUSES.has(status)) {
       throw new HttpsError(
         "invalid-argument",
-        "Statut vidéo invalide. Valeurs : ready, under_review, hidden, removed.",
+        "Statut video invalide. Valeurs : approved, pending, hidden, removed, rejected.",
       );
     }
 
+    const reason = getString(request.data, "reason").slice(0, 500);
+
     try {
+      if (status === "rejected") {
+        return await rejectVideoWithAdminRights({
+          videoId,
+          adminUid,
+          reason,
+        });
+      }
+
       const videoRef = db.collection("videos").doc(videoId);
       const videoSnap = await videoRef.get();
       if (!videoSnap.exists) {
-        throw new HttpsError("not-found", "Vidéo introuvable.");
+        throw new HttpsError("not-found", "Video introuvable.");
       }
 
       const videoData = videoSnap.data() ?? {};
-      if (status === "ready" && videoData.optimized !== true) {
+      if (status === "approved" && videoData.optimized !== true) {
         throw new HttpsError(
           "failed-precondition",
-          "Seule une vidéo optimisée peut être republiée.",
+          "La video doit etre optimisee avant approbation.",
         );
       }
 
+      const ownerUid = getString(videoData, "uid");
+      if (status === "approved") {
+        const publicVideoCount = await countPublicPlayerVideos(ownerUid, videoId);
+        if (publicVideoCount >= MAX_PUBLIC_PLAYER_VIDEOS) {
+          throw new HttpsError(
+            "resource-exhausted",
+            `Ce joueur a deja ${MAX_PUBLIC_PLAYER_VIDEOS} videos publiques. Approbation impossible.`,
+          );
+        }
+      }
+
+      const nextStatus = status === "approved" ?
+        "ready" :
+        status === "pending" ?
+          (videoData.optimized === true ? "under_review" : "processing") :
+          status;
+      const moderationStatus = status === "pending" ? "pending" : status;
+      const isPublic = status === "approved";
+
       await videoRef.set({
-        status,
-        moderationStatus: status,
+        status: nextStatus,
+        moderationStatus,
+        visibility: isPublic ? "public" : "private",
+        isPublic,
         updatedByAdmin: adminUid,
         updatedAt: fieldValue.serverTimestamp(),
         lastModeratedAt: fieldValue.serverTimestamp(),
-        ...(status === "ready" ? {
+        ...(status === "approved" ? {
+          approvedAt: fieldValue.serverTimestamp(),
+          approvedBy: adminUid,
+          rejectedAt: fieldValue.delete(),
+          rejectionReason: fieldValue.delete(),
           hiddenAt: fieldValue.delete(),
           removedAt: fieldValue.delete(),
+        } : {}),
+        ...(status === "pending" ? {
+          approvedAt: fieldValue.delete(),
+          approvedBy: fieldValue.delete(),
+          rejectedAt: fieldValue.delete(),
+          rejectionReason: fieldValue.delete(),
+          submittedForReviewAt: fieldValue.serverTimestamp(),
         } : {}),
         ...(status === "hidden" ? {
           hiddenAt: fieldValue.serverTimestamp(),
@@ -532,19 +803,41 @@ export const adminSetVideoStatus = onCall(
         } : {}),
       }, {merge: true});
 
+      if (status === "approved") {
+        await recordVideoModerationDecision({
+          videoId,
+          ownerUid,
+          decision: "approved",
+          adminUid,
+          videoData,
+        });
+
+        await notifyVideoOwner({
+          ownerUid,
+          videoId,
+          decision: "approved",
+          title: "Video approuvee",
+          body: "Votre video a ete approuvee. Elle est maintenant visible par les clubs et recruteurs.",
+        });
+      }
+
       logger.info("admin video status updated", {
         videoId,
         status,
+        nextStatus,
         updatedBy: adminUid,
       });
 
       return {
         success: true,
-        code: "video_status_updated",
-        message: `Statut vidéo mis à jour : ${status}.`,
+        code: status === "approved" ? "video_approved" : "video_status_updated",
+        message: status === "approved" ?
+          "Video approuvee et rendue publique." :
+          `Statut video mis a jour : ${status}.`,
         data: {
           videoId,
           status,
+          firestoreStatus: nextStatus,
           updatedBy: adminUid,
         },
       };
@@ -561,12 +854,29 @@ export const adminSetVideoStatus = onCall(
       });
       throw new HttpsError(
         "internal",
-        "Mise à jour du statut vidéo impossible pour le moment.",
+        "Mise a jour du statut video impossible pour le moment.",
       );
     }
   },
 );
 
+export const adminRejectVideo = onCall(
+  LOW_CPU_CALLABLE_OPTIONS,
+  async (request) => {
+    const adminUid = await assertAdminCaller(request);
+    const videoId = getContentId(request.data, "videoId");
+    if (!videoId) {
+      throw new HttpsError("invalid-argument", "videoId est requis.");
+    }
+
+    const reason = getString(request.data, "reason").slice(0, 500);
+    return rejectVideoWithAdminRights({
+      videoId,
+      adminUid,
+      reason,
+    });
+  },
+);
 export const adminDeleteVideo = onCall(
   LOW_CPU_CALLABLE_OPTIONS,
   async (request) => {

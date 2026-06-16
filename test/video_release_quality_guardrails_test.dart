@@ -4,14 +4,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Video release quality guardrails', () {
-    test('smoke script enforces upload to ready to playback to delete flow',
+    test('smoke script enforces upload to review to playback to delete flow',
         () {
       final script = File('scripts/smoke-upload-flow.ps1').readAsStringSync();
 
       expect(script, contains('createUploadSession'));
+      expect(script, contains(r'fileSizeBytes = $videoSize'));
       expect(script, contains('requestThumbnailUploadUrl'));
       expect(script, contains('finalizeUpload'));
-      expect(script, contains('Wait-VideoReady'));
+      expect(script, contains('Wait-VideoUnderReview'));
+      expect(script, contains('status=under_review'));
+      expect(script, contains('moderationStatus=pending'));
+      expect(script, contains('visibility=private'));
       expect(script, contains('Get-PlayableUrls'));
       expect(script, contains('Probe-PlaybackUrl'));
       expect(script, contains('deleteVideo'));
@@ -38,14 +42,60 @@ void main() {
           contains("const failureStatuses = {'error', 'failed', 'failure'};"));
       expect(content,
           contains('await _waitForVideoStatusReady(session.sessionId);'));
-      expect(content, contains("'videoId': videoId"));
-      expect(content, contains("'autoplay': true"));
+      expect(content, contains("optimized && status == 'under_review'"));
+      expect(content, contains('VideoUiStrings.uploadSubmittedForReview'));
+      expect(content, isNot(contains("'videoId': videoId")));
+      expect(content, isNot(contains("'autoplay': true")));
       expect(content, contains('UploadVideoErrorMapper.toUserMessage(error)'));
       expect(errorMapper, contains("if (error.code == 'unauthenticated')"));
       expect(
         errorMapper.indexOf("if (error.code == 'unauthenticated')"),
         lessThan(errorMapper.indexOf("final message = (error.message ?? '')")),
       );
+    });
+
+    test('push notification copy is normalized before FCM send', () {
+      final actions = File('functions/src/actions.ts').readAsStringSync();
+      final adminActions =
+          File('functions/src/admin_content_actions.ts').readAsStringSync();
+      final notificationText =
+          File('functions/src/notification_text.ts').readAsStringSync();
+
+      expect(notificationText, contains('function normalizeNotificationText'));
+      expect(notificationText, contains(r'\u00c3\u00a9'));
+      expect(notificationText, contains(r'\u2019'));
+      expect(
+          actions,
+          contains(
+              'import {normalizeNotificationText} from "./notification_text";'));
+      expect(
+        adminActions,
+        contains(
+            'import {normalizeNotificationText} from "./notification_text";'),
+      );
+      expect(actions,
+          contains('title: normalizeNotificationText(params.title, 120)'));
+      expect(actions,
+          contains('body: normalizeNotificationText(params.body, 300)'));
+      expect(
+        actions,
+        contains(
+          'const title = normalizeNotificationText(getString(request.data, "title"), 120);',
+        ),
+      );
+      expect(
+        actions,
+        contains(
+          'const body = normalizeNotificationText(getString(request.data, "body"), 300);',
+        ),
+      );
+      expect(adminActions,
+          contains('title: normalizeNotificationText(params.title, 120)'));
+      expect(adminActions,
+          contains('body: normalizeNotificationText(params.body, 300)'));
+      expect(actions, contains('"Une nouvelle offre a ete publiee."'));
+      expect(actions, contains('"Nouvel evenement"'));
+      expect(actions, contains('"Un nouvel evenement est disponible."'));
     });
 
     test('video controller delete flow preserves runtime consistency', () {

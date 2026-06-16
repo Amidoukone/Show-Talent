@@ -59,6 +59,8 @@ void main() {
     expect(VideoUiStrings.emptyHomeVideoFeedTitle, contains('vidéo'));
     expect(
         VideoUiStrings.emptyHomeVideoFeedPlayerMessage, contains('première'));
+    expect(
+        VideoUiStrings.emptyHomeVideoFeedPlayerMessage, contains('Soumettez'));
     expect(VideoUiStrings.noInternetMessage, contains('réseau'));
     expect(VideoUiStrings.videoSearchUnavailable, contains('Réessayez'));
     expect(VideoUiStrings.emptyProfileVideoFeedMessage, contains('profil'));
@@ -73,7 +75,14 @@ void main() {
     expect(VideoUiStrings.deleteVideoSheetMessage, contains('feed'));
     expect(VideoUiStrings.reportVideoPrimaryAction, contains('signalement'));
     expect(VideoUiStrings.reportVideoSheetMessage, contains('identit'));
-    expect(VideoUiStrings.uploadProgressTitle, contains('Publication'));
+    expect(VideoUiStrings.addVideo, 'Ajouter');
+    expect(VideoUiStrings.addVideoSemantic, contains('Soumettre'));
+    expect(VideoUiStrings.uploadProgressTitle, contains('Soumission'));
+    expect(VideoUiStrings.uploadVideoButton, contains('Soumettre'));
+    expect(VideoUiStrings.uploadSubmittedForReview, contains('revue admin'));
+    expect(VideoUiStrings.uploadSubmittedForReview, contains('validation'));
+    expect(VideoUiStrings.uploadOptimizationPending, contains('revue admin'));
+    expect(VideoUiStrings.uploadReminder, contains('50 Mo'));
     expect(VideoUiStrings.uploadCurrentStepLabel, contains('tape'));
     expect(VideoUiStrings.uploadStepPrepare, isNotEmpty);
     expect(VideoUiStrings.uploadStepFinalize, isNotEmpty);

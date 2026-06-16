@@ -66,10 +66,15 @@ void main() {
     expect(controller, contains('VideoUiStrings.uploadStageAnalyze'));
     expect(controller, contains('VideoUiStrings.uploadSuccess'));
     expect(controller, contains('VideoUiStrings.uploadOptimizationFailed'));
+    expect(controller, contains('VideoTools.maxUploadFileSizeBytes'));
+    expect(controller, contains('VideoUiStrings.uploadFileTooLarge'));
     expect(controller, isNot(contains("showErrorToast('")));
     expect(controller, isNot(contains("showInfoToast('")));
     expect(addVideo, contains('VideoUiStrings.noVideoSelected'));
     expect(addVideo, contains('VideoUiStrings.addVideoPickTitle'));
+    expect(addVideo, contains('VideoUiStrings.addVideoScreenSubtitle'));
+    expect(addVideo, isNot(contains('Publication vidéo')));
+    expect(addVideo, contains('VideoUiStrings.maxFileSizeChip'));
     expect(uploadForm, contains('VideoUiStrings.descriptionLabel'));
     expect(uploadForm, contains('VideoUiStrings.uploadVideoButton'));
     expect(
@@ -85,6 +90,8 @@ void main() {
     expect(processingDialog, contains('VideoUiStrings.uploadCancelAction'));
     expect(strings, contains('uploadMissingRequiredFields'));
     expect(strings, contains('uploadReminder'));
+    expect(strings, contains('uploadSubmittedForReview'));
+    expect(strings, contains('maxFileSizeChip'));
   });
 
   test('upload states expose modern step-by-step user feedback', () {

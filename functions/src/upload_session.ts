@@ -21,6 +21,22 @@ const MAX_CONCURRENT_VIDEO_UPLOADS = parsePositiveIntEnv(
   process.env.MAX_CONCURRENT_VIDEO_UPLOADS,
   2,
 );
+const MAX_PENDING_VIDEO_REVIEWS = parsePositiveIntEnv(
+  process.env.MAX_PENDING_VIDEO_REVIEWS,
+  3,
+);
+const MAX_PUBLIC_PLAYER_VIDEOS = parsePositiveIntEnv(
+  process.env.MAX_PUBLIC_PLAYER_VIDEOS,
+  10,
+);
+const MAX_VIDEO_UPLOAD_FILE_SIZE_BYTES = parsePositiveIntEnv(
+  process.env.MAX_VIDEO_UPLOAD_FILE_SIZE_BYTES,
+  50 * 1024 * 1024,
+);
+const MAX_VIDEO_UPLOAD_DURATION_SECONDS = parsePositiveIntEnv(
+  process.env.MAX_VIDEO_UPLOAD_DURATION_SECONDS,
+  60,
+);
 const VIDEO_UPLOAD_ROLE = "joueur";
 
 /* -------------------------------------------------------------------------- */
@@ -40,6 +56,9 @@ interface VideoDoc {
   thumbnailPath?: string;
   thumbnailGuard?: ThumbnailGuard;
   status?: string;
+  moderationStatus?: string;
+  visibility?: string;
+  isPublic?: boolean;
   optimized?: boolean;
   createdAt?: unknown;
 }
@@ -147,6 +166,36 @@ function resolveUploadLifecycleState(
   return {status: "processing", optimized: false};
 }
 
+function isFinalizedUploadSession(doc: VideoDoc | undefined): boolean {
+  const status = typeof doc?.status === "string" ? doc.status : "";
+  return doc?.optimized === true &&
+    (status === "ready" || status === "under_review");
+}
+
+function isPendingReviewVideo(data: VideoDoc): boolean {
+  if (["removed", "rejected", "hidden", "error", "failed", "failure"].includes(data.status ?? "")) {
+    return false;
+  }
+
+  const moderationStatus = data.moderationStatus ?? "";
+  return moderationStatus === "pending" ||
+    moderationStatus === "under_review" ||
+    data.status === "processing" ||
+    data.status === "under_review";
+}
+
+function isPublicPlayerVideo(data: VideoDoc): boolean {
+  if (data.status !== "ready") {
+    return false;
+  }
+
+  const moderationStatus = data.moderationStatus ?? "";
+  return moderationStatus === "" ||
+    moderationStatus === "approved" ||
+    data.visibility === "public" ||
+    data.isPublic === true;
+}
+
 async function assertUploadCallerEligible(
   uid: string,
   authToken: Record<string, unknown> | undefined,
@@ -209,6 +258,8 @@ async function assertUploadRateLimits(
 
   let recentUploads = 0;
   let concurrentUploads = 0;
+  let pendingReviewVideos = 0;
+  let publicVideos = 0;
 
   for (const doc of snapshot.docs) {
     if (doc.id === currentSessionId) {
@@ -220,6 +271,14 @@ async function assertUploadRateLimits(
       concurrentUploads += 1;
     }
 
+    if (isPendingReviewVideo(data)) {
+      pendingReviewVideos += 1;
+    }
+
+    if (isPublicPlayerVideo(data)) {
+      publicVideos += 1;
+    }
+
     if (timestampToMillis(data.createdAt) >= cutoffMs) {
       recentUploads += 1;
     }
@@ -228,14 +287,28 @@ async function assertUploadRateLimits(
   if (concurrentUploads >= MAX_CONCURRENT_VIDEO_UPLOADS) {
     throw new HttpsError(
       "resource-exhausted",
-      "Trop d’uploads vidéo en cours pour ce compte.",
+      "Trop d'uploads video sont deja en cours pour ce compte.",
     );
   }
 
   if (recentUploads >= MAX_VIDEO_UPLOADS_PER_DAY) {
     throw new HttpsError(
       "resource-exhausted",
-      "Quota journalier d’upload vidéo atteint.",
+      "Limite quotidienne d'upload video atteinte.",
+    );
+  }
+
+  if (pendingReviewVideos >= MAX_PENDING_VIDEO_REVIEWS) {
+    throw new HttpsError(
+      "resource-exhausted",
+      `Vous avez deja ${MAX_PENDING_VIDEO_REVIEWS} videos en revue admin.`,
+    );
+  }
+
+  if (publicVideos >= MAX_PUBLIC_PLAYER_VIDEOS) {
+    throw new HttpsError(
+      "resource-exhausted",
+      `Vous avez deja ${MAX_PUBLIC_PLAYER_VIDEOS} videos publiques. Archivez une video avant d'en ajouter une nouvelle.`,
     );
   }
 }
@@ -359,11 +432,34 @@ async function validateVideoUpload(path: string): Promise<void> {
       "";
 
   if (!Number.isFinite(actualSize) || actualSize <= 0) {
-    throw new HttpsError("failed-precondition", "Fichier vidéo vide.");
+    throw new HttpsError("failed-precondition", "Le fichier video est vide.");
+  }
+
+  if (actualSize > MAX_VIDEO_UPLOAD_FILE_SIZE_BYTES) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Le fichier video depasse la limite de 50 Mo.",
+    );
   }
 
   if (!actualContentType.startsWith("video/mp4")) {
-    throw new HttpsError("failed-precondition", "Type vidéo invalide.");
+    throw new HttpsError("failed-precondition", "Seuls les fichiers MP4 sont acceptes.");
+  }
+}
+
+function assertVideoMetadataPolicy(metadata: ParsedMetadata): void {
+  if (metadata.duration === undefined) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Duree de la video manquante. Merci de reessayer.",
+    );
+  }
+
+  if (metadata.duration > MAX_VIDEO_UPLOAD_DURATION_SECONDS) {
+    throw new HttpsError(
+      "failed-precondition",
+      "La video ne doit pas depasser 60 secondes.",
+    );
   }
 }
 
@@ -414,10 +510,26 @@ export const createUploadSession = onCall(
         data.contentType.trim() :
         "video/mp4";
 
+    const fileSizeBytes = asPositiveInt(data.fileSizeBytes);
+
     if (contentType !== "video/mp4") {
       throw new HttpsError(
         "invalid-argument",
-        "Seuls les uploads video/mp4 sont autorisés.",
+        "Seuls les fichiers MP4 sont acceptes.",
+      );
+    }
+
+    if (fileSizeBytes === undefined || fileSizeBytes <= 0) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Taille du fichier video manquante.",
+      );
+    }
+
+    if (fileSizeBytes > MAX_VIDEO_UPLOAD_FILE_SIZE_BYTES) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Le fichier video depasse la limite de 50 Mo.",
       );
     }
 
@@ -435,6 +547,12 @@ export const createUploadSession = onCall(
       if (doc?.uid && doc.uid !== uid) {
         throw new HttpsError("permission-denied", "Session appartenant à un autre utilisateur.");
       }
+      if (isFinalizedUploadSession(doc)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Session upload deja finalisee.",
+        );
+      }
       storagePath = normalizeVideoStoragePath(sessionId, doc?.storagePath);
       thumbnailPath = normalizeThumbnailStoragePath(sessionId, doc?.thumbnailPath);
       lifecycle = resolveUploadLifecycleState(doc);
@@ -449,9 +567,16 @@ export const createUploadSession = onCall(
         storagePath,
         thumbnailPath,
         status: lifecycle.status,
+        moderationStatus: "pending",
+        visibility: "private",
+        isPublic: false,
         optimized: lifecycle.optimized,
+        uploadFileSizeBytes: fileSizeBytes,
         updatedAt: fieldValue.serverTimestamp(),
-        ...(isExistingSession ? {} : {createdAt: fieldValue.serverTimestamp()}),
+        ...(isExistingSession ? {} : {
+          createdAt: fieldValue.serverTimestamp(),
+          submittedForReviewAt: fieldValue.serverTimestamp(),
+        }),
       },
       {merge: true},
     );
@@ -628,6 +753,8 @@ export const finalizeUpload = onCall(
     }
 
     // On n’écrit que les valeurs présentes dans safe
+    assertVideoMetadataPolicy(safe);
+
     const sanitizedMetadata: Record<string, unknown> = {};
     const assignIfPresent = <K extends keyof ParsedMetadata>(key: K) => {
       const value = safe[key];
@@ -651,6 +778,9 @@ export const finalizeUpload = onCall(
       {
         uid,
         status: lifecycle.status,
+        moderationStatus: "pending",
+        visibility: "private",
+        isPublic: false,
         optimized: lifecycle.optimized,
 
         // ✅ CANONIQUE (nouveau standard)
@@ -671,6 +801,7 @@ export const finalizeUpload = onCall(
         ...sanitizedMetadata,
 
         updatedAt: fieldValue.serverTimestamp(),
+        submittedForReviewAt: fieldValue.serverTimestamp(),
       },
       {merge: true},
     );

@@ -214,6 +214,7 @@ class UploadClient {
 
   Future<UploadSessionState> ensureSession({
     required String localFilePath,
+    required int fileSizeBytes,
     String contentType = 'video/mp4',
   }) async {
     final persisted = await loadPersistedSession();
@@ -222,12 +223,14 @@ class UploadClient {
     }
     return _createSession(
       localFilePath: localFilePath,
+      fileSizeBytes: fileSizeBytes,
       contentType: contentType,
     );
   }
 
   Future<UploadSessionState> _createSession({
     required String localFilePath,
+    required int fileSizeBytes,
     String? sessionId,
     String contentType = 'video/mp4',
   }) async {
@@ -237,6 +240,7 @@ class UploadClient {
             callable, 'createUploadSession', {
       if (sessionId != null) 'sessionId': sessionId,
       'contentType': contentType,
+      'fileSizeBytes': fileSizeBytes,
     });
 
     final expiresAtMs = (data['expiresAt'] as num?)?.toInt() ?? 0;
@@ -255,8 +259,14 @@ class UploadClient {
   }
 
   Future<UploadSessionState> refreshSession(UploadSessionState session) async {
+    final file = File(session.localFilePath);
+    final fileSizeBytes = await _readValidFileLength(
+      file: file,
+      label: 'video',
+    );
     final refreshed = await _createSession(
       localFilePath: session.localFilePath,
+      fileSizeBytes: fileSizeBytes,
       sessionId: session.sessionId,
     );
     // A new resumable URL starts a new server-side upload session.

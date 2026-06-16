@@ -75,7 +75,7 @@ class _AddVideoState extends State<AddVideo> {
       extendBodyBehindAppBar: false,
       appBar: const AdAppBar(
         title: VideoUiStrings.addVideoScreenTitle,
-        subtitle: 'Publication vidéo',
+        subtitle: VideoUiStrings.addVideoScreenSubtitle,
         showBottomDivider: true,
       ),
       body: Container(
@@ -204,6 +204,10 @@ class _BodyCard extends StatelessWidget {
               _TipChip(
                 icon: Icons.hd_rounded,
                 label: VideoUiStrings.minQualityChip,
+              ),
+              _TipChip(
+                icon: Icons.sd_storage_rounded,
+                label: VideoUiStrings.maxFileSizeChip,
               ),
               _TipChip(
                 icon: Icons.data_saver_on_rounded,

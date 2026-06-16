@@ -41,7 +41,7 @@ const OPTIMIZE_TRIGGER_OPTIONS = {
 };
 const MAX_OPTIMIZE_FILE_SIZE_BYTES = parsePositiveIntEnv(
   process.env.MAX_OPTIMIZE_FILE_SIZE_BYTES,
-  120 * 1024 * 1024,
+  50 * 1024 * 1024,
 );
 const MP4_RENDITION_PRESETS: readonly Mp4RenditionPreset[] = [
   {
@@ -657,8 +657,12 @@ export const optimizeMp4Video = onObjectFinalized(
           sources: [...mp4Sources],
           ...(thumbnail ? {thumbnail} : {}),
           optimized: true,
-          status: "ready",
+          status: "under_review",
+          moderationStatus: "pending",
+          visibility: "private",
+          isPublic: false,
           updatedAt: fieldValue.serverTimestamp(),
+          submittedForReviewAt: fieldValue.serverTimestamp(),
         },
         {merge: true}
       );
@@ -726,6 +730,7 @@ export {
 } from "./admin_account_actions";
 export {
   adminDeleteVideo,
+  adminRejectVideo,
   adminSetVideoStatus,
   adminDeleteEvent,
   adminDeleteOffer,

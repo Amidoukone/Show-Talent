@@ -194,7 +194,7 @@ function Get-FirestoreVideoDoc {
   return Convert-FromFirestoreFields -Fields $resp.fields
 }
 
-function Wait-VideoReady {
+function Wait-VideoUnderReview {
   param(
     [Parameter(Mandatory = $true)][string]$Project,
     [Parameter(Mandatory = $true)][string]$VideoId,
@@ -216,19 +216,37 @@ function Wait-VideoReady {
     if ($doc.ContainsKey("status") -and $doc.status -is [string]) {
       $status = [string]$doc.status
     }
+    $moderationStatus = ""
+    if ($doc.ContainsKey("moderationStatus") -and $doc.moderationStatus -is [string]) {
+      $moderationStatus = [string]$doc.moderationStatus
+    }
+    $visibility = ""
+    if ($doc.ContainsKey("visibility") -and $doc.visibility -is [string]) {
+      $visibility = [string]$doc.visibility
+    }
     $optimized = ($doc.ContainsKey("optimized") -and $doc.optimized -eq $true)
+    $isPublic = ($doc.ContainsKey("isPublic") -and $doc.isPublic -eq $true)
 
     if ($null -ne $StateTracker) {
       $StateTracker["attempts"] = $attempts
       $StateTracker["status"] = $status
+      $StateTracker["moderationStatus"] = $moderationStatus
+      $StateTracker["visibility"] = $visibility
       $StateTracker["optimized"] = $optimized
+      $StateTracker["isPublic"] = $isPublic
     }
 
     if ($failureStatuses -contains $status.ToLowerInvariant()) {
-      throw "Video entered a failure status while waiting for ready: $status"
+      throw "Video entered a failure status while waiting for admin review: $status"
     }
 
-    if ($status -eq "ready" -and $optimized) {
+    if (
+      $status -eq "under_review" -and
+      $moderationStatus -eq "pending" -and
+      $visibility -eq "private" -and
+      -not $isPublic -and
+      $optimized
+    ) {
       return $doc
     }
 
@@ -365,12 +383,15 @@ $result = [ordered]@{
     checked = (-not $SkipOptimizeLogCheck.IsPresent)
     seenInLogs = $null
   }
-  waitReady = [ordered]@{
+  waitReview = [ordered]@{
     checked = (-not $SkipReadyCheck.IsPresent)
     attempts = 0
     status = $null
+    moderationStatus = $null
+    visibility = $null
     optimized = $null
-    readyObserved = $null
+    isPublic = $null
+    reviewObserved = $null
   }
   playback = [ordered]@{
     checked = (-not $SkipPlaybackProbe.IsPresent)
@@ -394,7 +415,7 @@ $result = [ordered]@{
 $idToken = $null
 $tmpVideo = $null
 $sessionId = $null
-$readyDoc = $null
+$reviewDoc = $null
 $ownsAuthUser = $false
 
 try {
@@ -481,6 +502,7 @@ try {
   $createResp = Invoke-JsonPost -Uri "$base/createUploadSession" -Headers $authHeaders -Body @{
     data = @{
       contentType = "video/mp4"
+      fileSizeBytes = $videoSize
     }
   }
 
@@ -597,23 +619,23 @@ try {
   }
 
   if (-not $SkipReadyCheck.IsPresent) {
-    $readyDoc = Wait-VideoReady -Project $ProjectId -VideoId $sessionId -IdToken $idToken -TimeoutSec $ReadyTimeoutSec -PollSec $ReadyPollSec -StateTracker $result.waitReady
-    $result.waitReady.readyObserved = ($null -ne $readyDoc)
-    if ($null -eq $readyDoc) {
-      throw "Video did not reach status=ready and optimized=true within ${ReadyTimeoutSec}s."
+    $reviewDoc = Wait-VideoUnderReview -Project $ProjectId -VideoId $sessionId -IdToken $idToken -TimeoutSec $ReadyTimeoutSec -PollSec $ReadyPollSec -StateTracker $result.waitReview
+    $result.waitReview.reviewObserved = ($null -ne $reviewDoc)
+    if ($null -eq $reviewDoc) {
+      throw "Video did not reach status=under_review, moderationStatus=pending, visibility=private and optimized=true within ${ReadyTimeoutSec}s."
     }
   }
 
   if (-not $SkipPlaybackProbe.IsPresent) {
-    if ($null -eq $readyDoc) {
-      $readyDoc = Get-FirestoreVideoDoc -Project $ProjectId -VideoId $sessionId -IdToken $idToken
+    if ($null -eq $reviewDoc) {
+      $reviewDoc = Get-FirestoreVideoDoc -Project $ProjectId -VideoId $sessionId -IdToken $idToken
     }
 
-    if ($null -eq $readyDoc) {
+    if ($null -eq $reviewDoc) {
       throw "Unable to fetch Firestore video document for playback checks."
     }
 
-    $playableUrls = @(Get-PlayableUrls -VideoDoc $readyDoc)
+    $playableUrls = @(Get-PlayableUrls -VideoDoc $reviewDoc)
     $result.playback.urlCount = $playableUrls.Count
 
     if ($playableUrls.Count -eq 0) {

@@ -50,6 +50,7 @@ class UploadVideoController extends GetxController {
   int? _preparedDurationSec;
   int? _preparedWidth;
   int? _preparedHeight;
+  int? _preparedFileSizeBytes;
 
   @override
   void onClose() {
@@ -92,6 +93,7 @@ class UploadVideoController extends GetxController {
     _preparedDurationSec = null;
     _preparedWidth = null;
     _preparedHeight = null;
+    _preparedFileSizeBytes = null;
 
     var isPrepared = false;
 
@@ -102,7 +104,8 @@ class UploadVideoController extends GetxController {
         return false;
       }
 
-      if (await sourceFile.length() <= 0) {
+      final sourceFileSizeBytes = await sourceFile.length();
+      if (sourceFileSizeBytes <= 0) {
         showErrorToast(VideoUiStrings.uploadEmptyFile);
         return false;
       }
@@ -116,6 +119,17 @@ class UploadVideoController extends GetxController {
         maxDurationSeconds: VideoTools.defaultMaxUploadDurationSeconds,
       );
       if (!_isCurrentOperation(operation)) return false;
+
+      final preparedFileSizeBytes = await preparedVideo.file.length();
+      if (preparedFileSizeBytes <= 0) {
+        showErrorToast(VideoUiStrings.uploadEmptyFile);
+        return false;
+      }
+
+      if (preparedFileSizeBytes > VideoTools.maxUploadFileSizeBytes) {
+        showErrorToast(VideoUiStrings.uploadFileTooLarge);
+        return false;
+      }
 
       final isValidQuality =
           await VideoTools.isQualityAcceptable(preparedVideo.file.path);
@@ -137,6 +151,7 @@ class UploadVideoController extends GetxController {
       _preparedDurationSec = preparedVideo.uploadDurationSeconds;
       _preparedWidth = preparedWidth;
       _preparedHeight = preparedHeight;
+      _preparedFileSizeBytes = preparedFileSizeBytes;
       if (preparedVideo.wasTrimmed) {
         showInfoToast(
           VideoUiStrings.uploadTrimmed(
@@ -241,8 +256,23 @@ class UploadVideoController extends GetxController {
     UploadSessionState session;
 
     try {
+      final fileSizeBytes =
+          _preparedFileSizeBytes ?? await selectedVideo!.length();
+      if (fileSizeBytes <= 0) {
+        showErrorToast(VideoUiStrings.uploadEmptyFile);
+        isUploading(false);
+        return;
+      }
+
+      if (fileSizeBytes > VideoTools.maxUploadFileSizeBytes) {
+        showErrorToast(VideoUiStrings.uploadFileTooLarge);
+        isUploading(false);
+        return;
+      }
+
       session = await _uploadClient.ensureSession(
         localFilePath: selectedVideo!.path,
+        fileSizeBytes: fileSizeBytes,
         contentType: 'video/mp4',
       );
       _activeSession = session;
@@ -405,8 +435,6 @@ class UploadVideoController extends GetxController {
         arguments: {
           'tab': 0,
           'refresh': true,
-          'videoId': videoId,
-          'autoplay': true,
         },
       );
     }
@@ -415,6 +443,21 @@ class UploadVideoController extends GetxController {
       isOptimizing(false);
       await Future.delayed(const Duration(milliseconds: 300));
       showSuccessToast(VideoUiStrings.uploadSuccess);
+      await navigateBackToFeed();
+    }
+
+    Future<void> finalizeReviewFlow() async {
+      unawaited(
+        _observability.logUploadInfo(
+          event: 'upload_submitted_for_review',
+          stage: 'optimization',
+          sessionId: videoId,
+          metadata: _uploadDiagnostics(operation: _operationSerial),
+        ),
+      );
+      isOptimizing(false);
+      await Future.delayed(const Duration(milliseconds: 300));
+      showInfoToast(VideoUiStrings.uploadSubmittedForReview);
       await navigateBackToFeed();
     }
 
@@ -472,6 +515,12 @@ class UploadVideoController extends GetxController {
 
       if (status == 'ready' && optimized) {
         await closeOptimizationFlow(finalizeSuccessFlow);
+        return;
+      }
+
+      if (optimized && status == 'under_review') {
+        await closeOptimizationFlow(finalizeReviewFlow);
+        return;
       }
     }
 
@@ -546,6 +595,7 @@ class UploadVideoController extends GetxController {
     _preparedDurationSec = null;
     _preparedWidth = null;
     _preparedHeight = null;
+    _preparedFileSizeBytes = null;
     _cancelToken = null;
     _activeSession = null;
     _lastUploadedThumbPath = null;
@@ -565,6 +615,7 @@ class UploadVideoController extends GetxController {
       'preparedDurationSec': _preparedDurationSec,
       'preparedWidth': _preparedWidth,
       'preparedHeight': _preparedHeight,
+      'preparedFileSizeBytes': _preparedFileSizeBytes,
       'hasSelectedVideo': selectedVideo != null,
       'hasThumbnail': thumbnail != null,
     };

@@ -47,7 +47,7 @@ class VideoUiStrings {
       'Ce profil n\u2019a pas encore de vid\u00e9o disponible.';
   static const String emptyHomeVideoFeedTitle = 'Aucune vid\u00e9o disponible';
   static const String emptyHomeVideoFeedPlayerMessage =
-      'Publiez votre premi\u00e8re vid\u00e9o pour appara\u00eetre dans le feed.';
+      'Soumettez votre premi\u00e8re vid\u00e9o pour la proposer au feed.';
   static const String emptyHomeVideoFeedDefaultMessage =
       'Revenez plus tard ou actualisez le feed.';
   static const String noInternetTitle = 'Pas de connexion Internet';
@@ -87,8 +87,8 @@ class VideoUiStrings {
   static const String moderationReviewLabel = 'Revue mod\u00e9ration';
   static const String moreVideoActions = 'Plus';
   static const String moreVideoActionsSemantic = 'Plus d\u2019actions';
-  static const String addVideo = 'Publier';
-  static const String addVideoSemantic = 'Publier une vid\u00e9o';
+  static const String addVideo = 'Ajouter';
+  static const String addVideoSemantic = 'Soumettre une vid\u00e9o';
   static const String profile = 'Profil';
   static const String openProfile = 'Ouvrir le profil';
   static const String followProfile = 'Suivre le profil';
@@ -164,6 +164,8 @@ class VideoUiStrings {
   static const String uploadSourceNotFound =
       'Vid\u00e9o introuvable. Merci de r\u00e9essayer.';
   static const String uploadEmptyFile = 'Le fichier vid\u00e9o est vide.';
+  static const String uploadFileTooLarge =
+      'Le fichier vid\u00e9o d\u00e9passe la limite de 50 Mo.';
   static const String uploadQualityTooLow =
       'Qualit\u00e9 vid\u00e9o insuffisante (minimum 480x360).';
   static const String uploadThumbnailFailed =
@@ -185,11 +187,12 @@ class VideoUiStrings {
   static const String uploadCancelled = 'T\u00e9l\u00e9versement annul\u00e9.';
   static const String uploadPreparationCancelled =
       'Pr\u00e9paration annul\u00e9e.';
-  static const String uploadSuccess =
-      'Vid\u00e9o ajout\u00e9e avec succ\u00e8s !';
+  static const String uploadSuccess = 'Vid\u00e9o pr\u00eate et visible.';
+  static const String uploadSubmittedForReview =
+      'Vid\u00e9o soumise \u00e0 la revue admin. Elle sera visible apr\u00e8s validation.';
   static const String uploadOptimizationPending =
-      'Votre vid\u00e9o est en cours d\u2019optimisation. Elle sera visible '
-      'sous peu.';
+      'Votre vid\u00e9o est en cours d\u2019optimisation. Elle sera soumise '
+      '\u00e0 la revue admin d\u00e8s que le traitement sera termin\u00e9.';
   static const String uploadAuthRequired =
       'Authentification requise. Reconnectez-vous puis r\u00e9essayez.';
   static const String uploadPermissionDenied =
@@ -215,7 +218,7 @@ class VideoUiStrings {
   static const String uploadStageSendThumbnail = 'Envoi de la miniature...';
   static const String uploadStageFinalize = 'Finalisation...';
   static const String uploadOptimizationTitle = 'Optimisation en cours';
-  static const String uploadProgressTitle = 'Publication en cours';
+  static const String uploadProgressTitle = 'Soumission en cours';
   static const String uploadPreparationTitle =
       'Pr\u00e9paration de la vid\u00e9o';
   static const String uploadProgressSubtitle =
@@ -223,7 +226,7 @@ class VideoUiStrings {
   static const String uploadPreparationSubtitle =
       'Nous pr\u00e9parons le fichier et la miniature avant l\u2019envoi.';
   static const String uploadOptimizationSubtitle =
-      'Nous finalisons la lecture et la qualit\u00e9 avant publication.';
+      'Nous finalisons la lecture et la qualit\u00e9 avant la revue admin.';
   static const String uploadProgressLabel = 'Progression';
   static const String uploadCurrentStepLabel = '\u00c9tape actuelle';
   static const String uploadCancelAction = 'Annuler le t\u00e9l\u00e9versement';
@@ -239,7 +242,8 @@ class VideoUiStrings {
   static const String uploadStageUploadingThumbnail =
       'T\u00e9l\u00e9versement miniature...';
   static const String addVideoScreenTitle = 'Ajouter une vid\u00e9o';
-  static const String uploadFormTitle = 'T\u00e9l\u00e9verser une vid\u00e9o';
+  static const String addVideoScreenSubtitle = 'Soumission vid\u00e9o';
+  static const String uploadFormTitle = 'Soumettre une vid\u00e9o';
   static const String noVideoSelected =
       'Aucune vid\u00e9o s\u00e9lectionn\u00e9e.';
   static const String galleryPermissionTitle = 'Autorisation requise';
@@ -249,13 +253,14 @@ class VideoUiStrings {
   static const String videoSelectionErrorTitle = 'S\u00e9lection impossible';
   static const String uploadUnexpectedErrorTitle = 'Erreur inattendue';
   static const String addVideoPickTitle =
-      'S\u00e9lectionnez une vid\u00e9o depuis votre galerie';
+      'S\u00e9lectionnez une vid\u00e9o \u00e0 soumettre';
   static const String uploadConstraintsHint =
-      'Dur\u00e9e maximale 60s \u2022 Qualit\u00e9 minimale 480\u00d7360';
+      'Dur\u00e9e max 60s \u2022 Fichier max 50 Mo \u2022 Qualit\u00e9 minimale 480\u00d7360';
   static const String chooseFromGallery = 'Choisir depuis la galerie';
   static const String maxDurationChip = '\u2264 60 secondes';
   static const String minQualityChip = '\u2265 480\u00d7360';
-  static const String autoOptimizationChip = 'Optimisation auto';
+  static const String maxFileSizeChip = '\u2264 50 Mo';
+  static const String autoOptimizationChip = 'Validation admin';
   static const String overlayLoading = 'Chargement...';
   static const String overlayUploading = 'T\u00e9l\u00e9versement en cours';
   static const String overlayWaiting = 'Veuillez patienter...';
@@ -266,10 +271,10 @@ class VideoUiStrings {
   static const String captionLabel = 'L\u00e9gende (obligatoire)';
   static const String captionHint = 'Ex: #U17 #Ailier #Vitesse';
   static const String captionRequired = 'La l\u00e9gende est requise.';
-  static const String uploadVideoButton = 'T\u00e9l\u00e9verser la vid\u00e9o';
+  static const String uploadVideoButton = 'Soumettre la vid\u00e9o';
   static const String uploadReminder =
-      'Rappel : dur\u00e9e max 60s \u2022 qualit\u00e9 minimale '
-      '\u2265 480\u00d7360';
+      'Rappel : dur\u00e9e max 60s \u2022 fichier max 50 Mo \u2022 '
+      'validation admin avant publication';
 
   static String buildShareText({
     required String shareUrl,

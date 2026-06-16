@@ -47,6 +47,8 @@ class VideoTools {
   // Tolérance (en ms) pour absorber les imprécisions de métadonnées
   static const int _durationLeewayMs = 10000;
   static const int defaultMaxUploadDurationSeconds = 60;
+  static const int maxUploadFileSizeBytes = 50 * 1024 * 1024;
+  static const int maxUploadFileSizeMb = 50;
 
   // Petit délai après sélection (certains OS écrivent encore le fichier).
   static const Duration _settleDelay = Duration(milliseconds: 120);

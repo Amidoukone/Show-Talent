@@ -8,6 +8,7 @@ import * as logger from "firebase-functions/logger";
 import {db, fieldValue, messaging, storage} from "./firebase";
 import {LOW_CPU_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
+import {normalizeNotificationText} from "./notification_text";
 
 type SuccessResponse<T> = {
   success: true;
@@ -531,8 +532,8 @@ async function sendFanoutToPlayers(params: {
     const response = await messaging.sendEachForMulticast({
       tokens: tokenChunk,
       notification: {
-        title: params.title,
-        body: params.body,
+        title: normalizeNotificationText(params.title, 120),
+        body: normalizeNotificationText(params.body, 300),
       },
       data: {
         type: params.contextType,
@@ -577,8 +578,8 @@ export const sendUserPush = onCall(
     const recipientUid = getString(request.data, "recipientUid");
     const contextType = getString(request.data, "contextType");
     const contextData = getString(request.data, "contextData");
-    const title = getString(request.data, "title").slice(0, 120);
-    const body = getString(request.data, "body").slice(0, 300);
+    const title = normalizeNotificationText(getString(request.data, "title"), 120);
+    const body = normalizeNotificationText(getString(request.data, "body"), 300);
 
     if (!recipientUid || !contextType || !contextData || !title || !body) {
       throw new HttpsError("invalid-argument", "Paramètres push invalides.");
@@ -678,7 +679,7 @@ export const sendOfferFanout = onCall(
       "Nouvelle offre disponible";
     const body =
       getString(request.data, "body").slice(0, 300) ||
-      "Une nouvelle offre a été publiée.";
+      "Une nouvelle offre a ete publiee.";
 
     try {
       const stats = await sendFanoutToPlayers({
@@ -710,10 +711,10 @@ export const sendEventFanout = onCall(
 
     const title =
       getString(request.data, "title").slice(0, 120) ||
-      "Nouvel événement";
+      "Nouvel evenement";
     const body =
       getString(request.data, "body").slice(0, 300) ||
-      "Un nouvel événement est disponible.";
+      "Un nouvel evenement est disponible.";
 
     try {
       const stats = await sendFanoutToPlayers({
