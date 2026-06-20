@@ -6,29 +6,28 @@ import 'dart:io';
 
 void main() {
   group('CallableAuthGuard direct HTTP response decoding', () {
-    test('does not retry business permission-denied errors through raw HTTP',
-        () {
-      final source =
-          File('lib/services/callable_auth_guard.dart').readAsStringSync();
+    test(
+      'does not retry business permission-denied errors through raw HTTP',
+      () {
+        final source = File(
+          'lib/services/callable_auth_guard.dart',
+        ).readAsStringSync();
 
-      expect(
-        source,
-        contains("return error.code == 'unauthenticated';"),
-      );
-      expect(
-        source,
-        isNot(contains("error.code == 'permission-denied'")),
-      );
-    });
+        expect(source, contains("return error.code == 'unauthenticated';"));
+        expect(source, isNot(contains("error.code == 'permission-denied'")));
+      },
+    );
 
     test('keeps App Check on raw HTTP fallback for production callables', () {
-      final source =
-          File('lib/services/callable_auth_guard.dart').readAsStringSync();
+      final source = File(
+        'lib/services/callable_auth_guard.dart',
+      ).readAsStringSync();
 
-      expect(source, contains("bool.fromEnvironment('APP_CHECK_ENABLED'"));
+      expect(source, contains('bool.fromEnvironment('));
+      expect(source, contains("'APP_CHECK_ENABLED'"));
       expect(source, contains('FirebaseAppCheck.instance.getToken'));
       expect(source, contains('_appCheckEnabled && appCheckToken == null'));
-      expect(source, contains("'X-Firebase-AppCheck': appCheckToken"));
+      expect(source, contains("'X-Firebase-AppCheck': ?appCheckToken"));
     });
 
     test('keeps callable JSON errors as FirebaseFunctionsException', () {
@@ -38,11 +37,10 @@ void main() {
       );
 
       expect(
-        () => CallableAuthGuard.readDirectCallableResultForTest<
-            Map<String, dynamic>>(
-          response,
-          'createUploadSession',
-        ),
+        () =>
+            CallableAuthGuard.readDirectCallableResultForTest<
+              Map<String, dynamic>
+            >(response, 'createUploadSession'),
         throwsA(
           isA<FirebaseFunctionsException>()
               .having((error) => error.code, 'code', 'permission-denied')
@@ -58,11 +56,10 @@ void main() {
       );
 
       expect(
-        () => CallableAuthGuard.readDirectCallableResultForTest<
-            Map<String, dynamic>>(
-          response,
-          'createUploadSession',
-        ),
+        () =>
+            CallableAuthGuard.readDirectCallableResultForTest<
+              Map<String, dynamic>
+            >(response, 'createUploadSession'),
         throwsA(
           isA<FirebaseFunctionsException>()
               .having((error) => error.code, 'code', 'permission-denied')

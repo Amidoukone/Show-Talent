@@ -80,9 +80,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         elevation: 0,
       ),
       body: DecoratedBox(
-        decoration: BoxDecoration(
-          color: cs.surface,
-        ),
+        decoration: BoxDecoration(color: cs.surface),
         child: SafeArea(
           child: Obx(() {
             final currentUser = userController.user ?? authController.user;
@@ -101,9 +99,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             }
 
             if (currentUser == null) {
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
+              return const Center(child: CircularProgressIndicator());
             }
 
             final conversations = chatController.conversations;
@@ -134,8 +130,11 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
             // ✅ Tri local
             final sorted = List.of(conversations)
-              ..sort((a, b) => (b.lastMessageDate ?? DateTime(0))
-                  .compareTo(a.lastMessageDate ?? DateTime(0)));
+              ..sort(
+                (a, b) => (b.lastMessageDate ?? DateTime(0)).compareTo(
+                  a.lastMessageDate ?? DateTime(0),
+                ),
+              );
 
             // ✅ Map uid -> AppUser pour accès O(1)
             final Map<String, AppUser> usersById = {
@@ -153,15 +152,15 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 86),
                     itemCount: sorted.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final conversation = sorted[index];
 
-                      final otherUserId =
-                          conversation.utilisateurIds.firstWhere(
-                        (id) => id != currentUserId,
-                        orElse: () => '',
-                      );
+                      final otherUserId = conversation.utilisateurIds
+                          .firstWhere(
+                            (id) => id != currentUserId,
+                            orElse: () => '',
+                          );
 
                       if (otherUserId.isEmpty) {
                         return _InfoCard(
@@ -194,12 +193,14 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       return _ConversationCard(
                         colorScheme: cs,
                         user: otherUser,
-                        lastMessage: (conversation.lastMessage != null &&
+                        lastMessage:
+                            (conversation.lastMessage != null &&
                                 conversation.lastMessage!.trim().isNotEmpty)
                             ? conversation.lastMessage!
                             : "Aucun message",
-                        dateLabel:
-                            _formatDateOrTime(conversation.lastMessageDate),
+                        dateLabel: _formatDateOrTime(
+                          conversation.lastMessageDate,
+                        ),
                         isUnread: isUnread,
                         unreadCount: unreadCount,
                         onTap: () async {
@@ -216,10 +217,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                               );
                             }
 
-                            await Get.to(() => ChatScreen(
-                                  conversationId: conversation.id,
-                                  otherUser: otherUser,
-                                ));
+                            await Get.to(
+                              () => ChatScreen(
+                                conversationId: conversation.id,
+                                otherUser: otherUser,
+                              ),
+                            );
                           } finally {
                             if (mounted) {
                               setState(() => _isOpeningConversation = false);
@@ -279,7 +282,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     if (dateTime == null) return "Inconnue";
 
     final now = DateTime.now();
-    final isToday = now.day == dateTime.day &&
+    final isToday =
+        now.day == dateTime.day &&
         now.month == dateTime.month &&
         now.year == dateTime.year;
 
@@ -326,8 +330,9 @@ class _ConversationCard extends StatelessWidget {
     );
 
     final subtitleStyle = theme.textTheme.bodyMedium?.copyWith(
-      color:
-          theme.colorScheme.onSurface.withValues(alpha: isUnread ? 0.92 : 0.68),
+      color: theme.colorScheme.onSurface.withValues(
+        alpha: isUnread ? 0.92 : 0.68,
+      ),
       fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
       letterSpacing: 0,
     );
@@ -337,8 +342,9 @@ class _ConversationCard extends StatelessWidget {
       fontWeight: FontWeight.w700,
     );
 
-    final avatarBg =
-        theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.9);
+    final avatarBg = theme.colorScheme.surfaceContainerHighest.withValues(
+      alpha: 0.9,
+    );
 
     final card = AnimatedContainer(
       duration: const Duration(milliseconds: 180),
@@ -573,8 +579,10 @@ class _InfoCard extends StatelessWidget {
             CircleAvatar(
               radius: 22,
               backgroundColor: theme.colorScheme.surfaceContainerHighest,
-              child: Icon(icon,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+              child: Icon(
+                icon,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -583,8 +591,9 @@ class _InfoCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: theme.textTheme.titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -612,14 +621,13 @@ class _SkeletonConversationTile extends StatelessWidget {
     final theme = Theme.of(context);
 
     Widget bar(double w, double h) => Container(
-          width: w,
-          height: h,
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest
-                .withValues(alpha: 0.8),
-            borderRadius: BorderRadius.circular(10),
-          ),
-        );
+      width: w,
+      height: h,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+    );
 
     return Material(
       color: theme.colorScheme.surface,

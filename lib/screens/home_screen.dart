@@ -105,7 +105,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final player = videoManager.getController('home', url);
     final ctrl = player?.controller;
 
-    final shouldKeepAwake = ctrl != null &&
+    final shouldKeepAwake =
+        ctrl != null &&
         ctrl.value.isInitialized &&
         ctrl.value.isPlaying &&
         !ctrl.value.isBuffering;
@@ -162,8 +163,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     try {
-      final video =
-          await widget.homeFeedRepository.fetchReadyVideoById(targetId);
+      final video = await widget.homeFeedRepository.fetchReadyVideoById(
+        targetId,
+      );
       if (!mounted || video == null) {
         return 0;
       }
@@ -375,23 +377,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // ---------------------------------------------------------------------------
 
   void _initConnectivityListener() {
-    _connectivitySubscription = ConnectivityService()
-        .connectionStream
+    _connectivitySubscription = ConnectivityService().connectionStream
         .distinct()
         .listen((connected) async {
-      if (!mounted) return;
-      setState(() => _isConnected = connected);
+          if (!mounted) return;
+          setState(() => _isConnected = connected);
 
-      if (connected && videoController.videoList.isEmpty) {
-        final ok = await videoController.fetchPaginatedVideos();
-        if (ok && mounted && videoController.videoList.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _refreshFocusVideos();
-            unawaited(_activateHomeIndex(0, alignPageView: true));
-          });
-        }
-      }
-    });
+          if (connected && videoController.videoList.isEmpty) {
+            final ok = await videoController.fetchPaginatedVideos();
+            if (ok && mounted && videoController.videoList.isNotEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _refreshFocusVideos();
+                unawaited(_activateHomeIndex(0, alignPageView: true));
+              });
+            }
+          }
+        });
   }
 
   Future<void> _loadInitialVideos() async {
@@ -514,10 +515,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       if (matchesById.isEmpty) {
-        await _loadRecentVideosMatchingQuery(
-          query,
-          matchesById: matchesById,
-        );
+        await _loadRecentVideosMatchingQuery(query, matchesById: matchesById);
       }
 
       if (!mounted || requestToken != _searchRequestToken) {
@@ -525,8 +523,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       setState(() {
-        _searchResults =
-            matchesById.values.take(_searchResultLimit).toList(growable: false);
+        _searchResults = matchesById.values
+            .take(_searchResultLimit)
+            .toList(growable: false);
         _isSearchLoading = false;
       });
       _notifySearchUi();
@@ -548,14 +547,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _hydrateSearchUsersIfNeeded() async {
-    final hasWatchedPlayers =
-        userController.userList.any((user) => user.isPlayer);
+    final hasWatchedPlayers = userController.userList.any(
+      (user) => user.isPlayer,
+    );
     if (_searchUsersHydrated || hasWatchedPlayers) {
       return;
     }
 
-    final players =
-        await widget.homeFeedRepository.fetchSearchablePlayers(limit: 300);
+    final players = await widget.homeFeedRepository.fetchSearchablePlayers(
+      limit: 300,
+    );
     for (final user in players) {
       userController.usersCache[user.uid] = user;
     }
@@ -686,7 +687,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         builder: (sheetContext) {
           return ValueListenableBuilder<int>(
             valueListenable: _searchUiRevision,
-            builder: (context, _, __) {
+            builder: (context, _, _) {
               return _VideoSearchSheet(
                 controller: _searchController,
                 focusNode: _searchFocusNode,
@@ -727,8 +728,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (_isSearchActive) {
       videoController.currentIndex.value = index;
     } else {
-      final shouldApplyPendingLiveOnTop =
-          videoController.updateCurrentIndex(index);
+      final shouldApplyPendingLiveOnTop = videoController.updateCurrentIndex(
+        index,
+      );
       if (shouldApplyPendingLiveOnTop) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
@@ -812,16 +814,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: AdColors.surface,
-        border: Border.all(
-          color: AdColors.brand,
-          width: 1.4,
-        ),
+        border: Border.all(color: AdColors.brand, width: 1.4),
       ),
-      child: Icon(
-        _profileRoleIcon(user),
-        color: AdColors.brand,
-        size: 9.5,
-      ),
+      child: Icon(_profileRoleIcon(user), color: AdColors.brand, size: 9.5),
     );
   }
 
@@ -864,9 +859,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               cacheHeight: 96,
                               loadingBuilder:
                                   (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return fallback;
-                              },
+                                    if (loadingProgress == null) return child;
+                                    return fallback;
+                                  },
                               errorBuilder: (context, error, stackTrace) {
                                 return fallback;
                               },
@@ -893,8 +888,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final countLabel = _isSearchLoading
         ? null
         : active
-            ? '${_searchResults.length}'
-            : null;
+        ? '${_searchResults.length}'
+        : null;
 
     return Semantics(
       button: true,
@@ -1247,8 +1242,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 },
                 itemBuilder: (context, index) {
                   final video = videos[index];
-                  final player =
-                      videoManager.getController('home', video.videoUrl);
+                  final player = videoManager.getController(
+                    'home',
+                    video.videoUrl,
+                  );
 
                   return SmartVideoPlayer(
                     key: ValueKey(video.id),

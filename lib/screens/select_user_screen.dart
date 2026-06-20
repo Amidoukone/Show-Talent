@@ -72,9 +72,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
         }
 
         if (currentUser == null) {
-          return const Center(
-            child: CircularProgressIndicator(),
-          );
+          return const Center(child: CircularProgressIndicator());
         }
 
         final users = userController.userList.where((user) {
@@ -149,7 +147,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                   return ListView.separated(
                     padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
                     itemCount: filteredUsers.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final AppUser user = filteredUsers[index];
 
@@ -183,11 +181,11 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                               return;
                             }
 
-                            final existingConversationId =
-                                await chatController.findExistingConversationId(
-                              currentUserId: resolvedCurrentUser.uid,
-                              otherUserId: user.uid,
-                            );
+                            final existingConversationId = await chatController
+                                .findExistingConversationId(
+                                  currentUserId: resolvedCurrentUser.uid,
+                                  otherUserId: user.uid,
+                                );
 
                             if (existingConversationId != null &&
                                 existingConversationId.isNotEmpty) {
@@ -205,29 +203,29 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
 
                             final draft =
                                 await Get.bottomSheet<GuidedContactDraft>(
-                              ContactIntakeSheet(
-                                currentUser: resolvedCurrentUser,
-                                otherUser: user,
-                                context: ContactContext.discovery(
-                                  title: 'Sélection utilisateur',
-                                ),
-                              ),
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                            );
+                                  ContactIntakeSheet(
+                                    currentUser: resolvedCurrentUser,
+                                    otherUser: user,
+                                    context: ContactContext.discovery(
+                                      title: 'Sélection utilisateur',
+                                    ),
+                                  ),
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                );
 
                             if (draft == null) {
                               return;
                             }
 
-                            final result =
-                                await chatController.startGuidedConversation(
-                              currentUser: resolvedCurrentUser,
-                              otherUser: user,
-                              context: draft.context,
-                              contactReason: draft.reasonCode,
-                              introMessage: draft.introMessage,
-                            );
+                            final result = await chatController
+                                .startGuidedConversation(
+                                  currentUser: resolvedCurrentUser,
+                                  otherUser: user,
+                                  context: draft.context,
+                                  contactReason: draft.reasonCode,
+                                  introMessage: draft.introMessage,
+                                );
 
                             if (result.createdIntake) {
                               AdFeedback.info(
@@ -255,10 +253,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                               ),
                             );
                           } on ChatFlowException catch (error) {
-                            AdFeedback.error(
-                              'Erreur',
-                              error.message,
-                            );
+                            AdFeedback.error('Erreur', error.message);
                           } catch (_) {
                             AdFeedback.error(
                               'Erreur',
@@ -298,8 +293,9 @@ class _UserCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final initial =
-        user.nom.trim().isNotEmpty ? user.nom.trim()[0].toUpperCase() : '?';
+    final initial = user.nom.trim().isNotEmpty
+        ? user.nom.trim()[0].toUpperCase()
+        : '?';
 
     return AdSurfaceCard(
       padding: EdgeInsets.zero,

@@ -361,9 +361,11 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $effectiveNativeEnvironment = Get-EffectiveNativeEnvironment -EnvironmentName $Environment
 $expectedPackage = Get-PlannedPackageId -EnvironmentName $Environment
 $expectedAppName = Get-PlannedAppName -EnvironmentName $Environment
-$expectedAgpVersionPattern = '^8\.6\.'
-$expectedGradleVersion = "8.9"
-$expectedCompileSdk = "35"
+$expectedAgpVersionPattern = '^8\.11\.'
+$expectedAgpVersionLabel = "8.11.x"
+$expectedGradleVersion = "8.14.3"
+$expectedCompileSdk = "36"
+$expectedTargetSdk = "35"
 $expectedBuildToolsVersion = "35.0.0"
 $expectedNdkVersion = "29.0.13599879"
 
@@ -486,7 +488,7 @@ if ($errors.Count -eq 0) {
 
     if ($agpVersion -notmatch $expectedAgpVersionPattern) {
         $errors.Add(
-            "Android Gradle Plugin version is '$agpVersion'. compileSdk 35 release builds should use AGP 8.6.x with Gradle $expectedGradleVersion."
+            "Android Gradle Plugin version is '$agpVersion'. Flutter 3.44 release builds should use AGP $expectedAgpVersionLabel with Gradle $expectedGradleVersion."
         )
     }
 
@@ -500,8 +502,8 @@ if ($errors.Count -eq 0) {
         $errors.Add("Android compileSdk must be $expectedCompileSdk.")
     }
 
-    if ($gradleRaw -notmatch "targetSdk\s*=\s*$expectedCompileSdk") {
-        $errors.Add("Android targetSdk must be $expectedCompileSdk.")
+    if ($gradleRaw -notmatch "targetSdk\s*=\s*$expectedTargetSdk") {
+        $errors.Add("Android targetSdk must be $expectedTargetSdk.")
     }
 
     if ($gradleRaw -notmatch "buildToolsVersion\s*=\s*`"$([regex]::Escape($expectedBuildToolsVersion))`"") {
@@ -801,9 +803,9 @@ Write-Host "Environment                 : $Environment"
 Write-Host "Effective native env        : $effectiveNativeEnvironment"
 Write-Host "Expected package            : $expectedPackage"
 Write-Host "Expected app name           : $expectedAppName"
-Write-Host "Expected AGP                : 8.6.x"
+Write-Host "Expected AGP                : $expectedAgpVersionLabel"
 Write-Host "Expected Gradle wrapper     : $expectedGradleVersion"
-Write-Host "Expected Android SDK        : compile/target $expectedCompileSdk, build-tools $expectedBuildToolsVersion, NDK $expectedNdkVersion"
+Write-Host "Expected Android SDK        : compile $expectedCompileSdk / target $expectedTargetSdk, build-tools $expectedBuildToolsVersion, NDK $expectedNdkVersion"
 Write-Host "Detected Java major         : $(if ($null -eq $javaMajorVersion) { '<unknown>' } else { $javaMajorVersion })"
 Write-Host "Android SDK root            : $(if ([string]::IsNullOrWhiteSpace($androidSdkRoot)) { '<missing>' } else { $androidSdkRoot })"
 Write-Host "Release gate mode           : $ReleaseGate"

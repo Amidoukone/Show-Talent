@@ -94,27 +94,28 @@ class UserController extends GetxController with WidgetsBindingObserver {
     try {
       final snapshot = await _authSessionService
           .resolveSessionSafely(
-        firebaseUser,
-        waitForVerifiedUserDocument: true,
-        syncVerifiedUserRecord: false,
-        signOutOnInvalid: true,
-      )
+            firebaseUser,
+            waitForVerifiedUserDocument: true,
+            syncVerifiedUserRecord: false,
+            signOutOnInvalid: true,
+          )
           .timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          final fallbackUser = firebaseUser ?? _authSessionService.currentUser;
-          if (fallbackUser != null && fallbackUser.emailVerified) {
-            return AuthSessionSnapshot(
-              destination: AuthSessionDestination.main,
-              firebaseUser: fallbackUser,
-            );
-          }
+            const Duration(seconds: 15),
+            onTimeout: () {
+              final fallbackUser =
+                  firebaseUser ?? _authSessionService.currentUser;
+              if (fallbackUser != null && fallbackUser.emailVerified) {
+                return AuthSessionSnapshot(
+                  destination: AuthSessionDestination.main,
+                  firebaseUser: fallbackUser,
+                );
+              }
 
-          return const AuthSessionSnapshot(
-            destination: AuthSessionDestination.login,
+              return const AuthSessionSnapshot(
+                destination: AuthSessionDestination.login,
+              );
+            },
           );
-        },
-      );
 
       await _applySessionSnapshot(snapshot, requestVersion: requestVersion);
     } on FirebaseAuthException catch (error) {
@@ -257,26 +258,28 @@ class UserController extends GetxController with WidgetsBindingObserver {
 
     _startAccessHeartbeat(uid);
 
-    _currentUserAccessSub = _userRepository.watchUserAccess(uid).listen(
-      (decision) {
-        if (decision.isAllowed || _accessRevocationInProgress) {
-          return;
-        }
+    _currentUserAccessSub = _userRepository
+        .watchUserAccess(uid)
+        .listen(
+          (decision) {
+            if (decision.isAllowed || _accessRevocationInProgress) {
+              return;
+            }
 
-        unawaited(_enforceCurrentSessionAccess());
-      },
-      onError: (error) {
-        _currentUserAccessSub = null;
-        AppLogger.debug('UserController watchUserAccess error: $error');
+            unawaited(_enforceCurrentSessionAccess());
+          },
+          onError: (error) {
+            _currentUserAccessSub = null;
+            AppLogger.debug('UserController watchUserAccess error: $error');
 
-        if (_isPermissionDenied(error)) {
-          unawaited(_enforceCurrentSessionAccess());
-        }
-      },
-      onDone: () {
-        _currentUserAccessSub = null;
-      },
-    );
+            if (_isPermissionDenied(error)) {
+              unawaited(_enforceCurrentSessionAccess());
+            }
+          },
+          onDone: () {
+            _currentUserAccessSub = null;
+          },
+        );
   }
 
   void _startAccessHeartbeat(String uid) {
@@ -315,10 +318,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
       await _syncCurrentUserAccessWatch(null);
       await _stopAllUsersWatch();
       await _authSessionService.signOut();
-      await _safeOffAllNamed(
-        AppRoutes.login,
-        arguments: notice,
-      );
+      await _safeOffAllNamed(AppRoutes.login, arguments: notice);
     } catch (error) {
       AppLogger.debug('UserController forced sign-out error: $error');
     } finally {
@@ -355,7 +355,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
           issue: snapshot.failure,
           user: snapshot.appUser,
           title: snapshot.failureTitle,
-          message: snapshot.failureMessage ??
+          message:
+              snapshot.failureMessage ??
               snapshot.failure?.loginMessage ??
               'Votre session n’est plus autorisée.',
         ),
@@ -391,7 +392,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
       );
     } catch (error) {
       AppLogger.debug(
-          'UserController enforceCurrentSessionAccess error: $error');
+        'UserController enforceCurrentSessionAccess error: $error',
+      );
     }
   }
 
@@ -410,10 +412,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         'sessionNoticeTitle': fallbackTitle,
         'sessionNoticeMessage': fallbackMessage,
       };
-      await _safeOffAllNamed(
-        AppRoutes.login,
-        arguments: _pendingSessionNotice,
-      );
+      await _safeOffAllNamed(AppRoutes.login, arguments: _pendingSessionNotice);
       return;
     }
 
@@ -439,14 +438,16 @@ class UserController extends GetxController with WidgetsBindingObserver {
           issue: snapshot.failure,
           user: snapshot.appUser,
           title: snapshot.failureTitle ?? fallbackTitle,
-          message: snapshot.failureMessage ??
+          message:
+              snapshot.failureMessage ??
               snapshot.failure?.loginMessage ??
               fallbackMessage,
         ),
       );
     } catch (error) {
       AppLogger.debug(
-          'UserController handleProtectedAccessDenied error: $error');
+        'UserController handleProtectedAccessDenied error: $error',
+      );
       await _handleCurrentUserAccessRevoked(
         UserAccessDecision(
           exists: true,
@@ -461,7 +462,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
   Map<String, String> _buildSessionNoticeFromDecision(
     UserAccessDecision decision,
   ) {
-    final title = decision.title ??
+    final title =
+        decision.title ??
         switch (decision.issue) {
           UserAccessIssue.missingProfile => 'Compte indisponible',
           UserAccessIssue.adminPortalOnly => 'Accès refusé',
@@ -469,7 +471,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
           null => 'Session fermée',
         };
 
-    final message = decision.message ??
+    final message =
+        decision.message ??
         decision.issue?.loginMessage ??
         'Votre session n’est plus autorisée.';
 
@@ -489,8 +492,9 @@ class UserController extends GetxController with WidgetsBindingObserver {
 
     final title = snapshot.failureTitle?.trim();
     return <String, String>{
-      'sessionNoticeTitle':
-          (title == null || title.isEmpty) ? 'Information importante' : title,
+      'sessionNoticeTitle': (title == null || title.isEmpty)
+          ? 'Information importante'
+          : title,
       'sessionNoticeMessage': message,
     };
   }
@@ -550,8 +554,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
           _pendingSessionNotice = notice;
         }
         final navigationArguments = <String, dynamic>{
-          if (routeArguments != null) ...routeArguments,
-          if (notice != null) ...notice,
+          ...?routeArguments,
+          ...?notice,
         };
         await _safeOffAllNamed(
           AppRoutes.login,
@@ -633,9 +637,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
       await (navFuture ?? Future<void>.value()).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          AppLogger.debug(
-            'UserController navigation timeout for route=$route',
-          );
+          AppLogger.debug('UserController navigation timeout for route=$route');
         },
       );
     } finally {

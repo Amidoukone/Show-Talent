@@ -13,13 +13,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/services/app_logger.dart';
 
-typedef ChatNotificationSender = Future<void> Function({
-  required String title,
-  required String body,
-  required String recipientUid,
-  required String contextType,
-  required String contextData,
-});
+typedef ChatNotificationSender =
+    Future<void> Function({
+      required String title,
+      required String body,
+      required String recipientUid,
+      required String contextType,
+      required String contextData,
+    });
 
 class ChatFlowException implements Exception {
   const ChatFlowException(this.message);
@@ -37,14 +38,12 @@ class ChatController extends GetxController {
     AuthSessionService? authSessionService,
     ChatRepository? chatRepository,
     ChatNotificationSender? notificationSender,
-    Future<void> Function()? protectedAccessDeniedHandler,
-    String? Function()? currentUidResolver,
-  })  : _authSessionService = authSessionService ?? AuthSessionService(),
-        _chatRepository = chatRepository ?? ChatRepository(),
-        _notificationSender =
-            notificationSender ?? PushNotificationService.sendNotification,
-        _protectedAccessDeniedHandler = protectedAccessDeniedHandler,
-        _currentUidResolver = currentUidResolver;
+    this._protectedAccessDeniedHandler,
+    this._currentUidResolver,
+  }) : _authSessionService = authSessionService ?? AuthSessionService(),
+       _chatRepository = chatRepository ?? ChatRepository(),
+       _notificationSender =
+           notificationSender ?? PushNotificationService.sendNotification;
 
   final AuthSessionService _authSessionService;
   final ChatRepository _chatRepository;
@@ -52,8 +51,9 @@ class ChatController extends GetxController {
   final Future<void> Function()? _protectedAccessDeniedHandler;
   final String? Function()? _currentUidResolver;
 
-  final Rx<List<Conversation>> _conversations =
-      Rx<List<Conversation>>(<Conversation>[]);
+  final Rx<List<Conversation>> _conversations = Rx<List<Conversation>>(
+    <Conversation>[],
+  );
   List<Conversation> get conversations => _conversations.value;
 
   final RxInt _totalUnread = 0.obs;
@@ -192,45 +192,48 @@ class ChatController extends GetxController {
 
     final myEpoch = ++_bindEpoch;
 
-    _convSub = _chatRepository.watchConversationsForUser(userId).listen(
-      (snapshot) {
-        try {
-          if (myEpoch != _bindEpoch) {
-            return;
-          }
+    _convSub = _chatRepository
+        .watchConversationsForUser(userId)
+        .listen(
+          (snapshot) {
+            try {
+              if (myEpoch != _bindEpoch) {
+                return;
+              }
 
-          final items = snapshot.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
+              final items = snapshot.docs.map((doc) {
+                final data = doc.data();
+                data['id'] = doc.id;
 
-            final conv = Conversation.fromMap(data);
-            final unread = _extractUnreadCount(data, userId);
-            conv.unreadMessagesCount = unread;
-            conv.unreadCountByUser[userId] = unread;
-            return conv;
-          }).toList();
+                final conv = Conversation.fromMap(data);
+                final unread = _extractUnreadCount(data, userId);
+                conv.unreadMessagesCount = unread;
+                conv.unreadCountByUser[userId] = unread;
+                return conv;
+              }).toList();
 
-          if (myEpoch != _bindEpoch) {
-            return;
-          }
+              if (myEpoch != _bindEpoch) {
+                return;
+              }
 
-          _conversations.value = items;
-          _recalculateTotalUnread();
-          _conversations.refresh();
-          update();
-        } catch (error) {
-          AppLogger.debug(
-              "Erreur lors du chargement des conversations : $error");
-        }
-      },
-      onError: (error) {
-        AppLogger.debug("Erreur ecoute conversations : $error");
-        if (_isPermissionDenied(error)) {
-          _resetLocalState();
-          unawaited(_handleProtectedAccessDenied());
-        }
-      },
-    );
+              _conversations.value = items;
+              _recalculateTotalUnread();
+              _conversations.refresh();
+              update();
+            } catch (error) {
+              AppLogger.debug(
+                "Erreur lors du chargement des conversations : $error",
+              );
+            }
+          },
+          onError: (error) {
+            AppLogger.debug("Erreur ecoute conversations : $error");
+            if (_isPermissionDenied(error)) {
+              _resetLocalState();
+              unawaited(_handleProtectedAccessDenied());
+            }
+          },
+        );
   }
 
   void _unbindConversations() {
@@ -263,9 +266,7 @@ class ChatController extends GetxController {
     required String otherUserId,
   }) async {
     if (currentUserId.trim().isEmpty || otherUserId.trim().isEmpty) {
-      throw const ChatFlowException(
-        'Identifiants de conversation invalides.',
-      );
+      throw const ChatFlowException('Identifiants de conversation invalides.');
     }
 
     if (currentUserId == otherUserId) {
@@ -383,9 +384,7 @@ class ChatController extends GetxController {
     }
 
     if (normalizedContent.isEmpty) {
-      throw const ChatFlowException(
-        'Le message est vide.',
-      );
+      throw const ChatFlowException('Le message est vide.');
     }
 
     if (normalizedContent.length > 2000) {
@@ -423,15 +422,16 @@ class ChatController extends GetxController {
         recipientId: normalizedRecipientId,
       );
 
-      final idx = _conversations.value
-          .indexWhere((c) => c.id == normalizedConversationId);
+      final idx = _conversations.value.indexWhere(
+        (c) => c.id == normalizedConversationId,
+      );
       if (idx != -1) {
         _conversations.value[idx].lastMessage = normalizedContent;
         _conversations.value[idx].lastMessageDate = DateTime.now();
         _conversations.value[idx].unreadCountByUser[normalizedSenderId] = 0;
-        _conversations.value[idx].unreadMessagesCount = _conversations
-                .value[idx]
-                .unreadCountByUser[_boundUid ?? normalizedSenderId] ??
+        _conversations.value[idx].unreadMessagesCount =
+            _conversations.value[idx].unreadCountByUser[_boundUid ??
+                normalizedSenderId] ??
             0;
         _recalculateTotalUnread();
         _conversations.refresh();
@@ -465,7 +465,8 @@ class ChatController extends GetxController {
       rethrow;
     } on FirebaseException catch (error) {
       AppLogger.debug(
-          "Erreur envoi message firebase : ${error.code} ${error.message}");
+        "Erreur envoi message firebase : ${error.code} ${error.message}",
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ChatFlowException(
@@ -535,8 +536,9 @@ class ChatController extends GetxController {
         userId: userId,
       );
 
-      final index =
-          _conversations.value.indexWhere((c) => c.id == conversationId);
+      final index = _conversations.value.indexWhere(
+        (c) => c.id == conversationId,
+      );
       if (index != -1) {
         _conversations.value[index].unreadCountByUser[userId] = 0;
         _conversations.value[index].unreadMessagesCount = 0;
@@ -583,7 +585,8 @@ class ChatController extends GetxController {
         );
       } catch (error) {
         AppLogger.debug(
-            "Erreur markAllAsReadOnServer conv ${conv.id} : $error");
+          "Erreur markAllAsReadOnServer conv ${conv.id} : $error",
+        );
         if (_isPermissionDenied(error)) {
           unawaited(_handleProtectedAccessDenied());
           return;
@@ -602,8 +605,9 @@ class ChatController extends GetxController {
     }
 
     final unread = _extractUnreadCount(data, userId);
-    final index =
-        _conversations.value.indexWhere((c) => c.id == conversationId);
+    final index = _conversations.value.indexWhere(
+      (c) => c.id == conversationId,
+    );
     if (index != -1) {
       _conversations.value[index].unreadCountByUser[userId] = unread;
       _conversations.value[index].unreadMessagesCount = unread;

@@ -6,11 +6,12 @@ import 'package:flutter/foundation.dart';
 import '../services/client_logger.dart';
 import '../widgets/video_manager.dart';
 
-typedef ClientLogEmitter = Future<void> Function(
-  String source,
-  String message, {
-  Map<String, dynamic>? metadata,
-});
+typedef ClientLogEmitter =
+    Future<void> Function(
+      String source,
+      String message, {
+      Map<String, dynamic>? metadata,
+    });
 
 class VideoMetricsPolicy {
   const VideoMetricsPolicy({
@@ -27,7 +28,8 @@ class VideoMetricsPolicy {
 
   factory VideoMetricsPolicy.forCurrentBuild() {
     final defaultSampleRate = kReleaseMode ? 0.0 : 1.0;
-    final configuredSampleRate = double.tryParse(
+    final configuredSampleRate =
+        double.tryParse(
           const String.fromEnvironment('VIDEO_METRICS_SUCCESS_SAMPLE_RATE'),
         ) ??
         defaultSampleRate;
@@ -46,18 +48,14 @@ class VideoMetricsPolicy {
 
 class VideoMetricsObserver {
   VideoMetricsObserver({
-    ClientLogger? logger,
-    VideoManager? videoManager,
+    this._logger,
+    this._videoManager,
     VideoMetricsPolicy? policy,
     double Function()? random,
-    ClientLogEmitter? logInfo,
-    ClientLogEmitter? logError,
-  })  : _logger = logger,
-        _videoManager = videoManager,
-        _policy = policy ?? VideoMetricsPolicy.forCurrentBuild(),
-        _random = random ?? Random().nextDouble,
-        _logInfo = logInfo,
-        _logError = logError;
+    this._logInfo,
+    this._logError,
+  }) : _policy = policy ?? VideoMetricsPolicy.forCurrentBuild(),
+       _random = random ?? Random().nextDouble;
 
   final ClientLogger? _logger;
   final VideoManager? _videoManager;
@@ -105,21 +103,13 @@ class VideoMetricsObserver {
     if (event.type == VideoMetricType.initError) {
       metadata['error'] = event.error.toString();
       unawaited(
-        _emitError(
-          'video_manager',
-          'Video init error',
-          metadata: metadata,
-        ),
+        _emitError('video_manager', 'Video init error', metadata: metadata),
       );
       return;
     }
 
     unawaited(
-      _emitInfo(
-        'video_manager',
-        'Video init success',
-        metadata: metadata,
-      ),
+      _emitInfo('video_manager', 'Video init success', metadata: metadata),
     );
   }
 

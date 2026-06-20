@@ -20,8 +20,9 @@ class _HeaderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final location = user.city ?? user.region ?? user.country;
-    final teamLabel =
-        user.team?.isNotEmpty == true ? user.team : user.clubActuel;
+    final teamLabel = user.team?.isNotEmpty == true
+        ? user.team
+        : user.clubActuel;
 
     return Stack(
       children: [
@@ -58,15 +59,15 @@ class _HeaderCard extends StatelessWidget {
                         child: profileController.isLoadingPhoto.value
                             ? const CircularProgressIndicator()
                             : (user.photoProfil.isEmpty
-                                ? Text(
-                                    _profileInitials(user),
-                                    style: const TextStyle(
-                                      color: AdColors.onSurface,
-                                      fontSize: 28,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  )
-                                : null),
+                                  ? Text(
+                                      _profileInitials(user),
+                                      style: const TextStyle(
+                                        color: AdColors.onSurface,
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    )
+                                  : null),
                       ),
                     ),
                   ),
@@ -179,16 +180,10 @@ class _StatChip extends StatelessWidget {
           children: [
             Text(
               '$value',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(color: AdColors.onSurfaceMuted),
-            ),
+            Text(label, style: const TextStyle(color: AdColors.onSurfaceMuted)),
           ],
         ),
       ),
@@ -200,10 +195,7 @@ class _VideoTile extends StatelessWidget {
   final Video video;
   final VoidCallback onTap;
 
-  const _VideoTile({
-    required this.video,
-    required this.onTap,
-  });
+  const _VideoTile({required this.video, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -226,7 +218,7 @@ class _VideoTile extends StatelessWidget {
         child: Image.network(
           video.thumbnailUrl,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => fallback(),
+          errorBuilder: (_, _, _) => fallback(),
           loadingBuilder: (context, child, loadingProgress) {
             if (loadingProgress == null) {
               return child;
@@ -293,17 +285,15 @@ class _InfoPill extends StatelessWidget {
   final IconData icon;
   final _ProfileLevelStyle? style;
 
-  const _InfoPill({
-    required this.label,
-    required this.icon,
-    this.style,
-  });
+  const _InfoPill({required this.label, required this.icon, this.style});
 
   @override
   Widget build(BuildContext context) {
     final resolvedStyle = style;
-    final maxLabelWidth =
-        (MediaQuery.of(context).size.width - 120).clamp(80.0, 320.0);
+    final maxLabelWidth = (MediaQuery.of(context).size.width - 120).clamp(
+      80.0,
+      320.0,
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -345,10 +335,7 @@ class _SectionHeader extends StatelessWidget {
   final IconData icon;
   final String title;
 
-  const _SectionHeader({
-    required this.icon,
-    required this.title,
-  });
+  const _SectionHeader({required this.icon, required this.title});
 
   @override
   Widget build(BuildContext context) {

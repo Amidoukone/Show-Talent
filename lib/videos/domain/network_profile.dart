@@ -176,6 +176,8 @@ class NetworkProfileService {
         return 'wifi';
       case ConnectivityResult.mobile:
         return 'mobile';
+      case ConnectivityResult.satellite:
+        return 'satellite';
       case ConnectivityResult.vpn:
         return 'vpn';
       case ConnectivityResult.bluetooth:

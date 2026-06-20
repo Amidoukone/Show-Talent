@@ -120,8 +120,9 @@ class _EventListScreenState extends State<EventListScreen> {
 
                         final event = events[index];
                         final organiser = event.organisateur;
-                        final isParticipant = event.participants
-                            .any((p) => p.uid == currentUser.uid);
+                        final isParticipant = event.participants.any(
+                          (p) => p.uid == currentUser.uid,
+                        );
                         final isOrganisateur = organiser.uid == currentUser.uid;
 
                         return Card(
@@ -129,7 +130,9 @@ class _EventListScreenState extends State<EventListScreen> {
                           clipBehavior: Clip.antiAlias,
                           elevation: 2,
                           margin: const EdgeInsets.symmetric(
-                              vertical: 8, horizontal: 6),
+                            vertical: 8,
+                            horizontal: 6,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                             side: const BorderSide(color: AdColors.divider),
@@ -182,8 +185,9 @@ class _EventListScreenState extends State<EventListScreen> {
                                   if (eventController.isLoading)
                                     const Padding(
                                       padding: EdgeInsets.only(bottom: 12),
-                                      child:
-                                          LinearProgressIndicator(minHeight: 2),
+                                      child: LinearProgressIndicator(
+                                        minHeight: 2,
+                                      ),
                                     ),
                                   Wrap(
                                     spacing: 8,
@@ -194,7 +198,9 @@ class _EventListScreenState extends State<EventListScreen> {
                                         '${DateFormat('dd MMM').format(event.dateDebut)} -> ${DateFormat('dd MMM').format(event.dateFin)}',
                                       ),
                                       _buildChip(
-                                          Icons.place_outlined, event.lieu),
+                                        Icons.place_outlined,
+                                        event.lieu,
+                                      ),
                                       _buildChip(
                                         Icons.privacy_tip_outlined,
                                         event.estPublic ? 'Public' : 'Privé',
@@ -355,15 +361,15 @@ class _EventListScreenState extends State<EventListScreen> {
       DateTime(date.year, date.month, date.day);
 
   int _daysUntilStart(Event event) {
-    return _dateOnly(event.dateDebut)
-        .difference(_dateOnly(DateTime.now()))
-        .inDays;
+    return _dateOnly(
+      event.dateDebut,
+    ).difference(_dateOnly(DateTime.now())).inDays;
   }
 
   int _daysUntilEnd(Event event) {
-    return _dateOnly(event.dateFin)
-        .difference(_dateOnly(DateTime.now()))
-        .inDays;
+    return _dateOnly(
+      event.dateFin,
+    ).difference(_dateOnly(DateTime.now())).inDays;
   }
 
   bool _isExpired(Event event) => _daysUntilEnd(event) < 0;
@@ -391,14 +397,16 @@ class _EventListScreenState extends State<EventListScreen> {
     final query = _searchController.text.toLowerCase().trim();
 
     return source.where((event) {
-      final matchesSearch = query.isEmpty ||
+      final matchesSearch =
+          query.isEmpty ||
           event.titre.toLowerCase().contains(query) ||
           event.description.toLowerCase().contains(query) ||
           event.lieu.toLowerCase().contains(query) ||
           event.organisateur.nom.toLowerCase().contains(query) ||
           event.organisateur.role.toLowerCase().contains(query) ||
-          (event.tags ?? const <String>[])
-              .any((tag) => tag.toLowerCase().contains(query));
+          (event.tags ?? const <String>[]).any(
+            (tag) => tag.toLowerCase().contains(query),
+          );
 
       final matchesStatus = _selectedStatus == 'tous'
           ? true
@@ -407,8 +415,8 @@ class _EventListScreenState extends State<EventListScreen> {
       final matchesVisibility = _selectedVisibility == 'tous'
           ? true
           : (_selectedVisibility == 'public'
-              ? event.estPublic
-              : !event.estPublic);
+                ? event.estPublic
+                : !event.estPublic);
 
       final matchesUpcoming =
           !_onlyUpcoming || event.dateFin.isAfter(DateTime.now());
@@ -420,8 +428,7 @@ class _EventListScreenState extends State<EventListScreen> {
           matchesVisibility &&
           matchesUpcoming &&
           matchesMine;
-    }).toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
   Widget _buildMissingUserState() {
@@ -448,7 +455,7 @@ class _EventListScreenState extends State<EventListScreen> {
     return ListView.builder(
       padding: const EdgeInsets.all(12),
       itemCount: 3,
-      itemBuilder: (_, __) => Card(
+      itemBuilder: (_, _) => Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -503,11 +510,13 @@ class _EventListScreenState extends State<EventListScreen> {
     AppUser currentUser,
   ) {
     final isPublisher = isOpportunityPublisherRole(currentUser.role);
-    final openCount =
-        allEvents.where((event) => _isOpenForRegistration(event)).length;
+    final openCount = allEvents
+        .where((event) => _isOpenForRegistration(event))
+        .length;
     final soonCount = allEvents.where((event) => _isUpcomingSoon(event)).length;
-    final ownedEvents =
-        allEvents.where((event) => event.organisateur.uid == currentUser.uid);
+    final ownedEvents = allEvents.where(
+      (event) => event.organisateur.uid == currentUser.uid,
+    );
     final myParticipants = ownedEvents.fold<int>(
       0,
       (total, event) => total + event.participants.length,
@@ -549,9 +558,9 @@ class _EventListScreenState extends State<EventListScreen> {
                     Text(
                       'Événements',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: AdColors.onSurface,
-                            fontWeight: FontWeight.w800,
-                          ),
+                        color: AdColors.onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -559,9 +568,9 @@ class _EventListScreenState extends State<EventListScreen> {
                           ? 'Gérez vos événements et les inscriptions.'
                           : 'Repérez les événements ouverts et à venir.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AdColors.onSurfaceMuted,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: AdColors.onSurfaceMuted,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -639,13 +648,13 @@ class _EventListScreenState extends State<EventListScreen> {
     final shouldLoadMore = filteredOut && canLoadMore;
     final actionLabel = shouldLoadMore
         ? isLoadingMore
-            ? 'Chargement...'
-            : 'Charger plus d’événements'
+              ? 'Chargement...'
+              : 'Charger plus d’événements'
         : filteredOut
-            ? 'Réinitialiser les filtres'
-            : isOrganizer
-                ? 'Créer un événement'
-                : 'Explorer les vidéos';
+        ? 'Réinitialiser les filtres'
+        : isOrganizer
+        ? 'Créer un événement'
+        : 'Explorer les vidéos';
 
     return Center(
       child: Padding(
@@ -656,8 +665,8 @@ class _EventListScreenState extends State<EventListScreen> {
           message: filteredOut
               ? 'Aucun événement ne correspond à vos filtres.'
               : isOrganizer
-                  ? 'Vous pouvez publier votre premier événement.'
-                  : 'Revenez plus tard ou explorez les vidéos de talents.',
+              ? 'Vous pouvez publier votre premier événement.'
+              : 'Revenez plus tard ou explorez les vidéos de talents.',
           action: AdButton(
             expanded: false,
             label: actionLabel,
@@ -681,10 +690,7 @@ class _EventListScreenState extends State<EventListScreen> {
                       return;
                     }
 
-                    Get.offAllNamed(
-                      AppRoutes.main,
-                      arguments: {'tab': 0},
-                    );
+                    Get.offAllNamed(AppRoutes.main, arguments: {'tab': 0});
                   },
           ),
         ),
@@ -722,9 +728,7 @@ class _EventListScreenState extends State<EventListScreen> {
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: const BoxDecoration(
         color: AdColors.surfaceAlt,
-        border: Border(
-          bottom: BorderSide(color: AdColors.divider),
-        ),
+        border: Border(bottom: BorderSide(color: AdColors.divider)),
       ),
       child: Column(
         children: [
@@ -821,8 +825,9 @@ class _EventListScreenState extends State<EventListScreen> {
           child: CircleAvatar(
             radius: 22,
             backgroundColor: AdColors.surfaceCardAlt,
-            backgroundImage:
-                hasPhoto ? NetworkImage(organiser.photoProfil) : null,
+            backgroundImage: hasPhoto
+                ? NetworkImage(organiser.photoProfil)
+                : null,
             child: hasPhoto
                 ? null
                 : const Icon(Icons.person, color: Colors.white70),
@@ -842,9 +847,7 @@ class _EventListScreenState extends State<EventListScreen> {
               ),
               Text(
                 organiser.role,
-                style: const TextStyle(
-                  color: AdColors.onSurfaceMuted,
-                ),
+                style: const TextStyle(color: AdColors.onSurfaceMuted),
               ),
             ],
           ),
@@ -882,8 +885,8 @@ class _EventListScreenState extends State<EventListScreen> {
     final color = expired
         ? AdColors.error
         : soon
-            ? AdColors.warning
-            : AdColors.onSurfaceMuted;
+        ? AdColors.warning
+        : AdColors.onSurfaceMuted;
 
     return Row(
       children: [
@@ -970,14 +973,14 @@ class _EventListScreenState extends State<EventListScreen> {
                     final response = await _runEventAction(
                       event: event,
                       action: 'status',
-                      task: () => eventController.updateEvent(
-                        updated,
-                        currentUser,
-                      ),
+                      task: () =>
+                          eventController.updateEvent(updated, currentUser),
                     );
                     if (response != null) {
-                      _showResponse(response,
-                          successTitle: 'Statut mis à jour');
+                      _showResponse(
+                        response,
+                        successTitle: 'Statut mis à jour',
+                      );
                     }
                   },
           ),
@@ -1022,32 +1025,30 @@ class _EventListScreenState extends State<EventListScreen> {
         AdButton(
           onPressed:
               (!isParticipant && !isClosed && !isFull && !registerPending)
-                  ? () async {
-                      final response = await _runEventAction(
-                        event: event,
-                        action: 'registration',
-                        task: () => eventController.registerToEvent(
-                          event.id,
-                          currentUser,
-                        ),
-                      );
-                      if (response != null) {
-                        _showResponse(
-                          response,
-                          successTitle: 'Inscription confirmée',
-                        );
-                      }
-                    }
-                  : null,
+              ? () async {
+                  final response = await _runEventAction(
+                    event: event,
+                    action: 'registration',
+                    task: () =>
+                        eventController.registerToEvent(event.id, currentUser),
+                  );
+                  if (response != null) {
+                    _showResponse(
+                      response,
+                      successTitle: 'Inscription confirmée',
+                    );
+                  }
+                }
+              : null,
           loading: registerPending,
           leading: Icons.event_available,
           label: registerPending
               ? 'Inscription...'
               : isClosed
-                  ? 'Événement fermé'
-                  : isFull
-                      ? 'Complet'
-                      : 'S’inscrire',
+              ? 'Événement fermé'
+              : isFull
+              ? 'Complet'
+              : 'S’inscrire',
           size: AdButtonSize.compact,
           expanded: false,
         ),
@@ -1143,19 +1144,13 @@ class _EventListScreenState extends State<EventListScreen> {
     }
   }
 
-  void _showResponse(
-    ActionResponse response, {
-    required String successTitle,
-  }) {
+  void _showResponse(ActionResponse response, {required String successTitle}) {
     if (response.toast == ToastLevel.none) {
       return;
     }
 
     if (response.success) {
-      _showSystemNotice(
-        title: successTitle,
-        message: response.message,
-      );
+      _showSystemNotice(title: successTitle, message: response.message);
       return;
     }
 

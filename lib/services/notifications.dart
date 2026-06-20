@@ -22,14 +22,16 @@ class NotificationService {
 
   /// Init notifs locales (à appeler au démarrage)
   static Future<void> initLocal() async {
-    const androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const initSettings = InitializationSettings(android: androidSettings);
-    await _local.initialize(initSettings);
+    await _local.initialize(settings: initSettings);
 
     await _local
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(_channel);
   }
 
@@ -40,10 +42,10 @@ class NotificationService {
       final android = notif?.android;
       if (notif != null && android != null) {
         _local.show(
-          notif.hashCode,
-          notif.title,
-          notif.body,
-          NotificationDetails(
+          id: notif.hashCode,
+          title: notif.title,
+          body: notif.body,
+          notificationDetails: NotificationDetails(
             android: AndroidNotificationDetails(
               _channel.id,
               _channel.name,

@@ -756,7 +756,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
           Switch(
             value: value,
-            activeColor: AdColors.brand,
+            activeThumbColor: AdColors.brand,
             onChanged: canChange ? onChanged : null,
           ),
         ],

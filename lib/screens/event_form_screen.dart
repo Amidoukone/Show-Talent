@@ -228,7 +228,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
-                            value: statut,
+                            initialValue: statut,
                             decoration: InputDecoration(
                               labelText: 'Statut',
                               prefixIcon: const Icon(

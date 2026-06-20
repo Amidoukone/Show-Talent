@@ -181,7 +181,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: (_strongFoot == null || _strongFoot!.isEmpty)
+              initialValue: (_strongFoot == null || _strongFoot!.isEmpty)
                   ? null
                   : _strongFoot,
               items: const [

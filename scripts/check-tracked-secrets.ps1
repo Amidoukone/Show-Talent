@@ -23,12 +23,30 @@ $patterns = @(
     }
 )
 
+$blockedTrackedPathPatterns = @(
+    @{
+        Name = "Android App Bundle release artifact"
+        Regex = '^artifacts/android/.+\.aab$'
+    },
+    @{
+        Name = "Flutter SDK backup artifact"
+        Regex = '^artifacts/flutter-sdk-backups/'
+    }
+)
+
 $findings = New-Object System.Collections.Generic.List[string]
 $trackedFiles = git -C $repoRoot ls-files
 
 foreach ($relativePath in $trackedFiles) {
     if ([string]::IsNullOrWhiteSpace($relativePath)) {
         continue
+    }
+
+    $normalizedRelativePath = $relativePath -replace '\\', '/'
+    foreach ($blockedPathPattern in $blockedTrackedPathPatterns) {
+        if ($normalizedRelativePath -match $blockedPathPattern.Regex) {
+            $findings.Add("$relativePath is a tracked $($blockedPathPattern.Name).")
+        }
     }
 
     $path = Join-Path $repoRoot $relativePath

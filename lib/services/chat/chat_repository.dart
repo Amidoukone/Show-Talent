@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatRepository {
   ChatRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   static const int _messageWriteBatchLimit = 450;
 
@@ -70,11 +70,13 @@ class ChatRepository {
         .orderBy('dateEnvoi', descending: true)
         .snapshots()
         .map(
-          (snapshot) => snapshot.docs.map((doc) {
-            final data = doc.data();
-            data['id'] = doc.id;
-            return Message.fromMap(data);
-          }).toList(growable: false),
+          (snapshot) => snapshot.docs
+              .map((doc) {
+                final data = doc.data();
+                data['id'] = doc.id;
+                return Message.fromMap(data);
+              })
+              .toList(growable: false),
         );
   }
 
@@ -97,10 +99,7 @@ class ChatRepository {
       utilisateur1Id: ids[0],
       utilisateur2Id: ids[1],
       utilisateurIds: ids,
-      unreadCountByUser: <String, int>{
-        ids[0]: 0,
-        ids[1]: 0,
-      },
+      unreadCountByUser: <String, int>{ids[0]: 0, ids[1]: 0},
     );
 
     await conversationRef.set(newConversation.toMap());
@@ -188,10 +187,7 @@ class ChatRepository {
       utilisateur1Id: ids[0],
       utilisateur2Id: ids[1],
       utilisateurIds: ids,
-      unreadCountByUser: <String, int>{
-        ids[0]: 0,
-        ids[1]: 0,
-      },
+      unreadCountByUser: <String, int>{ids[0]: 0, ids[1]: 0},
       createdVia: 'guided_first_contact',
       contextType: normalizedContext.normalizedType,
       contextId: normalizedContext.normalizedId,
@@ -260,11 +256,13 @@ class ChatRepository {
       return null;
     }
 
-    final existingIntakeId =
-        conversationData['contactIntakeId']?.toString().trim();
+    final existingIntakeId = conversationData['contactIntakeId']
+        ?.toString()
+        .trim();
     if (existingIntakeId != null && existingIntakeId.isNotEmpty) {
-      final existingIntake =
-          await _contactIntakesCollection.doc(existingIntakeId).get();
+      final existingIntake = await _contactIntakesCollection
+          .doc(existingIntakeId)
+          .get();
       if (existingIntake.exists) {
         return ContactIntake.fromMap(
           existingIntake.data() ?? <String, dynamic>{},
@@ -314,14 +312,11 @@ class ChatRepository {
     );
 
     await intakeRef.set(intake.toMap());
-    await conversationRef.set(
-      <String, dynamic>{
-        'contactIntakeId': intake.id,
-        'agencyFollowUpStatus': AgencyFollowUpStatus.newLead,
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
+    await conversationRef.set(<String, dynamic>{
+      'contactIntakeId': intake.id,
+      'agencyFollowUpStatus': AgencyFollowUpStatus.newLead,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
     return intake;
   }
@@ -339,21 +334,14 @@ class ChatRepository {
     final conversationRef = _conversationsCollection.doc(conversationId);
 
     final batch = _firestore.batch();
-    batch.set(
-      messageRef,
-      message.copyWithId(messageRef.id).toMap(),
-    );
-    batch.set(
-      conversationRef,
-      <String, dynamic>{
-        'lastMessage': message.contenu,
-        'lastMessageDate': Timestamp.fromDate(message.dateEnvoi),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'unreadCountByUser.$recipientId': FieldValue.increment(1),
-        'unreadCountByUser.$senderId': 0,
-      },
-      SetOptions(merge: true),
-    );
+    batch.set(messageRef, message.copyWithId(messageRef.id).toMap());
+    batch.set(conversationRef, <String, dynamic>{
+      'lastMessage': message.contenu,
+      'lastMessageDate': Timestamp.fromDate(message.dateEnvoi),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'unreadCountByUser.$recipientId': FieldValue.increment(1),
+      'unreadCountByUser.$senderId': 0,
+    }, SetOptions(merge: true));
 
     await batch.commit();
   }
@@ -413,18 +401,18 @@ class ChatRepository {
     required String conversationId,
     required String userId,
   }) {
-    return _conversationsCollection.doc(conversationId).set(
-      <String, dynamic>{'unreadCountByUser.$userId': 0},
-      SetOptions(merge: true),
-    );
+    return _conversationsCollection.doc(conversationId).set(<String, dynamic>{
+      'unreadCountByUser.$userId': 0,
+    }, SetOptions(merge: true));
   }
 
   Future<void> markMessagesAsRead({
     required String conversationId,
     required String userId,
   }) async {
-    final messagesRef =
-        _conversationsCollection.doc(conversationId).collection('messages');
+    final messagesRef = _conversationsCollection
+        .doc(conversationId)
+        .collection('messages');
 
     while (true) {
       final unreadMessages = await messagesRef
@@ -444,14 +432,14 @@ class ChatRepository {
       await batch.commit();
     }
 
-    await _conversationsCollection.doc(conversationId).set(
-      <String, dynamic>{'unreadCountByUser.$userId': 0},
-      SetOptions(merge: true),
-    );
+    await _conversationsCollection.doc(conversationId).set(<String, dynamic>{
+      'unreadCountByUser.$userId': 0,
+    }, SetOptions(merge: true));
   }
 
   Future<Map<String, dynamic>?> fetchConversationData(
-      String conversationId) async {
+    String conversationId,
+  ) async {
     final doc = await _conversationsCollection.doc(conversationId).get();
     return doc.data();
   }
@@ -476,10 +464,7 @@ class ChatRepository {
     final conversationData = conversationSnapshot.data();
     final currentRecipientUnread = deletedMessage.destinataireId.trim().isEmpty
         ? 0
-        : _extractUnreadCount(
-            conversationData,
-            deletedMessage.destinataireId,
-          );
+        : _extractUnreadCount(conversationData, deletedMessage.destinataireId);
 
     await messageRef.delete();
 
@@ -489,16 +474,15 @@ class ChatRepository {
         .limit(1)
         .get();
 
-    final patch = <String, dynamic>{
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+    final patch = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
 
     if (latestMessageSnapshot.docs.isEmpty) {
       patch['lastMessage'] = FieldValue.delete();
       patch['lastMessageDate'] = FieldValue.delete();
     } else {
-      final latestMessage =
-          Message.fromMap(latestMessageSnapshot.docs.first.data());
+      final latestMessage = Message.fromMap(
+        latestMessageSnapshot.docs.first.data(),
+      );
       patch['lastMessage'] = latestMessage.contenu;
       patch['lastMessageDate'] = Timestamp.fromDate(latestMessage.dateEnvoi);
     }
@@ -571,7 +555,7 @@ class ChatRepository {
       'role': user.role,
       'photoProfil': user.photoProfil,
       if (user.email.trim().isNotEmpty) 'email': user.email.trim(),
-      if (organization != null) 'organisation': organization,
+      'organisation': ?organization,
     };
   }
 
@@ -612,10 +596,7 @@ class ChatRepository {
     required String introMessage,
   }) {
     final reasonLabel = ContactIntake.reasonLabel(reasonCode);
-    final parts = <String>[
-      'Premier contact Adfoot.',
-      'Motif : $reasonLabel.',
-    ];
+    final parts = <String>['Premier contact Adfoot.', 'Motif : $reasonLabel.'];
 
     final contextLabel = context.displayLabel;
     final contextTitle = context.normalizedTitle;

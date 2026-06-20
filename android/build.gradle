@@ -1,6 +1,6 @@
 // ============================================================================
 // Root-level build.gradle
-// Compatible with Flutter 3.32.7 / AGP 8.6.1 / Gradle 8.9 / Kotlin 1.8.22
+// Compatible with Flutter 3.44.x / AGP 8.11.x / Gradle 8.14.x / Kotlin 2.2.x
 // ============================================================================
 
 allprojects {
@@ -15,23 +15,22 @@ rootProject.buildDir = "../build"
 
 subprojects {
 
+    buildscript {
+        configurations.classpath {
+            resolutionStrategy.eachDependency { details ->
+                if (details.requested.group == "org.jetbrains.kotlin") {
+                    details.useVersion("2.2.20")
+                    details.because("Align plugin Kotlin Gradle Plugin classpaths with Flutter 3.44 and Gradle 8.14")
+                }
+            }
+        }
+    }
+
     // Each module (app + Flutter plugins) has its own build directory.
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 
     // Flutter requires every plugin module to depend on :app.
     project.evaluationDependsOn(":app")
-
-    // Critical guardrail: force Kotlin.
-    // Avoids errors like "Too many arguments for public constructor String()"
-    // on package_info_plus, cloud_functions, etc.
-    configurations.all {
-        resolutionStrategy.eachDependency { details ->
-            if (details.requested.group == "org.jetbrains.kotlin") {
-                details.useVersion("1.8.22")
-                details.because("Force Kotlin version for Flutter plugins compatibility")
-            }
-        }
-    }
 }
 
 // Global clean task used by flutter clean.

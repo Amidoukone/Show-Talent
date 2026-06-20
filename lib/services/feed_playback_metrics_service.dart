@@ -5,22 +5,23 @@ import 'package:flutter/foundation.dart';
 import '../models/video.dart';
 import 'client_logger.dart';
 
-typedef PlaybackMetricsEmitter = Future<void> Function(
-  String source,
-  String message, {
-  Map<String, dynamic>? metadata,
-});
+typedef PlaybackMetricsEmitter =
+    Future<void> Function(
+      String source,
+      String message, {
+      Map<String, dynamic>? metadata,
+    });
 
 class FeedPlaybackMetricsPolicy {
-  const FeedPlaybackMetricsPolicy({
-    this.sampleRate = 1.0,
-  }) : assert(sampleRate >= 0 && sampleRate <= 1);
+  const FeedPlaybackMetricsPolicy({this.sampleRate = 1.0})
+    : assert(sampleRate >= 0 && sampleRate <= 1);
 
   final double sampleRate;
 
   factory FeedPlaybackMetricsPolicy.forCurrentBuild() {
     final defaultSampleRate = kReleaseMode ? 0.2 : 1.0;
-    final configuredSampleRate = double.tryParse(
+    final configuredSampleRate =
+        double.tryParse(
           const String.fromEnvironment('FEED_PLAYBACK_METRICS_SAMPLE_RATE'),
         ) ??
         defaultSampleRate;
@@ -34,7 +35,8 @@ class FeedPlaybackMetricsPolicy {
     FeedPlaybackSessionSummary summary, {
     required double randomValue,
   }) {
-    final shouldAlwaysLog = !summary.hadFirstFrame ||
+    final shouldAlwaysLog =
+        !summary.hadFirstFrame ||
         summary.rebufferCount > 0 ||
         summary.stallRecoveryCount > 0;
     if (shouldAlwaysLog) {
@@ -172,8 +174,8 @@ class FeedPlaybackSessionTracker {
     this.networkTier,
     String? resolvedUrl,
     VideoSource? source,
-  })  : _now = now,
-        _startedAt = now() {
+  }) : _now = now,
+       _startedAt = now() {
     updateSource(resolvedUrl: resolvedUrl, source: source);
   }
 
@@ -221,10 +223,7 @@ class FeedPlaybackSessionTracker {
   bool _finished = false;
   double _estimatedBytesPlayed = 0;
 
-  void updateSource({
-    String? resolvedUrl,
-    VideoSource? source,
-  }) {
+  void updateSource({String? resolvedUrl, VideoSource? source}) {
     if (_finished) {
       return;
     }
@@ -251,7 +250,8 @@ class FeedPlaybackSessionTracker {
       _initialSourceBitrate = nextSourceBitrate;
     }
 
-    final sourceChanged = (_currentSourceUrl != null &&
+    final sourceChanged =
+        (_currentSourceUrl != null &&
             nextSourceUrl != null &&
             nextSourceUrl.isNotEmpty &&
             _currentSourceUrl != nextSourceUrl) ||
@@ -305,8 +305,9 @@ class FeedPlaybackSessionTracker {
 
     final now = _now();
     final safePosition = position < Duration.zero ? Duration.zero : position;
-    final safeDuration =
-        duration == null || duration <= Duration.zero ? null : duration;
+    final safeDuration = duration == null || duration <= Duration.zero
+        ? null
+        : duration;
 
     if (safeDuration != null && safeDuration > _reportedDuration) {
       _reportedDuration = safeDuration;
@@ -401,8 +402,9 @@ class FeedPlaybackSessionTracker {
       finalSourceBitrate: _finalSourceBitrate,
       sourceChangeCount: _sourceChangeCount,
       maxPosition: _maxPosition > Duration.zero ? _maxPosition : null,
-      reportedDuration:
-          _reportedDuration > Duration.zero ? _reportedDuration : null,
+      reportedDuration: _reportedDuration > Duration.zero
+          ? _reportedDuration
+          : null,
       recoveryReasons: Map<String, int>.unmodifiable(_recoveryReasons),
     );
   }
@@ -432,7 +434,8 @@ class FeedPlaybackSessionTracker {
     }
 
     final thresholdMs = duration.inMilliseconds * completionThreshold;
-    final likelyLooped = previous.inMilliseconds >= thresholdMs &&
+    final likelyLooped =
+        previous.inMilliseconds >= thresholdMs &&
         current.inMilliseconds <= duration.inMilliseconds * 0.2;
     if (!likelyLooped) {
       return Duration.zero;
@@ -467,14 +470,12 @@ class FeedPlaybackSessionTracker {
 
 class FeedPlaybackMetricsLogger {
   FeedPlaybackMetricsLogger({
-    ClientLogger? logger,
+    this._logger,
     FeedPlaybackMetricsPolicy? policy,
     double Function()? random,
-    PlaybackMetricsEmitter? emitInfo,
-  })  : _logger = logger,
-        _policy = policy ?? FeedPlaybackMetricsPolicy.forCurrentBuild(),
-        _random = random ?? Random().nextDouble,
-        _emitInfo = emitInfo;
+    this._emitInfo,
+  }) : _policy = policy ?? FeedPlaybackMetricsPolicy.forCurrentBuild(),
+       _random = random ?? Random().nextDouble;
 
   final ClientLogger? _logger;
   final FeedPlaybackMetricsPolicy _policy;
@@ -487,11 +488,7 @@ class FeedPlaybackMetricsLogger {
     }
 
     await (_emitInfo ??
-            ((
-              String source,
-              String message, {
-              Map<String, dynamic>? metadata,
-            }) {
+            ((String source, String message, {Map<String, dynamic>? metadata}) {
               return (_logger ?? ClientLogger.instance).logInfo(
                 source,
                 message,
@@ -499,9 +496,9 @@ class FeedPlaybackMetricsLogger {
               );
             }))
         .call(
-      'feed_playback',
-      'Feed playback session',
-      metadata: summary.toMetadata(),
-    );
+          'feed_playback',
+          'Feed playback session',
+          metadata: summary.toMetadata(),
+        );
   }
 }

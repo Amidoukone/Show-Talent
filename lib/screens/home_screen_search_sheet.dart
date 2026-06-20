@@ -43,10 +43,7 @@ class _VideoSearchSheet extends StatelessWidget {
       child: Align(
         alignment: Alignment.bottomCenter,
         child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 620,
-            maxHeight: sheetMaxHeight,
-          ),
+          constraints: BoxConstraints(maxWidth: 620, maxHeight: sheetMaxHeight),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: AdColors.surfaceCard,
@@ -126,15 +123,11 @@ class _VideoSearchSheet extends StatelessWidget {
                         fillColor: AdColors.surface,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                            color: AdColors.divider,
-                          ),
+                          borderSide: const BorderSide(color: AdColors.divider),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(
-                            color: AdColors.divider,
-                          ),
+                          borderSide: const BorderSide(color: AdColors.divider),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -146,9 +139,7 @@ class _VideoSearchSheet extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    Flexible(
-                      child: _buildContent(active),
-                    ),
+                    Flexible(child: _buildContent(active)),
                   ],
                 ),
               ),
@@ -188,10 +179,8 @@ class _VideoSearchSheet extends StatelessWidget {
       shrinkWrap: true,
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       itemCount: results.length,
-      separatorBuilder: (_, __) => const Divider(
-        color: AdColors.divider,
-        height: 1,
-      ),
+      separatorBuilder: (_, _) =>
+          const Divider(color: AdColors.divider, height: 1),
       itemBuilder: (context, index) {
         final video = results[index];
         final author = userController.usersCache[video.uid];
@@ -295,7 +284,7 @@ class _VideoSearchResultTile extends StatelessWidget {
                       : Image.network(
                           video.thumbnailUrl.trim(),
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => const ColoredBox(
+                          errorBuilder: (_, _, _) => const ColoredBox(
                             color: AdColors.surface,
                             child: Icon(
                               Icons.play_arrow_rounded,

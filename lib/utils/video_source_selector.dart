@@ -129,9 +129,7 @@ class VideoSourceSelector {
         highBandwidth: highBandwidth,
       );
 
-      return _dedupe([
-        if (primary != null) primary,
-      ]);
+      return _dedupe([?primary]);
     }
 
     final mp4Sources = _sortedByHeight(candidateSources);
@@ -142,12 +140,12 @@ class VideoSourceSelector {
 
     final ordered = <VideoSource>[
       if (highBandwidth) ...[
-        if (preferred720 != null) preferred720,
-        if (preferred480 != null) preferred480,
+        ?preferred720,
+        ?preferred480,
         ...mp4Sources.reversed,
       ] else ...[
-        if (preferred480 != null) preferred480,
-        if (preferred360 != null) preferred360,
+        ?preferred480,
+        ?preferred360,
         ...mp4Sources,
         ...mp4Sources.reversed,
       ],

@@ -67,8 +67,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _languagesController = TextEditingController(
       text: user.languages?.join(', ') ?? '',
     );
-    _teamController =
-        TextEditingController(text: user.team ?? user.clubActuel ?? '');
+    _teamController = TextEditingController(
+      text: user.team ?? user.clubActuel ?? '',
+    );
     _ligueController = TextEditingController(text: user.ligue ?? '');
     _entrepriseController = TextEditingController(text: user.entreprise ?? '');
     _nombreRecrutementsController = TextEditingController(
@@ -138,7 +139,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return null;
   }
 
-  InputDecorationTheme _inputDecorationTheme(BuildContext context) {
+  InputDecorationThemeData _inputDecorationTheme(BuildContext context) {
     final base = Theme.of(context).inputDecorationTheme;
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -191,15 +192,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -258,8 +259,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   color: _selectedBirthDate != null
                       ? AdColors.onSurface
                       : AdColors.onSurfaceMuted,
-                  fontWeight:
-                      _selectedBirthDate != null ? FontWeight.w600 : null,
+                  fontWeight: _selectedBirthDate != null
+                      ? FontWeight.w600
+                      : null,
                 ),
               ),
             ),
@@ -425,46 +427,46 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final displayNameLabel = _isClub
         ? 'Nom du club'
         : _isRecruiter
-            ? 'Nom affiché'
-            : 'Nom complet';
+        ? 'Nom affiché'
+        : 'Nom complet';
     final headerTitle = _isPlayer
         ? user.role == 'coach'
-            ? 'Profil coach'
-            : 'Profil joueur'
+              ? 'Profil coach'
+              : 'Profil joueur'
         : _isClub
-            ? 'Profil club'
-            : _isRecruiter
-                ? user.isAgent
-                    ? 'Profil agent'
-                    : 'Profil recruteur'
-                : 'Profil';
+        ? 'Profil club'
+        : _isRecruiter
+        ? user.isAgent
+              ? 'Profil agent'
+              : 'Profil recruteur'
+        : 'Profil';
     final headerSubtitle = _isPlayer
         ? user.role == 'coach'
-            ? 'Présentez vos informations publiques de coach dans un cadre clair, lisible et crédible.'
-            : 'Présentez vos informations publiques de joueur dans un cadre clair, lisible et crédible.'
+              ? 'Présentez vos informations publiques de coach dans un cadre clair, lisible et crédible.'
+              : 'Présentez vos informations publiques de joueur dans un cadre clair, lisible et crédible.'
         : _isClub
-            ? 'Rassemblez les informations visibles de votre club dans une présentation professionnelle et cohérente.'
-            : _isRecruiter
-                ? user.isAgent
-                    ? 'Centralisez votre identité professionnelle, votre agence et vos coordonnées dans un profil de représentation plus clair.'
-                    : 'Centralisez votre identité professionnelle, votre structure de recrutement et vos coordonnées dans un profil plus clair.'
-                : 'Mettez à jour les informations visibles de votre profil dans un cadre plus clair.';
+        ? 'Rassemblez les informations visibles de votre club dans une présentation professionnelle et cohérente.'
+        : _isRecruiter
+        ? user.isAgent
+              ? 'Centralisez votre identité professionnelle, votre agence et vos coordonnées dans un profil de représentation plus clair.'
+              : 'Centralisez votre identité professionnelle, votre structure de recrutement et vos coordonnées dans un profil plus clair.'
+        : 'Mettez à jour les informations visibles de votre profil dans un cadre plus clair.';
     final generalInfoSubtitle = _isClub
         ? 'Nom du club, contact, langues et présentation visibles sur le profil.'
         : _isRecruiter
-            ? 'Nom affiché, contact, langues et présentation professionnelle visibles sur le profil.'
-            : 'Nom affiché, contact, langues et présentation visible sur le profil.';
+        ? 'Nom affiché, contact, langues et présentation professionnelle visibles sur le profil.'
+        : 'Nom affiché, contact, langues et présentation visible sur le profil.';
     final bioLabel = _isPlayer
         ? user.role == 'coach'
-            ? 'Présentation du coach'
-            : 'Présentation du joueur'
+              ? 'Présentation du coach'
+              : 'Présentation du joueur'
         : _isClub
-            ? 'Présentation du club'
-            : _isRecruiter
-                ? user.isAgent
-                    ? 'Présentation de l’agent'
-                    : 'Présentation du recruteur'
-                : 'Présentation';
+        ? 'Présentation du club'
+        : _isRecruiter
+        ? user.isAgent
+              ? 'Présentation de l’agent'
+              : 'Présentation du recruteur'
+        : 'Présentation';
 
     return Scaffold(
       backgroundColor: kSurface,
@@ -516,10 +518,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           icon: _isPlayer
                               ? Icons.person_pin_circle_outlined
                               : _isClub
-                                  ? Icons.groups_outlined
-                                  : _isRecruiter
-                                      ? Icons.badge_outlined
-                                      : Icons.person_outline,
+                              ? Icons.groups_outlined
+                              : _isRecruiter
+                              ? Icons.badge_outlined
+                              : Icons.person_outline,
                         ),
                         const SizedBox(height: 16),
                         _SectionCard(
@@ -748,7 +750,7 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
             onPressed: _isUploading || _isDeleting
                 ? null
                 : () async {
-                    final result = await FilePicker.platform.pickFiles(
+                    final result = await FilePicker.pickFiles(
                       type: FileType.custom,
                       allowedExtensions: ['pdf'],
                       withData: true,
@@ -769,8 +771,9 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
                       await widget.profileController.uploadCvPdf(
                         user.uid,
                         pdfBytes: bytes,
-                        pdfFile:
-                            path != null && path.isNotEmpty ? File(path) : null,
+                        pdfFile: path != null && path.isNotEmpty
+                            ? File(path)
+                            : null,
                         fileName: fileName.toLowerCase().endsWith('.pdf')
                             ? fileName
                             : '$fileName.pdf',
@@ -792,8 +795,8 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
             label: _isUploading
                 ? 'Ajout du CV...'
                 : hasCv
-                    ? 'Remplacer le CV'
-                    : 'Ajouter un CV',
+                ? 'Remplacer le CV'
+                : 'Ajouter un CV',
             kind: AdButtonKind.tonal,
           ),
           if (hasCv) ...[
@@ -864,12 +867,10 @@ class _SectionCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 18,
-                  backgroundColor:
-                      _EditProfileScreenState.kPrimary.withValues(alpha: 0.1),
-                  child: Icon(
-                    icon,
-                    color: _EditProfileScreenState.kPrimary,
+                  backgroundColor: _EditProfileScreenState.kPrimary.withValues(
+                    alpha: 0.1,
                   ),
+                  child: Icon(icon, color: _EditProfileScreenState.kPrimary),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -896,10 +897,7 @@ class _SectionCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (trailing != null) ...[
-                  const SizedBox(width: 10),
-                  trailing!,
-                ],
+                if (trailing != null) ...[const SizedBox(width: 10), trailing!],
               ],
             ),
             const SizedBox(height: 14),

@@ -376,7 +376,8 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     final bool hasError = value.hasError || widget.errorMessage != null;
     final bool hasRenderableFrame =
         _didRenderFrame(value) || widget.hasFirstFrame;
-    final bool showLoader = !hasRenderableFrame &&
+    final bool showLoader =
+        !hasRenderableFrame &&
         (widget.isLoading || value.isBuffering || !value.isInitialized);
     _syncSlowLoadingState(showLoader: showLoader, hasError: hasError);
 
@@ -394,7 +395,10 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   }
 
   Widget _buildContentLayer(
-      VideoPlayerValue value, bool hasError, bool showLoader) {
+    VideoPlayerValue value,
+    bool hasError,
+    bool showLoader,
+  ) {
     if (hasError) {
       return _buildSafeState(
         showLoader: false,
@@ -406,7 +410,8 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       fit: StackFit.expand,
       children: [
         _buildThumbnail(
-          fadeOut: value.isInitialized &&
+          fadeOut:
+              value.isInitialized &&
               (_didRenderFrame(value) || widget.hasFirstFrame),
         ),
         if (value.isInitialized) _buildVideo(),
@@ -415,10 +420,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     );
   }
 
-  Widget _buildSafeState({
-    required bool showLoader,
-    String? errorMessage,
-  }) {
+  Widget _buildSafeState({required bool showLoader, String? errorMessage}) {
     final hasError = errorMessage != null && errorMessage.trim().isNotEmpty;
     return GestureDetector(
       onTap: hasError ? null : _onTap,
@@ -477,8 +479,8 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
           filterQuality: FilterQuality.low,
           fadeInDuration: Duration.zero,
           fadeOutDuration: Duration.zero,
-          placeholder: (_, __) => _buildThumbnailFallback(),
-          errorWidget: (_, __, ___) => _buildThumbnailFallback(),
+          placeholder: (_, _) => _buildThumbnailFallback(),
+          errorWidget: (_, _, _) => _buildThumbnailFallback(),
         ),
         _buildPosterReadabilityScrim(),
       ],
@@ -508,10 +510,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF11161C),
-            Color(0xFF050608),
-          ],
+          colors: [Color(0xFF11161C), Color(0xFF050608)],
         ),
       ),
       child: const Center(
@@ -583,9 +582,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.42),
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.18),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.32),
@@ -629,9 +626,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.16),
-                ),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.3),
@@ -648,11 +643,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      feedback.icon,
-                      color: Colors.white,
-                      size: 26,
-                    ),
+                    Icon(feedback.icon, color: Colors.white, size: 26),
                     const SizedBox(width: 8),
                     Text(
                       feedback.label,
@@ -749,9 +740,6 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   }
 
   Widget _buildErrorOverlay({String? message}) {
-    return VideoStateOverlay.error(
-      message: message,
-      onRetry: widget.onRetry,
-    );
+    return VideoStateOverlay.error(message: message, onRetry: widget.onRetry);
   }
 }

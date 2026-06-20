@@ -173,7 +173,7 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                           ),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
-                            value: _selectedReason,
+                            initialValue: _selectedReason,
                             isExpanded: true,
                             decoration: const InputDecoration(
                               labelText: 'Motif du contact',

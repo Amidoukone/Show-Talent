@@ -29,9 +29,9 @@ class UploadVideoController extends GetxController {
     UploadClient? uploadClient,
     VideoObservabilityService? observability,
     UploadVideoRepository? uploadRepository,
-  })  : _uploadClient = uploadClient ?? UploadClient(),
-        _observability = observability ?? VideoObservabilityService.instance,
-        _uploadRepository = uploadRepository ?? UploadVideoRepository();
+  }) : _uploadClient = uploadClient ?? UploadClient(),
+       _observability = observability ?? VideoObservabilityService.instance,
+       _uploadRepository = uploadRepository ?? UploadVideoRepository();
 
   File? selectedVideo;
   File? thumbnail;
@@ -131,8 +131,9 @@ class UploadVideoController extends GetxController {
         return false;
       }
 
-      final isValidQuality =
-          await VideoTools.isQualityAcceptable(preparedVideo.file.path);
+      final isValidQuality = await VideoTools.isQualityAcceptable(
+        preparedVideo.file.path,
+      );
       if (!_isCurrentOperation(operation)) return false;
 
       if (!isValidQuality) {
@@ -141,8 +142,9 @@ class UploadVideoController extends GetxController {
       }
 
       uploadStage.value = VideoUiStrings.uploadStagePrepareFile;
-      final (preparedWidth, preparedHeight) =
-          await VideoTools.getDimensions(preparedVideo.file.path);
+      final (preparedWidth, preparedHeight) = await VideoTools.getDimensions(
+        preparedVideo.file.path,
+      );
       if (!_isCurrentOperation(operation)) return false;
 
       uploadProgress.value = 0.08;
@@ -199,9 +201,7 @@ class UploadVideoController extends GetxController {
           metadata: _uploadDiagnostics(operation: operation),
         ),
       );
-      showErrorToast(
-        VideoUiStrings.uploadPreparationFailed,
-      );
+      showErrorToast(VideoUiStrings.uploadPreparationFailed);
       return false;
     } finally {
       if (_isCurrentOperation(operation)) {
@@ -297,8 +297,9 @@ class UploadVideoController extends GetxController {
       }
 
       if (!await thumbnail!.exists() || (await thumbnail!.length()) == 0) {
-        final regenerated =
-            await VideoTools.generateThumbnail(originalVideoPath!);
+        final regenerated = await VideoTools.generateThumbnail(
+          originalVideoPath!,
+        );
         if (regenerated != null && await regenerated.exists()) {
           thumbnail = regenerated;
         } else {
@@ -307,8 +308,9 @@ class UploadVideoController extends GetxController {
       }
 
       uploadStage.value = VideoUiStrings.uploadStagePrepareSecureThumbnail;
-      final thumbContentType =
-          VideoTools.inferImageContentTypeFromPath(thumbnail!.path);
+      final thumbContentType = VideoTools.inferImageContentTypeFromPath(
+        thumbnail!.path,
+      );
 
       final thumbTicket = await _uploadClient.requestThumbnailTicket(
         sessionId: session.sessionId,
@@ -364,9 +366,9 @@ class UploadVideoController extends GetxController {
           'reportCount': 0,
           'shareCount': 0,
           'optimized': false,
-          if (durationSec != null) 'duration': durationSec,
-          if (w != null) 'width': w,
-          if (h != null) 'height': h,
+          'duration': ?durationSec,
+          'width': ?w,
+          'height': ?h,
         },
       );
 
@@ -430,13 +432,7 @@ class UploadVideoController extends GetxController {
 
     Future<void> navigateBackToFeed() async {
       await Future.delayed(const Duration(milliseconds: 200));
-      Get.offAllNamed(
-        AppRoutes.main,
-        arguments: {
-          'tab': 0,
-          'refresh': true,
-        },
-      );
+      Get.offAllNamed(AppRoutes.main, arguments: {'tab': 0, 'refresh': true});
     }
 
     Future<void> finalizeSuccessFlow() async {
@@ -490,9 +486,7 @@ class UploadVideoController extends GetxController {
       await navigateBackToFeed();
     }
 
-    Future<void> closeOptimizationFlow(
-      Future<void> Function() callback,
-    ) async {
+    Future<void> closeOptimizationFlow(Future<void> Function() callback) async {
       if (completer.isCompleted) return;
 
       await subscription?.cancel();
@@ -535,16 +529,18 @@ class UploadVideoController extends GetxController {
       }
     });
 
-    subscription = _uploadRepository.watchProcessingState(videoId).listen(
-      (state) {
-        unawaited(inspectVideoState(state));
-      },
-      onError: (error) {
-        AppLogger.debug(
-          '[UploadVideoController] optimization snapshot error: $error',
+    subscription = _uploadRepository
+        .watchProcessingState(videoId)
+        .listen(
+          (state) {
+            unawaited(inspectVideoState(state));
+          },
+          onError: (error) {
+            AppLogger.debug(
+              '[UploadVideoController] optimization snapshot error: $error',
+            );
+          },
         );
-      },
-    );
 
     timeoutTimer = Timer(_optimizationOverallTimeout, () {
       unawaited(closeOptimizationFlow(finalizePendingFlow));

@@ -48,14 +48,14 @@ class UploadSessionState {
   }
 
   Map<String, dynamic> toJson() => {
-        'sessionId': sessionId,
-        'uploadUrl': uploadUrl,
-        'expiresAt': expiresAt.toIso8601String(),
-        'videoPath': videoPath,
-        'thumbnailPath': thumbnailPath,
-        'localFilePath': localFilePath,
-        'uploadedBytes': uploadedBytes,
-      };
+    'sessionId': sessionId,
+    'uploadUrl': uploadUrl,
+    'expiresAt': expiresAt.toIso8601String(),
+    'videoPath': videoPath,
+    'thumbnailPath': thumbnailPath,
+    'localFilePath': localFilePath,
+    'uploadedBytes': uploadedBytes,
+  };
 
   factory UploadSessionState.fromJson(Map<String, dynamic> json) {
     return UploadSessionState(
@@ -111,16 +111,17 @@ abstract class UploadHttpClient {
 
 class DioUploadHttpClient implements UploadHttpClient {
   DioUploadHttpClient({Dio? dio})
-      : _dio = dio ??
-            Dio(
-              BaseOptions(
-                connectTimeout: const Duration(seconds: 20),
-                receiveTimeout: const Duration(seconds: 20),
-                sendTimeout: const Duration(seconds: 20),
-                followRedirects: false,
-                validateStatus: (status) => status != null && status < 500,
-              ),
-            );
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              connectTimeout: const Duration(seconds: 20),
+              receiveTimeout: const Duration(seconds: 20),
+              sendTimeout: const Duration(seconds: 20),
+              followRedirects: false,
+              validateStatus: (status) => status != null && status < 500,
+            ),
+          );
 
   final Dio _dio;
 
@@ -150,16 +151,13 @@ class UploadClient {
   UploadClient({
     UploadHttpClient? httpClient,
     FirebaseFunctions? functions,
-    Future<String> Function()? cachePathProvider,
-    Duration videoRetryDelay = const Duration(milliseconds: 750),
-    Duration thumbnailRetryDelay = const Duration(milliseconds: 500),
+    this._cachePathProvider,
+    this._videoRetryDelay = const Duration(milliseconds: 750),
+    this._thumbnailRetryDelay = const Duration(milliseconds: 500),
     int maxChunkRetries = _defaultMaxChunkRetries,
-  })  : _httpClient = httpClient ?? DioUploadHttpClient(),
-        _functionsOverride = functions,
-        _cachePathProvider = cachePathProvider,
-        _videoRetryDelay = videoRetryDelay,
-        _thumbnailRetryDelay = thumbnailRetryDelay,
-        _maxChunkRetries = maxChunkRetries < 1 ? 1 : maxChunkRetries;
+  }) : _httpClient = httpClient ?? DioUploadHttpClient(),
+       _functionsOverride = functions,
+       _maxChunkRetries = maxChunkRetries < 1 ? 1 : maxChunkRetries;
 
   final UploadHttpClient _httpClient;
   final FirebaseFunctions? _functionsOverride;
@@ -168,7 +166,8 @@ class UploadClient {
   final Duration _thumbnailRetryDelay;
   final int _maxChunkRetries;
 
-  late final FirebaseFunctions _functions = _functionsOverride ??
+  late final FirebaseFunctions _functions =
+      _functionsOverride ??
       FirebaseFunctions.instanceFor(
         region: AppEnvironmentConfig.functionsRegion,
       );
@@ -237,11 +236,14 @@ class UploadClient {
     final callable = _functions.httpsCallable('createUploadSession');
     final data =
         await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
-            callable, 'createUploadSession', {
-      if (sessionId != null) 'sessionId': sessionId,
-      'contentType': contentType,
-      'fileSizeBytes': fileSizeBytes,
-    });
+          callable,
+          'createUploadSession',
+          {
+            'sessionId': ?sessionId,
+            'contentType': contentType,
+            'fileSizeBytes': fileSizeBytes,
+          },
+        );
 
     final expiresAtMs = (data['expiresAt'] as num?)?.toInt() ?? 0;
 
@@ -361,11 +363,13 @@ class UploadClient {
       final response = await _httpClient.put(
         session.uploadUrl,
         data: Stream<List<int>>.empty(),
-        options: Options(headers: {
-          'Content-Length': '0',
-          'Content-Range': 'bytes */$totalBytes',
-          'Content-Type': 'application/octet-stream',
-        }),
+        options: Options(
+          headers: {
+            'Content-Length': '0',
+            'Content-Range': 'bytes */$totalBytes',
+            'Content-Type': 'application/octet-stream',
+          },
+        ),
       );
       if (response.statusCode == 308) {
         return _extractLastByte(response.headers.value('range'));
@@ -401,10 +405,7 @@ class UploadClient {
     void Function()? onUrlRefreshed,
   }) async {
     var current = session;
-    final totalBytes = await _readValidFileLength(
-      file: file,
-      label: 'video',
-    );
+    final totalBytes = await _readValidFileLength(file: file, label: 'video');
     var uploadedBytes = session.uploadedBytes;
 
     final remoteOffset = await _queryRemoteOffset(current, totalBytes);
@@ -441,8 +442,9 @@ class UploadClient {
       );
 
       if (response.statusCode == 308) {
-        final lastPersistedByte =
-            _extractLastByte(response.headers.value('range'));
+        final lastPersistedByte = _extractLastByte(
+          response.headers.value('range'),
+        );
         if (lastPersistedByte < chunkStart || lastPersistedByte >= totalBytes) {
           throw const UploadClientException(
             'Réponse 308 invalide pendant l’upload vidéo.',
@@ -466,22 +468,22 @@ class UploadClient {
     required String contentType,
     String? thumbnailPath,
   }) async {
-    final size = await _readValidFileLength(
-      file: file,
-      label: 'miniature',
-    );
+    final size = await _readValidFileLength(file: file, label: 'miniature');
     final hash = await _computeMd5(file);
 
     final callable = _functions.httpsCallable('requestThumbnailUploadUrl');
     final data =
         await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
-            callable, 'requestThumbnailUploadUrl', {
-      'sessionId': sessionId,
-      'hash': hash,
-      'size': size,
-      'contentType': contentType,
-      if (thumbnailPath != null) 'thumbnailPath': thumbnailPath,
-    });
+          callable,
+          'requestThumbnailUploadUrl',
+          {
+            'sessionId': sessionId,
+            'hash': hash,
+            'size': size,
+            'contentType': contentType,
+            'thumbnailPath': ?thumbnailPath,
+          },
+        );
 
     return ThumbnailUploadTicket(
       uploadUrl: data['uploadUrl'],
@@ -511,8 +513,10 @@ class UploadClient {
 
     while (uploadedBytes < totalBytes) {
       final chunkStart = uploadedBytes;
-      final end =
-          (chunkStart + _thumbnailChunkSize - 1).clamp(0, totalBytes - 1);
+      final end = (chunkStart + _thumbnailChunkSize - 1).clamp(
+        0,
+        totalBytes - 1,
+      );
       final length = end - chunkStart + 1;
 
       final response = await _sendChunkWithRetry(
@@ -529,8 +533,9 @@ class UploadClient {
       );
 
       if (response.statusCode == 308) {
-        final lastPersistedByte =
-            _extractLastByte(response.headers.value('range'));
+        final lastPersistedByte = _extractLastByte(
+          response.headers.value('range'),
+        );
         if (lastPersistedByte < chunkStart || lastPersistedByte >= totalBytes) {
           throw const UploadClientException(
             'Réponse 308 invalide pendant l’upload miniature.',
@@ -560,10 +565,10 @@ class UploadClient {
     final callable = _functions.httpsCallable('finalizeUpload');
     final data =
         await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
-            callable, 'finalizeUpload', {
-      'sessionId': sessionId,
-      'metadata': metadata,
-    });
+          callable,
+          'finalizeUpload',
+          {'sessionId': sessionId, 'metadata': metadata},
+        );
     return (data['ok'] as bool?) ?? false;
   }
 }

@@ -124,11 +124,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   static const int _captionCollapsedMaxLines = 2;
   static const int _descriptionMaxLines = 1;
   static const List<Shadow> _videoMetadataTextShadow = <Shadow>[
-    Shadow(
-      offset: Offset(0, 1),
-      blurRadius: 3,
-      color: Color(0x99000000),
-    ),
+    Shadow(offset: Offset(0, 1), blurRadius: 3, color: Color(0x99000000)),
   ];
 
   // ---------------------------------------------------------------------------
@@ -144,8 +140,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _playbackMetricsLogger = FeedPlaybackMetricsLogger();
     _observability = VideoObservabilityService.instance;
     _showPlayIcon = ValueNotifier<bool>(true);
-    _videoUiSignal =
-        _videoManager.watchVideoUi(widget.contextKey, widget.videoUrl);
+    _videoUiSignal = _videoManager.watchVideoUi(
+      widget.contextKey,
+      widget.videoUrl,
+    );
 
     _vc = widget.videoController;
     _bindIndexWorker();
@@ -199,11 +197,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     if (oldWidget.contextKey != widget.contextKey ||
         oldWidget.videoUrl != widget.videoUrl) {
       _videoManager.unwatchVideoUi(oldWidget.contextKey, oldWidget.videoUrl);
-      _videoUiSignal =
-          _videoManager.watchVideoUi(widget.contextKey, widget.videoUrl);
+      _videoUiSignal = _videoManager.watchVideoUi(
+        widget.contextKey,
+        widget.videoUrl,
+      );
     }
 
-    final videoChanged = oldWidget.videoUrl != widget.videoUrl ||
+    final videoChanged =
+        oldWidget.videoUrl != widget.videoUrl ||
         oldWidget.video.id != widget.video.id;
     final incomingPlayerChanged = !identical(oldWidget.player, widget.player);
 
@@ -264,8 +265,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     String? recoveryReason,
   }) async {
     final localToken = ++_attachToken;
-    final resolvedUrl =
-        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl);
+    final resolvedUrl = _videoManager.getResolvedUrl(
+      widget.contextKey,
+      widget.videoUrl,
+    );
     final canReuseExisting = _videoManager.shouldReuseControllerForRequest(
       originalUrl: widget.videoUrl,
       resolvedUrl: resolvedUrl,
@@ -275,7 +278,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
     CachedVideoPlayerPlus? p;
     if (canReuseExisting) {
-      p = reuse ??
+      p =
+          reuse ??
           _videoManager.getController(widget.contextKey, widget.videoUrl);
     } else {
       AppLogger.debug(
@@ -312,8 +316,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   void _bindManagedPlayerIfAvailable() {
-    final managedPlayer =
-        _videoManager.getController(widget.contextKey, widget.videoUrl);
+    final managedPlayer = _videoManager.getController(
+      widget.contextKey,
+      widget.videoUrl,
+    );
     if (managedPlayer == null || identical(managedPlayer, _player)) {
       return;
     }
@@ -337,8 +343,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _player = p;
     _hasFirstFrame = false;
 
-    final resolved =
-        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl);
+    final resolved = _videoManager.getResolvedUrl(
+      widget.contextKey,
+      widget.videoUrl,
+    );
     if (resolved != null &&
         resolved.isNotEmpty &&
         widget.video.resolvedUrl != resolved) {
@@ -397,10 +405,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   VideoSource? _currentPlaybackSource() {
-    final resolvedUrl = _videoManager.getResolvedUrl(
-          widget.contextKey,
-          widget.videoUrl,
-        ) ??
+    final resolvedUrl =
+        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
         widget.video.resolvedUrl ??
         widget.video.videoUrl;
 
@@ -428,20 +434,15 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   void _ensurePlaybackSession() {
-    final resolvedUrl = _videoManager.getResolvedUrl(
-          widget.contextKey,
-          widget.videoUrl,
-        ) ??
+    final resolvedUrl =
+        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
         widget.video.resolvedUrl ??
         widget.video.videoUrl;
     final source = _currentPlaybackSource();
 
     final currentSession = _playbackSession;
     if (currentSession != null) {
-      currentSession.updateSource(
-        resolvedUrl: resolvedUrl,
-        source: source,
-      );
+      currentSession.updateSource(resolvedUrl: resolvedUrl, source: source);
       return;
     }
 
@@ -450,7 +451,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       entryContext: widget.contextKey,
       now: DateTime.now,
       playbackMode: widget.video.playback?.mode,
-      hasMultipleMp4Sources: widget.video.hasMultipleMp4Sources &&
+      hasMultipleMp4Sources:
+          widget.video.hasMultipleMp4Sources &&
           _videoManager.adaptiveSourcesEnabled,
       networkTier: _videoManager.currentProfile?.tier.name,
       resolvedUrl: resolvedUrl,
@@ -467,10 +469,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       return;
     }
     currentSession.updateSource(
-      resolvedUrl: _videoManager.getResolvedUrl(
-            widget.contextKey,
-            widget.videoUrl,
-          ) ??
+      resolvedUrl:
+          _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
           widget.video.resolvedUrl ??
           widget.video.videoUrl,
       source: _currentPlaybackSource(),
@@ -509,9 +509,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _stopStallWatchdog();
       if (mounted && !_isDisposed) setState(() {});
       if (_isActuallyVisible()) {
-        unawaited(_recoverPlayback(
-          reason: 'runtime_value_error',
-        ));
+        unawaited(_recoverPlayback(reason: 'runtime_value_error'));
       } else {
         _becomePassive();
       }
@@ -594,7 +592,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       final token = _attachToken;
       final resolvedUrl =
           _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
-              widget.video.resolvedUrl;
+          widget.video.resolvedUrl;
       final shouldReuseCurrent = _videoManager.shouldReuseControllerForRequest(
         originalUrl: widget.videoUrl,
         resolvedUrl: resolvedUrl,
@@ -635,9 +633,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             ),
           );
           if (mounted && !_isDisposed) {
-            await _recoverPlayback(
-              reason: 'play_error',
-            );
+            await _recoverPlayback(reason: 'play_error');
           }
           return;
         }
@@ -704,9 +700,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           _bufferingStrikes++;
           if (_bufferingStrikes >= _bufferingMaxStrikesBeforeReload) {
             _bufferingStrikes = 0;
-            await _recoverPlayback(
-              reason: 'buffering_watchdog',
-            );
+            await _recoverPlayback(reason: 'buffering_watchdog');
             return;
           }
         }
@@ -719,9 +713,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         _stallStrikes++;
         if (_stallStrikes >= _stallMaxStrikesBeforeReload) {
           _stallStrikes = 0;
-          await _recoverPlayback(
-            reason: 'stall_watchdog',
-          );
+          await _recoverPlayback(reason: 'stall_watchdog');
         }
       } else {
         _stallStrikes = 0;
@@ -748,9 +740,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _firstFrameTimer = Timer(_firstFrameTimeout, () async {
       if (_isDisposed || _hasFirstFrame || !_isActuallyVisible()) return;
       if (token != _attachToken || c != _ctrl) return;
-      await _recoverPlayback(
-        reason: 'first_frame_timeout',
-      );
+      await _recoverPlayback(reason: 'first_frame_timeout');
     });
   }
 
@@ -759,17 +749,13 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _firstFrameTimer = null;
   }
 
-  Future<void> _recoverPlayback({
-    required String reason,
-  }) async {
+  Future<void> _recoverPlayback({required String reason}) async {
     if (_isDisposed || _isRecovering) return;
     _isRecovering = true;
     try {
       _playbackSession?.recordRecoveryAttempt(reason);
-      final resolvedUrl = _videoManager.getResolvedUrl(
-            widget.contextKey,
-            widget.videoUrl,
-          ) ??
+      final resolvedUrl =
+          _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
           widget.video.resolvedUrl ??
           widget.video.effectiveUrl;
 
@@ -793,14 +779,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
     return ValueListenableBuilder<int>(
       valueListenable: _videoUiSignal,
-      builder: (_, __, ___) {
+      builder: (_, _, _) {
         final ctrl = _ctrl;
-        final managedPlayer =
-            _videoManager.getController(widget.contextKey, widget.videoUrl);
+        final managedPlayer = _videoManager.getController(
+          widget.contextKey,
+          widget.videoUrl,
+        );
         final managedCtrl = managedPlayer?.controller;
         final shouldBindManagedPlayer =
             managedPlayer != null && !identical(managedPlayer, _player);
-        final shouldDetachStaleCtrl = ctrl != null &&
+        final shouldDetachStaleCtrl =
+            ctrl != null &&
             (managedCtrl == null || !identical(ctrl, managedCtrl));
         if (shouldBindManagedPlayer || shouldDetachStaleCtrl) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -819,9 +808,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             ? managedCtrl
             : ctrl;
         final value = _safeValue(effectiveCtrl);
-        final loadState =
-            _videoManager.getLoadState(widget.contextKey, widget.videoUrl);
-        final errorMessage = _getErrorMessage(loadState) ??
+        final loadState = _videoManager.getLoadState(
+          widget.contextKey,
+          widget.videoUrl,
+        );
+        final errorMessage =
+            _getErrorMessage(loadState) ??
             (value?.hasError == true
                 ? VideoUiStrings.playbackInterruptedRetry
                 : null);
@@ -831,7 +823,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           children: [
             ValueListenableBuilder<bool>(
               valueListenable: _showPlayIcon,
-              builder: (_, showIcon, __) {
+              builder: (_, showIcon, _) {
                 return TiktokVideoPlayer(
                   controller: effectiveCtrl,
                   isPlaying: value?.isPlaying ?? false,
@@ -881,13 +873,13 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
   Map<String, dynamic> _playbackDiagnostics() {
     final value = _safeValue(_ctrl);
-    final resolvedUrl = _videoManager.getResolvedUrl(
-          widget.contextKey,
-          widget.videoUrl,
-        ) ??
+    final resolvedUrl =
+        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
         widget.video.resolvedUrl;
-    final loadState =
-        _videoManager.getLoadState(widget.contextKey, widget.videoUrl);
+    final loadState = _videoManager.getLoadState(
+      widget.contextKey,
+      widget.videoUrl,
+    );
 
     return {
       'videoId': widget.video.id,
@@ -907,7 +899,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   double _videoOverlayBottomOffset(MediaQueryData media) {
-    var bottom = media.viewPadding.bottom +
+    var bottom =
+        media.viewPadding.bottom +
         _videoBottomSafeGap +
         (widget.showProgressBar ? _videoProgressReservedHeight : 0);
     if (bottom < _videoBottomMinimumOffset) {
@@ -1009,7 +1002,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       bottom: bottomOffset,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final needsExpansion = rawCaption.isNotEmpty &&
+          final needsExpansion =
+              rawCaption.isNotEmpty &&
               _captionNeedsExpansion(
                 context: context,
                 text: caption,
@@ -1071,12 +1065,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                                       vertical: 2,
                                     ),
                                     decoration: BoxDecoration(
-                                      color:
-                                          Colors.black.withValues(alpha: 0.32),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.32,
+                                      ),
                                       borderRadius: BorderRadius.circular(999),
                                       border: Border.all(
-                                        color: Colors.white
-                                            .withValues(alpha: 0.18),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.18,
+                                        ),
                                       ),
                                     ),
                                     child: Text(
@@ -1122,10 +1118,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                       ),
                       child: Padding(
                         padding: const EdgeInsets.only(top: 6, bottom: 4),
-                        child: Text(
-                          VideoUiStrings.seeMore,
-                          style: linkStyle,
-                        ),
+                        child: Text(VideoUiStrings.seeMore, style: linkStyle),
                       ),
                     ),
                   ),
@@ -1210,10 +1203,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     await _videoManager.pauseAll(widget.contextKey);
     await _setWakelock(false);
     await Get.to(
-      () => ProfileScreen(
-        uid: widget.video.uid,
-        isReadOnly: !isOwner,
-      ),
+      () => ProfileScreen(uid: widget.video.uid, isReadOnly: !isOwner),
     );
     if (mounted && !_isDisposed) {
       _scheduleMaybePlay();
@@ -1533,10 +1523,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     // a controller whose native player ID no longer exists.
     _bindPlayer(null);
 
-    final resolvedUrl = _videoManager.getResolvedUrl(
-          widget.contextKey,
-          widget.videoUrl,
-        ) ??
+    final resolvedUrl =
+        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
         widget.video.resolvedUrl;
     await _videoManager.disposeUrls(widget.contextKey, [widget.videoUrl]);
     if (!kIsWeb && purgeCachedFile) {

@@ -12,12 +12,17 @@ import 'package:adfoot/services/app_logger.dart';
 class CallableAuthGuard {
   CallableAuthGuard._();
 
-  static const bool _appCheckEnabled =
-      bool.fromEnvironment('APP_CHECK_ENABLED', defaultValue: false);
-  static const bool _forceAppCheckDebugProvider =
-      bool.fromEnvironment('APP_CHECK_DEBUG_PROVIDER', defaultValue: false);
-  static const String _androidProviderName =
-      String.fromEnvironment('APP_CHECK_ANDROID_PROVIDER');
+  static const bool _appCheckEnabled = bool.fromEnvironment(
+    'APP_CHECK_ENABLED',
+    defaultValue: false,
+  );
+  static const bool _forceAppCheckDebugProvider = bool.fromEnvironment(
+    'APP_CHECK_DEBUG_PROVIDER',
+    defaultValue: false,
+  );
+  static const String _androidProviderName = String.fromEnvironment(
+    'APP_CHECK_ANDROID_PROVIDER',
+  );
   static bool get _shouldReadAppCheckToken =>
       _appCheckEnabled ||
       _forceAppCheckDebugProvider ||
@@ -106,7 +111,8 @@ class CallableAuthGuard {
     if (_appCheckEnabled && appCheckToken == null) {
       throw _DirectCallableException(
         code: 'failed-precondition',
-        message: 'Vérification de sécurité indisponible. Vérifiez App Check, '
+        message:
+            'Vérification de sécurité indisponible. Vérifiez App Check, '
             "redémarrez l'application puis réessayez.",
       );
     }
@@ -121,15 +127,12 @@ class CallableAuthGuard {
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
-          if (appCheckToken != null) 'X-Firebase-AppCheck': appCheckToken,
+          'X-Firebase-AppCheck': ?appCheckToken,
         },
         body: jsonEncode({'data': parameters ?? <String, dynamic>{}}),
       );
 
-      return _readDirectCallableResult<T>(
-        response,
-        callableName,
-      );
+      return _readDirectCallableResult<T>(response, callableName);
     } finally {
       if (shouldCloseClient) {
         client.close();
@@ -149,10 +152,7 @@ class CallableAuthGuard {
     http.Response response,
     String callableName,
   ) {
-    final decoded = _decodeDirectCallableResponse(
-      response,
-      callableName,
-    );
+    final decoded = _decodeDirectCallableResponse(response, callableName);
 
     final error = decoded['error'];
     if (error is Map<String, dynamic>) {
@@ -196,7 +196,8 @@ class CallableAuthGuard {
       final code = _httpStatusToFunctionsCode(statusCode);
       throw _DirectCallableException(
         code: code,
-        message: 'Service serveur indisponible pendant l appel $callableName '
+        message:
+            'Service serveur indisponible pendant l appel $callableName '
             '(HTTP $statusCode).',
       );
     }
@@ -208,7 +209,8 @@ class CallableAuthGuard {
         scheme: 'http',
         host: AppEnvironmentConfig.firebaseEmulatorHost,
         port: AppEnvironmentConfig.functionsEmulatorPort,
-        path: '/${AppEnvironmentConfig.firebaseProjectId}/'
+        path:
+            '/${AppEnvironmentConfig.firebaseProjectId}/'
             '${AppEnvironmentConfig.functionsRegion}/$callableName',
       );
     }
@@ -220,9 +222,7 @@ class CallableAuthGuard {
     );
   }
 
-  static Future<String?> _readAppCheckToken({
-    bool forceRefresh = false,
-  }) async {
+  static Future<String?> _readAppCheckToken({bool forceRefresh = false}) async {
     if (!_shouldReadAppCheckToken) {
       return null;
     }
@@ -234,7 +234,8 @@ class CallableAuthGuard {
     } catch (error) {
       if (kDebugMode) {
         AppLogger.debug(
-            '[CallableAuthGuard] App Check token unavailable: $error');
+          '[CallableAuthGuard] App Check token unavailable: $error',
+        );
       }
       return null;
     }

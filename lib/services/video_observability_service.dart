@@ -7,28 +7,24 @@ import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/services/callable_auth_guard.dart';
 import 'package:adfoot/services/client_logger.dart';
 
-typedef VideoObservabilityLogEmitter = Future<void> Function(
-  String source,
-  String message, {
-  Map<String, dynamic>? metadata,
-});
+typedef VideoObservabilityLogEmitter =
+    Future<void> Function(
+      String source,
+      String message, {
+      Map<String, dynamic>? metadata,
+    });
 
-typedef VideoActionLogEmitter = Future<void> Function(
-  Map<String, dynamic> payload,
-);
+typedef VideoActionLogEmitter =
+    Future<void> Function(Map<String, dynamic> payload);
 
 class VideoObservabilityService {
   VideoObservabilityService({
-    ClientLogger? logger,
-    FirebaseFunctions? functions,
-    VideoObservabilityLogEmitter? logInfo,
-    VideoObservabilityLogEmitter? logError,
-    VideoActionLogEmitter? videoActionLog,
-  })  : _logger = logger,
-        _functions = functions,
-        _logInfo = logInfo,
-        _logError = logError,
-        _videoActionLog = videoActionLog;
+    this._logger,
+    this._functions,
+    this._logInfo,
+    this._logError,
+    this._videoActionLog,
+  });
 
   static final VideoObservabilityService instance = VideoObservabilityService();
 
@@ -299,9 +295,8 @@ class VideoObservabilityService {
   }
 
   Map<String, dynamic> _metadata(Map<String, dynamic> raw) {
-    return raw.map(
-      (key, value) => MapEntry(key, _safeValue(value)),
-    )..removeWhere((_, value) => value == null);
+    return raw.map((key, value) => MapEntry(key, _safeValue(value)))
+      ..removeWhere((_, value) => value == null);
   }
 
   dynamic _safeValue(dynamic value) {
