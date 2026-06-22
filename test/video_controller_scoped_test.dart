@@ -51,13 +51,10 @@ void main() {
       enableFeedFetch: false,
     );
 
-    controller.replaceVideos(
-      [
-        buildVideo('v1'),
-        buildVideo('v2'),
-      ],
-      selectedIndex: 1,
-    );
+    controller.replaceVideos([
+      buildVideo('v1'),
+      buildVideo('v2'),
+    ], selectedIndex: 1);
 
     expect(controller.videoList.length, 2);
     expect(controller.currentIndex.value, 1);
@@ -71,195 +68,205 @@ void main() {
     expect(controller.currentIndex.value, 1);
   });
 
-  test('replaceVideos clamps selected index and clears selection on empty list',
-      () {
-    final controller = VideoController(
-      contextKey: 'profile:user-2',
-      enableLiveStream: false,
-      enableFeedFetch: false,
-    );
+  test(
+    'replaceVideos clamps selected index and clears selection on empty list',
+    () {
+      final controller = VideoController(
+        contextKey: 'profile:user-2',
+        enableLiveStream: false,
+        enableFeedFetch: false,
+      );
 
-    controller.replaceVideos(
-      [
+      controller.replaceVideos([
         buildVideo('v1'),
         buildVideo('v2'),
-      ],
-      selectedIndex: 7,
-    );
+      ], selectedIndex: 7);
 
-    expect(controller.currentIndex.value, 1);
+      expect(controller.currentIndex.value, 1);
+
+      controller.replaceVideos(const []);
+
+      expect(controller.videoList, isEmpty);
+      expect(controller.currentIndex.value, -1);
+    },
+  );
+
+  test(
+    'live feed buffers new head videos while keeping the current order stable',
+    () {
+      final controller = VideoController(
+        contextKey: 'home',
+        enableLiveStream: true,
+        enableFeedFetch: true,
+      );
+
+      controller.replaceVideos([
+        buildVideo('v1'),
+        buildVideo('v2'),
+        buildVideo('v3'),
+      ], selectedIndex: 2);
+
+      controller.applyLiveWindowForTests([
+        buildVideo('v-new'),
+        buildVideo('v1', description: 'updated v1'),
+        buildVideo('v2'),
+      ]);
+
+      expect(controller.videoList.map((video) => video.id).toList(), [
+        'v1',
+        'v2',
+        'v3',
+      ]);
+      expect(controller.videoList.first.description, 'updated v1');
+      expect(controller.pendingLiveCount.value, 1);
+      expect(controller.currentIndex.value, 2);
+    },
+  );
+
+  test('live feed activates the first ready video after an empty refresh', () {
+    final controller = VideoController(
+      contextKey: 'home',
+      enableLiveStream: true,
+      enableFeedFetch: true,
+    );
 
     controller.replaceVideos(const []);
 
-    expect(controller.videoList, isEmpty);
-    expect(controller.currentIndex.value, -1);
-  });
-
-  test(
-      'live feed buffers new head videos while keeping the current order stable',
-      () {
-    final controller = VideoController(
-      contextKey: 'home',
-      enableLiveStream: true,
-      enableFeedFetch: true,
-    );
-
-    controller.replaceVideos(
-      [
-        buildVideo('v1'),
-        buildVideo('v2'),
-        buildVideo('v3'),
-      ],
-      selectedIndex: 2,
-    );
-
-    controller.applyLiveWindowForTests([
-      buildVideo('v-new'),
-      buildVideo('v1', description: 'updated v1'),
-      buildVideo('v2'),
-    ]);
+    controller.applyLiveWindowForTests([buildVideo('newly-approved')]);
 
     expect(controller.videoList.map((video) => video.id).toList(), [
-      'v1',
-      'v2',
-      'v3',
-    ]);
-    expect(controller.videoList.first.description, 'updated v1');
-    expect(controller.pendingLiveCount.value, 1);
-    expect(controller.currentIndex.value, 2);
-  });
-
-  test('returning to the top signals that buffered live videos should apply',
-      () {
-    final controller = VideoController(
-      contextKey: 'home',
-      enableLiveStream: true,
-      enableFeedFetch: true,
-    );
-
-    controller.replaceVideos(
-      [
-        buildVideo('v1'),
-        buildVideo('v2'),
-        buildVideo('v3'),
-      ],
-      selectedIndex: 2,
-    );
-
-    controller.applyLiveWindowForTests([
-      buildVideo('v-new'),
-      buildVideo('v1'),
-      buildVideo('v2'),
-    ]);
-
-    final shouldApplyBufferedLive = controller.updateCurrentIndex(0);
-    final inserted = controller.applyBufferedLiveVideos();
-
-    expect(shouldApplyBufferedLive, isTrue);
-    expect(inserted, 1);
-    expect(controller.videoList.map((video) => video.id).toList(), [
-      'v-new',
-      'v1',
-      'v2',
-      'v3',
+      'newly-approved',
     ]);
     expect(controller.pendingLiveCount.value, 0);
     expect(controller.currentIndex.value, 0);
   });
 
   test(
-      'manual live apply prepends pending videos only once and can move to top',
-      () {
-    final controller = VideoController(
-      contextKey: 'home',
-      enableLiveStream: true,
-      enableFeedFetch: true,
-    );
+    'returning to the top signals that buffered live videos should apply',
+    () {
+      final controller = VideoController(
+        contextKey: 'home',
+        enableLiveStream: true,
+        enableFeedFetch: true,
+      );
 
-    controller.replaceVideos(
-      [
+      controller.replaceVideos([
         buildVideo('v1'),
         buildVideo('v2'),
-      ],
-      selectedIndex: 1,
-    );
+        buildVideo('v3'),
+      ], selectedIndex: 2);
 
-    controller.applyLiveWindowForTests([
-      buildVideo('v-new'),
-      buildVideo('v1'),
-    ]);
+      controller.applyLiveWindowForTests([
+        buildVideo('v-new'),
+        buildVideo('v1'),
+        buildVideo('v2'),
+      ]);
 
-    final inserted = controller.applyBufferedLiveVideos(moveToTop: true);
-    final insertedAgain = controller.applyBufferedLiveVideos(moveToTop: true);
+      final shouldApplyBufferedLive = controller.updateCurrentIndex(0);
+      final inserted = controller.applyBufferedLiveVideos();
 
-    expect(inserted, 1);
-    expect(insertedAgain, 0);
-    expect(controller.videoList.map((video) => video.id).toList(), [
-      'v-new',
-      'v1',
-      'v2',
-    ]);
-    expect(controller.pendingLiveCount.value, 0);
-    expect(controller.currentIndex.value, 0);
-  });
+      expect(shouldApplyBufferedLive, isTrue);
+      expect(inserted, 1);
+      expect(controller.videoList.map((video) => video.id).toList(), [
+        'v-new',
+        'v1',
+        'v2',
+        'v3',
+      ]);
+      expect(controller.pendingLiveCount.value, 0);
+      expect(controller.currentIndex.value, 0);
+    },
+  );
 
   test(
-      'pending live videos warm only a few thumbnails without mounting players',
-      () async {
-    final controller = VideoController(
-      contextKey: 'home',
-      enableLiveStream: true,
-      enableFeedFetch: true,
-    );
-    final prefetched = <String>[];
+    'manual live apply prepends pending videos only once and can move to top',
+    () {
+      final controller = VideoController(
+        contextKey: 'home',
+        enableLiveStream: true,
+        enableFeedFetch: true,
+      );
 
-    controller.setThumbnailPrefetcherForTests((thumbUrl) async {
-      prefetched.add(thumbUrl);
-    });
-
-    controller.replaceVideos(
-      [
+      controller.replaceVideos([
         buildVideo('v1'),
         buildVideo('v2'),
-      ],
-      selectedIndex: 1,
-    );
+      ], selectedIndex: 1);
 
-    controller.applyLiveWindowForTests([
-      buildVideo(
-        'v-new-1',
-        thumbnailUrl: 'https://cdn.example.com/thumbs/1.jpg',
-      ),
-      buildVideo(
-        'v-new-2',
-        thumbnailUrl: 'https://cdn.example.com/thumbs/2.jpg',
-      ),
-      buildVideo(
-        'v-new-3',
-        thumbnailUrl: 'https://cdn.example.com/thumbs/3.jpg',
-      ),
-      buildVideo(
-        'v-new-4',
-        thumbnailUrl: 'https://cdn.example.com/thumbs/4.jpg',
-      ),
-      buildVideo(
-        'v-new-5',
-        thumbnailUrl: 'https://cdn.example.com/thumbs/5.jpg',
-      ),
-    ]);
+      controller.applyLiveWindowForTests([
+        buildVideo('v-new'),
+        buildVideo('v1'),
+      ]);
 
-    await flushMicrotasks();
+      final inserted = controller.applyBufferedLiveVideos(moveToTop: true);
+      final insertedAgain = controller.applyBufferedLiveVideos(moveToTop: true);
 
-    expect(controller.pendingLiveCount.value, 5);
-    expect(prefetched, [
-      'https://cdn.example.com/thumbs/1.jpg',
-      'https://cdn.example.com/thumbs/2.jpg',
-      'https://cdn.example.com/thumbs/3.jpg',
-      'https://cdn.example.com/thumbs/4.jpg',
-    ]);
-    expect(controller.videoList.map((video) => video.id).toList(), [
-      'v1',
-      'v2',
-    ]);
-  });
+      expect(inserted, 1);
+      expect(insertedAgain, 0);
+      expect(controller.videoList.map((video) => video.id).toList(), [
+        'v-new',
+        'v1',
+        'v2',
+      ]);
+      expect(controller.pendingLiveCount.value, 0);
+      expect(controller.currentIndex.value, 0);
+    },
+  );
+
+  test(
+    'pending live videos warm only a few thumbnails without mounting players',
+    () async {
+      final controller = VideoController(
+        contextKey: 'home',
+        enableLiveStream: true,
+        enableFeedFetch: true,
+      );
+      final prefetched = <String>[];
+
+      controller.setThumbnailPrefetcherForTests((thumbUrl) async {
+        prefetched.add(thumbUrl);
+      });
+
+      controller.replaceVideos([
+        buildVideo('v1'),
+        buildVideo('v2'),
+      ], selectedIndex: 1);
+
+      controller.applyLiveWindowForTests([
+        buildVideo(
+          'v-new-1',
+          thumbnailUrl: 'https://cdn.example.com/thumbs/1.jpg',
+        ),
+        buildVideo(
+          'v-new-2',
+          thumbnailUrl: 'https://cdn.example.com/thumbs/2.jpg',
+        ),
+        buildVideo(
+          'v-new-3',
+          thumbnailUrl: 'https://cdn.example.com/thumbs/3.jpg',
+        ),
+        buildVideo(
+          'v-new-4',
+          thumbnailUrl: 'https://cdn.example.com/thumbs/4.jpg',
+        ),
+        buildVideo(
+          'v-new-5',
+          thumbnailUrl: 'https://cdn.example.com/thumbs/5.jpg',
+        ),
+      ]);
+
+      await flushMicrotasks();
+
+      expect(controller.pendingLiveCount.value, 5);
+      expect(prefetched, [
+        'https://cdn.example.com/thumbs/1.jpg',
+        'https://cdn.example.com/thumbs/2.jpg',
+        'https://cdn.example.com/thumbs/3.jpg',
+        'https://cdn.example.com/thumbs/4.jpg',
+      ]);
+      expect(controller.videoList.map((video) => video.id).toList(), [
+        'v1',
+        'v2',
+      ]);
+    },
+  );
 }

@@ -22,6 +22,30 @@ service firebase.storage {
         firestore.get(/databases/(default)/documents/videos/$(videoId)).data.uid == request.auth.uid;
     }
 
+    function hasUserProfileDoc(uid) {
+      return firestore.exists(/databases/(default)/documents/users/$(uid));
+    }
+
+    function userProfileDoc(uid) {
+      return firestore.get(/databases/(default)/documents/users/$(uid));
+    }
+
+    function signedInUserRole() {
+      return signedIn() && hasUserProfileDoc(request.auth.uid) ?
+        userProfileDoc(request.auth.uid).data.role :
+        null;
+    }
+
+    function isAdminOperator() {
+      return signedIn() &&
+        (
+          signedInUserRole() == "admin" ||
+          request.auth.token.admin == true ||
+          request.auth.token.platformAdmin == true ||
+          request.auth.token.superAdmin == true
+        );
+    }
+
     function isOwnedVideoMp4(fileName) {
       return fileName.matches('^[A-Za-z0-9_-]+\\.mp4$') &&
         isOwnedVideoDoc(videoDocIdFromFileName(fileName));
@@ -46,14 +70,41 @@ service firebase.storage {
       );
     }
 
+    function isCvFileName(fileName) {
+      return fileName.matches('^cv_[0-9]+\\.pdf$');
+    }
+
+    function isValidCvPdfUpload(fileName) {
+      return isCvFileName(fileName) &&
+        request.resource.size > 0 &&
+        request.resource.size <= 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('application/pdf(;.*)?');
+    }
+
+    function canReadCv(uid) {
+      return signedIn() &&
+        (
+          request.auth.uid == uid ||
+          isAdminOperator() ||
+          (
+            hasUserProfileDoc(uid) &&
+            userProfileDoc(uid).data.profilePublic == true &&
+            userProfileDoc(uid).data.authDisabled != true
+          )
+        );
+    }
+
     match /profilePhotos/{uid} {
       allow read: if true;
       allow write: if signedIn() && request.auth.uid == uid;
     }
 
     match /cvs/{uid}/{fileName} {
-      allow read: if signedIn();
-      allow write: if signedIn() && request.auth.uid == uid;
+      allow read: if canReadCv(uid);
+      allow create, update: if signedIn() &&
+        request.auth.uid == uid &&
+        isValidCvPdfUpload(fileName);
+      allow delete: if signedIn() && request.auth.uid == uid;
     }
 
     match /videos/{videoFileName} {

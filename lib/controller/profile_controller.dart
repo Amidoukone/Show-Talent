@@ -23,10 +23,11 @@ class ProfileLoadException implements Exception {
 
 class ProfileController extends GetxController {
   static const ProfileFieldDelete deleteField = ProfileRepository.deleteField;
+  static const int maxCvPdfBytes = ProfileRepository.maxCvPdfBytes;
   static const Duration _userRefreshTimeout = Duration(seconds: 8);
 
   ProfileController({ProfileRepository? profileRepository})
-      : _profileRepository = profileRepository ?? ProfileRepository();
+    : _profileRepository = profileRepository ?? ProfileRepository();
 
   final ProfileRepository _profileRepository;
   final VideoManager _videoManager = VideoManager();
@@ -99,9 +100,9 @@ class ProfileController extends GetxController {
     }
 
     try {
-      await Get.find<UserController>()
-          .refreshUser()
-          .timeout(_userRefreshTimeout);
+      await Get.find<UserController>().refreshUser().timeout(
+        _userRefreshTimeout,
+      );
     } catch (refreshError, refreshStackTrace) {
       AppLogger.debug(
         'ProfileController refreshUser warning: '
@@ -147,26 +148,28 @@ class ProfileController extends GetxController {
 
   void _startUserListener(String uid) {
     _userSubscription?.cancel();
-    _userSubscription = _profileRepository.watchUser(uid).listen(
-      (updatedUser) {
-        if (updatedUser == null) {
-          return;
-        }
-        user = updatedUser;
-        update();
-      },
-      onError: (error, stackTrace) {
-        AppLogger.debug('profile user listener error: $error\n$stackTrace');
-        if (user == null) {
-          profileLoadErrorTitle = 'Profil indisponible';
-          profileLoadErrorMessage = _profileLoadErrorMessage(error);
-          update();
-        }
-        if (_isPermissionDenied(error)) {
-          unawaited(_handleProtectedAccessDenied());
-        }
-      },
-    );
+    _userSubscription = _profileRepository
+        .watchUser(uid)
+        .listen(
+          (updatedUser) {
+            if (updatedUser == null) {
+              return;
+            }
+            user = updatedUser;
+            update();
+          },
+          onError: (error, stackTrace) {
+            AppLogger.debug('profile user listener error: $error\n$stackTrace');
+            if (user == null) {
+              profileLoadErrorTitle = 'Profil indisponible';
+              profileLoadErrorMessage = _profileLoadErrorMessage(error);
+              update();
+            }
+            if (_isPermissionDenied(error)) {
+              unawaited(_handleProtectedAccessDenied());
+            }
+          },
+        );
   }
 
   Future<void> updateUserProfile(AppUser updatedUser) async {
@@ -237,8 +240,19 @@ class ProfileController extends GetxController {
     } catch (e, st) {
       AppLogger.debug('updateProfilePatch error: $e\n$st');
       if (_isPermissionDenied(e)) {
+        AdFeedback.error(
+          'Accès refusé',
+          'Votre session ne permet pas de modifier ce profil. Reconnectez-vous puis réessayez.',
+        );
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
+      }
+      if (ProfileRepository.isUnauthorized(e)) {
+        AdFeedback.error(
+          'Accès refusé',
+          'Votre session ne permet pas de modifier ce profil. Reconnectez-vous puis réessayez.',
+        );
+        return;
       }
       AdFeedback.error(
         'Mise à jour impossible',
@@ -469,8 +483,9 @@ class ProfileController extends GetxController {
       } else {
         final newVideos = page.videos;
         final existingIds = videoList.map((v) => v.id).toSet();
-        final unique =
-            newVideos.where((v) => !existingIds.contains(v.id)).toList();
+        final unique = newVideos
+            .where((v) => !existingIds.contains(v.id))
+            .toList();
 
         videoList.addAll(unique);
         _lastVideoCursor = page.cursor;
@@ -520,20 +535,17 @@ class ProfileController extends GetxController {
     String uid, {
     File? pdfFile,
     Uint8List? pdfBytes,
-    String? fileName,
+    Stream<List<int>>? pdfReadStream,
+    int? byteSize,
   }) async {
     try {
-      if ((pdfFile == null && pdfBytes == null) ||
-          (pdfBytes != null && pdfBytes.isEmpty)) {
-        throw ArgumentError('CV payload is empty.');
-      }
-
       final previousCvUrl = user?.cvUrl;
       final url = await _profileRepository.uploadCvPdf(
         uid,
         pdfFile: pdfFile,
         pdfBytes: pdfBytes,
-        fileName: fileName,
+        pdfReadStream: pdfReadStream,
+        byteSize: byteSize,
         previousCvUrl: previousCvUrl,
       );
       user?.cvUrl = url;
@@ -550,23 +562,20 @@ class ProfileController extends GetxController {
         'uploadCvPdf error: $e\n'
         'uid=$uid '
         'authUid=${_profileRepository.currentAuthUid} '
-        'fileName=$fileName\n$st',
+        'byteSize=$byteSize\n$st',
       );
-      if (_isPermissionDenied(e)) {
-        unawaited(_handleProtectedAccessDenied());
-        throw const ProfileAccessRevokedException();
+      if (e is CvUploadValidationException) {
+        AdFeedback.error('CV non accepte', e.message);
+        return;
       }
-      if (ProfileRepository.isUnauthorized(e)) {
+      if (_isPermissionDenied(e) || ProfileRepository.isUnauthorized(e)) {
         AdFeedback.error(
           'Autorisation refusée',
           'Le stockage Firebase refuse actuellement l’ajout du CV pour cette session.',
         );
         return;
       }
-      AdFeedback.error(
-        'Ajout impossible',
-        'Impossible d’ajouter le CV.',
-      );
+      AdFeedback.error('Ajout impossible', "Impossible d'ajouter le CV.");
     }
   }
 
@@ -579,10 +588,7 @@ class ProfileController extends GetxController {
 
       await _safeRefreshCurrentUser();
 
-      AdFeedback.success(
-        'CV supprimé',
-        'Le CV a été retiré du profil.',
-      );
+      AdFeedback.success('CV supprimé', 'Le CV a été retiré du profil.');
     } catch (e) {
       AppLogger.debug('deleteCv error: $e');
       if (_isPermissionDenied(e)) {

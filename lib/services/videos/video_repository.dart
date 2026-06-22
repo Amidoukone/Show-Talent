@@ -25,21 +25,16 @@ class VideoFeedPage {
 }
 
 class VideoLiveBatch {
-  const VideoLiveBatch({
-    required this.videos,
-    required this.cursor,
-  });
+  const VideoLiveBatch({required this.videos, required this.cursor});
 
   final List<Video> videos;
   final VideoFeedCursor? cursor;
 }
 
 class VideoRepository {
-  VideoRepository({
-    FirebaseFirestore? firestore,
-    FirebaseAuth? auth,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
+  VideoRepository({FirebaseFirestore? firestore, FirebaseAuth? auth})
+    : _firestore = firestore ?? FirebaseFirestore.instance,
+      _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
@@ -54,13 +49,13 @@ class VideoRepository {
         .limit(limit)
         .snapshots()
         .map((snapshot) {
-      return VideoLiveBatch(
-        videos: _playableVideos(snapshot.docs),
-        cursor: snapshot.docs.isEmpty
-            ? null
-            : VideoFeedCursor._(snapshot.docs.last),
-      );
-    });
+          return VideoLiveBatch(
+            videos: _playableVideos(snapshot.docs),
+            cursor: snapshot.docs.isEmpty
+                ? null
+                : VideoFeedCursor._(snapshot.docs.last),
+          );
+        });
   }
 
   Future<VideoFeedPage> fetchReadyVideosPage({
@@ -193,8 +188,9 @@ class VideoRepository {
         return ActionResponse(
           success: true,
           code: 'like-toggled',
-          message:
-              liked ? VideoUiStrings.likeAdded : VideoUiStrings.likeRemoved,
+          message: liked
+              ? VideoUiStrings.likeAdded
+              : VideoUiStrings.likeRemoved,
           data: {
             'liked': liked,
             'likes': liked
@@ -248,9 +244,7 @@ class VideoRepository {
         final currentShareCount = _asInt(data['shareCount']) ?? 0;
         final nextShareCount = currentShareCount + 1;
 
-        tx.update(ref, {
-          'shareCount': FieldValue.increment(1),
-        });
+        tx.update(ref, {'shareCount': FieldValue.increment(1)});
 
         return ActionResponse(
           success: true,
@@ -290,7 +284,7 @@ class VideoRepository {
   ) {
     return docs
         .map(Video.fromDoc)
-        .where((video) => video.videoUrl.isNotEmpty)
+        .where((video) => video.effectiveUrl.isNotEmpty)
         .toList(growable: false);
   }
 

@@ -13,10 +13,23 @@ class ProfileFieldDelete {
   const ProfileFieldDelete._();
 }
 
+class _ProfileNestedFieldDelete {
+  const _ProfileNestedFieldDelete();
+}
+
 class ProfilePatchWriteResult {
   const ProfilePatchWriteResult({required this.appliedPatch});
 
   final Map<String, dynamic> appliedPatch;
+}
+
+class CvUploadValidationException implements Exception {
+  const CvUploadValidationException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 class ProfileVideoCursor {
@@ -52,21 +65,24 @@ class ProfileRepository {
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
     FirebaseAuth? auth,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _storageOverride = storage,
-        _authOverride = auth;
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _storageOverride = storage,
+       _authOverride = auth;
 
   static const ProfileFieldDelete deleteField = ProfileFieldDelete._();
   static const Duration firestoreReadTimeout = Duration(seconds: 12);
   static const Duration firestoreWriteTimeout = Duration(seconds: 15);
   static const Duration storageWriteTimeout = Duration(seconds: 45);
+  static const int maxCvPdfBytes = 5 * 1024 * 1024;
   static const String _profileInvalidationReason = 'profile_updated_by_user';
+  static const List<int> _pdfHeader = <int>[0x25, 0x50, 0x44, 0x46, 0x2D];
   static const Set<String> _advancedProfileKeys = {
     'playerProfile',
     'clubProfile',
     'agentProfile',
     'eventOrganizerProfile',
   };
+  static const _deleteNestedProfileField = _ProfileNestedFieldDelete();
   static const Set<String> _trustSensitiveProfileKeys = {
     'nom',
     'phone',
@@ -111,6 +127,19 @@ class ProfileRepository {
   FirebaseAuth get _auth => _authOverride ?? FirebaseAuth.instance;
 
   String? get currentAuthUid => _auth.currentUser?.uid;
+
+  Future<void> _ensureAuthenticatedOwner(String uid) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null || currentUser.uid != uid) {
+      throw FirebaseException(
+        plugin: 'firebase_auth',
+        code: 'permission-denied',
+        message: 'Authenticated profile owner required.',
+      );
+    }
+
+    await currentUser.getIdToken();
+  }
 
   static bool isPermissionDenied(Object error) {
     return error is FirebaseException && error.code == 'permission-denied';
@@ -185,6 +214,8 @@ class ProfileRepository {
     String uid,
     Map<String, dynamic> patch,
   ) async {
+    await _ensureAuthenticatedOwner(uid);
+
     if (patch.isEmpty) {
       return const ProfilePatchWriteResult(appliedPatch: <String, dynamic>{});
     }
@@ -207,8 +238,9 @@ class ProfileRepository {
       return existingData!;
     }
 
-    final needsDeepMerge =
-        firestorePatch.keys.any(_advancedProfileKeys.contains);
+    final needsDeepMerge = firestorePatch.keys.any(
+      _advancedProfileKeys.contains,
+    );
     if (needsDeepMerge) {
       final existing = await loadExistingData();
 
@@ -223,18 +255,29 @@ class ProfileRepository {
         }
 
         final old = existing[key];
-        final merged = old is Map
-            ? _deepMergeMap(
-                Map<String, dynamic>.from(old),
-                Map<String, dynamic>.from(incomingLocal),
-              )
-            : Map<String, dynamic>.from(incomingLocal);
-        firestorePatch[key] = merged;
-        localPatch[key] = merged;
+        final merged = _deepMergeMap(
+          old is Map ? Map<String, dynamic>.from(old) : <String, dynamic>{},
+          Map<String, dynamic>.from(incomingLocal),
+        );
+        final cleaned = _pruneEmptyProfileMap(merged);
+        firestorePatch.remove(key);
+        if (cleaned.isEmpty) {
+          firestorePatch[key] = FieldValue.delete();
+          localPatch[key] = deleteField;
+        } else {
+          firestorePatch.addAll(
+            _flattenAdvancedProfilePatch(
+              profileKey: key,
+              incoming: Map<String, dynamic>.from(incomingLocal),
+              cleaned: cleaned,
+            ),
+          );
+          localPatch[key] = cleaned;
+        }
       }
     }
 
-    if (firestorePatch.keys.any(_trustSensitiveProfileKeys.contains)) {
+    if (firestorePatch.keys.any(_isTrustSensitivePatchKey)) {
       await _appendVerificationInvalidationIfCurrentProfileIsVerified(
         uid: uid,
         firestorePatch: firestorePatch,
@@ -252,18 +295,15 @@ class ProfileRepository {
   }
 
   Future<String> updateProfilePhoto(String uid, String photoPath) async {
+    await _ensureAuthenticatedOwner(uid);
+
     final ref = _storage.ref('profilePhotos/$uid');
     await ref
-        .putFile(
-          File(photoPath),
-          SettableMetadata(contentType: 'image/jpeg'),
-        )
+        .putFile(File(photoPath), SettableMetadata(contentType: 'image/jpeg'))
         .timeout(storageWriteTimeout);
     final url = await ref.getDownloadURL().timeout(firestoreReadTimeout);
 
-    final patch = <String, dynamic>{
-      'photoProfil': url,
-    };
+    final patch = <String, dynamic>{'photoProfil': url};
     await _appendVerificationInvalidationIfCurrentProfileIsVerified(
       uid: uid,
       firestorePatch: patch,
@@ -295,7 +335,7 @@ class ProfileRepository {
     final snap = await query.get().timeout(firestoreReadTimeout);
     final videos = snap.docs
         .map(Video.fromDoc)
-        .where((video) => video.videoUrl.isNotEmpty)
+        .where((video) => video.effectiveUrl.isNotEmpty)
         .toList(growable: false);
 
     return ProfileVideoPage(
@@ -309,64 +349,98 @@ class ProfileRepository {
     String uid, {
     File? pdfFile,
     Uint8List? pdfBytes,
-    String? fileName,
+    Stream<List<int>>? pdfReadStream,
+    int? byteSize,
     String? previousCvUrl,
   }) async {
-    if ((pdfFile == null && pdfBytes == null) ||
-        (pdfBytes != null && pdfBytes.isEmpty)) {
-      throw ArgumentError('CV payload is empty.');
-    }
+    await _ensureAuthenticatedOwner(uid);
 
-    final targetFileName = fileName?.trim().isNotEmpty == true
-        ? fileName!.trim()
-        : 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf';
-    final storagePath = 'cvs/$uid/$targetFileName';
-    final ref = _storage.ref(storagePath);
-    final metadata = SettableMetadata(contentType: 'application/pdf');
+    File? streamBackedFile;
 
-    final uploadTask = pdfBytes != null
-        ? await ref.putData(pdfBytes, metadata).timeout(storageWriteTimeout)
-        : await ref.putFile(pdfFile!, metadata).timeout(storageWriteTimeout);
-    final url =
-        await uploadTask.ref.getDownloadURL().timeout(firestoreReadTimeout);
+    try {
+      Uint8List? uploadBytes = pdfBytes != null && pdfBytes.isNotEmpty
+          ? Uint8List.fromList(pdfBytes)
+          : null;
+      File? uploadFile = pdfFile;
 
-    final patch = <String, dynamic>{'cvUrl': url};
-    await _appendVerificationInvalidationIfCurrentProfileIsVerified(
-      uid: uid,
-      firestorePatch: patch,
-    );
+      if (uploadBytes != null) {
+        _validatePdfBytes(uploadBytes);
+      } else {
+        if (uploadFile == null && pdfReadStream != null) {
+          streamBackedFile = await _materializePdfStream(pdfReadStream);
+          uploadFile = streamBackedFile;
+        }
 
-    await _usersCollection
-        .doc(uid)
-        .update(patch)
-        .timeout(firestoreWriteTimeout);
+        if (uploadFile == null) {
+          throw const CvUploadValidationException(
+            'Le fichier CV est introuvable ou illisible.',
+          );
+        }
 
-    if (previousCvUrl != null &&
-        previousCvUrl.isNotEmpty &&
-        previousCvUrl != url) {
-      try {
-        await _storage.refFromURL(previousCvUrl).delete();
-      } catch (cleanupError, cleanupStackTrace) {
-        developer.log(
-          'uploadCvPdf previous CV cleanup warning',
-          name: 'ProfileRepository.uploadCvPdf',
-          error: cleanupError,
-          stackTrace: cleanupStackTrace,
-        );
+        await _validatePdfFile(uploadFile, knownSize: byteSize);
+        uploadBytes = await uploadFile.readAsBytes();
+        _validatePdfBytes(uploadBytes);
+      }
+      final bytesToUpload = uploadBytes;
+
+      final targetFileName = _buildCvFileName();
+      final storagePath = 'cvs/$uid/$targetFileName';
+      final ref = _storage.ref(storagePath);
+      final metadata = SettableMetadata(
+        contentType: 'application/pdf',
+        cacheControl: 'private, max-age=0, no-transform',
+        customMetadata: <String, String>{'kind': 'player_cv', 'ownerUid': uid},
+      );
+
+      final uploadTask = await ref
+          .putData(bytesToUpload, metadata)
+          .timeout(storageWriteTimeout);
+      final url = await uploadTask.ref.getDownloadURL().timeout(
+        firestoreReadTimeout,
+      );
+
+      final patch = <String, dynamic>{'cvUrl': url};
+      await _appendVerificationInvalidationIfCurrentProfileIsVerified(
+        uid: uid,
+        firestorePatch: patch,
+      );
+
+      await _usersCollection
+          .doc(uid)
+          .update(patch)
+          .timeout(firestoreWriteTimeout);
+
+      if (previousCvUrl != null &&
+          previousCvUrl.isNotEmpty &&
+          previousCvUrl != url) {
+        try {
+          await _storage.refFromURL(previousCvUrl).delete();
+        } catch (cleanupError, cleanupStackTrace) {
+          developer.log(
+            'uploadCvPdf previous CV cleanup warning',
+            name: 'ProfileRepository.uploadCvPdf',
+            error: cleanupError,
+            stackTrace: cleanupStackTrace,
+          );
+        }
+      }
+
+      return url;
+    } finally {
+      if (streamBackedFile != null) {
+        await _deleteTemporaryCvFile(streamBackedFile);
       }
     }
-
-    return url;
   }
 
   Future<void> deleteCv(String uid, {String? cvUrl}) async {
+    await _ensureAuthenticatedOwner(uid);
+
     if (cvUrl != null && cvUrl.isNotEmpty) {
       await _storage.refFromURL(cvUrl).delete().timeout(storageWriteTimeout);
     }
 
-    final patch = <String, dynamic>{
-      'cvUrl': FieldValue.delete(),
-    };
+    final patch = <String, dynamic>{'cvUrl': FieldValue.delete()};
     await _appendVerificationInvalidationIfCurrentProfileIsVerified(
       uid: uid,
       firestorePatch: patch,
@@ -402,7 +476,8 @@ class ProfileRepository {
     Map<String, dynamic>? localPatch,
     Map<String, dynamic>? existingData,
   }) async {
-    final data = existingData ??
+    final data =
+        existingData ??
         (await _getWithRetry(_usersCollection.doc(uid))).data() ??
         <String, dynamic>{};
 
@@ -433,9 +508,116 @@ class ProfileRepository {
   }
 
   static bool _isProfileCurrentlyVerified(Map<String, dynamic> data) {
-    final status =
-        data['profileVerificationStatus']?.toString().trim().toLowerCase();
+    final status = data['profileVerificationStatus']
+        ?.toString()
+        .trim()
+        .toLowerCase();
     return data['profileVerified'] == true || status == 'verified';
+  }
+
+  static String _buildCvFileName() {
+    return 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf';
+  }
+
+  static bool _hasPdfHeader(List<int> bytes) {
+    if (bytes.length < _pdfHeader.length) {
+      return false;
+    }
+
+    for (var i = 0; i < _pdfHeader.length; i++) {
+      if (bytes[i] != _pdfHeader[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static void _validatePdfBytes(Uint8List bytes) {
+    if (bytes.isEmpty) {
+      throw const CvUploadValidationException('Le fichier CV est vide.');
+    }
+    if (bytes.length > maxCvPdfBytes) {
+      throw const CvUploadValidationException('Le CV doit faire 5 Mo maximum.');
+    }
+    if (!_hasPdfHeader(bytes)) {
+      throw const CvUploadValidationException('Le CV doit etre un PDF valide.');
+    }
+  }
+
+  static Future<void> _validatePdfFile(File file, {int? knownSize}) async {
+    final exists = await file.exists();
+    if (!exists) {
+      throw const CvUploadValidationException(
+        'Le fichier CV est introuvable ou illisible.',
+      );
+    }
+
+    final measuredSize = await file.length();
+    final size = measuredSize > 0 ? measuredSize : knownSize ?? 0;
+    if (size <= 0) {
+      throw const CvUploadValidationException('Le fichier CV est vide.');
+    }
+    if (size > maxCvPdfBytes) {
+      throw const CvUploadValidationException('Le CV doit faire 5 Mo maximum.');
+    }
+
+    final headerLength = size < _pdfHeader.length ? size : _pdfHeader.length;
+    final builder = BytesBuilder(copy: false);
+    await for (final chunk in file.openRead(0, headerLength)) {
+      builder.add(chunk);
+    }
+    if (!_hasPdfHeader(builder.takeBytes())) {
+      throw const CvUploadValidationException('Le CV doit etre un PDF valide.');
+    }
+  }
+
+  static Future<File> _materializePdfStream(Stream<List<int>> stream) async {
+    final tempDir = await Directory.systemTemp.createTemp('adfoot_cv_');
+    final tempFile = File('${tempDir.path}/cv.pdf');
+    final sink = tempFile.openWrite();
+    var sinkClosed = false;
+    var byteCount = 0;
+
+    try {
+      await for (final chunk in stream) {
+        if (chunk.isEmpty) {
+          continue;
+        }
+        byteCount += chunk.length;
+        if (byteCount > maxCvPdfBytes) {
+          throw const CvUploadValidationException(
+            'Le CV doit faire 5 Mo maximum.',
+          );
+        }
+        sink.add(chunk);
+      }
+      await sink.close();
+      sinkClosed = true;
+      await _validatePdfFile(tempFile, knownSize: byteCount);
+      return tempFile;
+    } catch (_) {
+      if (!sinkClosed) {
+        await sink.close();
+      }
+      await _deleteTemporaryCvFile(tempFile);
+      rethrow;
+    }
+  }
+
+  static Future<void> _deleteTemporaryCvFile(File file) async {
+    try {
+      final directory = file.parent;
+      if (await directory.exists()) {
+        await directory.delete(recursive: true);
+      }
+    } catch (cleanupError, cleanupStackTrace) {
+      developer.log(
+        'temporary CV cleanup warning',
+        name: 'ProfileRepository.uploadCvPdf',
+        error: cleanupError,
+        stackTrace: cleanupStackTrace,
+      );
+    }
   }
 
   static _SanitizedProfilePatch _sanitizePatch(Map<String, dynamic> patch) {
@@ -482,7 +664,12 @@ class ProfileRepository {
         if (value.isEmpty) {
           return;
         }
-        final mapped = Map<String, dynamic>.from(value);
+        final mapped = _advancedProfileKeys.contains(key)
+            ? _sanitizeAdvancedProfileMap(value)
+            : Map<String, dynamic>.from(value);
+        if (mapped.isEmpty) {
+          return;
+        }
         firestorePatch[key] = mapped;
         localPatch[key] = mapped;
         return;
@@ -499,6 +686,54 @@ class ProfileRepository {
     );
   }
 
+  static Map<String, dynamic> _sanitizeAdvancedProfileMap(Map value) {
+    final mapped = <String, dynamic>{};
+
+    value.forEach((rawKey, rawValue) {
+      final key = rawKey.toString().trim();
+      if (key.isEmpty) {
+        return;
+      }
+
+      final sanitized = _sanitizeAdvancedProfileValue(rawValue);
+      mapped[key] = sanitized;
+    });
+
+    return mapped;
+  }
+
+  static dynamic _sanitizeAdvancedProfileValue(dynamic value) {
+    if (value == null || value is ProfileFieldDelete || value is FieldValue) {
+      return _deleteNestedProfileField;
+    }
+
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? _deleteNestedProfileField : trimmed;
+    }
+
+    if (value is Map) {
+      final mapped = _sanitizeAdvancedProfileMap(value);
+      return mapped.isEmpty ? _deleteNestedProfileField : mapped;
+    }
+
+    if (value is List) {
+      final sanitizedItems = <dynamic>[];
+      for (final item in value) {
+        final sanitized = _sanitizeAdvancedProfileValue(item);
+        if (sanitized is _ProfileNestedFieldDelete) {
+          continue;
+        }
+        sanitizedItems.add(sanitized);
+      }
+      return sanitizedItems.isEmpty
+          ? _deleteNestedProfileField
+          : sanitizedItems;
+    }
+
+    return value;
+  }
+
   static Map<String, dynamic> _deepMergeMap(
     Map<String, dynamic> base,
     Map<String, dynamic> incoming,
@@ -506,20 +741,122 @@ class ProfileRepository {
     final result = Map<String, dynamic>.from(base);
 
     incoming.forEach((key, value) {
-      if (value == null) {
+      if (value == null || value is _ProfileNestedFieldDelete) {
+        result.remove(key);
         return;
       }
       final old = result[key];
       if (old is Map && value is Map) {
-        result[key] = _deepMergeMap(
+        final merged = _deepMergeMap(
           Map<String, dynamic>.from(old),
           Map<String, dynamic>.from(value),
         );
+        if (_isEmptyProfileValue(merged)) {
+          result.remove(key);
+        } else {
+          result[key] = merged;
+        }
+      } else if (_isEmptyProfileValue(value)) {
+        result.remove(key);
       } else {
         result[key] = value;
       }
     });
 
     return result;
+  }
+
+  static Map<String, dynamic> _pruneEmptyProfileMap(
+    Map<String, dynamic> value,
+  ) {
+    final pruned = <String, dynamic>{};
+
+    value.forEach((key, rawValue) {
+      if (rawValue is Map) {
+        final nested = _pruneEmptyProfileMap(
+          Map<String, dynamic>.from(rawValue),
+        );
+        if (nested.isNotEmpty) {
+          pruned[key] = nested;
+        }
+        return;
+      }
+
+      if (!_isEmptyProfileValue(rawValue)) {
+        pruned[key] = rawValue;
+      }
+    });
+
+    return pruned;
+  }
+
+  static Map<String, dynamic> _flattenAdvancedProfilePatch({
+    required String profileKey,
+    required Map<String, dynamic> incoming,
+    required Map<String, dynamic> cleaned,
+  }) {
+    final patch = <String, dynamic>{};
+
+    void visit(String path, dynamic value, dynamic cleanedValue) {
+      if (value == null || value is _ProfileNestedFieldDelete) {
+        patch[path] = FieldValue.delete();
+        return;
+      }
+
+      if (value is Map) {
+        if (cleanedValue is! Map || cleanedValue.isEmpty) {
+          patch[path] = FieldValue.delete();
+          return;
+        }
+
+        final cleanedMap = Map<String, dynamic>.from(cleanedValue);
+        value.forEach((rawKey, rawValue) {
+          final key = rawKey.toString().trim();
+          if (key.isEmpty) {
+            return;
+          }
+          visit('$path.$key', rawValue, cleanedMap[key]);
+        });
+        return;
+      }
+
+      if (_isEmptyProfileValue(value)) {
+        patch[path] = FieldValue.delete();
+        return;
+      }
+
+      patch[path] = value;
+    }
+
+    incoming.forEach((key, value) {
+      visit('$profileKey.$key', value, cleaned[key]);
+    });
+
+    return patch;
+  }
+
+  static bool _isEmptyProfileValue(dynamic value) {
+    if (value == null || value is _ProfileNestedFieldDelete) {
+      return true;
+    }
+    if (value is String) {
+      return value.trim().isEmpty;
+    }
+    if (value is Map) {
+      return value.isEmpty;
+    }
+    if (value is List) {
+      return value.isEmpty;
+    }
+    return false;
+  }
+
+  static bool _isTrustSensitivePatchKey(String key) {
+    if (_trustSensitiveProfileKeys.contains(key)) {
+      return true;
+    }
+    return _advancedProfileKeys.any(
+      (profileKey) => key.startsWith('$profileKey.'),
+    );
   }
 }

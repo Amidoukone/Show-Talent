@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/theme/ad_colors.dart';
@@ -720,6 +719,78 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
     _cvUrl = _currentUser.cvUrl;
   }
 
+  String get _maxCvSizeLabel {
+    final sizeMb = ProfileController.maxCvPdfBytes ~/ (1024 * 1024);
+    return '$sizeMb Mo';
+  }
+
+  Future<void> _pickAndUploadCv(AppUser user) async {
+    var uploadStarted = false;
+
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: false,
+        withReadStream: true,
+      );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final pickedFile = result.files.single;
+      if (pickedFile.size > ProfileController.maxCvPdfBytes) {
+        AdFeedback.error(
+          'CV trop volumineux',
+          'Le fichier PDF doit faire $_maxCvSizeLabel maximum.',
+        );
+        return;
+      }
+
+      final bytes = pickedFile.bytes;
+      final path = pickedFile.path;
+      final readStream = pickedFile.readStream;
+      final hasBytes = bytes != null && bytes.isNotEmpty;
+      final hasPath = path != null && path.isNotEmpty;
+      final hasStream = readStream != null;
+
+      if (!hasBytes && !hasPath && !hasStream) {
+        AdFeedback.error(
+          'CV illisible',
+          'Impossible de lire ce PDF depuis votre appareil.',
+        );
+        return;
+      }
+
+      setState(() => _isUploading = true);
+      uploadStarted = true;
+
+      await widget.profileController.uploadCvPdf(
+        user.uid,
+        pdfBytes: hasBytes ? bytes : null,
+        pdfFile: hasPath ? File(path) : null,
+        pdfReadStream: hasStream ? readStream : null,
+        byteSize: pickedFile.size > 0 ? pickedFile.size : null,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _cvUrl = _currentUser.cvUrl);
+    } on ProfileAccessRevokedException {
+      return;
+    } catch (e, st) {
+      AppLogger.debug('CV picker/upload error: $e\n$st');
+      AdFeedback.error(
+        'Ajout impossible',
+        "Impossible de lire ou d'ajouter ce CV.",
+      );
+    } finally {
+      if (mounted && uploadStarted) {
+        setState(() => _isUploading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = _currentUser;
@@ -749,47 +820,7 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
           AdButton(
             onPressed: _isUploading || _isDeleting
                 ? null
-                : () async {
-                    final result = await FilePicker.pickFiles(
-                      type: FileType.custom,
-                      allowedExtensions: ['pdf'],
-                      withData: true,
-                    );
-                    if (result == null) {
-                      return;
-                    }
-
-                    final pickedFile = result.files.single;
-                    final Uint8List? bytes = pickedFile.bytes;
-                    final String? path = pickedFile.path;
-                    final String fileName = pickedFile.name.isNotEmpty
-                        ? pickedFile.name
-                        : 'cv_${DateTime.now().millisecondsSinceEpoch}.pdf';
-
-                    try {
-                      setState(() => _isUploading = true);
-                      await widget.profileController.uploadCvPdf(
-                        user.uid,
-                        pdfBytes: bytes,
-                        pdfFile: path != null && path.isNotEmpty
-                            ? File(path)
-                            : null,
-                        fileName: fileName.toLowerCase().endsWith('.pdf')
-                            ? fileName
-                            : '$fileName.pdf',
-                      );
-                      if (!mounted) {
-                        return;
-                      }
-                      setState(() => _cvUrl = _currentUser.cvUrl);
-                    } on ProfileAccessRevokedException {
-                      return;
-                    } finally {
-                      if (mounted) {
-                        setState(() => _isUploading = false);
-                      }
-                    }
-                  },
+                : () => _pickAndUploadCv(user),
             loading: _isUploading,
             leading: Icons.upload_file_rounded,
             label: _isUploading

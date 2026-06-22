@@ -5,8 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('Settings and follow release guardrails', () {
     test('settings screen exposes an explicit invalid session state', () {
-      final settings =
-          File('lib/screens/setting_screen.dart').readAsStringSync();
+      final settings = File(
+        'lib/screens/setting_screen.dart',
+      ).readAsStringSync();
 
       expect(settings, contains('bool _sessionUnavailable = false;'));
       expect(settings, contains('_authSessionService.currentUser?.uid'));
@@ -21,11 +22,14 @@ void main() {
     });
 
     test('settings refresh shared user state after privacy changes', () {
-      final settings =
-          File('lib/screens/setting_screen.dart').readAsStringSync();
+      final settings = File(
+        'lib/screens/setting_screen.dart',
+      ).readAsStringSync();
 
-      expect(settings,
-          contains("import 'package:adfoot/controller/user_controller.dart';"));
+      expect(
+        settings,
+        contains("import 'package:adfoot/controller/user_controller.dart';"),
+      );
       expect(settings, contains('Get.isRegistered<UserController>()'));
       expect(settings, contains('Get.find<UserController>().refreshUser()'));
       expect(settings, contains("case 'recruteur':"));
@@ -37,11 +41,14 @@ void main() {
     });
 
     test('tools screen uses production-ready account sections', () {
-      final settings =
-          File('lib/screens/setting_screen.dart').readAsStringSync();
+      final settings = File(
+        'lib/screens/setting_screen.dart',
+      ).readAsStringSync();
 
-      expect(settings,
-          contains("import 'package:adfoot/widgets/ad_app_bar.dart';"));
+      expect(
+        settings,
+        contains("import 'package:adfoot/widgets/ad_app_bar.dart';"),
+      );
       expect(settings, contains('appBar: const AdAppBar('));
       expect(settings, contains("title: 'Outils'"));
       expect(settings, contains("subtitle: 'Compte et sécurité'"));
@@ -62,31 +69,35 @@ void main() {
     });
 
     test(
-        'follow list button resolves current uid defensively and clears loading',
-        () {
-      final follow =
-          File('lib/screens/follow_list_screen.dart').readAsStringSync();
+      'follow list button resolves current uid defensively and clears loading',
+      () {
+        final follow = File(
+          'lib/screens/follow_list_screen.dart',
+        ).readAsStringSync();
 
-      expect(follow, contains('AuthSessionService'));
-      expect(
-        follow,
-        contains("Get.find<UserController>().user?.uid ??"),
-      );
-      expect(follow, contains("_authSessionService.currentUser?.uid"));
-      expect(follow, contains('try {'));
-      expect(follow, contains('} finally {'));
-      expect(follow, contains('_isLoading = false;'));
-      expect(follow,
-          isNot(contains("if (Get.find<UserController>().user == null) {")));
-    });
+        expect(follow, contains('AuthSessionService'));
+        expect(follow, contains("Get.find<UserController>().user?.uid ??"));
+        expect(follow, contains("_authSessionService.currentUser?.uid"));
+        expect(follow, contains('try {'));
+        expect(follow, contains('} finally {'));
+        expect(follow, contains('_isLoading = false;'));
+        expect(
+          follow,
+          isNot(contains("if (Get.find<UserController>().user == null) {")),
+        );
+      },
+    );
 
     test('follow controller delegates mutations to callable backend', () {
-      final controller =
-          File('lib/controller/follow_controller.dart').readAsStringSync();
-      final repository =
-          File('lib/services/users/follow_repository.dart').readAsStringSync();
-      final backend =
-          File('functions/src/follow_actions.ts').readAsStringSync();
+      final controller = File(
+        'lib/controller/follow_controller.dart',
+      ).readAsStringSync();
+      final repository = File(
+        'lib/services/users/follow_repository.dart',
+      ).readAsStringSync();
+      final backend = File(
+        'functions/src/follow_actions.ts',
+      ).readAsStringSync();
       final exports = File('functions/src/index.ts').readAsStringSync();
 
       expect(controller, contains('_followRepository.followUser'));
@@ -96,6 +107,9 @@ void main() {
         repository,
         contains("CallableAuthGuard.callDataWithHttpFallback"),
       );
+      expect(repository, contains('_runFollowMutationWithRetry'));
+      expect(repository, contains('Duration(seconds: 20)'));
+      expect(repository, contains('_isTransientMutationError'));
       expect(repository, contains("'followUser'"));
       expect(repository, contains("'unfollowUser'"));
       expect(backend, contains('export const followUser = onCall('));
@@ -103,16 +117,33 @@ void main() {
       expect(exports, contains('export {followUser, unfollowUser}'));
     });
 
+    test('follow controller rolls back optimistic state on backend rejection', () {
+      final controller = File(
+        'lib/controller/follow_controller.dart',
+      ).readAsStringSync();
+
+      expect(
+        RegExp(
+          r'else\s*\{\s*_syncLocalFollowingState\([\s\S]*?shouldFollow:\s*false',
+        ).hasMatch(controller),
+        isTrue,
+      );
+      expect(
+        RegExp(
+          r'else\s*\{\s*_syncLocalFollowingState\([\s\S]*?shouldFollow:\s*true',
+        ).hasMatch(controller),
+        isTrue,
+      );
+    });
+
     test('follow list keeps coherent local UX details', () {
-      final follow =
-          File('lib/screens/follow_list_screen.dart').readAsStringSync();
+      final follow = File(
+        'lib/screens/follow_list_screen.dart',
+      ).readAsStringSync();
 
       expect(follow, contains("assets/default_avatar.jpg"));
       expect(follow, contains('RefreshIndicator('));
-      expect(
-        follow,
-        contains("widget.listType == 'followings' &&"),
-      );
+      expect(follow, contains("widget.listType == 'followings' &&"));
       expect(follow, contains('currentUserId == widget.listOwnerUid'));
       expect(follow, contains('widget.onRemove();'));
     });

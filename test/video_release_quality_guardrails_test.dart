@@ -718,6 +718,19 @@ void main() {
       expect(home, contains('_activateHomeIndex(targetIndex'));
     });
 
+    test('home activates a live-ready video after an empty feed', () {
+      final controller = File(
+        'lib/controller/video_controller.dart',
+      ).readAsStringSync();
+      final home = File('lib/screens/home_screen.dart').readAsStringSync();
+
+      expect(controller, contains('currentIndex.value < 0'));
+      expect(controller, contains('currentIndex.value = 0;'));
+      expect(home, contains('_wasHomeFeedEmpty'));
+      expect(home, contains('_scheduleHomeFeedActivationAfterEmptyFeed'));
+      expect(home, contains('unawaited(_onPageChanged(safeIndex));'));
+    });
+
     test(
       'home profile action uses a professional generated avatar fallback',
       () {

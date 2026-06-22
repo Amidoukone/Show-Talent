@@ -27,9 +27,9 @@ class VideoController extends GetxController {
     bool? enableFeedFetch,
     VideoRepository? videoRepository,
     VideoActionService? videoActionService,
-  })  : enableFeedFetch = enableFeedFetch ?? enableLiveStream,
-        _videoRepository = videoRepository ?? VideoRepository(),
-        _videoActionService = videoActionService ?? VideoActionService();
+  }) : enableFeedFetch = enableFeedFetch ?? enableLiveStream,
+       _videoRepository = videoRepository ?? VideoRepository(),
+       _videoActionService = videoActionService ?? VideoActionService();
 
   final VideoRepository _videoRepository;
   final VideoActionService _videoActionService;
@@ -155,37 +155,40 @@ class VideoController extends GetxController {
 
   void listenToVideos() {
     _videoSubscription?.cancel();
-    _videoSubscription =
-        _videoRepository.watchReadyVideos(limit: _liveWindowLimit).listen((
-      batch,
-    ) {
-      _streamDebouncer?.cancel();
-      _streamDebouncer = Timer(const Duration(milliseconds: 120), () {
-        try {
-          final incoming = batch.videos;
+    _videoSubscription = _videoRepository
+        .watchReadyVideos(limit: _liveWindowLimit)
+        .listen(
+          (batch) {
+            _streamDebouncer?.cancel();
+            _streamDebouncer = Timer(const Duration(milliseconds: 120), () {
+              try {
+                final incoming = batch.videos;
 
-          if (incoming.isEmpty) return;
+                if (incoming.isEmpty) return;
 
-          final merged = _applyLiveWindow(incoming);
-          if (merged.isEmpty) return;
+                final merged = _applyLiveWindow(incoming);
+                if (merged.isEmpty) return;
 
-          if (_lastCursor == null && batch.cursor != null) {
-            _lastCursor = batch.cursor;
-          }
+                if (_lastCursor == null && batch.cursor != null) {
+                  _lastCursor = batch.cursor;
+                }
 
-          final safeIndex =
-              currentIndex.value.clamp(0, merged.length - 1).toInt();
-          _prefetchThumbnailsAround(safeIndex);
-        } catch (e) {
-          AppLogger.debug('❌ listenToVideos merge error: $e');
-        }
-      });
-    }, onError: (e) {
-      AppLogger.debug('Video stream error: $e');
-      if (_isPermissionDenied(e)) {
-        unawaited(_handleProtectedAccessDenied());
-      }
-    });
+                final safeIndex = currentIndex.value
+                    .clamp(0, merged.length - 1)
+                    .toInt();
+                _prefetchThumbnailsAround(safeIndex);
+              } catch (e) {
+                AppLogger.debug('❌ listenToVideos merge error: $e');
+              }
+            });
+          },
+          onError: (e) {
+            AppLogger.debug('Video stream error: $e');
+            if (_isPermissionDenied(e)) {
+              unawaited(_handleProtectedAccessDenied());
+            }
+          },
+        );
   }
 
   // PAGINATED FETCH
@@ -223,9 +226,7 @@ class VideoController extends GetxController {
         videoList.assignAll(fetched);
       } else {
         final currentIds = videoList.map((v) => v.id).toSet();
-        videoList.addAll(
-          fetched.where((v) => !currentIds.contains(v.id)),
-        );
+        videoList.addAll(fetched.where((v) => !currentIds.contains(v.id)));
       }
 
       if (videoList.isNotEmpty) {
@@ -351,8 +352,9 @@ class VideoController extends GetxController {
       currentIndex.value = 0;
       _prefetchThumbnailsAround(0);
     } else {
-      final safeIndex =
-          currentIndex.value.clamp(0, nextFeed.length - 1).toInt();
+      final safeIndex = currentIndex.value
+          .clamp(0, nextFeed.length - 1)
+          .toInt();
       _prefetchThumbnailsAround(safeIndex);
     }
 
@@ -365,10 +367,7 @@ class VideoController extends GetxController {
     _prefetchThumbnailsAround(index);
   }
 
-  void replaceVideos(
-    List<Video> videos, {
-    int? selectedIndex,
-  }) {
+  void replaceVideos(List<Video> videos, {int? selectedIndex}) {
     _clearPendingLiveHead();
     videoList.assignAll(videos);
 
@@ -389,11 +388,9 @@ class VideoController extends GetxController {
   // ------------------------------------------------------------------
 
   Future<ActionResponse> likeVideo(String videoId, String userId) async {
-    var response = await _callAction(
-      'likeVideo',
-      {'videoId': videoId},
-      offlineMessage: VideoUiStrings.likeOffline,
-    );
+    var response = await _callAction('likeVideo', {
+      'videoId': videoId,
+    }, offlineMessage: VideoUiStrings.likeOffline);
 
     if (!response.success && response.code == 'unauthenticated') {
       response = await _likeVideoWithFirestoreFallback(videoId, userId);
@@ -403,12 +400,14 @@ class VideoController extends GetxController {
       final liked = response.data?['liked'] == true;
       _applyLikeState(videoId, userId, liked);
     } else {
-      unawaited(_logActionFailure(
-        'likeVideo',
-        videoId: videoId,
-        code: response.code,
-        message: response.message,
-      ));
+      unawaited(
+        _logActionFailure(
+          'likeVideo',
+          videoId: videoId,
+          code: response.code,
+          message: response.message,
+        ),
+      );
       _restoreFromStreamSoon(videoId);
       response.showToast();
     }
@@ -417,11 +416,9 @@ class VideoController extends GetxController {
   }
 
   Future<ActionResponse> signalerVideo(String videoId, String userId) async {
-    var response = await _callAction(
-      'reportVideo',
-      {'videoId': videoId},
-      offlineMessage: VideoUiStrings.reportOffline,
-    );
+    var response = await _callAction('reportVideo', {
+      'videoId': videoId,
+    }, offlineMessage: VideoUiStrings.reportOffline);
 
     if (!response.success && response.code == 'unauthenticated') {
       response = await _reportVideoWithFirestoreFallback(videoId, userId);
@@ -434,18 +431,16 @@ class VideoController extends GetxController {
     final resolved = response.copyWith(toast: toastLevel);
 
     if (resolved.success) {
-      _applyReportState(
-        videoId,
-        userId,
-        resolved.data?['reportCount'] as int?,
-      );
+      _applyReportState(videoId, userId, resolved.data?['reportCount'] as int?);
     } else {
-      unawaited(_logActionFailure(
-        'reportVideo',
-        videoId: videoId,
-        code: resolved.code,
-        message: resolved.message,
-      ));
+      unawaited(
+        _logActionFailure(
+          'reportVideo',
+          videoId: videoId,
+          code: resolved.code,
+          message: resolved.message,
+        ),
+      );
     }
 
     resolved.showToast(includeSuccess: true);
@@ -453,16 +448,15 @@ class VideoController extends GetxController {
   }
 
   Future<ActionResponse> deleteVideo(String videoId) async {
-    final response = await _callAction(
-      'deleteVideo',
-      {'videoId': videoId},
-      offlineMessage: VideoUiStrings.deleteOffline,
-    );
+    final response = await _callAction('deleteVideo', {
+      'videoId': videoId,
+    }, offlineMessage: VideoUiStrings.deleteOffline);
 
     if (response.success) {
       final removedIndex = videoList.indexWhere((v) => v.id == videoId);
-      final removedUrl =
-          removedIndex != -1 ? videoList[removedIndex].videoUrl : null;
+      final removedUrl = removedIndex != -1
+          ? videoList[removedIndex].videoUrl
+          : null;
 
       await videoManager.pauseAll(contextKey);
 
@@ -475,8 +469,9 @@ class VideoController extends GetxController {
         if (videoList.isEmpty) {
           currentIndex.value = -1;
         } else {
-          final clampedIndex =
-              currentIndex.value.clamp(0, videoList.length - 1).toInt();
+          final clampedIndex = currentIndex.value
+              .clamp(0, videoList.length - 1)
+              .toInt();
           currentIndex.value = clampedIndex;
           _prefetchThumbnailsAround(clampedIndex);
         }
@@ -485,12 +480,14 @@ class VideoController extends GetxController {
 
       showSuccessToast(response.message);
     } else {
-      unawaited(_logActionFailure(
-        'deleteVideo',
-        videoId: videoId,
-        code: response.code,
-        message: response.message,
-      ));
+      unawaited(
+        _logActionFailure(
+          'deleteVideo',
+          videoId: videoId,
+          code: response.code,
+          message: response.message,
+        ),
+      );
       response.showToast();
     }
 
@@ -502,11 +499,9 @@ class VideoController extends GetxController {
   // ------------------------------------------------------------------
 
   Future<ActionResponse> partagerVideo(String videoId) async {
-    var response = await _callAction(
-      'shareVideo',
-      {'videoId': videoId},
-      offlineMessage: VideoUiStrings.shareOffline,
-    );
+    var response = await _callAction('shareVideo', {
+      'videoId': videoId,
+    }, offlineMessage: VideoUiStrings.shareOffline);
 
     if (!response.success && response.code == 'unauthenticated') {
       response = await _shareVideoWithFirestoreFallback(videoId);
@@ -517,17 +512,16 @@ class VideoController extends GetxController {
         : response;
 
     if (resolved.success) {
-      _applyShareState(
-        videoId,
-        resolved.data?['shareCount'] as int?,
-      );
+      _applyShareState(videoId, resolved.data?['shareCount'] as int?);
     } else if (resolved.code != 'resource-exhausted') {
-      unawaited(_logActionFailure(
-        'shareVideo',
-        videoId: videoId,
-        code: resolved.code,
-        message: resolved.message,
-      ));
+      unawaited(
+        _logActionFailure(
+          'shareVideo',
+          videoId: videoId,
+          code: resolved.code,
+          message: resolved.message,
+        ),
+      );
     }
 
     resolved.showToast();
@@ -601,11 +595,7 @@ class VideoController extends GetxController {
     videoList.refresh();
   }
 
-  void _applyReportState(
-    String videoId,
-    String userId,
-    int? reportCount,
-  ) {
+  void _applyReportState(String videoId, String userId, int? reportCount) {
     final idx = videoList.indexWhere((v) => v.id == videoId);
     if (idx == -1) return;
 
@@ -651,10 +641,7 @@ class VideoController extends GetxController {
       videoId: videoId,
       code: code,
       message: message,
-      metadata: {
-        'contextKey': contextKey,
-        ...?extra,
-      },
+      metadata: {'contextKey': contextKey, ...?extra},
     );
   }
 
@@ -662,6 +649,9 @@ class VideoController extends GetxController {
     final existing = videoList.toList();
     if (existing.isEmpty) {
       _clearPendingLiveHead();
+      if (currentIndex.value < 0 || currentIndex.value >= incoming.length) {
+        currentIndex.value = 0;
+      }
       videoList.assignAll(incoming);
       return incoming;
     }

@@ -264,18 +264,24 @@ class AppUser {
       ),
       profileVerifiedAt: _parseNullableDate(map['profileVerifiedAt']),
       profileVerifiedBy: _normalizeNullableString(map['profileVerifiedBy']),
-      profileVerificationUpdatedAt:
-          _parseNullableDate(map['profileVerificationUpdatedAt']),
-      profileVerificationUpdatedBy:
-          _normalizeNullableString(map['profileVerificationUpdatedBy']),
-      profileVerificationNote:
-          _normalizeNullableString(map['profileVerificationNote']),
-      profileVerificationInvalidatedAt:
-          _parseNullableDate(map['profileVerificationInvalidatedAt']),
-      profileVerificationInvalidatedBy:
-          _normalizeNullableString(map['profileVerificationInvalidatedBy']),
+      profileVerificationUpdatedAt: _parseNullableDate(
+        map['profileVerificationUpdatedAt'],
+      ),
+      profileVerificationUpdatedBy: _normalizeNullableString(
+        map['profileVerificationUpdatedBy'],
+      ),
+      profileVerificationNote: _normalizeNullableString(
+        map['profileVerificationNote'],
+      ),
+      profileVerificationInvalidatedAt: _parseNullableDate(
+        map['profileVerificationInvalidatedAt'],
+      ),
+      profileVerificationInvalidatedBy: _normalizeNullableString(
+        map['profileVerificationInvalidatedBy'],
+      ),
       profileVerificationInvalidationReason: _normalizeNullableString(
-          map['profileVerificationInvalidationReason']),
+        map['profileVerificationInvalidationReason'],
+      ),
 
       // Transverses
       birthDate: (map['birthDate'] as Timestamp?)?.toDate(),
@@ -284,7 +290,8 @@ class AppUser {
       region: map['region']?.toString(),
       languages: map['languages'] != null
           ? List<String>.from(
-              (map['languages'] as List).map((e) => e.toString()))
+              (map['languages'] as List).map((e) => e.toString()),
+            )
           : null,
       openToOpportunities: map['openToOpportunities'] as bool?,
 
@@ -298,8 +305,8 @@ class AppUser {
 
       videosPubliees: parseNestedCollections && map['videosPubliees'] is List
           ? (map['videosPubliees'] as List)
-              .map((v) => Video.fromMap(Map<String, dynamic>.from(v as Map)))
-              .toList()
+                .map((v) => Video.fromMap(Map<String, dynamic>.from(v as Map)))
+                .toList()
           : null,
 
       performances: map['performances'] is Map
@@ -322,14 +329,14 @@ class AppUser {
 
       offrePubliees: parseNestedCollections && map['offrePubliees'] is List
           ? (map['offrePubliees'] as List)
-              .map((v) => Offre.fromMap(Map<String, dynamic>.from(v as Map)))
-              .toList()
+                .map((v) => Offre.fromMap(Map<String, dynamic>.from(v as Map)))
+                .toList()
           : null,
 
       eventPublies: parseNestedCollections && map['eventPublies'] is List
           ? (map['eventPublies'] as List)
-              .map((v) => Event.fromMap(Map<String, dynamic>.from(v as Map)))
-              .toList()
+                .map((v) => Event.fromMap(Map<String, dynamic>.from(v as Map)))
+                .toList()
           : null,
 
       entreprise: map['entreprise']?.toString(),
@@ -340,28 +347,28 @@ class AppUser {
 
       joueursSuivis: parseNestedCollections && map['joueursSuivis'] is List
           ? (map['joueursSuivis'] as List)
-              .map(
-                (j) => AppUser.fromEmbeddedMap(
-                  Map<String, dynamic>.from(j as Map),
-                ),
-              )
-              .toList()
+                .map(
+                  (j) => AppUser.fromEmbeddedMap(
+                    Map<String, dynamic>.from(j as Map),
+                  ),
+                )
+                .toList()
           : null,
 
       clubsSuivis: parseNestedCollections && map['clubsSuivis'] is List
           ? (map['clubsSuivis'] as List)
-              .map(
-                (c) => AppUser.fromEmbeddedMap(
-                  Map<String, dynamic>.from(c as Map),
-                ),
-              )
-              .toList()
+                .map(
+                  (c) => AppUser.fromEmbeddedMap(
+                    Map<String, dynamic>.from(c as Map),
+                  ),
+                )
+                .toList()
           : null,
 
       videosLikees: parseNestedCollections && map['videosLikees'] is List
           ? (map['videosLikees'] as List)
-              .map((v) => Video.fromMap(Map<String, dynamic>.from(v as Map)))
-              .toList()
+                .map((v) => Video.fromMap(Map<String, dynamic>.from(v as Map)))
+                .toList()
           : null,
 
       followersList: (safeList<dynamic>(map['followersList']) ?? [])
@@ -408,8 +415,9 @@ class AppUser {
   Map<String, dynamic> toMap() {
     return {
       ...toEmbeddedMap(),
-      'emailVerifiedAt':
-          emailVerifiedAt != null ? Timestamp.fromDate(emailVerifiedAt!) : null,
+      'emailVerifiedAt': emailVerifiedAt != null
+          ? Timestamp.fromDate(emailVerifiedAt!)
+          : null,
       'followers': followers,
       'followings': followings,
       'dateInscription': Timestamp.fromDate(dateInscription),
@@ -427,8 +435,8 @@ class AppUser {
       'profileVerificationNote': profileVerificationNote,
       'profileVerificationInvalidatedAt':
           profileVerificationInvalidatedAt != null
-              ? Timestamp.fromDate(profileVerificationInvalidatedAt!)
-              : null,
+          ? Timestamp.fromDate(profileVerificationInvalidatedAt!)
+          : null,
       'profileVerificationInvalidatedBy': profileVerificationInvalidatedBy,
       'profileVerificationInvalidationReason':
           profileVerificationInvalidationReason,
@@ -566,14 +574,14 @@ class AppUser {
   bool get hasAdvancedProfile {
     switch (role) {
       case 'joueur':
-        return playerProfile != null && playerProfile!.isNotEmpty;
+        return _hasMeaningfulProfileValue(playerProfile);
 
       case 'club':
-        return clubProfile != null && clubProfile!.isNotEmpty;
+        return _hasMeaningfulProfileValue(clubProfile);
 
       case 'recruteur':
       case 'agent':
-        return agentProfile != null && agentProfile!.isNotEmpty;
+        return _hasMeaningfulProfileValue(agentProfile);
 
       default:
         return false;
@@ -594,7 +602,8 @@ class AppUser {
         ? Map<String, dynamic>.from(p['physical'] as Map)
         : <String, dynamic>{};
 
-    final hasPhysical = physical['heightCm'] != null ||
+    final hasPhysical =
+        physical['heightCm'] != null ||
         physical['weightKg'] != null ||
         physical['strongFoot'] != null;
 
@@ -611,7 +620,9 @@ class AppUser {
     final hasStats = stats is Map && stats.isNotEmpty;
 
     // Evidence
-    final hasEvidence = (videosPubliees?.isNotEmpty ?? false) || cvUrl != null;
+    final hasEvidence =
+        (videosPubliees?.isNotEmpty ?? false) ||
+        (cvUrl?.trim().isNotEmpty ?? false);
 
     // Scout-ready
     return (hasPhysical || hasSkills) && hasPosition && hasStats && hasEvidence;
@@ -632,6 +643,28 @@ class AppUser {
   /// -------------------------
   bool get shouldPromptAdvancedCompletion {
     return isMvpProfileComplete && !hasAdvancedProfile;
+  }
+
+  static bool _hasMeaningfulProfileValue(dynamic value) {
+    if (value == null) {
+      return false;
+    }
+    if (value is String) {
+      return value.trim().isNotEmpty;
+    }
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return true;
+    }
+    if (value is List) {
+      return value.any(_hasMeaningfulProfileValue);
+    }
+    if (value is Map) {
+      return value.values.any(_hasMeaningfulProfileValue);
+    }
+    return true;
   }
 
   /// -------------------------
@@ -663,12 +696,7 @@ class AppUser {
     required bool verified,
   }) {
     final normalized = value?.toString().trim().toLowerCase();
-    const supportedStatuses = {
-      'verified',
-      'unverified',
-      'pending',
-      'rejected',
-    };
+    const supportedStatuses = {'verified', 'unverified', 'pending', 'rejected'};
 
     if (normalized != null && supportedStatuses.contains(normalized)) {
       return normalized;

@@ -5,7 +5,7 @@ import 'package:adfoot/models/video.dart';
 
 class HomeFeedRepository {
   const HomeFeedRepository({FirebaseFirestore? firestore})
-      : _firestoreOverride = firestore;
+    : _firestoreOverride = firestore;
 
   final FirebaseFirestore? _firestoreOverride;
 
@@ -24,7 +24,7 @@ class HomeFeedRepository {
     }
 
     final video = Video.fromDoc(doc);
-    if (video.status != 'ready' || video.videoUrl.isEmpty) {
+    if (video.status != 'ready' || video.effectiveUrl.isEmpty) {
       return null;
     }
     return video;
@@ -40,10 +40,7 @@ class HomeFeedRepository {
     return snapshot.docs
         .map((doc) {
           final data = doc.data();
-          return AppUser.fromMap({
-            ...data,
-            'uid': data['uid'] ?? doc.id,
-          });
+          return AppUser.fromMap({...data, 'uid': data['uid'] ?? doc.id});
         })
         .where((user) => user.uid.trim().isNotEmpty)
         .toList(growable: false);
@@ -71,7 +68,7 @@ class HomeFeedRepository {
 
     return snapshot.docs
         .map(Video.fromDoc)
-        .where((video) => video.videoUrl.isNotEmpty)
+        .where((video) => video.effectiveUrl.isNotEmpty)
         .toList(growable: false);
   }
 
@@ -85,7 +82,7 @@ class HomeFeedRepository {
 
     return snapshot.docs
         .map(Video.fromDoc)
-        .where((video) => video.videoUrl.isNotEmpty)
+        .where((video) => video.effectiveUrl.isNotEmpty)
         .toList(growable: false);
   }
 }

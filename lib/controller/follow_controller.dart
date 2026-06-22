@@ -7,7 +7,7 @@ import 'package:adfoot/services/app_logger.dart';
 
 class FollowController extends GetxController {
   FollowController({FollowRepository? followRepository})
-      : _followRepository = followRepository ?? FollowRepository();
+    : _followRepository = followRepository ?? FollowRepository();
 
   final FollowRepository _followRepository;
 
@@ -95,6 +95,12 @@ class FollowController extends GetxController {
           shouldFollow: result.following ?? true,
           resolvedFollowingsCount: result.followings,
         );
+      } else {
+        _syncLocalFollowingState(
+          userCtrl: userCtrl,
+          targetUserId: targetUserId,
+          shouldFollow: false,
+        );
       }
       return result.success;
     } catch (error) {
@@ -134,6 +140,12 @@ class FollowController extends GetxController {
           shouldFollow: result.following ?? false,
           resolvedFollowingsCount: result.followings,
         );
+      } else {
+        _syncLocalFollowingState(
+          userCtrl: userCtrl,
+          targetUserId: targetUserId,
+          shouldFollow: true,
+        );
       }
       return result.success;
     } catch (error) {
@@ -156,9 +168,8 @@ class FollowController extends GetxController {
     String listType,
   ) async {
     try {
-      final currentFollowings = Get.find<UserController>()
-              .user
-              ?.followingsList
+      final currentFollowings =
+          Get.find<UserController>().user?.followingsList
               .map((id) => id.trim())
               .where((id) => id.isNotEmpty)
               .toSet() ??

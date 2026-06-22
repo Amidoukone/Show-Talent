@@ -5,9 +5,7 @@ Map<String, dynamic>? _asMap(dynamic value) {
     return value;
   }
   if (value is Map) {
-    return value.map(
-      (key, entry) => MapEntry(key.toString(), entry),
-    );
+    return value.map((key, entry) => MapEntry(key.toString(), entry));
   }
   return null;
 }
@@ -26,9 +24,8 @@ List<VideoSource> _parseVideoSources(dynamic value) {
 
   return value
       .map(
-        (entry) => VideoSource.fromMap(
-          _asMap(entry) ?? const <String, dynamic>{},
-        ),
+        (entry) =>
+            VideoSource.fromMap(_asMap(entry) ?? const <String, dynamic>{}),
       )
       .where((source) => source.url.isNotEmpty && source.isMp4)
       .toList();
@@ -147,14 +144,13 @@ class VideoPlaybackContract {
   }
 
   List<VideoSource> get mp4Sources => _dedupeVideoSources([
-        ...renditionSources.where((source) => source.isMp4),
-        if ((fallbackSource?.url.isNotEmpty ?? false) &&
-            (fallbackSource?.isMp4 ?? false))
-          fallbackSource!,
-        if ((sourceAsset?.url.isNotEmpty ?? false) &&
-            (sourceAsset?.isMp4 ?? false))
-          sourceAsset!,
-      ]);
+    ...renditionSources.where((source) => source.isMp4),
+    if ((fallbackSource?.url.isNotEmpty ?? false) &&
+        (fallbackSource?.isMp4 ?? false))
+      fallbackSource!,
+    if ((sourceAsset?.url.isNotEmpty ?? false) && (sourceAsset?.isMp4 ?? false))
+      sourceAsset!,
+  ]);
 
   List<VideoSource> get sources => mp4Sources;
 
@@ -227,30 +223,41 @@ class Video {
       ...legacySources,
     ]);
 
-    final fallbackUrl = readString(map['videoUrl']);
+    final fallbackUrl = readString(
+      map['videoUrl'] ??
+          map['playbackUrl'] ??
+          map['downloadUrl'] ??
+          map['urlVideo'] ??
+          map['video_url'] ??
+          map['url'],
+    );
     final safeFallbackUrl = _isMp4Url(fallbackUrl) ? fallbackUrl : '';
     final playbackFallback = playback?.fallbackSource;
     final playbackSourceAsset = playback?.sourceAsset;
-    final playbackPrimaryUrl = ((playbackFallback?.url.isNotEmpty ?? false) &&
+    final playbackPrimaryUrl =
+        ((playbackFallback?.url.isNotEmpty ?? false) &&
             (playbackFallback?.isMp4 ?? false))
         ? playbackFallback!.url
         : ((playbackSourceAsset?.url.isNotEmpty ?? false) &&
-                (playbackSourceAsset?.isMp4 ?? false))
-            ? playbackSourceAsset!.url
-            : '';
+              (playbackSourceAsset?.isMp4 ?? false))
+        ? playbackSourceAsset!.url
+        : '';
     final inferredUrl = playbackPrimaryUrl.isNotEmpty
         ? playbackPrimaryUrl
         : safeFallbackUrl.isNotEmpty
-            ? safeFallbackUrl
-            : (playback?.mp4Sources.isNotEmpty ?? false)
-                ? playback!.mp4Sources.first.url
-                : (mergedSources.isNotEmpty ? mergedSources.first.url : '');
+        ? safeFallbackUrl
+        : (playback?.mp4Sources.isNotEmpty ?? false)
+        ? playback!.mp4Sources.first.url
+        : (mergedSources.isNotEmpty ? mergedSources.first.url : '');
 
     return Video(
       id: map['id']?.toString() ?? '',
       videoUrl: inferredUrl,
       thumbnailUrl: readString(
-        map['thumbnail'] ?? map['thumbnailUrl'] ?? map['thumbnailPath'],
+        map['thumbnail'] ??
+            map['thumbnailUrl'] ??
+            map['thumbnail_url'] ??
+            map['thumbnailPath'],
       ),
       description: readString(
         map['description'] ?? map['songName'] ?? map['title'],
@@ -276,10 +283,7 @@ class Video {
 
   factory Video.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? {};
-    return Video.fromMap({
-      ...data,
-      'id': data['id'] ?? doc.id,
-    });
+    return Video.fromMap({...data, 'id': data['id'] ?? doc.id});
   }
 
   Map<String, dynamic> toMap() {

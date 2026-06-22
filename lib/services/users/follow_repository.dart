@@ -31,24 +31,23 @@ class FollowMutationResult {
 }
 
 class FollowRepository {
-  FollowRepository({
-    FirebaseFirestore? firestore,
-    FirebaseFunctions? functions,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _functions = functions ??
-            FirebaseFunctions.instanceFor(
-              region: AppEnvironmentConfig.functionsRegion,
-            );
+  FollowRepository({FirebaseFirestore? firestore, FirebaseFunctions? functions})
+    : _firestore = firestore ?? FirebaseFirestore.instance,
+      _functions =
+          functions ??
+          FirebaseFunctions.instanceFor(
+            region: AppEnvironmentConfig.functionsRegion,
+          );
 
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
 
   Future<FollowMutationResult> followUser(String targetUserId) {
-    return _runFollowMutation('followUser', targetUserId);
+    return _runFollowMutationWithRetry('followUser', targetUserId);
   }
 
   Future<FollowMutationResult> unfollowUser(String targetUserId) {
-    return _runFollowMutation('unfollowUser', targetUserId);
+    return _runFollowMutationWithRetry('unfollowUser', targetUserId);
   }
 
   Future<List<Map<String, dynamic>>> fetchFollowList({
@@ -60,9 +59,11 @@ class FollowRepository {
     if (!doc.exists) return [];
 
     final data = doc.data() ?? const <String, dynamic>{};
-    final rawIds = (listType == 'followers'
-            ? data['followersList']
-            : data['followingsList']) as List<dynamic>? ??
+    final rawIds =
+        (listType == 'followers'
+                ? data['followersList']
+                : data['followingsList'])
+            as List<dynamic>? ??
         const <dynamic>[];
     final ids = <String>[];
     final seen = <String>{};
@@ -112,15 +113,15 @@ class FollowRepository {
   ) async {
     final callable = _functions.httpsCallable(
       callableName,
-      options: HttpsCallableOptions(timeout: const Duration(seconds: 12)),
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
     );
 
     final raw =
         await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
-      callable,
-      callableName,
-      {'targetUserId': targetUserId},
-    );
+          callable,
+          callableName,
+          {'targetUserId': targetUserId},
+        );
 
     final response = ActionResponse.fromMap(
       raw,
@@ -128,6 +129,51 @@ class FollowRepository {
     );
 
     return FollowMutationResult.fromActionResponse(response);
+  }
+
+  Future<FollowMutationResult> _runFollowMutationWithRetry(
+    String callableName,
+    String targetUserId,
+  ) async {
+    const maxAttempts = 2;
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await _runFollowMutation(callableName, targetUserId);
+      } catch (error) {
+        if (attempt >= maxAttempts || !_isTransientMutationError(error)) {
+          rethrow;
+        }
+        await Future<void>.delayed(Duration(milliseconds: 300 * attempt));
+      }
+    }
+
+    throw StateError('Follow mutation retry loop exited unexpectedly.');
+  }
+
+  static bool _isTransientMutationError(Object error) {
+    if (error is FirebaseFunctionsException) {
+      return _isTransientCode(error.code);
+    }
+    if (error is FirebaseException) {
+      return _isTransientCode(error.code);
+    }
+    return false;
+  }
+
+  static bool _isTransientCode(String code) {
+    switch (code) {
+      case 'unavailable':
+      case 'deadline-exceeded':
+      case 'aborted':
+      case 'cancelled':
+      case 'resource-exhausted':
+      case 'internal':
+      case 'unknown':
+        return true;
+      default:
+        return false;
+    }
   }
 
   static bool isPermissionDenied(Object error) {

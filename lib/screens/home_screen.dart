@@ -73,6 +73,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _routeRefreshRequested = false;
   String? _routeFocusVideoId;
   bool _isSearchSheetOpen = false;
+  bool _wasHomeFeedEmpty = true;
   int? _silencedPageChangeIndex;
   int _searchRequestToken = 0;
   int? _feedIndexBeforeSearch;
@@ -265,6 +266,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     await _onPageChanged(0);
+  }
+
+  void _scheduleHomeFeedActivationAfterEmptyFeed() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _isSearchActive || videoController.videoList.isEmpty) {
+        return;
+      }
+
+      final safeIndex = videoController.currentIndex.value
+          .clamp(0, videoController.videoList.length - 1)
+          .toInt();
+      videoController.currentIndex.value = safeIndex;
+      _refreshFocusVideos();
+
+      if (_pageController.hasClients) {
+        _jumpToPageSilently(safeIndex);
+      }
+
+      unawaited(_onPageChanged(safeIndex));
+    });
   }
 
   void _jumpToPageSilently(int index) {
@@ -1199,6 +1220,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           : Obx(() {
               final feedVideos = videoController.videoList;
               final videos = _currentVideos;
+              final feedBecameAvailable =
+                  !_isSearchActive &&
+                  _wasHomeFeedEmpty &&
+                  feedVideos.isNotEmpty;
+              if (!_isSearchActive) {
+                _wasHomeFeedEmpty = feedVideos.isEmpty;
+              }
 
               if (_isSearchActive && videos.isEmpty) {
                 if (_isSearchLoading) {
@@ -1221,6 +1249,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               if (!_isSearchActive && feedVideos.isEmpty) {
                 final user = userController.user;
                 return _buildEmptyFeed(userRole: user?.role);
+              }
+
+              if (feedBecameAvailable) {
+                _scheduleHomeFeedActivationAfterEmptyFeed();
               }
 
               return PageView.builder(
