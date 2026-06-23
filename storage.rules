@@ -74,11 +74,17 @@ service firebase.storage {
       return fileName.matches('^cv_[0-9]+\\.pdf$');
     }
 
+    function isAllowedCvContentType() {
+      return request.resource.contentType.matches('application/pdf(;.*)?') ||
+        request.resource.contentType == 'application/x-pdf' ||
+        request.resource.contentType == 'application/octet-stream';
+    }
+
     function isValidCvPdfUpload(fileName) {
       return isCvFileName(fileName) &&
         request.resource.size > 0 &&
         request.resource.size <= 5 * 1024 * 1024 &&
-        request.resource.contentType.matches('application/pdf(;.*)?');
+        isAllowedCvContentType();
     }
 
     function canReadCv(uid) {

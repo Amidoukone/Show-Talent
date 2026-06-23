@@ -35,6 +35,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _bioController;
   late final TextEditingController _phoneController;
   late final TextEditingController _languagesController;
+  late final TextEditingController _positionController;
   late final TextEditingController _teamController;
   late final TextEditingController _ligueController;
   late final TextEditingController _entrepriseController;
@@ -66,6 +67,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _languagesController = TextEditingController(
       text: user.languages?.join(', ') ?? '',
     );
+    _positionController = TextEditingController(text: user.position ?? '');
     _teamController = TextEditingController(
       text: user.team ?? user.clubActuel ?? '',
     );
@@ -83,6 +85,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _bioController.dispose();
     _phoneController.dispose();
     _languagesController.dispose();
+    _positionController.dispose();
     _teamController.dispose();
     _ligueController.dispose();
     _entrepriseController.dispose();
@@ -355,6 +358,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           patch['birthDate'] = ProfileController.deleteField;
         }
 
+        final position = _trimOrNull(_positionController.text);
+        if (position != null) {
+          patch['position'] = position;
+        } else if ((user.position?.isNotEmpty ?? false)) {
+          patch['position'] = ProfileController.deleteField;
+        }
+
         final team = _trimOrNull(_teamController.text);
         if (team != null) {
           patch['team'] = team;
@@ -584,6 +594,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             child: Column(
                               children: [
                                 _buildTextField(
+                                  controller: _positionController,
+                                  label: user.role == 'coach'
+                                      ? 'Fonction sportive'
+                                      : 'Poste principal',
+                                  icon: Icons.sports_outlined,
+                                  hint: user.role == 'coach'
+                                      ? 'Ex : Coach principal, préparateur physique'
+                                      : 'Ex : Ailier droit, gardien, milieu axial',
+                                ),
+                                const SizedBox(height: 12),
+                                _buildTextField(
                                   controller: _teamController,
                                   label: user.role == 'coach'
                                       ? 'Club / structure actuelle'
@@ -765,7 +786,7 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
       setState(() => _isUploading = true);
       uploadStarted = true;
 
-      await widget.profileController.uploadCvPdf(
+      final cvUrl = await widget.profileController.uploadCvPdf(
         user.uid,
         pdfBytes: hasBytes ? bytes : null,
         pdfFile: hasPath ? File(path) : null,
@@ -775,7 +796,7 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
       if (!mounted) {
         return;
       }
-      setState(() => _cvUrl = _currentUser.cvUrl);
+      setState(() => _cvUrl = cvUrl ?? _currentUser.cvUrl);
     } on ProfileAccessRevokedException {
       return;
     } catch (e, st) {

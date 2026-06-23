@@ -45,15 +45,19 @@ class PlayerStatsAvailabilityFormState
 
     final p = widget.user.playerProfile ?? {};
     final stats = (p['stats'] is Map) ? (p['stats'] as Map) : {};
-    final availability =
-        (p['availability'] is Map) ? (p['availability'] as Map) : {};
+    final availability = (p['availability'] is Map)
+        ? (p['availability'] as Map)
+        : {};
 
-    _minutesController =
-        TextEditingController(text: stats['minutes']?.toString() ?? '');
-    _goalsController =
-        TextEditingController(text: stats['goals']?.toString() ?? '');
-    _assistsController =
-        TextEditingController(text: stats['assists']?.toString() ?? '');
+    _minutesController = TextEditingController(
+      text: stats['minutes']?.toString() ?? '',
+    );
+    _goalsController = TextEditingController(
+      text: stats['goals']?.toString() ?? '',
+    );
+    _assistsController = TextEditingController(
+      text: stats['assists']?.toString() ?? '',
+    );
     _regionsController = TextEditingController(
       text: (availability['regions'] as List?)?.join(', ') ?? '',
     );
@@ -104,6 +108,7 @@ class PlayerStatsAvailabilityFormState
     setState(() => _saving = true);
     try {
       final patch = {
+        'openToOpportunities': _openToTrials,
         'playerProfile': {
           'stats': {
             'minutes': int.tryParse(_minutesController.text.trim()),
@@ -114,7 +119,7 @@ class PlayerStatsAvailabilityFormState
             'open': _openToTrials,
             'regions': _csvToList(_regionsController.text),
           },
-        }
+        },
       };
 
       try {
@@ -123,6 +128,8 @@ class PlayerStatsAvailabilityFormState
           patch,
         );
       } on ProfileAccessRevokedException {
+        return false;
+      } catch (_) {
         return false;
       }
 

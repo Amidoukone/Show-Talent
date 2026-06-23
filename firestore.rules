@@ -134,8 +134,13 @@ service cloud.firestore {
         ownerProfileVerificationResetIsValid();
     }
 
+    function resourceProfileIsVerified() {
+      return resource.data.profileVerified == true ||
+        resource.data.profileVerificationStatus == "verified";
+    }
+
     function verifiedOwnerProfileChangeIsInvalidated() {
-      return resource.data.profileVerified != true ||
+      return !resourceProfileIsVerified() ||
         !ownerProfileTrustFieldsChanged() ||
         ownerProfileVerificationResetIsValid();
     }

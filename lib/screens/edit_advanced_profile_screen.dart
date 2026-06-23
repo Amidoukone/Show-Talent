@@ -44,12 +44,20 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_handleTabChanged);
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _handleTabChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _save() async {
@@ -64,7 +72,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
       if (_user.isPlayer) {
         final profileSaved =
             await _playerProfileKey.currentState?.save(showFeedback: false) ??
-                false;
+            false;
         if (!profileSaved) {
           _tabController.animateTo(0);
           return;
@@ -72,7 +80,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
 
         final scoutSaved =
             await _playerScoutKey.currentState?.save(showFeedback: false) ??
-                false;
+            false;
         if (!scoutSaved) {
           _tabController.animateTo(1);
           return;
@@ -130,15 +138,15 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -172,16 +180,16 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -218,8 +226,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
           ),
         ),
         Expanded(
-          child: TabBarView(
-            controller: _tabController,
+          child: IndexedStack(
+            index: _tabController.index,
             children: [
               SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
@@ -324,8 +332,9 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
         subtitle: _isAgent
             ? 'Renseignez votre licence, votre pays d’exercice et vos zones d’intervention pour présenter un cadre de représentation crédible.'
             : 'Renseignez vos références, votre zone de travail et vos informations de licence pour cadrer votre activité de recrutement.',
-        sectionTitle:
-            _isAgent ? 'Cadre de représentation' : 'Cadre de recrutement',
+        sectionTitle: _isAgent
+            ? 'Cadre de représentation'
+            : 'Cadre de recrutement',
         sectionSubtitle: _isAgent
             ? 'Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre d’accompagnement.'
             : 'Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre de recrutement.',

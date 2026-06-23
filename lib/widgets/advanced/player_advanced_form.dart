@@ -44,10 +44,12 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
     final p = widget.user.playerProfile ?? {};
     final physical = (p['physical'] is Map) ? (p['physical'] as Map) : {};
 
-    _heightController =
-        TextEditingController(text: physical['heightCm']?.toString() ?? '');
-    _weightController =
-        TextEditingController(text: physical['weightKg']?.toString() ?? '');
+    _heightController = TextEditingController(
+      text: physical['heightCm']?.toString() ?? '',
+    );
+    _weightController = TextEditingController(
+      text: physical['weightKg']?.toString() ?? '',
+    );
     _strongFoot = physical['strongFoot']?.toString();
     _positionsController = TextEditingController(
       text: (p['positions'] as List?)?.join(', ') ?? '',
@@ -84,15 +86,18 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
 
     setState(() => _saving = true);
     try {
-      final patch = {
+      final positions = _csvToList(_positionsController.text);
+      final skills = _csvToList(_skillsController.text);
+      final patch = <String, dynamic>{
+        if (positions.isNotEmpty) 'position': positions.first,
         'playerProfile': {
           'physical': {
             'heightCm': int.tryParse(_heightController.text.trim()),
             'weightKg': int.tryParse(_weightController.text.trim()),
             'strongFoot': _strongFoot,
           },
-          'positions': _csvToList(_positionsController.text),
-          'skills': _csvToList(_skillsController.text),
+          'positions': positions,
+          'skills': skills,
         },
       };
 
@@ -102,6 +107,8 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
           patch,
         );
       } on ProfileAccessRevokedException {
+        return false;
+      } catch (_) {
         return false;
       }
 

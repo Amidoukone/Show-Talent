@@ -356,6 +356,7 @@ class ProfileRepository {
     await _ensureAuthenticatedOwner(uid);
 
     File? streamBackedFile;
+    Reference? uploadedRef;
 
     try {
       Uint8List? uploadBytes = pdfBytes != null && pdfBytes.isNotEmpty
@@ -395,20 +396,28 @@ class ProfileRepository {
       final uploadTask = await ref
           .putData(bytesToUpload, metadata)
           .timeout(storageWriteTimeout);
-      final url = await uploadTask.ref.getDownloadURL().timeout(
-        firestoreReadTimeout,
-      );
+      uploadedRef = uploadTask.ref;
 
-      final patch = <String, dynamic>{'cvUrl': url};
-      await _appendVerificationInvalidationIfCurrentProfileIsVerified(
-        uid: uid,
-        firestorePatch: patch,
-      );
+      late final String url;
+      try {
+        url = await uploadTask.ref.getDownloadURL().timeout(
+          firestoreReadTimeout,
+        );
 
-      await _usersCollection
-          .doc(uid)
-          .update(patch)
-          .timeout(firestoreWriteTimeout);
+        final patch = <String, dynamic>{'cvUrl': url};
+        await _appendVerificationInvalidationIfCurrentProfileIsVerified(
+          uid: uid,
+          firestorePatch: patch,
+        );
+
+        await _usersCollection
+            .doc(uid)
+            .update(patch)
+            .timeout(firestoreWriteTimeout);
+      } catch (_) {
+        await _deleteUploadedCvIfPresent(uploadedRef);
+        rethrow;
+      }
 
       if (previousCvUrl != null &&
           previousCvUrl.isNotEmpty &&
@@ -436,10 +445,6 @@ class ProfileRepository {
   Future<void> deleteCv(String uid, {String? cvUrl}) async {
     await _ensureAuthenticatedOwner(uid);
 
-    if (cvUrl != null && cvUrl.isNotEmpty) {
-      await _storage.refFromURL(cvUrl).delete().timeout(storageWriteTimeout);
-    }
-
     final patch = <String, dynamic>{'cvUrl': FieldValue.delete()};
     await _appendVerificationInvalidationIfCurrentProfileIsVerified(
       uid: uid,
@@ -450,6 +455,19 @@ class ProfileRepository {
         .doc(uid)
         .update(patch)
         .timeout(firestoreWriteTimeout);
+
+    if (cvUrl != null && cvUrl.isNotEmpty) {
+      try {
+        await _storage.refFromURL(cvUrl).delete().timeout(storageWriteTimeout);
+      } catch (cleanupError, cleanupStackTrace) {
+        developer.log(
+          'deleteCv storage cleanup warning',
+          name: 'ProfileRepository.deleteCv',
+          error: cleanupError,
+          stackTrace: cleanupStackTrace,
+        );
+      }
+    }
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(
@@ -613,6 +631,23 @@ class ProfileRepository {
     } catch (cleanupError, cleanupStackTrace) {
       developer.log(
         'temporary CV cleanup warning',
+        name: 'ProfileRepository.uploadCvPdf',
+        error: cleanupError,
+        stackTrace: cleanupStackTrace,
+      );
+    }
+  }
+
+  static Future<void> _deleteUploadedCvIfPresent(Reference? ref) async {
+    if (ref == null) {
+      return;
+    }
+
+    try {
+      await ref.delete().timeout(storageWriteTimeout);
+    } catch (cleanupError, cleanupStackTrace) {
+      developer.log(
+        'uploaded CV cleanup warning',
         name: 'ProfileRepository.uploadCvPdf',
         error: cleanupError,
         stackTrace: cleanupStackTrace,

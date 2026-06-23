@@ -8,6 +8,7 @@ import 'package:adfoot/models/video.dart';
 import 'package:adfoot/services/users/profile_repository.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/video_manager.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/services/app_logger.dart';
 
@@ -55,8 +56,57 @@ class ProfileController extends GetxController {
   bool _isPermissionDenied(Object error) =>
       ProfileRepository.isPermissionDenied(error);
 
+  bool _isAccessDenied(Object error) =>
+      _isPermissionDenied(error) || ProfileRepository.isUnauthorized(error);
+
   bool _isTransientFirestoreError(Object error) =>
       ProfileRepository.isTransientFirestoreError(error);
+
+  String _firebaseFailureCode(Object error) {
+    if (error is FirebaseException) {
+      return '${error.plugin}/${error.code}';
+    }
+    return error.runtimeType.toString();
+  }
+
+  String? _ownerSessionProblemMessage(String uid) {
+    final authUid = _profileRepository.currentAuthUid;
+    if (authUid == null) {
+      return 'La session Firebase est expirée. Reconnectez-vous puis réessayez.';
+    }
+    if (authUid != uid) {
+      return 'La session active ne correspond pas au profil ouvert. Reconnectez-vous avec le bon compte puis réessayez.';
+    }
+    return null;
+  }
+
+  String _profileWriteAccessDeniedMessage(Object error, String uid) {
+    final code = _firebaseFailureCode(error);
+    final ownerProblem = _ownerSessionProblemMessage(uid);
+    if (ownerProblem != null) {
+      return '$ownerProblem Code: $code';
+    }
+
+    if (ProfileRepository.isUnauthorized(error)) {
+      return 'Firebase refuse cette session. Vérifiez App Check pour ce build/téléphone, puis réessayez. Code: $code';
+    }
+
+    return 'Votre session ne permet pas de modifier ce profil. Reconnectez-vous puis réessayez. Code: $code';
+  }
+
+  String _cvAccessDeniedMessage(Object error, String uid) {
+    final code = _firebaseFailureCode(error);
+    final ownerProblem = _ownerSessionProblemMessage(uid);
+    if (ownerProblem != null) {
+      return '$ownerProblem Code: $code';
+    }
+
+    if (ProfileRepository.isUnauthorized(error)) {
+      return 'Firebase Storage ou App Check refuse ce build/téléphone. Vérifiez que le debug token de ce téléphone est enregistré, ou utilisez Play Integrity pour la version finale. Code: $code';
+    }
+
+    return 'Firebase Storage refuse actuellement l’ajout du CV pour cette session. Code: $code';
+  }
 
   String _profileLoadErrorMessage(Object error) {
     if (error is ProfileLoadException) {
@@ -189,7 +239,11 @@ class ProfileController extends GetxController {
       await _safeRefreshCurrentUser();
     } catch (e, st) {
       AppLogger.debug('updateUserProfile error: $e\n$st');
-      if (_isPermissionDenied(e)) {
+      if (_isAccessDenied(e)) {
+        AdFeedback.error(
+          'Autorisation refusée',
+          'Votre session ne permet pas de modifier cette photo. Reconnectez-vous puis réessayez.',
+        );
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
@@ -210,6 +264,12 @@ class ProfileController extends GetxController {
     try {
       if (patch.isEmpty) {
         return;
+      }
+      final ownerProblem = _ownerSessionProblemMessage(uid);
+      if (ownerProblem != null) {
+        AdFeedback.error('Session invalide', ownerProblem);
+        unawaited(_handleProtectedAccessDenied());
+        throw const ProfileAccessRevokedException();
       }
 
       final writeResult = await _profileRepository.updateProfilePatch(
@@ -239,20 +299,13 @@ class ProfileController extends GetxController {
       }
     } catch (e, st) {
       AppLogger.debug('updateProfilePatch error: $e\n$st');
-      if (_isPermissionDenied(e)) {
+      if (_isAccessDenied(e)) {
         AdFeedback.error(
           'Accès refusé',
-          'Votre session ne permet pas de modifier ce profil. Reconnectez-vous puis réessayez.',
+          _profileWriteAccessDeniedMessage(e, uid),
         );
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
-      }
-      if (ProfileRepository.isUnauthorized(e)) {
-        AdFeedback.error(
-          'Accès refusé',
-          'Votre session ne permet pas de modifier ce profil. Reconnectez-vous puis réessayez.',
-        );
-        return;
       }
       AdFeedback.error(
         'Mise à jour impossible',
@@ -437,7 +490,7 @@ class ProfileController extends GetxController {
       );
     } catch (e, st) {
       AppLogger.debug('updateProfilePhoto error: $e\n$st');
-      if (_isPermissionDenied(e)) {
+      if (_isAccessDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
@@ -531,7 +584,7 @@ class ProfileController extends GetxController {
     await fetchUserVideos(user!.uid, isRefresh: true);
   }
 
-  Future<void> uploadCvPdf(
+  Future<String?> uploadCvPdf(
     String uid, {
     File? pdfFile,
     Uint8List? pdfBytes,
@@ -539,6 +592,13 @@ class ProfileController extends GetxController {
     int? byteSize,
   }) async {
     try {
+      final ownerProblem = _ownerSessionProblemMessage(uid);
+      if (ownerProblem != null) {
+        AdFeedback.error('Session invalide', ownerProblem);
+        unawaited(_handleProtectedAccessDenied());
+        return null;
+      }
+
       final previousCvUrl = user?.cvUrl;
       final url = await _profileRepository.uploadCvPdf(
         uid,
@@ -557,6 +617,7 @@ class ProfileController extends GetxController {
         'CV enregistré',
         'Votre CV a été ajouté ou mis à jour.',
       );
+      return url;
     } catch (e, st) {
       AppLogger.debug(
         'uploadCvPdf error: $e\n'
@@ -566,16 +627,17 @@ class ProfileController extends GetxController {
       );
       if (e is CvUploadValidationException) {
         AdFeedback.error('CV non accepte', e.message);
-        return;
+        return null;
       }
-      if (_isPermissionDenied(e) || ProfileRepository.isUnauthorized(e)) {
+      if (_isAccessDenied(e)) {
         AdFeedback.error(
           'Autorisation refusée',
-          'Le stockage Firebase refuse actuellement l’ajout du CV pour cette session.',
+          _cvAccessDeniedMessage(e, uid),
         );
-        return;
+        return null;
       }
       AdFeedback.error('Ajout impossible', "Impossible d'ajouter le CV.");
+      return null;
     }
   }
 
@@ -591,7 +653,11 @@ class ProfileController extends GetxController {
       AdFeedback.success('CV supprimé', 'Le CV a été retiré du profil.');
     } catch (e) {
       AppLogger.debug('deleteCv error: $e');
-      if (_isPermissionDenied(e)) {
+      if (_isAccessDenied(e)) {
+        AdFeedback.error(
+          'Autorisation refusée',
+          'Votre session ne permet pas de supprimer ce CV. Reconnectez-vous puis réessayez.',
+        );
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }

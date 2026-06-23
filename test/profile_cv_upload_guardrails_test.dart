@@ -34,8 +34,40 @@ void main() {
       expect(repository, contains('uploadFile.readAsBytes()'));
       expect(repository, contains('.putData(bytesToUpload, metadata)'));
       expect(repository, contains('_materializePdfStream(pdfReadStream)'));
+      expect(repository, contains('_deleteUploadedCvIfPresent(uploadedRef)'));
       expect(repository, isNot(contains("'originalName'")));
       expect(repository, isNot(contains('.putFile(uploadFile')));
+
+      final controller = File(
+        'lib/controller/profile_controller.dart',
+      ).readAsStringSync();
+      final screen = File(
+        'lib/screens/edit_profil_screen.dart',
+      ).readAsStringSync();
+      expect(controller, contains('Future<String?> uploadCvPdf'));
+      expect(controller, contains('return url;'));
+      expect(controller, contains('String _firebaseFailureCode'));
+      expect(controller, contains('_ownerSessionProblemMessage(uid)'));
+      expect(controller, contains('_cvAccessDeniedMessage(e, uid)'));
+      expect(controller, contains(r'Code: $code'));
+      expect(
+        screen,
+        contains('final cvUrl = await widget.profileController.uploadCvPdf'),
+      );
+      expect(
+        screen,
+        contains('setState(() => _cvUrl = cvUrl ?? _currentUser.cvUrl)'),
+      );
+
+      final deleteCv = repository.substring(
+        repository.indexOf('Future<void> deleteCv'),
+        repository.indexOf('Future<DocumentSnapshot<Map<String, dynamic>>>'),
+      );
+      expect(
+        deleteCv.indexOf('.doc(uid)\n        .update(patch)'),
+        lessThan(deleteCv.indexOf('refFromURL(cvUrl)')),
+      );
+      expect(deleteCv, contains('deleteCv storage cleanup warning'));
     });
 
     test('storage rules scope CV writes to small generated PDFs', () {
@@ -47,8 +79,11 @@ void main() {
       expect(rules, contains('function isCvFileName(fileName)'));
       expect(rules, contains("fileName.matches('^cv_[0-9]+\\\\.pdf\$')"));
       expect(rules, contains('request.resource.size <= 5 * 1024 * 1024'));
+      expect(rules, contains('function isAllowedCvContentType()'));
       expect(rules, contains("request.resource.contentType.matches"));
       expect(rules, contains("application/pdf(;.*)?"));
+      expect(rules, contains("application/x-pdf"));
+      expect(rules, contains("application/octet-stream"));
       expect(rules, contains('function canReadCv(uid)'));
       expect(rules, contains('function isAdminOperator()'));
       expect(rules, contains('request.auth.token.platformAdmin == true'));

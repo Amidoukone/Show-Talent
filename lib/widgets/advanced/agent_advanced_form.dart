@@ -99,6 +99,8 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
         );
       } on ProfileAccessRevokedException {
         return false;
+      } catch (_) {
+        return false;
       }
 
       if (widget.autoCloseOnSave && showFeedback) {
@@ -134,8 +136,10 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
             if (widget.showSectionTitle) ...[
               Text(
                 _isAgent ? 'Profil agent avancé' : 'Profil recruteur avancé',
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 12),
             ],

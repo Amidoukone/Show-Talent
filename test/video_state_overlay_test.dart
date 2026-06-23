@@ -6,17 +6,15 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   Widget host(Widget child) {
     return MaterialApp(
-      home: Scaffold(
-        body: SizedBox(width: 390, height: 720, child: child),
-      ),
+      theme: ThemeData(splashFactory: NoSplash.splashFactory),
+      home: Scaffold(body: SizedBox(width: 390, height: 720, child: child)),
     );
   }
 
-  testWidgets('loading overlay keeps the standard loading message',
-      (tester) async {
-    await tester.pumpWidget(
-      host(const VideoStateOverlay.loading()),
-    );
+  testWidgets('loading overlay keeps the standard loading message', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(const VideoStateOverlay.loading()));
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.text(VideoUiStrings.loadingMessage), findsOneWidget);
@@ -44,8 +42,9 @@ void main() {
     expect(retried, isTrue);
   });
 
-  testWidgets('error overlay uses fallback text and retry action',
-      (tester) async {
+  testWidgets('error overlay uses fallback text and retry action', (
+    tester,
+  ) async {
     var retried = false;
 
     await tester.pumpWidget(

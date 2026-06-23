@@ -50,14 +50,16 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
     final needs = clubProfile['needs'];
     if (needs is List) {
       _needsController = TextEditingController(
-        text: needs.map((entry) {
-          if (entry is Map) {
-            final position = entry['position']?.toString() ?? '';
-            final priority = entry['priority']?.toString() ?? '';
-            return priority.isNotEmpty ? '$position:$priority' : position;
-          }
-          return entry.toString();
-        }).join(', '),
+        text: needs
+            .map((entry) {
+              if (entry is Map) {
+                final position = entry['position']?.toString() ?? '';
+                final priority = entry['priority']?.toString() ?? '';
+                return priority.isNotEmpty ? '$position:$priority' : position;
+              }
+              return entry.toString();
+            })
+            .join(', '),
       );
     } else {
       _needsController = TextEditingController();
@@ -86,8 +88,11 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
   }
 
   List<Map<String, String?>> _parseNeeds(String raw) {
-    final entries =
-        raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final entries = raw
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
 
     return entries.map((entry) {
       final parts = entry.split(':');
@@ -122,6 +127,8 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
           patch,
         );
       } on ProfileAccessRevokedException {
+        return false;
+      } catch (_) {
         return false;
       }
 

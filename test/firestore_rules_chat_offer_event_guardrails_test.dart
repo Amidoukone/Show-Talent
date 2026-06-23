@@ -5,17 +5,22 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('Firestore chat/offre/event guardrails', () {
     test(
-        'rules keep guided messaging intake creation available to active users',
-        () {
-      final rules = File('firestore.rules').readAsStringSync();
+      'rules keep guided messaging intake creation available to active users',
+      () {
+        final rules = File('firestore.rules').readAsStringSync();
 
-      expect(rules, contains('match /conversations/{conversationId} {'));
-      expect(rules, contains('match /contact_intakes/{intakeId} {'));
-      expect(rules,
-          contains('request.resource.data.requesterUid == request.auth.uid'));
-      expect(rules,
-          contains('request.resource.data.agencyFollowUpStatus == "new"'));
-    });
+        expect(rules, contains('match /conversations/{conversationId} {'));
+        expect(rules, contains('match /contact_intakes/{intakeId} {'));
+        expect(
+          rules,
+          contains('request.resource.data.requesterUid == request.auth.uid'),
+        );
+        expect(
+          rules,
+          contains('request.resource.data.agencyFollowUpStatus == "new"'),
+        );
+      },
+    );
 
     test('rules allow narrow active chat presence updates for mobile', () {
       final rules = File('firestore.rules').readAsStringSync();
@@ -30,27 +35,31 @@ void main() {
     });
 
     test(
-        'rules allow player-side candidature and registration mutations only on narrow fields',
-        () {
-      final rules = File('firestore.rules').readAsStringSync();
+      'rules allow player-side candidature and registration mutations only on narrow fields',
+      () {
+        final rules = File('firestore.rules').readAsStringSync();
 
-      expect(rules, contains('function canMutateOfferCandidates() {'));
-      expect(rules, contains('changesOnly(["candidats", "lastUpdated"])'));
-      expect(rules, contains('function canMutateEventParticipants() {'));
-      expect(rules, contains('changesOnly(["participants", "lastUpdated"])'));
-      expect(rules, contains('resource.data.statut == "ouverte"'));
-      expect(rules, contains('resource.data.statut == "ouvert"'));
-    });
+        expect(rules, contains('function canMutateOfferCandidates() {'));
+        expect(rules, contains('changesOnly(["candidats", "lastUpdated"])'));
+        expect(rules, contains('function canMutateEventParticipants() {'));
+        expect(rules, contains('changesOnly(["participants", "lastUpdated"])'));
+        expect(rules, contains('resource.data.statut == "ouverte"'));
+        expect(rules, contains('resource.data.statut == "ouvert"'));
+      },
+    );
 
     test(
-        'rules keep offer view metrics writable without reopening owner fields',
-        () {
-      final rules = File('firestore.rules').readAsStringSync();
+      'rules keep offer view metrics writable without reopening owner fields',
+      () {
+        final rules = File('firestore.rules').readAsStringSync();
 
-      expect(rules, contains('function canMutateOfferViews() {'));
-      expect(
-          rules, contains('changesOnly(["vues", "viewedBy", "lastUpdated"])'));
-    });
+        expect(rules, contains('function canMutateOfferViews() {'));
+        expect(
+          rules,
+          contains('changesOnly(["vues", "viewedBy", "lastUpdated"])'),
+        );
+      },
+    );
 
     test('rules allow only narrow owner FCM token updates', () {
       final rules = File('firestore.rules').readAsStringSync();
@@ -67,15 +76,16 @@ void main() {
       expect(rules, contains('function canUpdateOwnProfile() {'));
       expect(rules, contains('function ownerProfileTrustFieldsChanged() {'));
       expect(
-          rules, contains('function ownerProfileVerificationResetIsValid() {'));
+        rules,
+        contains('function ownerProfileVerificationResetIsValid() {'),
+      );
+      expect(rules, contains('function resourceProfileIsVerified() {'));
       expect(
         rules,
-        contains('verifiedOwnerProfileChangeIsInvalidated()'),
+        contains('resource.data.profileVerificationStatus == "verified"'),
       );
-      expect(
-        rules,
-        contains('"profileVerificationInvalidationReason"'),
-      );
+      expect(rules, contains('verifiedOwnerProfileChangeIsInvalidated()'));
+      expect(rules, contains('"profileVerificationInvalidationReason"'));
       expect(
         rules,
         contains(

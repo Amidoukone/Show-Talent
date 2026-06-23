@@ -27,4 +27,41 @@ void main() {
       contains('loadingBuilder: (context, child, loadingProgress)'),
     );
   });
+
+  test('profile editors keep MVP and advanced save flows complete', () {
+    final editProfile = File(
+      'lib/screens/edit_profil_screen.dart',
+    ).readAsStringSync();
+    final advancedEditor = File(
+      'lib/screens/edit_advanced_profile_screen.dart',
+    ).readAsStringSync();
+    final controller = File(
+      'lib/controller/profile_controller.dart',
+    ).readAsStringSync();
+    final playerAdvanced = File(
+      'lib/widgets/advanced/player_advanced_form.dart',
+    ).readAsStringSync();
+    final playerStats = File(
+      'lib/widgets/advanced/player_stats_availability_form.dart',
+    ).readAsStringSync();
+
+    expect(editProfile, contains('_positionController'));
+    expect(editProfile, contains("patch['position']"));
+    expect(editProfile, contains("label: user.role == 'coach'"));
+    expect(advancedEditor, contains('IndexedStack'));
+    expect(advancedEditor, isNot(contains('TabBarView(')));
+    expect(controller, contains('bool _isAccessDenied(Object error)'));
+    expect(
+      controller,
+      contains('throw const ProfileAccessRevokedException();'),
+    );
+    expect(
+      controller,
+      isNot(contains('if (ProfileRepository.isUnauthorized(e))')),
+    );
+    expect(playerAdvanced, contains('} catch (_) {'));
+    expect(playerStats, contains('} catch (_) {'));
+    expect(playerAdvanced, contains("if (positions.isNotEmpty) 'position'"));
+    expect(playerStats, contains("'openToOpportunities': _openToTrials"));
+  });
 }

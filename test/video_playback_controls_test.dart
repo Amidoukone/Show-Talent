@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   Widget host(Widget child, {double height = 120}) {
     return MaterialApp(
+      theme: ThemeData(splashFactory: NoSplash.splashFactory),
       home: Scaffold(
         backgroundColor: Colors.black,
         body: SizedBox(width: 400, height: height, child: child),
@@ -13,8 +14,9 @@ void main() {
     );
   }
 
-  testWidgets('playback controls expose stable labels and callbacks',
-      (tester) async {
+  testWidgets('playback controls expose stable labels and callbacks', (
+    tester,
+  ) async {
     var rewind = 0;
     var toggle = 0;
     var forward = 0;
@@ -48,8 +50,9 @@ void main() {
     expect(speed, 1);
   });
 
-  testWidgets('progress bar displays time and maps taps to seek proportion',
-      (tester) async {
+  testWidgets('progress bar displays time and maps taps to seek proportion', (
+    tester,
+  ) async {
     double? tappedProportion;
 
     await tester.pumpWidget(
@@ -80,8 +83,9 @@ void main() {
     expect(tappedProportion!, closeTo(0.5, 0.02));
   });
 
-  testWidgets('speed sheet highlights current speed and returns a selection',
-      (tester) async {
+  testWidgets('speed sheet highlights current speed and returns a selection', (
+    tester,
+  ) async {
     double? selectedSpeed;
 
     await tester.pumpWidget(

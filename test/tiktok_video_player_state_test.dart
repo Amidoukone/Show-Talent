@@ -6,13 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   Widget host(Widget child) {
     return MaterialApp(
-      home: Scaffold(
-        body: SizedBox(
-          width: 390,
-          height: 720,
-          child: child,
-        ),
-      ),
+      theme: ThemeData(splashFactory: NoSplash.splashFactory),
+      home: Scaffold(body: SizedBox(width: 390, height: 720, child: child)),
     );
   }
 
@@ -36,8 +31,9 @@ void main() {
     );
   }
 
-  testWidgets('shows a retry state when playback has no usable controller',
-      (tester) async {
+  testWidgets('shows a retry state when playback has no usable controller', (
+    tester,
+  ) async {
     var retried = false;
 
     await tester.pumpWidget(
