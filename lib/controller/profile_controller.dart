@@ -13,7 +13,19 @@ import 'package:get/get.dart';
 import 'package:adfoot/services/app_logger.dart';
 
 class ProfileAccessRevokedException implements Exception {
-  const ProfileAccessRevokedException();
+  const ProfileAccessRevokedException({this.title, this.message});
+
+  final String? title;
+  final String? message;
+
+  @override
+  String toString() {
+    final resolvedMessage = message;
+    if (resolvedMessage == null || resolvedMessage.trim().isEmpty) {
+      return 'ProfileAccessRevokedException';
+    }
+    return resolvedMessage;
+  }
 }
 
 class ProfileLoadException implements Exception {
@@ -41,6 +53,10 @@ class ProfileController extends GetxController {
   bool isLoadingUser = false;
   String? profileLoadErrorTitle;
   String? profileLoadErrorMessage;
+  String? lastProfileWriteErrorTitle;
+  String? lastProfileWriteErrorMessage;
+  String? lastCvUploadErrorTitle;
+  String? lastCvUploadErrorMessage;
 
   ProfileVideoCursor? _lastVideoCursor;
   static const int _videoFetchLimit = 20;
@@ -69,6 +85,26 @@ class ProfileController extends GetxController {
     return error.runtimeType.toString();
   }
 
+  void _clearProfileWriteError() {
+    lastProfileWriteErrorTitle = null;
+    lastProfileWriteErrorMessage = null;
+  }
+
+  void _setProfileWriteError(String title, String message) {
+    lastProfileWriteErrorTitle = title;
+    lastProfileWriteErrorMessage = message;
+  }
+
+  void _clearCvUploadError() {
+    lastCvUploadErrorTitle = null;
+    lastCvUploadErrorMessage = null;
+  }
+
+  void _setCvUploadError(String title, String message) {
+    lastCvUploadErrorTitle = title;
+    lastCvUploadErrorMessage = message;
+  }
+
   String? _ownerSessionProblemMessage(String uid) {
     final authUid = _profileRepository.currentAuthUid;
     if (authUid == null) {
@@ -91,7 +127,7 @@ class ProfileController extends GetxController {
       return 'Firebase refuse cette session. Vérifiez App Check pour ce build/téléphone, puis réessayez. Code: $code';
     }
 
-    return 'Votre session ne permet pas de modifier ce profil. Reconnectez-vous puis réessayez. Code: $code';
+    return 'Votre session ne permet pas de modifier ce profil. Reconnectez-vous puis réessayez. Si le problème persiste sur ce build, vérifiez App Check et le déploiement des règles Firestore. Code: $code';
   }
 
   String _cvAccessDeniedMessage(Object error, String uid) {
@@ -105,7 +141,7 @@ class ProfileController extends GetxController {
       return 'Firebase Storage ou App Check refuse ce build/téléphone. Vérifiez que le debug token de ce téléphone est enregistré, ou utilisez Play Integrity pour la version finale. Code: $code';
     }
 
-    return 'Firebase Storage refuse actuellement l’ajout du CV pour cette session. Code: $code';
+    return 'Firebase Storage refuse actuellement l’ajout du CV pour cette session. Vérifiez que les règles Storage déployées autorisent les CV PDF du propriétaire et que App Check est actif pour ce build. Code: $code';
   }
 
   String _profileLoadErrorMessage(Object error) {
@@ -262,14 +298,19 @@ class ProfileController extends GetxController {
     bool alsoUpdateLocalUser = true,
   }) async {
     try {
+      _clearProfileWriteError();
       if (patch.isEmpty) {
         return;
       }
       final ownerProblem = _ownerSessionProblemMessage(uid);
       if (ownerProblem != null) {
+        _setProfileWriteError('Session invalide', ownerProblem);
         AdFeedback.error('Session invalide', ownerProblem);
         unawaited(_handleProtectedAccessDenied());
-        throw const ProfileAccessRevokedException();
+        throw ProfileAccessRevokedException(
+          title: 'Session invalide',
+          message: ownerProblem,
+        );
       }
 
       final writeResult = await _profileRepository.updateProfilePatch(
@@ -300,16 +341,49 @@ class ProfileController extends GetxController {
     } catch (e, st) {
       AppLogger.debug('updateProfilePatch error: $e\n$st');
       if (_isAccessDenied(e)) {
+        final message = _profileWriteAccessDeniedMessage(e, uid);
+        _setProfileWriteError('Accès refusé', message);
+        AppLogger.error(
+          'Profile write rejected',
+          source: 'ProfileController.updateProfilePatch',
+          error: e,
+          stackTrace: st,
+          metadata: {
+            'code': _firebaseFailureCode(e),
+            'uidMatchesAuth': _profileRepository.currentAuthUid == uid,
+            'patchKeys': patch.keys.join(','),
+            'role': user?.role,
+          },
+        );
         AdFeedback.error(
           'Accès refusé',
-          _profileWriteAccessDeniedMessage(e, uid),
+          message,
+          duration: const Duration(seconds: 6),
         );
         unawaited(_handleProtectedAccessDenied());
-        throw const ProfileAccessRevokedException();
+        throw ProfileAccessRevokedException(
+          title: 'Accès refusé',
+          message: message,
+        );
       }
+      const message = 'Impossible de mettre à jour le profil.';
+      _setProfileWriteError('Mise à jour impossible', message);
+      AppLogger.error(
+        'Profile write failed',
+        source: 'ProfileController.updateProfilePatch',
+        error: e,
+        stackTrace: st,
+        metadata: {
+          'code': _firebaseFailureCode(e),
+          'uidMatchesAuth': _profileRepository.currentAuthUid == uid,
+          'patchKeys': patch.keys.join(','),
+          'role': user?.role,
+        },
+      );
       AdFeedback.error(
         'Mise à jour impossible',
-        'Impossible de mettre à jour le profil.',
+        message,
+        duration: const Duration(seconds: 6),
       );
       rethrow;
     }
@@ -592,8 +666,10 @@ class ProfileController extends GetxController {
     int? byteSize,
   }) async {
     try {
+      _clearCvUploadError();
       final ownerProblem = _ownerSessionProblemMessage(uid);
       if (ownerProblem != null) {
+        _setCvUploadError('Session invalide', ownerProblem);
         AdFeedback.error('Session invalide', ownerProblem);
         unawaited(_handleProtectedAccessDenied());
         return null;
@@ -619,24 +695,60 @@ class ProfileController extends GetxController {
       );
       return url;
     } catch (e, st) {
-      AppLogger.debug(
-        'uploadCvPdf error: $e\n'
-        'uid=$uid '
-        'authUid=${_profileRepository.currentAuthUid} '
-        'byteSize=$byteSize\n$st',
-      );
       if (e is CvUploadValidationException) {
-        AdFeedback.error('CV non accepte', e.message);
-        return null;
-      }
-      if (_isAccessDenied(e)) {
+        _setCvUploadError('CV non accepté', e.message);
         AdFeedback.error(
-          'Autorisation refusée',
-          _cvAccessDeniedMessage(e, uid),
+          'CV non accepté',
+          e.message,
+          duration: const Duration(seconds: 6),
         );
         return null;
       }
-      AdFeedback.error('Ajout impossible', "Impossible d'ajouter le CV.");
+      if (_isAccessDenied(e)) {
+        final message = _cvAccessDeniedMessage(e, uid);
+        _setCvUploadError('Autorisation refusée', message);
+        AppLogger.error(
+          'CV upload rejected',
+          source: 'ProfileController.uploadCvPdf',
+          error: e,
+          stackTrace: st,
+          metadata: {
+            'code': _firebaseFailureCode(e),
+            'uidMatchesAuth': _profileRepository.currentAuthUid == uid,
+            'byteSize': byteSize,
+            'hasFile': pdfFile != null,
+            'hasBytes': pdfBytes != null,
+            'hasStream': pdfReadStream != null,
+          },
+        );
+        AdFeedback.error(
+          'Autorisation refusée',
+          message,
+          duration: const Duration(seconds: 6),
+        );
+        return null;
+      }
+      const message = "Impossible d'ajouter le CV.";
+      _setCvUploadError('Ajout impossible', message);
+      AppLogger.error(
+        'CV upload failed',
+        source: 'ProfileController.uploadCvPdf',
+        error: e,
+        stackTrace: st,
+        metadata: {
+          'code': _firebaseFailureCode(e),
+          'uidMatchesAuth': _profileRepository.currentAuthUid == uid,
+          'byteSize': byteSize,
+          'hasFile': pdfFile != null,
+          'hasBytes': pdfBytes != null,
+          'hasStream': pdfReadStream != null,
+        },
+      );
+      AdFeedback.error(
+        'Ajout impossible',
+        message,
+        duration: const Duration(seconds: 6),
+      );
       return null;
     }
   }

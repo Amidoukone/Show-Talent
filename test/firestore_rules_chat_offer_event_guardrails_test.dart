@@ -95,8 +95,16 @@ void main() {
       expect(rules, contains('"cvUrl"'));
       expect(rules, contains('"photoProfil"'));
       expect(rules, contains('"playerProfile"'));
+      expect(rules, contains('"playerProfile.physical.heightCm"'));
+      expect(rules, contains('"playerProfile.stats.goals"'));
+      expect(rules, contains('"playerProfile.availability.regions"'));
       expect(rules, contains('"clubProfile"'));
+      expect(rules, contains('"clubProfile.structureType"'));
       expect(rules, contains('"agentProfile"'));
+      expect(rules, contains('"agentProfile.licenseNumber"'));
+      expect(rules, contains('function ownerCvUrlChangeIsSafe()'));
+      expect(rules, contains('userRole() == "joueur"'));
+      expect(rules, contains('request.resource.data.cvUrl.size() <= 2048'));
       expect(rules, contains('canUpdateOwnProfile()'));
     });
   });

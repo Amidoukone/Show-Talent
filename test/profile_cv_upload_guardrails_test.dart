@@ -54,10 +54,9 @@ void main() {
         screen,
         contains('final cvUrl = await widget.profileController.uploadCvPdf'),
       );
-      expect(
-        screen,
-        contains('setState(() => _cvUrl = cvUrl ?? _currentUser.cvUrl)'),
-      );
+      expect(screen, contains('if (cvUrl == null)'));
+      expect(screen, contains('lastCvUploadErrorMessage'));
+      expect(screen, contains('ProfileActionNotice('));
 
       final deleteCv = repository.substring(
         repository.indexOf('Future<void> deleteCv'),
@@ -72,6 +71,7 @@ void main() {
 
     test('storage rules scope CV writes to small generated PDFs', () {
       final rules = File('storage.rules').readAsStringSync();
+      final packageJson = File('package.json').readAsStringSync();
       final cvRules = rules.substring(
         rules.indexOf('match /cvs/{uid}/{fileName}'),
       );
@@ -80,21 +80,37 @@ void main() {
       expect(rules, contains("fileName.matches('^cv_[0-9]+\\\\.pdf\$')"));
       expect(rules, contains('request.resource.size <= 5 * 1024 * 1024'));
       expect(rules, contains('function isAllowedCvContentType()'));
+      expect(rules, contains('function hasDeclaredCvContentType()'));
+      expect(rules, contains('!hasDeclaredCvContentType()'));
       expect(rules, contains("request.resource.contentType.matches"));
       expect(rules, contains("application/pdf(;.*)?"));
       expect(rules, contains("application/x-pdf"));
+      expect(rules, contains("application/acrobat"));
+      expect(rules, contains("application/vnd.pdf"));
+      expect(rules, contains("text/pdf"));
+      expect(rules, contains("text/x-pdf"));
       expect(rules, contains("application/octet-stream"));
+      expect(rules, contains('function hasActiveUserProfile(uid)'));
+      expect(rules, contains('function isActiveProfileOwner(uid)'));
+      expect(rules, contains('function isPlayerProfileOwner(uid)'));
+      expect(rules, contains('userProfileDoc(uid).data.role == "joueur"'));
       expect(rules, contains('function canReadCv(uid)'));
       expect(rules, contains('function isAdminOperator()'));
       expect(rules, contains('request.auth.token.platformAdmin == true'));
       expect(rules, contains('isAdminOperator()'));
       expect(cvRules, contains('allow read: if canReadCv(uid);'));
-      expect(cvRules, contains('allow create, update: if signedIn()'));
       expect(
         cvRules,
-        contains('allow delete: if signedIn() && request.auth.uid == uid;'),
+        contains('allow create, update: if isPlayerProfileOwner(uid)'),
       );
+      expect(cvRules, contains('allow delete: if isActiveProfileOwner(uid);'));
       expect(cvRules, isNot(contains('allow write:')));
+      expect(
+        packageJson,
+        contains(
+          'firebase.cmd deploy --only firestore:rules,storage --project production',
+        ),
+      );
     });
   });
 }

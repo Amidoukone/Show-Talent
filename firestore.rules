@@ -102,6 +102,25 @@ service cloud.firestore {
         "clubProfile",
         "agentProfile",
         "eventOrganizerProfile",
+        "playerProfile.physical",
+        "playerProfile.physical.heightCm",
+        "playerProfile.physical.weightKg",
+        "playerProfile.physical.strongFoot",
+        "playerProfile.positions",
+        "playerProfile.skills",
+        "playerProfile.stats",
+        "playerProfile.stats.minutes",
+        "playerProfile.stats.goals",
+        "playerProfile.stats.assists",
+        "playerProfile.availability",
+        "playerProfile.availability.open",
+        "playerProfile.availability.regions",
+        "clubProfile.structureType",
+        "clubProfile.categories",
+        "clubProfile.needs",
+        "agentProfile.licenseNumber",
+        "agentProfile.licenseCountry",
+        "agentProfile.zones",
         "photoProfil",
         "cvUrl",
       ]);
@@ -145,6 +164,21 @@ service cloud.firestore {
         ownerProfileVerificationResetIsValid();
     }
 
+    function ownerCvUrlChangeIsSafe() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["cvUrl"]) ||
+        (
+          userRole() == "joueur" &&
+          (
+            !("cvUrl" in request.resource.data) ||
+            (
+              request.resource.data.cvUrl is string &&
+              request.resource.data.cvUrl.size() > 0 &&
+              request.resource.data.cvUrl.size() <= 2048
+            )
+          )
+        );
+    }
+
     function canUpdateOwnProfile() {
       return changesOnly([
         "nom",
@@ -173,6 +207,25 @@ service cloud.firestore {
         "clubProfile",
         "agentProfile",
         "eventOrganizerProfile",
+        "playerProfile.physical",
+        "playerProfile.physical.heightCm",
+        "playerProfile.physical.weightKg",
+        "playerProfile.physical.strongFoot",
+        "playerProfile.positions",
+        "playerProfile.skills",
+        "playerProfile.stats",
+        "playerProfile.stats.minutes",
+        "playerProfile.stats.goals",
+        "playerProfile.stats.assists",
+        "playerProfile.availability",
+        "playerProfile.availability.open",
+        "playerProfile.availability.regions",
+        "clubProfile.structureType",
+        "clubProfile.categories",
+        "clubProfile.needs",
+        "agentProfile.licenseNumber",
+        "agentProfile.licenseCountry",
+        "agentProfile.zones",
         "photoProfil",
         "cvUrl",
         "profileVerified",
@@ -184,6 +237,7 @@ service cloud.firestore {
         "profileVerificationInvalidationReason",
         "updatedAt",
       ]) &&
+      ownerCvUrlChangeIsSafe() &&
       ownerProfileVerificationChangesAreSafe() &&
       verifiedOwnerProfileChangeIsInvalidated();
     }

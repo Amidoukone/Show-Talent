@@ -86,6 +86,9 @@ void main() {
           'nom': '  Nouveau nom  ',
           'phone': ProfileRepository.deleteField,
           'bio': '   ',
+          'city': '  Abidjan  ',
+          'region': '  Lagunes  ',
+          'country': '  Côte d’Ivoire  ',
           'playerProfile': {
             'physical': {'weightKg': 77},
             'availability': {'open': true},
@@ -104,6 +107,9 @@ void main() {
         expect(data['nom'], 'Nouveau nom');
         expect(data.containsKey('phone'), isFalse);
         expect(data['bio'], isNull);
+        expect(data['city'], 'Abidjan');
+        expect(data['region'], 'Lagunes');
+        expect(data['country'], 'Côte d’Ivoire');
         expect(physical['heightCm'], 181);
         expect(physical['weightKg'], 77);
         expect(playerProfile['skills'], ['pace']);

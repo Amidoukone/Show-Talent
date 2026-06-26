@@ -5,6 +5,7 @@ import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/profile_action_notice.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -35,6 +36,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _bioController;
   late final TextEditingController _phoneController;
   late final TextEditingController _languagesController;
+  late final TextEditingController _cityController;
+  late final TextEditingController _regionController;
+  late final TextEditingController _countryController;
   late final TextEditingController _positionController;
   late final TextEditingController _teamController;
   late final TextEditingController _ligueController;
@@ -43,6 +47,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   DateTime? _selectedBirthDate;
   bool _saving = false;
+  String? _saveFailureTitle;
+  String? _saveFailureMessage;
 
   AppUser get user {
     final liveUser = profileController.user;
@@ -54,7 +60,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   ProfileController get profileController => widget.profileController;
 
-  bool get _isPlayer => user.role == 'joueur' || user.role == 'coach';
+  bool get _isPlayer => user.isPlayer || user.isCoach;
   bool get _isClub => user.role == 'club';
   bool get _isRecruiter => user.isRecruiter;
 
@@ -67,6 +73,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _languagesController = TextEditingController(
       text: user.languages?.join(', ') ?? '',
     );
+    _cityController = TextEditingController(text: user.city ?? '');
+    _regionController = TextEditingController(text: user.region ?? '');
+    _countryController = TextEditingController(text: user.country ?? '');
     _positionController = TextEditingController(text: user.position ?? '');
     _teamController = TextEditingController(
       text: user.team ?? user.clubActuel ?? '',
@@ -85,6 +94,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _bioController.dispose();
     _phoneController.dispose();
     _languagesController.dispose();
+    _cityController.dispose();
+    _regionController.dispose();
+    _countryController.dispose();
     _positionController.dispose();
     _teamController.dispose();
     _ligueController.dispose();
@@ -98,6 +110,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _trimOrNull(String value) {
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  void _putNullableStringPatch(
+    Map<String, dynamic> patch,
+    String key,
+    String value,
+    String? currentValue,
+  ) {
+    final normalized = _trimOrNull(value);
+    if (normalized != null) {
+      patch[key] = normalized;
+    } else if ((currentValue?.trim().isNotEmpty ?? false)) {
+      patch[key] = ProfileController.deleteField;
+    }
   }
 
   int? _intOrNull(String value) {
@@ -319,7 +345,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveFailureTitle = null;
+      _saveFailureMessage = null;
+    });
 
     try {
       final patch = <String, dynamic>{};
@@ -350,6 +380,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       } else if ((user.bio?.isNotEmpty ?? false)) {
         patch['bio'] = ProfileController.deleteField;
       }
+
+      _putNullableStringPatch(patch, 'city', _cityController.text, user.city);
+      _putNullableStringPatch(
+        patch,
+        'region',
+        _regionController.text,
+        user.region,
+      );
+      _putNullableStringPatch(
+        patch,
+        'country',
+        _countryController.text,
+        user.country,
+      );
 
       if (_isPlayer) {
         if (_selectedBirthDate != null) {
@@ -415,13 +459,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
 
       Navigator.of(context).pop(true);
-    } on ProfileAccessRevokedException {
+    } on ProfileAccessRevokedException catch (e) {
+      final title =
+          e.title ??
+          profileController.lastProfileWriteErrorTitle ??
+          'Sauvegarde refusée';
+      final message =
+          e.message ??
+          profileController.lastProfileWriteErrorMessage ??
+          'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.';
+      if (mounted) {
+        setState(() {
+          _saveFailureTitle = title;
+          _saveFailureMessage = message;
+        });
+      }
       return;
     } catch (e) {
       AppLogger.debug('EditProfile _save error: $e');
+      if (mounted) {
+        setState(() {
+          _saveFailureTitle = 'Erreur';
+          _saveFailureMessage =
+              profileController.lastProfileWriteErrorMessage ??
+              'Impossible de sauvegarder les modifications.';
+        });
+      }
       AdFeedback.error(
         'Erreur',
         'Impossible de sauvegarder les modifications.',
+        duration: const Duration(seconds: 6),
       );
     } finally {
       if (mounted) {
@@ -532,6 +599,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ? Icons.badge_outlined
                               : Icons.person_outline,
                         ),
+                        if (_saveFailureMessage != null) ...[
+                          const SizedBox(height: 16),
+                          ProfileActionNotice(
+                            title: _saveFailureTitle ?? 'Sauvegarde impossible',
+                            message: _saveFailureMessage!,
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         _SectionCard(
                           title: 'Informations générales',
@@ -569,15 +643,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 const SizedBox(height: 12),
                                 _buildBirthDateField(context),
                               ],
-                              if (!user.isFan) ...[
-                                const SizedBox(height: 12),
-                                _buildTextField(
-                                  controller: _bioController,
-                                  label: bioLabel,
-                                  icon: Icons.info_outline,
-                                  maxLines: 3,
-                                ),
-                              ],
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                controller: _bioController,
+                                label: bioLabel,
+                                icon: Icons.info_outline,
+                                maxLines: 3,
+                              ),
                             ],
                           ),
                         ),
@@ -586,10 +658,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           _SectionCard(
                             title: user.role == 'coach'
                                 ? 'Cadre sportif du coach'
-                                : 'Identité sportive',
+                                : 'Identité sportive du joueur',
                             subtitle: user.role == 'coach'
                                 ? 'Renseignez la structure dans laquelle vous intervenez publiquement.'
-                                : 'Renseignez le club ou l’académie actuellement affiché(e) sur votre profil.',
+                                : 'Renseignez le poste principal et le club ou l’académie actuellement affichés sur votre profil.',
                             icon: Icons.sports_soccer_outlined,
                             child: Column(
                               children: [
@@ -668,6 +740,37 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             ),
                           ),
                         const SizedBox(height: 16),
+                        _SectionCard(
+                          title: 'Localisation',
+                          subtitle:
+                              'Ville, région et pays affichés sur votre profil public lorsque ces informations sont renseignées.',
+                          icon: Icons.place_outlined,
+                          child: Column(
+                            children: [
+                              _buildTextField(
+                                controller: _cityController,
+                                label: 'Ville',
+                                icon: Icons.location_city_outlined,
+                                hint: 'Ex : Abidjan',
+                              ),
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                controller: _regionController,
+                                label: 'Région / État',
+                                icon: Icons.map_outlined,
+                                hint: 'Ex : District autonome d’Abidjan',
+                              ),
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                controller: _countryController,
+                                label: 'Pays',
+                                icon: Icons.public_outlined,
+                                hint: 'Ex : Côte d’Ivoire',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
                         if (user.role == 'joueur') ...[
                           CvUploaderSection(
                             initialUser: user,
@@ -719,6 +822,8 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
   String? _cvUrl;
   bool _isUploading = false;
   bool _isDeleting = false;
+  String? _cvFailureTitle;
+  String? _cvFailureMessage;
 
   AppUser get _currentUser {
     final liveUser = widget.profileController.user;
@@ -745,10 +850,31 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
     return '$sizeMb Mo';
   }
 
+  void _showCvFailure(String title, String message) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _cvFailureTitle = title;
+      _cvFailureMessage = message;
+    });
+  }
+
+  void _clearCvFailure() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _cvFailureTitle = null;
+      _cvFailureMessage = null;
+    });
+  }
+
   Future<void> _pickAndUploadCv(AppUser user) async {
     var uploadStarted = false;
 
     try {
+      _clearCvFailure();
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
@@ -761,9 +887,12 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
 
       final pickedFile = result.files.single;
       if (pickedFile.size > ProfileController.maxCvPdfBytes) {
+        final message = 'Le fichier PDF doit faire $_maxCvSizeLabel maximum.';
+        _showCvFailure('CV trop volumineux', message);
         AdFeedback.error(
           'CV trop volumineux',
-          'Le fichier PDF doit faire $_maxCvSizeLabel maximum.',
+          message,
+          duration: const Duration(seconds: 6),
         );
         return;
       }
@@ -776,9 +905,12 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
       final hasStream = readStream != null;
 
       if (!hasBytes && !hasPath && !hasStream) {
+        const message = 'Impossible de lire ce PDF depuis votre appareil.';
+        _showCvFailure('CV illisible', message);
         AdFeedback.error(
           'CV illisible',
-          'Impossible de lire ce PDF depuis votre appareil.',
+          message,
+          duration: const Duration(seconds: 6),
         );
         return;
       }
@@ -796,14 +928,33 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
       if (!mounted) {
         return;
       }
-      setState(() => _cvUrl = cvUrl ?? _currentUser.cvUrl);
+      if (cvUrl == null) {
+        setState(() {
+          _cvUrl = _currentUser.cvUrl;
+          _cvFailureTitle =
+              widget.profileController.lastCvUploadErrorTitle ??
+              'Ajout impossible';
+          _cvFailureMessage =
+              widget.profileController.lastCvUploadErrorMessage ??
+              "Impossible d'ajouter ce CV.";
+        });
+        return;
+      }
+      setState(() {
+        _cvUrl = cvUrl;
+        _cvFailureTitle = null;
+        _cvFailureMessage = null;
+      });
     } on ProfileAccessRevokedException {
       return;
     } catch (e, st) {
       AppLogger.debug('CV picker/upload error: $e\n$st');
+      const message = "Impossible de lire ou d'ajouter ce CV.";
+      _showCvFailure('Ajout impossible', message);
       AdFeedback.error(
         'Ajout impossible',
-        "Impossible de lire ou d'ajouter ce CV.",
+        message,
+        duration: const Duration(seconds: 6),
       );
     } finally {
       if (mounted && uploadStarted) {
@@ -838,6 +989,13 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_cvFailureMessage != null) ...[
+            ProfileActionNotice(
+              title: _cvFailureTitle ?? 'Ajout impossible',
+              message: _cvFailureMessage!,
+            ),
+            const SizedBox(height: 12),
+          ],
           AdButton(
             onPressed: _isUploading || _isDeleting
                 ? null

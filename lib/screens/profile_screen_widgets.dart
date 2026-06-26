@@ -19,7 +19,11 @@ class _HeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final location = user.city ?? user.region ?? user.country;
+    final location = [
+      user.city,
+      user.region,
+      user.country,
+    ].where((value) => value?.trim().isNotEmpty == true).join(', ');
     final teamLabel = user.team?.isNotEmpty == true
         ? user.team
         : user.clubActuel;
@@ -122,10 +126,10 @@ class _HeaderCard extends StatelessWidget {
                             icon: Icons.flag_outlined,
                             label: teamLabel!,
                           ),
-                        if (location?.isNotEmpty == true)
+                        if (location.isNotEmpty)
                           _InfoPill(
                             icon: Icons.place_outlined,
-                            label: location!,
+                            label: location,
                           ),
                       ],
                     ),

@@ -30,6 +30,22 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/users/$(uid));
     }
 
+    function hasActiveUserProfile(uid) {
+      return hasUserProfileDoc(uid) &&
+        userProfileDoc(uid).data.authDisabled != true;
+    }
+
+    function isActiveProfileOwner(uid) {
+      return signedIn() &&
+        request.auth.uid == uid &&
+        hasActiveUserProfile(uid);
+    }
+
+    function isPlayerProfileOwner(uid) {
+      return isActiveProfileOwner(uid) &&
+        userProfileDoc(uid).data.role == "joueur";
+    }
+
     function signedInUserRole() {
       return signedIn() && hasUserProfileDoc(request.auth.uid) ?
         userProfileDoc(request.auth.uid).data.role :
@@ -74,9 +90,19 @@ service firebase.storage {
       return fileName.matches('^cv_[0-9]+\\.pdf$');
     }
 
+    function hasDeclaredCvContentType() {
+      return request.resource.contentType != null &&
+        request.resource.contentType != "";
+    }
+
     function isAllowedCvContentType() {
-      return request.resource.contentType.matches('application/pdf(;.*)?') ||
+      return !hasDeclaredCvContentType() ||
+        request.resource.contentType.matches('application/pdf(;.*)?') ||
         request.resource.contentType == 'application/x-pdf' ||
+        request.resource.contentType == 'application/acrobat' ||
+        request.resource.contentType == 'application/vnd.pdf' ||
+        request.resource.contentType == 'text/pdf' ||
+        request.resource.contentType == 'text/x-pdf' ||
         request.resource.contentType == 'application/octet-stream';
     }
 
@@ -90,7 +116,7 @@ service firebase.storage {
     function canReadCv(uid) {
       return signedIn() &&
         (
-          request.auth.uid == uid ||
+          (request.auth.uid == uid && hasActiveUserProfile(uid)) ||
           isAdminOperator() ||
           (
             hasUserProfileDoc(uid) &&
@@ -102,15 +128,14 @@ service firebase.storage {
 
     match /profilePhotos/{uid} {
       allow read: if true;
-      allow write: if signedIn() && request.auth.uid == uid;
+      allow write: if isActiveProfileOwner(uid);
     }
 
     match /cvs/{uid}/{fileName} {
       allow read: if canReadCv(uid);
-      allow create, update: if signedIn() &&
-        request.auth.uid == uid &&
+      allow create, update: if isPlayerProfileOwner(uid) &&
         isValidCvPdfUpload(fileName);
-      allow delete: if signedIn() && request.auth.uid == uid;
+      allow delete: if isActiveProfileOwner(uid);
     }
 
     match /videos/{videoFileName} {

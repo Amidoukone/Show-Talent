@@ -73,6 +73,7 @@ class ProfileRepository {
   static const Duration firestoreReadTimeout = Duration(seconds: 12);
   static const Duration firestoreWriteTimeout = Duration(seconds: 15);
   static const Duration storageWriteTimeout = Duration(seconds: 45);
+  static const Duration authRefreshTimeout = Duration(seconds: 8);
   static const int maxCvPdfBytes = 5 * 1024 * 1024;
   static const String _profileInvalidationReason = 'profile_updated_by_user';
   static const List<int> _pdfHeader = <int>[0x25, 0x50, 0x44, 0x46, 0x2D];
@@ -138,7 +139,29 @@ class ProfileRepository {
       );
     }
 
-    await currentUser.getIdToken();
+    try {
+      await currentUser.getIdToken(true).timeout(authRefreshTimeout);
+    } on TimeoutException {
+      await currentUser.getIdToken().timeout(authRefreshTimeout);
+    } on FirebaseException catch (error) {
+      if (!_isTransientAuthTokenRefreshError(error)) {
+        rethrow;
+      }
+      await currentUser.getIdToken().timeout(authRefreshTimeout);
+    }
+  }
+
+  static bool _isTransientAuthTokenRefreshError(FirebaseException error) {
+    switch (error.code) {
+      case 'network-request-failed':
+      case 'timeout':
+      case 'too-many-requests':
+      case 'internal-error':
+      case 'unknown':
+        return true;
+      default:
+        return false;
+    }
   }
 
   static bool isPermissionDenied(Object error) {

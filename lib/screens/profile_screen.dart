@@ -299,12 +299,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                       child: _SectionCard(
-                        title: 'Biographie',
+                        title: _bioSectionTitle(user),
                         icon: Icons.notes_rounded,
                         child: Text(
                           user.bio?.isNotEmpty == true
                               ? user.bio!
-                              : 'Aucune biographie renseignée.',
+                              : _emptyBioMessage(user),
                           style: const TextStyle(fontSize: 15),
                         ),
                       ),
@@ -1011,6 +1011,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(children: tiles);
   }
 
+  String _bioSectionTitle(AppUser user) {
+    if (user.isPlayer) return 'Présentation du joueur';
+    if (user.isCoach) return 'Présentation du coach';
+    if (user.isClub) return 'Présentation du club';
+    if (user.isRecruiter) {
+      return user.isAgent
+          ? 'Présentation de l’agent'
+          : 'Présentation du recruteur';
+    }
+    return 'Présentation';
+  }
+
+  String _emptyBioMessage(AppUser user) {
+    if (user.isPlayer) return 'Aucune présentation de joueur renseignée.';
+    if (user.isCoach) return 'Aucune présentation de coach renseignée.';
+    if (user.isClub) return 'Aucune présentation de club renseignée.';
+    if (user.isRecruiter) {
+      return user.isAgent
+          ? 'Aucune présentation d’agent renseignée.'
+          : 'Aucune présentation de recruteur renseignée.';
+    }
+    return 'Aucune présentation renseignée.';
+  }
+
   Widget _buildAdvancedFootballSectionClean(AppUser user) {
     if (!user.hasAdvancedProfile) {
       return Column(
@@ -1206,24 +1230,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user.isPlayer) {
       if (user.cvUrl != null) {
         tiles.add(
-          ListTile(
-            leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-            title: const Text('Voir le CV'),
-            subtitle: const Text('CV au format PDF'),
-            onTap: () async {
-              final uri = Uri.parse(user.cvUrl!);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              }
-            },
+          Material(
+            color: Colors.transparent,
+            child: ListTile(
+              leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+              title: const Text('Voir le CV'),
+              subtitle: const Text('CV au format PDF'),
+              onTap: () async {
+                final uri = Uri.parse(user.cvUrl!);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+            ),
           ),
         );
       } else {
         tiles.add(
-          const ListTile(
-            leading: Icon(Icons.picture_as_pdf_outlined),
-            title: Text('CV'),
-            subtitle: Text('Aucun CV renseigné'),
+          const Material(
+            color: Colors.transparent,
+            child: ListTile(
+              leading: Icon(Icons.picture_as_pdf_outlined),
+              title: Text('CV'),
+              subtitle: Text('Aucun CV renseigné'),
+            ),
           ),
         );
       }

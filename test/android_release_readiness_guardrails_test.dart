@@ -96,6 +96,8 @@ void main() {
     expect(runScript, contains('function Mask-PreviewArg'));
     expect(runScript, contains('KEY|SECRET|TOKEN|PASSWORD'));
     expect(appCheckService, contains('APP_CHECK_ANDROID_PROVIDER'));
+    expect(appCheckService, contains('AppEnvironmentConfig.isProduction'));
+    expect(appCheckService, contains('_environmentRequiresAppCheck'));
     expect(appCheckService, contains('TargetPlatform.android'));
     expect(appCheckService, contains('AndroidDebugProvider'));
     expect(appCheckService, contains('AndroidPlayIntegrityProvider'));

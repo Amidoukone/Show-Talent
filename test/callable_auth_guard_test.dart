@@ -25,6 +25,12 @@ void main() {
 
       expect(source, contains('bool.fromEnvironment('));
       expect(source, contains("'APP_CHECK_ENABLED'"));
+      expect(
+        source,
+        contains(
+          '_configuredAppCheckEnabled || AppEnvironmentConfig.isProduction',
+        ),
+      );
       expect(source, contains('FirebaseAppCheck.instance.getToken'));
       expect(source, contains('_appCheckEnabled && appCheckToken == null'));
       expect(source, contains("'X-Firebase-AppCheck': ?appCheckToken"));

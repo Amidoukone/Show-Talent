@@ -107,8 +107,20 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
           patch,
         );
       } on ProfileAccessRevokedException {
+        if (showFeedback) {
+          AdFeedback.error(
+            'Sauvegarde refusée',
+            'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.',
+          );
+        }
         return false;
       } catch (_) {
+        if (showFeedback) {
+          AdFeedback.error(
+            'Sauvegarde impossible',
+            'Les informations avancées du joueur n’ont pas été enregistrées.',
+          );
+        }
         return false;
       }
 

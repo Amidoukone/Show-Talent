@@ -5,6 +5,7 @@ import '../models/user.dart';
 import '../widgets/ad_app_bar.dart';
 import '../widgets/ad_button.dart';
 import '../widgets/ad_feedback.dart';
+import '../widgets/profile_action_notice.dart';
 import '../widgets/advanced/agent_advanced_form.dart';
 import '../widgets/advanced/club_advanced_form.dart';
 import '../widgets/advanced/player_advanced_form.dart';
@@ -34,6 +35,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
 
   late final TabController _tabController;
   bool _saving = false;
+  String? _saveFailureTitle;
+  String? _saveFailureMessage;
 
   AppUser get _user => widget.user;
   ProfileController get _profileController => widget.profileController;
@@ -65,7 +68,11 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
       return;
     }
 
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _saveFailureTitle = null;
+      _saveFailureMessage = null;
+    });
     try {
       bool saved = false;
 
@@ -75,6 +82,20 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
             false;
         if (!profileSaved) {
           _tabController.animateTo(0);
+          final message =
+              _profileController.lastProfileWriteErrorMessage ??
+              'Le profil joueur n’a pas été enregistré. Vérifiez les champs ou la session, puis réessayez.';
+          if (mounted) {
+            setState(() {
+              _saveFailureTitle = 'Sauvegarde impossible';
+              _saveFailureMessage = message;
+            });
+          }
+          AdFeedback.error(
+            'Sauvegarde impossible',
+            message,
+            duration: const Duration(seconds: 6),
+          );
           return;
         }
 
@@ -83,6 +104,20 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
             false;
         if (!scoutSaved) {
           _tabController.animateTo(1);
+          final message =
+              _profileController.lastProfileWriteErrorMessage ??
+              'Le dossier scout n’a pas été enregistré. Vérifiez les champs ou la session, puis réessayez.';
+          if (mounted) {
+            setState(() {
+              _saveFailureTitle = 'Sauvegarde impossible';
+              _saveFailureMessage = message;
+            });
+          }
+          AdFeedback.error(
+            'Sauvegarde impossible',
+            message,
+            duration: const Duration(seconds: 6),
+          );
           return;
         }
 
@@ -94,7 +129,25 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
             await _agentKey.currentState?.save(showFeedback: false) ?? false;
       }
 
-      if (!saved || !mounted) {
+      if (!saved) {
+        final message =
+            _profileController.lastProfileWriteErrorMessage ??
+            'Les informations avancées n’ont pas été enregistrées. Vérifiez les champs ou la session, puis réessayez.';
+        if (mounted) {
+          setState(() {
+            _saveFailureTitle = 'Sauvegarde impossible';
+            _saveFailureMessage = message;
+          });
+        }
+        AdFeedback.error(
+          'Sauvegarde impossible',
+          message,
+          duration: const Duration(seconds: 6),
+        );
+        return;
+      }
+
+      if (!mounted) {
         return;
       }
 
@@ -206,12 +259,23 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-          child: _buildHeader(
-            context: context,
-            title: 'Dossier joueur',
-            subtitle:
-                'Les informations sont réparties en deux volets pour vous aider à compléter votre profil sportif avec méthode.',
-            icon: Icons.shield_outlined,
+          child: Column(
+            children: [
+              _buildHeader(
+                context: context,
+                title: 'Dossier joueur',
+                subtitle:
+                    'Les informations sont réparties en deux volets pour vous aider à compléter votre profil sportif avec méthode.',
+                icon: Icons.shield_outlined,
+              ),
+              if (_saveFailureMessage != null) ...[
+                const SizedBox(height: 12),
+                ProfileActionNotice(
+                  title: _saveFailureTitle ?? 'Sauvegarde impossible',
+                  message: _saveFailureMessage!,
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(height: 16),
@@ -289,6 +353,13 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
             subtitle: subtitle,
             icon: icon,
           ),
+          if (_saveFailureMessage != null) ...[
+            const SizedBox(height: 12),
+            ProfileActionNotice(
+              title: _saveFailureTitle ?? 'Sauvegarde impossible',
+              message: _saveFailureMessage!,
+            ),
+          ],
           _buildSectionCard(
             context: context,
             title: sectionTitle,

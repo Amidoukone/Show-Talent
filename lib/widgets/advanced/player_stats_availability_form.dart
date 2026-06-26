@@ -128,8 +128,20 @@ class PlayerStatsAvailabilityFormState
           patch,
         );
       } on ProfileAccessRevokedException {
+        if (showFeedback) {
+          AdFeedback.error(
+            'Sauvegarde refusée',
+            'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.',
+          );
+        }
         return false;
       } catch (_) {
+        if (showFeedback) {
+          AdFeedback.error(
+            'Sauvegarde impossible',
+            'Les statistiques et disponibilités n’ont pas été enregistrées.',
+          );
+        }
         return false;
       }
 

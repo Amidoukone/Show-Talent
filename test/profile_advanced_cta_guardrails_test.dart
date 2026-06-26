@@ -50,6 +50,8 @@ void main() {
     expect(editProfile, contains("label: user.role == 'coach'"));
     expect(advancedEditor, contains('IndexedStack'));
     expect(advancedEditor, isNot(contains('TabBarView(')));
+    expect(advancedEditor, contains('Le profil joueur n’a pas été enregistré'));
+    expect(advancedEditor, contains('Le dossier scout n’a pas été enregistré'));
     expect(controller, contains('bool _isAccessDenied(Object error)'));
     expect(
       controller,
@@ -60,7 +62,9 @@ void main() {
       isNot(contains('if (ProfileRepository.isUnauthorized(e))')),
     );
     expect(playerAdvanced, contains('} catch (_) {'));
+    expect(playerAdvanced, contains('Sauvegarde refusée'));
     expect(playerStats, contains('} catch (_) {'));
+    expect(playerStats, contains('Sauvegarde refusée'));
     expect(playerAdvanced, contains("if (positions.isNotEmpty) 'position'"));
     expect(playerStats, contains("'openToOpportunities': _openToTrials"));
   });

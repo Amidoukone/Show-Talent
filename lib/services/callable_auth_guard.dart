@@ -12,7 +12,7 @@ import 'package:adfoot/services/app_logger.dart';
 class CallableAuthGuard {
   CallableAuthGuard._();
 
-  static const bool _appCheckEnabled = bool.fromEnvironment(
+  static const bool _configuredAppCheckEnabled = bool.fromEnvironment(
     'APP_CHECK_ENABLED',
     defaultValue: false,
   );
@@ -23,6 +23,8 @@ class CallableAuthGuard {
   static const String _androidProviderName = String.fromEnvironment(
     'APP_CHECK_ANDROID_PROVIDER',
   );
+  static bool get _appCheckEnabled =>
+      _configuredAppCheckEnabled || AppEnvironmentConfig.isProduction;
   static bool get _shouldReadAppCheckToken =>
       _appCheckEnabled ||
       _forceAppCheckDebugProvider ||
