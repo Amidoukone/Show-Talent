@@ -259,6 +259,77 @@ function ConvertTo-LongPath {
     return $fullPath
 }
 
+function Remove-DirectoryWithRetry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        [int]$MaxAttempts = 5
+    )
+
+    $lastError = $null
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        try {
+            if (-not [System.IO.Directory]::Exists($Path)) {
+                return
+            }
+
+            [System.IO.Directory]::Delete($Path, $true)
+            return
+        } catch {
+            $lastError = $_
+            try {
+                if (-not (Test-Path -LiteralPath $Path)) {
+                    return
+                }
+
+                Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+                return
+            } catch {
+                $lastError = $_
+            }
+
+            if ($attempt -ge $MaxAttempts) {
+                break
+            }
+
+            Start-Sleep -Milliseconds (500 * $attempt)
+        }
+    }
+
+    throw $lastError
+}
+
+function Move-StaleBuildDirectory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot,
+        [Parameter(Mandatory = $true)]
+        [string]$BuildDir
+    )
+
+    if (-not (Test-PathIsUnderDirectory -Path $BuildDir -Directory $RepoRoot)) {
+        throw "Refusing to move build directory outside the repository: '$BuildDir'."
+    }
+
+    $tempRoot = [System.IO.Path]::GetTempPath()
+    $staleRoot = Join-Path $tempRoot "adfoot-stale-build-cleanup"
+    if (-not (Test-PathIsUnderDirectory -Path $staleRoot -Directory $tempRoot)) {
+        throw "Refusing to move stale build directory outside the temporary cleanup root: '$staleRoot'."
+    }
+
+    New-Item -ItemType Directory -Path $staleRoot -Force | Out-Null
+
+    $timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+    $destination = Join-Path $staleRoot "build-$timestamp-$PID"
+    if (-not (Test-PathIsUnderDirectory -Path $destination -Directory $staleRoot)) {
+        throw "Refusing to move stale build directory outside the temporary cleanup root: '$destination'."
+    }
+
+    [System.IO.Directory]::Move($BuildDir, $destination)
+    Write-Warning "Moved generated build directory to temporary stale output '$destination'."
+    return $destination
+}
+
 function Clear-GeneratedBuildDirectory {
     param(
         [Parameter(Mandatory = $true)]
@@ -267,15 +338,25 @@ function Clear-GeneratedBuildDirectory {
 
     $buildDir = Join-Path $RepoRoot "build"
     if (-not (Test-Path -LiteralPath $buildDir)) {
-        return
+        return $true
     }
 
     if (-not (Test-PathIsUnderDirectory -Path $buildDir -Directory $RepoRoot)) {
         throw "Refusing to clean build directory outside the repository: '$buildDir'."
     }
 
-    $buildDirForDelete = ConvertTo-LongPath -Path $buildDir
-    Remove-Item -LiteralPath $buildDirForDelete -Recurse -Force
+    $staleBuildDir = $null
+    try {
+        $staleBuildDir = Move-StaleBuildDirectory -RepoRoot $RepoRoot -BuildDir $buildDir
+    } catch {
+        Write-Warning "Could not move generated build directory before cleanup. Trying in-place deletion. $($_.Exception.Message)"
+        $buildDirForDelete = ConvertTo-LongPath -Path $buildDir
+        Remove-DirectoryWithRetry -Path $buildDirForDelete
+        return $true
+    }
+
+    Write-Warning "Moved stale build output to '$staleBuildDir'. Skipping synchronous deletion so the release build is not blocked by Windows file locks or long Gradle paths."
+    return $true
 }
 
 function Test-AabContainsFlutterDebugSymbols {
@@ -380,8 +461,9 @@ function Assert-NoConflictingAndroidBuildProcess {
                         $commandLine.IndexOf("GradleWrapperMain", [System.StringComparison]::OrdinalIgnoreCase) -ge 0 -and
                         $commandLine.IndexOf("bundle", [System.StringComparison]::OrdinalIgnoreCase) -ge 0
                     )
+                    $isFlutterTest = $commandLine.IndexOf("flutter_tester", [System.StringComparison]::OrdinalIgnoreCase) -ge 0
 
-                    $isSameRepo -and $isAndroidBundle
+                    $isSameRepo -and ($isAndroidBundle -or $isFlutterTest)
                 }
             } |
             Select-Object ProcessId, Name, CommandLine
@@ -389,7 +471,7 @@ function Assert-NoConflictingAndroidBuildProcess {
 
     if ($conflicts.Count -gt 0) {
         $summary = ($conflicts | ForEach-Object { "$($_.ProcessId) $($_.Name)" }) -join ", "
-        throw "Another Android/Gradle bundle build is already running for this repository ($summary). Stop it before starting a new release build."
+        throw "Another Android/Gradle bundle build or Flutter test is already running for this repository ($summary). Stop it before starting a new release build."
     }
 }
 
@@ -417,6 +499,9 @@ try {
         }
         if ($RequireSigning) {
             $preflightArgs += "-RequireSigning"
+        }
+        if ($RequirePlayIntegrityAppCheck) {
+            $preflightArgs += "-RequirePlayIntegrityAppCheck"
         }
 
         & powershell @preflightArgs
@@ -507,12 +592,12 @@ try {
     }
 
     if ($Clean) {
-        Clear-GeneratedBuildDirectory -RepoRoot $repoRoot
-
-        & flutter clean
-        if ($LASTEXITCODE -gt 0) {
-            throw "flutter clean failed (exit code $LASTEXITCODE)."
+        $buildDirectoryCleared = Clear-GeneratedBuildDirectory -RepoRoot $repoRoot
+        if (-not $buildDirectoryCleared) {
+            throw "Generated build directory cleanup did not complete."
         }
+
+        Write-Host "Skipping flutter clean because the release script already cleared the generated build directory."
 
         & flutter pub get
         if ($LASTEXITCODE -gt 0) {

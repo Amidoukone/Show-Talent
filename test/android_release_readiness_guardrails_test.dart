@@ -91,6 +91,10 @@ void main() {
     expect(buildScript, contains('Mobile config APP_ENV'));
     expect(buildScript, contains('APP_CHECK_ENABLED must be true'));
     expect(buildScript, contains('RequirePlayIntegrityAppCheck'));
+    expect(
+      buildScript,
+      contains(r'$preflightArgs += "-RequirePlayIntegrityAppCheck"'),
+    );
     expect(buildScript, contains('Test-MobileConfigUsesAppCheckDebugProvider'));
     expect(buildScript, contains(r'$dartDefines["APP_ENV"] = $Environment'));
     expect(runScript, contains('function Mask-PreviewArg'));
@@ -117,6 +121,8 @@ void main() {
     expect(mobileConfigReadme, contains('Final Play Store guard'));
     expect(mobileConfigReadme, contains('release:android:bundle:playstore'));
     expect(gitignore, contains('/config/mobile/*.json'));
+    expect(gitignore, contains('/artifacts/stale-build-cleanup/'));
+    expect(gitignore, contains('/android/.kotlin/'));
   });
 
   test('production app links include public domain auth actions', () {
@@ -180,8 +186,18 @@ void main() {
       expect(buildScript, contains('Clear-AndroidAppBundleOutput'));
       expect(buildScript, contains('Clear-GeneratedBuildDirectory'));
       expect(buildScript, contains('ConvertTo-LongPath'));
+      expect(buildScript, isNot(contains(r'$fullPath.Length -ge 240')));
+      expect(buildScript, contains(r'return "\\?\$fullPath"'));
+      expect(buildScript, contains('Remove-DirectoryWithRetry'));
+      expect(buildScript, contains('[System.IO.Directory]::Delete'));
+      expect(buildScript, contains('Move-StaleBuildDirectory'));
+      expect(buildScript, contains('[System.IO.Path]::GetTempPath()'));
+      expect(buildScript, contains('adfoot-stale-build-cleanup'));
+      expect(buildScript, contains('Skipping flutter clean'));
+      expect(buildScript, contains('flutter pub get'));
       expect(buildScript, contains('New-AndroidReleaseBuildLock'));
       expect(buildScript, contains('Assert-NoConflictingAndroidBuildProcess'));
+      expect(buildScript, contains('flutter_tester'));
       expect(
         buildScript,
         contains(

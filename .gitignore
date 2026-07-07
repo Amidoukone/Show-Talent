@@ -92,6 +92,8 @@ service-account*.json
 # Local release/build artifacts
 /artifacts/android/*.aab
 /artifacts/flutter-sdk-backups/
+/artifacts/stale-build-cleanup/
+/android/.kotlin/
 
 # Local-only folders kept out of Git
 /.firebase/
