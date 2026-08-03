@@ -90,9 +90,7 @@ service-account*.json
 /docs/smoke-public-signup.md
 
 # Local release/build artifacts
-/artifacts/android/*.aab
-/artifacts/flutter-sdk-backups/
-/artifacts/stale-build-cleanup/
+/artifacts/
 /android/.kotlin/
 
 # Local-only folders kept out of Git
