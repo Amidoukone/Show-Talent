@@ -1,10 +1,7 @@
 part of 'offre_screen.dart';
 
 class _OfferInlineStat extends StatelessWidget {
-  const _OfferInlineStat({
-    required this.icon,
-    required this.label,
-  });
+  const _OfferInlineStat({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -27,55 +24,6 @@ class _OfferInlineStat extends StatelessWidget {
             label,
             style: const TextStyle(
               color: AdColors.onSurface,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OfferMetric extends StatelessWidget {
-  const _OfferMetric({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 38),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AdColors.surfaceCard,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AdColors.divider),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AdColors.brand),
-          const SizedBox(width: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AdColors.onSurface,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AdColors.onSurfaceMuted,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -172,11 +120,12 @@ class _FilterChip extends StatelessWidget {
         label: Text(label),
         selected: selected,
         onSelected: (_) => onTap(),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 8),
         selectedColor: cs.primary.withValues(alpha: 0.18),
         backgroundColor: AdColors.surfaceCard,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         labelStyle: TextStyle(
           color: selected ? cs.primary : cs.onSurface,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w600,

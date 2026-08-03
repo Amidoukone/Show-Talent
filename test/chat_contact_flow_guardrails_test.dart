@@ -4,31 +4,39 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Chat contact flow guardrails', () {
-    test('profile and event entry points use the guided first contact flow',
-        () {
-      final profileScreen =
-          File('lib/screens/profile_screen.dart').readAsStringSync();
-      final eventScreen =
-          File('lib/screens/event_detail_screen.dart').readAsStringSync();
+    test(
+      'profile and event entry points use the guided first contact flow',
+      () {
+        final profileScreen = File(
+          'lib/screens/profile_screen.dart',
+        ).readAsStringSync();
+        final eventScreen = File(
+          'lib/screens/event_detail_screen.dart',
+        ).readAsStringSync();
 
-      expect(profileScreen, contains('ContactIntakeSheet'));
-      expect(profileScreen, contains('startGuidedConversation'));
-      expect(profileScreen, contains('findExistingConversationId'));
+        expect(profileScreen, contains('ContactIntakeSheet'));
+        expect(profileScreen, contains('startGuidedConversation'));
+        expect(profileScreen, contains('findExistingConversationId'));
 
-      expect(eventScreen, contains('ContactIntakeSheet'));
-      expect(eventScreen, contains('startGuidedConversation'));
-      expect(eventScreen, contains('ContactContext.event('));
-    });
+        expect(eventScreen, contains('ContactIntakeSheet'));
+        expect(eventScreen, contains('startGuidedConversation'));
+        expect(eventScreen, contains('ContactContext.event('));
+      },
+    );
 
     test('chat screen surfaces guided contact metadata when present', () {
-      final chatScreen =
-          File('lib/screens/chat_screen.dart').readAsStringSync();
-      final conversationModel =
-          File('lib/models/message_converstion.dart').readAsStringSync();
-      final controller =
-          File('lib/controller/chat_controller.dart').readAsStringSync();
-      final repository =
-          File('lib/services/chat/chat_repository.dart').readAsStringSync();
+      final chatScreen = File(
+        'lib/screens/chat_screen.dart',
+      ).readAsStringSync();
+      final conversationModel = File(
+        'lib/models/message_converstion.dart',
+      ).readAsStringSync();
+      final controller = File(
+        'lib/controller/chat_controller.dart',
+      ).readAsStringSync();
+      final repository = File(
+        'lib/services/chat/chat_repository.dart',
+      ).readAsStringSync();
 
       expect(chatScreen, contains('watchConversationById'));
       expect(chatScreen, contains('Premier contact cadré'));
@@ -47,56 +55,91 @@ void main() {
     });
 
     test('chat date headers are derived from adjacent messages', () {
-      final chatScreen =
-          File('lib/screens/chat_screen.dart').readAsStringSync();
+      final chatScreen = File(
+        'lib/screens/chat_screen.dart',
+      ).readAsStringSync();
 
       expect(chatScreen, contains('_shouldShowDateHeader'));
       expect(chatScreen, contains('messages[nextOlderIndex]'));
       expect(chatScreen, isNot(contains('_lastDateHeaderKey')));
     });
 
+    test('chat sending and deletion keep guarded user feedback', () {
+      final chatScreen = File(
+        'lib/screens/chat_screen.dart',
+      ).readAsStringSync();
+      final controller = File(
+        'lib/controller/chat_controller.dart',
+      ).readAsStringSync();
+
+      final sendStart = chatScreen.indexOf('Future<void> _sendMessage');
+      final sendEnd = chatScreen.indexOf('void _scrollToBottom');
+      expect(sendStart, greaterThanOrEqualTo(0));
+      expect(sendEnd, greaterThan(sendStart));
+      final sendSnippet = chatScreen.substring(sendStart, sendEnd);
+
+      expect(
+        sendSnippet.indexOf('setState(() => _isSendingMessage = true)'),
+        lessThan(sendSnippet.indexOf('chatController.canSendMessage')),
+      );
+      expect(chatScreen, contains('_pendingMessageDeletes'));
+      expect(chatScreen, contains('on ChatFlowException catch (error)'));
+      expect(controller, contains('Future<void> deleteMessage'));
+      expect(controller, contains('Future<void> deleteConversation'));
+      expect(controller, contains('throw const ChatFlowException'));
+    });
+
     test('empty chat and feedback failure states stay explicit', () {
-      final chatScreen =
-          File('lib/screens/chat_screen.dart').readAsStringSync();
+      final chatScreen = File(
+        'lib/screens/chat_screen.dart',
+      ).readAsStringSync();
 
       expect(chatScreen, contains('required bool canMessage'));
       expect(
         chatScreen,
         contains(
-            'La conversation est ouverte, mais la messagerie est désactivée'),
+          'La conversation est ouverte, mais la messagerie est désactivée',
+        ),
       );
       expect(chatScreen, contains('Le retour n’a pas pu être transmis'));
     });
 
     test(
-        'shared backend exposes an admin follow-up callable for contact intakes',
-        () {
-      final callableFile = File(
-        'functions/src/admin_contact_intake_actions.ts',
-      ).readAsStringSync();
-      final indexFile = File('functions/src/index.ts').readAsStringSync();
-      final feedbackService = File(
-        'lib/services/contact_intake_feedback_service.dart',
-      ).readAsStringSync();
+      'shared backend exposes an admin follow-up callable for contact intakes',
+      () {
+        final callableFile = File(
+          'functions/src/admin_contact_intake_actions.ts',
+        ).readAsStringSync();
+        final indexFile = File('functions/src/index.ts').readAsStringSync();
+        final feedbackService = File(
+          'lib/services/contact_intake_feedback_service.dart',
+        ).readAsStringSync();
 
-      expect(callableFile, contains('adminSetContactIntakeFollowUp'));
-      expect(callableFile,
-          contains('export const adminDeleteContactIntake = onCall'));
-      expect(callableFile, contains('adminDeleteContactIntakeConversation'));
-      expect(callableFile, contains('submitContactIntakeFeedback'));
-      expect(callableFile, contains('latestParticipantFeedbackStatus'));
-      expect(callableFile, contains('agencyFollowUpStatus'));
-      expect(callableFile, contains('agencyFollowUpLabel(status)'));
-      expect(callableFile,
-          contains('recoverMissingContactIntakeFromConversation'));
-      expect(callableFile, contains('conversationId'));
-      expect(indexFile, contains('adminSetContactIntakeFollowUp'));
-      expect(indexFile, contains('adminDeleteContactIntake,'));
-      expect(indexFile, contains('adminDeleteContactIntakeConversation'));
-      expect(indexFile, contains('submitContactIntakeFeedback'));
-      expect(feedbackService,
-          contains("httpsCallable('submitContactIntakeFeedback')"));
-      expect(feedbackService, contains('normalizedCode'));
-    });
+        expect(callableFile, contains('adminSetContactIntakeFollowUp'));
+        expect(
+          callableFile,
+          contains('export const adminDeleteContactIntake = onCall'),
+        );
+        expect(callableFile, contains('adminDeleteContactIntakeConversation'));
+        expect(callableFile, contains('submitContactIntakeFeedback'));
+        expect(callableFile, contains('latestParticipantFeedbackStatus'));
+        expect(callableFile, contains('agencyFollowUpStatus'));
+        expect(callableFile, contains('agencyFollowUpLabel(status)'));
+        expect(
+          callableFile,
+          contains('recoverMissingContactIntakeFromConversation'),
+        );
+        expect(callableFile, contains('conversationId'));
+        expect(indexFile, contains('adminSetContactIntakeFollowUp'));
+        expect(indexFile, contains('adminDeleteContactIntake,'));
+        expect(indexFile, contains('adminDeleteContactIntakeConversation'));
+        expect(indexFile, contains('submitContactIntakeFeedback'));
+        expect(
+          feedbackService,
+          contains("httpsCallable('submitContactIntakeFeedback')"),
+        );
+        expect(feedbackService, contains('normalizedCode'));
+      },
+    );
   });
 }

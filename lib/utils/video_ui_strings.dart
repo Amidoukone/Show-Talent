@@ -174,6 +174,8 @@ class VideoUiStrings {
       'Pr\u00e9paration impossible pour le moment. Merci de r\u00e9essayer.';
   static const String uploadPreparationInProgress =
       'Pr\u00e9paration en cours...';
+  static const String uploadAlreadyInProgress =
+      'T\u00e9l\u00e9versement d\u00e9j\u00e0 en cours.';
   static const String uploadMissingFile = 'Fichier manquant.';
   static const String uploadMissingThumbnail = 'Miniature manquante.';
   static const String uploadMissingMetadata =

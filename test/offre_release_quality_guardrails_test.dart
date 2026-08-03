@@ -37,9 +37,13 @@ void main() {
       expect(form, contains('bool get _submitLocked'));
       expect(form, contains('onPressed: _submitLocked ? null : _submitForm'));
       expect(
-          form, contains("id: isEditing ? editingOffre!.id : _draftOfferId"));
+        form,
+        contains("id: isEditing ? editingOffre!.id : _draftOfferId"),
+      );
       expect(
-          form, contains('_navigateAfterSuccessfulSubmit(response.message)'));
+        form,
+        contains('_navigateAfterSuccessfulSubmit(response.message)'),
+      );
       expect(form, contains('AdFeedback.dismissCurrent();'));
       expect(form, contains('Get.back(result: result);'));
       expect(form, isNot(contains('Get.back(result: true);')));
@@ -54,59 +58,74 @@ void main() {
       expect(form, contains('pieceJointeUrl: null'));
     });
 
-    test('offre screen reacts to action responses for status, apply and delete',
-        () {
-      final screen = File('lib/screens/offre_screen.dart').readAsStringSync();
+    test(
+      'offre screen reacts to action responses for status, apply and delete',
+      () {
+        final screen = File('lib/screens/offre_screen.dart').readAsStringSync();
+        final widgets = File(
+          'lib/screens/offre_screen_widgets.dart',
+        ).readAsStringSync();
 
-      expect(screen, contains('await _runOfferAction('));
-      expect(screen, contains('offreController.changerStatut('));
-      expect(screen, contains('offreController.postulerOffre('));
-      expect(screen, contains('offreController.seDesinscrireOffre('));
-      expect(screen, contains('offreController.supprimerOffre('));
-      expect(screen, contains('_handleActionResponse('));
-      expect(screen, contains('_showSystemNotice('));
-      expect(screen,
-          contains("import 'package:adfoot/widgets/ad_system_notice.dart';"));
-      expect(screen, contains('AdSystemNotice('));
-      expect(screen, isNot(contains('class _OfferSystemNotice')));
-      expect(screen, contains('_buildOffersOverview('));
-      expect(screen, contains('_openCreateOfferForm()'));
-      expect(screen, contains('_openEditOfferForm(Offre offre)'));
-      expect(screen, contains('offreController.hasMoreOffres'));
-      expect(screen, contains('offreController.isLoadingMore'));
-      expect(screen, contains('_buildLoadMoreFooter()'));
-      expect(screen, contains('offreController.loadMoreOffres()'));
-      expect(screen, contains('_pendingOfferActions'));
-      expect(screen, contains('_runOfferAction('));
-      expect(screen, contains('_isOfferActionPending('));
-      expect(screen, contains('_showOfferDetails('));
-      expect(screen, contains('Get.bottomSheet('));
-      expect(screen, contains('_onlyMine'));
-      expect(screen, contains('_onlyExpiringSoon'));
-      expect(screen, contains('_isExpired(Offre offre)'));
-      expect(screen, contains('_isExpiringSoon(Offre offre)'));
-      expect(screen, contains('_isOfferOpenForApplications(Offre offre)'));
-      expect(screen, contains('o.recruteur.nom.toLowerCase()'));
-      expect(screen, contains('Icons.mark_email_unread_outlined'));
-      expect(screen, contains('Créer une offre'));
-      expect(
-          screen, isNot(contains('response.showToast(includeSuccess: true);')));
-      expect(screen, isNot(contains('AdFeedback.success(')));
-      expect(screen, contains('response.message'));
-      expect(screen, contains('ContactContext.offer('));
-      expect(screen, contains('startGuidedConversation('));
-      expect(screen, contains('findExistingConversationId('));
-      expect(
-        screen,
-        contains('filteredOut: true'),
-      );
-      expect(screen, contains('_resetFilters()'));
-      expect(screen, contains("arguments: {'tab': 0}"));
-    });
+        expect(screen, contains('await _runOfferAction('));
+        expect(screen, contains('offreController.changerStatut('));
+        expect(screen, contains('offreController.postulerOffre('));
+        expect(screen, contains('offreController.seDesinscrireOffre('));
+        expect(screen, contains('offreController.supprimerOffre('));
+        expect(screen, contains('_handleActionResponse('));
+        expect(screen, contains('_showSystemNotice('));
+        expect(
+          screen,
+          contains("import 'package:adfoot/widgets/ad_system_notice.dart';"),
+        );
+        expect(screen, contains('AdSystemNotice('));
+        expect(screen, isNot(contains('class _OfferSystemNotice')));
+        expect(screen, isNot(contains('_buildOffersOverview(')));
+        expect(screen, contains('_openCreateOfferForm()'));
+        expect(screen, contains('_openEditOfferForm(Offre offre)'));
+        expect(screen, contains('offreController.hasMoreOffres'));
+        expect(screen, contains('offreController.isLoadingMore'));
+        expect(screen, contains('_buildLoadMoreFooter()'));
+        expect(screen, contains('offreController.loadMoreOffres()'));
+        expect(screen, contains('_pendingOfferActions'));
+        expect(screen, contains('_runOfferAction('));
+        expect(screen, contains('_isOfferActionPending('));
+        expect(screen, contains('_showOfferDetails('));
+        expect(screen, contains('Get.bottomSheet('));
+        expect(screen, contains('_onlyMine'));
+        expect(screen, contains('_onlyExpiringSoon'));
+        expect(screen, contains('_isExpired(Offre offre)'));
+        expect(screen, contains('_isExpiringSoon(Offre offre)'));
+        expect(screen, contains('_isOfferOpenForApplications(Offre offre)'));
+        expect(screen, contains('o.recruteur.nom.toLowerCase()'));
+        expect(screen, contains('Créer une offre'));
+        expect(screen, contains("hintText: 'Rechercher une offre...'"));
+        expect(
+          screen,
+          contains('constraints: const BoxConstraints(maxWidth: 760)'),
+        );
+        expect(widgets, contains('MaterialTapTargetSize.shrinkWrap'));
+        expect(widgets, contains('VisualDensity.compact'));
+        expect(widgets, contains('labelPadding: const EdgeInsets.symmetric'));
+        expect(widgets, isNot(contains('class _OfferMetric')));
+        expect(
+          screen,
+          isNot(contains('response.showToast(includeSuccess: true);')),
+        );
+        expect(screen, isNot(contains('AdFeedback.success(')));
+        expect(screen, contains('response.message'));
+        expect(screen, contains('ContactContext.offer('));
+        expect(screen, contains('startGuidedConversation('));
+        expect(screen, contains('findExistingConversationId('));
+        expect(screen, contains('filteredOut: true'));
+        expect(screen, contains('_resetFilters()'));
+        expect(screen, contains("arguments: {'tab': 0}"));
+      },
+    );
 
     test('system notice is shared outside the offer screen', () {
-      final notice =
-          File('lib/widgets/ad_system_notice.dart').readAsStringSync();
+      final notice = File(
+        'lib/widgets/ad_system_notice.dart',
+      ).readAsStringSync();
 
       expect(notice, contains('enum AdSystemNoticeTone'));
       expect(notice, contains('class AdSystemNoticeData'));
@@ -118,10 +137,12 @@ void main() {
     });
 
     test('offre controller mutations return explicit action responses', () {
-      final controller =
-          File('lib/controller/offre_controller.dart').readAsStringSync();
-      final repository =
-          File('lib/services/offers/offer_repository.dart').readAsStringSync();
+      final controller = File(
+        'lib/controller/offre_controller.dart',
+      ).readAsStringSync();
+      final repository = File(
+        'lib/services/offers/offer_repository.dart',
+      ).readAsStringSync();
 
       expect(controller, contains('Future<ActionResponse> publierOffre'));
       expect(controller, contains('Future<ActionResponse> modifierOffre'));
@@ -139,6 +160,11 @@ void main() {
       expect(controller, contains('_offerPageSize'));
       expect(controller, contains('_replaceLocalOffer(offre)'));
       expect(controller, contains('_removeLocalOffer(offreId)'));
+      expect(controller, contains('_setLocalOfferCandidateState'));
+      expect(controller, contains('_restoreLocalOfferCandidates'));
+      expect(controller, contains('previousCandidates'));
+      expect(controller, contains("e.code == 'already_applied'"));
+      expect(controller, contains("e.code == 'not_applied'"));
       expect(controller, contains('fetchOffersPage('));
       expect(controller, isNot(contains('runTransaction')));
       expect(repository, contains('runTransaction'));
@@ -147,7 +173,9 @@ void main() {
       expect(repository, contains('Stream<OfferLiveBatch> watchOffers'));
       expect(repository, contains('Future<OfferFeedPage> fetchOffersPage'));
       expect(
-          repository, contains(".orderBy('dateCreation', descending: true)"));
+        repository,
+        contains(".orderBy('dateCreation', descending: true)"),
+      );
       expect(repository, contains('.limit(limit)'));
       expect(repository, contains('startAfterDocument'));
       expect(repository, contains("'statut'"));
@@ -161,10 +189,12 @@ void main() {
     });
 
     test('offre controller keeps the mobile stream bounded and tolerant', () {
-      final controller =
-          File('lib/controller/offre_controller.dart').readAsStringSync();
-      final repository =
-          File('lib/services/offers/offer_repository.dart').readAsStringSync();
+      final controller = File(
+        'lib/controller/offre_controller.dart',
+      ).readAsStringSync();
+      final repository = File(
+        'lib/services/offers/offer_repository.dart',
+      ).readAsStringSync();
 
       expect(controller, contains('_offerRepository'));
       expect(controller, contains('.watchOffers(limit: _offerPageSize'));
@@ -172,9 +202,11 @@ void main() {
       expect(repository, contains('_parseSnapshotDocs(snapshot.docs)'));
       expect(repository, contains('Offre ignoree car document invalide'));
       expect(
-          repository,
-          contains(
-              'fetched.sort((a, b) => b.dateCreation.compareTo(a.dateCreation));'));
+        repository,
+        contains(
+          'fetched.sort((a, b) => b.dateCreation.compareTo(a.dateCreation));',
+        ),
+      );
     });
 
     test('offre indexes support ordered and filtered production queries', () {

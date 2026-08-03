@@ -93,6 +93,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   static const Duration _readSyncThrottle = Duration(seconds: 2);
   bool _isSendingMessage = false;
   bool _isSubmittingFeedback = false;
+  final Set<String> _pendingMessageDeletes = <String>{};
 
   @override
   void initState() {
@@ -156,9 +157,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (currentUser == null && _authSessionService.currentUser != null) {
       return Scaffold(
         appBar: const AdAppBar(title: 'Chargement'),
-        body: const Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -180,10 +179,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final canMessage = currentUser.allowMessages && otherUser.allowMessages;
     final disabledHint =
         (!currentUser.allowMessages && !otherUser.allowMessages)
-            ? 'Les messages sont désactivés pour vous deux.'
-            : currentUser.allowMessages
-                ? 'Cet utilisateur a désactivé les messages.'
-                : 'Vous avez désactivé les messages.';
+        ? 'Les messages sont désactivés pour vous deux.'
+        : currentUser.allowMessages
+        ? 'Cet utilisateur a désactivé les messages.'
+        : 'Vous avez désactivé les messages.';
 
     return PopScope(
       canPop: false,
@@ -258,9 +257,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ),
         body: DecoratedBox(
           // ✅ fond subtil (moderne) sans assets
-          decoration: BoxDecoration(
-            color: cs.surface,
-          ),
+          decoration: BoxDecoration(color: cs.surface),
           child: SafeArea(
             child: Column(
               children: [
@@ -326,7 +323,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             children: [
                               if (showDateHeader)
                                 _datePill(
-                                    label: _formatDayLabel(message.dateEnvoi)),
+                                  label: _formatDayLabel(message.dateEnvoi),
+                                ),
                               _MessageBubble(
                                 cs: cs,
                                 isMe: isSentByUser,
@@ -355,8 +353,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color:
-                            cs.surfaceContainerHighest.withValues(alpha: 0.8),
+                        color: cs.surfaceContainerHighest.withValues(
+                          alpha: 0.8,
+                        ),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: cs.outline.withValues(alpha: 0.3),
@@ -394,15 +393,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _startOtherUserListener() {
     _otherUserSub?.cancel();
     if (widget.otherUser.uid.isEmpty) return;
-    _otherUserSub = chatController.watchUserById(widget.otherUser.uid).listen(
-      (user) {
-        if (user == null || !mounted) return;
-        setState(() => _otherUser = user);
-      },
-      onError: (error, stackTrace) {
-        AppLogger.debug('❌ chat otherUser listener error: $error\n$stackTrace');
-      },
-    );
+    _otherUserSub = chatController
+        .watchUserById(widget.otherUser.uid)
+        .listen(
+          (user) {
+            if (user == null || !mounted) return;
+            setState(() => _otherUser = user);
+          },
+          onError: (error, stackTrace) {
+            AppLogger.debug(
+              '❌ chat otherUser listener error: $error\n$stackTrace',
+            );
+          },
+        );
   }
 
   AppUser? get _resolvedCurrentUser =>
@@ -415,6 +418,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // Delete message
   // ------------------------------
   Future<void> _confirmDeleteMessage(Message message) async {
+    if (_pendingMessageDeletes.contains(message.id)) {
+      return;
+    }
+
     final confirmed = await AdDialogs.confirm(
       context: context,
       title: 'Supprimer ce message',
@@ -425,17 +432,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
     if (!confirmed) return;
 
+    setState(() => _pendingMessageDeletes.add(message.id));
     try {
       await chatController.deleteMessage(widget.conversationId, message.id);
       AdFeedback.success(
         'Message supprimé',
         'Le message a été supprimé avec succès.',
       );
-    } catch (e) {
+    } on ChatFlowException catch (error) {
+      AdFeedback.error('Suppression impossible', error.message);
+    } catch (_) {
       AdFeedback.error(
-        'Erreur',
-        'Échec de la suppression du message : $e',
+        'Suppression impossible',
+        'Le message n’a pas pu être supprimé. Merci de réessayer.',
       );
+    } finally {
+      if (mounted) {
+        setState(() => _pendingMessageDeletes.remove(message.id));
+      }
     }
   }
 
@@ -499,21 +513,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final content = messageController.text.trim();
     if (content.isEmpty || _isSendingMessage) return;
 
-    final canSend = await chatController.canSendMessage(
-      senderId: senderId,
-      recipientId: recipientId,
-    );
-    if (!canSend) {
-      AdFeedback.warning(
-        'Messages indisponibles',
-        "L’envoi de messages est désactivé pour cette conversation.",
-      );
-      return;
-    }
-
     setState(() => _isSendingMessage = true);
 
     try {
+      final canSend = await chatController.canSendMessage(
+        senderId: senderId,
+        recipientId: recipientId,
+      );
+      if (!canSend) {
+        AdFeedback.warning(
+          'Messages indisponibles',
+          "L’envoi de messages est désactivé pour cette conversation.",
+        );
+        return;
+      }
+
       await chatController.sendMessage(
         conversationId: widget.conversationId,
         senderId: senderId,
@@ -526,10 +540,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _scrollToBottom(delay: const Duration(milliseconds: 110));
       _throttledTouchActiveAt();
     } on ChatFlowException catch (error) {
-      AdFeedback.error(
-        'Envoi impossible',
-        error.message,
-      );
+      AdFeedback.error('Envoi impossible', error.message);
     } catch (_) {
       AdFeedback.error(
         'Envoi impossible',
@@ -556,8 +567,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _markMessagesAsRead(List<Message> messages, String currentUserId) {
     if (_readSyncInFlight) return;
 
-    final hasUnreadForCurrentUser =
-        messages.any((m) => !m.estLu && m.destinataireId == currentUserId);
+    final hasUnreadForCurrentUser = messages.any(
+      (m) => !m.estLu && m.destinataireId == currentUserId,
+    );
     if (!hasUnreadForCurrentUser) return;
 
     final now = DateTime.now();
@@ -652,9 +664,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             Text(
               'Premier contact cadré',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSecondaryContainer,
-                  ),
+                fontWeight: FontWeight.w900,
+                color: cs.onSecondaryContainer,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -662,26 +674,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ? '$contextLabel - $contextTitle'
                   : contextLabel,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: cs.onSecondaryContainer.withValues(alpha: 0.9),
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: cs.onSecondaryContainer.withValues(alpha: 0.9),
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               'Motif : $reasonLabel. Adfoot garde ce premier échange dans le circuit officiel.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: cs.onSecondaryContainer.withValues(alpha: 0.82),
-                    height: 1.3,
-                  ),
+                color: cs.onSecondaryContainer.withValues(alpha: 0.82),
+                height: 1.3,
+              ),
             ),
             if (followUpStatus != AgencyFollowUpStatus.newLead) ...[
               const SizedBox(height: 4),
               Text(
                 'Suivi agence : $followUpLabel.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: cs.onSecondaryContainer.withValues(alpha: 0.82),
-                      fontWeight: FontWeight.w700,
-                    ),
+                  color: cs.onSecondaryContainer.withValues(alpha: 0.82),
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
             if (feedbackLabel != null) ...[

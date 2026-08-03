@@ -100,7 +100,6 @@ class _EventListScreenState extends State<EventListScreen> {
         return Column(
           children: [
             _buildSystemNoticeSlot(),
-            _buildEventsOverview(allEvents, events, currentUser),
             _buildFilters(currentUser),
             Expanded(
               child: events.isEmpty
@@ -111,7 +110,7 @@ class _EventListScreenState extends State<EventListScreen> {
                       isLoadingMore: eventController.isLoadingMore,
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 96),
                       itemCount: events.length + (canLoadMoreEvents ? 1 : 0),
                       itemBuilder: (context, index) {
                         if (index == events.length) {
@@ -504,140 +503,6 @@ class _EventListScreenState extends State<EventListScreen> {
     );
   }
 
-  Widget _buildEventsOverview(
-    List<Event> allEvents,
-    List<Event> filteredEvents,
-    AppUser currentUser,
-  ) {
-    final isPublisher = isOpportunityPublisherRole(currentUser.role);
-    final openCount = allEvents
-        .where((event) => _isOpenForRegistration(event))
-        .length;
-    final soonCount = allEvents.where((event) => _isUpcomingSoon(event)).length;
-    final ownedEvents = allEvents.where(
-      (event) => event.organisateur.uid == currentUser.uid,
-    );
-    final myParticipants = ownedEvents.fold<int>(
-      0,
-      (total, event) => total + event.participants.length,
-    );
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      decoration: const BoxDecoration(
-        color: AdColors.surface,
-        border: Border(bottom: BorderSide(color: AdColors.divider)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: AdColors.brand.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(AdRadius.md),
-                  border: Border.all(
-                    color: AdColors.brand.withValues(alpha: 0.25),
-                  ),
-                ),
-                child: const Icon(
-                  Icons.event_available_outlined,
-                  color: AdColors.brand,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Événements',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AdColors.onSurface,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      isPublisher
-                          ? 'Gérez vos événements et les inscriptions.'
-                          : 'Repérez les événements ouverts et à venir.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AdColors.onSurfaceMuted,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _EventMetric(
-                icon: Icons.filter_list_rounded,
-                label: 'Affichés',
-                value: '${filteredEvents.length}/${allEvents.length}',
-              ),
-              _EventMetric(
-                icon: Icons.event_available_outlined,
-                label: 'Ouverts',
-                value: '$openCount',
-              ),
-              _EventMetric(
-                icon: Icons.schedule_rounded,
-                label: 'Bientôt',
-                value: '$soonCount',
-              ),
-              if (isPublisher)
-                _EventMetric(
-                  icon: Icons.mark_email_unread_outlined,
-                  label: 'Inscrits reçus',
-                  value: '$myParticipants',
-                ),
-            ],
-          ),
-          if (isPublisher) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                AdButton(
-                  onPressed: () => setState(() => _onlyMine = !_onlyMine),
-                  leading: _onlyMine
-                      ? Icons.public_rounded
-                      : Icons.manage_accounts_outlined,
-                  label: _onlyMine ? 'Tous les événements' : 'Mes événements',
-                  kind: AdButtonKind.outline,
-                  size: AdButtonSize.compact,
-                  expanded: false,
-                ),
-                AdButton(
-                  onPressed: () {
-                    _openCreateEventForm();
-                  },
-                  leading: Icons.add_rounded,
-                  label: 'Créer un événement',
-                  size: AdButtonSize.compact,
-                  expanded: false,
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _buildEmptyState(
     AppUser currentUser, {
     required bool filteredOut,
@@ -725,91 +590,108 @@ class _EventListScreenState extends State<EventListScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       decoration: const BoxDecoration(
         color: AdColors.surfaceAlt,
         border: Border(bottom: BorderSide(color: AdColors.divider)),
       ),
-      child: Column(
-        children: [
-          TextField(
-            controller: _searchController,
-            onChanged: (_) => setState(() {}),
-            style: TextStyle(color: cs.onSurface),
-            decoration: InputDecoration(
-              hintText: 'Rechercher titre, lieu, organisateur...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchController.text.trim().isEmpty
-                  ? null
-                  : IconButton(
-                      tooltip: 'Effacer la recherche',
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() {});
-                      },
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            children: [
+              TextField(
+                controller: _searchController,
+                onChanged: (_) => setState(() {}),
+                style: TextStyle(color: cs.onSurface),
+                decoration: InputDecoration(
+                  hintText: 'Rechercher un événement...',
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  prefixIcon: const Icon(Icons.search),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 42,
+                    minHeight: 42,
+                  ),
+                  suffixIcon: _searchController.text.trim().isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Effacer la recherche',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                        ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterChip(
+                      label: 'Tous',
+                      selected: _selectedStatus == 'tous',
+                      onTap: () => setState(() => _selectedStatus = 'tous'),
                     ),
-            ),
+                    _FilterChip(
+                      label: 'Ouverts',
+                      selected: _selectedStatus == 'ouvert',
+                      onTap: () => setState(() => _selectedStatus = 'ouvert'),
+                    ),
+                    _FilterChip(
+                      label: 'Fermés',
+                      selected: _selectedStatus == 'ferme',
+                      onTap: () => setState(() => _selectedStatus = 'ferme'),
+                    ),
+                    _FilterChip(
+                      label: 'Archivés',
+                      selected: _selectedStatus == 'archive',
+                      onTap: () => setState(() => _selectedStatus = 'archive'),
+                    ),
+                    const SizedBox(width: 8),
+                    _FilterChip(
+                      label: 'Public',
+                      selected: _selectedVisibility == 'public',
+                      onTap: () =>
+                          setState(() => _selectedVisibility = 'public'),
+                    ),
+                    _FilterChip(
+                      label: 'Privé',
+                      selected: _selectedVisibility == 'prive',
+                      onTap: () =>
+                          setState(() => _selectedVisibility = 'prive'),
+                    ),
+                    _FilterChip(
+                      label: 'À venir',
+                      selected: _onlyUpcoming,
+                      onTap: () =>
+                          setState(() => _onlyUpcoming = !_onlyUpcoming),
+                    ),
+                    if (isOpportunityPublisherRole(currentUser.role)) ...[
+                      const SizedBox(width: 8),
+                      _FilterChip(
+                        label: 'Mes événements',
+                        selected: _onlyMine,
+                        onTap: () => setState(() => _onlyMine = !_onlyMine),
+                      ),
+                    ],
+                    if (_hasActiveFilters)
+                      TextButton.icon(
+                        onPressed: _resetFilters,
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        label: const Text('Réinitialiser'),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _FilterChip(
-                  label: 'Tous',
-                  selected: _selectedStatus == 'tous',
-                  onTap: () => setState(() => _selectedStatus = 'tous'),
-                ),
-                _FilterChip(
-                  label: 'Ouverts',
-                  selected: _selectedStatus == 'ouvert',
-                  onTap: () => setState(() => _selectedStatus = 'ouvert'),
-                ),
-                _FilterChip(
-                  label: 'Fermés',
-                  selected: _selectedStatus == 'ferme',
-                  onTap: () => setState(() => _selectedStatus = 'ferme'),
-                ),
-                _FilterChip(
-                  label: 'Archivés',
-                  selected: _selectedStatus == 'archive',
-                  onTap: () => setState(() => _selectedStatus = 'archive'),
-                ),
-                const SizedBox(width: 8),
-                _FilterChip(
-                  label: 'Public',
-                  selected: _selectedVisibility == 'public',
-                  onTap: () => setState(() => _selectedVisibility = 'public'),
-                ),
-                _FilterChip(
-                  label: 'Privé',
-                  selected: _selectedVisibility == 'prive',
-                  onTap: () => setState(() => _selectedVisibility = 'prive'),
-                ),
-                _FilterChip(
-                  label: 'À venir',
-                  selected: _onlyUpcoming,
-                  onTap: () => setState(() => _onlyUpcoming = !_onlyUpcoming),
-                ),
-                if (isOpportunityPublisherRole(currentUser.role)) ...[
-                  const SizedBox(width: 8),
-                  _FilterChip(
-                    label: 'Mes événements',
-                    selected: _onlyMine,
-                    onTap: () => setState(() => _onlyMine = !_onlyMine),
-                  ),
-                ],
-                if (_hasActiveFilters)
-                  TextButton.icon(
-                    onPressed: _resetFilters,
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    label: const Text('Réinitialiser'),
-                  ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1163,55 +1045,6 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 }
 
-class _EventMetric extends StatelessWidget {
-  const _EventMetric({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 38),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: AdColors.surfaceCard,
-        borderRadius: BorderRadius.circular(AdRadius.md),
-        border: Border.all(color: AdColors.divider),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: AdColors.brand),
-          const SizedBox(width: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AdColors.onSurface,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AdColors.onSurfaceMuted,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
   final String status;
@@ -1298,6 +1131,9 @@ class _FilterChip extends StatelessWidget {
         label: Text(label),
         selected: selected,
         onSelected: (_) => onTap(),
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        labelPadding: const EdgeInsets.symmetric(horizontal: 8),
         selectedColor: cs.primary.withValues(alpha: 0.18),
         backgroundColor: AdColors.surfaceCard,
         labelStyle: TextStyle(

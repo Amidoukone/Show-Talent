@@ -251,6 +251,11 @@ void main() {
       ).readAsStringSync();
 
       expect(player, contains('_isLikeActionLoading'));
+      expect(player, contains('_queuedLikeTarget'));
+      expect(player, contains('isLikeLoading: false'));
+      expect(player, contains('_setLocalLikeState'));
+      expect(player, contains('_resolvedLikeState'));
+      expect(player, isNot(contains('isLikeLoading: _isLikeActionLoading')));
       expect(player, contains('_isReportActionLoading'));
       expect(player, contains('_isDeleteActionLoading'));
       expect(player, contains('_isAddVideoActionLoading'));

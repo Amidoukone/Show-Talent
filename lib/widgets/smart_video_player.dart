@@ -11,6 +11,7 @@ import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:adfoot/controller/follow_controller.dart';
+import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/screens/add_video.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/screens/success_toast.dart';
@@ -94,6 +95,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   bool _isDisposed = false;
   bool _isFollowActionLoading = false;
   bool _isLikeActionLoading = false;
+  bool? _queuedLikeTarget;
   bool _isReportActionLoading = false;
   bool _isShareActionLoading = false;
   bool _isDeleteActionLoading = false;
@@ -1176,7 +1178,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       sectionSpacing: _videoSectionSpacing(media),
       showDeleteAction: widget.showDeleteAction,
       showProfileAction: widget.showProfileAction,
-      isLikeLoading: _isLikeActionLoading,
+      isLikeLoading: false,
       isShareLoading: _isShareActionLoading,
       isReportLoading: _isReportActionLoading,
       isDeleteLoading: _isDeleteActionLoading,
@@ -1231,34 +1233,58 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   Future<void> _toggleLike(VideoController controller, String userId) async {
-    if (_isLikeActionLoading) return;
+    final targetLiked = !widget.video.likes.contains(userId);
+    _queuedLikeTarget = targetLiked;
+    _setLocalLikeState(userId, targetLiked);
 
-    final wasLiked = widget.video.likes.contains(userId);
+    if (_isLikeActionLoading) {
+      return;
+    }
 
-    if (wasLiked) {
-      widget.video.likes.remove(userId);
-    } else {
+    _isLikeActionLoading = true;
+    var confirmedLiked = !targetLiked;
+    try {
+      while (mounted && !_isDisposed && _queuedLikeTarget != null) {
+        final targetForRequest = _queuedLikeTarget!;
+        final response = await controller.likeVideo(widget.video.id, userId);
+        if (!mounted || _isDisposed) {
+          return;
+        }
+
+        if (!response.success) {
+          _queuedLikeTarget = null;
+          _setLocalLikeState(userId, confirmedLiked);
+          return;
+        }
+
+        confirmedLiked = _resolvedLikeState(response, targetForRequest);
+        final latestTarget = _queuedLikeTarget;
+        if (latestTarget == null || latestTarget == confirmedLiked) {
+          _queuedLikeTarget = null;
+          _setLocalLikeState(userId, confirmedLiked);
+          return;
+        }
+
+        _setLocalLikeState(userId, latestTarget);
+      }
+    } finally {
+      _isLikeActionLoading = false;
+    }
+  }
+
+  void _setLocalLikeState(String userId, bool liked) {
+    widget.video.likes.remove(userId);
+    if (liked) {
       widget.video.likes.add(userId);
     }
     if (mounted && !_isDisposed) {
-      setState(() => _isLikeActionLoading = true);
+      setState(() {});
     }
+  }
 
-    try {
-      final response = await controller.likeVideo(widget.video.id, userId);
-      if (!response.success) {
-        if (wasLiked) {
-          widget.video.likes.add(userId);
-        } else {
-          widget.video.likes.remove(userId);
-        }
-        if (mounted && !_isDisposed) setState(() {});
-      }
-    } finally {
-      if (mounted && !_isDisposed) {
-        setState(() => _isLikeActionLoading = false);
-      }
-    }
+  bool _resolvedLikeState(ActionResponse response, bool fallback) {
+    final rawLiked = response.data?['liked'];
+    return rawLiked is bool ? rawLiked : fallback;
   }
 
   Future<void> _confirmDelete(

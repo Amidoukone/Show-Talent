@@ -78,6 +78,41 @@ If the app shows `Verification de securite indisponible`, the client could not
 obtain a valid App Check token. Check the local config provider first, then the
 Firebase App Check registration for the Android app.
 
+## Closed-test emergency mitigation
+
+Use this only when the Play Store closed-test build is already live and client
+logs show `App attestation failed`.
+
+Read the remote production state:
+
+```powershell
+node scripts/check-mobile-appcheck-status.mjs --environment production
+node scripts/list-recent-client-errors.mjs --environment production --limit 120 --inspect-users
+node scripts/check-deployed-firebase-rules.mjs --environment production
+```
+
+Temporary closed-test mitigation, no new AAB required:
+
+```powershell
+node scripts/check-mobile-appcheck-status.mjs --environment production --allow-unrecognized-version true --execute
+```
+
+Then force-stop and reopen the Play-installed app on the tester phone. If App
+Check was the blocker, `AppCheckService.initialize` should stop logging
+`App attestation failed` and the upload callables should show
+`app=VALID, auth=VALID` in Functions logs.
+
+Rollback before a broader production rollout:
+
+```powershell
+node scripts/check-mobile-appcheck-status.mjs --environment production --allow-unrecognized-version false --execute
+```
+
+Before rolling back, confirm that the Firebase Android app `org.adfoot.app`
+contains the Google Play **App signing key certificate** SHA-256 fingerprint
+from Play Console > App integrity. Keep the upload-key SHA-256 registered too
+if direct release-device validation is still needed.
+
 ## Remote smoke option
 
 For CI or backend validation, provide a Firebase App Check token explicitly:

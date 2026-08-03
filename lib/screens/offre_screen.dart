@@ -118,7 +118,6 @@ class _OffreScreenState extends State<OffreScreen> {
         return Column(
           children: [
             _buildSystemNoticeSlot(),
-            _buildOffersOverview(allOffres, offres, currentUser),
             _buildFilters(currentUser),
             Expanded(
               child: offres.isEmpty
@@ -615,163 +614,6 @@ class _OffreScreenState extends State<OffreScreen> {
     );
   }
 
-  Widget _buildOffersOverview(
-    List<Offre> allOffres,
-    List<Offre> filteredOffres,
-    AppUser? currentUser,
-  ) {
-    final isPublisher = isOpportunityPublisherRole(currentUser?.role);
-    final openCount = allOffres
-        .where((offre) => _isOfferOpenForApplications(offre))
-        .length;
-    final expiringCount = allOffres
-        .where((offre) => _isExpiringSoon(offre))
-        .length;
-    final totalCandidates = allOffres.fold<int>(
-      0,
-      (total, offre) => total + offre.candidats.length,
-    );
-    final ownedOffers = currentUser == null
-        ? <Offre>[]
-        : allOffres
-              .where((offre) => offre.recruteur.uid == currentUser.uid)
-              .toList();
-    final myOffers = ownedOffers.length;
-    final myCandidates = ownedOffers.fold<int>(
-      0,
-      (total, offre) => total + offre.candidats.length,
-    );
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      decoration: const BoxDecoration(
-        color: AdColors.surface,
-        border: Border(bottom: BorderSide(color: AdColors.divider)),
-      ),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: AdColors.brand.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(AdRadius.md),
-                      border: Border.all(
-                        color: AdColors.brand.withValues(alpha: 0.25),
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.local_offer_outlined,
-                      color: AdColors.brand,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Offres disponibles',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                color: AdColors.onSurface,
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          isPublisher
-                              ? 'Gérez vos publications et suivez les candidatures.'
-                              : 'Repérez rapidement les opportunités ouvertes.',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: AdColors.onSurfaceMuted,
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _OfferMetric(
-                    icon: Icons.filter_list_rounded,
-                    label: 'Affichées',
-                    value: '${filteredOffres.length}/${allOffres.length}',
-                  ),
-                  _OfferMetric(
-                    icon: Icons.check_circle_outline_rounded,
-                    label: 'Ouvertes',
-                    value: '$openCount',
-                  ),
-                  _OfferMetric(
-                    icon: Icons.schedule_rounded,
-                    label: 'Urgentes',
-                    value: '$expiringCount',
-                  ),
-                  _OfferMetric(
-                    icon: isPublisher
-                        ? Icons.manage_accounts_outlined
-                        : Icons.group_outlined,
-                    label: isPublisher ? 'Mes offres' : 'Candidatures',
-                    value: '${isPublisher ? myOffers : totalCandidates}',
-                  ),
-                  if (isPublisher)
-                    _OfferMetric(
-                      icon: Icons.mark_email_unread_outlined,
-                      label: 'Reçues',
-                      value: '$myCandidates',
-                    ),
-                ],
-              ),
-              if (isPublisher) ...[
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    AdButton(
-                      onPressed: () => setState(() => _onlyMine = !_onlyMine),
-                      leading: _onlyMine
-                          ? Icons.public_rounded
-                          : Icons.manage_accounts_outlined,
-                      label: _onlyMine ? 'Toutes les offres' : 'Mes offres',
-                      kind: AdButtonKind.outline,
-                      size: AdButtonSize.compact,
-                      expanded: false,
-                    ),
-                    AdButton(
-                      onPressed: () {
-                        _openCreateOfferForm();
-                      },
-                      leading: Icons.add_rounded,
-                      label: 'Créer une offre',
-                      size: AdButtonSize.compact,
-                      expanded: false,
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildEmptyState(
     dynamic currentUser, {
     required bool filteredOut,
@@ -859,7 +701,7 @@ class _OffreScreenState extends State<OffreScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       decoration: const BoxDecoration(
         color: AdColors.surfaceAlt,
         border: Border(bottom: BorderSide(color: AdColors.divider)),
@@ -874,8 +716,17 @@ class _OffreScreenState extends State<OffreScreen> {
                 onChanged: (_) => setState(() {}),
                 style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
-                  hintText: 'Rechercher titre, poste, lieu, recruteur...',
+                  hintText: 'Rechercher une offre...',
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
                   prefixIcon: const Icon(Icons.search),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 42,
+                    minHeight: 42,
+                  ),
                   suffixIcon: _searchController.text.trim().isEmpty
                       ? null
                       : IconButton(
@@ -889,7 +740,7 @@ class _OffreScreenState extends State<OffreScreen> {
                   // Keep theme-driven input styling.
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(

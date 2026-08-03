@@ -5,8 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('Event release quality guardrails', () {
     test('event form awaits controller result before system feedback', () {
-      final form =
-          File('lib/screens/event_form_screen.dart').readAsStringSync();
+      final form = File(
+        'lib/screens/event_form_screen.dart',
+      ).readAsStringSync();
 
       expect(form, contains('Future<void> _handleSubmit() async'));
       expect(form, contains('await eventController.updateEvent'));
@@ -45,98 +46,122 @@ void main() {
       expect(form, contains('flyerUrl: null'));
     });
 
-    test('event list reacts to action responses for register/unregister/delete',
-        () {
-      final screen =
-          File('lib/screens/event_list_screen.dart').readAsStringSync();
+    test(
+      'event list reacts to action responses for register/unregister/delete',
+      () {
+        final screen = File(
+          'lib/screens/event_list_screen.dart',
+        ).readAsStringSync();
 
-      expect(screen, contains('await _runEventAction('));
-      expect(screen, contains('eventController.registerToEvent('));
-      expect(screen, contains('eventController.unregisterFromEvent('));
-      expect(screen, contains('eventController.deleteEvent('));
-      expect(screen, contains('Event.normalizeStatus'));
-      expect(screen, contains('void _showResponse('));
-      expect(screen, contains('required String successTitle'));
-      expect(screen, contains('if (response.success)'));
-      expect(screen,
-          contains("import 'package:adfoot/widgets/ad_system_notice.dart';"));
-      expect(screen, contains('AdSystemNotice('));
-      expect(screen, contains('_pendingEventActions'));
-      expect(screen, contains('_isEventActionPending('));
-      expect(screen, contains('_isOpenForRegistration(Event event)'));
-      expect(screen, contains('_buildEventsOverview('));
-      expect(screen, contains('_onlyMine'));
-      expect(screen, contains('eventController.hasMoreEvents'));
-      expect(screen, contains('eventController.isLoadingMore'));
-      expect(screen, contains('_buildLoadMoreFooter()'));
-      expect(screen, contains('eventController.loadMoreEvents()'));
-      expect(screen, contains('event.organisateur.nom.toLowerCase()'));
-      expect(screen, contains('Icons.mark_email_unread_outlined'));
-      expect(screen, contains('Créer un événement'));
-      expect(screen, contains('return Wrap('));
-      expect(
-        screen,
-        contains('filteredOut: true'),
-      );
-      expect(screen, contains('_resetFilters()'));
-      expect(screen, contains('_openEditEventForm(event)'));
-      expect(screen, contains('final isFull = _isFull(event);'));
-      expect(screen, contains('S’inscrire'));
-      expect(screen, isNot(contains('AdFeedback.success(')));
-      expect(screen, isNot(contains("const Text('Details')")));
-      expect(
-        screen,
-        contains('..sort((a, b) => b.createdAt.compareTo(a.createdAt))'),
-      );
-      expect(screen, contains('streamingUrl: null'));
-      expect(screen, contains('flyerUrl: null'));
-    });
+        expect(screen, contains('await _runEventAction('));
+        expect(screen, contains('eventController.registerToEvent('));
+        expect(screen, contains('eventController.unregisterFromEvent('));
+        expect(screen, contains('eventController.deleteEvent('));
+        expect(screen, contains('Event.normalizeStatus'));
+        expect(screen, contains('void _showResponse('));
+        expect(screen, contains('required String successTitle'));
+        expect(screen, contains('if (response.success)'));
+        expect(
+          screen,
+          contains("import 'package:adfoot/widgets/ad_system_notice.dart';"),
+        );
+        expect(screen, contains('AdSystemNotice('));
+        expect(screen, contains('_pendingEventActions'));
+        expect(screen, contains('_isEventActionPending('));
+        expect(screen, contains('_isOpenForRegistration(Event event)'));
+        expect(screen, isNot(contains('_buildEventsOverview(')));
+        expect(screen, contains('_onlyMine'));
+        expect(screen, contains('eventController.hasMoreEvents'));
+        expect(screen, contains('eventController.isLoadingMore'));
+        expect(screen, contains('_buildLoadMoreFooter()'));
+        expect(screen, contains('eventController.loadMoreEvents()'));
+        expect(screen, contains('event.organisateur.nom.toLowerCase()'));
+        expect(screen, contains('Créer un événement'));
+        expect(screen, contains("hintText: 'Rechercher un événement...'"));
+        expect(
+          screen,
+          contains('constraints: const BoxConstraints(maxWidth: 760)'),
+        );
+        expect(screen, contains('MaterialTapTargetSize.shrinkWrap'));
+        expect(screen, contains('VisualDensity.compact'));
+        expect(screen, contains('labelPadding: const EdgeInsets.symmetric'));
+        expect(screen, isNot(contains('class _EventMetric')));
+        expect(screen, contains('return Wrap('));
+        expect(screen, contains('filteredOut: true'));
+        expect(screen, contains('_resetFilters()'));
+        expect(screen, contains('_openEditEventForm(event)'));
+        expect(screen, contains('final isFull = _isFull(event);'));
+        expect(screen, contains('S’inscrire'));
+        expect(screen, isNot(contains('AdFeedback.success(')));
+        expect(screen, isNot(contains("const Text('Details')")));
+        expect(
+          screen,
+          contains('..sort((a, b) => b.createdAt.compareTo(a.createdAt))'),
+        );
+        expect(screen, contains('streamingUrl: null'));
+        expect(screen, contains('flyerUrl: null'));
+      },
+    );
 
     test(
-        'event controller and repository keep explicit failures and transactions',
-        () {
-      final controller =
-          File('lib/controller/event_controller.dart').readAsStringSync();
-      final repository =
-          File('lib/services/events/event_repository.dart').readAsStringSync();
+      'event controller and repository keep explicit failures and transactions',
+      () {
+        final controller = File(
+          'lib/controller/event_controller.dart',
+        ).readAsStringSync();
+        final repository = File(
+          'lib/services/events/event_repository.dart',
+        ).readAsStringSync();
 
-      expect(controller, contains('Future<ActionResponse> createEvent'));
-      expect(controller, contains('Future<ActionResponse> updateEvent'));
-      expect(controller, contains('Future<ActionResponse> deleteEvent'));
-      expect(controller, contains('Future<ActionResponse> registerToEvent'));
-      expect(
-          controller, contains('Future<ActionResponse> unregisterFromEvent'));
-      expect(controller, contains('_assertPublisherAuthorized'));
-      expect(controller, contains('sendEventFanout'));
+        expect(controller, contains('Future<ActionResponse> createEvent'));
+        expect(controller, contains('Future<ActionResponse> updateEvent'));
+        expect(controller, contains('Future<ActionResponse> deleteEvent'));
+        expect(controller, contains('Future<ActionResponse> registerToEvent'));
+        expect(
+          controller,
+          contains('Future<ActionResponse> unregisterFromEvent'),
+        );
+        expect(controller, contains('_assertPublisherAuthorized'));
+        expect(controller, contains('sendEventFanout'));
+        expect(controller, contains('_setLocalEventParticipantState'));
+        expect(controller, contains('_restoreLocalEventParticipants'));
+        expect(controller, contains('_findLocalEvent'));
+        expect(controller, contains('previousParticipants'));
+        expect(controller, contains("e.code == 'already_registered'"));
+        expect(controller, contains("e.code == 'not_registered'"));
 
-      expect(repository, contains('class EventRepositoryException'));
-      expect(repository, contains('class EventFeedCursor'));
-      expect(repository, contains('class EventQueryFilter'));
-      expect(repository, contains('Stream<EventLiveBatch> watchEvents'));
-      expect(repository, contains('Future<EventFeedPage> fetchEventsPage'));
-      expect(repository, contains(".orderBy('createdAt', descending: true)"));
-      expect(repository, contains('.limit(limit)'));
-      expect(repository, contains('startAfterDocument'));
-      expect(repository, contains("'statut'"));
-      expect(repository, contains("'dateFin'"));
-      expect(repository, contains('runTransaction'));
-      expect(repository, contains('capacity_reached'));
-      expect(repository, contains('already_registered'));
-      expect(repository, contains('not_registered'));
-      expect(repository, contains('event_closed'));
-      expect(
-        repository,
-        contains("payload['streamingUrl'] = FieldValue.delete()"),
-      );
-      expect(repository, contains("payload['flyerUrl'] = FieldValue.delete()"));
-      expect(controller, contains('StreamSubscription<EventLiveBatch>'));
-      expect(controller, contains('Future<void> loadMoreEvents()'));
-      expect(controller, contains('_lastCursor'));
-      expect(controller, contains('_eventPageSize'));
-      expect(controller, contains('_replaceLocalEvent(event)'));
-      expect(controller, contains('_removeLocalEvent(eventId)'));
-      expect(controller, contains('fetchEventsPage('));
-    });
+        expect(repository, contains('class EventRepositoryException'));
+        expect(repository, contains('class EventFeedCursor'));
+        expect(repository, contains('class EventQueryFilter'));
+        expect(repository, contains('Stream<EventLiveBatch> watchEvents'));
+        expect(repository, contains('Future<EventFeedPage> fetchEventsPage'));
+        expect(repository, contains(".orderBy('createdAt', descending: true)"));
+        expect(repository, contains('.limit(limit)'));
+        expect(repository, contains('startAfterDocument'));
+        expect(repository, contains("'statut'"));
+        expect(repository, contains("'dateFin'"));
+        expect(repository, contains('runTransaction'));
+        expect(repository, contains('capacity_reached'));
+        expect(repository, contains('already_registered'));
+        expect(repository, contains('not_registered'));
+        expect(repository, contains('event_closed'));
+        expect(
+          repository,
+          contains("payload['streamingUrl'] = FieldValue.delete()"),
+        );
+        expect(
+          repository,
+          contains("payload['flyerUrl'] = FieldValue.delete()"),
+        );
+        expect(controller, contains('StreamSubscription<EventLiveBatch>'));
+        expect(controller, contains('Future<void> loadMoreEvents()'));
+        expect(controller, contains('_lastCursor'));
+        expect(controller, contains('_eventPageSize'));
+        expect(controller, contains('_replaceLocalEvent(event)'));
+        expect(controller, contains('_removeLocalEvent(eventId)'));
+        expect(controller, contains('fetchEventsPage('));
+      },
+    );
 
     test('event indexes support ordered and filtered production queries', () {
       final indexes = File('firestore.indexes.json').readAsStringSync();
@@ -148,20 +173,25 @@ void main() {
       expect(indexes, contains('"order": "DESCENDING"'));
     });
 
-    test('event details stay in-app and tolerate transient missing session',
-        () {
-      final details =
-          File('lib/screens/event_detail_screen.dart').readAsStringSync();
+    test(
+      'event details stay in-app and tolerate transient missing session',
+      () {
+        final details = File(
+          'lib/screens/event_detail_screen.dart',
+        ).readAsStringSync();
 
-      expect(details, contains('final AppUser? currentUser'));
-      expect(details, contains('currentUser != null &&'));
-      expect(details,
-          contains('await Get.find<EventController>().fetchEvents();'));
-      expect(details, contains('Get.back(result: updated);'));
-      expect(details, contains('current.uid == other.uid'));
-      expect(details, contains('Aucun participant pour le moment.'));
-      expect(details, isNot(contains('Get.find<UserController>().user!')));
-      expect(details, isNot(contains('Get.offAllNamed(AppRoutes.main')));
-    });
+        expect(details, contains('final AppUser? currentUser'));
+        expect(details, contains('currentUser != null &&'));
+        expect(
+          details,
+          contains('await Get.find<EventController>().fetchEvents();'),
+        );
+        expect(details, contains('Get.back(result: updated);'));
+        expect(details, contains('current.uid == other.uid'));
+        expect(details, contains('Aucun participant pour le moment.'));
+        expect(details, isNot(contains('Get.find<UserController>().user!')));
+        expect(details, isNot(contains('Get.offAllNamed(AppRoutes.main')));
+      },
+    );
   });
 }

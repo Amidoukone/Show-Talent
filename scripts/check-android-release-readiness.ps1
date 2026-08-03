@@ -365,7 +365,7 @@ $expectedAgpVersionPattern = '^8\.11\.'
 $expectedAgpVersionLabel = "8.11.x"
 $expectedGradleVersion = "8.14.3"
 $expectedCompileSdk = "36"
-$expectedTargetSdk = "35"
+$expectedTargetSdk = "36"
 $expectedBuildToolsVersion = "35.0.0"
 $expectedNdkVersion = "29.0.13599879"
 

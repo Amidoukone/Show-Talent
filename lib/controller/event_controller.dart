@@ -91,7 +91,8 @@ class EventController extends GetxController {
   }) async {
     final currentUid = _authSessionService.currentUser?.uid;
     final queryKey = filter.cacheKey;
-    final hasActiveStream = _eventsSub != null &&
+    final hasActiveStream =
+        _eventsSub != null &&
         _activeAuthUid == currentUid &&
         _activeEventsQueryKey == queryKey &&
         !forceRefresh;
@@ -114,38 +115,40 @@ class EventController extends GetxController {
     _eventsSub = _eventRepository
         .watchEvents(limit: _eventPageSize, filter: filter)
         .listen(
-      (batch) {
-        final updatedEvents = _prepareEvents(batch.events);
-        _lastCursor = batch.cursor;
-        _hasMoreEvents.value =
-            batch.cursor != null && batch.fetchedCount >= _eventPageSize;
-        if (_hasLoadedAdditionalPages) {
-          final mergedById = <String, Event>{
-            for (final event in _events.value) event.id: event,
-          };
-          for (final event in updatedEvents) {
-            mergedById[event.id] = event;
-          }
-          _events.value = _sortEvents(mergedById.values);
-        } else {
-          _events.value = _sortEvents(updatedEvents);
-        }
-        update();
-        _isLoading.value = false;
-      },
-      onError: (error) {
-        _isLoading.value = false;
-        AppLogger.debug('Firestore events stream failed: $error');
-        if (_isPermissionDenied(error)) {
-          _events.value = const <Event>[];
-          final hasResolvedSession = Get.isRegistered<UserController>() &&
-              Get.find<UserController>().user != null;
-          if (hasResolvedSession && _authSessionService.currentUser != null) {
-            unawaited(_handleProtectedAccessDenied());
-          }
-        }
-      },
-    );
+          (batch) {
+            final updatedEvents = _prepareEvents(batch.events);
+            _lastCursor = batch.cursor;
+            _hasMoreEvents.value =
+                batch.cursor != null && batch.fetchedCount >= _eventPageSize;
+            if (_hasLoadedAdditionalPages) {
+              final mergedById = <String, Event>{
+                for (final event in _events.value) event.id: event,
+              };
+              for (final event in updatedEvents) {
+                mergedById[event.id] = event;
+              }
+              _events.value = _sortEvents(mergedById.values);
+            } else {
+              _events.value = _sortEvents(updatedEvents);
+            }
+            update();
+            _isLoading.value = false;
+          },
+          onError: (error) {
+            _isLoading.value = false;
+            AppLogger.debug('Firestore events stream failed: $error');
+            if (_isPermissionDenied(error)) {
+              _events.value = const <Event>[];
+              final hasResolvedSession =
+                  Get.isRegistered<UserController>() &&
+                  Get.find<UserController>().user != null;
+              if (hasResolvedSession &&
+                  _authSessionService.currentUser != null) {
+                unawaited(_handleProtectedAccessDenied());
+              }
+            }
+          },
+        );
   }
 
   Future<void> loadMoreEvents() async {
@@ -325,7 +328,9 @@ class EventController extends GetxController {
   }
 
   Future<ActionResponse> deleteEvent(
-      String eventId, AppUser utilisateur) async {
+    String eventId,
+    AppUser utilisateur,
+  ) async {
     final auth = _assertPublisherAuthorized(utilisateur);
     if (auth != null) return auth;
 
@@ -386,19 +391,25 @@ class EventController extends GetxController {
       );
     }
 
+    final localEvent = _findLocalEvent(eventId);
+    final previousParticipants = localEvent == null
+        ? null
+        : List<AppUser>.from(localEvent.participants);
+    if (localEvent != null) {
+      _setLocalEventParticipantState(localEvent, participant, registered: true);
+    }
+
     try {
       await _eventRepository.registerParticipant(
         eventId: eventId,
         participant: participant,
       );
-
-      final idx = _events.value.indexWhere((e) => e.id == eventId);
-      if (idx != -1) {
-        final local = _events.value[idx];
-        if (!local.participants.any((p) => p.uid == participant.uid)) {
-          local.participants.add(participant);
-          _events.refresh();
-        }
+      if (localEvent != null) {
+        _setLocalEventParticipantState(
+          localEvent,
+          participant,
+          registered: true,
+        );
       }
 
       return const ActionResponse(
@@ -408,12 +419,26 @@ class EventController extends GetxController {
         toast: ToastLevel.success,
       );
     } on EventRepositoryException catch (e) {
+      if (localEvent != null) {
+        if (e.code == 'already_registered') {
+          _setLocalEventParticipantState(
+            localEvent,
+            participant,
+            registered: true,
+          );
+        } else if (previousParticipants != null) {
+          _restoreLocalEventParticipants(localEvent, previousParticipants);
+        }
+      }
       return ActionResponse.failure(
         code: e.code,
         message: e.message,
         toast: ToastLevel.info,
       );
     } on FirebaseException catch (error) {
+      if (localEvent != null && previousParticipants != null) {
+        _restoreLocalEventParticipants(localEvent, previousParticipants);
+      }
       AppLogger.debug('Event registration failed: $error');
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
@@ -424,6 +449,9 @@ class EventController extends GetxController {
         message: 'Échec de l’inscription.',
       );
     } catch (e) {
+      if (localEvent != null && previousParticipants != null) {
+        _restoreLocalEventParticipants(localEvent, previousParticipants);
+      }
       AppLogger.debug('Event registration failed: $e');
       return ActionResponse.failure(
         code: 'registration_failed',
@@ -444,17 +472,29 @@ class EventController extends GetxController {
       );
     }
 
+    final localEvent = _findLocalEvent(eventId);
+    final previousParticipants = localEvent == null
+        ? null
+        : List<AppUser>.from(localEvent.participants);
+    if (localEvent != null) {
+      _setLocalEventParticipantState(
+        localEvent,
+        participant,
+        registered: false,
+      );
+    }
+
     try {
       await _eventRepository.unregisterParticipant(
         eventId: eventId,
         participant: participant,
       );
-
-      final idx = _events.value.indexWhere((e) => e.id == eventId);
-      if (idx != -1) {
-        final local = _events.value[idx];
-        local.participants.removeWhere((p) => p.uid == participant.uid);
-        _events.refresh();
+      if (localEvent != null) {
+        _setLocalEventParticipantState(
+          localEvent,
+          participant,
+          registered: false,
+        );
       }
 
       return const ActionResponse(
@@ -464,12 +504,26 @@ class EventController extends GetxController {
         toast: ToastLevel.success,
       );
     } on EventRepositoryException catch (e) {
+      if (localEvent != null) {
+        if (e.code == 'not_registered') {
+          _setLocalEventParticipantState(
+            localEvent,
+            participant,
+            registered: false,
+          );
+        } else if (previousParticipants != null) {
+          _restoreLocalEventParticipants(localEvent, previousParticipants);
+        }
+      }
       return ActionResponse.failure(
         code: e.code,
         message: e.message,
         toast: ToastLevel.info,
       );
     } on FirebaseException catch (error) {
+      if (localEvent != null && previousParticipants != null) {
+        _restoreLocalEventParticipants(localEvent, previousParticipants);
+      }
       AppLogger.debug('Event unregistration failed: $error');
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
@@ -480,6 +534,9 @@ class EventController extends GetxController {
         message: 'Échec de la désinscription.',
       );
     } catch (e) {
+      if (localEvent != null && previousParticipants != null) {
+        _restoreLocalEventParticipants(localEvent, previousParticipants);
+      }
       AppLogger.debug('Event unregistration failed: $e');
       return ActionResponse.failure(
         code: 'unregistration_failed',
@@ -515,8 +572,10 @@ class EventController extends GetxController {
           _eventRepository
               .updateEventStatus(eventId: event.id, status: 'ferme')
               .catchError((error, stack) {
-            AppLogger.debug('Auto close event status update failed: $error');
-          }),
+                AppLogger.debug(
+                  'Auto close event status update failed: $error',
+                );
+              }),
         );
 
         event.statut = 'ferme';
@@ -534,10 +593,40 @@ class EventController extends GetxController {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
+  Event? _findLocalEvent(String eventId) {
+    final index = _events.value.indexWhere((event) => event.id == eventId);
+    return index == -1 ? null : _events.value[index];
+  }
+
+  void _setLocalEventParticipantState(
+    Event event,
+    AppUser participant, {
+    required bool registered,
+  }) {
+    event.participants.removeWhere(
+      (candidate) => candidate.uid == participant.uid,
+    );
+    if (registered) {
+      event.participants.add(participant);
+    }
+    _replaceLocalEvent(event);
+  }
+
+  void _restoreLocalEventParticipants(
+    Event event,
+    List<AppUser> previousParticipants,
+  ) {
+    event.participants
+      ..clear()
+      ..addAll(previousParticipants);
+    _replaceLocalEvent(event);
+  }
+
   void _replaceLocalEvent(Event event) {
     final existing = _events.value;
     final index = existing.indexWhere((candidate) => candidate.id == event.id);
     if (index == -1) {
+      update();
       return;
     }
 

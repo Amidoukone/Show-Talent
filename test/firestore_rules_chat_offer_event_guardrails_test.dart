@@ -48,6 +48,27 @@ void main() {
       },
     );
 
+    test('event participant repository updates stay aligned with narrow rules', () {
+      final repository = File(
+        'lib/services/events/event_repository.dart',
+      ).readAsStringSync();
+      final registerBlock = RegExp(
+        r'Future<void> registerParticipant[\s\S]*?Future<void> unregisterParticipant',
+      ).firstMatch(repository)?.group(0);
+      final unregisterBlock = RegExp(
+        r'Future<void> unregisterParticipant[\s\S]*?Query<Map<String, dynamic>> _buildQuery',
+      ).firstMatch(repository)?.group(0);
+
+      expect(registerBlock, isNotNull);
+      expect(unregisterBlock, isNotNull);
+      expect(registerBlock, contains("'participants': participants"));
+      expect(unregisterBlock, contains("'participants': participants"));
+      expect(registerBlock, contains("'lastUpdated'"));
+      expect(unregisterBlock, contains("'lastUpdated'"));
+      expect(registerBlock, isNot(contains("'statut': status")));
+      expect(unregisterBlock, isNot(contains("'statut': status")));
+    });
+
     test(
       'rules keep offer view metrics writable without reopening owner fields',
       () {

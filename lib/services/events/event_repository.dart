@@ -1,12 +1,10 @@
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/app_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EventRepositoryException implements Exception {
-  const EventRepositoryException({
-    required this.code,
-    required this.message,
-  });
+  const EventRepositoryException({required this.code, required this.message});
 
   final String code;
   final String message;
@@ -43,10 +41,7 @@ class EventLiveBatch {
 }
 
 class EventQueryFilter {
-  const EventQueryFilter({
-    this.status,
-    this.endingAfter,
-  });
+  const EventQueryFilter({this.status, this.endingAfter});
 
   final String? status;
   final DateTime? endingAfter;
@@ -54,8 +49,9 @@ class EventQueryFilter {
   bool get hasDateFilter => endingAfter != null;
 
   String get cacheKey {
-    final normalizedStatus =
-        status == null ? 'all' : Event.normalizeStatus(status!).trim();
+    final normalizedStatus = status == null
+        ? 'all'
+        : Event.normalizeStatus(status!).trim();
     final dateKey = endingAfter?.millisecondsSinceEpoch.toString() ?? 'all';
     return '$normalizedStatus:$dateKey';
   }
@@ -65,7 +61,7 @@ class EventRepository {
   static const int defaultPageSize = 40;
 
   EventRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
 
@@ -188,8 +184,9 @@ class EventRepository {
         );
       }
 
-      final alreadyRegistered =
-          event.participants.any((p) => p.uid == participant.uid);
+      final alreadyRegistered = event.participants.any(
+        (p) => p.uid == participant.uid,
+      );
       if (alreadyRegistered) {
         throw const EventRepositoryException(
           code: 'already_registered',
@@ -212,7 +209,6 @@ class EventRepository {
 
       txn.update(docRef, {
         'participants': participants,
-        'statut': status,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
     });
@@ -242,8 +238,9 @@ class EventRepository {
         );
       }
 
-      final isRegistered =
-          event.participants.any((p) => p.uid == participant.uid);
+      final isRegistered = event.participants.any(
+        (p) => p.uid == participant.uid,
+      );
       if (!isRegistered) {
         throw const EventRepositoryException(
           code: 'not_registered',
@@ -258,7 +255,6 @@ class EventRepository {
 
       txn.update(docRef, {
         'participants': participants,
-        'statut': status,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
     });
@@ -291,6 +287,19 @@ class EventRepository {
   static List<Event> _eventsFromDocs(
     Iterable<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
   ) {
-    return docs.map(Event.fromDoc).toList(growable: false);
+    final fetched = <Event>[];
+
+    for (final doc in docs) {
+      try {
+        fetched.add(Event.fromDoc(doc));
+      } catch (error, stackTrace) {
+        AppLogger.debug(
+          'Event ignored because document is invalid: ${doc.id}\n'
+          '$error\n$stackTrace',
+        );
+      }
+    }
+
+    return fetched;
   }
 }

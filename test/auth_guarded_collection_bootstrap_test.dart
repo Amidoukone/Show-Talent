@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+final _resolvedSessionGuardPattern = RegExp(
+  r'if\s*\(\s*hasResolvedSession\s*&&\s*_authSessionService\.currentUser\s*!=\s*null\s*\)',
+);
+
 void main() {
   group('Auth-guarded collection bootstrap', () {
     test('event controller waits for auth before starting listeners', () {
@@ -11,11 +15,7 @@ void main() {
       expect(content, contains('AuthSessionService'));
       expect(content, contains('idTokenChanges().listen'));
       expect(content, contains('_stopEventsStream(clearData: true)'));
-      expect(
-        content,
-        contains(
-            'if (hasResolvedSession && _authSessionService.currentUser != null)'),
-      );
+      expect(content, matches(_resolvedSessionGuardPattern));
     });
 
     test('offre controller waits for auth before starting listeners', () {
@@ -25,11 +25,7 @@ void main() {
       expect(content, contains('AuthSessionService'));
       expect(content, contains('idTokenChanges().listen'));
       expect(content, contains('_stopOffresStream(clearData: true)'));
-      expect(
-        content,
-        contains(
-            'if (hasResolvedSession && _authSessionService.currentUser != null)'),
-      );
+      expect(content, matches(_resolvedSessionGuardPattern));
     });
   });
 }

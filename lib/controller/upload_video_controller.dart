@@ -233,6 +233,11 @@ class UploadVideoController extends GetxController {
       return;
     }
 
+    if (isUploading.value || isOptimizing.value) {
+      showInfoToast(VideoUiStrings.uploadAlreadyInProgress);
+      return;
+    }
+
     if (selectedVideo == null || thumbnail == null) {
       showErrorToast(VideoUiStrings.uploadMissingFile);
       return;
@@ -241,6 +246,7 @@ class UploadVideoController extends GetxController {
     isPreparing(false);
     isUploading(true);
     isOptimizing(false);
+    final operation = _operationSerial;
 
     final desc = (description ?? '').trim();
     final cap = (caption ?? '').trim();
@@ -275,6 +281,7 @@ class UploadVideoController extends GetxController {
         fileSizeBytes: fileSizeBytes,
         contentType: 'video/mp4',
       );
+      if (!_isCurrentOperation(operation)) return;
       _activeSession = session;
 
       uploadStage.value = VideoUiStrings.uploadStageUploading;
@@ -291,6 +298,7 @@ class UploadVideoController extends GetxController {
           uploadProgress.value = 0.2 + (0.5 * p);
         },
       );
+      if (!_isCurrentOperation(operation)) return;
 
       if (!videoUploaded) {
         throw VideoUiStrings.uploadVideoTransferFailed;
@@ -306,6 +314,7 @@ class UploadVideoController extends GetxController {
           throw VideoUiStrings.uploadMissingThumbnail;
         }
       }
+      if (!_isCurrentOperation(operation)) return;
 
       uploadStage.value = VideoUiStrings.uploadStagePrepareSecureThumbnail;
       final thumbContentType = VideoTools.inferImageContentTypeFromPath(
@@ -318,6 +327,7 @@ class UploadVideoController extends GetxController {
         contentType: thumbContentType,
         thumbnailPath: session.thumbnailPath,
       );
+      if (!_isCurrentOperation(operation)) return;
       _lastUploadedThumbPath = thumbTicket.thumbnailPath;
 
       uploadStage.value = VideoUiStrings.uploadStageSendThumbnail;
@@ -329,6 +339,7 @@ class UploadVideoController extends GetxController {
           uploadProgress.value = 0.7 + (0.25 * p);
         },
       );
+      if (!_isCurrentOperation(operation)) return;
 
       if (!thumbUploaded) {
         throw VideoUiStrings.uploadThumbnailTransferFailed;
@@ -371,6 +382,7 @@ class UploadVideoController extends GetxController {
           'height': ?h,
         },
       );
+      if (!_isCurrentOperation(operation)) return;
 
       if (!finalized) {
         throw VideoUiStrings.uploadFinalizeFailed;
@@ -385,15 +397,17 @@ class UploadVideoController extends GetxController {
       isOptimizing(true);
 
       await _waitForVideoStatusReady(session.sessionId);
+      if (!_isCurrentOperation(operation)) return;
       await _cleanupLocalFiles();
     } catch (e, stackTrace) {
+      if (!_isCurrentOperation(operation)) return;
       if (e is DioException && CancelToken.isCancel(e)) {
         unawaited(
           _observability.logUploadInfo(
             event: 'upload_cancelled',
             stage: uploadStage.value.isNotEmpty ? uploadStage.value : 'upload',
             sessionId: _activeSession?.sessionId,
-            metadata: _uploadDiagnostics(operation: _operationSerial),
+            metadata: _uploadDiagnostics(operation: operation),
           ),
         );
         showInfoToast(VideoUiStrings.uploadCancelled);
@@ -405,15 +419,17 @@ class UploadVideoController extends GetxController {
             code: _uploadFailureCode(e),
             error: e,
             stackTrace: stackTrace,
-            metadata: _uploadDiagnostics(operation: _operationSerial),
+            metadata: _uploadDiagnostics(operation: operation),
           ),
         );
         showErrorToast(_toUserMessage(e));
       }
       isUploading(false);
     } finally {
-      _cancelToken = null;
-      if (!isOptimizing.value) {
+      if (_isCurrentOperation(operation)) {
+        _cancelToken = null;
+      }
+      if (_isCurrentOperation(operation) && !isOptimizing.value) {
         resetUploadState();
       }
     }

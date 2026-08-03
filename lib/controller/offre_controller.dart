@@ -19,8 +19,8 @@ class OffreController extends GetxController {
   OffreController({
     OfferRepository? offerRepository,
     AuthSessionService? authSessionService,
-  })  : _offerRepository = offerRepository ?? OfferRepository(),
-        _authSessionService = authSessionService ?? AuthSessionService();
+  }) : _offerRepository = offerRepository ?? OfferRepository(),
+       _authSessionService = authSessionService ?? AuthSessionService();
 
   final OfferRepository _offerRepository;
   final AuthSessionService _authSessionService;
@@ -120,7 +120,8 @@ class OffreController extends GetxController {
   void _fetchOffres() {
     final currentUid = _authSessionService.currentUser?.uid;
     final queryKey = _activeFilter.cacheKey;
-    final hasActiveStream = _offresSubscription != null &&
+    final hasActiveStream =
+        _offresSubscription != null &&
         _activeAuthUid == currentUid &&
         _activeOffersQueryKey == queryKey;
     if (hasActiveStream) {
@@ -140,40 +141,45 @@ class OffreController extends GetxController {
 
     _offresSubscription = _offerRepository
         .watchOffers(limit: _offerPageSize, filter: _activeFilter)
-        .listen((batch) {
-      _lastCursor = batch.cursor;
-      _hasMoreOffres.value =
-          batch.cursor != null && batch.fetchedCount >= _offerPageSize;
-      if (_hasLoadedAdditionalPages) {
-        final mergedById = <String, Offre>{
-          for (final offer in _offres.value) offer.id: offer,
-        };
-        for (final offer in batch.offers) {
-          mergedById[offer.id] = offer;
-        }
-        _offres.value = _sortOffers(mergedById.values);
-      } else {
-        _offres.value = _sortOffers(batch.offers);
-      }
-      update();
-      _isLoading.value = false;
-    }, onError: (error, stackTrace) {
-      developer.log(
-        'Erreur ecoute Firestore pour les offres: $error',
-        name: 'OffreController._fetchOffres',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (_isPermissionDenied(error)) {
-        _offres.value = const <Offre>[];
-        final hasResolvedSession = Get.isRegistered<UserController>() &&
-            Get.find<UserController>().user != null;
-        if (hasResolvedSession && _authSessionService.currentUser != null) {
-          unawaited(_handleProtectedAccessDenied());
-        }
-      }
-      _isLoading.value = false;
-    });
+        .listen(
+          (batch) {
+            _lastCursor = batch.cursor;
+            _hasMoreOffres.value =
+                batch.cursor != null && batch.fetchedCount >= _offerPageSize;
+            if (_hasLoadedAdditionalPages) {
+              final mergedById = <String, Offre>{
+                for (final offer in _offres.value) offer.id: offer,
+              };
+              for (final offer in batch.offers) {
+                mergedById[offer.id] = offer;
+              }
+              _offres.value = _sortOffers(mergedById.values);
+            } else {
+              _offres.value = _sortOffers(batch.offers);
+            }
+            update();
+            _isLoading.value = false;
+          },
+          onError: (error, stackTrace) {
+            developer.log(
+              'Erreur ecoute Firestore pour les offres: $error',
+              name: 'OffreController._fetchOffres',
+              error: error,
+              stackTrace: stackTrace,
+            );
+            if (_isPermissionDenied(error)) {
+              _offres.value = const <Offre>[];
+              final hasResolvedSession =
+                  Get.isRegistered<UserController>() &&
+                  Get.find<UserController>().user != null;
+              if (hasResolvedSession &&
+                  _authSessionService.currentUser != null) {
+                unawaited(_handleProtectedAccessDenied());
+              }
+            }
+            _isLoading.value = false;
+          },
+        );
   }
 
   Future<void> loadMoreOffres() async {
@@ -328,7 +334,9 @@ class OffreController extends GetxController {
   }
 
   Future<ActionResponse> _notifierJoueurs(
-      Offre offre, AppUser recruteur) async {
+    Offre offre,
+    AppUser recruteur,
+  ) async {
     final response = await PushNotificationService.sendOfferFanout(
       offerId: offre.id,
       title: 'Nouvelle offre disponible',
@@ -528,12 +536,12 @@ class OffreController extends GetxController {
       );
     }
 
+    final previousCandidates = List<AppUser>.from(offre.candidats);
+    _setLocalOfferCandidateState(offre, joueur, applied: true);
+
     try {
       await _offerRepository.applyToOffer(player: joueur, offer: offre);
-      if (!offre.candidats.any((candidate) => candidate.uid == joueur.uid)) {
-        offre.candidats.add(joueur);
-        _replaceLocalOffer(offre);
-      }
+      _setLocalOfferCandidateState(offre, joueur, applied: true);
 
       return const ActionResponse(
         success: true,
@@ -542,8 +550,14 @@ class OffreController extends GetxController {
         toast: ToastLevel.success,
       );
     } on OfferRepositoryException catch (e) {
+      if (e.code == 'already_applied') {
+        _setLocalOfferCandidateState(offre, joueur, applied: true);
+      } else {
+        _restoreLocalOfferCandidates(offre, previousCandidates);
+      }
       return _offerRepositoryExceptionResponse(e);
     } on FirebaseException catch (error, st) {
+      _restoreLocalOfferCandidates(offre, previousCandidates);
       developer.log(
         'Erreur lors de la postulation offre: $error',
         name: 'OffreController.postulerOffre',
@@ -561,6 +575,7 @@ class OffreController extends GetxController {
         message: 'Impossible de postuler pour le moment.',
       );
     } catch (e, st) {
+      _restoreLocalOfferCandidates(offre, previousCandidates);
       developer.log(
         'Erreur lors de la postulation offre: $e',
         name: 'OffreController.postulerOffre',
@@ -584,10 +599,12 @@ class OffreController extends GetxController {
       );
     }
 
+    final previousCandidates = List<AppUser>.from(offre.candidats);
+    _setLocalOfferCandidateState(offre, joueur, applied: false);
+
     try {
       await _offerRepository.withdrawFromOffer(player: joueur, offer: offre);
-      offre.candidats.removeWhere((candidate) => candidate.uid == joueur.uid);
-      _replaceLocalOffer(offre);
+      _setLocalOfferCandidateState(offre, joueur, applied: false);
 
       return const ActionResponse(
         success: true,
@@ -596,8 +613,14 @@ class OffreController extends GetxController {
         toast: ToastLevel.success,
       );
     } on OfferRepositoryException catch (e) {
+      if (e.code == 'not_applied') {
+        _setLocalOfferCandidateState(offre, joueur, applied: false);
+      } else {
+        _restoreLocalOfferCandidates(offre, previousCandidates);
+      }
       return _offerRepositoryExceptionResponse(e);
     } on FirebaseException catch (error, st) {
+      _restoreLocalOfferCandidates(offre, previousCandidates);
       developer.log(
         'Erreur lors de la désinscription offre: $error',
         name: 'OffreController.seDesinscrireOffre',
@@ -615,6 +638,7 @@ class OffreController extends GetxController {
         message: 'Impossible de se désinscrire pour le moment.',
       );
     } catch (e, st) {
+      _restoreLocalOfferCandidates(offre, previousCandidates);
       developer.log(
         'Erreur lors de la désinscription offre: $e',
         name: 'OffreController.seDesinscrireOffre',
@@ -634,10 +658,31 @@ class OffreController extends GetxController {
       ..sort((a, b) => b.dateCreation.compareTo(a.dateCreation));
   }
 
+  void _setLocalOfferCandidateState(
+    Offre offer,
+    AppUser player, {
+    required bool applied,
+  }) {
+    offer.candidats.removeWhere((candidate) => candidate.uid == player.uid);
+    if (applied) {
+      offer.candidats.add(player);
+    }
+    _replaceLocalOffer(offer);
+  }
+
+  void _restoreLocalOfferCandidates(
+    Offre offer,
+    List<AppUser> previousCandidates,
+  ) {
+    offer.candidats = List<AppUser>.from(previousCandidates);
+    _replaceLocalOffer(offer);
+  }
+
   void _replaceLocalOffer(Offre offer) {
     final existing = _offres.value;
     final index = existing.indexWhere((candidate) => candidate.id == offer.id);
     if (index == -1) {
+      update();
       return;
     }
 

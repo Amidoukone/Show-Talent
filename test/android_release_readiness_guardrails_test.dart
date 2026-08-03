@@ -13,7 +13,7 @@ void main() {
     expect(settingsGradle, contains('com.android.application" version "8.11.'));
     expect(wrapper, contains('gradle-8.14.3-bin.zip'));
     expect(gradle, contains('compileSdk = 36'));
-    expect(gradle, contains('targetSdk = 35'));
+    expect(gradle, contains('targetSdk = 36'));
     expect(gradle, contains('buildToolsVersion = "35.0.0"'));
     expect(gradle, contains('ndkVersion = "29.0.13599879"'));
     expect(gradle, contains('minifyEnabled true'));

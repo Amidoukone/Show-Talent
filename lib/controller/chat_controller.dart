@@ -628,11 +628,24 @@ class ChatController extends GetxController {
       if (currentUid != null) {
         await _syncUnreadFromConversation(conversationId, currentUid);
       }
-    } catch (error) {
-      AppLogger.debug("Erreur suppression message : $error");
+    } on FirebaseException catch (error) {
+      AppLogger.debug(
+        "Erreur suppression message firebase : ${error.code} ${error.message}",
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
+        throw const ChatFlowException(
+          'Votre session a été fermée. Veuillez vous reconnecter.',
+        );
       }
+      throw const ChatFlowException(
+        'Suppression impossible pour le moment. Vérifiez votre connexion.',
+      );
+    } catch (error) {
+      AppLogger.debug("Erreur suppression message : $error");
+      throw const ChatFlowException(
+        'Suppression impossible pour le moment. Merci de réessayer.',
+      );
     }
   }
 
@@ -643,11 +656,25 @@ class ChatController extends GetxController {
       _recalculateTotalUnread();
       _conversations.refresh();
       update();
-    } catch (error) {
-      AppLogger.debug("Erreur suppression conversation : $error");
+    } on FirebaseException catch (error) {
+      AppLogger.debug(
+        "Erreur suppression conversation firebase : "
+        "${error.code} ${error.message}",
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
+        throw const ChatFlowException(
+          'Votre session a été fermée. Veuillez vous reconnecter.',
+        );
       }
+      throw const ChatFlowException(
+        'Suppression impossible pour le moment. Vérifiez votre connexion.',
+      );
+    } catch (error) {
+      AppLogger.debug("Erreur suppression conversation : $error");
+      throw const ChatFlowException(
+        'Suppression impossible pour le moment. Merci de réessayer.',
+      );
     }
   }
 }

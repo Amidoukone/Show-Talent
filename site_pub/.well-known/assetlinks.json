@@ -7,7 +7,8 @@
                        "namespace":  "android_app",
                        "package_name":  "org.adfoot.app",
                        "sha256_cert_fingerprints":  [
-                                                        "B9:94:BC:5C:C2:26:12:9F:ED:1F:2D:A1:7C:E3:BF:B3:A2:86:63:A4:77:32:DF:BB:70:C6:DA:C8:CD:8B:88:E3"
+                                                        "B9:94:BC:5C:C2:26:12:9F:ED:1F:2D:A1:7C:E3:BF:B3:A2:86:63:A4:77:32:DF:BB:70:C6:DA:C8:CD:8B:88:E3",
+                                                        "EA:FC:F5:99:50:E3:24:0F:C5:39:4A:EB:25:69:C2:32:2F:D3:E2:2A:DE:67:82:B3:1D:B4:F1:24:39:12:C2:EA"
                                                     ]
                    }
     },
