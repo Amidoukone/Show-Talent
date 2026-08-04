@@ -419,6 +419,27 @@ async function validateThumbnail(
   }
 }
 
+// The Storage object's contentType is whatever the client declared during
+// the resumable upload — trivial to spoof, so it only rules out obviously
+// wrong uploads. This checks the actual bytes: virtually every MP4 (camera
+// output, ffmpeg, editing tools) starts with a 4-byte box size followed by
+// the ASCII box type "ftyp" at offset 4-8 (ISO base media file format).
+// Anything else isn't a real MP4, regardless of what contentType claims.
+async function assertVideoBytesLookLikeMp4(
+  file: ReturnType<ReturnType<typeof storage.bucket>["file"]>,
+): Promise<void> {
+  const [header] = await file.download({start: 0, end: 11});
+  const isMp4 = header.length >= 8 &&
+    header.subarray(4, 8).toString("ascii") === "ftyp";
+
+  if (!isMp4) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Le fichier ne correspond pas a une video MP4 valide.",
+    );
+  }
+}
+
 async function validateVideoUpload(path: string): Promise<void> {
   const file = storage.bucket().file(path);
   const [exists] = await file.exists();
@@ -445,6 +466,8 @@ async function validateVideoUpload(path: string): Promise<void> {
   if (!actualContentType.startsWith("video/mp4")) {
     throw new HttpsError("failed-precondition", "Seuls les fichiers MP4 sont acceptes.");
   }
+
+  await assertVideoBytesLookLikeMp4(file);
 }
 
 function assertVideoMetadataPolicy(metadata: ParsedMetadata): void {

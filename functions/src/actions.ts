@@ -6,7 +6,7 @@
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import {db, fieldValue, messaging, storage} from "./firebase";
-import {LOW_CPU_CALLABLE_OPTIONS} from "./function_runtime";
+import {MOBILE_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 import {normalizeNotificationText} from "./notification_text";
 
@@ -169,6 +169,55 @@ function timestampToMillis(value: unknown): number {
   return 0;
 }
 
+/**
+ * Fixed-window per-key call throttle backed by a small Firestore doc,
+ * evaluated inside a transaction so concurrent calls can't race past the
+ * limit. Used to stop a single account from hammering logging endpoints —
+ * there's no per-entry validation that can catch call *frequency*, only a
+ * server-side counter can.
+ * @param {string} collection Collection to store the rate-limit doc in.
+ * @param {string} key Doc id — usually the caller's uid.
+ * @param {number} maxCalls Max calls allowed within the window.
+ * @param {number} windowMs Window length in milliseconds.
+ */
+async function enforceCallRateLimit(
+  collection: string,
+  key: string,
+  maxCalls: number,
+  windowMs: number,
+): Promise<void> {
+  const ref = db.collection(collection).doc(key);
+  const now = Date.now();
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const data = snap.data() || {};
+    const windowStartMs = timestampToMillis(data.windowStart);
+    const count = typeof data.count === "number" ? data.count : 0;
+
+    if (!windowStartMs || now - windowStartMs > windowMs) {
+      tx.set(ref, {
+        windowStart: fieldValue.serverTimestamp(),
+        count: 1,
+        updatedAt: fieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    if (count >= maxCalls) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Trop de requêtes. Réessaie dans quelques instants.",
+      );
+    }
+
+    tx.update(ref, {
+      count: fieldValue.increment(1),
+      updatedAt: fieldValue.serverTimestamp(),
+    });
+  });
+}
+
 function safeJson(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null) return {};
   try {
@@ -211,7 +260,7 @@ function shouldPersistClientLog(entry: {level: string; source: string}): boolean
  * Toggle like sur une vidéo
  */
 export const likeVideo = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{liked: boolean; likes: number}>> => {
     const uid = await requireAuth(request);
 
@@ -263,7 +312,7 @@ export const likeVideo = onCall(
  * Signaler une vidéo
  */
 export const reportVideo = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{reportCount: number}>> => {
     const uid = await requireAuth(request);
 
@@ -314,7 +363,7 @@ export const reportVideo = onCall(
  * Suppression d’une vidéo
  */
 export const deleteVideo = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<null>> => {
     const uid = await requireAuth(request);
 
@@ -353,7 +402,7 @@ export const deleteVideo = onCall(
  * Enregistrement du partage (auth + anti-spam)
  */
 export const shareVideo = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{shareCount: number}>> => {
     const uid = await requireAuth(request);
 
@@ -571,7 +620,7 @@ async function sendFanoutToPlayers(params: {
  * Envoi push securise via backend (plus de cle privee cote client)
  */
 export const sendUserPush = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{sent: boolean}>> => {
     const uid = await requireAuth(request);
 
@@ -631,7 +680,7 @@ export const sendUserPush = onCall(
 );
 
 export const saveUserFcmToken = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{saved: boolean}>> => {
     const uid = await requireAuth(request);
     const token = getString(request.data, "token");
@@ -663,7 +712,7 @@ export const saveUserFcmToken = onCall(
 );
 
 export const sendOfferFanout = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<FanoutStats>> => {
     const uid = await requireAuth(request);
 
@@ -698,7 +747,7 @@ export const sendOfferFanout = onCall(
 );
 
 export const sendEventFanout = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<FanoutStats>> => {
     const uid = await requireAuth(request);
 
@@ -733,9 +782,10 @@ export const sendEventFanout = onCall(
 );
 
 export const logClientEvents = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{count: number}>> => {
     const uid = await requireAuth(request);
+    await enforceCallRateLimit("log_call_limits", `logClientEvents_${uid}`, 20, 60_000);
 
     const entries = Array.isArray(request.data?.entries) ?
       request.data.entries :
@@ -801,9 +851,10 @@ export const logClientEvents = onCall(
  * Centralisation des erreurs/actions vidéo
  */
 export const videoActionLog = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<{logged: boolean}>> => {
     const uid = await requireAuth(request);
+    await enforceCallRateLimit("log_call_limits", `videoActionLog_${uid}`, 30, 60_000);
 
     const action = getString(request.data, "action");
     if (!action) {

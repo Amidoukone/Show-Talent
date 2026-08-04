@@ -311,12 +311,26 @@ class ChatRepository {
       updatedAt: now,
     );
 
-    await intakeRef.set(intake.toMap());
-    await conversationRef.set(<String, dynamic>{
+    // contact_intakes has no Cloud Function in front of it, so the
+    // 60s-per-requester cooldown lives in firestore.rules
+    // (contactIntakeCooldownOk) instead — it reads this same-uid doc, which
+    // must be bumped in the same batch as the intake create for the rule to
+    // see a consistent before/after state.
+    final rateLimitRef = _firestore
+        .collection('contact_intake_limits')
+        .doc(currentUser.uid);
+
+    final batch = _firestore.batch();
+    batch.set(intakeRef, intake.toMap());
+    batch.set(conversationRef, <String, dynamic>{
       'contactIntakeId': intake.id,
       'agencyFollowUpStatus': AgencyFollowUpStatus.newLead,
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+    batch.set(rateLimitRef, <String, dynamic>{
+      'lastIntakeAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
 
     return intake;
   }

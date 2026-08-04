@@ -20,6 +20,7 @@ module.exports = {
   ignorePatterns: [
     "/lib/**/*", // Ignore built files.
     "/generated/**/*", // Ignore generated files.
+    "/scripts/**/*", // Plain Node ops scripts, not part of the TS project.
   ],
   plugins: [
     "@typescript-eslint",

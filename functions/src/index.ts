@@ -74,7 +74,9 @@ type StorageClient = {
     file: (path: string) => {
       getMetadata: () => Promise<[unknown]>;
       setMetadata: (metadata: Record<string, unknown>) => Promise<unknown>;
-      download: (options: {destination: string}) => Promise<unknown>;
+      download: (
+        options: {destination: string} | {start: number; end: number},
+      ) => Promise<[Buffer]>;
       exists: () => Promise<[boolean]>;
       delete: () => Promise<unknown>;
     };
@@ -553,6 +555,35 @@ export const optimizeMp4Video = onObjectFinalized(
       const storage = await getStorage();
       await storage.bucket(bucketName).file(filePath).delete().catch((error) => {
         console.warn("⚠️ Oversized file deletion skipped:", (error as Error).message);
+      });
+      return null;
+    }
+
+    // contentType above is whatever the client declared during upload —
+    // trivial to spoof. Check the actual bytes before this file ever
+    // reaches ffprobe/ffmpeg: a real MP4 starts with a 4-byte box size
+    // followed by the ASCII box type "ftyp" at offset 4-8 (ISO base media
+    // file format). A cheap ranged read here avoids running ffmpeg on
+    // attacker-controlled bytes and avoids the full download below.
+    const earlyStorage = await getStorage();
+    const earlyFile = earlyStorage.bucket(bucketName).file(filePath);
+    const [magicBytesHeader] = await earlyFile.download({start: 0, end: 11});
+    const looksLikeMp4 = magicBytesHeader.length >= 8 &&
+      magicBytesHeader.subarray(4, 8).toString("ascii") === "ftyp";
+
+    if (!looksLikeMp4) {
+      console.warn(`⛔ Rejected upload that isn't a real MP4: ${filePath}`);
+      await videoRef.set(
+        {
+          status: "error",
+          optimized: false,
+          optimizationError: "invalid_file_format",
+          updatedAt: fieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+      await earlyFile.delete().catch((error) => {
+        console.warn("⚠️ Invalid file deletion skipped:", (error as Error).message);
       });
       return null;
     }

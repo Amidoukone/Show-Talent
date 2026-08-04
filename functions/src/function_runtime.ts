@@ -19,4 +19,27 @@ const LOW_CPU_CALLABLE_OPTIONS = {
   ingressSettings: "ALLOW_ALL",
 } satisfies CallableOptions;
 
-export {LOW_CPU_CALLABLE_OPTIONS, REGION, LOW_CPU_REGION_OPTIONS};
+// ENFORCE_APPCHECK is true in production/production-next and false
+// elsewhere (see functions/.env.*). The Flutter client activates App Check
+// app-wide at startup once it's enabled for the running environment (see
+// lib/services/app_check_service.dart), so every request from the mobile
+// app already carries a token by the time it reaches a callable here.
+const ENFORCE_APP_CHECK = process.env.ENFORCE_APPCHECK === "true";
+
+// For callables reachable ONLY from the mobile app. The admin web app
+// (show_talent - web) doesn't activate App Check yet, so callables it also
+// calls (admin_*.ts, managed_accounts.ts) must keep using
+// LOW_CPU_CALLABLE_OPTIONS as-is — enforcing here would reject every admin
+// panel request outright.
+const MOBILE_CALLABLE_OPTIONS = {
+  ...LOW_CPU_CALLABLE_OPTIONS,
+  enforceAppCheck: ENFORCE_APP_CHECK,
+} satisfies CallableOptions;
+
+export {
+  ENFORCE_APP_CHECK,
+  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
+  REGION,
+  LOW_CPU_REGION_OPTIONS,
+};

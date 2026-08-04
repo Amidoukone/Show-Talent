@@ -207,6 +207,7 @@ class ChatTestHarness {
     final projectRules = File('firestore.rules').readAsStringSync();
     if (!projectRules.contains('activeConversationId') ||
         !projectRules.contains('contact_intakes') ||
+        !projectRules.contains('contact_intake_limits') ||
         !projectRules.contains('match /conversations/{conversationId}')) {
       throw StateError(
         'Les règles Firestore du projet ont changé; mettez à jour le harness chat.',
@@ -231,6 +232,10 @@ service cloud.firestore {
 
     match /contact_intakes/{intakeId} {
       allow read, write: if request.auth != null;
+    }
+
+    match /contact_intake_limits/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
     match /{document=**} {

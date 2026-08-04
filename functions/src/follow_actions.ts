@@ -6,7 +6,7 @@ import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 
 import {db} from "./firebase";
-import {LOW_CPU_CALLABLE_OPTIONS} from "./function_runtime";
+import {MOBILE_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 
 type SuccessResponse<T> = {
@@ -131,7 +131,7 @@ async function mutateFollowState(
 }
 
 export const followUser = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<FollowActionData>> => {
     const currentUserId = await requireAuth(request);
     const targetUserId = getString(request.data, "targetUserId");
@@ -168,7 +168,7 @@ export const followUser = onCall(
 );
 
 export const unfollowUser = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  MOBILE_CALLABLE_OPTIONS,
   async (request): Promise<ActionResponse<FollowActionData>> => {
     const currentUserId = await requireAuth(request);
     const targetUserId = getString(request.data, "targetUserId");
