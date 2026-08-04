@@ -56,7 +56,10 @@ class AdfootApp extends StatelessWidget {
         );
 
         final mq = MediaQuery.of(context);
-        final scaleValue = mq.textScaler.scale(1.0).clamp(0.85, 1.15);
+        // Respect the system text-size setting for low-vision users instead
+        // of flattening it to near-1.0 — only guard the extremes so a very
+        // large system setting can't overflow layouts we haven't audited.
+        final scaleValue = mq.textScaler.scale(1.0).clamp(0.85, 1.6);
 
         final mediaWrapped = MediaQuery(
           data: mq.copyWith(

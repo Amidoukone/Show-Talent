@@ -83,7 +83,7 @@ class VideoActionRail extends StatelessWidget {
               icon: isLiked
                   ? Icons.favorite_rounded
                   : Icons.favorite_border_rounded,
-              color: isLiked ? Colors.redAccent : Colors.white,
+              color: isLiked ? AdColors.error : AdColors.white,
               label: formatActionCount(video.likes.length),
               onTap: isLikeLoading ? null : () => _run(onLike),
               emphasized: isLiked,
@@ -181,10 +181,9 @@ class VideoActionRail extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color:
-                              isFollowing ? AdColors.brand : Colors.redAccent,
+                          color: isFollowing ? AdColors.brand : AdColors.error,
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(color: AdColors.white, width: 2),
                         ),
                         child: isFollowLoading
                             ? const SizedBox(
@@ -318,7 +317,7 @@ class VideoActionRail extends StatelessWidget {
                               ? VideoUiStrings.reportedVideoSemantic
                               : VideoUiStrings.reportVideoSemantic,
                           color:
-                              hasReported ? Colors.amberAccent : Colors.white,
+                              hasReported ? AdColors.warning : AdColors.white,
                           isLoading: isReportLoading,
                           onTap: hasReported || isReportLoading
                               ? null
@@ -331,7 +330,7 @@ class VideoActionRail extends StatelessWidget {
                           _VideoMoreActionTile(
                             icon: Icons.delete_forever_rounded,
                             label: VideoUiStrings.deleteVideoSemantic,
-                            color: Colors.redAccent,
+                            color: AdColors.error,
                             isLoading: isDeleteLoading,
                             onTap: isDeleteLoading
                                 ? null

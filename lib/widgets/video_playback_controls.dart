@@ -272,7 +272,7 @@ class VideoPlaybackSpeedSheet extends StatelessWidget {
       top: false,
       child: DecoratedBox(
         decoration: const BoxDecoration(
-          color: Color(0xFF101214),
+          color: AdColors.videoOverlayBackground,
           borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
         ),
         child: Padding(

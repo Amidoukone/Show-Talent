@@ -892,7 +892,7 @@ class _EventListScreenState extends State<EventListScreen> {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.delete_outline, color: Colors.red),
+                : const Icon(Icons.delete_outline, color: AdColors.error),
             label: Text(deletePending ? 'Suppression...' : 'Supprimer'),
           ),
         ],

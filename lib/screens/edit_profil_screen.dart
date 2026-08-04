@@ -171,7 +171,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final base = Theme.of(context).inputDecorationTheme;
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
-      borderSide: const BorderSide(color: Color(0xFFB5C7C7)),
+      borderSide: const BorderSide(color: AdColors.borderMuted),
     );
     final focused = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
@@ -977,13 +977,13 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
           ? const Chip(
               label: Text('Disponible'),
               avatar: Icon(Icons.check_circle, color: Colors.white, size: 18),
-              backgroundColor: Colors.green,
+              backgroundColor: AdColors.success,
               labelStyle: TextStyle(color: Colors.white),
             )
           : const Chip(
               label: Text('Aucun CV'),
               avatar: Icon(Icons.info_outline, color: Colors.white, size: 18),
-              backgroundColor: Colors.orange,
+              backgroundColor: AdColors.warning,
               labelStyle: TextStyle(color: Colors.white),
             ),
       child: Column(

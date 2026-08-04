@@ -12,6 +12,7 @@ import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/contact_intake_feedback_service.dart';
 import '../controller/chat_controller.dart';
 import '../models/user.dart';
+import '../theme/ad_colors.dart';
 import '../widgets/ad_app_bar.dart';
 import '../widgets/ad_button.dart';
 import '../widgets/ad_dialogs.dart';
@@ -52,7 +53,7 @@ class ChatUi {
 
   static Color meta(ColorScheme cs) => cs.onSurface.withValues(alpha: 0.62);
 
-  static const Color onlineDot = Color(0xFF2DBA8C);
+  static const Color onlineDot = AdColors.success;
 }
 
 class ChatScreen extends StatefulWidget {

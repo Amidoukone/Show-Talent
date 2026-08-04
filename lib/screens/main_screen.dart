@@ -104,7 +104,7 @@ class _MainScreenState extends State<MainScreen> {
             top: -2,
             child: CircleAvatar(
               radius: 4,
-              backgroundColor: Colors.redAccent,
+              backgroundColor: AdColors.error,
             ),
           ),
       ],
@@ -245,7 +245,7 @@ class _ChatIconWithBadge extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               decoration: BoxDecoration(
-                color: Colors.red,
+                color: AdColors.error,
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: const <BoxShadow>[
                   BoxShadow(

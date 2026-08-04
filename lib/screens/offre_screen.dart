@@ -1088,7 +1088,7 @@ class _OffreScreenState extends State<OffreScreen> {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.delete, color: Colors.red),
+                : const Icon(Icons.delete, color: AdColors.error),
             label: Text(deletePending ? 'Suppression...' : 'Supprimer'),
           ),
           AdButton(

@@ -81,9 +81,9 @@ _ProfileLevelStyle _profileLevelStyle(String label) {
     case 'Profil Elite':
     case 'Profil Élite':
       return const _ProfileLevelStyle(
-        backgroundColor: Color(0xFF1E3A8A),
+        backgroundColor: AdColors.tierElite,
         foregroundColor: Colors.white,
-        borderColor: Color(0xFF1E3A8A),
+        borderColor: AdColors.tierElite,
         icon: Icons.verified_rounded,
       );
     case 'Profil avancé':
@@ -95,23 +95,23 @@ _ProfileLevelStyle _profileLevelStyle(String label) {
       );
     case 'Vérifié par Adfoot':
       return const _ProfileLevelStyle(
-        backgroundColor: Color(0xFF0F766E),
+        backgroundColor: AdColors.tierVerified,
         foregroundColor: Colors.white,
-        borderColor: Color(0xFF0F766E),
+        borderColor: AdColors.tierVerified,
         icon: Icons.verified_rounded,
       );
     case 'Profil complet':
       return const _ProfileLevelStyle(
-        backgroundColor: Color(0xFF2E7D32),
+        backgroundColor: AdColors.success,
         foregroundColor: Colors.white,
-        borderColor: Color(0xFF2E7D32),
+        borderColor: AdColors.success,
         icon: Icons.check_circle_rounded,
       );
     default:
       return const _ProfileLevelStyle(
-        backgroundColor: Color(0xFFE2E8F0),
-        foregroundColor: Color(0xFF334155),
-        borderColor: Color(0xFFCBD5E1),
+        backgroundColor: AdColors.tierDefaultBg,
+        foregroundColor: AdColors.tierDefaultFg,
+        borderColor: AdColors.tierDefaultBorder,
         icon: Icons.info_rounded,
       );
   }
@@ -1146,8 +1146,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 color: user.hasScoutReadyProfile
-                    ? const Color(0xFF2E7D32)
-                    : Colors.orange,
+                    ? AdColors.success
+                    : AdColors.warning,
               ),
             ),
           ),

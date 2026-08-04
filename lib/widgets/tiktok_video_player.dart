@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/video_playback_controls.dart';
 import 'package:adfoot/widgets/video_state_overlay.dart';
@@ -510,7 +511,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF11161C), Color(0xFF050608)],
+          colors: [AdColors.videoScrimTop, AdColors.videoScrimBottom],
         ),
       ),
       child: const Center(
