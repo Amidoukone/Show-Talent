@@ -121,7 +121,7 @@ void main() {
     expect(mobileConfigReadme, contains('Final Play Store guard'));
     expect(mobileConfigReadme, contains('release:android:bundle:playstore'));
     expect(gitignore, contains('/config/mobile/*.json'));
-    expect(gitignore, contains('/artifacts/stale-build-cleanup/'));
+    expect(gitignore, contains('/artifacts/'));
     expect(gitignore, contains('/android/.kotlin/'));
   });
 

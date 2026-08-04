@@ -82,7 +82,7 @@ void main() {
     expect(VideoUiStrings.uploadSubmittedForReview, contains('revue admin'));
     expect(VideoUiStrings.uploadSubmittedForReview, contains('validation'));
     expect(VideoUiStrings.uploadOptimizationPending, contains('revue admin'));
-    expect(VideoUiStrings.uploadReminder, contains('50 Mo'));
+    expect(VideoUiStrings.uploadReminder, contains('150 Mo'));
     expect(VideoUiStrings.uploadCurrentStepLabel, contains('tape'));
     expect(VideoUiStrings.uploadStepPrepare, isNotEmpty);
     expect(VideoUiStrings.uploadStepFinalize, isNotEmpty);

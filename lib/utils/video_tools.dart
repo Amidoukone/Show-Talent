@@ -35,7 +35,7 @@ class VideoPreparationException implements Exception {
 /// VideoTools
 /// ----------------------------------------------------------------------------
 /// Utilitaires vidéo côté client:
-/// - ✅ Validation robuste de la durée (<= 60s) : double sonde (VideoPlayer + VideoCompress),
+/// - ✅ Validation robuste de la durée (<= 180s) : double sonde (VideoPlayer + VideoCompress),
 ///   sélection du MIN obtenu, re-sondage avec délais, tolérance ms.
 /// - ✅ Génération de miniature fiable, avec retry et fallback (asset local).
 /// - 🚫 Compression côté client retirée (la Cloud Function optimise).
@@ -46,9 +46,9 @@ class VideoTools {
 
   // Tolérance (en ms) pour absorber les imprécisions de métadonnées
   static const int _durationLeewayMs = 10000;
-  static const int defaultMaxUploadDurationSeconds = 60;
-  static const int maxUploadFileSizeBytes = 50 * 1024 * 1024;
-  static const int maxUploadFileSizeMb = 50;
+  static const int defaultMaxUploadDurationSeconds = 180;
+  static const int maxUploadFileSizeBytes = 150 * 1024 * 1024;
+  static const int maxUploadFileSizeMb = 150;
 
   // Petit délai après sélection (certains OS écrivent encore le fichier).
   static const Duration _settleDelay = Duration(milliseconds: 120);
@@ -156,7 +156,7 @@ class VideoTools {
   /// Vérifie que la durée <= [maxDuration] secondes.
   static Future<bool> isDurationValid(
     String videoPath, {
-    int maxDuration = 60,
+    int maxDuration = defaultMaxUploadDurationSeconds,
   }) async {
     try {
       final ms = await _getDurationMsRobust(videoPath);
@@ -352,8 +352,8 @@ class VideoTools {
         rethrow;
       }
       await _logError('_trimVideoToDuration', error.toString());
-      throw const VideoPreparationException(
-        'Impossible de préparer un extrait de 60 secondes.',
+      throw VideoPreparationException(
+        'Impossible de préparer un extrait de $maxDurationSeconds secondes.',
       );
     }
   }

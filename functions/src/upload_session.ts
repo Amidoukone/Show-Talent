@@ -31,11 +31,11 @@ const MAX_PUBLIC_PLAYER_VIDEOS = parsePositiveIntEnv(
 );
 const MAX_VIDEO_UPLOAD_FILE_SIZE_BYTES = parsePositiveIntEnv(
   process.env.MAX_VIDEO_UPLOAD_FILE_SIZE_BYTES,
-  50 * 1024 * 1024,
+  150 * 1024 * 1024,
 );
 const MAX_VIDEO_UPLOAD_DURATION_SECONDS = parsePositiveIntEnv(
   process.env.MAX_VIDEO_UPLOAD_DURATION_SECONDS,
-  60,
+  180,
 );
 const VIDEO_UPLOAD_ROLE = "joueur";
 
@@ -438,7 +438,7 @@ async function validateVideoUpload(path: string): Promise<void> {
   if (actualSize > MAX_VIDEO_UPLOAD_FILE_SIZE_BYTES) {
     throw new HttpsError(
       "failed-precondition",
-      "Le fichier video depasse la limite de 50 Mo.",
+      "Le fichier video depasse la limite de 150 Mo.",
     );
   }
 
@@ -458,7 +458,7 @@ function assertVideoMetadataPolicy(metadata: ParsedMetadata): void {
   if (metadata.duration > MAX_VIDEO_UPLOAD_DURATION_SECONDS) {
     throw new HttpsError(
       "failed-precondition",
-      "La video ne doit pas depasser 60 secondes.",
+      "La video ne doit pas depasser 3 minutes.",
     );
   }
 }
@@ -529,7 +529,7 @@ export const createUploadSession = onCall(
     if (fileSizeBytes > MAX_VIDEO_UPLOAD_FILE_SIZE_BYTES) {
       throw new HttpsError(
         "failed-precondition",
-        "Le fichier video depasse la limite de 50 Mo.",
+        "Le fichier video depasse la limite de 150 Mo.",
       );
     }
 

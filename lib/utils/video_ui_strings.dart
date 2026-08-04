@@ -165,7 +165,7 @@ class VideoUiStrings {
       'Vid\u00e9o introuvable. Merci de r\u00e9essayer.';
   static const String uploadEmptyFile = 'Le fichier vid\u00e9o est vide.';
   static const String uploadFileTooLarge =
-      'Le fichier vid\u00e9o d\u00e9passe la limite de 50 Mo.';
+      'Le fichier vid\u00e9o d\u00e9passe la limite de 150 Mo.';
   static const String uploadQualityTooLow =
       'Qualit\u00e9 vid\u00e9o insuffisante (minimum 480x360).';
   static const String uploadThumbnailFailed =
@@ -257,11 +257,11 @@ class VideoUiStrings {
   static const String addVideoPickTitle =
       'S\u00e9lectionnez une vid\u00e9o \u00e0 soumettre';
   static const String uploadConstraintsHint =
-      'Dur\u00e9e max 60s \u2022 Fichier max 50 Mo \u2022 Qualit\u00e9 minimale 480\u00d7360';
+      'Dur\u00e9e max 3 min \u2022 Fichier max 150 Mo \u2022 Qualit\u00e9 minimale 480\u00d7360';
   static const String chooseFromGallery = 'Choisir depuis la galerie';
-  static const String maxDurationChip = '\u2264 60 secondes';
+  static const String maxDurationChip = '\u2264 3 minutes';
   static const String minQualityChip = '\u2265 480\u00d7360';
-  static const String maxFileSizeChip = '\u2264 50 Mo';
+  static const String maxFileSizeChip = '\u2264 150 Mo';
   static const String autoOptimizationChip = 'Validation admin';
   static const String overlayLoading = 'Chargement...';
   static const String overlayUploading = 'T\u00e9l\u00e9versement en cours';
@@ -275,7 +275,7 @@ class VideoUiStrings {
   static const String captionRequired = 'La l\u00e9gende est requise.';
   static const String uploadVideoButton = 'Soumettre la vid\u00e9o';
   static const String uploadReminder =
-      'Rappel : dur\u00e9e max 60s \u2022 fichier max 50 Mo \u2022 '
+      'Rappel : dur\u00e9e max 3 min \u2022 fichier max 150 Mo \u2022 '
       'validation admin avant publication';
 
   static String buildShareText({

@@ -41,7 +41,7 @@ const OPTIMIZE_TRIGGER_OPTIONS = {
 };
 const MAX_OPTIMIZE_FILE_SIZE_BYTES = parsePositiveIntEnv(
   process.env.MAX_OPTIMIZE_FILE_SIZE_BYTES,
-  50 * 1024 * 1024,
+  150 * 1024 * 1024,
 );
 const MP4_RENDITION_PRESETS: readonly Mp4RenditionPreset[] = [
   {
