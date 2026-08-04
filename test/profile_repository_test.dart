@@ -75,12 +75,17 @@ void main() {
 
         await firestore.collection('users').doc(user.uid).set({
           ...user.toMap(),
-          'phone': '+225000000',
           'playerProfile': {
             'physical': {'heightCm': 181, 'weightKg': 74},
             'skills': ['pace'],
           },
         });
+        final contactRef = firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('private')
+            .doc('contact');
+        await contactRef.set({'phone': '+225000000'});
 
         final result = await repository.updateProfilePatch(user.uid, {
           'nom': '  Nouveau nom  ',
@@ -103,9 +108,11 @@ void main() {
         final physical = Map<String, dynamic>.from(
           playerProfile['physical'] as Map,
         );
+        final contactData = (await contactRef.get()).data() ?? {};
 
         expect(data['nom'], 'Nouveau nom');
         expect(data.containsKey('phone'), isFalse);
+        expect(contactData.containsKey('phone'), isFalse);
         expect(data['bio'], isNull);
         expect(data['city'], 'Abidjan');
         expect(data['region'], 'Lagunes');

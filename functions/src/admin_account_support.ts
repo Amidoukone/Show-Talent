@@ -288,6 +288,26 @@ function cloneCallableRecord(
   return {};
 }
 
+// phone/email/authDisabledReason live here instead of on users/{uid} so a
+// third party can no longer read them just by having an active account
+// (see firestore.rules). Admin SDK writes bypass rules entirely, so this
+// is purely a path helper, not a permissions boundary.
+function privateContactRef(
+  uid: string,
+): FirebaseFirestore.DocumentReference {
+  return db.collection("users").doc(uid).collection("private").doc("contact");
+}
+
+// Internal admin commentary on a profile review — never shown to the user
+// it's about (see firestore.rules: adminNotes is admin-read-only).
+function privateAdminNotesRef(
+  uid: string,
+): FirebaseFirestore.DocumentReference {
+  return db.collection("users").doc(uid).collection("private").doc(
+    "adminNotes",
+  );
+}
+
 export {
   ADMIN_PROVISIONED_ROLE_LIST,
   ADMIN_PROVISIONED_ROLES,
@@ -313,4 +333,6 @@ export {
   isUserNotFound,
   localizeAuthActionLink,
   normalizeRole,
+  privateAdminNotesRef,
+  privateContactRef,
 };

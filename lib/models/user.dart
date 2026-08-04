@@ -213,8 +213,14 @@ class AppUser {
   // =========================
   // Parsing Firestore SAFE
   // =========================
-  factory AppUser.fromMap(Map<String, dynamic> map) {
-    return AppUser._fromMap(map, parseNestedCollections: true);
+  factory AppUser.fromMap(
+    Map<String, dynamic> map, {
+    Map<String, dynamic>? privateContact,
+  }) {
+    final merged = privateContact == null
+        ? map
+        : <String, dynamic>{...map, ...privateContact};
+    return AppUser._fromMap(merged, parseNestedCollections: true);
   }
 
   factory AppUser.fromEmbeddedMap(Map<String, dynamic> map) {
@@ -390,17 +396,20 @@ class AppUser {
   // Firestore export SAFE
   // =========================
   Map<String, dynamic> toEmbeddedMap() {
+    // email/phone are intentionally excluded: this map gets embedded into
+    // documents other users can read (offer candidates, event participants,
+    // follow lists), and those two fields now live in
+    // users/{uid}/private/contact specifically so third parties can't see
+    // them.
     return {
       'uid': uid,
       'nom': nom,
-      'email': email,
       'role': role,
       'photoProfil': photoProfil,
       'estActif': estActif,
       'authDisabled': authDisabled,
       'emailVerified': emailVerified,
       'createdByAdmin': createdByAdmin,
-      'phone': phone,
       'profileVerified': profileVerified,
       'profileVerificationStatus': profileVerificationStatus,
       'nomClub': nomClub,
@@ -412,6 +421,11 @@ class AppUser {
     };
   }
 
+  /// Fields for the users/{uid} doc. phone, birthDate, cvUrl, email and
+  /// authDisabledReason are intentionally absent — they live in
+  /// users/{uid}/private/contact (see [toPrivateContactMap]) and
+  /// profileVerificationNote lives in users/{uid}/private/adminNotes
+  /// (admin-write only, not exposed here at all).
   Map<String, dynamic> toMap() {
     return {
       ...toEmbeddedMap(),
@@ -422,8 +436,6 @@ class AppUser {
       'followings': followings,
       'dateInscription': Timestamp.fromDate(dateInscription),
       'dernierLogin': Timestamp.fromDate(dernierLogin),
-      'phone': phone,
-      'authDisabledReason': authDisabledReason,
       'profileVerifiedAt': profileVerifiedAt != null
           ? Timestamp.fromDate(profileVerifiedAt!)
           : null,
@@ -432,7 +444,6 @@ class AppUser {
           ? Timestamp.fromDate(profileVerificationUpdatedAt!)
           : null,
       'profileVerificationUpdatedBy': profileVerificationUpdatedBy,
-      'profileVerificationNote': profileVerificationNote,
       'profileVerificationInvalidatedAt':
           profileVerificationInvalidatedAt != null
           ? Timestamp.fromDate(profileVerificationInvalidatedAt!)
@@ -442,7 +453,6 @@ class AppUser {
           profileVerificationInvalidationReason,
 
       // Transverses
-      'birthDate': birthDate != null ? Timestamp.fromDate(birthDate!) : null,
       'country': country,
       'city': city,
       'region': region,
@@ -477,8 +487,21 @@ class AppUser {
       'followersList': followersList,
       'followingsList': followingsList,
 
-      // Docs
+      // Docs — cvUrl stays on this doc on purpose: it's meant to be
+      // visible to third parties once profilePublic is true, same as the
+      // Storage rule already gates the actual PDF (unlike phone/birthDate,
+      // which never had a legitimate third-party audience).
       'cvUrl': cvUrl,
+    };
+  }
+
+  /// Fields for users/{uid}/private/contact — owner/admin read-only doc.
+  /// email and authDisabledReason in that same doc are admin/Cloud-Function
+  /// managed and are never written from this client-side map.
+  Map<String, dynamic> toPrivateContactMap() {
+    return {
+      'phone': phone,
+      'birthDate': birthDate != null ? Timestamp.fromDate(birthDate!) : null,
     };
   }
 

@@ -5,6 +5,7 @@ import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {auth, db, fieldValue} from "./firebase";
 import {LOW_CPU_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
+import {privateContactRef} from "./admin_account_support";
 
 /**
  * Reads a boolean flag from a Firestore-like record.
@@ -84,6 +85,7 @@ export const completeEmailVerification = onCall(
       }
 
       const userData = userSnap.data() ?? {};
+      const contactRef = privateContactRef(uid);
       const nextActiveState = authRecord.disabled !== true;
       const updates: Record<string, unknown> = {
         emailVerified: true,
@@ -94,9 +96,6 @@ export const completeEmailVerification = onCall(
           fieldValue.delete(),
         authDisabledBy: authRecord.disabled === true ?
           userData["authDisabledBy"] ?? "system" :
-          fieldValue.delete(),
-        authDisabledReason: authRecord.disabled === true ?
-          userData["authDisabledReason"] ?? "account_disabled_in_auth" :
           fieldValue.delete(),
         estBloque: fieldValue.delete(),
         blockedAt: fieldValue.delete(),
@@ -119,7 +118,22 @@ export const completeEmailVerification = onCall(
         updates["dernierLogin"] = fieldValue.serverTimestamp();
       }
 
-      await userRef.set(updates, {merge: true});
+      let contactAuthDisabledReason: unknown;
+      if (authRecord.disabled === true) {
+        const contactSnap = await contactRef.get();
+        contactAuthDisabledReason =
+          contactSnap.data()?.["authDisabledReason"] ??
+          "account_disabled_in_auth";
+      } else {
+        contactAuthDisabledReason = fieldValue.delete();
+      }
+
+      const verificationBatch = db.batch();
+      verificationBatch.set(userRef, updates, {merge: true});
+      verificationBatch.set(contactRef, {
+        authDisabledReason: contactAuthDisabledReason,
+      }, {merge: true});
+      await verificationBatch.commit();
 
       console.log("completeEmailVerification:success", {
         uid,

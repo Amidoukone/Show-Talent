@@ -77,12 +77,18 @@ service cloud.firestore {
     }
 
     function ownerProfileTrustFieldsChanged() {
+      // phone/birthDate live in users/{uid}/private/contact now (see
+      // privateContactChangesOnly() below) and are written together with
+      // this doc in the same client WriteBatch, so keep them out of this
+      // list: it only needs to cover fields still writable directly here.
+      // cvUrl stays on this doc on purpose — unlike phone/birthDate it's
+      // meant to be visible to third parties whenever profilePublic is
+      // true (Storage rules already gate the actual PDF the same way), so
+      // it can't move to an owner/admin-only doc without breaking that.
       return request.resource.data.diff(resource.data).affectedKeys().hasAny([
         "nom",
-        "phone",
         "languages",
         "bio",
-        "birthDate",
         "position",
         "team",
         "clubActuel",
@@ -180,12 +186,15 @@ service cloud.firestore {
     }
 
     function canUpdateOwnProfile() {
+      // phone/birthDate are intentionally absent: they live in
+      // users/{uid}/private/contact (rules for that path below). A direct
+      // write to this doc that still includes either is rejected by
+      // changesOnly() below. cvUrl stays here — see the comment on
+      // ownerProfileTrustFieldsChanged() for why.
       return changesOnly([
         "nom",
-        "phone",
         "languages",
         "bio",
-        "birthDate",
         "position",
         "team",
         "clubActuel",
@@ -338,6 +347,36 @@ service cloud.firestore {
           canUpdateOwnProfile()
         );
       allow delete: if isOwner(userId);
+
+      // Sensitive fields (phone/birthDate/email/authDisabledReason) live
+      // here instead of on the parent doc so a third party can no longer
+      // read them just by having an active account. cvUrl deliberately
+      // stays on the parent doc instead (see ownerProfileTrustFieldsChanged
+      // comment) — it's meant to be visible to third parties once
+      // profilePublic is true, same as the Storage rule already gates the
+      // actual PDF. email/authDisabledReason are admin/Cloud-Function
+      // managed only (no client "allow write" covers them);
+      // phone/birthDate stay owner-editable exactly like before, just
+      // relocated. The client writes this doc and the parent
+      // users/{userId} doc together in one WriteBatch, so the existing
+      // verification-reset invariant on the parent doc still applies to
+      // the whole edit even though the values themselves moved here.
+      match /private/contact {
+        allow read: if isOwner(userId) || isAdminOperator();
+        allow create: if isOwner(userId) &&
+          hasActiveAccount(request.auth.uid) &&
+          request.resource.data.keys().hasOnly(["phone", "birthDate"]);
+        allow update: if isOwner(userId) &&
+          hasActiveAccount(request.auth.uid) &&
+          changesOnly(["phone", "birthDate"]);
+        allow delete: if isOwner(userId);
+      }
+
+      // Internal admin commentary on a profile review — never shown to the
+      // user it's about.
+      match /private/adminNotes {
+        allow read: if isAdminOperator();
+      }
     }
 
     match /videos/{videoId} {

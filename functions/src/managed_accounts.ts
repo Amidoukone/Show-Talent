@@ -18,6 +18,7 @@ import {
   isPrivilegedClaims,
   isUserNotFound,
   normalizeRole,
+  privateContactRef,
 } from "./admin_account_support";
 
 type ProvisionedManagedAccount = {
@@ -82,6 +83,8 @@ export const provisionManagedAccount = onCall(
     const existingRole = normalizeRole(
       getString(existingData, "role"),
     );
+    const existingContactDoc = await privateContactRef(userRecord.uid).get();
+    const existingContactData = existingContactDoc.data() ?? {};
 
     if (existingRole && existingRole !== role) {
       throw new HttpsError(
@@ -104,11 +107,10 @@ export const provisionManagedAccount = onCall(
       existingData.emailVerifiedAt ?? fieldValue.serverTimestamp() :
       null;
 
-    await db.collection("users").doc(userRecord.uid).set({
+    const provisionBatch = db.batch();
+    provisionBatch.set(db.collection("users").doc(userRecord.uid), {
       uid: userRecord.uid,
       nom: displayName,
-      email,
-      phone: phone || existingData.phone || null,
       role,
       photoProfil: existingData.photoProfil ?? "",
       estActif: userRecord.emailVerified && userRecord.disabled !== true,
@@ -132,6 +134,11 @@ export const provisionManagedAccount = onCall(
       invitedAt: existingData.invitedAt ?? fieldValue.serverTimestamp(),
       updatedAt: fieldValue.serverTimestamp(),
     }, {merge: true});
+    provisionBatch.set(privateContactRef(userRecord.uid), {
+      email,
+      phone: phone || existingContactData.phone || null,
+    }, {merge: true});
+    await provisionBatch.commit();
 
     const passwordSetupLink = buildHostedAuthActionLink(
       await auth.generatePasswordResetLink(

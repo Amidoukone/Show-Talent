@@ -337,7 +337,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: _SectionCard(
                           title: _publicSectionTitleClean(user),
                           icon: Icons.sports_soccer_outlined,
-                          child: _buildBaseFootballSectionClean(user),
+                          child: _buildBaseFootballSectionClean(
+                            user,
+                            isOwnProfile: isOwnProfile,
+                          ),
                         ),
                       ),
                     ),
@@ -934,7 +937,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildBaseFootballSectionClean(AppUser user) {
+  Widget _buildBaseFootballSectionClean(
+    AppUser user, {
+    required bool isOwnProfile,
+  }) {
     final tiles = <Widget>[];
     final location = [
       user.city,
@@ -942,7 +948,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       user.country,
     ].where((value) => value?.trim().isNotEmpty == true).join(', ');
 
-    tiles.add(_infoTile('Téléphone', user.phone, icon: Icons.phone_outlined));
+    // phone lives in users/{uid}/private/contact and is only fetched for the
+    // profile owner — this guard is defense in depth, not the only thing
+    // stopping a visitor from seeing it.
+    if (isOwnProfile) {
+      tiles.add(
+        _infoTile('Téléphone', user.phone, icon: Icons.phone_outlined),
+      );
+    }
 
     if (user.languages != null && user.languages!.isNotEmpty) {
       tiles.add(

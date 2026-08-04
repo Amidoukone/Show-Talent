@@ -22,6 +22,8 @@ import {
   isPrivilegedClaims,
   isUserNotFound,
   normalizeRole,
+  privateAdminNotesRef,
+  privateContactRef,
 } from "./admin_account_support";
 
 type ManagedTargetContext = {
@@ -476,14 +478,18 @@ export const disableManagedAccountAuth = onCall(
       await auth.updateUser(uid, {disabled: true});
     }
 
-    await target.userRef.set({
+    const disableBatch = db.batch();
+    disableBatch.set(target.userRef, {
       estActif: false,
       authDisabled: true,
       authDisabledBy: adminUid,
       authDisabledAt: fieldValue.serverTimestamp(),
-      authDisabledReason: reason ?? fieldValue.delete(),
       updatedAt: fieldValue.serverTimestamp(),
     }, {merge: true});
+    disableBatch.set(privateContactRef(uid), {
+      authDisabledReason: reason ?? fieldValue.delete(),
+    }, {merge: true});
+    await disableBatch.commit();
 
     return {
       success: true,
@@ -526,15 +532,19 @@ export const enableManagedAccountAuth = onCall(
       authDisabled: false,
     });
 
-    await target.userRef.set({
+    const enableBatch = db.batch();
+    enableBatch.set(target.userRef, {
       estActif,
       authDisabled: false,
       authDisabledBy: fieldValue.delete(),
       authDisabledAt: fieldValue.delete(),
-      authDisabledReason: fieldValue.delete(),
       updatedByAdmin: adminUid,
       updatedAt: fieldValue.serverTimestamp(),
     }, {merge: true});
+    enableBatch.set(privateContactRef(uid), {
+      authDisabledReason: fieldValue.delete(),
+    }, {merge: true});
+    await enableBatch.commit();
 
     return {
       success: true,
@@ -695,11 +705,37 @@ export const updateManagedAccountProfile = onCall(
       updates["profileVerificationUpdatedAt"] = fieldValue.serverTimestamp();
     }
 
-    await target.userRef.set({
-      ...updates,
+    const mainDocUpdates = {...updates};
+    const contactUpdates: Record<string, unknown> = {};
+    const adminNotesUpdates: Record<string, unknown> = {};
+
+    if ("phone" in mainDocUpdates) {
+      contactUpdates["phone"] = mainDocUpdates["phone"];
+      delete mainDocUpdates["phone"];
+    }
+    if ("profileVerificationNote" in mainDocUpdates) {
+      adminNotesUpdates["profileVerificationNote"] =
+        mainDocUpdates["profileVerificationNote"];
+      delete mainDocUpdates["profileVerificationNote"];
+    }
+
+    const profileBatch = db.batch();
+    profileBatch.set(target.userRef, {
+      ...mainDocUpdates,
       updatedByAdmin: adminUid,
       updatedAt: fieldValue.serverTimestamp(),
     }, {merge: true});
+    if (Object.keys(contactUpdates).length > 0) {
+      profileBatch.set(privateContactRef(uid), contactUpdates, {merge: true});
+    }
+    if (Object.keys(adminNotesUpdates).length > 0) {
+      profileBatch.set(
+        privateAdminNotesRef(uid),
+        adminNotesUpdates,
+        {merge: true},
+      );
+    }
+    await profileBatch.commit();
 
     if (typeof updates["nom"] === "string" && target.userRecord) {
       await auth.updateUser(uid, {displayName: updates["nom"]});

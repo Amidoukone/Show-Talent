@@ -112,6 +112,12 @@ class ProfileRepository {
     'photoProfil',
     'cvUrl',
   };
+  // Fields that must land in users/{uid}/private/contact instead of the
+  // main doc. Still trust-sensitive (see above) — moving where a field is
+  // physically stored doesn't change whether editing it should invalidate
+  // an existing verification. cvUrl deliberately stays out of this set and
+  // on the main doc — see toEmbeddedMap()/toMap() in AppUser for why.
+  static const Set<String> _privateContactKeys = {'phone', 'birthDate'};
 
   final FirebaseFirestore _firestore;
   final FirebaseStorage? _storageOverride;
@@ -122,6 +128,9 @@ class ProfileRepository {
 
   CollectionReference<Map<String, dynamic>> get _videosCollection =>
       _firestore.collection('videos');
+
+  DocumentReference<Map<String, dynamic>> _privateContactDoc(String uid) =>
+      _usersCollection.doc(uid).collection('private').doc('contact');
 
   FirebaseStorage get _storage => _storageOverride ?? FirebaseStorage.instance;
 
@@ -196,7 +205,15 @@ class ProfileRepository {
         message.contains('timeout');
   }
 
-  Future<AppUser?> fetchUser(String uid) async {
+  /// [includePrivateFields] also fetches users/{uid}/private/contact
+  /// (phone/birthDate/cvUrl) and merges it in. Only pass true for the
+  /// signed-in owner's own uid or an admin session — the rules reject that
+  /// read for anyone else, so requesting it for a third-party profile would
+  /// just produce a noisy permission-denied for no reason.
+  Future<AppUser?> fetchUser(
+    String uid, {
+    bool includePrivateFields = false,
+  }) async {
     final doc = await _getWithRetry(_usersCollection.doc(uid));
     if (!doc.exists) {
       return null;
@@ -207,17 +224,36 @@ class ProfileRepository {
       return null;
     }
 
-    return AppUser.fromMap(data);
+    final privateContact = includePrivateFields
+        ? await _fetchPrivateContact(uid)
+        : null;
+    return AppUser.fromMap(data, privateContact: privateContact);
   }
 
-  Stream<AppUser?> watchUser(String uid) {
-    return _usersCollection.doc(uid).snapshots().map((snapshot) {
+  Stream<AppUser?> watchUser(String uid, {bool includePrivateFields = false}) {
+    if (!includePrivateFields) {
+      return _usersCollection.doc(uid).snapshots().map((snapshot) {
+        final data = snapshot.data();
+        if (!snapshot.exists || data == null) {
+          return null;
+        }
+        return AppUser.fromMap(data);
+      });
+    }
+
+    return _usersCollection.doc(uid).snapshots().asyncMap((snapshot) async {
       final data = snapshot.data();
       if (!snapshot.exists || data == null) {
         return null;
       }
-      return AppUser.fromMap(data);
+      final privateContact = await _fetchPrivateContact(uid);
+      return AppUser.fromMap(data, privateContact: privateContact);
     });
+  }
+
+  Future<Map<String, dynamic>?> _fetchPrivateContact(String uid) async {
+    final doc = await _getWithRetry(_privateContactDoc(uid));
+    return doc.data();
   }
 
   Future<void> saveUserProfile(AppUser updatedUser) async {
@@ -227,10 +263,21 @@ class ProfileRepository {
       firestorePatch: data,
     );
 
-    return _usersCollection
-        .doc(updatedUser.uid)
-        .set(data, SetOptions(merge: true))
-        .timeout(firestoreWriteTimeout);
+    final privateContact = updatedUser.toPrivateContactMap();
+
+    final batch = _firestore.batch()
+      ..set(
+        _usersCollection.doc(updatedUser.uid),
+        data,
+        SetOptions(merge: true),
+      )
+      ..set(
+        _privateContactDoc(updatedUser.uid),
+        privateContact,
+        SetOptions(merge: true),
+      );
+
+    return batch.commit().timeout(firestoreWriteTimeout);
   }
 
   Future<ProfilePatchWriteResult> updateProfilePatch(
@@ -309,10 +356,25 @@ class ProfileRepository {
       );
     }
 
-    await _usersCollection
-        .doc(uid)
-        .update(firestorePatch)
-        .timeout(firestoreWriteTimeout);
+    final privatePatch = <String, dynamic>{};
+    for (final key in _privateContactKeys) {
+      if (firestorePatch.containsKey(key)) {
+        privatePatch[key] = firestorePatch.remove(key);
+      }
+    }
+
+    final batch = _firestore.batch();
+    if (firestorePatch.isNotEmpty) {
+      batch.update(_usersCollection.doc(uid), firestorePatch);
+    }
+    if (privatePatch.isNotEmpty) {
+      batch.set(
+        _privateContactDoc(uid),
+        privatePatch,
+        SetOptions(merge: true),
+      );
+    }
+    await batch.commit().timeout(firestoreWriteTimeout);
 
     return ProfilePatchWriteResult(appliedPatch: localPatch);
   }

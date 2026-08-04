@@ -204,7 +204,10 @@ class ProfileController extends GetxController {
     update();
 
     try {
-      final fetchedUser = await _profileRepository.fetchUser(uid);
+      final fetchedUser = await _profileRepository.fetchUser(
+        uid,
+        includePrivateFields: uid == _profileRepository.currentAuthUid,
+      );
       if (fetchedUser == null) {
         throw const ProfileLoadException('Profil introuvable.');
       }
@@ -235,7 +238,10 @@ class ProfileController extends GetxController {
   void _startUserListener(String uid) {
     _userSubscription?.cancel();
     _userSubscription = _profileRepository
-        .watchUser(uid)
+        .watchUser(
+          uid,
+          includePrivateFields: uid == _profileRepository.currentAuthUid,
+        )
         .listen(
           (updatedUser) {
             if (updatedUser == null) {
