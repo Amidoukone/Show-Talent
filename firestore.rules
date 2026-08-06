@@ -379,6 +379,17 @@ service cloud.firestore {
       }
     }
 
+    // The two rules above grant `get` on a literal document id (contact,
+    // adminNotes) but not `list`: the admin portal's user list enriches
+    // rows via a collectionGroup('private') query, and Firestore only
+    // authorizes a collection-group `list` against a rule whose last path
+    // segment is a wildcard, regardless of what the per-document rules
+    // above allow. This rule adds that, admin-only, without loosening the
+    // per-document owner/admin semantics already enforced above.
+    match /{path=**}/private/{docId} {
+      allow list: if isAdminOperator();
+    }
+
     match /videos/{videoId} {
       allow read: if canReadVideo();
       allow create: if false;
