@@ -1,0 +1,26 @@
+{
+  "projects": {
+    "default": "adfoot-staging",
+    "production": "adfoot-production",
+    "prod": "adfoot-production",
+    "staging": "adfoot-staging",
+    "production-next": "adfoot-production"
+  },
+  "targets": {
+    "adfoot-production": {
+      "hosting": {
+        "marketing": [
+          "adfoot-production"
+        ]
+      }
+    },
+    "adfoot-staging": {
+      "hosting": {
+        "marketing": [
+          "adfoot-staging"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

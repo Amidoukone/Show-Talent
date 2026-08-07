@@ -1,0 +1,643 @@
+import 'package:adfoot/models/contact_intake.dart';
+import 'package:adfoot/models/message_converstion.dart';
+import 'package:adfoot/models/user.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class ChatRepository {
+  ChatRepository({FirebaseFirestore? firestore})
+    : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  static const int _messageWriteBatchLimit = 450;
+
+  final FirebaseFirestore _firestore;
+
+  CollectionReference<Map<String, dynamic>> get _conversationsCollection =>
+      _firestore.collection('conversations');
+
+  CollectionReference<Map<String, dynamic>> get _usersCollection =>
+      _firestore.collection('users');
+
+  CollectionReference<Map<String, dynamic>> get _contactIntakesCollection =>
+      _firestore.collection('contact_intakes');
+
+  int _extractUnreadCount(Map<String, dynamic>? data, String userId) {
+    final raw = data?['unreadCountByUser'];
+    if (raw is! Map) {
+      return 0;
+    }
+
+    final value = raw[userId];
+    if (value is int) {
+      return value;
+    }
+
+    return int.tryParse('$value') ?? 0;
+  }
+
+  static String buildConversationId(String uid1, String uid2) {
+    final pair = <String>[uid1, uid2]..sort();
+    return "${pair.first}__${pair.last}";
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> watchConversationsForUser(
+    String userId,
+  ) {
+    return _conversationsCollection
+        .where('utilisateurIds', arrayContains: userId)
+        .snapshots();
+  }
+
+  Stream<Conversation?> watchConversationById(String conversationId) {
+    return _conversationsCollection.doc(conversationId).snapshots().map((doc) {
+      if (!doc.exists) {
+        return null;
+      }
+
+      final data = doc.data();
+      if (data == null) {
+        return null;
+      }
+
+      data['id'] = doc.id;
+      return Conversation.fromMap(data);
+    });
+  }
+
+  Stream<List<Message>> watchMessages(String conversationId) {
+    return _conversationsCollection
+        .doc(conversationId)
+        .collection('messages')
+        .orderBy('dateEnvoi', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) {
+                final data = doc.data();
+                data['id'] = doc.id;
+                return Message.fromMap(data);
+              })
+              .toList(growable: false),
+        );
+  }
+
+  Future<String> createOrGetConversation({
+    required String currentUserId,
+    required String otherUserId,
+  }) async {
+    final ids = <String>[currentUserId, otherUserId]..sort();
+    final conversationId = buildConversationId(currentUserId, otherUserId);
+    final conversationRef = _conversationsCollection.doc(conversationId);
+    final existingConversationId = await findExistingConversationId(
+      currentUserId: currentUserId,
+      otherUserId: otherUserId,
+    );
+    if (existingConversationId != null) {
+      return existingConversationId;
+    }
+    final newConversation = Conversation(
+      id: conversationRef.id,
+      utilisateur1Id: ids[0],
+      utilisateur2Id: ids[1],
+      utilisateurIds: ids,
+      unreadCountByUser: <String, int>{ids[0]: 0, ids[1]: 0},
+    );
+
+    await conversationRef.set(newConversation.toMap());
+
+    return conversationRef.id;
+  }
+
+  Future<String?> findExistingConversationId({
+    required String currentUserId,
+    required String otherUserId,
+  }) async {
+    final normalizedCurrentUserId = currentUserId.trim();
+    final normalizedOtherUserId = otherUserId.trim();
+    if (normalizedCurrentUserId.isEmpty ||
+        normalizedOtherUserId.isEmpty ||
+        normalizedCurrentUserId == normalizedOtherUserId) {
+      return null;
+    }
+
+    final conversationId = buildConversationId(
+      normalizedCurrentUserId,
+      normalizedOtherUserId,
+    );
+    final snapshot = await _conversationsCollection
+        .where('utilisateurIds', arrayContains: normalizedCurrentUserId)
+        .get();
+
+    String? legacyConversationId;
+    for (final doc in snapshot.docs) {
+      final participantIds = _normalizeParticipantIds(doc.data());
+      if (!participantIds.contains(normalizedOtherUserId)) {
+        continue;
+      }
+
+      if (doc.id == conversationId) {
+        return doc.id;
+      }
+
+      legacyConversationId ??= doc.id;
+    }
+
+    return legacyConversationId;
+  }
+
+  Future<GuidedConversationStartResult> startGuidedConversation({
+    required AppUser currentUser,
+    required AppUser otherUser,
+    required ContactContext context,
+    required String contactReason,
+    required String introMessage,
+  }) async {
+    final normalizedReason = ContactIntake.normalizeReasonCode(contactReason);
+    final normalizedIntro = introMessage.trim();
+    final normalizedContext = ContactContext(
+      type: context.type,
+      id: context.id,
+      title: context.title,
+      sourceLabel: context.sourceLabel,
+    );
+    final conversationId = buildConversationId(currentUser.uid, otherUser.uid);
+    final conversationRef = _conversationsCollection.doc(conversationId);
+    final ids = <String>[currentUser.uid, otherUser.uid]..sort();
+    final existingConversationId = await findExistingConversationId(
+      currentUserId: currentUser.uid,
+      otherUserId: otherUser.uid,
+    );
+    if (existingConversationId != null) {
+      final recoveredIntake = await _recoverMissingGuidedContactIntake(
+        conversationRef: _conversationsCollection.doc(existingConversationId),
+        currentUser: currentUser,
+        otherUser: otherUser,
+        context: normalizedContext,
+        contactReason: normalizedReason,
+        introMessage: normalizedIntro,
+      );
+
+      return GuidedConversationStartResult(
+        conversationId: existingConversationId,
+        conversationCreated: false,
+        contactIntake: recoveredIntake,
+      );
+    }
+    final newConversation = Conversation(
+      id: conversationRef.id,
+      utilisateur1Id: ids[0],
+      utilisateur2Id: ids[1],
+      utilisateurIds: ids,
+      unreadCountByUser: <String, int>{ids[0]: 0, ids[1]: 0},
+      createdVia: 'guided_first_contact',
+      contextType: normalizedContext.normalizedType,
+      contextId: normalizedContext.normalizedId,
+      contextTitle:
+          normalizedContext.normalizedTitle ?? normalizedContext.displayLabel,
+      contactReason: normalizedReason,
+      initiatedByUid: currentUser.uid,
+      initiatedByRole: currentUser.role,
+      agencyFollowUpStatus: AgencyFollowUpStatus.newLead,
+      createdAt: DateTime.now(),
+    );
+    await conversationRef.set(newConversation.toMap());
+
+    final firstMessage = Message(
+      id: '',
+      expediteurId: currentUser.uid,
+      destinataireId: otherUser.uid,
+      contenu: buildGuidedFirstMessage(
+        context: normalizedContext,
+        reasonCode: normalizedReason,
+        introMessage: normalizedIntro,
+      ),
+      dateEnvoi: DateTime.now(),
+      estLu: false,
+    );
+
+    await persistMessageAndConversation(
+      conversationId: conversationId,
+      message: firstMessage,
+      senderId: currentUser.uid,
+      recipientId: otherUser.uid,
+    );
+
+    final intake = await _createAndLinkGuidedContactIntake(
+      conversationRef: conversationRef,
+      currentUser: currentUser,
+      otherUser: otherUser,
+      context: normalizedContext,
+      contactReason: normalizedReason,
+      introMessage: normalizedIntro,
+    );
+
+    return GuidedConversationStartResult(
+      conversationId: conversationId,
+      conversationCreated: true,
+      contactIntake: intake,
+    );
+  }
+
+  Future<ContactIntake?> _recoverMissingGuidedContactIntake({
+    required DocumentReference<Map<String, dynamic>> conversationRef,
+    required AppUser currentUser,
+    required AppUser otherUser,
+    required ContactContext context,
+    required String contactReason,
+    required String introMessage,
+  }) async {
+    final conversationSnap = await conversationRef.get();
+    if (!conversationSnap.exists) {
+      return null;
+    }
+
+    final conversationData = conversationSnap.data() ?? <String, dynamic>{};
+    final createdVia = conversationData['createdVia']?.toString().trim();
+    if (createdVia != 'guided_first_contact') {
+      return null;
+    }
+
+    final existingIntakeId = conversationData['contactIntakeId']
+        ?.toString()
+        .trim();
+    if (existingIntakeId != null && existingIntakeId.isNotEmpty) {
+      final existingIntake = await _contactIntakesCollection
+          .doc(existingIntakeId)
+          .get();
+      if (existingIntake.exists) {
+        return ContactIntake.fromMap(
+          existingIntake.data() ?? <String, dynamic>{},
+          fallbackId: existingIntake.id,
+        );
+      }
+    }
+
+    return _createAndLinkGuidedContactIntake(
+      conversationRef: conversationRef,
+      currentUser: currentUser,
+      otherUser: otherUser,
+      context: context,
+      contactReason: contactReason,
+      introMessage: introMessage,
+    );
+  }
+
+  Future<ContactIntake> _createAndLinkGuidedContactIntake({
+    required DocumentReference<Map<String, dynamic>> conversationRef,
+    required AppUser currentUser,
+    required AppUser otherUser,
+    required ContactContext context,
+    required String contactReason,
+    required String introMessage,
+  }) async {
+    final intakeRef = _contactIntakesCollection.doc();
+    final now = DateTime.now();
+    final intake = ContactIntake(
+      id: intakeRef.id,
+      requesterUid: currentUser.uid,
+      targetUid: otherUser.uid,
+      requesterRole: currentUser.role,
+      targetRole: otherUser.role,
+      contextType: context.normalizedType,
+      contextId: context.normalizedId,
+      contextTitle: context.normalizedTitle,
+      contactReason: contactReason,
+      introMessage: introMessage,
+      status: ContactIntakeStatus.newRequest,
+      agencyFollowUpStatus: AgencyFollowUpStatus.newLead,
+      conversationId: conversationRef.id,
+      requesterSnapshot: buildUserSnapshot(currentUser),
+      targetSnapshot: buildUserSnapshot(otherUser),
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    // contact_intakes has no Cloud Function in front of it, so the
+    // 60s-per-requester cooldown lives in firestore.rules
+    // (contactIntakeCooldownOk) instead — it reads this same-uid doc, which
+    // must be bumped in the same batch as the intake create for the rule to
+    // see a consistent before/after state.
+    final rateLimitRef = _firestore
+        .collection('contact_intake_limits')
+        .doc(currentUser.uid);
+
+    final batch = _firestore.batch();
+    batch.set(intakeRef, intake.toMap());
+    batch.set(conversationRef, <String, dynamic>{
+      'contactIntakeId': intake.id,
+      'agencyFollowUpStatus': AgencyFollowUpStatus.newLead,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    batch.set(rateLimitRef, <String, dynamic>{
+      'lastIntakeAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    return intake;
+  }
+
+  Future<void> persistMessageAndConversation({
+    required String conversationId,
+    required Message message,
+    required String senderId,
+    required String recipientId,
+  }) async {
+    final messageRef = _conversationsCollection
+        .doc(conversationId)
+        .collection('messages')
+        .doc();
+    final conversationRef = _conversationsCollection.doc(conversationId);
+
+    final batch = _firestore.batch();
+    batch.set(messageRef, message.copyWithId(messageRef.id).toMap());
+    batch.set(conversationRef, <String, dynamic>{
+      'lastMessage': message.contenu,
+      'lastMessageDate': Timestamp.fromDate(message.dateEnvoi),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'unreadCountByUser.$recipientId': FieldValue.increment(1),
+      'unreadCountByUser.$senderId': 0,
+    }, SetOptions(merge: true));
+
+    await batch.commit();
+  }
+
+  Future<bool> canSendMessage({
+    required String senderId,
+    required String recipientId,
+  }) async {
+    final senderDoc = await _usersCollection.doc(senderId).get();
+    final recipientDoc = await _usersCollection.doc(recipientId).get();
+
+    if (!senderDoc.exists || !recipientDoc.exists) {
+      return false;
+    }
+
+    final senderAllow = senderDoc.data()?['allowMessages'] as bool? ?? true;
+    final recipientAllow =
+        recipientDoc.data()?['allowMessages'] as bool? ?? true;
+
+    return senderAllow && recipientAllow;
+  }
+
+  Future<bool> shouldSendNotification({
+    required String recipientId,
+    required String conversationId,
+    required Duration activeWindowTolerance,
+  }) async {
+    final doc = await _usersCollection.doc(recipientId).get();
+    if (!doc.exists) return true;
+
+    final data = doc.data() ?? <String, dynamic>{};
+    final activeConvId = data['activeConversationId'] as String?;
+    final ts = data['activeAt'] as Timestamp?;
+    final activeAt = ts?.toDate();
+
+    if (activeConvId == conversationId && activeAt != null) {
+      final isRecent =
+          DateTime.now().difference(activeAt) <= activeWindowTolerance;
+      return !isRecent;
+    }
+
+    return true;
+  }
+
+  Future<void> markMessageAsRead({
+    required String conversationId,
+    required String messageId,
+  }) {
+    return _conversationsCollection
+        .doc(conversationId)
+        .collection('messages')
+        .doc(messageId)
+        .update(<String, dynamic>{'estLu': true});
+  }
+
+  Future<void> setConversationUnreadToZero({
+    required String conversationId,
+    required String userId,
+  }) {
+    return _conversationsCollection.doc(conversationId).set(<String, dynamic>{
+      'unreadCountByUser.$userId': 0,
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> markMessagesAsRead({
+    required String conversationId,
+    required String userId,
+  }) async {
+    final messagesRef = _conversationsCollection
+        .doc(conversationId)
+        .collection('messages');
+
+    while (true) {
+      final unreadMessages = await messagesRef
+          .where('destinataireId', isEqualTo: userId)
+          .where('estLu', isEqualTo: false)
+          .limit(_messageWriteBatchLimit)
+          .get();
+
+      if (unreadMessages.docs.isEmpty) {
+        break;
+      }
+
+      final batch = _firestore.batch();
+      for (final doc in unreadMessages.docs) {
+        batch.update(doc.reference, <String, dynamic>{'estLu': true});
+      }
+      await batch.commit();
+    }
+
+    await _conversationsCollection.doc(conversationId).set(<String, dynamic>{
+      'unreadCountByUser.$userId': 0,
+    }, SetOptions(merge: true));
+  }
+
+  Future<Map<String, dynamic>?> fetchConversationData(
+    String conversationId,
+  ) async {
+    final doc = await _conversationsCollection.doc(conversationId).get();
+    return doc.data();
+  }
+
+  Future<void> deleteMessage({
+    required String conversationId,
+    required String messageId,
+  }) async {
+    final conversationRef = _conversationsCollection.doc(conversationId);
+    final messageRef = conversationRef.collection('messages').doc(messageId);
+
+    final messageSnapshot = await messageRef.get();
+    if (!messageSnapshot.exists) {
+      return;
+    }
+
+    final messageData = messageSnapshot.data() ?? <String, dynamic>{};
+    messageData['id'] = messageSnapshot.id;
+    final deletedMessage = Message.fromMap(messageData);
+
+    final conversationSnapshot = await conversationRef.get();
+    final conversationData = conversationSnapshot.data();
+    final currentRecipientUnread = deletedMessage.destinataireId.trim().isEmpty
+        ? 0
+        : _extractUnreadCount(conversationData, deletedMessage.destinataireId);
+
+    await messageRef.delete();
+
+    final latestMessageSnapshot = await conversationRef
+        .collection('messages')
+        .orderBy('dateEnvoi', descending: true)
+        .limit(1)
+        .get();
+
+    final patch = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
+
+    if (latestMessageSnapshot.docs.isEmpty) {
+      patch['lastMessage'] = FieldValue.delete();
+      patch['lastMessageDate'] = FieldValue.delete();
+    } else {
+      final latestMessage = Message.fromMap(
+        latestMessageSnapshot.docs.first.data(),
+      );
+      patch['lastMessage'] = latestMessage.contenu;
+      patch['lastMessageDate'] = Timestamp.fromDate(latestMessage.dateEnvoi);
+    }
+
+    if (!deletedMessage.estLu &&
+        deletedMessage.destinataireId.trim().isNotEmpty) {
+      patch['unreadCountByUser.${deletedMessage.destinataireId}'] =
+          currentRecipientUnread > 0 ? currentRecipientUnread - 1 : 0;
+    }
+
+    await conversationRef.set(patch, SetOptions(merge: true));
+  }
+
+  Future<void> deleteConversation(String conversationId) async {
+    final conversationRef = _conversationsCollection.doc(conversationId);
+    final messagesRef = conversationRef.collection('messages');
+
+    while (true) {
+      final snapshot = await messagesRef.limit(_messageWriteBatchLimit).get();
+      if (snapshot.docs.isEmpty) {
+        break;
+      }
+
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
+
+    await conversationRef.delete();
+  }
+
+  Stream<AppUser?> watchUserById(String uid) {
+    return _usersCollection.doc(uid).snapshots().map((snapshot) {
+      if (!snapshot.exists) {
+        return null;
+      }
+      final data = snapshot.data();
+      if (data == null) {
+        return null;
+      }
+      return AppUser.fromMap(data);
+    });
+  }
+
+  Future<void> setActiveConversation({
+    required String uid,
+    required String? conversationId,
+  }) {
+    return _usersCollection.doc(uid).update(<String, dynamic>{
+      'activeConversationId': conversationId,
+      'activeAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> touchActiveConversation(String uid) {
+    return _usersCollection.doc(uid).update(<String, dynamic>{
+      'activeAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  static Map<String, dynamic> buildUserSnapshot(AppUser user) {
+    final organization = _resolveUserOrganization(user);
+
+    return <String, dynamic>{
+      'uid': user.uid,
+      'nom': user.nom,
+      'displayName': user.nom,
+      'role': user.role,
+      'photoProfil': user.photoProfil,
+      if (user.email.trim().isNotEmpty) 'email': user.email.trim(),
+      'organisation': ?organization,
+    };
+  }
+
+  static String? _resolveUserOrganization(AppUser user) {
+    for (final value in <String?>[
+      user.nomClub,
+      user.entreprise,
+      user.clubActuel,
+      user.team,
+    ]) {
+      final normalized = value?.trim();
+      if (normalized != null && normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+    return null;
+  }
+
+  static List<String> _normalizeParticipantIds(Map<String, dynamic> data) {
+    final rawIds = data['utilisateurIds'];
+    if (rawIds is Iterable) {
+      return rawIds
+          .map((value) => value.toString().trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+    }
+
+    final ids = <String>[
+      data['utilisateur1Id']?.toString().trim() ?? '',
+      data['utilisateur2Id']?.toString().trim() ?? '',
+    ]..removeWhere((value) => value.isEmpty);
+    return ids;
+  }
+
+  static String buildGuidedFirstMessage({
+    required ContactContext context,
+    required String reasonCode,
+    required String introMessage,
+  }) {
+    final reasonLabel = ContactIntake.reasonLabel(reasonCode);
+    final parts = <String>['Premier contact Adfoot.', 'Motif : $reasonLabel.'];
+
+    final contextLabel = context.displayLabel;
+    final contextTitle = context.normalizedTitle;
+    if (contextLabel.isNotEmpty && contextTitle != null) {
+      parts.add('Contexte : $contextLabel - $contextTitle.');
+    } else if (contextLabel.isNotEmpty &&
+        context.normalizedType != ContactContextType.none) {
+      parts.add('Contexte : $contextLabel.');
+    }
+
+    if (introMessage.trim().isNotEmpty) {
+      parts.add(introMessage.trim());
+    }
+
+    return parts.join(' ');
+  }
+}
+
+extension on Message {
+  Message copyWithId(String id) {
+    return Message(
+      id: id,
+      expediteurId: expediteurId,
+      destinataireId: destinataireId,
+      contenu: contenu,
+      dateEnvoi: dateEnvoi,
+      estLu: estLu,
+    );
+  }
+}

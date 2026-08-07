@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.example.adfoot",
+      "sha256_cert_fingerprints": [
+        "61:3A:F4:33:DA:A6:45:34:0C:60:D8:D5:BE:EF:7A:A0:A0:CD:33:E9:D9:2D:47:EE:56:9D:73:24:CC:51:BB:EE"
+      ]
+    }
+  }
+]

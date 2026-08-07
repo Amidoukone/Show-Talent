@@ -1,52 +1,110 @@
+import 'dart:async';
 
-import 'package:get/get.dart';
-import 'package:show_talent/controller/user_controller.dart';
-import 'package:show_talent/screens/main_screen.dart';
-import 'package:show_talent/screens/splash_screen.dart';
-
-import 'firebase_options.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:get/get.dart';
+import 'package:intl/intl.dart';
 
+import 'config/app_bootstrap.dart';
+import 'config/app_routes.dart';
+import 'theme/ad_colors.dart';
+import 'theme/app_theme.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialisation de Firebase avec les options de plateforme
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-
-  // Initialisation de GetX pour la gestion de l'état global
-  Get.put(UserController());
-
-  runApp(const MyApp());
+Future<void> main() async {
+  runZonedGuarded(() async {
+    Intl.defaultLocale = 'fr_FR';
+    await AppBootstrap.initialize();
+    runApp(const MyApp());
+  }, AppBootstrap.reportZoneError);
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class AdfootApp extends StatelessWidget {
+  const AdfootApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'ShowTalent',
-      theme: ThemeData(
-        primaryColor: const Color.fromARGB(255, 11, 78, 72),  // Couleur principale
-        scaffoldBackgroundColor: const Color.fromARGB(255, 219, 239, 240),  // Couleur de fond
-
-        // Thème pour le BottomNavigationBar
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF004d00), // Couleur de fond vert foncé
-          selectedItemColor: Colors.white, // Couleur des icônes sélectionnées
-          unselectedItemColor: Color(0xFF8AB98A), // Couleur des icônes non sélectionnées
-        ),
-      ),
-      home: const SplashScreen(),  // L'écran de démarrage
-      getPages: [
-        GetPage(name: '/', page: () => const SplashScreen()),
-        GetPage(name: '/main', page: () => const MainScreen()),  // Page principale après Splash
+      title: 'Adfoot',
+      debugShowCheckedModeBanner: false,
+      navigatorKey: Get.key,
+      theme: AppTheme.light(),
+      locale: const Locale('fr', 'FR'),
+      fallbackLocale: const Locale('fr', 'FR'),
+      supportedLocales: const <Locale>[
+        Locale('fr', 'FR'),
+        Locale('en', 'US'),
       ],
+      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      defaultTransition: Transition.fadeIn,
+      color: AdColors.brand,
+      builder: (context, child) {
+        final Widget safeChild = child ?? const SizedBox.shrink();
+
+        final wrapped = GestureDetector(
+          behavior: HitTestBehavior.deferToChild,
+          onTap: () {
+            final focus = FocusManager.instance.primaryFocus;
+            if (focus?.hasFocus == true) {
+              focus?.unfocus();
+            }
+          },
+          child: safeChild,
+        );
+
+        final mq = MediaQuery.of(context);
+        // Respect the system text-size setting for low-vision users instead
+        // of flattening it to near-1.0 — only guard the extremes so a very
+        // large system setting can't overflow layouts we haven't audited.
+        final scaleValue = mq.textScaler.scale(1.0).clamp(0.85, 1.6);
+
+        final mediaWrapped = MediaQuery(
+          data: mq.copyWith(
+            textScaler: TextScaler.linear(scaleValue),
+            padding: mq.padding,
+            viewPadding: mq.viewPadding,
+            viewInsets: mq.viewInsets,
+            systemGestureInsets: mq.systemGestureInsets,
+          ),
+          child: wrapped,
+        );
+
+        return ScrollConfiguration(
+          behavior: const _AppScrollBehavior(),
+          child: mediaWrapped,
+        );
+      },
+      initialRoute: AppRoutes.splash,
+      getPages: AppRoutes.pages,
     );
   }
 }
 
+class MyApp extends AdfootApp {
+  const MyApp({super.key});
+}
+
+class _AppScrollBehavior extends ScrollBehavior {
+  const _AppScrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    if (platform == TargetPlatform.iOS || platform == TargetPlatform.macOS) {
+      return const BouncingScrollPhysics();
+    }
+    return const ClampingScrollPhysics();
+  }
+}

@@ -1,4 +1,4 @@
-# Miscellaneous
+﻿# Miscellaneous
 *.class
 *.log
 *.pyc
@@ -9,6 +9,22 @@
 .history
 .svn/
 migrate_working_dir/
+
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.p12
+*.pfx
+*.key
+*.crt
+*.cer
+*.mobileprovision
+*.jks
+*.keystore
+*firebase-adminsdk*.json
 
 # IntelliJ related
 *.iml
@@ -41,3 +57,43 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+android/key.properties
+android/*.jks
+android/*.keystore
+node_modules
+
+# Local cloud credentials
+.credentials/
+service-account*.json
+*service-account*.json
+
+# Local mobile Firebase config
+/config/mobile/*.json
+!/config/mobile/*.example.json
+!/config/mobile/README.md
+/config/mobile/*.plist
+/config/mobile/*.env
+/config/mobile/*.yaml
+# Sensitive Firebase config files (keep local, never commit)
+/android/app/google-services.json
+/android/app/src/local/google-services.json
+/android/app/src/staging/google-services.json
+/android/app/src/production/google-services.json
+/ios/Firebase/local/GoogleService-Info.plist
+/ios/Firebase/staging/GoogleService-Info.plist
+/ios/Firebase/production/GoogleService-Info.plist
+/web/firebase-messaging-config.js
+
+# Generated smoke-test reports
+/docs/smoke-managed-account-auth-*.json
+/docs/smoke-public-signup-*.json
+/docs/smoke-public-signup.md
+
+# Local release/build artifacts
+/artifacts/
+/android/.kotlin/
+
+# Local-only folders kept out of Git
+/.firebase/
+/docs/
+

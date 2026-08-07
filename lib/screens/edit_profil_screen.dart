@@ -1,43 +1,1117 @@
+import 'dart:io';
+
+import 'package:adfoot/controller/profile_controller.dart';
+import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/widgets/ad_app_bar.dart';
+import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/profile_action_notice.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:get/get.dart';
 
-class EditProfileScreen extends StatelessWidget {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final TextEditingController _nameController = TextEditingController();
+import '../models/user.dart';
+import 'package:adfoot/services/app_logger.dart';
 
-  EditProfileScreen({super.key});
+class EditProfileScreen extends StatefulWidget {
+  final AppUser user;
+  final ProfileController profileController;
+
+  const EditProfileScreen({
+    super.key,
+    required this.user,
+    required this.profileController,
+  });
+
+  @override
+  State<EditProfileScreen> createState() => _EditProfileScreenState();
+}
+
+class _EditProfileScreenState extends State<EditProfileScreen> {
+  static const kPrimary = AdColors.brand;
+  static const kSurface = AdColors.surface;
+
+  final _formKey = GlobalKey<FormState>();
+
+  late final TextEditingController _nomController;
+  late final TextEditingController _bioController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _languagesController;
+  late final TextEditingController _cityController;
+  late final TextEditingController _regionController;
+  late final TextEditingController _countryController;
+  late final TextEditingController _positionController;
+  late final TextEditingController _teamController;
+  late final TextEditingController _ligueController;
+  late final TextEditingController _entrepriseController;
+  late final TextEditingController _nombreRecrutementsController;
+
+  DateTime? _selectedBirthDate;
+  bool _saving = false;
+  String? _saveFailureTitle;
+  String? _saveFailureMessage;
+
+  AppUser get user {
+    final liveUser = profileController.user;
+    if (liveUser != null && liveUser.uid == widget.user.uid) {
+      return liveUser;
+    }
+    return widget.user;
+  }
+
+  ProfileController get profileController => widget.profileController;
+
+  bool get _isPlayer => user.isPlayer || user.isCoach;
+  bool get _isClub => user.role == 'club';
+  bool get _isRecruiter => user.isRecruiter;
+
+  @override
+  void initState() {
+    super.initState();
+    _nomController = TextEditingController(text: user.nom);
+    _bioController = TextEditingController(text: user.bio ?? '');
+    _phoneController = TextEditingController(text: user.phone ?? '');
+    _languagesController = TextEditingController(
+      text: user.languages?.join(', ') ?? '',
+    );
+    _cityController = TextEditingController(text: user.city ?? '');
+    _regionController = TextEditingController(text: user.region ?? '');
+    _countryController = TextEditingController(text: user.country ?? '');
+    _positionController = TextEditingController(text: user.position ?? '');
+    _teamController = TextEditingController(
+      text: user.team ?? user.clubActuel ?? '',
+    );
+    _ligueController = TextEditingController(text: user.ligue ?? '');
+    _entrepriseController = TextEditingController(text: user.entreprise ?? '');
+    _nombreRecrutementsController = TextEditingController(
+      text: user.nombreDeRecrutements?.toString() ?? '',
+    );
+    _selectedBirthDate = user.birthDate;
+  }
+
+  @override
+  void dispose() {
+    _nomController.dispose();
+    _bioController.dispose();
+    _phoneController.dispose();
+    _languagesController.dispose();
+    _cityController.dispose();
+    _regionController.dispose();
+    _countryController.dispose();
+    _positionController.dispose();
+    _teamController.dispose();
+    _ligueController.dispose();
+    _entrepriseController.dispose();
+    _nombreRecrutementsController.dispose();
+    super.dispose();
+  }
+
+  String _trimOrEmpty(String value) => value.trim();
+
+  String? _trimOrNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  void _putNullableStringPatch(
+    Map<String, dynamic> patch,
+    String key,
+    String value,
+    String? currentValue,
+  ) {
+    final normalized = _trimOrNull(value);
+    if (normalized != null) {
+      patch[key] = normalized;
+    } else if ((currentValue?.trim().isNotEmpty ?? false)) {
+      patch[key] = ProfileController.deleteField;
+    }
+  }
+
+  int? _intOrNull(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return int.tryParse(trimmed);
+  }
+
+  int? _intOrNullClamped(String value, {int? min, int? max}) {
+    final parsed = _intOrNull(value);
+    if (parsed == null) {
+      return null;
+    }
+    int clamped = parsed;
+    if (min != null && clamped < min) {
+      clamped = min;
+    }
+    if (max != null && clamped > max) {
+      clamped = max;
+    }
+    return clamped;
+  }
+
+  String? _validateOptionalNonNegativeInt(String? value, {int max = 9999}) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) {
+      return null;
+    }
+    final number = int.tryParse(text);
+    if (number == null) {
+      return 'Veuillez saisir un nombre valide.';
+    }
+    if (number < 0) {
+      return 'La valeur doit être positive.';
+    }
+    if (number > max) {
+      return 'La valeur maximale est $max.';
+    }
+    return null;
+  }
+
+  InputDecorationThemeData _inputDecorationTheme(BuildContext context) {
+    final base = Theme.of(context).inputDecorationTheme;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: AdColors.borderMuted),
+    );
+    final focused = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: kPrimary, width: 1.6),
+    );
+
+    return base.copyWith(
+      filled: true,
+      fillColor: AdColors.surfaceCard,
+      border: border,
+      enabledBorder: border,
+      focusedBorder: focused,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      labelStyle: const TextStyle(color: AdColors.onSurfaceMuted),
+    );
+  }
+
+  Widget _buildHeader({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: kPrimary.withValues(alpha: 0.12),
+            foregroundColor: kPrimary,
+            child: Icon(icon),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+    String? Function(String?)? validator,
+    String? hint,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: kPrimary),
+      ),
+    );
+  }
+
+  Widget _buildBirthDateField(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: _pickBirthDate,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Date de naissance',
+          prefixIcon: const Icon(Icons.cake_outlined, color: kPrimary),
+          suffixIcon: _selectedBirthDate != null
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => setState(() => _selectedBirthDate = null),
+                  tooltip: 'Effacer',
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _selectedBirthDate != null
+                    ? _formatBirthDate(_selectedBirthDate!)
+                    : 'Ajoutez votre date de naissance',
+                style: TextStyle(
+                  color: _selectedBirthDate != null
+                      ? AdColors.onSurface
+                      : AdColors.onSurfaceMuted,
+                  fontWeight: _selectedBirthDate != null
+                      ? FontWeight.w600
+                      : null,
+                ),
+              ),
+            ),
+            const Icon(Icons.edit_calendar_outlined, color: kPrimary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatBirthDate(DateTime date) {
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    return '$day/$month/${date.year}';
+  }
+
+  Future<void> _pickBirthDate() async {
+    final now = DateTime.now();
+    final initial =
+        _selectedBirthDate ?? DateTime(now.year - 18, now.month, now.day);
+    final earliest = DateTime(now.year - 60);
+    final latest = DateTime(now.year - 10, now.month, now.day);
+
+    DateTime initialDate = initial;
+    if (initialDate.isAfter(latest)) {
+      initialDate = latest;
+    }
+    if (initialDate.isBefore(earliest)) {
+      initialDate = earliest;
+    }
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: earliest,
+      lastDate: latest,
+      helpText: 'Choisir votre date de naissance',
+      confirmText: 'Valider',
+      cancelText: 'Annuler',
+    );
+
+    if (picked != null) {
+      setState(() => _selectedBirthDate = picked);
+    }
+  }
+
+  Future<void> _save() async {
+    FocusScope.of(context).unfocus();
+    if (_saving) {
+      return;
+    }
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _saveFailureTitle = null;
+      _saveFailureMessage = null;
+    });
+
+    try {
+      final patch = <String, dynamic>{};
+
+      patch['nom'] = _trimOrEmpty(_nomController.text);
+
+      final phone = _trimOrNull(_phoneController.text);
+      if (phone != null) {
+        patch['phone'] = phone;
+      } else if ((user.phone?.isNotEmpty ?? false)) {
+        patch['phone'] = ProfileController.deleteField;
+      }
+
+      final languages = _languagesController.text
+          .split(',')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      if (languages.isNotEmpty) {
+        patch['languages'] = languages;
+      } else if (user.languages?.isNotEmpty == true) {
+        patch['languages'] = ProfileController.deleteField;
+      }
+
+      final bio = _trimOrNull(_bioController.text);
+      if (bio != null) {
+        patch['bio'] = bio;
+      } else if ((user.bio?.isNotEmpty ?? false)) {
+        patch['bio'] = ProfileController.deleteField;
+      }
+
+      _putNullableStringPatch(patch, 'city', _cityController.text, user.city);
+      _putNullableStringPatch(
+        patch,
+        'region',
+        _regionController.text,
+        user.region,
+      );
+      _putNullableStringPatch(
+        patch,
+        'country',
+        _countryController.text,
+        user.country,
+      );
+
+      if (_isPlayer) {
+        if (_selectedBirthDate != null) {
+          patch['birthDate'] = _selectedBirthDate;
+        } else if (user.birthDate != null) {
+          patch['birthDate'] = ProfileController.deleteField;
+        }
+
+        final position = _trimOrNull(_positionController.text);
+        if (position != null) {
+          patch['position'] = position;
+        } else if ((user.position?.isNotEmpty ?? false)) {
+          patch['position'] = ProfileController.deleteField;
+        }
+
+        final team = _trimOrNull(_teamController.text);
+        if (team != null) {
+          patch['team'] = team;
+          patch['clubActuel'] = team;
+        } else if ((user.team?.isNotEmpty ?? false) ||
+            (user.clubActuel?.isNotEmpty ?? false)) {
+          patch['team'] = ProfileController.deleteField;
+          patch['clubActuel'] = ProfileController.deleteField;
+        }
+      }
+
+      if (_isClub) {
+        patch['nomClub'] = _trimOrEmpty(_nomController.text);
+
+        final ligue = _trimOrNull(_ligueController.text);
+        if (ligue != null) {
+          patch['ligue'] = ligue;
+        } else if ((user.ligue?.isNotEmpty ?? false)) {
+          patch['ligue'] = ProfileController.deleteField;
+        }
+      }
+
+      if (_isRecruiter) {
+        final entreprise = _trimOrNull(_entrepriseController.text);
+        if (entreprise != null) {
+          patch['entreprise'] = entreprise;
+        } else if ((user.entreprise?.isNotEmpty ?? false)) {
+          patch['entreprise'] = ProfileController.deleteField;
+        }
+
+        final recruitments = _intOrNullClamped(
+          _nombreRecrutementsController.text,
+          min: 0,
+          max: 9999,
+        );
+        if (recruitments != null) {
+          patch['nombreDeRecrutements'] = recruitments;
+        } else if (user.nombreDeRecrutements != null) {
+          patch['nombreDeRecrutements'] = ProfileController.deleteField;
+        }
+      }
+
+      await profileController.updateProfilePatch(user.uid, patch);
+
+      AdFeedback.success('Succès', 'Profil mis à jour.');
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop(true);
+    } on ProfileAccessRevokedException catch (e) {
+      final title =
+          e.title ??
+          profileController.lastProfileWriteErrorTitle ??
+          'Sauvegarde refusée';
+      final message =
+          e.message ??
+          profileController.lastProfileWriteErrorMessage ??
+          'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.';
+      if (mounted) {
+        setState(() {
+          _saveFailureTitle = title;
+          _saveFailureMessage = message;
+        });
+      }
+      return;
+    } catch (e) {
+      AppLogger.debug('EditProfile _save error: $e');
+      if (mounted) {
+        setState(() {
+          _saveFailureTitle = 'Erreur';
+          _saveFailureMessage =
+              profileController.lastProfileWriteErrorMessage ??
+              'Impossible de sauvegarder les modifications.';
+        });
+      }
+      AdFeedback.error(
+        'Erreur',
+        'Impossible de sauvegarder les modifications.',
+        duration: const Duration(seconds: 6),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final inputTheme = _inputDecorationTheme(context);
+    final displayNameLabel = _isClub
+        ? 'Nom du club'
+        : _isRecruiter
+        ? 'Nom affiché'
+        : 'Nom complet';
+    final headerTitle = _isPlayer
+        ? user.role == 'coach'
+              ? 'Profil coach'
+              : 'Profil joueur'
+        : _isClub
+        ? 'Profil club'
+        : _isRecruiter
+        ? user.isAgent
+              ? 'Profil agent'
+              : 'Profil recruteur'
+        : 'Profil';
+    final headerSubtitle = _isPlayer
+        ? user.role == 'coach'
+              ? 'Présentez vos informations publiques de coach dans un cadre clair, lisible et crédible.'
+              : 'Présentez vos informations publiques de joueur dans un cadre clair, lisible et crédible.'
+        : _isClub
+        ? 'Rassemblez les informations visibles de votre club dans une présentation professionnelle et cohérente.'
+        : _isRecruiter
+        ? user.isAgent
+              ? 'Centralisez votre identité professionnelle, votre agence et vos coordonnées dans un profil de représentation plus clair.'
+              : 'Centralisez votre identité professionnelle, votre structure de recrutement et vos coordonnées dans un profil plus clair.'
+        : 'Mettez à jour les informations visibles de votre profil dans un cadre plus clair.';
+    final generalInfoSubtitle = _isClub
+        ? 'Nom du club, contact, langues et présentation visibles sur le profil.'
+        : _isRecruiter
+        ? 'Nom affiché, contact, langues et présentation professionnelle visibles sur le profil.'
+        : 'Nom affiché, contact, langues et présentation visible sur le profil.';
+    final bioLabel = _isPlayer
+        ? user.role == 'coach'
+              ? 'Présentation du coach'
+              : 'Présentation du joueur'
+        : _isClub
+        ? 'Présentation du club'
+        : _isRecruiter
+        ? user.isAgent
+              ? 'Présentation de l’agent'
+              : 'Présentation du recruteur'
+        : 'Présentation';
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Modifier le profil'),
-        backgroundColor: Colors.red,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Nom',
+      backgroundColor: kSurface,
+      appBar: const AdAppBar(title: 'Modifier le profil'),
+      body: Theme(
+        data: Theme.of(context).copyWith(
+          inputDecorationTheme: inputTheme,
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kPrimary,
+              foregroundColor: Colors.white,
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+            ),
+          ),
+          outlinedButtonTheme: OutlinedButtonThemeData(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kPrimary,
+              side: const BorderSide(color: kPrimary, width: 1.2),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+            ),
+          ),
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(foregroundColor: kPrimary),
+          ),
+        ),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (_, constraints) => SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildHeader(
+                          context: context,
+                          title: headerTitle,
+                          subtitle: headerSubtitle,
+                          icon: _isPlayer
+                              ? Icons.person_pin_circle_outlined
+                              : _isClub
+                              ? Icons.groups_outlined
+                              : _isRecruiter
+                              ? Icons.badge_outlined
+                              : Icons.person_outline,
+                        ),
+                        if (_saveFailureMessage != null) ...[
+                          const SizedBox(height: 16),
+                          ProfileActionNotice(
+                            title: _saveFailureTitle ?? 'Sauvegarde impossible',
+                            message: _saveFailureMessage!,
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        _SectionCard(
+                          title: 'Informations générales',
+                          subtitle: generalInfoSubtitle,
+                          icon: Icons.badge_rounded,
+                          child: Column(
+                            children: [
+                              _buildTextField(
+                                controller: _nomController,
+                                label: displayNameLabel,
+                                icon: Icons.person_outline,
+                                validator: (value) {
+                                  final text = (value ?? '').trim();
+                                  if (text.isEmpty) {
+                                    return 'Le nom est requis';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                controller: _phoneController,
+                                label: 'Numéro de téléphone',
+                                icon: Icons.phone_outlined,
+                                keyboardType: TextInputType.phone,
+                              ),
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                controller: _languagesController,
+                                label: 'Langues',
+                                icon: Icons.language_outlined,
+                                hint: 'Ex : Français, Anglais, Espagnol',
+                              ),
+                              if (_isPlayer) ...[
+                                const SizedBox(height: 12),
+                                _buildBirthDateField(context),
+                              ],
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                controller: _bioController,
+                                label: bioLabel,
+                                icon: Icons.info_outline,
+                                maxLines: 3,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (_isPlayer)
+                          _SectionCard(
+                            title: user.role == 'coach'
+                                ? 'Cadre sportif du coach'
+                                : 'Identité sportive du joueur',
+                            subtitle: user.role == 'coach'
+                                ? 'Renseignez la structure dans laquelle vous intervenez publiquement.'
+                                : 'Renseignez le poste principal et le club ou l’académie actuellement affichés sur votre profil.',
+                            icon: Icons.sports_soccer_outlined,
+                            child: Column(
+                              children: [
+                                _buildTextField(
+                                  controller: _positionController,
+                                  label: user.role == 'coach'
+                                      ? 'Fonction sportive'
+                                      : 'Poste principal',
+                                  icon: Icons.sports_outlined,
+                                  hint: user.role == 'coach'
+                                      ? 'Ex : Coach principal, préparateur physique'
+                                      : 'Ex : Ailier droit, gardien, milieu axial',
+                                ),
+                                const SizedBox(height: 12),
+                                _buildTextField(
+                                  controller: _teamController,
+                                  label: user.role == 'coach'
+                                      ? 'Club / structure actuelle'
+                                      : 'Club actuel',
+                                  icon: Icons.flag_outlined,
+                                  hint: 'Ex : AS Bamako',
+                                ),
+                              ],
+                            ),
+                          )
+                        else if (_isClub)
+                          _SectionCard(
+                            title: 'Cadre sportif du club',
+                            subtitle:
+                                'Renseignez la compétition principale du club pour situer immédiatement son niveau d’évolution.',
+                            icon: Icons.stadium_outlined,
+                            child: Column(
+                              children: [
+                                _buildTextField(
+                                  controller: _ligueController,
+                                  label: 'Ligue / championnat principal',
+                                  icon: Icons.emoji_events_outlined,
+                                  hint:
+                                      'Ex : Ligue 2, National U19, Régional 1',
+                                ),
+                              ],
+                            ),
+                          )
+                        else if (_isRecruiter)
+                          _SectionCard(
+                            title: user.isAgent
+                                ? 'Références de représentation'
+                                : 'Références de recrutement',
+                            subtitle: user.isAgent
+                                ? 'Présentez votre agence ou structure et le volume de mouvements accompagnés pour cadrer votre activité.'
+                                : 'Présentez votre structure et votre volume de recrutements pour situer clairement votre activité.',
+                            icon: Icons.search_rounded,
+                            child: Column(
+                              children: [
+                                _buildTextField(
+                                  controller: _entrepriseController,
+                                  label: user.isAgent
+                                      ? 'Agence / structure'
+                                      : 'Structure / cellule de recrutement',
+                                  icon: Icons.apartment_outlined,
+                                  hint: user.isAgent
+                                      ? 'Ex : Agence Horizon Football'
+                                      : 'Ex : Cellule de recrutement du FC Plateau',
+                                ),
+                                const SizedBox(height: 12),
+                                _buildTextField(
+                                  controller: _nombreRecrutementsController,
+                                  label: user.isAgent
+                                      ? 'Placements ou signatures réalisés'
+                                      : 'Recrutements réalisés',
+                                  icon: Icons.how_to_reg_outlined,
+                                  keyboardType: TextInputType.number,
+                                  validator: _validateOptionalNonNegativeInt,
+                                ),
+                              ],
+                            ),
+                          ),
+                        const SizedBox(height: 16),
+                        _SectionCard(
+                          title: 'Localisation',
+                          subtitle:
+                              'Ville, région et pays affichés sur votre profil public lorsque ces informations sont renseignées.',
+                          icon: Icons.place_outlined,
+                          child: Column(
+                            children: [
+                              _buildTextField(
+                                controller: _cityController,
+                                label: 'Ville',
+                                icon: Icons.location_city_outlined,
+                                hint: 'Ex : Abidjan',
+                              ),
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                controller: _regionController,
+                                label: 'Région / État',
+                                icon: Icons.map_outlined,
+                                hint: 'Ex : District autonome d’Abidjan',
+                              ),
+                              const SizedBox(height: 12),
+                              _buildTextField(
+                                controller: _countryController,
+                                label: 'Pays',
+                                icon: Icons.public_outlined,
+                                hint: 'Ex : Côte d’Ivoire',
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        if (user.role == 'joueur') ...[
+                          CvUploaderSection(
+                            initialUser: user,
+                            profileController: profileController,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () async {
-                // Sauvegarde les changements dans Firestore
-                String uid = _auth.currentUser!.uid;
-                await FirebaseFirestore.instance.collection('users').doc(uid).update({
-                  'name': _nameController.text,
-                });
-                Get.snackbar('Succès', 'Profil mis à jour !');
-              },
-              child: const Text('Sauvegarder'),
+          ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: AdButton(
+            onPressed: _saving ? null : _save,
+            loading: _saving,
+            leading: Icons.save_rounded,
+            label: _saving ? 'Sauvegarde...' : 'Enregistrer',
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class CvUploaderSection extends StatefulWidget {
+  final AppUser initialUser;
+  final ProfileController profileController;
+
+  static const kPrimary = _EditProfileScreenState.kPrimary;
+  const CvUploaderSection({
+    super.key,
+    required this.initialUser,
+    required this.profileController,
+  });
+
+  @override
+  State<CvUploaderSection> createState() => _CvUploaderSectionState();
+}
+
+class _CvUploaderSectionState extends State<CvUploaderSection> {
+  String? _cvUrl;
+  bool _isUploading = false;
+  bool _isDeleting = false;
+  String? _cvFailureTitle;
+  String? _cvFailureMessage;
+
+  AppUser get _currentUser {
+    final liveUser = widget.profileController.user;
+    if (liveUser != null && liveUser.uid == widget.initialUser.uid) {
+      return liveUser;
+    }
+    return widget.initialUser;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _cvUrl = widget.initialUser.cvUrl;
+  }
+
+  @override
+  void didUpdateWidget(covariant CvUploaderSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _cvUrl = _currentUser.cvUrl;
+  }
+
+  String get _maxCvSizeLabel {
+    final sizeMb = ProfileController.maxCvPdfBytes ~/ (1024 * 1024);
+    return '$sizeMb Mo';
+  }
+
+  void _showCvFailure(String title, String message) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _cvFailureTitle = title;
+      _cvFailureMessage = message;
+    });
+  }
+
+  void _clearCvFailure() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _cvFailureTitle = null;
+      _cvFailureMessage = null;
+    });
+  }
+
+  Future<void> _pickAndUploadCv(AppUser user) async {
+    var uploadStarted = false;
+
+    try {
+      _clearCvFailure();
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: false,
+        withReadStream: true,
+      );
+      if (result == null || result.files.isEmpty) {
+        return;
+      }
+
+      final pickedFile = result.files.single;
+      if (pickedFile.size > ProfileController.maxCvPdfBytes) {
+        final message = 'Le fichier PDF doit faire $_maxCvSizeLabel maximum.';
+        _showCvFailure('CV trop volumineux', message);
+        AdFeedback.error(
+          'CV trop volumineux',
+          message,
+          duration: const Duration(seconds: 6),
+        );
+        return;
+      }
+
+      final bytes = pickedFile.bytes;
+      final path = pickedFile.path;
+      final readStream = pickedFile.readStream;
+      final hasBytes = bytes != null && bytes.isNotEmpty;
+      final hasPath = path != null && path.isNotEmpty;
+      final hasStream = readStream != null;
+
+      if (!hasBytes && !hasPath && !hasStream) {
+        const message = 'Impossible de lire ce PDF depuis votre appareil.';
+        _showCvFailure('CV illisible', message);
+        AdFeedback.error(
+          'CV illisible',
+          message,
+          duration: const Duration(seconds: 6),
+        );
+        return;
+      }
+
+      setState(() => _isUploading = true);
+      uploadStarted = true;
+
+      final cvUrl = await widget.profileController.uploadCvPdf(
+        user.uid,
+        pdfBytes: hasBytes ? bytes : null,
+        pdfFile: hasPath ? File(path) : null,
+        pdfReadStream: hasStream ? readStream : null,
+        byteSize: pickedFile.size > 0 ? pickedFile.size : null,
+      );
+      if (!mounted) {
+        return;
+      }
+      if (cvUrl == null) {
+        setState(() {
+          _cvUrl = _currentUser.cvUrl;
+          _cvFailureTitle =
+              widget.profileController.lastCvUploadErrorTitle ??
+              'Ajout impossible';
+          _cvFailureMessage =
+              widget.profileController.lastCvUploadErrorMessage ??
+              "Impossible d'ajouter ce CV.";
+        });
+        return;
+      }
+      setState(() {
+        _cvUrl = cvUrl;
+        _cvFailureTitle = null;
+        _cvFailureMessage = null;
+      });
+    } on ProfileAccessRevokedException {
+      return;
+    } catch (e, st) {
+      AppLogger.debug('CV picker/upload error: $e\n$st');
+      const message = "Impossible de lire ou d'ajouter ce CV.";
+      _showCvFailure('Ajout impossible', message);
+      AdFeedback.error(
+        'Ajout impossible',
+        message,
+        duration: const Duration(seconds: 6),
+      );
+    } finally {
+      if (mounted && uploadStarted) {
+        setState(() => _isUploading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _currentUser;
+    final hasCv = (_cvUrl ?? '').trim().isNotEmpty;
+
+    return _SectionCard(
+      title: 'CV (PDF)',
+      subtitle:
+          'Ajoutez un CV football au format PDF pour renforcer la crédibilité de votre présentation.',
+      icon: Icons.picture_as_pdf_outlined,
+      trailing: hasCv
+          ? const Chip(
+              label: Text('Disponible'),
+              avatar: Icon(Icons.check_circle, color: Colors.white, size: 18),
+              backgroundColor: AdColors.success,
+              labelStyle: TextStyle(color: Colors.white),
+            )
+          : const Chip(
+              label: Text('Aucun CV'),
+              avatar: Icon(Icons.info_outline, color: Colors.white, size: 18),
+              backgroundColor: AdColors.warning,
+              labelStyle: TextStyle(color: Colors.white),
             ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_cvFailureMessage != null) ...[
+            ProfileActionNotice(
+              title: _cvFailureTitle ?? 'Ajout impossible',
+              message: _cvFailureMessage!,
+            ),
+            const SizedBox(height: 12),
+          ],
+          AdButton(
+            onPressed: _isUploading || _isDeleting
+                ? null
+                : () => _pickAndUploadCv(user),
+            loading: _isUploading,
+            leading: Icons.upload_file_rounded,
+            label: _isUploading
+                ? 'Ajout du CV...'
+                : hasCv
+                ? 'Remplacer le CV'
+                : 'Ajouter un CV',
+            kind: AdButtonKind.tonal,
+          ),
+          if (hasCv) ...[
+            const SizedBox(height: 10),
+            AdButton(
+              onPressed: _isUploading || _isDeleting
+                  ? null
+                  : () async {
+                      try {
+                        setState(() => _isDeleting = true);
+                        await widget.profileController.deleteCv(user.uid);
+                        if (!mounted) {
+                          return;
+                        }
+                        setState(() => _cvUrl = _currentUser.cvUrl);
+                      } on ProfileAccessRevokedException {
+                        return;
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isDeleting = false);
+                        }
+                      }
+                    },
+              loading: _isDeleting,
+              leading: Icons.delete_forever_rounded,
+              label: _isDeleting ? 'Suppression...' : 'Supprimer le CV',
+              kind: AdButtonKind.danger,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final IconData icon;
+  final Widget child;
+  final Widget? trailing;
+
+  const _SectionCard({
+    required this.title,
+    this.subtitle,
+    required this.icon,
+    required this.child,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: _EditProfileScreenState.kPrimary.withValues(
+                    alpha: 0.1,
+                  ),
+                  child: Icon(icon, color: _EditProfileScreenState.kPrimary),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle!,
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant,
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+              ],
+            ),
+            const SizedBox(height: 14),
+            child,
           ],
         ),
       ),

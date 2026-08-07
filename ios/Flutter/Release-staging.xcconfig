@@ -1,0 +1,4 @@
+#include "Release.xcconfig"
+
+APP_ENV=staging
+PRODUCT_BUNDLE_IDENTIFIER=org.adfoot.app.staging

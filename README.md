@@ -1,16 +1,130 @@
-# show_talent
+# Adfoot
 
-A new Flutter project.
+Flutter mobile app and Firebase backend for Adfoot.
 
-## Getting Started
+Product branding is `Adfoot`.
 
-This project is a starting point for a Flutter application.
+Historical infrastructure identifiers such as `show-talent-5987d` may still
+appear in technical configuration and legacy runbooks until the backend
+migration is completed.
 
-A few resources to get you started if this is your first Flutter project:
+## Operational runbooks
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+- [Mobile App Check Validation Runbook](./MOBILE_APPCHECK_VALIDATION_RUNBOOK.md)
+- [IAM Safe Configuration Runbook](./IAM_SAFE_CONFIGURATION_RUNBOOK.md)
+- [Video Metrics Logging Runbook](./VIDEO_METRICS_LOGGING_RUNBOOK.md)
+- [MP4 Production Baseline Runbook](./MP4_PRODUCTION_BASELINE_RUNBOOK.md)
+- [Firebase Environments Runbook](./docs/firebase-environments-runbook.md)
+- [Production-Next Recipe And Pilot Report](./docs/pv-recette-production-next.md)
+- [Mobile Firebase Config Runbook](./docs/mobile-firebase-config-runbook.md)
+- [Mobile Firebase Project Bootstrap Runbook](./docs/mobile-firebase-project-bootstrap-runbook.md)
+- [Cloud Cost Control Plan](./docs/cloud-cost-control-plan.md)
+- [Admin Bootstrap Runbook](./docs/admin-bootstrap-runbook.md)
+- [Admin Content Callables](./docs/admin-content-callables.md)
+- [Shared Backend Contract](./docs/shared-backend-contract.md)
+- [Inter-Repo Admin / Mobile Runbook](./docs/inter-repo-admin-mobile-runbook.md)
+- [Admin / Mobile Production Runbook](./docs/admin-mobile-production-runbook.md)
+- [Sprint 6 Android Store Ready](./docs/sprints/sprint-6-android-store-ready.md)
+- [Sprint 6 Development Coherence](./docs/sprints/sprint-6-development-coherence.md)
+- [Sprint 7 iOS Readiness](./docs/sprints/sprint-7-ios-readiness.md)
+- [Store Compliance](./docs/store-compliance.md)
+- [Android Release Checklist](./docs/checklists/android-release-checklist.md)
+- [Play Console Data Safety Draft](./docs/play-console-data-safety.md)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Development coherence gate
+
+Default gate (pre-store):
+
+```powershell
+npm.cmd run quality:coherence:check
+```
+
+Full gate including backend scheduler signal:
+
+```powershell
+npm.cmd run quality:coherence:check:full
+```
+
+Cross-repo gate including external admin repository checks:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\run-product-coherence-gate.ps1 `
+  -IncludeBackendGate `
+  -AdminRepoPath "C:\Users\Ing.Amidou.KONE\Desktop\MyApp\show_talent - web"
+```
+
+## Video release quality gate
+
+Local guardrails + targeted mobile/functions checks:
+
+```powershell
+npm.cmd run video:quality:release
+```
+
+Remote smoke flow (`upload -> processing -> ready -> playback -> delete`):
+
+```powershell
+npm.cmd run video:quality:release:remote
+```
+
+Remote smoke flow plus upload auth/app-check log verification:
+
+```powershell
+npm.cmd run video:quality:release:remote:verify
+```
+
+## Offer release quality gate
+
+Local guardrails + targeted mobile/functions checks for the Offer flow:
+
+```powershell
+npm.cmd run offer:quality:release
+```
+
+## Event release quality gate
+
+Local guardrails + targeted mobile/functions checks for the Event flow:
+
+```powershell
+npm.cmd run event:quality:release
+```
+
+## Sprint 6 command set
+
+Backend + Android gate:
+
+```powershell
+npm.cmd run release:android:gate
+```
+
+Android signed bundle build (after signing and assetlinks setup):
+
+```powershell
+npm.cmd run release:android:gate:build
+```
+
+Android signing setup (local machine):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup-android-signing.ps1 `
+  -StorePassword "<STORE_PASSWORD>" `
+  -KeyPassword "<KEY_PASSWORD>" `
+  -GenerateKeystore
+```
+
+Asset Links SHA update:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\update-assetlinks-fingerprints.ps1 `
+  -StagingFingerprint "<STAGING_SHA256_IF_AVAILABLE>"
+```
+
+## Video metrics logging
+
+Video initialization metrics now use a defensive two-stage policy:
+
+- mobile release builds are `errors-only` by default
+- mobile success logs resume only when `VIDEO_METRICS_SUCCESS_SAMPLE_RATE` is set explicitly
+- backend `logClientEvents` still persists `video_manager` errors, but samples `info` logs with `VIDEO_MANAGER_INFO_LOG_SAMPLE_RATE`
+
+See [VIDEO_METRICS_LOGGING_RUNBOOK.md](./VIDEO_METRICS_LOGGING_RUNBOOK.md) for the effective defaults, release behavior, and staging/production verification flow.

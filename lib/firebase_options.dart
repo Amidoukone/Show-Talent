@@ -15,6 +15,16 @@ import 'package:flutter/foundation.dart'
 /// );
 /// ```
 class DefaultFirebaseOptions {
+  static const String _placeholderApiKey = 'firebase-api-key-placeholder';
+  static const String _placeholderAppId = 'firebase-app-id-placeholder';
+  static const String _placeholderSenderId = 'firebase-sender-id-placeholder';
+  static const String _placeholderProjectId = 'firebase-project-placeholder';
+  static const String _placeholderAuthDomain =
+      'firebase-project-placeholder.firebaseapp.com';
+  static const String _placeholderStorageBucket =
+      'firebase-project-placeholder.firebasestorage.app';
+  static const String _placeholderBundleId = 'org.adfoot.app.placeholder';
+
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
       return web;
@@ -41,46 +51,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'firebase-api-key-placeholder',
-    appId: '1:43422248234:web:90e6e10558e53ab4f8c253',
-    messagingSenderId: '43422248234',
-    projectId: 'show-talent-5987d',
-    authDomain: 'show-talent-5987d.firebaseapp.com',
-    storageBucket: 'show-talent-5987d.appspot.com',
+    apiKey: _placeholderApiKey,
+    appId: _placeholderAppId,
+    messagingSenderId: _placeholderSenderId,
+    projectId: _placeholderProjectId,
+    authDomain: _placeholderAuthDomain,
+    storageBucket: _placeholderStorageBucket,
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'firebase-api-key-placeholder',
-    appId: '1:43422248234:android:08b0ab2b97c1f39ef8c253',
-    messagingSenderId: '43422248234',
-    projectId: 'show-talent-5987d',
-    storageBucket: 'show-talent-5987d.appspot.com',
+    apiKey: _placeholderApiKey,
+    appId: _placeholderAppId,
+    messagingSenderId: _placeholderSenderId,
+    projectId: _placeholderProjectId,
+    storageBucket: _placeholderStorageBucket,
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'firebase-api-key-placeholder',
-    appId: '1:43422248234:ios:5d961e9e382cbd4af8c253',
-    messagingSenderId: '43422248234',
-    projectId: 'show-talent-5987d',
-    storageBucket: 'show-talent-5987d.appspot.com',
-    iosBundleId: 'com.example.showTalent',
+    apiKey: _placeholderApiKey,
+    appId: _placeholderAppId,
+    messagingSenderId: _placeholderSenderId,
+    projectId: _placeholderProjectId,
+    storageBucket: _placeholderStorageBucket,
+    iosBundleId: _placeholderBundleId,
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'firebase-api-key-placeholder',
-    appId: '1:43422248234:ios:5d961e9e382cbd4af8c253',
-    messagingSenderId: '43422248234',
-    projectId: 'show-talent-5987d',
-    storageBucket: 'show-talent-5987d.appspot.com',
-    iosBundleId: 'com.example.showTalent',
+    apiKey: _placeholderApiKey,
+    appId: _placeholderAppId,
+    messagingSenderId: _placeholderSenderId,
+    projectId: _placeholderProjectId,
+    storageBucket: _placeholderStorageBucket,
+    iosBundleId: _placeholderBundleId,
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'firebase-api-key-placeholder',
-    appId: '1:43422248234:web:403c0fe305e9dedef8c253',
-    messagingSenderId: '43422248234',
-    projectId: 'show-talent-5987d',
-    authDomain: 'show-talent-5987d.firebaseapp.com',
-    storageBucket: 'show-talent-5987d.appspot.com',
+    apiKey: _placeholderApiKey,
+    appId: _placeholderAppId,
+    messagingSenderId: _placeholderSenderId,
+    projectId: _placeholderProjectId,
+    authDomain: _placeholderAuthDomain,
+    storageBucket: _placeholderStorageBucket,
   );
 }

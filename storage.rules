@@ -1,0 +1,163 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function videoDocIdFromFileName(fileName) {
+      return fileName[0:fileName.size() - 4];
+    }
+
+    function thumbnailDocIdFromJpgFileName(fileName) {
+      return fileName[10:fileName.size() - 4];
+    }
+
+    function thumbnailDocIdFromJpegFileName(fileName) {
+      return fileName[10:fileName.size() - 5];
+    }
+
+    function isOwnedVideoDoc(videoId) {
+      return firestore.exists(/databases/(default)/documents/videos/$(videoId)) &&
+        firestore.get(/databases/(default)/documents/videos/$(videoId)).data.uid == request.auth.uid;
+    }
+
+    function hasUserProfileDoc(uid) {
+      return firestore.exists(/databases/(default)/documents/users/$(uid));
+    }
+
+    function userProfileDoc(uid) {
+      return firestore.get(/databases/(default)/documents/users/$(uid));
+    }
+
+    function hasActiveUserProfile(uid) {
+      return hasUserProfileDoc(uid) &&
+        userProfileDoc(uid).data.authDisabled != true;
+    }
+
+    function isActiveProfileOwner(uid) {
+      return signedIn() &&
+        request.auth.uid == uid &&
+        hasActiveUserProfile(uid);
+    }
+
+    function isPlayerProfileOwner(uid) {
+      return isActiveProfileOwner(uid) &&
+        userProfileDoc(uid).data.role == "joueur";
+    }
+
+    function signedInUserRole() {
+      return signedIn() && hasUserProfileDoc(request.auth.uid) ?
+        userProfileDoc(request.auth.uid).data.role :
+        null;
+    }
+
+    function isAdminOperator() {
+      return signedIn() &&
+        (
+          signedInUserRole() == "admin" ||
+          request.auth.token.admin == true ||
+          request.auth.token.platformAdmin == true ||
+          request.auth.token.superAdmin == true
+        );
+    }
+
+    function isOwnedVideoMp4(fileName) {
+      return fileName.matches('^[A-Za-z0-9_-]+\\.mp4$') &&
+        isOwnedVideoDoc(videoDocIdFromFileName(fileName));
+    }
+
+    function isOwnedMp4Rendition(videoId, fileName) {
+      return videoId.matches('^[A-Za-z0-9_-]+$') &&
+        fileName.matches('^[A-Za-z0-9_.-]+\\.mp4$') &&
+        isOwnedVideoDoc(videoId);
+    }
+
+    function isOwnedThumbnail(fileName) {
+      return (
+        fileName.matches('^thumbnail_[A-Za-z0-9_-]+\\.jpg$') &&
+        isOwnedVideoDoc(thumbnailDocIdFromJpgFileName(fileName))
+      ) || (
+        fileName.matches('^thumbnail_[A-Za-z0-9_-]+\\.png$') &&
+        isOwnedVideoDoc(thumbnailDocIdFromJpgFileName(fileName))
+      ) || (
+        fileName.matches('^thumbnail_[A-Za-z0-9_-]+\\.jpeg$') &&
+        isOwnedVideoDoc(thumbnailDocIdFromJpegFileName(fileName))
+      );
+    }
+
+    function isCvFileName(fileName) {
+      return fileName.matches('^cv_[0-9]+\\.pdf$');
+    }
+
+    function hasDeclaredCvContentType() {
+      return request.resource.contentType != null &&
+        request.resource.contentType != "";
+    }
+
+    function isAllowedCvContentType() {
+      return !hasDeclaredCvContentType() ||
+        request.resource.contentType.matches('application/pdf(;.*)?') ||
+        request.resource.contentType == 'application/x-pdf' ||
+        request.resource.contentType == 'application/acrobat' ||
+        request.resource.contentType == 'application/vnd.pdf' ||
+        request.resource.contentType == 'text/pdf' ||
+        request.resource.contentType == 'text/x-pdf' ||
+        request.resource.contentType == 'application/octet-stream';
+    }
+
+    function isValidCvPdfUpload(fileName) {
+      return isCvFileName(fileName) &&
+        request.resource.size > 0 &&
+        request.resource.size <= 5 * 1024 * 1024 &&
+        isAllowedCvContentType();
+    }
+
+    function canReadCv(uid) {
+      return signedIn() &&
+        (
+          (request.auth.uid == uid && hasActiveUserProfile(uid)) ||
+          isAdminOperator() ||
+          (
+            hasUserProfileDoc(uid) &&
+            userProfileDoc(uid).data.profilePublic == true &&
+            userProfileDoc(uid).data.authDisabled != true
+          )
+        );
+    }
+
+    match /profilePhotos/{uid} {
+      allow read: if true;
+      allow write: if isActiveProfileOwner(uid);
+    }
+
+    match /cvs/{uid}/{fileName} {
+      allow read: if canReadCv(uid);
+      allow create, update: if isPlayerProfileOwner(uid) &&
+        isValidCvPdfUpload(fileName);
+      allow delete: if isActiveProfileOwner(uid);
+    }
+
+    match /videos/{videoFileName} {
+      allow read: if true;
+      allow create, update: if false;
+      allow delete: if signedIn() && isOwnedVideoMp4(videoFileName);
+    }
+
+    match /mp4/{videoId}/{fileName} {
+      allow read: if true;
+      allow create, update: if false;
+      allow delete: if signedIn() && isOwnedMp4Rendition(videoId, fileName);
+    }
+
+    match /thumbnails/{fileName} {
+      allow read: if true;
+      allow create, update: if false;
+      allow delete: if signedIn() && isOwnedThumbnail(fileName);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

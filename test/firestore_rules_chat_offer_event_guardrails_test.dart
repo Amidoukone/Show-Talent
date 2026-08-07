@@ -1,0 +1,132 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  group('Firestore chat/offre/event guardrails', () {
+    test(
+      'rules keep guided messaging intake creation available to active users',
+      () {
+        final rules = File('firestore.rules').readAsStringSync();
+
+        expect(rules, contains('match /conversations/{conversationId} {'));
+        expect(rules, contains('match /contact_intakes/{intakeId} {'));
+        expect(
+          rules,
+          contains('request.resource.data.requesterUid == request.auth.uid'),
+        );
+        expect(
+          rules,
+          contains('request.resource.data.agencyFollowUpStatus == "new"'),
+        );
+      },
+    );
+
+    test('rules allow narrow active chat presence updates for mobile', () {
+      final rules = File('firestore.rules').readAsStringSync();
+
+      expect(rules, contains('function canUpdateOwnChatPresence() {'));
+      expect(
+        rules,
+        contains('changesOnly(["activeConversationId", "activeAt"])'),
+      );
+      expect(rules, contains('request.resource.data.activeAt == request.time'));
+      expect(rules, contains('canUpdateOwnChatPresence()'));
+    });
+
+    test(
+      'rules allow player-side candidature and registration mutations only on narrow fields',
+      () {
+        final rules = File('firestore.rules').readAsStringSync();
+
+        expect(rules, contains('function canMutateOfferCandidates() {'));
+        expect(rules, contains('changesOnly(["candidats", "lastUpdated"])'));
+        expect(rules, contains('function canMutateEventParticipants() {'));
+        expect(rules, contains('changesOnly(["participants", "lastUpdated"])'));
+        expect(rules, contains('resource.data.statut == "ouverte"'));
+        expect(rules, contains('resource.data.statut == "ouvert"'));
+      },
+    );
+
+    test('event participant repository updates stay aligned with narrow rules', () {
+      final repository = File(
+        'lib/services/events/event_repository.dart',
+      ).readAsStringSync();
+      final registerBlock = RegExp(
+        r'Future<void> registerParticipant[\s\S]*?Future<void> unregisterParticipant',
+      ).firstMatch(repository)?.group(0);
+      final unregisterBlock = RegExp(
+        r'Future<void> unregisterParticipant[\s\S]*?Query<Map<String, dynamic>> _buildQuery',
+      ).firstMatch(repository)?.group(0);
+
+      expect(registerBlock, isNotNull);
+      expect(unregisterBlock, isNotNull);
+      expect(registerBlock, contains("'participants': participants"));
+      expect(unregisterBlock, contains("'participants': participants"));
+      expect(registerBlock, contains("'lastUpdated'"));
+      expect(unregisterBlock, contains("'lastUpdated'"));
+      expect(registerBlock, isNot(contains("'statut': status")));
+      expect(unregisterBlock, isNot(contains("'statut': status")));
+    });
+
+    test(
+      'rules keep offer view metrics writable without reopening owner fields',
+      () {
+        final rules = File('firestore.rules').readAsStringSync();
+
+        expect(rules, contains('function canMutateOfferViews() {'));
+        expect(
+          rules,
+          contains('changesOnly(["vues", "viewedBy", "lastUpdated"])'),
+        );
+      },
+    );
+
+    test('rules allow only narrow owner FCM token updates', () {
+      final rules = File('firestore.rules').readAsStringSync();
+
+      expect(rules, contains('function canUpdateOwnFcmToken() {'));
+      expect(rules, contains('changesOnly(["fcmToken"])'));
+      expect(rules, contains('request.resource.data.fcmToken is string'));
+      expect(rules, contains('request.resource.data.fcmToken.size() <= 4096'));
+    });
+
+    test('rules allow narrow self-service profile updates for mobile', () {
+      final rules = File('firestore.rules').readAsStringSync();
+
+      expect(rules, contains('function canUpdateOwnProfile() {'));
+      expect(rules, contains('function ownerProfileTrustFieldsChanged() {'));
+      expect(
+        rules,
+        contains('function ownerProfileVerificationResetIsValid() {'),
+      );
+      expect(rules, contains('function resourceProfileIsVerified() {'));
+      expect(
+        rules,
+        contains('resource.data.profileVerificationStatus == "verified"'),
+      );
+      expect(rules, contains('verifiedOwnerProfileChangeIsInvalidated()'));
+      expect(rules, contains('"profileVerificationInvalidationReason"'));
+      expect(
+        rules,
+        contains(
+          'request.resource.data.profileVerificationInvalidationReason == "profile_updated_by_user"',
+        ),
+      );
+      expect(rules, contains('"cvUrl"'));
+      expect(rules, contains('"photoProfil"'));
+      expect(rules, contains('"playerProfile"'));
+      expect(rules, contains('"playerProfile.physical.heightCm"'));
+      expect(rules, contains('"playerProfile.stats.goals"'));
+      expect(rules, contains('"playerProfile.availability.regions"'));
+      expect(rules, contains('"clubProfile"'));
+      expect(rules, contains('"clubProfile.structureType"'));
+      expect(rules, contains('"agentProfile"'));
+      expect(rules, contains('"agentProfile.licenseNumber"'));
+      expect(rules, contains('function ownerCvUrlChangeIsSafe()'));
+      expect(rules, contains('userRole() == "joueur"'));
+      expect(rules, contains('request.resource.data.cvUrl.size() <= 2048'));
+      expect(rules, contains('canUpdateOwnProfile()'));
+    });
+  });
+}

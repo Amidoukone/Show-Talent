@@ -1,156 +1,159 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/screens/home_screen.dart';
-import '../models/user.dart';
 
-class SignUpScreen extends StatefulWidget {
+class SignUpScreen extends StatelessWidget {
   const SignUpScreen({super.key});
 
   @override
-  _SignUpScreenState createState() => _SignUpScreenState();
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final roleLabels = adminProvisionedRoles.join(', ');
+
+    return Scaffold(
+      backgroundColor: cs.surface,
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: AdSurfaceCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.center,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.asset(
+                        'assets/logo.png',
+                        height: 80,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Création de compte centralisée',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: cs.onSurface,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'L’application mobile ne crée plus de comptes directement.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.7),
+                          fontWeight: FontWeight.w600,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  _InfoCard(
+                    icon: Icons.admin_panel_settings_outlined,
+                    color: cs.primary,
+                    title: 'Règle active',
+                    message: publicSignupDisabledMessage,
+                  ),
+                  const SizedBox(height: 14),
+                  _InfoCard(
+                    icon: Icons.groups_outlined,
+                    color: cs.secondary,
+                    title: 'Rôles concernés',
+                    message:
+                        'Tous les comptes sont maintenant provisionnés dans le portail admin : $roleLabels.',
+                  ),
+                  const SizedBox(height: 14),
+                  _InfoCard(
+                    icon: Icons.list_alt_outlined,
+                    color: cs.tertiary,
+                    title: 'Parcours utilisateur',
+                    message: '1. Contacter l’administration Adfoot.\n'
+                        '2. Recevoir le lien de définition du mot de passe.\n'
+                        '3. Valider l’adresse e-mail.\n'
+                        '4. Se connecter ensuite dans l’application mobile.',
+                  ),
+                  const SizedBox(height: 24),
+                  AdButton(
+                    label: 'Retour à la connexion',
+                    onPressed: () => Get.back(),
+                    leading: Icons.arrow_back_rounded,
+                    kind: AdButtonKind.primary,
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () => Get.back(),
+                    child: const Text('J’ai déjà un compte'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
-class _SignUpScreenState extends State<SignUpScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _nameController = TextEditingController();
-  String _selectedRole = 'joueur';  // Le rôle sélectionné par l'utilisateur
-  bool _obscurePassword = true; // Contrôle pour masquer/afficher le mot de passe
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.message,
+  });
 
-  _signUp() async {
-    try {
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-            email: _emailController.text,
-            password: _passwordController.text,
-          );
-
-      String uid = userCredential.user!.uid;
-
-      // Sauvegarder les informations utilisateur dans Firestore
-      AppUser newUser = AppUser(
-        uid: uid,
-        name: _nameController.text,
-        email: _emailController.text,
-        role: _selectedRole,
-        profilePhoto: '',
-        followers: [],
-        following: [],
-      );
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .set(newUser.toMap());
-
-      Get.offAll(() => const HomeScreen());
-    } catch (e) {
-      Get.snackbar('Échec de l\'inscription', e.toString());
-    }
-  }
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Logo
-              Image.asset('assets/logo.png', height: 100),
-              const SizedBox(height: 40),
-              // Titre de la page
-              const Text(
-                'Créez un compte',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              // Champ Nom
-              TextField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: 'Nom',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  prefixIcon: const Icon(Icons.person),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Champ Email
-              TextField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: 'Adresse e-mail',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  prefixIcon: const Icon(Icons.email),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Champ mot de passe avec option afficher/masquer
-              TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'Mot de passe',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  prefixIcon: const Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword
-                        ? Icons.visibility_off
-                        : Icons.visibility),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Sélection du rôle
-              DropdownButton<String>(
-                value: _selectedRole,
-                items: ['joueur', 'club', 'recruteur', 'fan', 'coach']
-                    .map((String role) {
-                  return DropdownMenuItem<String>(
-                    value: role,
-                    child: Text(role),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _selectedRole = newValue!;
-                  });
-                },
-              ),
-              const SizedBox(height: 20),
-              // Bouton d'inscription
-              ElevatedButton(
-                onPressed: _signUp,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  'S\'inscrire',
-                  style: TextStyle(fontSize: 18),
-                ),
-              ),
-            ],
-          ),
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withValues(alpha: 0.18),
         ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: cs.onSurface.withValues(alpha: 0.8),
+                        height: 1.45,
+                        fontWeight: FontWeight.w500,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

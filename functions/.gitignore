@@ -1,0 +1,22 @@
+# Compiled JavaScript files
+lib/**/*.js
+lib/**/*.js.map
+
+# TypeScript v1 declaration files
+typings/
+
+# Node.js dependency directory
+node_modules/
+*.local
+.env
+.env.local
+.env.production
+.env.prod
+.env.staging
+.env.dev
+.env.*
+!.env.example
+!.env.local.example
+!.env.production.example
+!.env.production-next.example
+!.env.staging.example

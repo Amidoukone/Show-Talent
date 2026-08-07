@@ -1,120 +1,104 @@
-import 'dart:io';
-
-
+import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/services/email_link_handler.dart';
+import 'package:adfoot/services/notifications.dart';
+import 'package:adfoot/services/users/user_repository.dart';
+import 'package:adfoot/services/web_messaging_helper.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:get/get.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:show_talent/models/user.dart';
-import 'package:show_talent/screens/home_screen.dart';
-import 'package:show_talent/screens/login_screen.dart'; 
+import 'package:adfoot/services/app_logger.dart';
 
-
-
+/// AuthController ne navigue pas.
+/// - Maintient AppUser "metier" et sa synchronisation.
+/// - Gere FCM et permission systeme.
+/// - La navigation reste entierement geree par UserController.
 class AuthController extends GetxController {
   static AuthController instance = Get.find();
 
-  late Rx<User?> _user;
-  late Rx<File?> _pickedImage;
+  final AuthSessionService _authSessionService = AuthSessionService();
+  final UserRepository _userRepository = UserRepository();
 
-  File? get profilePhoto => _pickedImage.value;
-  User get user => _user.value!;
+  final Rx<User?> _firebaseUser = Rx<User?>(null);
+  final Rx<AppUser?> _appUser = Rx<AppUser?>(null);
+
+  AppUser? get user => _appUser.value;
+  String? get currentUid => _appUser.value?.uid;
+
+  bool _askedNotifThisSession = false;
 
   @override
   void onReady() {
     super.onReady();
-    _user = Rx<User?>(FirebaseAuth.instance.currentUser);  // Instance Firebase Auth
-    _user.bindStream(FirebaseAuth.instance.authStateChanges());
-    ever(_user, _setInitialScreen);
+    _firebaseUser.bindStream(_authSessionService.idTokenChanges());
+    ever<User?>(_firebaseUser, _syncState);
+    _syncState(_authSessionService.currentUser);
   }
 
-  _setInitialScreen(User? user) {
-    if (user == null) {
-      Get.offAll(() => const LoginScreen());
-    } else {
-      Get.offAll(() => const HomeScreen());
+  Future<void> _syncState(User? firebaseUser) async {
+    if (firebaseUser == null) {
+      _appUser.value = null;
+      return;
     }
-  }
 
-  // Méthode pour choisir une image de profil
-  void pickImage() async {
-    final pickedImage =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (pickedImage != null) {
-      Get.snackbar('Profile Picture', 'Image Added Successfully');
-    }
-    _pickedImage = Rx<File?>(File(pickedImage!.path));
-  }
-
-  // Méthode pour uploader l'image dans Firebase Storage
-  Future<String> _uploadToStorage(File image) async {
-    Reference ref = FirebaseStorage.instance
-        .ref()
-        .child('profilePictures')
-        .child(FirebaseAuth.instance.currentUser!.uid);
-
-    UploadTask uploadTask = ref.putFile(image);
-    TaskSnapshot snap = await uploadTask;
-    String downloadUrl = await snap.ref.getDownloadURL();
-    return downloadUrl;
-  }
-
-  // Méthode pour enregistrer un utilisateur avec un rôle
-  void registerUser(String name, String email, String password, String role, File? image) async {
     try {
-      if (name.isNotEmpty && email.isNotEmpty && password.isNotEmpty && image != null && role.isNotEmpty) {
-        // Création d'un utilisateur Firebase
-        UserCredential userCred = await FirebaseAuth.instance
-            .createUserWithEmailAndPassword(email: email, password: password);
+      final snapshot = await _authSessionService.resolveSessionSafely(
+        firebaseUser,
+        waitForVerifiedUserDocument: true,
+        syncVerifiedUserRecord: false,
+        signOutOnInvalid: false,
+      );
 
-        // Upload de l'image de profil
-        String downloadUrl = await _uploadToStorage(image);
-
-        // Création de l'objet AppUser
-        AppUser newUser = AppUser(
-          uid: userCred.user!.uid,
-          name: name,
-          email: email,
-          role: role,  // Ajout du rôle ici
-          profilePhoto: downloadUrl,
-          followers: [],
-          following: [],
-        );
-
-        // Enregistrement de l'utilisateur dans Firestore
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCred.user!.uid)
-            .set(newUser.toMap());
-
-        Get.snackbar('Bienvenue', 'Votre compte a été créé avec succès');
-        Get.to(() => const HomeScreen());
-      } else {
-        Get.snackbar('Erreur', 'Veuillez remplir tous les champs et ajouter une photo');
+      _appUser.value = snapshot.destination == AuthSessionDestination.main
+          ? snapshot.appUser
+          : null;
+      final refreshed = snapshot.firebaseUser;
+      if (snapshot.destination != AuthSessionDestination.main ||
+          refreshed == null) {
+        return;
       }
-    } catch (e) {
-      Get.snackbar('Erreur', e.toString());
+
+      await _updateFcmToken(refreshed);
+      await _ensureSystemNotificationPromptOnce(refreshed);
+    } catch (error) {
+      AppLogger.debug('AuthController _syncState error: $error');
+      _appUser.value = null;
     }
   }
 
-  // Méthode pour se connecter
-  void loginUser(String email, String password) async {
+  Future<void> signOut() async {
     try {
-      if (email.isNotEmpty && password.isNotEmpty) {
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-            email: email, password: password);
-        Get.to(() => const HomeScreen());
-      } else {
-        Get.snackbar('Erreur', 'Veuillez remplir toutes les informations');
+      await EmailLinkHandler.dispose();
+    } catch (_) {}
+
+    await _authSessionService.signOut();
+    _appUser.value = null;
+    _askedNotifThisSession = false;
+  }
+
+  Future<void> _updateFcmToken(User user) async {
+    try {
+      final token = await WebMessagingHelper.getTokenWithRetry(retries: 2);
+      if (token != null) {
+        await _userRepository.saveFcmToken(user.uid, token);
       }
-    } catch (e) {
-      Get.snackbar('Erreur de connexion', e.toString());
+    } catch (error) {
+      AppLogger.debug('AuthController _updateFcmToken error: $error');
     }
   }
 
-  // Méthode pour se déconnecter
-  void signOut() async {
-    await FirebaseAuth.instance.signOut();
+  Future<void> _ensureSystemNotificationPromptOnce(User user) async {
+    if (_askedNotifThisSession) {
+      return;
+    }
+
+    _askedNotifThisSession = true;
+    try {
+      await NotificationService.askPermissionAndUpdateToken(currentUser: user);
+    } catch (error) {
+      AppLogger.debug('AuthController notifications permission error: $error');
+    }
   }
+
+  /// Appel transitoire conserve pour compatibilite avec les ecrans existants.
+  Future<void> handleAuthState(User? firebaseUser) => _syncState(firebaseUser);
 }

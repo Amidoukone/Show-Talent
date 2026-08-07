@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Adfoot | Créer le mot de passe</title>
+    <meta
+      name="description"
+      content="Création du mot de passe Adfoot."
+    />
+    <link rel="stylesheet" href="/auth-action.css" />
+  </head>
+  <body>
+    <main class="card">
+      <h1 id="action-title">Créer votre mot de passe</h1>
+      <p id="action-description">
+        Saisissez un mot de passe pour activer votre compte.
+      </p>
+      <p class="status info" id="action-status" role="status">
+        Vérification du lien...
+      </p>
+      <section id="success-panel" class="success-panel" hidden>
+        <strong>Mot de passe créé</strong>
+        <span>Vous pouvez maintenant vous connecter à Adfoot.</span>
+      </section>
+      <form id="reset-form" class="form" hidden>
+        <label for="new-password">Nouveau mot de passe</label>
+        <input
+          id="new-password"
+          name="new-password"
+          type="password"
+          minlength="6"
+          autocomplete="new-password"
+          required
+        />
+        <label for="confirm-password">Confirmer le mot de passe</label>
+        <input
+          id="confirm-password"
+          name="confirm-password"
+          type="password"
+          minlength="6"
+          autocomplete="new-password"
+          required
+        />
+        <button id="submit-password" class="btn btn-primary" type="submit">
+          Définir le mot de passe
+        </button>
+      </form>
+      <p class="meta" id="action-meta" hidden></p>
+      <p class="footnote" id="action-hint">
+        Après validation, connectez-vous avec votre e-mail.
+      </p>
+    </main>
+    <script src="/auth-action.js" defer></script>
+  </body>
+</html>

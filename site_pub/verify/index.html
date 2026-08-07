@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Adfoot | Vérification e-mail</title>
+    <meta
+      name="description"
+      content="Vérification de l'adresse e-mail Adfoot."
+    />
+    <link rel="stylesheet" href="/auth-action.css" />
+  </head>
+  <body>
+    <main class="card">
+      <h1 id="action-title">Vérification e-mail</h1>
+      <p id="action-description">
+        Validation de votre adresse e-mail en cours.
+      </p>
+      <p class="status info" id="action-status" role="status">
+        Vérification du lien...
+      </p>
+      <section id="success-panel" class="success-panel" hidden>
+        <strong>E-mail vérifié</strong>
+        <span>Ouvrez le lien de création du mot de passe.</span>
+      </section>
+      <p class="meta" id="action-meta" hidden></p>
+      <p class="footnote" id="action-hint">
+        Ouvrez le lien de création du mot de passe.
+      </p>
+    </main>
+    <script src="/auth-action.js" defer></script>
+  </body>
+</html>

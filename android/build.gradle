@@ -1,3 +1,8 @@
+// ============================================================================
+// Root-level build.gradle
+// Compatible with Flutter 3.44.x / AGP 8.11.x / Gradle 8.14.x / Kotlin 2.2.x
+// ============================================================================
+
 allprojects {
     repositories {
         google()
@@ -5,14 +10,30 @@ allprojects {
     }
 }
 
+// Shared build directory (standard Flutter structure).
 rootProject.buildDir = "../build"
+
 subprojects {
+
+    buildscript {
+        configurations.classpath {
+            resolutionStrategy.eachDependency { details ->
+                if (details.requested.group == "org.jetbrains.kotlin") {
+                    details.useVersion("2.2.20")
+                    details.because("Align plugin Kotlin Gradle Plugin classpaths with Flutter 3.44 and Gradle 8.14")
+                }
+            }
+        }
+    }
+
+    // Each module (app + Flutter plugins) has its own build directory.
     project.buildDir = "${rootProject.buildDir}/${project.name}"
-}
-subprojects {
+
+    // Flutter requires every plugin module to depend on :app.
     project.evaluationDependsOn(":app")
 }
 
+// Global clean task used by flutter clean.
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }

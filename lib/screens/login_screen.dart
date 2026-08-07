@@ -1,136 +1,418 @@
+import 'package:adfoot/controller/user_controller.dart';
+import 'dart:async';
+
+import 'package:adfoot/screens/signup_screen.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/utils/auth_error_mapper.dart';
+import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_surface_card.dart';
+import 'package:adfoot/widgets/ad_text_field.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:show_talent/screens/home_screen.dart';
-import 'package:show_talent/screens/signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  bool _obscurePassword = true; // Contrôle pour masquer/afficher le mot de passe
+  final AuthSessionService _authSessionService = AuthSessionService();
 
-  _login() async {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+  bool _isResettingPassword = false;
+  String? _sessionNoticeTitle;
+  String? _sessionNoticeMessage;
+  String _sessionNoticeKind = 'error';
+  Map<String, dynamic>? _postLoginRouteArguments;
+
+  bool get _isBusy => _isLoading || _isResettingPassword;
+
+  @override
+  void initState() {
+    super.initState();
+    _captureSessionNotice();
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _login() async {
+    if (_isBusy) {
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text,
+      final snapshot = await _authSessionService.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-      Get.offAll(() => const HomeScreen());  // Redirection vers la page d'accueil après connexion
-    } catch (e) {
-      Get.snackbar('Échec de la connexion', e.toString());
+
+      if (snapshot.destination == AuthSessionDestination.login) {
+        _showErrorSnackbar(
+          snapshot.failureMessage ??
+              snapshot.failure?.loginMessage ??
+              'Connexion impossible pour le moment.',
+          title: snapshot.failureTitle ?? 'Connexion impossible',
+        );
+        return;
+      }
+
+      final userController = Get.find<UserController>();
+      await userController
+          .applyResolvedSessionSnapshot(
+            snapshot,
+            routeArguments: _postLoginRouteArguments,
+          )
+          .timeout(
+            const Duration(seconds: 12),
+            onTimeout: () => userController.kickstart(),
+          );
+    } on FirebaseAuthException catch (error) {
+      _showErrorSnackbar(AuthErrorMapper.toMessage(error));
+    } on AuthFlowException catch (error) {
+      _showErrorSnackbar(error.message);
+    } catch (_) {
+      _showErrorSnackbar(
+        'Une erreur inattendue s’est produite. Veuillez réessayer.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  // Méthode pour récupérer un mot de passe oublié
-  Future<void> _forgotPassword() async {
-    if (_emailController.text.isEmpty) {
-      Get.snackbar('Erreur', 'Veuillez entrer votre email pour réinitialiser le mot de passe.');
+  Future<void> _resetPassword() async {
+    if (_isBusy) {
       return;
     }
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: _emailController.text);
-      Get.snackbar('Réinitialisation du mot de passe', 'Un email de réinitialisation vous a été envoyé.');
-    } catch (e) {
-      Get.snackbar('Erreur', e.toString());
+
+    final email = _emailController.text.trim();
+    final emailError = _validateEmailValue(email);
+    if (emailError != null) {
+      _showErrorSnackbar(emailError, title: 'Réinitialisation impossible');
+      return;
     }
+
+    if (mounted) {
+      setState(() => _isResettingPassword = true);
+    }
+
+    try {
+      await _authSessionService.sendPasswordResetEmail(
+        email: email,
+      );
+
+      AdFeedback.success(
+        'Succès',
+        'E-mail de réinitialisation envoyé.',
+      );
+    } on FirebaseAuthException catch (error) {
+      _showErrorSnackbar(
+        AuthErrorMapper.toMessage(error),
+        title: 'Réinitialisation impossible',
+      );
+    } on AuthFlowException catch (error) {
+      _showErrorSnackbar(error.message, title: 'Réinitialisation impossible');
+    } catch (_) {
+      _showErrorSnackbar(
+        'Impossible d’envoyer le lien de réinitialisation pour le moment.',
+        title: 'Réinitialisation impossible',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isResettingPassword = false);
+      }
+    }
+  }
+
+  String? _validateEmailValue(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return 'Veuillez saisir votre e-mail.';
+    }
+    final ok =
+        RegExp(r'^[\w\.\-+]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(normalized);
+    if (!ok) {
+      return 'Veuillez saisir une adresse e-mail valide.';
+    }
+    return null;
+  }
+
+  void _captureSessionNotice() {
+    Map<String, String>? notice;
+
+    final args = Get.arguments;
+    if (args is Map) {
+      _postLoginRouteArguments = _extractPostLoginRouteArguments(args);
+
+      final prefillEmail = args['prefillEmail']?.toString().trim();
+      if (prefillEmail != null && prefillEmail.isNotEmpty) {
+        _emailController.text = prefillEmail;
+      }
+
+      final title = args['sessionNoticeTitle']?.toString().trim();
+      final message = args['sessionNoticeMessage']?.toString().trim();
+      final kind = args['sessionNoticeKind']?.toString().trim().toLowerCase();
+      if (message != null && message.isNotEmpty) {
+        notice = <String, String>{
+          'sessionNoticeTitle': (title == null || title.isEmpty)
+              ? 'Information importante'
+              : title,
+          'sessionNoticeMessage': message,
+          'sessionNoticeKind': (kind == null || kind.isEmpty) ? 'error' : kind,
+        };
+      }
+    }
+
+    notice ??= Get.find<UserController>().consumePendingSessionNotice();
+    if (notice == null) {
+      return;
+    }
+
+    final title = notice['sessionNoticeTitle']?.trim();
+    final message = notice['sessionNoticeMessage']?.trim();
+    if (message == null || message.isEmpty) {
+      return;
+    }
+
+    _sessionNoticeTitle =
+        (title == null || title.isEmpty) ? 'Information importante' : title;
+    _sessionNoticeMessage = message;
+    _sessionNoticeKind =
+        notice['sessionNoticeKind']?.trim().toLowerCase() ?? 'error';
+  }
+
+  Map<String, dynamic>? _extractPostLoginRouteArguments(
+      Map<dynamic, dynamic> args) {
+    final videoId = args['videoId']?.toString().trim();
+    final focusVideoId = args['focusVideoId']?.toString().trim();
+    final hasVideoTarget = (videoId != null && videoId.isNotEmpty) ||
+        (focusVideoId != null && focusVideoId.isNotEmpty);
+
+    if (!hasVideoTarget) {
+      return null;
+    }
+
+    return <String, dynamic>{
+      'tab': args['tab'] is int ? args['tab'] : 0,
+      'refresh': args['refresh'] == true,
+      if (videoId != null && videoId.isNotEmpty) 'videoId': videoId,
+      if (focusVideoId != null && focusVideoId.isNotEmpty)
+        'focusVideoId': focusVideoId,
+      'autoplay': args['autoplay'] != false,
+      if (args['source'] != null) 'source': args['source'].toString(),
+    };
+  }
+
+  void _showErrorSnackbar(
+    String message, {
+    String title = 'Connexion échouée',
+  }) {
+    AdFeedback.error(
+      title,
+      message,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isSuccessNotice = _sessionNoticeKind == 'success';
+    final noticeBackground = isSuccessNotice
+        ? cs.primaryContainer.withValues(alpha: 0.95)
+        : cs.errorContainer.withValues(alpha: 0.95);
+    final noticeBorder = isSuccessNotice
+        ? cs.primary.withValues(alpha: 0.18)
+        : cs.error.withValues(alpha: 0.18);
+    final noticeForeground =
+        isSuccessNotice ? cs.onPrimaryContainer : cs.onErrorContainer;
+    final noticeIcon =
+        isSuccessNotice ? Icons.verified_outlined : Icons.gpp_bad_outlined;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: cs.surface,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Logo
-              Image.asset('assets/logo.jpg', height: 100),
-              const SizedBox(height: 40),
-              // Titre de la page
-              const Text(
-                'Connectez-vous à votre compte',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              // Champ email
-              TextField(
-                controller: _emailController,
-                decoration: InputDecoration(
-                  labelText: 'Adresse e-mail',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  prefixIcon: const Icon(Icons.email),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: AdSurfaceCard(
+              child: Form(
+                key: _formKey,
+                autovalidateMode: AutovalidateMode.disabled,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_sessionNoticeMessage != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: noticeBackground,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: noticeBorder,
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              noticeIcon,
+                              color: noticeForeground,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _sessionNoticeTitle ??
+                                        'Information importante',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          color: noticeForeground,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _sessionNoticeMessage!,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: noticeForeground.withValues(
+                                              alpha: .92),
+                                          height: 1.35,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    Align(
+                      alignment: Alignment.center,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.asset(
+                          'assets/logo.png',
+                          height: 80,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Connectez-vous',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Ravi de vous revoir !',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurface.withValues(alpha: .7),
+                            fontWeight: FontWeight.w600,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    AdTextField(
+                      controller: _emailController,
+                      label: 'Adresse e-mail',
+                      keyboardType: TextInputType.emailAddress,
+                      prefixIcon: const Icon(Icons.email_outlined),
+                      validator: (v) => _validateEmailValue(v ?? ''),
+                    ),
+                    const SizedBox(height: 16),
+                    AdTextField(
+                      controller: _passwordController,
+                      label: 'Mot de passe',
+                      isPassword: true,
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      validator: (v) => (v == null || v.isEmpty)
+                          ? 'Mot de passe requis'
+                          : null,
+                      onSubmitted: _login,
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _isBusy ? null : _resetPassword,
+                        child: const Text('Mot de passe oublié ?'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    AdButton(
+                      label: 'Se connecter',
+                      onPressed: _isBusy ? null : _login,
+                      loading: _isLoading,
+                      leading: Icons.login_rounded,
+                      kind: AdButtonKind.primary,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Tous les comptes sont maintenant créés par l’administration Adfoot.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSurface.withValues(alpha: .7),
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Nouveau ici ?',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: cs.onSurface.withValues(alpha: .8),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                        TextButton(
+                          onPressed: _isBusy
+                              ? null
+                              : () => Get.to(() => const SignUpScreen()),
+                          child: const Text('Obtenir un accès'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-              // Champ mot de passe avec option afficher/masquer
-              TextField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'Mot de passe',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  prefixIcon: const Icon(Icons.lock),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword
-                        ? Icons.visibility_off
-                        : Icons.visibility),
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              // Lien pour mot de passe oublié
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: _forgotPassword,
-                  child: const Text(
-                    'Mot de passe oublié ?',
-                    style: TextStyle(color: Colors.blue),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Bouton de connexion
-              ElevatedButton(
-                onPressed: _login,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text(
-                  'Se connecter',
-                  style: TextStyle(fontSize: 18),
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Lien pour inscription
-              TextButton(
-                onPressed: () {
-                  Get.to(() => const SignUpScreen());
-                },
-                child: const Text('Vous n\'avez pas de compte ? Inscrivez-vous'),
-              ),
-            ],
+            ),
           ),
         ),
       ),
