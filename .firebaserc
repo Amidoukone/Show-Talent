@@ -6,6 +6,21 @@
     "staging": "adfoot-staging",
     "production-next": "adfoot-production"
   },
-  "targets": {},
+  "targets": {
+    "adfoot-production": {
+      "hosting": {
+        "marketing": [
+          "adfoot-production"
+        ]
+      }
+    },
+    "adfoot-staging": {
+      "hosting": {
+        "marketing": [
+          "adfoot-staging"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

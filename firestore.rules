@@ -45,10 +45,13 @@ service cloud.firestore {
       return signedInAndActive() && userRole() == "joueur";
     }
 
+    // Gate is the signed custom claim only — the Firestore `role` field is
+    // operator-editable (console, script, bad merge) and must never be
+    // sufficient on its own to unlock admin-only reads/writes. Mirrors
+    // assertAdminCaller() in functions/src/admin_account_support.ts.
     function isAdminOperator() {
       return signedIn() &&
         (
-          userRole() == "admin" ||
           request.auth.token.admin == true ||
           request.auth.token.platformAdmin == true ||
           request.auth.token.superAdmin == true
@@ -386,6 +389,12 @@ service cloud.firestore {
     // segment is a wildcard, regardless of what the per-document rules
     // above allow. This rule adds that, admin-only, without loosening the
     // per-document owner/admin semantics already enforced above.
+    //
+    // That admin query (lib/controller/user_controller.dart, admin repo)
+    // currently has no where()/orderBy(), which is the only reason it works
+    // without an index. firestore.indexes.json has no COLLECTION_GROUP
+    // entry for `private` — add one there before that query (or any other
+    // collectionGroup('private') query) gains a filter or sort.
     match /{path=**}/private/{docId} {
       allow list: if isAdminOperator();
     }

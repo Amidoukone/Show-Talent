@@ -102,19 +102,13 @@ async function assertAdminCaller(
   request: AdminCallableRequestLike,
 ): Promise<string> {
   const {uid, token} = await resolveCallableAuth(request);
-  if (isPrivilegedClaims(token)) {
-    return uid;
-  }
-
-  const userSnap = await db.collection("users").doc(uid).get();
-  const userData = userSnap.data() ?? {};
-  const role = normalizeRole(getString(userData, "role"));
-  const hasFirestoreAdminAccess = role === "admin" ||
-    userData["admin"] === true ||
-    userData["platformAdmin"] === true ||
-    userData["superAdmin"] === true;
-
-  if (!hasFirestoreAdminAccess) {
+  // Gate is the signed custom claim only. The Firestore `role` field is
+  // operator-editable (console, script, or a bad merge) and must never be
+  // sufficient on its own to unlock admin callables — see
+  // docs/shared-backend-contract.md. scripts/create_admin_account.mjs
+  // always sets the claim alongside `role`, so this doesn't change how
+  // admins are provisioned, only what's checked at call time.
+  if (!isPrivilegedClaims(token)) {
     throw new HttpsError(
       "permission-denied",
       "Action reservee a l administration.",

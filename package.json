@@ -1,7 +1,7 @@
 {
   "name": "adfoot",
   "scripts": {
-    "create-admin": "node scripts/create_admin_account.mjs",
+    "admin:claims:audit": "node scripts/audit_admin_claims.mjs",
     "mobile:config:check:local": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-mobile-firebase-config.ps1 -Environment local",
     "mobile:config:check:staging": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-mobile-firebase-config.ps1 -Environment staging",
     "mobile:config:check:production": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-mobile-firebase-config.ps1 -Environment production",

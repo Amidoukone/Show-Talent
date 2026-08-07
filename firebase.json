@@ -51,6 +51,7 @@
   ],
 
   "hosting": {
+    "target": "marketing",
     "public": "site_pub",
     "ignore": [
       "firebase.json",

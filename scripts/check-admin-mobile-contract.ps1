@@ -31,6 +31,13 @@ if ([string]::IsNullOrWhiteSpace($AdminRepoPath)) {
     $AdminRepoPath = $env:ADFOOT_ADMIN_REPO
 }
 
+if ([string]::IsNullOrWhiteSpace($AdminRepoPath)) {
+    $defaultAdminRepoPath = Join-Path $env:USERPROFILE "Desktop\MyApp\show_talent - web"
+    if (Test-Path -LiteralPath $defaultAdminRepoPath) {
+        $AdminRepoPath = $defaultAdminRepoPath
+    }
+}
+
 $resolvedAdminRepoPath = $null
 if (-not [string]::IsNullOrWhiteSpace($AdminRepoPath)) {
     try {
@@ -38,6 +45,14 @@ if (-not [string]::IsNullOrWhiteSpace($AdminRepoPath)) {
     } catch {
         $errors.Add("Admin repo path cannot be resolved: $AdminRepoPath")
     }
+} else {
+    # This check exists to catch cross-repo drift (admin <-> mobile). A
+    # missing sibling repo used to just skip that half with a warning and
+    # still exit 0 -- silently proving nothing. It's a hard failure now:
+    # pass -AdminRepoPath or set ADFOOT_ADMIN_REPO.
+    $errors.Add(
+        "Admin repo path not provided and could not be auto-detected. Set -AdminRepoPath or `$env:ADFOOT_ADMIN_REPO -- this check cannot validate cross-repo consistency without it."
+    )
 }
 
 $functionsIndexPath = Join-Path $repoRoot "functions/src/index.ts"
@@ -72,7 +87,9 @@ $adminFiles = $null
 if ($null -ne $resolvedAdminRepoPath) {
     $adminFiles = @(
         @{ Path = Join-Path $resolvedAdminRepoPath "lib/services/managed_account_service.dart"; Label = "admin/lib/services/managed_account_service.dart" },
+        @{ Path = Join-Path $resolvedAdminRepoPath "lib/services/admin_content_service.dart"; Label = "admin/lib/services/admin_content_service.dart" },
         @{ Path = Join-Path $resolvedAdminRepoPath "lib/utils/account_role_policy.dart"; Label = "admin/lib/utils/account_role_policy.dart" },
+        @{ Path = Join-Path $resolvedAdminRepoPath "lib/utils/admin_callable_action_catalog.dart"; Label = "admin/lib/utils/admin_callable_action_catalog.dart" },
         @{ Path = Join-Path $resolvedAdminRepoPath "lib/main.dart"; Label = "admin/lib/main.dart" },
         @{ Path = Join-Path $resolvedAdminRepoPath "lib/firebase_options.dart"; Label = "admin/lib/firebase_options.dart" },
         @{ Path = Join-Path $resolvedAdminRepoPath "scripts/create_admin_account.mjs"; Label = "admin/scripts/create_admin_account.mjs" },
@@ -87,8 +104,15 @@ if ($null -ne $resolvedAdminRepoPath) {
             $checkedFiles.Add($entry.Label)
         }
     }
-} else {
-    $warnings.Add("Admin repo path not provided. External admin checks were skipped.")
+}
+
+# This mobile repo must never re-grow its own create-admin script -- the
+# admin repo is the sole source of truth (see docs/shared-backend-contract.md).
+$mobileCreateAdminScriptPath = Join-Path $repoRoot "scripts/create_admin_account.mjs"
+if (Test-Path -LiteralPath $mobileCreateAdminScriptPath) {
+    $errors.Add(
+        "scripts/create_admin_account.mjs exists in the mobile repo. Admin account bootstrap must live only in the admin repo -- delete this copy."
+    )
 }
 
 if ($errors.Count -gt 0) {
@@ -118,7 +142,25 @@ $requiredCallables = @(
     "updateManagedAccountProfile"
 )
 
-foreach ($callable in $requiredCallables) {
+# Content-moderation callables (video/offer/event/contact-intake). These are
+# real and already called from the admin repo's AdminContentService, but
+# used to be absent from every catalog/contract check -- that's exactly how
+# they went undocumented for a whole rollout. submitContactIntakeFeedback is
+# deliberately excluded: it's a participant-facing callable, not an admin one.
+$requiredContentCallables = @(
+    "adminSetOfferStatus",
+    "adminDeleteOffer",
+    "adminSetEventStatus",
+    "adminDeleteEvent",
+    "adminSetVideoStatus",
+    "adminRejectVideo",
+    "adminDeleteVideo",
+    "adminSetContactIntakeFollowUp",
+    "adminDeleteContactIntake",
+    "adminDeleteContactIntakeConversation"
+)
+
+foreach ($callable in ($requiredCallables + $requiredContentCallables)) {
     $callablePattern = "(?<![A-Za-z0-9_])" + [regex]::Escape($callable) + "(?![A-Za-z0-9_])"
     $msg = Assert-ContainsRegex `
         -Raw $functionsIndexRaw `
@@ -190,6 +232,15 @@ $msg = Assert-ContainsRegex `
     -Message "docs/shared-backend-contract.md no longer documents environment-driven backend targeting."
 if ($null -ne $msg) { $errors.Add($msg) }
 
+foreach ($callable in ($requiredCallables + $requiredContentCallables)) {
+    $callablePattern = "(?<![A-Za-z0-9_])" + [regex]::Escape($callable) + "(?![A-Za-z0-9_])"
+    $msg = Assert-ContainsRegex `
+        -Raw $sharedContractRaw `
+        -Pattern $callablePattern `
+        -Message "docs/shared-backend-contract.md is missing callable: $callable"
+    if ($null -ne $msg) { $errors.Add($msg) }
+}
+
 $msg = Assert-ContainsRegex `
     -Raw $interRepoRunbookRaw `
     -Pattern 'region Functions pour les callables admin : `europe-west1`' `
@@ -198,6 +249,8 @@ if ($null -ne $msg) { $errors.Add($msg) }
 
 if ($null -ne $resolvedAdminRepoPath) {
     $adminManagedAccountServicePath = Join-Path $resolvedAdminRepoPath "lib/services/managed_account_service.dart"
+    $adminContentServicePath = Join-Path $resolvedAdminRepoPath "lib/services/admin_content_service.dart"
+    $adminCallableCatalogPath = Join-Path $resolvedAdminRepoPath "lib/utils/admin_callable_action_catalog.dart"
     $adminRolePolicyPath = Join-Path $resolvedAdminRepoPath "lib/utils/account_role_policy.dart"
     $adminMainPath = Join-Path $resolvedAdminRepoPath "lib/main.dart"
     $adminFirebaseOptionsPath = Join-Path $resolvedAdminRepoPath "lib/firebase_options.dart"
@@ -206,6 +259,8 @@ if ($null -ne $resolvedAdminRepoPath) {
     $adminProductionRunbookPath = Join-Path $resolvedAdminRepoPath "docs/runbook-production-admin-mobile.md"
 
     $adminManagedAccountServiceRaw = Get-Content -LiteralPath $adminManagedAccountServicePath -Raw
+    $adminContentServiceRaw = Get-Content -LiteralPath $adminContentServicePath -Raw
+    $adminCallableCatalogRaw = Get-Content -LiteralPath $adminCallableCatalogPath -Raw
     $adminRolePolicyRaw = Get-Content -LiteralPath $adminRolePolicyPath -Raw
     $adminMainRaw = Get-Content -LiteralPath $adminMainPath -Raw
     $adminFirebaseOptionsRaw = Get-Content -LiteralPath $adminFirebaseOptionsPath -Raw
@@ -226,6 +281,30 @@ if ($null -ne $resolvedAdminRepoPath) {
             -Pattern $callablePattern `
             -Message "Admin managed_account_service.dart is missing callable usage: $callable"
         if ($null -ne $msg) { $errors.Add($msg) }
+
+        $catalogMsg = Assert-ContainsRegex `
+            -Raw $adminCallableCatalogRaw `
+            -Pattern $callablePattern `
+            -Message "Admin admin_callable_action_catalog.dart is missing catalog entry: $callable"
+        if ($null -ne $catalogMsg) { $errors.Add($catalogMsg) }
+    }
+
+    # Content-moderation callables must be wired in AdminContentService AND
+    # listed in the catalog -- the whole point is one list, not two that
+    # drift independently (see docs/admin-offer-event-rollout-plan.md).
+    foreach ($callable in $requiredContentCallables) {
+        $callablePattern = [regex]::Escape("'" + $callable + "'")
+        $msg = Assert-ContainsRegex `
+            -Raw $adminContentServiceRaw `
+            -Pattern $callablePattern `
+            -Message "Admin admin_content_service.dart is missing callable usage: $callable"
+        if ($null -ne $msg) { $errors.Add($msg) }
+
+        $catalogMsg = Assert-ContainsRegex `
+            -Raw $adminCallableCatalogRaw `
+            -Pattern $callablePattern `
+            -Message "Admin admin_callable_action_catalog.dart is missing catalog entry: $callable"
+        if ($null -ne $catalogMsg) { $errors.Add($catalogMsg) }
     }
 
     foreach ($roleLiteral in @("'joueur'", "'fan'", "'club'", "'recruteur'", "'agent'", "'admin'", "'platformAdmin'", "'superAdmin'")) {

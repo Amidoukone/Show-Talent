@@ -207,6 +207,12 @@ class ContactIntake {
     this.targetSnapshot,
     this.createdAt,
     this.updatedAt,
+    this.latestParticipantFeedbackStatus,
+    this.latestParticipantFeedbackNote,
+    this.latestParticipantFeedbackByUid,
+    this.latestParticipantFeedbackByRole,
+    this.latestParticipantFeedbackAt,
+    this.suggestedAgencyFollowUpStatus,
   });
 
   final String id;
@@ -229,6 +235,18 @@ class ContactIntake {
   final Map<String, dynamic>? targetSnapshot;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  // Written by the submitContactIntakeFeedback callable (participant-facing,
+  // not admin) directly onto this document — see
+  // functions/src/admin_contact_intake_actions.ts. Mirrored onto the linked
+  // conversation too (see Conversation in message_converstion.dart), but a
+  // caller reading contact_intakes/{id} directly needs it here as well.
+  final String? latestParticipantFeedbackStatus;
+  final String? latestParticipantFeedbackNote;
+  final String? latestParticipantFeedbackByUid;
+  final String? latestParticipantFeedbackByRole;
+  final DateTime? latestParticipantFeedbackAt;
+  final String? suggestedAgencyFollowUpStatus;
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
@@ -261,6 +279,22 @@ class ContactIntake {
       if (targetSnapshot != null) 'targetSnapshot': targetSnapshot,
       if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
       if (updatedAt != null) 'updatedAt': Timestamp.fromDate(updatedAt!),
+      if (latestParticipantFeedbackStatus?.trim().isNotEmpty == true)
+        'latestParticipantFeedbackStatus':
+            latestParticipantFeedbackStatus!.trim(),
+      if (latestParticipantFeedbackNote?.trim().isNotEmpty == true)
+        'latestParticipantFeedbackNote': latestParticipantFeedbackNote!.trim(),
+      if (latestParticipantFeedbackByUid?.trim().isNotEmpty == true)
+        'latestParticipantFeedbackByUid':
+            latestParticipantFeedbackByUid!.trim(),
+      if (latestParticipantFeedbackByRole?.trim().isNotEmpty == true)
+        'latestParticipantFeedbackByRole':
+            latestParticipantFeedbackByRole!.trim(),
+      if (latestParticipantFeedbackAt != null)
+        'latestParticipantFeedbackAt':
+            Timestamp.fromDate(latestParticipantFeedbackAt!),
+      if (suggestedAgencyFollowUpStatus?.trim().isNotEmpty == true)
+        'suggestedAgencyFollowUpStatus': suggestedAgencyFollowUpStatus!.trim(),
     };
   }
 
@@ -296,6 +330,18 @@ class ContactIntake {
       targetSnapshot: _normalizeMap(map['targetSnapshot']),
       createdAt: _parseNullableDate(map['createdAt']),
       updatedAt: _parseNullableDate(map['updatedAt']),
+      latestParticipantFeedbackStatus:
+          _normalizeNullableString(map['latestParticipantFeedbackStatus']),
+      latestParticipantFeedbackNote:
+          _normalizeNullableString(map['latestParticipantFeedbackNote']),
+      latestParticipantFeedbackByUid:
+          _normalizeNullableString(map['latestParticipantFeedbackByUid']),
+      latestParticipantFeedbackByRole:
+          _normalizeNullableString(map['latestParticipantFeedbackByRole']),
+      latestParticipantFeedbackAt:
+          _parseNullableDate(map['latestParticipantFeedbackAt']),
+      suggestedAgencyFollowUpStatus:
+          _normalizeNullableString(map['suggestedAgencyFollowUpStatus']),
     );
   }
 
