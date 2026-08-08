@@ -60,7 +60,9 @@
     "functions:deploy:production-next": "powershell -ExecutionPolicy Bypass -File .\\scripts\\deploy-functions-safe.ps1 -Environment production-next -Only functions",
     "functions:deploy:production:retry-failed-seq": "powershell -ExecutionPolicy Bypass -File .\\scripts\\deploy-functions-safe.ps1 -Environment production -Functions sendOfferFanout,videoActionLog,finalizeUpload -Sequential",
     "firebase:rules:deploy:production": "firebase.cmd deploy --only firestore:rules,storage --project production",
-    "firestore:indexes:deploy:production": "firebase.cmd deploy --only firestore:indexes --project production"
+    "firestore:indexes:deploy:production": "firebase.cmd deploy --only firestore:indexes --project production",
+    "hosting:marketing:deploy:staging": "firebase.cmd deploy --only hosting:marketing --project staging",
+    "hosting:marketing:deploy:production": "firebase.cmd deploy --only hosting:marketing --project production"
   },
   "dependencies": {
     "firebase-admin": "^13.10.0"

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  flutter:
+    name: Flutter analyze & test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+  functions:
+    name: Cloud Functions lint & build
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  secrets-scan:
+    name: Tracked secrets scan
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: powershell
+        run: .\scripts\check-tracked-secrets.ps1
+
+  contract:
+    name: Admin / mobile contract check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: mobile-repo
+      # Cross-repo checkout: the contract check reads files from the sibling
+      # admin repo to catch drift a same-repo check can never see (that's the
+      # whole point of this gate). ADFOOT_CROSS_REPO_TOKEN needs at least
+      # read access to Amidoukone/Show_talent_web.
+      - uses: actions/checkout@v4
+        with:
+          repository: Amidoukone/Show_talent_web
+          token: ${{ secrets.ADFOOT_CROSS_REPO_TOKEN }}
+          path: admin-repo
+      - shell: powershell
+        working-directory: mobile-repo
+        run: .\scripts\check-admin-mobile-contract.ps1 -Strict -AdminRepoPath "${{ github.workspace }}\admin-repo"
