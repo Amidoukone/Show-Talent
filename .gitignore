@@ -95,5 +95,10 @@ service-account*.json
 
 # Local-only folders kept out of Git
 /.firebase/
-/docs/
+/docs/*
+# Exceptions: shared admin/mobile contract docs must be tracked -- the
+# cross-repo CI contract check reads these from a fresh clone, and a
+# blanket /docs/ ignore silently hid this (and every other doc) from Git.
+!/docs/shared-backend-contract.md
+!/docs/inter-repo-admin-mobile-runbook.md
 

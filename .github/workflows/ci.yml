@@ -16,7 +16,11 @@ permissions:
 jobs:
   flutter:
     name: Flutter analyze & test
-    runs-on: windows-latest
+    # ubuntu, not windows-latest: this job has no PowerShell dependency, and
+    # windows-latest's default core.autocrlf=true reintroduces CRLF against
+    # this repo's LF-normalized (.gitattributes eol=lf) source, which false-
+    # fails line-ending-sensitive tests that pass everywhere else.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -28,7 +32,7 @@ jobs:
 
   functions:
     name: Cloud Functions lint & build
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: functions
