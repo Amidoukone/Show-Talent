@@ -56,7 +56,9 @@ void main() {
     final productionNextTemplate = File(
       'config/mobile/production-next.example.json',
     ).readAsStringSync();
-    final productionEnv = File('functions/.env.production').readAsStringSync();
+    final productionEnv = File(
+      'functions/.env.production.example',
+    ).readAsStringSync();
     final mobileConfigCheck = File(
       'scripts/check-mobile-firebase-config.ps1',
     ).readAsStringSync();
