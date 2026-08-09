@@ -359,13 +359,14 @@ class UploadVideoController extends GetxController {
           'id': session.sessionId,
           'uid': user?.uid ?? '',
           'profilePhoto': user?.photoProfil ?? '',
-          // Keep duplicated copy in legacy `songName` for compatibility.
+          // songName is the legacy alias for description (not caption) —
+          // Video.fromMap reads it back as description, see lib/models/video.dart.
           'description': desc,
+          'songName': desc,
           'legend': cap,
           'legende': cap,
           'captionText': cap,
           'caption': cap,
-          'songName': cap,
           'storagePath': session.videoPath,
           'thumbnailPath': thumbTicket.thumbnailPath,
           'thumbnailHash': thumbTicket.expectedHash,
