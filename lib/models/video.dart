@@ -271,9 +271,15 @@ class Video {
       ),
       profilePhoto: readString(map['profilePhoto']),
       uid: readString(map['uid']),
-      likes: List<String>.from(map['likes'] ?? const <String>[]),
+      likes: map['likes'] is List
+          ? List<String>.from((map['likes'] as List).map((e) => e.toString()))
+          : const <String>[],
       shareCount: _asInt(map['shareCount']) ?? 0,
-      reports: List<String>.from(map['reports'] ?? const <String>[]),
+      reports: map['reports'] is List
+          ? List<String>.from(
+              (map['reports'] as List).map((e) => e.toString()),
+            )
+          : const <String>[],
       reportCount: _asInt(map['reportCount']) ?? 0,
       status: map['status']?.toString(),
       sources: mergedSources,

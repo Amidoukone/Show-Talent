@@ -116,15 +116,21 @@ void main() {
     });
 
     test(
-      'watchEvents skips malformed documents instead of failing the stream',
+      'watchEvents tolerates a mistyped optional field instead of dropping '
+      'the document',
       () async {
+        // Event.fromMap now falls back to safe defaults for mistyped
+        // optional fields (see AppUser._fromMap hardening) instead of
+        // throwing, so a document like this is no longer silently excluded
+        // from the feed -- it used to vanish with no trace, which is worse
+        // than showing it with a defaulted field.
         final firestore = FakeFirebaseFirestore();
         final repository = EventRepository(firestore: firestore);
 
         await repository.createEvent(_event(id: 'valid'));
-        await firestore.collection('events').doc('malformed').set({
-          'id': 'malformed',
-          'titre': 'Bad event',
+        await firestore.collection('events').doc('quirky').set({
+          'id': 'quirky',
+          'titre': 'Event with an invalid public flag',
           'description': 'Payload with an invalid public flag.',
           'dateDebut': Timestamp.fromDate(DateTime(2026, 7, 1)),
           'dateFin': Timestamp.fromDate(DateTime(2026, 7, 2)),
@@ -138,7 +144,14 @@ void main() {
 
         final batch = await repository.watchEvents(limit: 10).first;
 
-        expect(batch.events.map((event) => event.id), ['valid']);
+        expect(
+          batch.events.map((event) => event.id).toSet(),
+          {'valid', 'quirky'},
+        );
+        expect(
+          batch.events.firstWhere((event) => event.id == 'quirky').estPublic,
+          isTrue,
+        );
         expect(batch.fetchedCount, 2);
         expect(batch.cursor, isNotNull);
       },

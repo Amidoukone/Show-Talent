@@ -34,14 +34,25 @@ class NotificationModel {
 
   // Création à partir d’un Map provenant de Firestore
   factory NotificationModel.fromMap(Map<String, dynamic> map) {
+    final rawDestinataire = map['destinataire'];
     return NotificationModel(
-      id: map['id'] ?? '',
-      destinataire: AppUser.fromMap(map['destinataire'] ?? {}),
-      message: map['message'] ?? 'Message inconnu',
-      type: map['type'] ?? 'général',
-      dateCreation:
-          (map['dateCreation'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      estLue: map['estLue'] ?? false,
+      id: map['id']?.toString() ?? '',
+      destinataire: AppUser.fromMap(
+        rawDestinataire is Map
+            ? Map<String, dynamic>.from(rawDestinataire)
+            : <String, dynamic>{},
+      ),
+      message: map['message']?.toString() ?? 'Message inconnu',
+      type: map['type']?.toString() ?? 'général',
+      dateCreation: _parseDate(map['dateCreation']),
+      estLue: map['estLue'] == true,
     );
+  }
+
+  static DateTime _parseDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
   }
 }

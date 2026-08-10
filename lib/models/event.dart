@@ -105,6 +105,15 @@ class Event {
     return null;
   }
 
+  static bool? _toNullableBool(dynamic value) => value is bool ? value : null;
+
+  static int? _toNullableInt(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
   int get nbParticipants => participants.length;
 
   bool get isExpired => dateFin.isBefore(DateTime.now());
@@ -211,24 +220,25 @@ class Event {
       lieu: _readFirst(map, ['lieu', 'location', 'localisation'])?.toString() ??
           '',
       estPublic:
-          (_readFirst(map, ['estPublic', 'isPublic', 'public']) as bool?) ??
+          _toNullableBool(
+            _readFirst(map, ['estPublic', 'isPublic', 'public']),
+          ) ??
               true,
       createdAt: _parseDate(
         _readFirst(map, ['createdAt', 'dateCreation', 'publishedAt']),
       ),
-      capaciteMax:
-          (_readFirst(map, ['capaciteMax', 'capacity', 'maxParticipants'])
-                  as num?)
-              ?.toInt(),
+      capaciteMax: _toNullableInt(
+        _readFirst(map, ['capaciteMax', 'capacity', 'maxParticipants']),
+      ),
       tags: map['tags'] is List
           ? (map['tags'] as List)
               .map((item) => item.toString().trim())
               .where((item) => item.isNotEmpty)
               .toList()
           : null,
-      streamingUrl: map['streamingUrl'] as String?,
-      flyerUrl: map['flyerUrl'] as String?,
-      views: (map['views'] as num?)?.toInt(),
+      streamingUrl: map['streamingUrl']?.toString(),
+      flyerUrl: map['flyerUrl']?.toString(),
+      views: _toNullableInt(map['views']),
       archivedAt: _parseNullableDate(map['archivedAt']),
       lastUpdated: _parseNullableDate(map['lastUpdated']),
     );

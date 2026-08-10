@@ -99,6 +99,13 @@ class Offre {
     return null;
   }
 
+  static int? _toNullableInt(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
   static String normalizeStatus(String rawStatus) {
     final value = rawStatus.trim().toLowerCase();
     switch (value) {
@@ -198,7 +205,7 @@ class Offre {
         map,
         ['pieceJointeUrl', 'attachmentUrl', 'documentUrl'],
       )?.toString(),
-      vues: (map['vues'] as num?)?.toInt(),
+      vues: _toNullableInt(map['vues']),
       viewedBy: map['viewedBy'] is List
           ? (map['viewedBy'] as List).map((id) => id.toString()).toList()
           : null,
