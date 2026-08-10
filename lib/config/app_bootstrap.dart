@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
@@ -21,6 +23,7 @@ class AppBootstrap {
   static Future<void> initialize() async {
     WidgetsFlutterBinding.ensureInitialized();
     _configureSystemUi();
+    _configureFlutterErrors();
 
     await FirebaseBootstrap.initialize();
     await AppCheckService.initialize();
@@ -42,15 +45,41 @@ class AppBootstrap {
     AppBindings.warmUpBackgroundServices();
 
     await _initializeEmailLinkHandler();
-    _configureFlutterErrors();
   }
 
   static void reportZoneError(Object error, StackTrace stack) {
-    if (!kDebugMode) {
-      return;
+    if (kDebugMode) {
+      AppLogger.debug('Uncaught zone error: $error\n$stack');
     }
 
-    AppLogger.debug('Uncaught zone error: $error\n$stack');
+    _safeReportError(
+      'Uncaught zone error',
+      source: 'AppBootstrap.reportZoneError',
+      error: error,
+      stackTrace: stack,
+    );
+  }
+
+  // Reporting itself must never throw: this can run before Firebase is
+  // initialized (e.g. errors during the bootstrap sequence), and
+  // AppLogger.error transitively touches FirebaseFunctions.instanceFor,
+  // which throws if called before Firebase.initializeApp() has resolved.
+  static void _safeReportError(
+    String message, {
+    required String source,
+    required Object error,
+    StackTrace? stackTrace,
+  }) {
+    try {
+      AppLogger.error(
+        message,
+        source: source,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    } catch (_) {
+      // Best-effort remote logging only; never let it mask the real error.
+    }
   }
 
   static void _configureSystemUi() {
@@ -78,6 +107,22 @@ class AppBootstrap {
       if (kDebugMode) {
         FlutterError.dumpErrorToConsole(details);
       }
+      _safeReportError(
+        'Uncaught Flutter framework error',
+        source: 'FlutterError.onError',
+        error: details.exception,
+        stackTrace: details.stack,
+      );
+    };
+
+    PlatformDispatcher.instance.onError = (error, stack) {
+      _safeReportError(
+        'Uncaught platform error',
+        source: 'PlatformDispatcher.onError',
+        error: error,
+        stackTrace: stack,
+      );
+      return true;
     };
   }
 }
