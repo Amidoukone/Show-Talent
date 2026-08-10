@@ -537,6 +537,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         skipPermissionCheck: true,
       );
 
+      // The user can navigate away (e.g. the back button, see
+      // _handleBackNavigation) while sendMessage is still in flight. The
+      // message is already delivered at this point, so bail out quietly
+      // instead of touching a possibly-disposed messageController/scroll
+      // controller -- doing so used to fall into the generic catch below
+      // and show a misleading "Envoi impossible" toast for a message that
+      // actually sent.
+      if (!mounted) {
+        return;
+      }
+
       messageController.clear();
       _scrollToBottom(delay: const Duration(milliseconds: 110));
       _throttledTouchActiveAt();
