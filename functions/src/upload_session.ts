@@ -119,10 +119,6 @@ interface ParsedMetadata {
   caption?: string;
   profilePhoto?: string;
   status?: string;
-  likes?: string[];
-  reports?: string[];
-  reportCount?: number;
-  shareCount?: number;
   optimized?: boolean;
   duration?: number;
   width?: number;
@@ -503,14 +499,6 @@ const asPositiveInt = (value: unknown): number | undefined => {
   return n >= 0 ? n : undefined;
 };
 
-const asStringList = (value: unknown): string[] | undefined => {
-  if (!Array.isArray(value)) return undefined;
-  const items = value
-    .map((v) => (typeof v === "string" ? v.trim() : ""))
-    .filter((v) => v.length > 0);
-  return items.length ? items : undefined;
-};
-
 /* -------------------------------------------------------------------------- */
 /* CREATE SESSION                                                              */
 /* -------------------------------------------------------------------------- */
@@ -726,6 +714,19 @@ export const finalizeUpload = onCall(
       throw new HttpsError("permission-denied", "Session appartenant à un autre utilisateur.");
     }
 
+    // Prevent re-finalizing an already-approved/under-review video: without
+    // this guard, a retried client call (or a deliberately repeated one)
+    // would reset moderationStatus/visibility/isPublic back to pending on a
+    // live video, and could overwrite likes/reports/reportCount/shareCount
+    // with attacker-supplied values (see the metadata parsing below, which
+    // no longer accepts those fields from the client at all).
+    if (isFinalizedUploadSession(doc)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Session upload deja finalisee.",
+      );
+    }
+
     const persistedStoragePath = normalizeVideoStoragePath(
       sessionId,
       doc?.storagePath,
@@ -761,18 +762,16 @@ export const finalizeUpload = onCall(
 
       safe.profilePhoto = asString(rawMetadata.profilePhoto, 600);
 
-      safe.reportCount = asPositiveInt(rawMetadata.reportCount);
-      safe.shareCount = asPositiveInt(rawMetadata.shareCount);
-
       safe.duration = asNumber(rawMetadata.duration);
       safe.width = asPositiveInt(rawMetadata.width);
       safe.height = asPositiveInt(rawMetadata.height);
 
-      safe.likes = asStringList(rawMetadata.likes);
-      safe.reports = asStringList(rawMetadata.reports);
-
       // NB: status/optimized ne doivent pas etre trust cote client.
       // On conserve seulement un etat terminal deja pose par l'optimiseur.
+      // likes/reports/reportCount/shareCount ne sont plus acceptes ici non
+      // plus: un nouveau document video n'en a jamais, et leur mutation
+      // legitime passe exclusivement par les fonctions transactionnelles
+      // dediees (likeVideo/reportVideo/shareVideo dans actions.ts).
     }
 
     // On n’écrit que les valeurs présentes dans safe
@@ -788,10 +787,6 @@ export const finalizeUpload = onCall(
       "description",
       "caption",
       "profilePhoto",
-      "likes",
-      "reports",
-      "reportCount",
-      "shareCount",
       "duration",
       "width",
       "height",
