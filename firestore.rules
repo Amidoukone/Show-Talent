@@ -163,8 +163,8 @@ service cloud.firestore {
     }
 
     function resourceProfileIsVerified() {
-      return resource.data.profileVerified == true ||
-        resource.data.profileVerificationStatus == "verified";
+      return ("profileVerified" in resource.data && resource.data.profileVerified == true) ||
+        ("profileVerificationStatus" in resource.data && resource.data.profileVerificationStatus == "verified");
     }
 
     function verifiedOwnerProfileChangeIsInvalidated() {
