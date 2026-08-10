@@ -89,9 +89,9 @@ class AppCheckService {
           return;
         }
 
-        await appCheck.activate(
-          providerWeb: ReCaptchaV3Provider(_webRecaptchaSiteKey),
-        );
+        await appCheck
+            .activate(providerWeb: ReCaptchaV3Provider(_webRecaptchaSiteKey))
+            .timeout(const Duration(seconds: 10));
       } else {
         if (_useAndroidDebugProvider || _useAppleDebugProvider) {
           AppLogger.debug('[AppCheck] enabling debug provider for this build.');
@@ -110,10 +110,12 @@ class AppCheckService {
               )
             : const AppleDeviceCheckProvider();
 
-        await appCheck.activate(
-          providerAndroid: androidProvider,
-          providerApple: appleProvider,
-        );
+        await appCheck
+            .activate(
+              providerAndroid: androidProvider,
+              providerApple: appleProvider,
+            )
+            .timeout(const Duration(seconds: 10));
       }
 
       final token = await appCheck
