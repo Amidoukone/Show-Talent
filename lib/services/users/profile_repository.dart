@@ -230,6 +230,24 @@ class ProfileRepository {
     return AppUser.fromMap(data, privateContact: privateContact);
   }
 
+  AppUser? _parseUserSafely(
+    Map<String, dynamic> data, {
+    Map<String, dynamic>? privateContact,
+    required String source,
+  }) {
+    try {
+      return AppUser.fromMap(data, privateContact: privateContact);
+    } catch (error, stackTrace) {
+      developer.log(
+        'user document parse error',
+        name: source,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
   Stream<AppUser?> watchUser(String uid, {bool includePrivateFields = false}) {
     if (!includePrivateFields) {
       return _usersCollection.doc(uid).snapshots().map((snapshot) {
@@ -237,7 +255,10 @@ class ProfileRepository {
         if (!snapshot.exists || data == null) {
           return null;
         }
-        return AppUser.fromMap(data);
+        return _parseUserSafely(
+          data,
+          source: 'ProfileRepository.watchUser',
+        );
       });
     }
 
@@ -247,7 +268,11 @@ class ProfileRepository {
         return null;
       }
       final privateContact = await _fetchPrivateContact(uid);
-      return AppUser.fromMap(data, privateContact: privateContact);
+      return _parseUserSafely(
+        data,
+        privateContact: privateContact,
+        source: 'ProfileRepository.watchUser',
+      );
     });
   }
 

@@ -160,6 +160,14 @@ class ProfileController extends GetxController {
     return 'Chargement du profil impossible. Réessayez dans quelques instants.';
   }
 
+  String _profileWriteFailureMessage(Object error) {
+    if (_isTransientFirestoreError(error)) {
+      return 'Connexion instable. Vérifiez votre réseau puis réessayez.';
+    }
+
+    return 'Impossible de mettre à jour le profil.';
+  }
+
   Future<void> _handleProtectedAccessDenied() async {
     if (!Get.isRegistered<UserController>()) {
       return;
@@ -289,10 +297,8 @@ class ProfileController extends GetxController {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
-      AdFeedback.error(
-        'Mise à jour impossible',
-        'Impossible de mettre à jour le profil.',
-      );
+      final message = _profileWriteFailureMessage(e);
+      AdFeedback.error('Mise à jour impossible', message);
       rethrow;
     }
   }
@@ -372,7 +378,7 @@ class ProfileController extends GetxController {
           message: message,
         );
       }
-      const message = 'Impossible de mettre à jour le profil.';
+      final message = _profileWriteFailureMessage(e);
       _setProfileWriteError('Mise à jour impossible', message);
       AppLogger.error(
         'Profile write failed',

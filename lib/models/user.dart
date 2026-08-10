@@ -245,22 +245,20 @@ class AppUser {
     final profileVerified = map['profileVerified'] == true;
 
     return AppUser(
-      uid: map['uid'] ?? '',
-      nom: map['nom'] ?? 'Nom inconnu',
-      email: map['email'] ?? '',
+      uid: map['uid']?.toString() ?? '',
+      nom: map['nom']?.toString() ?? 'Nom inconnu',
+      email: map['email']?.toString() ?? '',
       role: normalizedRole.isEmpty ? 'utilisateur' : normalizedRole,
-      photoProfil: map['photoProfil'] ?? '',
-      estActif: map['estActif'] as bool? ?? true,
+      photoProfil: map['photoProfil']?.toString() ?? '',
+      estActif: _toBool(map['estActif'], true),
       authDisabled: map['authDisabled'] == true,
-      emailVerified: map['emailVerified'] ?? false,
-      createdByAdmin: map['createdByAdmin'] as bool? ?? false,
-      emailVerifiedAt: (map['emailVerifiedAt'] as Timestamp?)?.toDate(),
-      followers: (map['followers'] as num?)?.toInt() ?? 0,
-      followings: (map['followings'] as num?)?.toInt() ?? 0,
-      dateInscription:
-          (map['dateInscription'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      dernierLogin:
-          (map['dernierLogin'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      emailVerified: _toBool(map['emailVerified'], false),
+      createdByAdmin: _toBool(map['createdByAdmin'], false),
+      emailVerifiedAt: _parseNullableDate(map['emailVerifiedAt']),
+      followers: _toInt(map['followers'], 0),
+      followings: _toInt(map['followings'], 0),
+      dateInscription: _parseDate(map['dateInscription'], DateTime.now()),
+      dernierLogin: _parseDate(map['dernierLogin'], DateTime.now()),
       phone: map['phone']?.toString(),
       authDisabledReason: map['authDisabledReason']?.toString(),
       profileVerified: profileVerified,
@@ -290,36 +288,42 @@ class AppUser {
       ),
 
       // Transverses
-      birthDate: (map['birthDate'] as Timestamp?)?.toDate(),
+      birthDate: _parseNullableDate(map['birthDate']),
       country: map['country']?.toString(),
       city: map['city']?.toString(),
       region: map['region']?.toString(),
-      languages: map['languages'] != null
+      languages: map['languages'] is List
           ? List<String>.from(
               (map['languages'] as List).map((e) => e.toString()),
             )
           : null,
-      openToOpportunities: map['openToOpportunities'] as bool?,
+      openToOpportunities: _toNullableBool(map['openToOpportunities']),
 
       // Joueur MVP
       bio: map['bio']?.toString(),
       position: map['position']?.toString(),
       clubActuel: map['clubActuel']?.toString(),
-      nombreDeMatchs: (map['nombreDeMatchs'] as num?)?.toInt(),
-      buts: (map['buts'] as num?)?.toInt(),
-      assistances: (map['assistances'] as num?)?.toInt(),
+      nombreDeMatchs: _toNullableInt(map['nombreDeMatchs']),
+      buts: _toNullableInt(map['buts']),
+      assistances: _toNullableInt(map['assistances']),
 
       videosPubliees: parseNestedCollections && map['videosPubliees'] is List
           ? (map['videosPubliees'] as List)
-                .map((v) => Video.fromMap(Map<String, dynamic>.from(v as Map)))
+                .whereType<Map>()
+                .map((v) => Video.fromMap(Map<String, dynamic>.from(v)))
                 .toList()
           : null,
 
       performances: map['performances'] is Map
-          ? Map<String, double>.from(
-              (map['performances'] as Map).map(
-                (k, v) => MapEntry(k.toString(), (v as num).toDouble()),
-              ),
+          ? Map<String, double>.fromEntries(
+              (map['performances'] as Map).entries
+                  .map((entry) {
+                    final value = _toNullableDouble(entry.value);
+                    return value == null
+                        ? null
+                        : MapEntry(entry.key.toString(), value);
+                  })
+                  .whereType<MapEntry<String, double>>(),
             )
           : null,
 
@@ -335,27 +339,30 @@ class AppUser {
 
       offrePubliees: parseNestedCollections && map['offrePubliees'] is List
           ? (map['offrePubliees'] as List)
-                .map((v) => Offre.fromMap(Map<String, dynamic>.from(v as Map)))
+                .whereType<Map>()
+                .map((v) => Offre.fromMap(Map<String, dynamic>.from(v)))
                 .toList()
           : null,
 
       eventPublies: parseNestedCollections && map['eventPublies'] is List
           ? (map['eventPublies'] as List)
-                .map((v) => Event.fromMap(Map<String, dynamic>.from(v as Map)))
+                .whereType<Map>()
+                .map((v) => Event.fromMap(Map<String, dynamic>.from(v)))
                 .toList()
           : null,
 
       entreprise: map['entreprise']?.toString(),
-      nombreDeRecrutements: (map['nombreDeRecrutements'] as num?)?.toInt(),
+      nombreDeRecrutements: _toNullableInt(map['nombreDeRecrutements']),
 
       // Social
       team: map['team']?.toString(),
 
       joueursSuivis: parseNestedCollections && map['joueursSuivis'] is List
           ? (map['joueursSuivis'] as List)
+                .whereType<Map>()
                 .map(
                   (j) => AppUser.fromEmbeddedMap(
-                    Map<String, dynamic>.from(j as Map),
+                    Map<String, dynamic>.from(j),
                   ),
                 )
                 .toList()
@@ -363,9 +370,10 @@ class AppUser {
 
       clubsSuivis: parseNestedCollections && map['clubsSuivis'] is List
           ? (map['clubsSuivis'] as List)
+                .whereType<Map>()
                 .map(
                   (c) => AppUser.fromEmbeddedMap(
-                    Map<String, dynamic>.from(c as Map),
+                    Map<String, dynamic>.from(c),
                   ),
                 )
                 .toList()
@@ -373,7 +381,8 @@ class AppUser {
 
       videosLikees: parseNestedCollections && map['videosLikees'] is List
           ? (map['videosLikees'] as List)
-                .map((v) => Video.fromMap(Map<String, dynamic>.from(v as Map)))
+                .whereType<Map>()
+                .map((v) => Video.fromMap(Map<String, dynamic>.from(v)))
                 .toList()
           : null,
 
@@ -387,8 +396,8 @@ class AppUser {
 
       // Docs
       cvUrl: map['cvUrl']?.toString(),
-      profilePublic: map['profilePublic'] as bool? ?? true,
-      allowMessages: map['allowMessages'] as bool? ?? true,
+      profilePublic: _toBool(map['profilePublic'], true),
+      allowMessages: _toBool(map['allowMessages'], true),
     );
   }
 
@@ -706,6 +715,39 @@ class AppUser {
     if (value is DateTime) return value;
     if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
     if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  static DateTime _parseDate(dynamic value, DateTime fallback) {
+    return _parseNullableDate(value) ?? fallback;
+  }
+
+  static bool _toBool(dynamic value, bool fallback) {
+    if (value is bool) return value;
+    return fallback;
+  }
+
+  static bool? _toNullableBool(dynamic value) {
+    return value is bool ? value : null;
+  }
+
+  static int _toInt(dynamic value, int fallback) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? fallback;
+    return fallback;
+  }
+
+  static int? _toNullableInt(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  static double? _toNullableDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
     return null;
   }
 

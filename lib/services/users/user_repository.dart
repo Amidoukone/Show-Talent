@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/services/callable_auth_guard.dart';
@@ -63,6 +65,42 @@ class UserRepository {
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
+
+  DocumentReference<Map<String, dynamic>> _privateContactDoc(String uid) =>
+      _usersCollection.doc(uid).collection('private').doc('contact');
+
+  Future<Map<String, dynamic>?> _fetchPrivateContact(String uid) async {
+    try {
+      final doc = await _privateContactDoc(uid).get();
+      return doc.data();
+    } catch (error, stackTrace) {
+      developer.log(
+        'private contact fetch warning',
+        name: 'UserRepository._fetchPrivateContact',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
+
+  AppUser? _parseUserSafely(
+    Map<String, dynamic> data, {
+    Map<String, dynamic>? privateContact,
+    String? source,
+  }) {
+    try {
+      return AppUser.fromMap(data, privateContact: privateContact);
+    } catch (error, stackTrace) {
+      developer.log(
+        'user document parse error',
+        name: source ?? 'UserRepository',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
+  }
 
   static Map<String, dynamic> _legacyFieldCleanupPatch() {
     return <String, dynamic>{
@@ -131,7 +169,13 @@ class UserRepository {
   Stream<List<AppUser>> watchAllUsers() {
     return _usersCollection.snapshots().map(
           (snapshot) => snapshot.docs
-              .map((doc) => AppUser.fromMap(doc.data()))
+              .map(
+                (doc) => _parseUserSafely(
+                  doc.data(),
+                  source: 'UserRepository.watchAllUsers',
+                ),
+              )
+              .whereType<AppUser>()
               .toList(growable: false),
         );
   }
@@ -153,11 +197,17 @@ class UserRepository {
 
   Future<AppUser?> fetchUserById(String uid) async {
     final doc = await _usersCollection.doc(uid).get();
-    if (!doc.exists) {
+    final data = doc.data();
+    if (!doc.exists || data == null) {
       return null;
     }
 
-    return AppUser.fromMap(doc.data()!);
+    final privateContact = await _fetchPrivateContact(uid);
+    return _parseUserSafely(
+      data,
+      privateContact: privateContact,
+      source: 'UserRepository.fetchUserById',
+    );
   }
 
   Future<UserAccessDecision> fetchUserAccess(

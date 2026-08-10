@@ -485,11 +485,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               'Impossible de sauvegarder les modifications.';
         });
       }
-      AdFeedback.error(
-        'Erreur',
-        'Impossible de sauvegarder les modifications.',
-        duration: const Duration(seconds: 6),
-      );
     } finally {
       if (mounted) {
         setState(() => _saving = false);
