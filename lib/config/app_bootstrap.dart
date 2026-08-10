@@ -25,26 +25,72 @@ class AppBootstrap {
     _configureSystemUi();
     _configureFlutterErrors();
 
+    // Hard dependencies: the app genuinely cannot run without these, so
+    // they're allowed to propagate and abort startup (reportZoneError still
+    // captures and logs the failure remotely).
     await FirebaseBootstrap.initialize();
     await AppCheckService.initialize();
-    FirebaseAuth.instance.setLanguageCode('fr');
+    AppBindings.registerPermanentDependencies();
+
+    // Everything below is best-effort: a failure here must never prevent
+    // runApp() from ever executing, which would otherwise strand the user
+    // on a blank/native splash screen forever with no way to recover.
+    await _runNonCritical(
+      'FirebaseAuth.setLanguageCode',
+      () async => FirebaseAuth.instance.setLanguageCode('fr'),
+    );
 
     if (kIsWeb) {
-      await FirebaseMessaging.instance.setAutoInitEnabled(false);
-    }
-
-    await NotificationService.initLocal();
-    if (!kIsWeb) {
-      FirebaseMessaging.onBackgroundMessage(
-        firebaseMessagingBackgroundHandler,
+      await _runNonCritical(
+        'FirebaseMessaging.setAutoInitEnabled',
+        () => FirebaseMessaging.instance.setAutoInitEnabled(false),
       );
     }
-    NotificationService.listenForeground();
 
-    AppBindings.registerPermanentDependencies();
-    AppBindings.warmUpBackgroundServices();
+    await _runNonCritical(
+      'NotificationService.initLocal',
+      NotificationService.initLocal,
+    );
+
+    if (!kIsWeb) {
+      await _runNonCritical(
+        'FirebaseMessaging.onBackgroundMessage',
+        () async => FirebaseMessaging.onBackgroundMessage(
+          firebaseMessagingBackgroundHandler,
+        ),
+      );
+    }
+
+    await _runNonCritical(
+      'NotificationService.listenForeground',
+      () async => NotificationService.listenForeground(),
+    );
+
+    await _runNonCritical(
+      'AppBindings.warmUpBackgroundServices',
+      () async => AppBindings.warmUpBackgroundServices(),
+    );
 
     await _initializeEmailLinkHandler();
+  }
+
+  static Future<void> _runNonCritical(
+    String step,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } catch (error, stack) {
+      if (kDebugMode) {
+        AppLogger.debug('$step failed (non-blocking): $error\n$stack');
+      }
+      _safeReportError(
+        '$step failed during bootstrap',
+        source: 'AppBootstrap.$step',
+        error: error,
+        stackTrace: stack,
+      );
+    }
   }
 
   static void reportZoneError(Object error, StackTrace stack) {
@@ -91,15 +137,7 @@ class AppBootstrap {
   }
 
   static Future<void> _initializeEmailLinkHandler() async {
-    try {
-      await EmailLinkHandler.init();
-    } catch (error, stack) {
-      if (!kDebugMode) {
-        return;
-      }
-
-      AppLogger.debug('EmailLinkHandler init error: $error\n$stack');
-    }
+    await _runNonCritical('EmailLinkHandler.init', EmailLinkHandler.init);
   }
 
   static void _configureFlutterErrors() {
