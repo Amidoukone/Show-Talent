@@ -331,15 +331,14 @@ async function cleanupFollowReferences(uid: string): Promise<void> {
     .get();
 
   for (const doc of followersSnapshot.docs) {
-    const data = doc.data();
-    const followers =
-      typeof data["followers"] == "number" && Number.isFinite(data["followers"]) ?
-        Math.max(0, Math.trunc(data["followers"] as number) - 1) :
-        0;
-
+    // FieldValue.increment is commutative and applied server-side, unlike
+    // a computed followers = count - 1 from a snapshot read here: that
+    // read-then-write pattern loses updates if a followUser/unfollowUser
+    // transaction (see follow_actions.ts) commits against the same doc
+    // between this read and this write.
     await doc.ref.update({
       followersList: fieldValue.arrayRemove(uid),
-      followers,
+      followers: fieldValue.increment(-1),
       updatedAt: fieldValue.serverTimestamp(),
     });
   }
@@ -350,16 +349,9 @@ async function cleanupFollowReferences(uid: string): Promise<void> {
     .get();
 
   for (const doc of followingsSnapshot.docs) {
-    const data = doc.data();
-    const followings =
-      typeof data["followings"] == "number" &&
-      Number.isFinite(data["followings"]) ?
-        Math.max(0, Math.trunc(data["followings"] as number) - 1) :
-        0;
-
     await doc.ref.update({
       followingsList: fieldValue.arrayRemove(uid),
-      followings,
+      followings: fieldValue.increment(-1),
       updatedAt: fieldValue.serverTimestamp(),
     });
   }
