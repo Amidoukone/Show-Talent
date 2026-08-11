@@ -134,6 +134,7 @@ class VideoUiStrings {
       'Connexion requise pour supprimer cette vid\u00e9o.';
 
   static const String videoSearchOpen = 'Rechercher';
+  static const String videoSearchIdleLabel = 'Poste, joueur, club';
   static const String videoSearchTitle = 'Recherche vid\u00e9o';
   static const String videoSearchHint = 'Poste, joueur, club...';
   static const String videoSearchClear = 'Effacer';

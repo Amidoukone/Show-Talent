@@ -906,7 +906,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Widget _buildVideoSearchLauncher() {
     final active = _isSearchActive;
-    final label = active ? _searchQuery : VideoUiStrings.videoSearchOpen;
+    final label = active ? _searchQuery : VideoUiStrings.videoSearchIdleLabel;
     final countLabel = _isSearchLoading
         ? null
         : active
@@ -919,18 +919,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(AdRadius.pill),
           onTap: () => unawaited(_openVideoSearchSheet()),
           child: Ink(
             height: 42,
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: active ? 0.48 : 0.32),
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(AdRadius.pill),
               border: Border.all(
                 color: Colors.white.withValues(alpha: active ? 0.36 : 0.16),
               ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: AdSpacing.sm),
             child: Row(
               children: [
                 Icon(
@@ -938,7 +938,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   color: Colors.white.withValues(alpha: 0.9),
                   size: 20,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AdSpacing.xs),
                 Expanded(
                   child: Text(
                     label,
@@ -965,12 +965,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   Container(
                     constraints: const BoxConstraints(minWidth: 26),
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
+                      horizontal: AdSpacing.xs,
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
                       color: AdColors.brand.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(AdRadius.pill),
                     ),
                     child: Text(
                       countLabel,
@@ -1038,8 +1038,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Padding(
         padding: const EdgeInsets.only(
           top: kToolbarHeight + 10,
-          left: 16,
-          right: 16,
+          left: AdSpacing.md,
+          right: AdSpacing.md,
         ),
         child: Semantics(
           button: true,
@@ -1047,18 +1047,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(AdRadius.pill),
               onTap: () => unawaited(_openPendingLiveVideos()),
               child: Ink(
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.76),
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(AdRadius.pill),
                   border: Border.all(
                     color: AdColors.brand.withValues(alpha: 0.44),
                   ),
                 ),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
+                  horizontal: AdSpacing.sm,
                   vertical: 9,
                 ),
                 child: ConstrainedBox(
@@ -1162,7 +1162,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               );
             }
             return Padding(
-              padding: const EdgeInsets.only(right: 8.0),
+              padding: const EdgeInsets.only(right: AdSpacing.xs),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1170,7 +1170,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     Tooltip(
                       message: VideoUiStrings.addVideoSemantic,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(AdRadius.pill),
                         onTap: () => unawaited(_openAddVideo()),
                         child: Container(
                           width: 40,
@@ -1188,7 +1188,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AdSpacing.xs),
                   ],
                   GestureDetector(
                     onTap: () async {
@@ -1331,7 +1331,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: AdStatePanel(
-          icon: Icons.play_circle_outline_rounded,
+          icon: Icons.sports_soccer_rounded,
           title: VideoUiStrings.emptyHomeVideoFeedTitle,
           message: canPublish
               ? VideoUiStrings.emptyHomeVideoFeedPlayerMessage
