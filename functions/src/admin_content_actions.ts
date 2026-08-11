@@ -528,7 +528,13 @@ function isPublicPlayerVideoData(
     data["isPublic"] === true;
 }
 
+// Takes a transaction so the count-then-write in adminSetVideoStatus can't
+// race: two admins approving two different pending videos for the same
+// player at nearly the same time used to both read the same pre-write
+// count outside any transaction and could both pass the
+// MAX_PUBLIC_PLAYER_VIDEOS check, exceeding the configured cap.
 async function countPublicPlayerVideos(
+  transaction: FirebaseFirestore.Transaction,
   ownerUid: string,
   excludeVideoId: string,
 ): Promise<number> {
@@ -536,10 +542,11 @@ async function countPublicPlayerVideos(
     return 0;
   }
 
-  const snapshot = await db.collection("videos")
-    .where("uid", "==", ownerUid)
-    .where("status", "==", "ready")
-    .get();
+  const snapshot = await transaction.get(
+    db.collection("videos")
+      .where("uid", "==", ownerUid)
+      .where("status", "==", "ready"),
+  );
 
   let count = 0;
   for (const doc of snapshot.docs) {
@@ -754,15 +761,6 @@ export const adminSetVideoStatus = onCall(
       }
 
       const ownerUid = getString(videoData, "uid");
-      if (status === "approved") {
-        const publicVideoCount = await countPublicPlayerVideos(ownerUid, videoId);
-        if (publicVideoCount >= MAX_PUBLIC_PLAYER_VIDEOS) {
-          throw new HttpsError(
-            "resource-exhausted",
-            `Ce joueur a deja ${MAX_PUBLIC_PLAYER_VIDEOS} videos publiques. Approbation impossible.`,
-          );
-        }
-      }
 
       const nextStatus = status === "approved" ?
         "ready" :
@@ -772,36 +770,52 @@ export const adminSetVideoStatus = onCall(
       const moderationStatus = status === "pending" ? "pending" : status;
       const isPublic = status === "approved";
 
-      await videoRef.set({
-        status: nextStatus,
-        moderationStatus,
-        visibility: isPublic ? "public" : "private",
-        isPublic,
-        updatedByAdmin: adminUid,
-        updatedAt: fieldValue.serverTimestamp(),
-        lastModeratedAt: fieldValue.serverTimestamp(),
-        ...(status === "approved" ? {
-          approvedAt: fieldValue.serverTimestamp(),
-          approvedBy: adminUid,
-          rejectedAt: fieldValue.delete(),
-          rejectionReason: fieldValue.delete(),
-          hiddenAt: fieldValue.delete(),
-          removedAt: fieldValue.delete(),
-        } : {}),
-        ...(status === "pending" ? {
-          approvedAt: fieldValue.delete(),
-          approvedBy: fieldValue.delete(),
-          rejectedAt: fieldValue.delete(),
-          rejectionReason: fieldValue.delete(),
-          submittedForReviewAt: fieldValue.serverTimestamp(),
-        } : {}),
-        ...(status === "hidden" ? {
-          hiddenAt: fieldValue.serverTimestamp(),
-        } : {}),
-        ...(status === "removed" ? {
-          removedAt: fieldValue.serverTimestamp(),
-        } : {}),
-      }, {merge: true});
+      await db.runTransaction(async (transaction) => {
+        if (status === "approved") {
+          const publicVideoCount = await countPublicPlayerVideos(
+            transaction,
+            ownerUid,
+            videoId,
+          );
+          if (publicVideoCount >= MAX_PUBLIC_PLAYER_VIDEOS) {
+            throw new HttpsError(
+              "resource-exhausted",
+              `Ce joueur a deja ${MAX_PUBLIC_PLAYER_VIDEOS} videos publiques. Approbation impossible.`,
+            );
+          }
+        }
+
+        transaction.set(videoRef, {
+          status: nextStatus,
+          moderationStatus,
+          visibility: isPublic ? "public" : "private",
+          isPublic,
+          updatedByAdmin: adminUid,
+          updatedAt: fieldValue.serverTimestamp(),
+          lastModeratedAt: fieldValue.serverTimestamp(),
+          ...(status === "approved" ? {
+            approvedAt: fieldValue.serverTimestamp(),
+            approvedBy: adminUid,
+            rejectedAt: fieldValue.delete(),
+            rejectionReason: fieldValue.delete(),
+            hiddenAt: fieldValue.delete(),
+            removedAt: fieldValue.delete(),
+          } : {}),
+          ...(status === "pending" ? {
+            approvedAt: fieldValue.delete(),
+            approvedBy: fieldValue.delete(),
+            rejectedAt: fieldValue.delete(),
+            rejectionReason: fieldValue.delete(),
+            submittedForReviewAt: fieldValue.serverTimestamp(),
+          } : {}),
+          ...(status === "hidden" ? {
+            hiddenAt: fieldValue.serverTimestamp(),
+          } : {}),
+          ...(status === "removed" ? {
+            removedAt: fieldValue.serverTimestamp(),
+          } : {}),
+        }, {merge: true});
+      });
 
       if (status === "approved") {
         await recordVideoModerationDecision({
