@@ -5,6 +5,7 @@ import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/users/user_repository.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/services/account_cleanup_service.dart';
+import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
@@ -16,6 +17,7 @@ import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -79,7 +81,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _allowMessages = settings.allowMessages;
         _loadingRole = false;
       });
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.debug('SettingsScreen load user settings error: $e\n$st');
       if (!mounted) {
         return;
       }
@@ -120,11 +123,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await Get.find<UserController>().refreshUser();
       }
       return true;
-    } catch (e) {
-      AdFeedback.error(
-        'Erreur',
-        'Impossible de sauvegarder les paramètres.',
-      );
+    } catch (e, st) {
+      AppLogger.debug('SettingsScreen update privacy setting error: $e\n$st');
+      AdFeedback.error('Erreur', 'Impossible de sauvegarder les paramètres.');
       return false;
     }
   }
@@ -379,8 +380,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildActionTile(
                           icon: Icons.support_agent_outlined,
                           title: 'Contacter l’équipe Adfoot',
-                          subtitle:
-                              'Vérification d’opportunités et accompagnement sécurisé.',
+                          subtitle: 'Ouvrir WhatsApp : $_supportPhoneDisplay',
                           onTap: _showSupportNotice,
                         ),
                       ],
@@ -449,10 +449,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showSupportNotice() {
+  static const String _supportPhoneDisplay = '+223 70 45 33 45';
+  static const String _supportWhatsappNumber = '22370453345';
+
+  Future<void> _showSupportNotice() async {
+    final uri = Uri.parse('https://wa.me/$_supportWhatsappNumber');
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (opened) {
+        return;
+      }
+    } catch (_) {
+      // Fall through to the informational toast below.
+    }
+
+    if (!mounted) {
+      return;
+    }
     AdFeedback.info(
-      'Equipe Adfoot',
-      'Faites vérifier toute opportunité via adfoot.org ou WhatsApp : +223 70 66 83 64.',
+      'Équipe Adfoot',
+      'Faites vérifier toute opportunité via adfoot.org ou WhatsApp : $_supportPhoneDisplay.',
       duration: const Duration(seconds: 5),
     );
   }
@@ -460,8 +476,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildToolsHeader(AppUser? user) {
     final userName = user?.nom.trim();
     final userEmail = user?.email.trim();
-    final displayName =
-        userName != null && userName.isNotEmpty ? userName : 'Compte Adfoot';
+    final displayName = userName != null && userName.isNotEmpty
+        ? userName
+        : 'Compte Adfoot';
     final displayEmail = userEmail != null && userEmail.isNotEmpty
         ? userEmail
         : 'Session connectée';
@@ -546,8 +563,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: _allowMessages
                       ? Icons.mark_chat_read_outlined
                       : Icons.chat_bubble_outline,
-                  label:
-                      _allowMessages ? 'Messages ouverts' : 'Messages fermés',
+                  label: _allowMessages
+                      ? 'Messages ouverts'
+                      : 'Messages fermés',
                   color: _allowMessages ? AdColors.success : AdColors.warning,
                 ),
             ],
@@ -646,10 +664,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required VoidCallback onTap,
     bool enabled = true,
   }) {
-    final foreground =
-        enabled ? AdColors.onSurface : AdColors.onSurfaceDisabled;
-    final muted =
-        enabled ? AdColors.onSurfaceMuted : AdColors.onSurfaceDisabled;
+    final foreground = enabled
+        ? AdColors.onSurface
+        : AdColors.onSurfaceDisabled;
+    final muted = enabled
+        ? AdColors.onSurfaceMuted
+        : AdColors.onSurfaceDisabled;
 
     return Material(
       color: Colors.transparent,
@@ -689,11 +709,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: muted,
-                size: 22,
-              ),
+              Icon(Icons.chevron_right_rounded, color: muted, size: 22),
             ],
           ),
         ),
@@ -939,7 +955,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await AdDialogs.confirm(
       context: context,
       title: 'Supprimer mon compte',
-      message: 'Cette action supprimera définitivement votre compte et '
+      message:
+          'Cette action supprimera définitivement votre compte et '
           'toutes vos données. Voulez-vous continuer ?',
       confirmLabel: 'Supprimer',
       cancelLabel: 'Annuler',
@@ -984,15 +1001,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return;
       }
 
-      AdFeedback.error(
-        'Suppression impossible',
-        error.message,
-      );
-    } catch (e) {
+      AdFeedback.error('Suppression impossible', error.message);
+    } catch (e, st) {
       closeBlockingDialog();
+      AppLogger.debug('SettingsScreen account deletion error: $e\n$st');
       AdFeedback.error(
         'Suppression impossible',
-        "Une erreur est survenue pendant la suppression : $e",
+        'Une erreur est survenue pendant la suppression. Merci de réessayer.',
       );
     } finally {
       if (mounted) setState(() => _isDeleting = false);
