@@ -48,7 +48,7 @@ class _VideoSearchSheet extends StatelessWidget {
             decoration: BoxDecoration(
               color: AdColors.surfaceCard,
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
+                top: Radius.circular(AdRadius.lg),
               ),
               border: Border.all(color: AdColors.divider),
             ),
@@ -122,15 +122,15 @@ class _VideoSearchSheet extends StatelessWidget {
                         filled: true,
                         fillColor: AdColors.surface,
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(AdRadius.md),
                           borderSide: const BorderSide(color: AdColors.divider),
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(AdRadius.md),
                           borderSide: const BorderSide(color: AdColors.divider),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(AdRadius.md),
                           borderSide: const BorderSide(
                             color: AdColors.brand,
                             width: 1.4,
@@ -269,7 +269,7 @@ class _VideoSearchResultTile extends StatelessWidget {
           child: Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AdRadius.sm),
                 child: SizedBox(
                   width: 48,
                   height: 68,

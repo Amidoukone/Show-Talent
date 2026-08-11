@@ -90,7 +90,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   color: cs.surface,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AdRadius.md),
                   border: Border.all(
                     color: theme.dividerColor.withValues(alpha: 0.6),
                   ),
