@@ -15,6 +15,20 @@ import 'package:adfoot/utils/video_tools.dart';
 import 'package:adfoot/screens/success_toast.dart';
 import 'package:adfoot/services/app_logger.dart';
 
+/// Distinguishes which upload stage threw, so observability isn't flattened
+/// to a single generic "upload-error" code for four operationally very
+/// different failures (video transfer / missing thumbnail / thumbnail
+/// transfer / finalize).
+class _UploadStageException implements Exception {
+  const _UploadStageException(this.code, this.message);
+
+  final String code;
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class UploadVideoController extends GetxController {
   static const Duration _optimizationOverallTimeout = Duration(seconds: 45);
   static const Duration _pollInterval = Duration(seconds: 10);
@@ -72,6 +86,15 @@ class UploadVideoController extends GetxController {
     if (isPreparing.value || isUploading.value || isOptimizing.value) {
       return false;
     }
+
+    // A previous attempt may have uploaded the video/thumbnail bytes but
+    // failed before finalizing (network blip on finalizeUpload, etc.).
+    // uploadDirectly() always resets state on failure, and this fresh
+    // prepareUpload call is about to create a brand-new session/storage
+    // path (a new temp file for trimmed videos never matches the old
+    // session's localFilePath) -- so the previous attempt's bytes would
+    // otherwise sit orphaned in Cloud Storage forever. Clean them up first.
+    await _cleanupOrphanedSession();
 
     final sanitizedDescription = description.trim();
     final sanitizedCaption = cap.trim();
@@ -301,7 +324,10 @@ class UploadVideoController extends GetxController {
       if (!_isCurrentOperation(operation)) return;
 
       if (!videoUploaded) {
-        throw VideoUiStrings.uploadVideoTransferFailed;
+        throw const _UploadStageException(
+          'video-transfer-failed',
+          VideoUiStrings.uploadVideoTransferFailed,
+        );
       }
 
       if (!await thumbnail!.exists() || (await thumbnail!.length()) == 0) {
@@ -311,7 +337,10 @@ class UploadVideoController extends GetxController {
         if (regenerated != null && await regenerated.exists()) {
           thumbnail = regenerated;
         } else {
-          throw VideoUiStrings.uploadMissingThumbnail;
+          throw const _UploadStageException(
+            'thumbnail-missing',
+            VideoUiStrings.uploadMissingThumbnail,
+          );
         }
       }
       if (!_isCurrentOperation(operation)) return;
@@ -342,7 +371,10 @@ class UploadVideoController extends GetxController {
       if (!_isCurrentOperation(operation)) return;
 
       if (!thumbUploaded) {
-        throw VideoUiStrings.uploadThumbnailTransferFailed;
+        throw const _UploadStageException(
+          'thumbnail-transfer-failed',
+          VideoUiStrings.uploadThumbnailTransferFailed,
+        );
       }
 
       uploadStage.value = VideoUiStrings.uploadStageFinalize;
@@ -386,7 +418,10 @@ class UploadVideoController extends GetxController {
       if (!_isCurrentOperation(operation)) return;
 
       if (!finalized) {
-        throw VideoUiStrings.uploadFinalizeFailed;
+        throw const _UploadStageException(
+          'finalize-failed',
+          VideoUiStrings.uploadFinalizeFailed,
+        );
       }
 
       await _uploadClient.clearPersistedSession();
@@ -635,10 +670,12 @@ class UploadVideoController extends GetxController {
   }
 
   String _uploadFailureCode(Object error) {
+    if (error is _UploadStageException) return error.code;
     return UploadVideoErrorMapper.failureCode(error);
   }
 
   String _toUserMessage(Object error) {
+    if (error is _UploadStageException) return error.message;
     return UploadVideoErrorMapper.toUserMessage(error);
   }
 
@@ -662,5 +699,17 @@ class UploadVideoController extends GetxController {
     try {
       await _uploadRepository.deletePartialUpload(videoPath, thumbPath);
     } catch (_) {}
+  }
+
+  Future<void> _cleanupOrphanedSession() async {
+    final session = _activeSession;
+    if (session == null) return;
+
+    _activeSession = null;
+    await _deletePartialUpload(
+      session.videoPath,
+      _lastUploadedThumbPath ?? session.thumbnailPath,
+    );
+    _lastUploadedThumbPath = null;
   }
 }

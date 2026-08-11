@@ -84,17 +84,20 @@ class _AddVideoState extends State<AddVideo> {
         color: cs.surface,
         child: SafeArea(
           child: Obx(() {
+            final preparing = uploadVideoController.isPreparing.value;
             final uploading = uploadVideoController.isUploading.value;
             final optimizing = uploadVideoController.isOptimizing.value;
             final loading = isLoading.value;
 
             // Contenu principal
-            final content = _BodyCard(
-              onPick: _pickVideoFromGallery,
-            );
+            final content = _BodyCard(onPick: _pickVideoFromGallery);
 
-            // Superpose un overlay “verre dépoli” quand on charge / upload / optimise
-            final showOverlay = loading || uploading || optimizing;
+            // Superpose un overlay "verre dépoli" quand on charge / prépare /
+            // upload / optimise. isPreparing doit être inclus: sans lui, un
+            // retour en arrière pendant la préparation (trim/miniature) sur
+            // UploadForm ramène ici sans aucune indication qu'un traitement
+            // est toujours en cours en arrière-plan.
+            final showOverlay = loading || preparing || uploading || optimizing;
 
             return Stack(
               children: [
@@ -119,7 +122,10 @@ class _AddVideoState extends State<AddVideo> {
                 ),
                 if (showOverlay)
                   _ProgressOverlay(
-                      controller: uploadVideoController, waiting: loading),
+                    controller: uploadVideoController,
+                    waiting: loading,
+                    preparing: preparing,
+                  ),
               ],
             );
           }),
@@ -149,9 +155,7 @@ class _BodyCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: AdColors.brand.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(AdRadius.xl),
-              border: Border.all(
-                color: AdColors.brand.withValues(alpha: .24),
-              ),
+              border: Border.all(color: AdColors.brand.withValues(alpha: .24)),
             ),
             child: const Center(
               child: Icon(
@@ -166,20 +170,20 @@ class _BodyCard extends StatelessWidget {
             VideoUiStrings.addVideoPickTitle,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontSize: 18,
-                  letterSpacing: .2,
-                  fontWeight: FontWeight.w700,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
+              fontSize: 18,
+              letterSpacing: .2,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             VideoUiStrings.uploadConstraintsHint,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 13,
-                  color: AdColors.onSurfaceMuted,
-                ),
+              fontSize: 13,
+              color: AdColors.onSurfaceMuted,
+            ),
           ),
           const SizedBox(height: 22),
 
@@ -253,8 +257,13 @@ class _TipChip extends StatelessWidget {
 class _ProgressOverlay extends StatelessWidget {
   final UploadVideoController controller;
   final bool waiting; // état "chargement" avant d’ouvrir la galerie
+  final bool preparing;
 
-  const _ProgressOverlay({required this.controller, required this.waiting});
+  const _ProgressOverlay({
+    required this.controller,
+    required this.waiting,
+    required this.preparing,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -263,6 +272,10 @@ class _ProgressOverlay extends StatelessWidget {
     final progress = controller.uploadProgress.value;
     final hasValue = progress > 0 && progress <= 1;
     final stage = controller.uploadStage.value;
+    // Mirrors ProgressFullScreenLoader's canCancel: cancelUpload() is a
+    // no-op while optimizing (server-side step), and there's nothing to
+    // cancel during the plain gallery-picker `waiting` state.
+    final canCancel = !waiting && !optimizing;
 
     String title;
     String subtitle = '';
@@ -273,18 +286,31 @@ class _ProgressOverlay extends StatelessWidget {
       title = VideoUiStrings.overlayLoading;
       subtitle = VideoUiStrings.overlayWaiting;
       icon = Icons.hourglass_top_rounded;
-      progressWidget =
-          const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
+      progressWidget = const CircularProgressIndicator(
+        strokeWidth: 3,
+        color: Colors.white,
+      );
+    } else if (preparing) {
+      title = VideoUiStrings.uploadPreparationTitle;
+      subtitle = VideoUiStrings.uploadPreparationSubtitle;
+      icon = Icons.tune_rounded;
+      progressWidget = const CircularProgressIndicator(
+        strokeWidth: 3,
+        color: Colors.white,
+      );
     } else if (optimizing) {
       title = VideoUiStrings.uploadOptimizationTitle;
       subtitle = VideoUiStrings.uploadOptimizationSubtitle;
       icon = Icons.auto_awesome_rounded;
-      progressWidget =
-          const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
+      progressWidget = const CircularProgressIndicator(
+        strokeWidth: 3,
+        color: Colors.white,
+      );
     } else if (uploading) {
       title = VideoUiStrings.uploadProgressTitle;
-      subtitle =
-          stage.isNotEmpty ? stage : VideoUiStrings.uploadProgressSubtitle;
+      subtitle = stage.isNotEmpty
+          ? stage
+          : VideoUiStrings.uploadProgressSubtitle;
       icon = Icons.cloud_upload_rounded;
       progressWidget = CircularProgressIndicator(
         strokeWidth: 3,
@@ -295,8 +321,10 @@ class _ProgressOverlay extends StatelessWidget {
       title = VideoUiStrings.overlayWaiting;
       subtitle = VideoUiStrings.uploadProgressSubtitle;
       icon = Icons.sync_rounded;
-      progressWidget =
-          const CircularProgressIndicator(strokeWidth: 3, color: Colors.white);
+      progressWidget = const CircularProgressIndicator(
+        strokeWidth: 3,
+        color: Colors.white,
+      );
     }
 
     return PositionedFill(
@@ -320,11 +348,7 @@ class _ProgressOverlay extends StatelessWidget {
                   Stack(
                     alignment: Alignment.center,
                     children: [
-                      SizedBox(
-                        width: 58,
-                        height: 58,
-                        child: progressWidget,
-                      ),
+                      SizedBox(width: 58, height: 58, child: progressWidget),
                       Container(
                         width: 38,
                         height: 38,
@@ -372,6 +396,17 @@ class _ProgressOverlay extends StatelessWidget {
                       minHeight: 6,
                       color: Colors.white,
                       backgroundColor: Colors.white.withValues(alpha: .25),
+                    ),
+                  ],
+                  if (canCancel) ...[
+                    const SizedBox(height: 16),
+                    TextButton.icon(
+                      onPressed: controller.cancelUpload,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text(VideoUiStrings.uploadCancelAction),
                     ),
                   ],
                 ],
