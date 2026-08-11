@@ -232,6 +232,11 @@ class VideoUiStrings {
   static const String uploadProgressLabel = 'Progression';
   static const String uploadCurrentStepLabel = '\u00c9tape actuelle';
   static const String uploadCancelAction = 'Annuler le t\u00e9l\u00e9versement';
+  static const String discardDraftTitle = 'Abandonner cette vid\u00e9o ?';
+  static const String discardDraftMessage =
+      'Votre description et votre l\u00e9gende ne seront pas enregistr\u00e9es.';
+  static const String discardDraftConfirm = 'Abandonner';
+  static const String discardDraftCancel = 'Continuer';
   static const String uploadStepPrepare = 'Pr\u00e9paration';
   static const String uploadStepTransfer = 'Transfert';
   static const String uploadStepThumbnail = 'Miniature';
