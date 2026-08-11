@@ -313,7 +313,7 @@ void main() {
         'lib/screens/video_feed_screen.dart',
       ).readAsStringSync();
       final profileFeed = File(
-        'lib/screens/profile_video_feed_screen.dart',
+        'lib/screens/profil_video_scrollview.dart',
       ).readAsStringSync();
       final tiktokPlayer = File(
         'lib/widgets/tiktok_video_player.dart',
@@ -455,7 +455,7 @@ void main() {
         ).readAsStringSync();
         final home = File('lib/screens/home_screen.dart').readAsStringSync();
         final profileFeed = File(
-          'lib/screens/profile_video_feed_screen.dart',
+          'lib/screens/profil_video_scrollview.dart',
         ).readAsStringSync();
 
         expect(player, contains('_buildVideoReadabilityScrim()'));
@@ -512,9 +512,6 @@ void main() {
       final videoFeed = File(
         'lib/screens/video_feed_screen.dart',
       ).readAsStringSync();
-      final profileFeed = File(
-        'lib/screens/profile_video_feed_screen.dart',
-      ).readAsStringSync();
       final profileScroll = File(
         'lib/screens/profil_video_scrollview.dart',
       ).readAsStringSync();
@@ -526,7 +523,6 @@ void main() {
       expect(player, isNot(contains('_forceMp4Fallback')));
       expect(home, isNot(contains('alternatePlaybackForVideo')));
       expect(videoFeed, isNot(contains('alternatePlaybackForVideo')));
-      expect(profileFeed, isNot(contains('alternatePlaybackForVideo')));
       expect(profileScroll, isNot(contains('alternatePlaybackForVideo')));
     });
 

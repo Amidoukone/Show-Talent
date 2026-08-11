@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/immersive_video_chrome.dart';
 import 'package:adfoot/widgets/smart_video_player.dart';
 import 'package:adfoot/widgets/video_manager.dart';
@@ -176,17 +177,14 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
           return Stack(
             children: [
               if (_isExiting)
-                const SizedBox.expand(
-                  child: ColoredBox(color: Colors.black),
-                )
+                const SizedBox.expand(child: ColoredBox(color: Colors.black))
               else if (videos.isEmpty)
-                const SizedBox.expand(
-                  child: Center(
-                    child: Text(
-                      'Aucune vidéo à afficher',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
+                ImmersiveVideoEmptyState(
+                  icon: Icons.video_library_outlined,
+                  title: VideoUiStrings.emptyProfileVideoFeedTitle,
+                  message: VideoUiStrings.emptyProfileVideoFeedMessage,
+                  actionLabel: VideoUiStrings.back,
+                  onAction: () => unawaited(_safeExit()),
                 )
               else if (_currentIndex >= videos.length)
                 const SizedBox.shrink()
