@@ -815,6 +815,15 @@ class VideoManager {
         final existing = lru.remove(cacheKey)!;
         final v = existing.controller.value;
         if (v.isInitialized && !v.hasError) {
+          // disposeAllForContext removes the contextKey's map entries but
+          // doesn't invalidate a map object a concurrent attempt() already
+          // captured -- without this check, a context torn down mid-flight
+          // could hand back an already-disposed controller here (dispose()
+          // doesn't flip isInitialized/hasError). Same guard as the slow
+          // path below.
+          if (!_isContextActive(contextKey, lru, futures)) {
+            throw const _VideoInitCancelled('context_disposed_lru_hit');
+          }
           lru[cacheKey] = existing;
           await _enforceLimit(contextKey, activeUrl: activeUrl);
           _setLoadState(contextKey, url, VideoLoadState.ready);
@@ -833,6 +842,9 @@ class VideoManager {
           final player = await futures[cacheKey]!;
           final v = player.controller.value;
           if (v.isInitialized && !v.hasError) {
+            if (!_isContextActive(contextKey, lru, futures)) {
+              throw const _VideoInitCancelled('context_disposed_future_hit');
+            }
             lru[cacheKey] = player;
             await _enforceLimit(contextKey, activeUrl: activeUrl);
             _setLoadState(contextKey, url, VideoLoadState.ready);
@@ -841,7 +853,9 @@ class VideoManager {
             }
             return player;
           }
-        } catch (_) {}
+        } catch (error) {
+          if (error is _VideoInitCancelled) rethrow;
+        }
         futures.remove(cacheKey);
         lru.remove(cacheKey);
       }
