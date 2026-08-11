@@ -148,6 +148,32 @@ class UploadClient {
   static const _defaultMaxChunkRetries = 3;
   static const Set<int> _terminalSuccessStatuses = {200, 201, 204};
 
+  // Server-side rejections that retrying can never fix -- everything else
+  // reaching this layer (timeouts, DNS/connection resets, transient
+  // 'unavailable'/'deadline-exceeded'/'internal' Functions errors) is worth
+  // a bounded retry so a momentary network blip on createUploadSession,
+  // requestThumbnailUploadUrl or finalizeUpload doesn't force the caller to
+  // redo the whole prepare+upload flow.
+  static const Set<String> _nonRetryableCallableErrorCodes = {
+    'permission-denied',
+    'invalid-argument',
+    'failed-precondition',
+    'not-found',
+    'already-exists',
+    'out-of-range',
+    'unimplemented',
+  };
+  static const int _defaultMaxCallableRetries = 3;
+  static const Duration _callableRetryBaseDelay = Duration(seconds: 1);
+
+  // The resumable session TTL (server-side, ~45 min) can expire mid-upload
+  // on a slow connection, which forces a restart from byte 0 (a new
+  // resumable URL means a new server-side upload session). Without a cap,
+  // a connection slow enough to never finish within one TTL window would
+  // retry this forever with no feedback. 2 refreshes gives a generous
+  // multi-hour ceiling before surfacing a clear, actionable error instead.
+  static const int _maxSessionRefreshes = 2;
+
   UploadClient({
     UploadHttpClient? httpClient,
     FirebaseFunctions? functions,
@@ -155,9 +181,11 @@ class UploadClient {
     this._videoRetryDelay = const Duration(milliseconds: 750),
     this._thumbnailRetryDelay = const Duration(milliseconds: 500),
     int maxChunkRetries = _defaultMaxChunkRetries,
+    int maxCallableRetries = _defaultMaxCallableRetries,
   }) : _httpClient = httpClient ?? DioUploadHttpClient(),
        _functionsOverride = functions,
-       _maxChunkRetries = maxChunkRetries < 1 ? 1 : maxChunkRetries;
+       _maxChunkRetries = maxChunkRetries < 1 ? 1 : maxChunkRetries,
+       _maxCallableRetries = maxCallableRetries < 1 ? 1 : maxCallableRetries;
 
   final UploadHttpClient _httpClient;
   final FirebaseFunctions? _functionsOverride;
@@ -165,6 +193,7 @@ class UploadClient {
   final Duration _videoRetryDelay;
   final Duration _thumbnailRetryDelay;
   final int _maxChunkRetries;
+  final int _maxCallableRetries;
 
   late final FirebaseFunctions _functions =
       _functionsOverride ??
@@ -173,6 +202,41 @@ class UploadClient {
       );
 
   UploadSessionState? _cachedSession;
+
+  bool _isRetryableCallableError(Object error) {
+    if (error is FirebaseFunctionsException) {
+      return !_nonRetryableCallableErrorCodes.contains(error.code);
+    }
+    // CallableAuthGuard already normalizes server-side rejections into
+    // FirebaseFunctionsException; anything else surfacing here is almost
+    // always a transport-level failure (timeout, DNS, connection reset),
+    // which is worth retrying.
+    return true;
+  }
+
+  Future<T> _callCallableWithRetry<T>(
+    HttpsCallable callable,
+    String callableName,
+    dynamic parameters,
+  ) async {
+    for (var attempt = 1; attempt <= _maxCallableRetries; attempt++) {
+      try {
+        return await CallableAuthGuard.callDataWithHttpFallback<T>(
+          callable,
+          callableName,
+          parameters,
+        );
+      } catch (error) {
+        if (attempt == _maxCallableRetries ||
+            !_isRetryableCallableError(error)) {
+          rethrow;
+        }
+        await Future.delayed(_callableRetryBaseDelay * attempt);
+      }
+    }
+
+    throw UploadClientException('Échec appel $callableName.');
+  }
 
   Future<String> _cachePath() async {
     final override = _cachePathProvider;
@@ -234,16 +298,15 @@ class UploadClient {
     String contentType = 'video/mp4',
   }) async {
     final callable = _functions.httpsCallable('createUploadSession');
-    final data =
-        await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
-          callable,
-          'createUploadSession',
-          {
-            'sessionId': ?sessionId,
-            'contentType': contentType,
-            'fileSizeBytes': fileSizeBytes,
-          },
-        );
+    final data = await _callCallableWithRetry<Map<String, dynamic>>(
+      callable,
+      'createUploadSession',
+      {
+        'sessionId': ?sessionId,
+        'contentType': contentType,
+        'fileSizeBytes': fileSizeBytes,
+      },
+    );
 
     final expiresAtMs = (data['expiresAt'] as num?)?.toInt() ?? 0;
 
@@ -407,6 +470,7 @@ class UploadClient {
     var current = session;
     final totalBytes = await _readValidFileLength(file: file, label: 'video');
     var uploadedBytes = session.uploadedBytes;
+    var sessionRefreshCount = 0;
 
     final remoteOffset = await _queryRemoteOffset(current, totalBytes);
     if (remoteOffset >= 0) {
@@ -418,6 +482,13 @@ class UploadClient {
 
     while (uploadedBytes < totalBytes) {
       if (current.isExpired) {
+        if (sessionRefreshCount >= _maxSessionRefreshes) {
+          throw const UploadClientException(
+            'Le transfert vidéo prend trop de temps sur cette connexion. '
+            'Vérifiez votre réseau puis réessayez.',
+          );
+        }
+        sessionRefreshCount++;
         current = await refreshSession(current);
         uploadedBytes = 0;
         await persistSession(current.copyWith(uploadedBytes: 0));
@@ -472,18 +543,17 @@ class UploadClient {
     final hash = await _computeMd5(file);
 
     final callable = _functions.httpsCallable('requestThumbnailUploadUrl');
-    final data =
-        await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
-          callable,
-          'requestThumbnailUploadUrl',
-          {
-            'sessionId': sessionId,
-            'hash': hash,
-            'size': size,
-            'contentType': contentType,
-            'thumbnailPath': ?thumbnailPath,
-          },
-        );
+    final data = await _callCallableWithRetry<Map<String, dynamic>>(
+      callable,
+      'requestThumbnailUploadUrl',
+      {
+        'sessionId': sessionId,
+        'hash': hash,
+        'size': size,
+        'contentType': contentType,
+        'thumbnailPath': ?thumbnailPath,
+      },
+    );
 
     return ThumbnailUploadTicket(
       uploadUrl: data['uploadUrl'],
@@ -563,12 +633,11 @@ class UploadClient {
     required Map<String, dynamic> metadata,
   }) async {
     final callable = _functions.httpsCallable('finalizeUpload');
-    final data =
-        await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
-          callable,
-          'finalizeUpload',
-          {'sessionId': sessionId, 'metadata': metadata},
-        );
+    final data = await _callCallableWithRetry<Map<String, dynamic>>(
+      callable,
+      'finalizeUpload',
+      {'sessionId': sessionId, 'metadata': metadata},
+    );
     return (data['ok'] as bool?) ?? false;
   }
 }
