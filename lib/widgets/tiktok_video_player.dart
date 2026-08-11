@@ -221,10 +221,19 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     if (_isDisposed) return;
     final wasPlaying = _safeValue()?.isPlaying ?? widget.isPlaying;
     widget.onTogglePlayPause?.call();
-    _showFeedback(
-      wasPlaying ? VideoUiStrings.pause : VideoUiStrings.play,
-      icon: wasPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-    );
+    // When showControls is on, _toggleOverlay() below brings up the
+    // floating scrub-controls row, which already has its own play/pause
+    // button -- showing this center feedback pill on top of it (and on top
+    // of the center playback indicator) stacks three overlapping overlays
+    // for a single tap. Only show it where there's no floating row to
+    // convey the same state change (e.g. thumbnail/grid contexts with
+    // showControls: false).
+    if (!widget.showControls) {
+      _showFeedback(
+        wasPlaying ? VideoUiStrings.pause : VideoUiStrings.play,
+        icon: wasPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+      );
+    }
     _toggleOverlay();
   }
 
@@ -552,10 +561,17 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
   }
 
   Widget _buildOverlayUI(VideoPlayerValue val) {
+    // The floating scrub-controls row already includes its own play/pause
+    // button, so the big center indicator would otherwise sit stacked on
+    // top of it (and of the tap feedback pill) for as long as the row is
+    // visible -- suppress it while that row is showing.
+    final showCenterIndicator =
+        !widget.hidePlayPauseIcon && !_showControlOverlay;
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (!widget.hidePlayPauseIcon) _buildCenterPlaybackIndicator(val),
+        if (showCenterIndicator) _buildCenterPlaybackIndicator(val),
         if (_feedbackOverlay != null) _buildFeedbackOverlay(),
         if (_showControlOverlay && widget.showControls)
           _buildFloatingControls(val),
