@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../services/app_check_service.dart';
 import '../services/email_link_handler.dart';
 import '../services/notifications.dart';
+import '../utils/video_tools.dart';
 import 'app_bindings.dart';
 import 'firebase_bootstrap.dart';
 import 'package:adfoot/services/app_logger.dart';
@@ -71,6 +73,17 @@ class AppBootstrap {
       () async => AppBindings.warmUpBackgroundServices(),
     );
 
+    // Fire-and-forget: reclaims video-processing temp files orphaned by a
+    // previous session getting killed mid-upload (see
+    // VideoTools.cleanupStaleTempFiles doc comment). Pure disk cleanup with
+    // no UI dependency, so it must not delay runApp().
+    unawaited(
+      _runNonCritical(
+        'VideoTools.cleanupStaleTempFiles',
+        VideoTools.cleanupStaleTempFiles,
+      ),
+    );
+
     await _initializeEmailLinkHandler();
   }
 
@@ -129,11 +142,13 @@ class AppBootstrap {
   }
 
   static void _configureSystemUi() {
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      statusBarBrightness: Brightness.dark,
-    ));
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+    );
   }
 
   static Future<void> _initializeEmailLinkHandler() async {

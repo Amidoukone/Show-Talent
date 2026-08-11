@@ -492,6 +492,39 @@ class VideoTools {
     } catch (_) {}
   }
 
+  /// Best-effort sweep of leftover video-processing temp files, meant to
+  /// run once at app startup. If the app is killed between a successful
+  /// finalizeUpload and the local cleanup that normally follows it (see
+  /// UploadVideoController._cleanupLocalFiles / dispose() above), the
+  /// trimmed-video and thumbnail temp files never get reclaimed and
+  /// silently accumulate on device storage. Only touches:
+  /// - the video_compress plugin's own cache directory (trimmed video
+  ///   output, generated thumbnails) via its own deleteAllCache() API, and
+  /// - files this class writes directly to the OS temp directory with the
+  ///   `fallback_*.png` prefix (generateFallbackThumbnail) -- a narrow,
+  ///   app-specific pattern so this never touches unrelated temp files.
+  static Future<void> cleanupStaleTempFiles() async {
+    try {
+      await VideoCompress.deleteAllCache();
+    } catch (_) {}
+
+    try {
+      final dir = await getTemporaryDirectory();
+      if (!await dir.exists()) return;
+      for (final entry in dir.listSync()) {
+        if (entry is! File) continue;
+        final name = entry.uri.pathSegments.isEmpty
+            ? ''
+            : entry.uri.pathSegments.last;
+        if (name.startsWith('fallback_') && name.endsWith('.png')) {
+          try {
+            await entry.delete();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
   static Future<void> purgeCacheForVideo(String path) async {
     try {
       _durationCacheMs.remove(path);
@@ -522,9 +555,7 @@ class VideoTools {
       await ClientLogger.instance.logInfo(
         source,
         message,
-        metadata: {
-          'device': "${Platform.operatingSystem} ${Platform.version}",
-        },
+        metadata: {'device': "${Platform.operatingSystem} ${Platform.version}"},
       );
     } catch (_) {}
   }
