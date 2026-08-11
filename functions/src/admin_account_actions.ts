@@ -357,6 +357,76 @@ async function cleanupFollowReferences(uid: string): Promise<void> {
   }
 }
 
+// Mirrors ownerProfileTrustFieldsChanged() in firestore.rules and
+// _trustSensitiveProfileKeys in the mobile app's profile_repository.dart.
+// Admin SDK writes bypass Security Rules, so that invariant (editing a
+// trust-sensitive field on an already-verified profile invalidates the
+// verification) has to be reimplemented here explicitly, or an admin edit
+// could silently leave a stale "verified" badge on materially changed data.
+const TRUST_SENSITIVE_PROFILE_FIELDS = [
+  "nom",
+  "phone",
+  "languages",
+  "bio",
+  "birthDate",
+  "position",
+  "team",
+  "clubActuel",
+  "nombreDeMatchs",
+  "buts",
+  "assistances",
+  "performances",
+  "nomClub",
+  "ligue",
+  "entreprise",
+  "nombreDeRecrutements",
+  "country",
+  "city",
+  "region",
+  "openToOpportunities",
+  "playerProfile",
+  "clubProfile",
+  "agentProfile",
+  "eventOrganizerProfile",
+  "photoProfil",
+  "cvUrl",
+];
+
+function isProfileCurrentlyVerified(data: Record<string, unknown>): boolean {
+  return data["profileVerified"] === true ||
+    data["profileVerificationStatus"] === "verified";
+}
+
+function trimmedString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// Mirrors AppUser.isMvpProfileComplete (lib/models/user.dart, both apps).
+function isMvpProfileComplete(
+  role: string,
+  data: Record<string, unknown>,
+): boolean {
+  const nom = trimmedString(data["nom"]);
+  if (!nom) {
+    return false;
+  }
+
+  switch (role) {
+  case "joueur":
+    return (
+      trimmedString(data["position"]).length > 0 &&
+        trimmedString(data["team"]).length > 0
+    );
+  case "club":
+    return trimmedString(data["ligue"]).length > 0;
+  case "recruteur":
+  case "agent":
+    return trimmedString(data["entreprise"]).length > 0;
+  default:
+    return true;
+  }
+}
+
 function sanitizeManagedProfilePatch(
   patch: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -372,6 +442,7 @@ function sanitizeManagedProfilePatch(
     "entreprise",
     "team",
     "clubActuel",
+    "position",
   ];
 
   const booleanFields = [
@@ -381,7 +452,14 @@ function sanitizeManagedProfilePatch(
     "profileVerified",
   ];
 
-  const mapFields = ["clubProfile", "agentProfile"];
+  const nonNegativeIntFields = [
+    "nombreDeMatchs",
+    "buts",
+    "assistances",
+    "nombreDeRecrutements",
+  ];
+
+  const mapFields = ["clubProfile", "agentProfile", "playerProfile"];
 
   const updates: Record<string, unknown> = {};
 
@@ -405,6 +483,17 @@ function sanitizeManagedProfilePatch(
     const value = patch[field];
     if (typeof value === "boolean") {
       updates[field] = value;
+    }
+  }
+
+  for (const field of nonNegativeIntFields) {
+    const value = patch[field];
+    if (value === null) {
+      updates[field] = null;
+      continue;
+    }
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      updates[field] = Math.trunc(value);
     }
   }
 
@@ -671,66 +760,115 @@ export const updateManagedAccountProfile = onCall(
     assertSafeAdminMutation(target, adminUid);
     assertManagedTarget(target);
 
-    const updates = sanitizeManagedProfilePatch(rawPatch);
-    if (Object.keys(updates).length === 0) {
+    const sanitizedPatch = sanitizeManagedProfilePatch(rawPatch);
+    if (Object.keys(sanitizedPatch).length === 0) {
       throw new HttpsError(
         "invalid-argument",
         "Aucun champ profil autorisé n’a été fourni.",
       );
     }
 
-    if (updates["profileVerified"] === true) {
-      updates["profileVerificationStatus"] = "verified";
-      updates["profileVerifiedBy"] = adminUid;
-      updates["profileVerifiedAt"] = fieldValue.serverTimestamp();
-      updates["profileVerificationUpdatedBy"] = adminUid;
-      updates["profileVerificationUpdatedAt"] = fieldValue.serverTimestamp();
-      updates["profileVerificationInvalidatedAt"] = fieldValue.delete();
-      updates["profileVerificationInvalidatedBy"] = fieldValue.delete();
-      updates["profileVerificationInvalidationReason"] = fieldValue.delete();
-    } else if (updates["profileVerified"] === false) {
-      updates["profileVerificationStatus"] =
-        updates["profileVerificationStatus"] ?? "unverified";
-      updates["profileVerifiedBy"] = fieldValue.delete();
-      updates["profileVerifiedAt"] = fieldValue.delete();
-      updates["profileVerificationUpdatedBy"] = adminUid;
-      updates["profileVerificationUpdatedAt"] = fieldValue.serverTimestamp();
-    }
+    const accountActive = computeAccountActiveState(target);
 
-    const mainDocUpdates = {...updates};
-    const contactUpdates: Record<string, unknown> = {};
-    const adminNotesUpdates: Record<string, unknown> = {};
+    // The read that the profileVerified/invalidation decision below depends
+    // on happens inside the transaction (tx.get()), not via the
+    // loadManagedTarget() snapshot taken above — otherwise a concurrent
+    // write landing between that earlier read and this function's commit
+    // (another admin action, or the owner editing their own profile) could
+    // make the decision on stale data while still committing unconditionally.
+    // sanitizedPatch is rebuilt into a fresh `updates` object on every
+    // attempt so a transaction retry (Firestore retries on contention)
+    // starts from the original patch instead of a previous attempt's
+    // already-mutated state.
+    const updatedFields = await db.runTransaction(async (tx) => {
+      const freshSnap = await tx.get(target.userRef);
+      const freshData = freshSnap.exists ? freshSnap.data() ?? {} : {};
+      const updates: Record<string, unknown> = {...sanitizedPatch};
 
-    if ("phone" in mainDocUpdates) {
-      contactUpdates["phone"] = mainDocUpdates["phone"];
-      delete mainDocUpdates["phone"];
-    }
-    if ("profileVerificationNote" in mainDocUpdates) {
-      adminNotesUpdates["profileVerificationNote"] =
-        mainDocUpdates["profileVerificationNote"];
-      delete mainDocUpdates["profileVerificationNote"];
-    }
+      const adminExplicitlySetVerification = "profileVerified" in updates;
+      if (
+        !adminExplicitlySetVerification &&
+        isProfileCurrentlyVerified(freshData) &&
+        Object.keys(updates).some((key) =>
+          TRUST_SENSITIVE_PROFILE_FIELDS.includes(key)
+        )
+      ) {
+        updates["profileVerified"] = false;
+        updates["profileVerificationStatus"] = "pending";
+        updates["profileVerificationInvalidatedAt"] =
+          fieldValue.serverTimestamp();
+        updates["profileVerificationInvalidatedBy"] = adminUid;
+        updates["profileVerificationInvalidationReason"] =
+          "profile_updated_by_admin";
+      }
 
-    const profileBatch = db.batch();
-    profileBatch.set(target.userRef, {
-      ...mainDocUpdates,
-      updatedByAdmin: adminUid,
-      updatedAt: fieldValue.serverTimestamp(),
-    }, {merge: true});
-    if (Object.keys(contactUpdates).length > 0) {
-      profileBatch.set(privateContactRef(uid), contactUpdates, {merge: true});
-    }
-    if (Object.keys(adminNotesUpdates).length > 0) {
-      profileBatch.set(
-        privateAdminNotesRef(uid),
-        adminNotesUpdates,
-        {merge: true},
-      );
-    }
-    await profileBatch.commit();
+      if (updates["profileVerified"] === true) {
+        // Mirrors AppUser.canBeProfileVerifiedByAdmin on the client: that
+        // check only gates which button the admin UI shows, and Admin SDK
+        // writes bypass Security Rules entirely, so without this the
+        // callable itself would happily verify an incomplete or inactive
+        // profile if called directly.
+        if (!accountActive) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Le compte doit être actif (email vérifié, non désactivé) avant d’être certifié.",
+          );
+        }
+        if (!isMvpProfileComplete(target.role, {...freshData, ...updates})) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Le profil ne contient pas encore les informations minimales requises pour être certifié.",
+          );
+        }
 
-    if (typeof updates["nom"] === "string" && target.userRecord) {
-      await auth.updateUser(uid, {displayName: updates["nom"]});
+        updates["profileVerificationStatus"] = "verified";
+        updates["profileVerifiedBy"] = adminUid;
+        updates["profileVerifiedAt"] = fieldValue.serverTimestamp();
+        updates["profileVerificationUpdatedBy"] = adminUid;
+        updates["profileVerificationUpdatedAt"] = fieldValue.serverTimestamp();
+        updates["profileVerificationInvalidatedAt"] = fieldValue.delete();
+        updates["profileVerificationInvalidatedBy"] = fieldValue.delete();
+        updates["profileVerificationInvalidationReason"] = fieldValue.delete();
+      } else if (updates["profileVerified"] === false) {
+        updates["profileVerificationStatus"] =
+          updates["profileVerificationStatus"] ?? "unverified";
+        updates["profileVerifiedBy"] = fieldValue.delete();
+        updates["profileVerifiedAt"] = fieldValue.delete();
+        updates["profileVerificationUpdatedBy"] = adminUid;
+        updates["profileVerificationUpdatedAt"] = fieldValue.serverTimestamp();
+      }
+
+      const mainDocUpdates = {...updates};
+      const contactUpdates: Record<string, unknown> = {};
+      const adminNotesUpdates: Record<string, unknown> = {};
+
+      if ("phone" in mainDocUpdates) {
+        contactUpdates["phone"] = mainDocUpdates["phone"];
+        delete mainDocUpdates["phone"];
+      }
+      if ("profileVerificationNote" in mainDocUpdates) {
+        adminNotesUpdates["profileVerificationNote"] =
+          mainDocUpdates["profileVerificationNote"];
+        delete mainDocUpdates["profileVerificationNote"];
+      }
+
+      tx.set(target.userRef, {
+        ...mainDocUpdates,
+        updatedByAdmin: adminUid,
+        updatedAt: fieldValue.serverTimestamp(),
+      }, {merge: true});
+      if (Object.keys(contactUpdates).length > 0) {
+        tx.set(privateContactRef(uid), contactUpdates, {merge: true});
+      }
+      if (Object.keys(adminNotesUpdates).length > 0) {
+        tx.set(privateAdminNotesRef(uid), adminNotesUpdates, {merge: true});
+      }
+
+      return updates;
+    });
+
+    if (typeof updatedFields["nom"] === "string" && target.userRecord) {
+      await auth.updateUser(uid, {displayName: updatedFields["nom"]});
     }
 
     return {
@@ -739,7 +877,7 @@ export const updateManagedAccountProfile = onCall(
       message: "Profil du compte géré mis à jour.",
       data: {
         ...buildManagedAccountSummary(target),
-        updatedFields: Object.keys(updates),
+        updatedFields: Object.keys(updatedFields),
       },
     };
   },

@@ -12,6 +12,7 @@ class PlayerStatsAvailabilityForm extends StatefulWidget {
   final bool autoCloseOnSave;
   final bool showSubmitButton;
   final bool showSectionTitle;
+  final VoidCallback? onDirty;
 
   const PlayerStatsAvailabilityForm({
     super.key,
@@ -20,6 +21,7 @@ class PlayerStatsAvailabilityForm extends StatefulWidget {
     this.autoCloseOnSave = true,
     this.showSubmitButton = true,
     this.showSectionTitle = true,
+    this.onDirty,
   });
 
   @override
@@ -168,6 +170,7 @@ class PlayerStatsAvailabilityFormState
   Widget build(BuildContext context) {
     return Form(
       key: _formKey,
+      onChanged: widget.onDirty,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

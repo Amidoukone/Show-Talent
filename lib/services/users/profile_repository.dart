@@ -255,10 +255,7 @@ class ProfileRepository {
         if (!snapshot.exists || data == null) {
           return null;
         }
-        return _parseUserSafely(
-          data,
-          source: 'ProfileRepository.watchUser',
-        );
+        return _parseUserSafely(data, source: 'ProfileRepository.watchUser');
       });
     }
 
@@ -289,6 +286,23 @@ class ProfileRepository {
     );
 
     final privateContact = updatedUser.toPrivateContactMap();
+
+    if (data.containsKey('profileVerificationInvalidatedAt')) {
+      // The private/contact rule refuses phone/birthDate changes while the
+      // profile is still verified, and can't see this parent-doc write's
+      // pending value if both land in the same batch (see
+      // contactOwnerProfileVerified() in firestore.rules). Commit the
+      // invalidation first so the contact write below is evaluated against
+      // an already-reset profile.
+      await _usersCollection
+          .doc(updatedUser.uid)
+          .set(data, SetOptions(merge: true))
+          .timeout(firestoreWriteTimeout);
+      await _privateContactDoc(updatedUser.uid)
+          .set(privateContact, SetOptions(merge: true))
+          .timeout(firestoreWriteTimeout);
+      return;
+    }
 
     final batch = _firestore.batch()
       ..set(
@@ -388,16 +402,27 @@ class ProfileRepository {
       }
     }
 
+    if (privatePatch.isNotEmpty &&
+        firestorePatch.containsKey('profileVerificationInvalidatedAt')) {
+      // See the matching comment in saveUserProfile(): the private/contact
+      // rule can't observe this parent-doc write's pending value if both
+      // land in the same batch, so commit the invalidation first.
+      await _usersCollection
+          .doc(uid)
+          .update(firestorePatch)
+          .timeout(firestoreWriteTimeout);
+      await _privateContactDoc(uid)
+          .set(privatePatch, SetOptions(merge: true))
+          .timeout(firestoreWriteTimeout);
+      return ProfilePatchWriteResult(appliedPatch: localPatch);
+    }
+
     final batch = _firestore.batch();
     if (firestorePatch.isNotEmpty) {
       batch.update(_usersCollection.doc(uid), firestorePatch);
     }
     if (privatePatch.isNotEmpty) {
-      batch.set(
-        _privateContactDoc(uid),
-        privatePatch,
-        SetOptions(merge: true),
-      );
+      batch.set(_privateContactDoc(uid), privatePatch, SetOptions(merge: true));
     }
     await batch.commit().timeout(firestoreWriteTimeout);
 

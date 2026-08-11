@@ -952,9 +952,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // profile owner — this guard is defense in depth, not the only thing
     // stopping a visitor from seeing it.
     if (isOwnProfile) {
-      tiles.add(
-        _infoTile('Téléphone', user.phone, icon: Icons.phone_outlined),
-      );
+      tiles.add(_infoTile('Téléphone', user.phone, icon: Icons.phone_outlined));
     }
 
     if (user.languages != null && user.languages!.isNotEmpty) {
@@ -1097,6 +1095,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final regions = (availability['regions'] is List)
           ? (availability['regions'] as List).join(', ')
           : null;
+      final license = p['licenseNumber']?.toString();
 
       return Column(
         children: [
@@ -1117,6 +1116,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.grid_view_rounded,
           ),
           _infoTile('Qualités clés', skills, icon: Icons.star_outline_rounded),
+          _infoTile('Numéro de licence', license, icon: Icons.badge_outlined),
           const Divider(),
           _infoTile(
             'Temps de jeu cumulé',
@@ -1180,6 +1180,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             .join(', ');
       }
 
+      final clubLicense = c['licenseNumber']?.toString();
+
       return Column(
         children: [
           _infoTile(
@@ -1196,6 +1198,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Besoins de recrutement prioritaires',
             needsText,
             icon: Icons.manage_search_outlined,
+          ),
+          _infoTile(
+            'Numéro de licence du club',
+            clubLicense,
+            icon: Icons.badge_outlined,
           ),
         ],
       );

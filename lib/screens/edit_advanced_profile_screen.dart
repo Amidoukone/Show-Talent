@@ -4,6 +4,7 @@ import '../controller/profile_controller.dart';
 import '../models/user.dart';
 import '../widgets/ad_app_bar.dart';
 import '../widgets/ad_button.dart';
+import '../widgets/ad_dialogs.dart';
 import '../widgets/ad_feedback.dart';
 import '../widgets/profile_action_notice.dart';
 import '../widgets/advanced/agent_advanced_form.dart';
@@ -35,6 +36,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
 
   late final TabController _tabController;
   bool _saving = false;
+  bool _isDirty = false;
   String? _saveFailureTitle;
   String? _saveFailureMessage;
 
@@ -42,6 +44,9 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
   ProfileController get _profileController => widget.profileController;
 
   bool get _isAgent => _user.isAgent;
+
+  bool get _hasAdvancedProfileSection =>
+      _user.isPlayer || _user.isClub || _user.isRecruiter;
 
   @override
   void initState() {
@@ -63,8 +68,26 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
     }
   }
 
+  Future<void> _handleBackNavigation({Object? result}) async {
+    if (!_isDirty) {
+      if (mounted) Navigator.of(context).pop(result);
+      return;
+    }
+    final shouldDiscard = await AdDialogs.confirm(
+      context: context,
+      title: 'Abandonner les modifications ?',
+      message: 'Les informations saisies ne seront pas enregistrées.',
+      confirmLabel: 'Abandonner',
+      cancelLabel: 'Continuer',
+      danger: true,
+    );
+    if (shouldDiscard && mounted) {
+      Navigator.of(context).pop(result);
+    }
+  }
+
   Future<void> _save() async {
-    if (_saving) {
+    if (_saving || !_hasAdvancedProfileSection) {
       return;
     }
 
@@ -151,6 +174,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
         return;
       }
 
+      _isDirty = false;
       AdFeedback.success('Succès', 'Informations avancées mises à jour');
       Navigator.of(context).pop(true);
     } finally {
@@ -307,6 +331,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
                     autoCloseOnSave: false,
                     showSubmitButton: false,
                     showSectionTitle: false,
+                    onDirty: () => _isDirty = true,
                   ),
                 ),
               ),
@@ -324,6 +349,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
                     autoCloseOnSave: false,
                     showSubmitButton: false,
                     showSectionTitle: false,
+                    onDirty: () => _isDirty = true,
                   ),
                 ),
               ),
@@ -394,6 +420,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
           autoCloseOnSave: false,
           showSubmitButton: false,
           showSectionTitle: false,
+          onDirty: () => _isDirty = true,
         ),
       );
     } else if (_user.isRecruiter) {
@@ -417,30 +444,40 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
           autoCloseOnSave: false,
           showSubmitButton: false,
           showSectionTitle: false,
+          onDirty: () => _isDirty = true,
         ),
       );
     } else {
       body = const Center(child: Text('Aucun profil avancé pour ce rôle'));
     }
 
-    return Scaffold(
-      appBar: const AdAppBar(
-        title: 'Informations avancées',
-        subtitle: 'Dossier professionnel',
-        showBottomDivider: true,
-      ),
-      body: SafeArea(child: body),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: AdButton(
-            onPressed: _saving ? null : _save,
-            loading: _saving,
-            leading: Icons.save_outlined,
-            label: _saving ? 'Sauvegarde...' : 'Enregistrer',
-          ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _handleBackNavigation(result: result);
+      },
+      child: Scaffold(
+        appBar: const AdAppBar(
+          title: 'Informations avancées',
+          subtitle: 'Dossier professionnel',
+          showBottomDivider: true,
         ),
+        body: SafeArea(child: body),
+        bottomNavigationBar: _hasAdvancedProfileSection
+            ? SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: AdButton(
+                    onPressed: _saving ? null : _save,
+                    loading: _saving,
+                    leading: Icons.save_outlined,
+                    label: _saving ? 'Sauvegarde...' : 'Enregistrer',
+                  ),
+                ),
+              )
+            : null,
       ),
     );
   }

@@ -12,6 +12,7 @@ class ClubAdvancedForm extends StatefulWidget {
   final bool autoCloseOnSave;
   final bool showSubmitButton;
   final bool showSectionTitle;
+  final VoidCallback? onDirty;
 
   const ClubAdvancedForm({
     super.key,
@@ -20,6 +21,7 @@ class ClubAdvancedForm extends StatefulWidget {
     this.autoCloseOnSave = true,
     this.showSubmitButton = true,
     this.showSectionTitle = true,
+    this.onDirty,
   });
 
   @override
@@ -32,6 +34,7 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
   late final TextEditingController _structureTypeController;
   late final TextEditingController _categoriesController;
   late final TextEditingController _needsController;
+  late final TextEditingController _licenseController;
 
   bool _saving = false;
 
@@ -64,6 +67,10 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
     } else {
       _needsController = TextEditingController();
     }
+
+    _licenseController = TextEditingController(
+      text: clubProfile['licenseNumber']?.toString() ?? '',
+    );
   }
 
   @override
@@ -71,6 +78,7 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
     _structureTypeController.dispose();
     _categoriesController.dispose();
     _needsController.dispose();
+    _licenseController.dispose();
     super.dispose();
   }
 
@@ -118,6 +126,7 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
           'structureType': _trimOrNull(_structureTypeController.text),
           'categories': _csvToList(_categoriesController.text),
           'needs': _parseNeeds(_needsController.text),
+          'licenseNumber': _trimOrNull(_licenseController.text),
         },
       };
 
@@ -167,6 +176,7 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
   Widget build(BuildContext context) {
     return Form(
       key: _formKey,
+      onChanged: widget.onDirty,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -201,6 +211,14 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
               decoration: const InputDecoration(
                 labelText: 'Besoins de recrutement prioritaires',
                 hintText: 'Ex : Défenseur central:haute, avant-centre:moyenne',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _licenseController,
+              decoration: const InputDecoration(
+                labelText: 'Numéro de licence du club (facultatif)',
+                hintText: 'Ex : LIC-CLUB-2026-014',
               ),
             ),
             if (widget.showSubmitButton) ...[

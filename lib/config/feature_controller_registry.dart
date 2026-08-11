@@ -7,7 +7,21 @@ import '../controller/video_controller.dart';
 class FeatureControllerRegistry {
   FeatureControllerRegistry._();
 
+  // ProfileScreen can legitimately be pushed twice for the same uid in the
+  // same nav stack (e.g. tapping your own avatar from a video card while a
+  // "My profile" tab for the same uid is already mounted underneath). Both
+  // instances share the single ProfileController registered under that
+  // uid. Without ref-counting, popping the top instance called
+  // Get.delete unconditionally, tearing down the shared controller (its
+  // Firestore listener, its VideoManager-cached players) while the screen
+  // still visible below kept a live GetBuilder reference to it -- it would
+  // silently stop receiving profile updates.
+  static final Map<String, int> _profileControllerRefCounts = {};
+
   static ProfileController ensureProfileController(String uid) {
+    _profileControllerRefCounts[uid] =
+        (_profileControllerRefCounts[uid] ?? 0) + 1;
+
     if (Get.isRegistered<ProfileController>(tag: uid)) {
       return Get.find<ProfileController>(tag: uid);
     }
@@ -16,6 +30,13 @@ class FeatureControllerRegistry {
   }
 
   static void releaseProfileController(String uid) {
+    final remaining = (_profileControllerRefCounts[uid] ?? 1) - 1;
+    if (remaining > 0) {
+      _profileControllerRefCounts[uid] = remaining;
+      return;
+    }
+    _profileControllerRefCounts.remove(uid);
+
     if (!Get.isRegistered<ProfileController>(tag: uid)) {
       return;
     }

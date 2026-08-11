@@ -117,6 +117,7 @@ service cloud.firestore {
         "playerProfile.physical.strongFoot",
         "playerProfile.positions",
         "playerProfile.skills",
+        "playerProfile.licenseNumber",
         "playerProfile.stats",
         "playerProfile.stats.minutes",
         "playerProfile.stats.goals",
@@ -127,6 +128,7 @@ service cloud.firestore {
         "clubProfile.structureType",
         "clubProfile.categories",
         "clubProfile.needs",
+        "clubProfile.licenseNumber",
         "agentProfile.licenseNumber",
         "agentProfile.licenseCountry",
         "agentProfile.zones",
@@ -165,6 +167,21 @@ service cloud.firestore {
     function resourceProfileIsVerified() {
       return ("profileVerified" in resource.data && resource.data.profileVerified == true) ||
         ("profileVerificationStatus" in resource.data && resource.data.profileVerificationStatus == "verified");
+    }
+
+    // Used by users/{userId}/private/contact below. That doc can't reuse
+    // resourceProfileIsVerified() (resource.data there is the contact doc,
+    // not the profile), and can't rely on a same-batch write to the parent
+    // doc either: within a batch/transaction, Security Rules evaluate every
+    // write against the pre-batch snapshot, so a get() here never observes
+    // a sibling write's pending value. The client (profile_repository.dart)
+    // accounts for this by committing the parent-doc verification reset as
+    // its own awaited write before writing phone/birthDate here whenever
+    // the profile is currently verified, so this get() sees the reset.
+    function contactOwnerProfileVerified(userId) {
+      let profile = get(/databases/$(database)/documents/users/$(userId)).data;
+      return ("profileVerified" in profile && profile.profileVerified == true) ||
+        ("profileVerificationStatus" in profile && profile.profileVerificationStatus == "verified");
     }
 
     function verifiedOwnerProfileChangeIsInvalidated() {
@@ -225,6 +242,7 @@ service cloud.firestore {
         "playerProfile.physical.strongFoot",
         "playerProfile.positions",
         "playerProfile.skills",
+        "playerProfile.licenseNumber",
         "playerProfile.stats",
         "playerProfile.stats.minutes",
         "playerProfile.stats.goals",
@@ -235,6 +253,7 @@ service cloud.firestore {
         "clubProfile.structureType",
         "clubProfile.categories",
         "clubProfile.needs",
+        "clubProfile.licenseNumber",
         "agentProfile.licenseNumber",
         "agentProfile.licenseCountry",
         "agentProfile.zones",
@@ -369,9 +388,17 @@ service cloud.firestore {
         allow create: if isOwner(userId) &&
           hasActiveAccount(request.auth.uid) &&
           request.resource.data.keys().hasOnly(["phone", "birthDate"]);
+        // Changing phone/birthDate is trust-sensitive exactly like the
+        // fields in ownerProfileTrustFieldsChanged() on the parent doc, but
+        // this doc can't detect that itself since these values no longer
+        // live there. Blocking the change outright while verified — instead
+        // of trying to require a same-batch invalidation write, which
+        // get() can't observe (see contactOwnerProfileVerified) — forces
+        // the client's already-established two-step reset-then-edit flow.
         allow update: if isOwner(userId) &&
           hasActiveAccount(request.auth.uid) &&
-          changesOnly(["phone", "birthDate"]);
+          changesOnly(["phone", "birthDate"]) &&
+          !contactOwnerProfileVerified(userId);
         allow delete: if isOwner(userId);
       }
 

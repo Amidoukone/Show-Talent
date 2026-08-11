@@ -4,6 +4,7 @@ import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/profile_action_notice.dart';
 import 'package:file_picker/file_picker.dart';
@@ -47,6 +48,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   DateTime? _selectedBirthDate;
   bool _saving = false;
+  bool _isDirty = false;
   String? _saveFailureTitle;
   String? _saveFailureMessage;
 
@@ -336,6 +338,25 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  Future<void> _handleBackNavigation({Object? result}) async {
+    if (!_isDirty) {
+      if (mounted) Navigator.of(context).pop(result);
+      return;
+    }
+
+    final shouldDiscard = await AdDialogs.confirm(
+      context: context,
+      title: 'Abandonner les modifications ?',
+      message: 'Les informations saisies ne seront pas enregistrées.',
+      confirmLabel: 'Abandonner',
+      cancelLabel: 'Continuer',
+      danger: true,
+    );
+    if (shouldDiscard && mounted) {
+      Navigator.of(context).pop(result);
+    }
+  }
+
   Future<void> _save() async {
     FocusScope.of(context).unfocus();
     if (_saving) {
@@ -454,6 +475,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       await profileController.updateProfilePatch(user.uid, patch);
 
       AdFeedback.success('Succès', 'Profil mis à jour.');
+      _isDirty = false;
       if (!mounted) {
         return;
       }
@@ -539,241 +561,256 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               : 'Présentation du recruteur'
         : 'Présentation';
 
-    return Scaffold(
-      backgroundColor: kSurface,
-      appBar: const AdAppBar(title: 'Modifier le profil'),
-      body: Theme(
-        data: Theme.of(context).copyWith(
-          inputDecorationTheme: inputTheme,
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kPrimary,
-              foregroundColor: Colors.white,
-              elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        await _handleBackNavigation(result: result);
+      },
+      child: Scaffold(
+        backgroundColor: kSurface,
+        appBar: const AdAppBar(title: 'Modifier le profil'),
+        body: Theme(
+          data: Theme.of(context).copyWith(
+            inputDecorationTheme: inputTheme,
+            elevatedButtonTheme: ElevatedButtonThemeData(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kPrimary,
+                foregroundColor: Colors.white,
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                  horizontal: 18,
+                ),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
+            ),
+            outlinedButtonTheme: OutlinedButtonThemeData(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: kPrimary,
+                side: const BorderSide(color: kPrimary, width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                  horizontal: 18,
+                ),
+              ),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(foregroundColor: kPrimary),
             ),
           ),
-          outlinedButtonTheme: OutlinedButtonThemeData(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: kPrimary,
-              side: const BorderSide(color: kPrimary, width: 1.2),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 18),
-            ),
-          ),
-          textButtonTheme: TextButtonThemeData(
-            style: TextButton.styleFrom(foregroundColor: kPrimary),
-          ),
-        ),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (_, constraints) => SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 680),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildHeader(
-                          context: context,
-                          title: headerTitle,
-                          subtitle: headerSubtitle,
-                          icon: _isPlayer
-                              ? Icons.person_pin_circle_outlined
-                              : _isClub
-                              ? Icons.groups_outlined
-                              : _isRecruiter
-                              ? Icons.badge_outlined
-                              : Icons.person_outline,
-                        ),
-                        if (_saveFailureMessage != null) ...[
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (_, constraints) => SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    child: Form(
+                      key: _formKey,
+                      onChanged: () => _isDirty = true,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildHeader(
+                            context: context,
+                            title: headerTitle,
+                            subtitle: headerSubtitle,
+                            icon: _isPlayer
+                                ? Icons.person_pin_circle_outlined
+                                : _isClub
+                                ? Icons.groups_outlined
+                                : _isRecruiter
+                                ? Icons.badge_outlined
+                                : Icons.person_outline,
+                          ),
+                          if (_saveFailureMessage != null) ...[
+                            const SizedBox(height: 16),
+                            ProfileActionNotice(
+                              title:
+                                  _saveFailureTitle ?? 'Sauvegarde impossible',
+                              message: _saveFailureMessage!,
+                            ),
+                          ],
                           const SizedBox(height: 16),
-                          ProfileActionNotice(
-                            title: _saveFailureTitle ?? 'Sauvegarde impossible',
-                            message: _saveFailureMessage!,
-                          ),
-                        ],
-                        const SizedBox(height: 16),
-                        _SectionCard(
-                          title: 'Informations générales',
-                          subtitle: generalInfoSubtitle,
-                          icon: Icons.badge_rounded,
-                          child: Column(
-                            children: [
-                              _buildTextField(
-                                controller: _nomController,
-                                label: displayNameLabel,
-                                icon: Icons.person_outline,
-                                validator: (value) {
-                                  final text = (value ?? '').trim();
-                                  if (text.isEmpty) {
-                                    return 'Le nom est requis';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 12),
-                              _buildTextField(
-                                controller: _phoneController,
-                                label: 'Numéro de téléphone',
-                                icon: Icons.phone_outlined,
-                                keyboardType: TextInputType.phone,
-                              ),
-                              const SizedBox(height: 12),
-                              _buildTextField(
-                                controller: _languagesController,
-                                label: 'Langues',
-                                icon: Icons.language_outlined,
-                                hint: 'Ex : Français, Anglais, Espagnol',
-                              ),
-                              if (_isPlayer) ...[
-                                const SizedBox(height: 12),
-                                _buildBirthDateField(context),
-                              ],
-                              const SizedBox(height: 12),
-                              _buildTextField(
-                                controller: _bioController,
-                                label: bioLabel,
-                                icon: Icons.info_outline,
-                                maxLines: 3,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        if (_isPlayer)
                           _SectionCard(
-                            title: user.role == 'coach'
-                                ? 'Cadre sportif du coach'
-                                : 'Identité sportive du joueur',
-                            subtitle: user.role == 'coach'
-                                ? 'Renseignez la structure dans laquelle vous intervenez publiquement.'
-                                : 'Renseignez le poste principal et le club ou l’académie actuellement affichés sur votre profil.',
-                            icon: Icons.sports_soccer_outlined,
+                            title: 'Informations générales',
+                            subtitle: generalInfoSubtitle,
+                            icon: Icons.badge_rounded,
                             child: Column(
                               children: [
                                 _buildTextField(
-                                  controller: _positionController,
-                                  label: user.role == 'coach'
-                                      ? 'Fonction sportive'
-                                      : 'Poste principal',
-                                  icon: Icons.sports_outlined,
-                                  hint: user.role == 'coach'
-                                      ? 'Ex : Coach principal, préparateur physique'
-                                      : 'Ex : Ailier droit, gardien, milieu axial',
+                                  controller: _nomController,
+                                  label: displayNameLabel,
+                                  icon: Icons.person_outline,
+                                  validator: (value) {
+                                    final text = (value ?? '').trim();
+                                    if (text.isEmpty) {
+                                      return 'Le nom est requis';
+                                    }
+                                    return null;
+                                  },
                                 ),
                                 const SizedBox(height: 12),
                                 _buildTextField(
-                                  controller: _teamController,
-                                  label: user.role == 'coach'
-                                      ? 'Club / structure actuelle'
-                                      : 'Club actuel',
-                                  icon: Icons.flag_outlined,
-                                  hint: 'Ex : AS Bamako',
+                                  controller: _phoneController,
+                                  label: 'Numéro de téléphone',
+                                  icon: Icons.phone_outlined,
+                                  keyboardType: TextInputType.phone,
+                                ),
+                                const SizedBox(height: 12),
+                                _buildTextField(
+                                  controller: _languagesController,
+                                  label: 'Langues',
+                                  icon: Icons.language_outlined,
+                                  hint: 'Ex : Français, Anglais, Espagnol',
+                                ),
+                                if (_isPlayer) ...[
+                                  const SizedBox(height: 12),
+                                  _buildBirthDateField(context),
+                                ],
+                                const SizedBox(height: 12),
+                                _buildTextField(
+                                  controller: _bioController,
+                                  label: bioLabel,
+                                  icon: Icons.info_outline,
+                                  maxLines: 3,
                                 ),
                               ],
                             ),
-                          )
-                        else if (_isClub)
+                          ),
+                          const SizedBox(height: 16),
+                          if (_isPlayer)
+                            _SectionCard(
+                              title: user.role == 'coach'
+                                  ? 'Cadre sportif du coach'
+                                  : 'Identité sportive du joueur',
+                              subtitle: user.role == 'coach'
+                                  ? 'Renseignez la structure dans laquelle vous intervenez publiquement.'
+                                  : 'Renseignez le poste principal et le club ou l’académie actuellement affichés sur votre profil.',
+                              icon: Icons.sports_soccer_outlined,
+                              child: Column(
+                                children: [
+                                  _buildTextField(
+                                    controller: _positionController,
+                                    label: user.role == 'coach'
+                                        ? 'Fonction sportive'
+                                        : 'Poste principal',
+                                    icon: Icons.sports_outlined,
+                                    hint: user.role == 'coach'
+                                        ? 'Ex : Coach principal, préparateur physique'
+                                        : 'Ex : Ailier droit, gardien, milieu axial',
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildTextField(
+                                    controller: _teamController,
+                                    label: user.role == 'coach'
+                                        ? 'Club / structure actuelle'
+                                        : 'Club actuel',
+                                    icon: Icons.flag_outlined,
+                                    hint: 'Ex : AS Bamako',
+                                  ),
+                                ],
+                              ),
+                            )
+                          else if (_isClub)
+                            _SectionCard(
+                              title: 'Cadre sportif du club',
+                              subtitle:
+                                  'Renseignez la compétition principale du club pour situer immédiatement son niveau d’évolution.',
+                              icon: Icons.stadium_outlined,
+                              child: Column(
+                                children: [
+                                  _buildTextField(
+                                    controller: _ligueController,
+                                    label: 'Ligue / championnat principal',
+                                    icon: Icons.emoji_events_outlined,
+                                    hint:
+                                        'Ex : Ligue 2, National U19, Régional 1',
+                                  ),
+                                ],
+                              ),
+                            )
+                          else if (_isRecruiter)
+                            _SectionCard(
+                              title: user.isAgent
+                                  ? 'Références de représentation'
+                                  : 'Références de recrutement',
+                              subtitle: user.isAgent
+                                  ? 'Présentez votre agence ou structure et le volume de mouvements accompagnés pour cadrer votre activité.'
+                                  : 'Présentez votre structure et votre volume de recrutements pour situer clairement votre activité.',
+                              icon: Icons.search_rounded,
+                              child: Column(
+                                children: [
+                                  _buildTextField(
+                                    controller: _entrepriseController,
+                                    label: user.isAgent
+                                        ? 'Agence / structure'
+                                        : 'Structure / cellule de recrutement',
+                                    icon: Icons.apartment_outlined,
+                                    hint: user.isAgent
+                                        ? 'Ex : Agence Horizon Football'
+                                        : 'Ex : Cellule de recrutement du FC Plateau',
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _buildTextField(
+                                    controller: _nombreRecrutementsController,
+                                    label: user.isAgent
+                                        ? 'Placements ou signatures réalisés'
+                                        : 'Recrutements réalisés',
+                                    icon: Icons.how_to_reg_outlined,
+                                    keyboardType: TextInputType.number,
+                                    validator: _validateOptionalNonNegativeInt,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          const SizedBox(height: 16),
                           _SectionCard(
-                            title: 'Cadre sportif du club',
+                            title: 'Localisation',
                             subtitle:
-                                'Renseignez la compétition principale du club pour situer immédiatement son niveau d’évolution.',
-                            icon: Icons.stadium_outlined,
+                                'Ville, région et pays affichés sur votre profil public lorsque ces informations sont renseignées.',
+                            icon: Icons.place_outlined,
                             child: Column(
                               children: [
                                 _buildTextField(
-                                  controller: _ligueController,
-                                  label: 'Ligue / championnat principal',
-                                  icon: Icons.emoji_events_outlined,
-                                  hint:
-                                      'Ex : Ligue 2, National U19, Régional 1',
-                                ),
-                              ],
-                            ),
-                          )
-                        else if (_isRecruiter)
-                          _SectionCard(
-                            title: user.isAgent
-                                ? 'Références de représentation'
-                                : 'Références de recrutement',
-                            subtitle: user.isAgent
-                                ? 'Présentez votre agence ou structure et le volume de mouvements accompagnés pour cadrer votre activité.'
-                                : 'Présentez votre structure et votre volume de recrutements pour situer clairement votre activité.',
-                            icon: Icons.search_rounded,
-                            child: Column(
-                              children: [
-                                _buildTextField(
-                                  controller: _entrepriseController,
-                                  label: user.isAgent
-                                      ? 'Agence / structure'
-                                      : 'Structure / cellule de recrutement',
-                                  icon: Icons.apartment_outlined,
-                                  hint: user.isAgent
-                                      ? 'Ex : Agence Horizon Football'
-                                      : 'Ex : Cellule de recrutement du FC Plateau',
+                                  controller: _cityController,
+                                  label: 'Ville',
+                                  icon: Icons.location_city_outlined,
+                                  hint: 'Ex : Abidjan',
                                 ),
                                 const SizedBox(height: 12),
                                 _buildTextField(
-                                  controller: _nombreRecrutementsController,
-                                  label: user.isAgent
-                                      ? 'Placements ou signatures réalisés'
-                                      : 'Recrutements réalisés',
-                                  icon: Icons.how_to_reg_outlined,
-                                  keyboardType: TextInputType.number,
-                                  validator: _validateOptionalNonNegativeInt,
+                                  controller: _regionController,
+                                  label: 'Région / État',
+                                  icon: Icons.map_outlined,
+                                  hint: 'Ex : District autonome d’Abidjan',
+                                ),
+                                const SizedBox(height: 12),
+                                _buildTextField(
+                                  controller: _countryController,
+                                  label: 'Pays',
+                                  icon: Icons.public_outlined,
+                                  hint: 'Ex : Côte d’Ivoire',
                                 ),
                               ],
                             ),
                           ),
-                        const SizedBox(height: 16),
-                        _SectionCard(
-                          title: 'Localisation',
-                          subtitle:
-                              'Ville, région et pays affichés sur votre profil public lorsque ces informations sont renseignées.',
-                          icon: Icons.place_outlined,
-                          child: Column(
-                            children: [
-                              _buildTextField(
-                                controller: _cityController,
-                                label: 'Ville',
-                                icon: Icons.location_city_outlined,
-                                hint: 'Ex : Abidjan',
-                              ),
-                              const SizedBox(height: 12),
-                              _buildTextField(
-                                controller: _regionController,
-                                label: 'Région / État',
-                                icon: Icons.map_outlined,
-                                hint: 'Ex : District autonome d’Abidjan',
-                              ),
-                              const SizedBox(height: 12),
-                              _buildTextField(
-                                controller: _countryController,
-                                label: 'Pays',
-                                icon: Icons.public_outlined,
-                                hint: 'Ex : Côte d’Ivoire',
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        if (user.role == 'joueur') ...[
-                          CvUploaderSection(
-                            initialUser: user,
-                            profileController: profileController,
-                          ),
                           const SizedBox(height: 16),
+                          if (user.role == 'joueur') ...[
+                            CvUploaderSection(
+                              initialUser: user,
+                              profileController: profileController,
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -781,16 +818,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ),
         ),
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-          child: AdButton(
-            onPressed: _saving ? null : _save,
-            loading: _saving,
-            leading: Icons.save_rounded,
-            label: _saving ? 'Sauvegarde...' : 'Enregistrer',
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: AdButton(
+              onPressed: _saving ? null : _save,
+              loading: _saving,
+              leading: Icons.save_rounded,
+              label: _saving ? 'Sauvegarde...' : 'Enregistrer',
+            ),
           ),
         ),
       ),

@@ -12,6 +12,7 @@ class AgentAdvancedForm extends StatefulWidget {
   final bool autoCloseOnSave;
   final bool showSubmitButton;
   final bool showSectionTitle;
+  final VoidCallback? onDirty;
 
   const AgentAdvancedForm({
     super.key,
@@ -20,6 +21,7 @@ class AgentAdvancedForm extends StatefulWidget {
     this.autoCloseOnSave = true,
     this.showSubmitButton = true,
     this.showSectionTitle = true,
+    this.onDirty,
   });
 
   @override
@@ -142,6 +144,7 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
   Widget build(BuildContext context) {
     return Form(
       key: _formKey,
+      onChanged: widget.onDirty,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

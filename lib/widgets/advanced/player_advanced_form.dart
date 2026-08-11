@@ -12,6 +12,7 @@ class PlayerAdvancedForm extends StatefulWidget {
   final bool autoCloseOnSave;
   final bool showSubmitButton;
   final bool showSectionTitle;
+  final VoidCallback? onDirty;
 
   const PlayerAdvancedForm({
     super.key,
@@ -20,6 +21,7 @@ class PlayerAdvancedForm extends StatefulWidget {
     this.autoCloseOnSave = true,
     this.showSubmitButton = true,
     this.showSectionTitle = true,
+    this.onDirty,
   });
 
   @override
@@ -33,6 +35,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
   late final TextEditingController _weightController;
   late final TextEditingController _positionsController;
   late final TextEditingController _skillsController;
+  late final TextEditingController _licenseController;
 
   String? _strongFoot;
   bool _saving = false;
@@ -57,6 +60,9 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
     _skillsController = TextEditingController(
       text: (p['skills'] as List?)?.join(', ') ?? '',
     );
+    _licenseController = TextEditingController(
+      text: p['licenseNumber']?.toString() ?? '',
+    );
   }
 
   @override
@@ -65,7 +71,13 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
     _weightController.dispose();
     _positionsController.dispose();
     _skillsController.dispose();
+    _licenseController.dispose();
     super.dispose();
+  }
+
+  String? _trimOrNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   List<String> _csvToList(String raw) {
@@ -98,6 +110,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
           },
           'positions': positions,
           'skills': skills,
+          'licenseNumber': _trimOrNull(_licenseController.text),
         },
       };
 
@@ -147,6 +160,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
   Widget build(BuildContext context) {
     return Form(
       key: _formKey,
+      onChanged: widget.onDirty,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -225,6 +239,14 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
               decoration: const InputDecoration(
                 labelText: 'Qualités clés (séparées par des virgules)',
                 hintText: 'Ex : Vitesse, Dribble, Qualité de centre',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _licenseController,
+              decoration: const InputDecoration(
+                labelText: 'Numéro de licence (facultatif)',
+                hintText: 'Ex : LIC-FAF-2026-014',
               ),
             ),
             if (widget.showSubmitButton) ...[
