@@ -730,7 +730,7 @@ export const optimizeMp4Video = onObjectFinalized(
 /* EXISTING EXPORTS                                                            */
 /* -------------------------------------------------------------------------- */
 
-export {cleanupUnverifiedUsers} from "./cleanup";
+export {cleanupUnverifiedUsers, reapAbandonedUploadSessions} from "./cleanup";
 
 /* -------------------------------------------------------------------------- */
 /* ACTIONS (Cloud Functions callable)                                          */

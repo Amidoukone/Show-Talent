@@ -235,3 +235,76 @@ export const cleanupUnverifiedUsers = onSchedule(
     }
   }
 );
+
+// Generous vs. the ~45min upload session TTL: the client can now retry a
+// session refresh up to twice on a slow connection (see
+// UploadClient._maxSessionRefreshes in the Flutter app), so a legitimately
+// still-uploading video can stay in "processing" for a couple of hours.
+const ABANDONED_UPLOAD_TIMEOUT_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * Reaps videos/{id} docs stuck at status:"processing" long past any
+ * realistic upload session lifetime -- the app being killed/backgrounded
+ * mid-upload, or a client crash, leaves createUploadSession's doc behind
+ * forever with nothing else to ever move it out of "processing".
+ * assertUploadRateLimits counts these toward MAX_CONCURRENT_VIDEO_UPLOADS
+ * and MAX_PENDING_VIDEO_REVIEWS, so a couple of abandoned attempts
+ * permanently locks that user out of uploading with no self-service
+ * recovery. Marks them status:"error" (excluded from both limits) instead
+ * of deleting, matching optimizeMp4Video's existing failure convention --
+ * no Storage cleanup needed since an abandoned resumable upload never
+ * commits a final object in the bucket.
+ * Runs hourly since MAX_CONCURRENT_VIDEO_UPLOADS is a tight cap (2).
+ */
+export const reapAbandonedUploadSessions = onSchedule(
+  {
+    ...LOW_CPU_REGION_OPTIONS,
+    schedule: "every 60 minutes",
+    timeZone: "UTC",
+    memory: "256MiB",
+  },
+  async () => {
+    const cutoffDate = new Date(Date.now() - ABANDONED_UPLOAD_TIMEOUT_MS);
+
+    let scanned = 0;
+    let reaped = 0;
+    let errors = 0;
+
+    try {
+      const stale = await db.collection("videos")
+        .where("status", "==", "processing")
+        .where("updatedAt", "<=", cutoffDate)
+        .get();
+
+      scanned = stale.docs.length;
+
+      for (const doc of stale.docs) {
+        try {
+          await doc.ref.set({
+            status: "error",
+            optimized: false,
+            optimizationError: "abandoned_upload_timeout",
+            updatedAt: fieldValue.serverTimestamp(),
+          }, {merge: true});
+          reaped += 1;
+        } catch (error) {
+          errors += 1;
+          logger.error("Abandoned upload session reap failed", {
+            videoId: doc.id,
+            error,
+          });
+        }
+      }
+
+      logger.info("Abandoned upload session reap completed", {
+        scanned,
+        reaped,
+        errors,
+        cutoffIso: cutoffDate.toISOString(),
+      });
+    } catch (err) {
+      logger.error("Abandoned upload session reap failed", err);
+      throw err;
+    }
+  }
+);
