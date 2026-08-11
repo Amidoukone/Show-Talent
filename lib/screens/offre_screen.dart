@@ -14,6 +14,7 @@ import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_owner_tag.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:adfoot/widgets/ad_system_notice.dart';
 import 'package:adfoot/widgets/contact_intake_sheet.dart';
@@ -186,10 +187,11 @@ class _OffreScreenState extends State<OffreScreen> {
                                     children: [
                                       Expanded(
                                         child: isOwner
-                                            ? const _OwnerTag()
-                                            : _buildCompactRecruteurRow(
-                                                context,
-                                                offre,
+                                            ? const AdOwnerTag(
+                                                label: 'Votre offre',
+                                              )
+                                            : AdCompactIdentityRow(
+                                                user: offre.recruteur,
                                               ),
                                       ),
                                       const SizedBox(width: 8),
@@ -921,47 +923,6 @@ class _OffreScreenState extends State<OffreScreen> {
         (t.startsWith('http://') || t.startsWith('https://'));
   }
 
-  /// Lighter single-line identity row used on the list card -- the detail
-  /// sheet uses its own two-line block, where there's room for it.
-  Widget _buildCompactRecruteurRow(BuildContext context, Offre offre) {
-    final cs = Theme.of(context).colorScheme;
-    final valid = _isValidPhotoUrl(offre.recruteur.photoProfil);
-
-    return GestureDetector(
-      onTap: () => Get.to(
-        () => ProfileScreen(uid: offre.recruteur.uid, isReadOnly: true),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircleAvatar(
-            radius: 13,
-            backgroundColor: AdColors.surfaceCardAlt,
-            backgroundImage: valid
-                ? NetworkImage(offre.recruteur.photoProfil)
-                : null,
-            child: valid
-                ? null
-                : const Icon(Icons.person, size: 14, color: Colors.white70),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              '${offre.recruteur.nom} · ${offre.recruteur.role}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: cs.onSurface,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   /// Replaces the two separate boxed rows (validity + vues/candidatures
   /// stats) that used to stack under the offer chips -- one lean row
   /// instead of two, without dropping any of the information.
@@ -1434,7 +1395,7 @@ class _OffreScreenState extends State<OffreScreen> {
                 if (isOwner)
                   Row(
                     children: [
-                      const _OwnerTag(),
+                      const AdOwnerTag(label: 'Votre offre'),
                       const Spacer(),
                       _StatusBadge(status: offre.statut),
                     ],

@@ -6,13 +6,13 @@ import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/event_detail_screen.dart';
 import 'package:adfoot/screens/event_form_screen.dart';
-import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_owner_tag.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:adfoot/widgets/ad_system_notice.dart';
 import 'package:flutter/material.dart';
@@ -127,63 +127,63 @@ class _EventListScreenState extends State<EventListScreen> {
                         return Card(
                           color: AdColors.surfaceCard,
                           clipBehavior: Clip.antiAlias,
-                          elevation: 2,
+                          elevation: 0,
                           margin: const EdgeInsets.symmetric(
-                            vertical: 8,
+                            vertical: 6,
                             horizontal: 6,
                           ),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(AdRadius.lg),
                             side: const BorderSide(color: AdColors.divider),
                           ),
                           child: InkWell(
                             onTap: () => _openEventDetails(event),
                             child: Padding(
-                              padding: const EdgeInsets.all(14),
+                              padding: const EdgeInsets.all(16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _buildOrganiserSection(organiser),
-                                  const SizedBox(height: 12),
                                   Row(
                                     crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                        CrossAxisAlignment.center,
                                     children: [
                                       Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              event.titre,
-                                              style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w800,
-                                                color: cs.onSurface,
+                                        child: isOrganisateur
+                                            ? const AdOwnerTag(
+                                                label: 'Votre événement',
+                                              )
+                                            : AdCompactIdentityRow(
+                                                user: organiser,
                                               ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Text(
-                                              event.description,
-                                              maxLines: 3,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                color: AdColors.onSurfaceMuted,
-                                                height: 1.35,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
                                       ),
                                       const SizedBox(width: 8),
                                       _StatusBadge(status: event.statut),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    event.titre,
+                                    style: TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800,
+                                      color: cs.onSurface,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    event.description,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AdColors.onSurfaceMuted,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
                                   if (eventController.isLoading)
                                     const Padding(
-                                      padding: EdgeInsets.only(bottom: 12),
+                                      padding: EdgeInsets.only(bottom: 10),
                                       child: LinearProgressIndicator(
                                         minHeight: 2,
                                       ),
@@ -192,10 +192,6 @@ class _EventListScreenState extends State<EventListScreen> {
                                     spacing: 8,
                                     runSpacing: 8,
                                     children: [
-                                      _buildChip(
-                                        Icons.calendar_today,
-                                        '${DateFormat('dd MMM').format(event.dateDebut)} -> ${DateFormat('dd MMM').format(event.dateFin)}',
-                                      ),
                                       _buildChip(
                                         Icons.place_outlined,
                                         event.lieu,
@@ -208,23 +204,11 @@ class _EventListScreenState extends State<EventListScreen> {
                                         Icons.group_outlined,
                                         '${event.participants.length} participants',
                                       ),
-                                      if (_isExpired(event))
-                                        _buildAlertChip(
-                                          Icons.timer_off_outlined,
-                                          'Terminé',
-                                          AdColors.error,
-                                        )
-                                      else if (_isUpcomingSoon(event))
-                                        _buildAlertChip(
-                                          Icons.schedule_rounded,
-                                          _eventTimingSummary(event),
-                                          AdColors.warning,
-                                        ),
                                     ],
                                   ),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 10),
                                   _buildTimingRow(event),
-                                  const SizedBox(height: 16),
+                                  const SizedBox(height: 12),
                                   _buildActions(
                                     context: context,
                                     event: event,
@@ -696,48 +680,6 @@ class _EventListScreenState extends State<EventListScreen> {
     );
   }
 
-  Widget _buildOrganiserSection(AppUser organiser) {
-    final hasPhoto = organiser.photoProfil.trim().startsWith('http');
-
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: () =>
-              Get.to(() => ProfileScreen(uid: organiser.uid, isReadOnly: true)),
-          child: CircleAvatar(
-            radius: 22,
-            backgroundColor: AdColors.surfaceCardAlt,
-            backgroundImage: hasPhoto
-                ? NetworkImage(organiser.photoProfil)
-                : null,
-            child: hasPhoto
-                ? null
-                : const Icon(Icons.person, color: Colors.white70),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                organiser.nom,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                organiser.role,
-                style: const TextStyle(color: AdColors.onSurfaceMuted),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildChip(IconData icon, String label) {
     final cs = Theme.of(context).colorScheme;
 
@@ -746,18 +688,6 @@ class _EventListScreenState extends State<EventListScreen> {
       label: Text(label, style: TextStyle(color: cs.onSurface)),
       backgroundColor: AdColors.surfaceCard,
       side: const BorderSide(color: AdColors.divider),
-    );
-  }
-
-  Widget _buildAlertChip(IconData icon, String label, Color color) {
-    return Chip(
-      avatar: Icon(icon, size: 16, color: color),
-      label: Text(
-        label,
-        style: TextStyle(color: color, fontWeight: FontWeight.w700),
-      ),
-      backgroundColor: color.withValues(alpha: 0.12),
-      side: BorderSide(color: color.withValues(alpha: 0.3)),
     );
   }
 
@@ -872,31 +802,63 @@ class _EventListScreenState extends State<EventListScreen> {
               height: 18,
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
-          TextButton.icon(
-            onPressed: () => _openEditEventForm(event),
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('Modifier'),
-          ),
-          TextButton.icon(
-            onPressed: () => _openEventDetails(event),
-            icon: const Icon(Icons.info_outline),
-            label: const Text('Détails'),
-          ),
-          TextButton.icon(
-            onPressed: deletePending
-                ? null
-                : () => _confirmDeleteEvent(context, event),
-            icon: deletePending
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.delete_outline, color: AdColors.error),
-            label: Text(deletePending ? 'Suppression...' : 'Supprimer'),
-          ),
+          if (deletePending)
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            PopupMenuButton<String>(
+              tooltip: 'Plus d’actions',
+              icon: const Icon(
+                Icons.more_vert_rounded,
+                color: AdColors.onSurfaceMuted,
+              ),
+              color: AdColors.surfaceCard,
+              onSelected: (value) {
+                if (value == 'edit') {
+                  _openEditEventForm(event);
+                } else if (value == 'delete') {
+                  _confirmDeleteEvent(context, event);
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Text('Modifier'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.delete_outline_rounded,
+                        size: 18,
+                        color: AdColors.error,
+                      ),
+                      SizedBox(width: 10),
+                      Text(
+                        'Supprimer',
+                        style: TextStyle(color: AdColors.error),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
         ],
       );
+    }
+
+    if (!isParticipant && isClosed) {
+      return const SizedBox.shrink();
     }
 
     return Wrap(
@@ -926,8 +888,6 @@ class _EventListScreenState extends State<EventListScreen> {
           leading: Icons.event_available,
           label: registerPending
               ? 'Inscription...'
-              : isClosed
-              ? 'Événement fermé'
               : isFull
               ? 'Complet'
               : 'S’inscrire',
@@ -942,15 +902,6 @@ class _EventListScreenState extends State<EventListScreen> {
             leading: Icons.person_remove_outlined,
             label: 'Se désinscrire',
             kind: AdButtonKind.outline,
-            size: AdButtonSize.compact,
-            expanded: false,
-          )
-        else
-          AdButton(
-            onPressed: () => _openEventDetails(event),
-            leading: Icons.info_outline,
-            label: 'Détails',
-            kind: AdButtonKind.tonal,
             size: AdButtonSize.compact,
             expanded: false,
           ),

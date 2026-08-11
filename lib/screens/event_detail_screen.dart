@@ -16,6 +16,7 @@ import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_owner_tag.dart';
 import 'package:adfoot/widgets/contact_intake_sheet.dart';
 
 class EventDetailsScreen extends StatelessWidget {
@@ -38,7 +39,8 @@ class EventDetailsScreen extends StatelessWidget {
       builder: (eventController) {
         final currentEvent = _resolveEvent(eventController);
         final AppUser? currentUser = Get.find<UserController>().user;
-        final bool isOrganisateur = currentUser != null &&
+        final bool isOrganisateur =
+            currentUser != null &&
             currentEvent.organisateur.uid == currentUser.uid;
         final cs = Theme.of(context).colorScheme;
 
@@ -71,7 +73,7 @@ class EventDetailsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildHeader(context, currentEvent),
+                _buildHeader(context, currentEvent, isOrganisateur),
                 const SizedBox(height: 18),
                 _buildEventDetails(context, currentEvent),
                 const SizedBox(height: 22),
@@ -92,10 +94,25 @@ class EventDetailsScreen extends StatelessWidget {
   // 🧑 HEADER ORGANISATEUR
   // =========================================================
 
-  Widget _buildHeader(BuildContext context, Event currentEvent) {
+  Widget _buildHeader(
+    BuildContext context,
+    Event currentEvent,
+    bool isOrganisateur,
+  ) {
+    if (isOrganisateur) {
+      return Row(
+        children: [
+          const AdOwnerTag(label: 'Votre événement'),
+          const Spacer(),
+          _StatusBadge(status: currentEvent.statut),
+        ],
+      );
+    }
+
     final cs = Theme.of(context).colorScheme;
-    final hasPhoto =
-        currentEvent.organisateur.photoProfil.trim().startsWith('http');
+    final hasPhoto = currentEvent.organisateur.photoProfil.trim().startsWith(
+      'http',
+    );
 
     return Row(
       children: [
@@ -233,11 +250,7 @@ class EventDetailsScreen extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           currentEvent.description,
-          style: TextStyle(
-            fontSize: 15.5,
-            height: 1.55,
-            color: cs.onSurface,
-          ),
+          style: TextStyle(fontSize: 15.5, height: 1.55, color: cs.onSurface),
         ),
       ],
     );
@@ -279,8 +292,9 @@ class EventDetailsScreen extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
                   backgroundColor: AdColors.surfaceCardAlt,
-                  backgroundImage:
-                      hasPhoto ? NetworkImage(p.photoProfil) : null,
+                  backgroundImage: hasPhoto
+                      ? NetworkImage(p.photoProfil)
+                      : null,
                   child: hasPhoto
                       ? null
                       : const Icon(Icons.person, color: Colors.white70),
@@ -292,10 +306,7 @@ class EventDetailsScreen extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                subtitle: const Text(
-                  '',
-                  style: TextStyle(height: 0),
-                ),
+                subtitle: const Text('', style: TextStyle(height: 0)),
                 trailing: IconButton(
                   icon: Icon(Icons.chat_bubble_outline, color: cs.primary),
                   onPressed: () => _openChatWith(
@@ -307,9 +318,8 @@ class EventDetailsScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                onTap: () => Get.to(
-                  () => ProfileScreen(uid: p.uid, isReadOnly: true),
-                ),
+                onTap: () =>
+                    Get.to(() => ProfileScreen(uid: p.uid, isReadOnly: true)),
               );
             }).toList(),
           ),
@@ -407,10 +417,7 @@ class EventDetailsScreen extends StatelessWidget {
     );
   }
 
-  void _openChatWith(
-    AppUser other, {
-    required ContactContext context,
-  }) async {
+  void _openChatWith(AppUser other, {required ContactContext context}) async {
     final chat = Get.find<ChatController>();
 
     final current = Get.find<UserController>().user;
@@ -437,10 +444,12 @@ class EventDetailsScreen extends StatelessWidget {
       );
 
       if (existingConversationId != null && existingConversationId.isNotEmpty) {
-        Get.to(() => ChatScreen(
-              conversationId: existingConversationId,
-              otherUser: other,
-            ));
+        Get.to(
+          () => ChatScreen(
+            conversationId: existingConversationId,
+            otherUser: other,
+          ),
+        );
         return;
       }
 
@@ -473,15 +482,12 @@ class EventDetailsScreen extends StatelessWidget {
         );
       }
 
-      Get.to(() => ChatScreen(
-            conversationId: result.conversationId,
-            otherUser: other,
-          ));
-    } on ChatFlowException catch (error) {
-      AdFeedback.error(
-        'Erreur',
-        error.message,
+      Get.to(
+        () =>
+            ChatScreen(conversationId: result.conversationId, otherUser: other),
       );
+    } on ChatFlowException catch (error) {
+      AdFeedback.error('Erreur', error.message);
     } catch (_) {
       AdFeedback.error(
         'Erreur',
@@ -552,10 +558,7 @@ class _StatusBadge extends StatelessWidget {
       ),
       child: Text(
         _labelFor(normalized),
-        style: TextStyle(
-          fontWeight: FontWeight.w800,
-          color: fg,
-        ),
+        style: TextStyle(fontWeight: FontWeight.w800, color: fg),
       ),
     );
   }
@@ -642,8 +645,9 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       backgroundColor: AdColors.surfaceCardAlt,
-                      backgroundImage:
-                          hasPhoto ? NetworkImage(p.photoProfil) : null,
+                      backgroundImage: hasPhoto
+                          ? NetworkImage(p.photoProfil)
+                          : null,
                       child: hasPhoto
                           ? null
                           : const Icon(Icons.person, color: Colors.white70),
@@ -690,31 +694,33 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                         }
 
                         try {
-                          final existingConversationId =
-                              await chat.findExistingConversationId(
-                            currentUserId: current.uid,
-                            otherUserId: p.uid,
-                          );
+                          final existingConversationId = await chat
+                              .findExistingConversationId(
+                                currentUserId: current.uid,
+                                otherUserId: p.uid,
+                              );
 
                           if (existingConversationId != null &&
                               existingConversationId.isNotEmpty) {
-                            Get.to(() => ChatScreen(
-                                  conversationId: existingConversationId,
-                                  otherUser: p,
-                                ));
+                            Get.to(
+                              () => ChatScreen(
+                                conversationId: existingConversationId,
+                                otherUser: p,
+                              ),
+                            );
                             return;
                           }
 
                           final draft =
                               await Get.bottomSheet<GuidedContactDraft>(
-                            ContactIntakeSheet(
-                              currentUser: current,
-                              otherUser: p,
-                              context: widget.contactContext,
-                            ),
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                          );
+                                ContactIntakeSheet(
+                                  currentUser: current,
+                                  otherUser: p,
+                                  context: widget.contactContext,
+                                ),
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                              );
 
                           if (draft == null) {
                             return;
@@ -735,15 +741,14 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                             );
                           }
 
-                          Get.to(() => ChatScreen(
-                                conversationId: result.conversationId,
-                                otherUser: p,
-                              ));
-                        } on ChatFlowException catch (error) {
-                          AdFeedback.error(
-                            'Erreur',
-                            error.message,
+                          Get.to(
+                            () => ChatScreen(
+                              conversationId: result.conversationId,
+                              otherUser: p,
+                            ),
                           );
+                        } on ChatFlowException catch (error) {
+                          AdFeedback.error('Erreur', error.message);
                         } catch (_) {
                           AdFeedback.error(
                             'Erreur',
