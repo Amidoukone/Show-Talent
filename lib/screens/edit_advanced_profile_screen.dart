@@ -6,6 +6,7 @@ import '../widgets/ad_app_bar.dart';
 import '../widgets/ad_button.dart';
 import '../widgets/ad_dialogs.dart';
 import '../widgets/ad_feedback.dart';
+import '../widgets/ad_profile_cards.dart';
 import '../widgets/profile_action_notice.dart';
 import '../widgets/advanced/agent_advanced_form.dart';
 import '../widgets/advanced/club_advanced_form.dart';
@@ -184,100 +185,6 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
     }
   }
 
-  Widget _buildHeader({
-    required BuildContext context,
-    required String title,
-    required String subtitle,
-    required IconData icon,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: scheme.primary.withValues(alpha: 0.12),
-            foregroundColor: scheme.primary,
-            child: Icon(icon),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionCard({
-    required BuildContext context,
-    required String title,
-    required String subtitle,
-    required Widget child,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          child,
-        ],
-      ),
-    );
-  }
-
   Widget _buildPlayerBody(BuildContext context) {
     return Column(
       children: [
@@ -285,8 +192,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: Column(
             children: [
-              _buildHeader(
-                context: context,
+              AdFormHeaderCard(
                 title: 'Dossier joueur',
                 subtitle:
                     'Les informations sont réparties en deux volets pour vous aider à compléter votre profil sportif avec méthode.',
@@ -319,11 +225,11 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
             children: [
               SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                child: _buildSectionCard(
-                  context: context,
+                child: AdSectionCard(
                   title: 'Profil joueur',
                   subtitle:
                       'Renseignez le gabarit, le pied préféré, les postes et les qualités fortes du joueur.',
+                  icon: Icons.person_outline,
                   child: PlayerAdvancedForm(
                     key: _playerProfileKey,
                     user: _user,
@@ -337,11 +243,11 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
               ),
               SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-                child: _buildSectionCard(
-                  context: context,
+                child: AdSectionCard(
                   title: 'Dossier scout',
                   subtitle:
                       'Renseignez vos statistiques et votre disponibilité pour compléter votre dossier joueur.',
+                  icon: Icons.bar_chart_rounded,
                   child: PlayerStatsAvailabilityForm(
                     key: _playerScoutKey,
                     user: _user,
@@ -373,12 +279,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
       child: Column(
         children: [
-          _buildHeader(
-            context: context,
-            title: title,
-            subtitle: subtitle,
-            icon: icon,
-          ),
+          AdFormHeaderCard(title: title, subtitle: subtitle, icon: icon),
           if (_saveFailureMessage != null) ...[
             const SizedBox(height: 12),
             ProfileActionNotice(
@@ -386,10 +287,11 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
               message: _saveFailureMessage!,
             ),
           ],
-          _buildSectionCard(
-            context: context,
+          const SizedBox(height: 16),
+          AdSectionCard(
             title: sectionTitle,
             subtitle: sectionSubtitle,
+            icon: icon,
             child: child,
           ),
         ],

@@ -19,6 +19,7 @@ import 'package:adfoot/screens/edit_profil_screen.dart';
 import 'package:adfoot/screens/follow_list_screen.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_profile_cards.dart';
 import 'package:adfoot/widgets/video_manager.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -298,7 +299,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                      child: _SectionCard(
+                      child: AdSectionCard(
                         title: _bioSectionTitle(user),
                         icon: Icons.notes_rounded,
                         child: Text(
@@ -334,7 +335,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        child: _SectionCard(
+                        child: AdSectionCard(
                           title: _publicSectionTitleClean(user),
                           icon: Icons.sports_soccer_outlined,
                           child: _buildBaseFootballSectionClean(
@@ -350,7 +351,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        child: _SectionCard(
+                        child: AdSectionCard(
                           title: _advancedSectionTitleClean(user),
                           icon: Icons.auto_awesome_rounded,
                           child: _buildAdvancedFootballSectionClean(user),
@@ -363,7 +364,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                        child: _SectionCard(
+                        child: AdSectionCard(
                           title: 'Documents et preuves',
                           icon: Icons.folder_open_rounded,
                           child: _buildEvidenceSectionClean(user),
@@ -912,7 +913,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildNetworkStatsCard(AppUser user) {
-    return _SectionCard(
+    return AdSectionCard(
       title: 'Réseau',
       icon: Icons.people_outline,
       child: Row(

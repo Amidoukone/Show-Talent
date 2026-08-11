@@ -8,7 +8,10 @@ void main() {
     final profileWidgets = File(
       'lib/screens/profile_screen_widgets.dart',
     ).readAsStringSync();
-    final profileSurface = '$profile\n$profileWidgets';
+    final profileCards = File(
+      'lib/widgets/ad_profile_cards.dart',
+    ).readAsStringSync();
+    final profileSurface = '$profile\n$profileWidgets\n$profileCards';
 
     expect(
       profile,

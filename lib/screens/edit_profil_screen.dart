@@ -6,6 +6,7 @@ import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
+import 'package:adfoot/widgets/ad_profile_cards.dart';
 import 'package:adfoot/widgets/profile_action_notice.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -188,55 +189,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       focusedBorder: focused,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       labelStyle: const TextStyle(color: AdColors.onSurfaceMuted),
-    );
-  }
-
-  Widget _buildHeader({
-    required BuildContext context,
-    required String title,
-    required String subtitle,
-    required IconData icon,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: kPrimary.withValues(alpha: 0.12),
-            foregroundColor: kPrimary,
-            child: Icon(icon),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -617,8 +569,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          _buildHeader(
-                            context: context,
+                          AdFormHeaderCard(
                             title: headerTitle,
                             subtitle: headerSubtitle,
                             icon: _isPlayer
@@ -638,7 +589,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             ),
                           ],
                           const SizedBox(height: 16),
-                          _SectionCard(
+                          AdSectionCard(
                             title: 'Informations générales',
                             subtitle: generalInfoSubtitle,
                             icon: Icons.badge_rounded,
@@ -686,7 +637,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ),
                           const SizedBox(height: 16),
                           if (_isPlayer)
-                            _SectionCard(
+                            AdSectionCard(
                               title: user.role == 'coach'
                                   ? 'Cadre sportif du coach'
                                   : 'Identité sportive du joueur',
@@ -719,7 +670,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                             )
                           else if (_isClub)
-                            _SectionCard(
+                            AdSectionCard(
                               title: 'Cadre sportif du club',
                               subtitle:
                                   'Renseignez la compétition principale du club pour situer immédiatement son niveau d’évolution.',
@@ -737,7 +688,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                             )
                           else if (_isRecruiter)
-                            _SectionCard(
+                            AdSectionCard(
                               title: user.isAgent
                                   ? 'Références de représentation'
                                   : 'Références de recrutement',
@@ -771,7 +722,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                             ),
                           const SizedBox(height: 16),
-                          _SectionCard(
+                          AdSectionCard(
                             title: 'Localisation',
                             subtitle:
                                 'Ville, région et pays affichés sur votre profil public lorsque ces informations sont renseignées.',
@@ -1000,7 +951,7 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
     final user = _currentUser;
     final hasCv = (_cvUrl ?? '').trim().isNotEmpty;
 
-    return _SectionCard(
+    return AdSectionCard(
       title: 'CV (PDF)',
       subtitle:
           'Ajoutez un CV football au format PDF pour renforcer la crédibilité de votre présentation.',
@@ -1069,83 +1020,6 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-  final IconData icon;
-  final Widget child;
-  final Widget? trailing;
-
-  const _SectionCard({
-    required this.title,
-    this.subtitle,
-    required this.icon,
-    required this.child,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: _EditProfileScreenState.kPrimary.withValues(
-                    alpha: 0.1,
-                  ),
-                  child: Icon(icon, color: _EditProfileScreenState.kPrimary),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle!,
-                          style: TextStyle(
-                            color: scheme.onSurfaceVariant,
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (trailing != null) ...[const SizedBox(width: 10), trailing!],
-              ],
-            ),
-            const SizedBox(height: 14),
-            child,
-          ],
-        ),
       ),
     );
   }
