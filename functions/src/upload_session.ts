@@ -245,11 +245,19 @@ async function assertUploadCallerEligible(
   }
 }
 
+// Runs inside the same transaction as the video doc write in
+// createUploadSession, so the count-then-write can't race: two concurrent
+// createUploadSession calls for the same user used to both read the same
+// pre-write snapshot outside any transaction and could both pass the
+// concurrentUploads/publicVideos checks, exceeding the configured caps.
 async function assertUploadRateLimits(
+  transaction: FirebaseFirestore.Transaction,
   uid: string,
   currentSessionId: string,
 ): Promise<void> {
-  const snapshot = await db.collection("videos").where("uid", "==", uid).get();
+  const snapshot = await transaction.get(
+    db.collection("videos").where("uid", "==", uid),
+  );
   const cutoffMs = Date.now() - 24 * 60 * 60 * 1000;
 
   let recentUploads = 0;
@@ -569,28 +577,31 @@ export const createUploadSession = onCall(
       lifecycle = resolveUploadLifecycleState(doc);
     }
 
-    await assertUploadRateLimits(uid, sessionId);
+    await db.runTransaction(async (transaction) => {
+      await assertUploadRateLimits(transaction, uid, sessionId);
 
-    await videoRef.set(
-      {
-        id: sessionId,
-        uid,
-        storagePath,
-        thumbnailPath,
-        status: lifecycle.status,
-        moderationStatus: "pending",
-        visibility: "private",
-        isPublic: false,
-        optimized: lifecycle.optimized,
-        uploadFileSizeBytes: fileSizeBytes,
-        updatedAt: fieldValue.serverTimestamp(),
-        ...(isExistingSession ? {} : {
-          createdAt: fieldValue.serverTimestamp(),
-          submittedForReviewAt: fieldValue.serverTimestamp(),
-        }),
-      },
-      {merge: true},
-    );
+      transaction.set(
+        videoRef,
+        {
+          id: sessionId,
+          uid,
+          storagePath,
+          thumbnailPath,
+          status: lifecycle.status,
+          moderationStatus: "pending",
+          visibility: "private",
+          isPublic: false,
+          optimized: lifecycle.optimized,
+          uploadFileSizeBytes: fileSizeBytes,
+          updatedAt: fieldValue.serverTimestamp(),
+          ...(isExistingSession ? {} : {
+            createdAt: fieldValue.serverTimestamp(),
+            submittedForReviewAt: fieldValue.serverTimestamp(),
+          }),
+        },
+        {merge: true},
+      );
+    });
 
     const expiresAtMs = Date.now() + 45 * 60 * 1000;
 
