@@ -379,10 +379,10 @@ service cloud.firestore {
       // actual PDF. email/authDisabledReason are admin/Cloud-Function
       // managed only (no client "allow write" covers them);
       // phone/birthDate stay owner-editable exactly like before, just
-      // relocated. The client writes this doc and the parent
-      // users/{userId} doc together in one WriteBatch, so the existing
-      // verification-reset invariant on the parent doc still applies to
-      // the whole edit even though the values themselves moved here.
+      // relocated. The verification-reset invariant still applies to a
+      // phone/birthDate edit on a verified profile — see
+      // contactOwnerProfileVerified() below for how, since it can no longer
+      // ride along for free in the same WriteBatch as the parent doc.
       match /private/contact {
         allow read: if isOwner(userId) || isAdminOperator();
         allow create: if isOwner(userId) &&

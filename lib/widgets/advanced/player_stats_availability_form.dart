@@ -208,7 +208,13 @@ class PlayerStatsAvailabilityFormState
               contentPadding: EdgeInsets.zero,
               title: const Text('Ouvert aux essais / opportunités'),
               value: _openToTrials,
-              onChanged: (v) => setState(() => _openToTrials = v),
+              onChanged: (v) {
+                // Not a FormField, so Form.onChanged never sees this flip on
+                // its own -- call onDirty directly or the unsaved-changes
+                // guard in the parent screen won't notice this toggle.
+                setState(() => _openToTrials = v);
+                widget.onDirty?.call();
+              },
             ),
             TextFormField(
               controller: _regionsController,
