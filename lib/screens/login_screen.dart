@@ -3,6 +3,8 @@ import 'dart:async';
 
 import 'package:adfoot/screens/signup_screen.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/auth_error_mapper.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
@@ -119,14 +121,9 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     try {
-      await _authSessionService.sendPasswordResetEmail(
-        email: email,
-      );
+      await _authSessionService.sendPasswordResetEmail(email: email);
 
-      AdFeedback.success(
-        'Succès',
-        'E-mail de réinitialisation envoyé.',
-      );
+      AdFeedback.success('Succès', 'E-mail de réinitialisation envoyé.');
     } on FirebaseAuthException catch (error) {
       _showErrorSnackbar(
         AuthErrorMapper.toMessage(error),
@@ -151,8 +148,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (normalized.isEmpty) {
       return 'Veuillez saisir votre e-mail.';
     }
-    final ok =
-        RegExp(r'^[\w\.\-+]+@([\w\-]+\.)+[\w\-]{2,}$').hasMatch(normalized);
+    final ok = RegExp(
+      r'^[\w\.\-+]+@([\w\-]+\.)+[\w\-]{2,}$',
+    ).hasMatch(normalized);
     if (!ok) {
       return 'Veuillez saisir une adresse e-mail valide.';
     }
@@ -196,18 +194,21 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    _sessionNoticeTitle =
-        (title == null || title.isEmpty) ? 'Information importante' : title;
+    _sessionNoticeTitle = (title == null || title.isEmpty)
+        ? 'Information importante'
+        : title;
     _sessionNoticeMessage = message;
     _sessionNoticeKind =
         notice['sessionNoticeKind']?.trim().toLowerCase() ?? 'error';
   }
 
   Map<String, dynamic>? _extractPostLoginRouteArguments(
-      Map<dynamic, dynamic> args) {
+    Map<dynamic, dynamic> args,
+  ) {
     final videoId = args['videoId']?.toString().trim();
     final focusVideoId = args['focusVideoId']?.toString().trim();
-    final hasVideoTarget = (videoId != null && videoId.isNotEmpty) ||
+    final hasVideoTarget =
+        (videoId != null && videoId.isNotEmpty) ||
         (focusVideoId != null && focusVideoId.isNotEmpty);
 
     if (!hasVideoTarget) {
@@ -229,10 +230,7 @@ class _LoginScreenState extends State<LoginScreen> {
     String message, {
     String title = 'Connexion échouée',
   }) {
-    AdFeedback.error(
-      title,
-      message,
-    );
+    AdFeedback.error(title, message);
   }
 
   @override
@@ -241,20 +239,25 @@ class _LoginScreenState extends State<LoginScreen> {
     final isSuccessNotice = _sessionNoticeKind == 'success';
     final noticeBackground = isSuccessNotice
         ? cs.primaryContainer.withValues(alpha: 0.95)
-        : cs.errorContainer.withValues(alpha: 0.95);
+        : AdColors.error.withValues(alpha: 0.95);
     final noticeBorder = isSuccessNotice
         ? cs.primary.withValues(alpha: 0.18)
         : cs.error.withValues(alpha: 0.18);
-    final noticeForeground =
-        isSuccessNotice ? cs.onPrimaryContainer : cs.onErrorContainer;
-    final noticeIcon =
-        isSuccessNotice ? Icons.verified_outlined : Icons.gpp_bad_outlined;
+    final noticeForeground = isSuccessNotice
+        ? cs.onPrimaryContainer
+        : AdColors.white;
+    final noticeIcon = isSuccessNotice
+        ? Icons.verified_outlined
+        : Icons.gpp_bad_outlined;
 
     return Scaffold(
       backgroundColor: cs.surface,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AdSpacing.lg,
+            vertical: AdSpacing.xl,
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: AdSurfaceCard(
@@ -270,18 +273,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         decoration: BoxDecoration(
                           color: noticeBackground,
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: noticeBorder,
-                          ),
+                          border: Border.all(color: noticeBorder),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              noticeIcon,
-                              color: noticeForeground,
-                            ),
-                            const SizedBox(width: 12),
+                            Icon(noticeIcon, color: noticeForeground),
+                            const SizedBox(width: AdSpacing.sm),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -305,7 +303,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                         .bodyMedium
                                         ?.copyWith(
                                           color: noticeForeground.withValues(
-                                              alpha: .92),
+                                            alpha: .92,
+                                          ),
                                           height: 1.35,
                                         ),
                                   ),
@@ -315,7 +314,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: AdSpacing.lg),
                     ],
                     Align(
                       alignment: Alignment.center,
@@ -328,25 +327,25 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AdSpacing.md),
                     Text(
                       'Connectez-vous',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: cs.onSurface,
-                          ),
+                        fontWeight: FontWeight.w800,
+                        color: cs.onSurface,
+                      ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AdSpacing.xs),
                     Text(
                       'Ravi de vous revoir !',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: cs.onSurface.withValues(alpha: .7),
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: cs.onSurface.withValues(alpha: .7),
+                        fontWeight: FontWeight.w600,
+                      ),
                       textAlign: TextAlign.center,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AdSpacing.xl),
                     AdTextField(
                       controller: _emailController,
                       label: 'Adresse e-mail',
@@ -354,7 +353,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: const Icon(Icons.email_outlined),
                       validator: (v) => _validateEmailValue(v ?? ''),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AdSpacing.md),
                     AdTextField(
                       controller: _passwordController,
                       label: 'Mot de passe',
@@ -372,7 +371,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: const Text('Mot de passe oublié ?'),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AdSpacing.xs),
                     AdButton(
                       label: 'Se connecter',
                       onPressed: _isBusy ? null : _login,
@@ -380,26 +379,26 @@ class _LoginScreenState extends State<LoginScreen> {
                       leading: Icons.login_rounded,
                       kind: AdButtonKind.primary,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AdSpacing.sm),
                     Text(
                       'Tous les comptes sont maintenant créés par l’administration Adfoot.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: cs.onSurface.withValues(alpha: .7),
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: cs.onSurface.withValues(alpha: .7),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AdSpacing.xs),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           'Nouveau ici ?',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: cs.onSurface.withValues(alpha: .8),
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: cs.onSurface.withValues(alpha: .8),
+                                fontWeight: FontWeight.w600,
+                              ),
                         ),
                         TextButton(
                           onPressed: _isBusy

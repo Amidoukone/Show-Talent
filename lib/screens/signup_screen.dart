@@ -1,3 +1,4 @@
+import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_surface_card.dart';
@@ -16,7 +17,10 @@ class SignUpScreen extends StatelessWidget {
       backgroundColor: cs.surface,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AdSpacing.lg,
+            vertical: AdSpacing.xl,
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
             child: AdSurfaceCard(
@@ -34,25 +38,25 @@ class SignUpScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AdSpacing.md),
                   Text(
                     'Création de compte centralisée',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface,
-                        ),
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'L’application mobile ne crée plus de comptes directement.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.7),
-                          fontWeight: FontWeight.w600,
-                        ),
+                      color: cs.onSurface.withValues(alpha: 0.7),
+                      fontWeight: FontWeight.w600,
+                    ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: AdSpacing.lg),
                   _InfoCard(
                     icon: Icons.admin_panel_settings_outlined,
                     color: cs.primary,
@@ -72,19 +76,20 @@ class SignUpScreen extends StatelessWidget {
                     icon: Icons.list_alt_outlined,
                     color: cs.tertiary,
                     title: 'Parcours utilisateur',
-                    message: '1. Contacter l’administration Adfoot.\n'
+                    message:
+                        '1. Contacter l’administration Adfoot.\n'
                         '2. Recevoir le lien de définition du mot de passe.\n'
                         '3. Valider l’adresse e-mail.\n'
                         '4. Se connecter ensuite dans l’application mobile.',
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AdSpacing.xl),
                   AdButton(
                     label: 'Retour à la connexion',
                     onPressed: () => Get.back(),
                     leading: Icons.arrow_back_rounded,
                     kind: AdButtonKind.primary,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AdSpacing.xs),
                   TextButton(
                     onPressed: () => Get.back(),
                     child: const Text('J’ai déjà un compte'),
@@ -120,10 +125,8 @@ class _InfoCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: color.withValues(alpha: 0.18),
-        ),
+        borderRadius: BorderRadius.circular(AdRadius.md),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,18 +140,18 @@ class _InfoCard extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   message,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: cs.onSurface.withValues(alpha: 0.8),
-                        height: 1.45,
-                        fontWeight: FontWeight.w500,
-                      ),
+                    color: cs.onSurface.withValues(alpha: 0.8),
+                    height: 1.45,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),

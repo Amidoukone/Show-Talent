@@ -1,5 +1,6 @@
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/auth_error_mapper.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
@@ -65,10 +66,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         newPassword: pass,
       );
 
-      AdFeedback.success(
-        'Succès',
-        'Mot de passe réinitialisé avec succès.',
-      );
+      AdFeedback.success('Succès', 'Mot de passe réinitialisé avec succès.');
 
       await Get.offAllNamed(AppRoutes.login);
     } on FirebaseAuthException catch (error) {
@@ -77,10 +75,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         AuthErrorMapper.toMessage(error),
       );
     } on AuthFlowException catch (error) {
-      AdFeedback.error(
-        'Réinitialisation impossible',
-        error.message,
-      );
+      AdFeedback.error('Réinitialisation impossible', error.message);
     } catch (_) {
       AdFeedback.error(
         'Réinitialisation impossible',
@@ -123,7 +118,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       backgroundColor: cs.surface,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AdSpacing.lg,
+            vertical: AdSpacing.xl,
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
             child: !_hasValidCode
@@ -148,16 +146,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         children: [
                           Text(
                             'Réinitialiser le mot de passe',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
+                            style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(
                                   fontWeight: FontWeight.bold,
                                   color: cs.onSurface,
                                 ),
                             textAlign: TextAlign.center,
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: AdSpacing.xl),
                           AdTextField(
                             controller: _passwordController,
                             label: 'Nouveau mot de passe',
@@ -165,7 +161,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             prefixIcon: const Icon(Icons.lock_outline),
                             validator: _validatePassword,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: AdSpacing.md),
                           AdTextField(
                             controller: _confirmController,
                             label: 'Confirmer le mot de passe',
@@ -174,7 +170,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             validator: _validateConfirmation,
                             onSubmitted: _resetPassword,
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: AdSpacing.xl),
                           AdButton(
                             label: 'Valider',
                             onPressed: _isLoading ? null : _resetPassword,

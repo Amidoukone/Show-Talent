@@ -13,6 +13,7 @@ import '../widgets/ad_feedback.dart';
 import '../widgets/ad_state_panel.dart';
 import '../widgets/ad_surface_card.dart';
 import 'package:adfoot/services/app_logger.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   const VerifyEmailScreen({super.key});
@@ -44,8 +45,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       _emailSent = args['emailSent'] == true;
       _sentAtMs = args['sentAt'] is int ? args['sentAt'] as int : null;
       if (_sentAtMs != null) {
-        VerifyEmailThrottle.lastSentAt =
-            DateTime.fromMillisecondsSinceEpoch(_sentAtMs!);
+        VerifyEmailThrottle.lastSentAt = DateTime.fromMillisecondsSinceEpoch(
+          _sentAtMs!,
+        );
       }
     }
 
@@ -54,23 +56,26 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   String _defaultUxMessage({required bool emailSent}) {
     final email = _authSessionService.currentUserEmail;
-    final emailLine =
-        (email != null && email.isNotEmpty) ? 'Adresse : $email\n\n' : '';
+    final emailLine = (email != null && email.isNotEmpty)
+        ? 'Adresse : $email\n\n'
+        : '';
 
     return emailSent
         ? 'Un e-mail de vérification a été envoyé.\n\n$emailLine'
-            'Ouvre ta boîte de réception et clique sur le lien.\n'
-            'Si tu ne le vois pas, vérifie aussi Spam / Indésirables / Promotions.\n\n'
-            'Une fois l’e-mail vérifié dans le navigateur, reviens ici puis retourne à la connexion.'
+              'Ouvre ta boîte de réception et clique sur le lien.\n'
+              'Si tu ne le vois pas, vérifie aussi Spam / Indésirables / Promotions.\n\n'
+              'Une fois l’e-mail vérifié dans le navigateur, reviens ici puis retourne à la connexion.'
         : 'Vérifie ta boîte mail et clique sur le lien de vérification.\n\n$emailLine'
-            'Si tu ne le vois pas, vérifie aussi Spam / Indésirables / Promotions.\n\n'
-            'Une fois l’e-mail vérifié dans le navigateur, reviens ici puis retourne à la connexion.';
+              'Si tu ne le vois pas, vérifie aussi Spam / Indésirables / Promotions.\n\n'
+              'Une fois l’e-mail vérifié dans le navigateur, reviens ici puis retourne à la connexion.';
   }
 
   Future<void> _goBackToLogin() async {
     try {
       await _authSessionService.signOut();
-    } catch (_) {}
+    } catch (error) {
+      AppLogger.debug('VerifyEmailScreen sign-out before login error: $error');
+    }
 
     if (!mounted) {
       return;
@@ -79,13 +84,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     await Get.offAllNamed(AppRoutes.login);
   }
 
-  Future<void> _redirectToLogin({
-    String? email,
-    String? message,
-  }) async {
+  Future<void> _redirectToLogin({String? email, String? message}) async {
     try {
       await _authSessionService.signOut();
-    } catch (_) {}
+    } catch (error) {
+      AppLogger.debug(
+        'VerifyEmailScreen sign-out before redirect error: $error',
+      );
+    }
 
     if (!mounted) {
       return;
@@ -96,7 +102,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       arguments: <String, dynamic>{
         if (email != null && email.isNotEmpty) 'prefillEmail': email,
         'sessionNoticeTitle': 'E-mail vérifié',
-        'sessionNoticeMessage': message ??
+        'sessionNoticeMessage':
+            message ??
             'Votre e-mail a été vérifié. Connectez-vous pour continuer.',
         'sessionNoticeKind': 'success',
       },
@@ -119,7 +126,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           return;
         } on FirebaseAuthException catch (error) {
           AppLogger.debug(
-              'applyActionCode error: ${error.code} - ${error.message}');
+            'applyActionCode error: ${error.code} - ${error.message}',
+          );
           if (mounted) {
             setState(() {
               _message =
@@ -160,18 +168,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     }
 
     try {
-      final result =
-          await _authSessionService.sendCurrentUserEmailVerification();
+      final result = await _authSessionService
+          .sendCurrentUserEmailVerification();
 
       if (!result.sent) {
         if (!mounted) {
           return;
         }
 
-        AdFeedback.error(
-          'Erreur',
-          result.errorMessage ?? 'Erreur d’envoi.',
-        );
+        AdFeedback.error('Erreur', result.errorMessage ?? 'Erreur d’envoi.');
         return;
       }
 
@@ -195,10 +200,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         return;
       }
 
-      AdFeedback.error(
-        'Erreur',
-        error.message,
-      );
+      AdFeedback.error('Erreur', error.message);
     } finally {
       if (mounted) {
         setState(() {
@@ -225,7 +227,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       ),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AdSpacing.xl),
           child: _isProcessing
               ? const AdStatePanel.loading(
                   title: 'Vérification en cours',
@@ -245,13 +247,13 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: AdSpacing.xl),
                         AdButton(
                           onPressed: _goBackToLogin,
                           leading: Icons.login_outlined,
                           label: 'Retour à la connexion',
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AdSpacing.sm),
                         AdButton(
                           onPressed: _resending ? null : _resendEmail,
                           loading: _resending,

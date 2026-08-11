@@ -38,7 +38,9 @@ class _SplashScreenState extends State<SplashScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
         Get.find<UserController>().kickstart();
-      } catch (_) {}
+      } catch (error) {
+        AppLogger.debug('Splash kickstart error: $error');
+      }
     });
 
     if (!_authControllerPresent) {
@@ -71,7 +73,9 @@ class _SplashScreenState extends State<SplashScreen> {
       AppLogger.debug('Splash fallback error: $error');
       try {
         await _authSessionService.signOut();
-      } catch (_) {}
+      } catch (signOutError) {
+        AppLogger.debug('Splash fallback sign-out error: $signOutError');
+      }
       return _safeOffAll(const LoginScreen());
     }
   }
@@ -104,9 +108,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: AdColors.surface,
-      body: Center(
-        child: CircularProgressIndicator(color: AdColors.brand),
-      ),
+      body: Center(child: CircularProgressIndicator(color: AdColors.brand)),
     );
   }
 }
