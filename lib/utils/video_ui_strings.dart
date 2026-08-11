@@ -205,6 +205,9 @@ class VideoUiStrings {
       'Votre compte ne remplit pas les conditions pour t\u00e9l\u00e9verser.';
   static const String uploadServerError =
       'Erreur serveur pendant le t\u00e9l\u00e9versement.';
+  static const String uploadConnectionUnstable =
+      'Connexion instable pendant le t\u00e9l\u00e9versement. V\u00e9rifiez votre r\u00e9seau '
+      'puis r\u00e9essayez.';
   static const String uploadUnknownError =
       'Erreur pendant le t\u00e9l\u00e9versement.';
   static const String uploadStageAnalyze = 'Analyse de la vid\u00e9o...';

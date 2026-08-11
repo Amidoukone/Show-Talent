@@ -47,6 +47,10 @@ class UploadVideoErrorMapper {
       }
     }
 
+    if (error is UploadClientException) {
+      return _uploadClientUserMessage(error);
+    }
+
     final normalized = error.toString();
     if (normalized.startsWith('Exception: ')) {
       return normalized.substring('Exception: '.length);
@@ -55,5 +59,26 @@ class UploadVideoErrorMapper {
       return VideoUiStrings.uploadUnknownError;
     }
     return normalized;
+  }
+
+  // A statusCode means this came from _sendChunkWithRetry exhausting its
+  // retries: its message embeds a raw diagnostic ("... statut HTTP 500.",
+  // Dio exception text) meant for logs, not end users. Messages with no
+  // statusCode (file missing/empty, expired thumbnail ticket, the
+  // session-refresh cap) are already clean, user-appropriate French text
+  // written for display, so pass those through as-is.
+  static String _uploadClientUserMessage(UploadClientException error) {
+    final statusCode = error.statusCode;
+    if (statusCode == null) {
+      final message = error.message.trim();
+      return message.isNotEmpty ? message : VideoUiStrings.uploadUnknownError;
+    }
+    if (statusCode >= 500) {
+      return VideoUiStrings.uploadServiceUnavailable;
+    }
+    if (statusCode == 401 || statusCode == 403) {
+      return VideoUiStrings.uploadPermissionDenied;
+    }
+    return VideoUiStrings.uploadConnectionUnstable;
   }
 }
