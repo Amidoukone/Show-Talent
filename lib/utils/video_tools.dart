@@ -153,42 +153,6 @@ class VideoTools {
     }
   }
 
-  /// Vérifie que la durée <= [maxDuration] secondes.
-  static Future<bool> isDurationValid(
-    String videoPath, {
-    int maxDuration = defaultMaxUploadDurationSeconds,
-  }) async {
-    try {
-      final ms = await _getDurationMsRobust(videoPath);
-      if (ms == null) {
-        await _logInfo(
-          "isDurationValid",
-          "Missing duration after probing → allow upload.",
-        );
-        return true;
-      }
-
-      final secondsFloor = (ms / 1000).floor();
-      if (secondsFloor <= maxDuration) return true;
-
-      final limitMs = maxDuration * 1000 + _durationLeewayMs;
-      return ms <= limitMs;
-    } catch (e) {
-      await _logError("isDurationValid", e.toString());
-      return false;
-    }
-  }
-
-  static Future<int?> getDurationSeconds(String videoPath) async {
-    try {
-      final ms = await _getDurationMsRobust(videoPath);
-      return ms != null ? (ms / 1000).floor() : null;
-    } catch (e) {
-      await _logError("getDurationSeconds", e.toString());
-      return null;
-    }
-  }
-
   static Future<PreparedVideoFile> prepareVideoFileForUpload(
     String videoPath, {
     int maxDurationSeconds = defaultMaxUploadDurationSeconds,
@@ -199,8 +163,22 @@ class VideoTools {
     }
 
     final sourceDurationMs = await _getDurationMsRobust(videoPath);
-    if (sourceDurationMs == null ||
-        _isWithinDurationLimit(sourceDurationMs, maxDurationSeconds)) {
+    if (sourceDurationMs == null) {
+      // finalizeUpload rejects a missing duration server-side
+      // (assertVideoMetadataPolicy), so silently letting an unprobeable
+      // video through here just wastes a full video+thumbnail upload
+      // before failing at the very last step. Fail fast instead.
+      await _logInfo(
+        'prepareVideoFileForUpload',
+        'Duration probing failed after all retries -> rejecting locally.',
+      );
+      throw const VideoPreparationException(
+        'Impossible de déterminer la durée de cette vidéo. '
+        'Réessayez ou choisissez un autre fichier.',
+      );
+    }
+
+    if (_isWithinDurationLimit(sourceDurationMs, maxDurationSeconds)) {
       return PreparedVideoFile(
         file: source,
         wasTrimmed: false,
@@ -522,14 +500,6 @@ class VideoTools {
           } catch (_) {}
         }
       }
-    } catch (_) {}
-  }
-
-  static Future<void> purgeCacheForVideo(String path) async {
-    try {
-      _durationCacheMs.remove(path);
-      _dimensionsCache.remove(path);
-      await VideoCompress.deleteAllCache();
     } catch (_) {}
   }
 
