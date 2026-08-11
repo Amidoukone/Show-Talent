@@ -1,31 +1,32 @@
 part of 'offre_screen.dart';
 
-class _OfferInlineStat extends StatelessWidget {
-  const _OfferInlineStat({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
+/// Replaces the full recruiter identity row on an owner's own offer card --
+/// showing your own name/photo on your own post added nothing and pushed
+/// the actual offer content down, which is exactly what made a freshly
+/// created offer feel "hidden" in the list.
+class _OwnerTag extends StatelessWidget {
+  const _OwnerTag();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: AdColors.surfaceCardAlt,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AdColors.divider),
+        color: AdColors.brand.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AdColors.brand.withValues(alpha: 0.32)),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: AdColors.onSurfaceMuted),
-          const SizedBox(width: 6),
+          Icon(Icons.person_pin_rounded, size: 14, color: AdColors.brand),
+          SizedBox(width: 4),
           Text(
-            label,
-            style: const TextStyle(
-              color: AdColors.onSurface,
+            'Votre offre',
+            style: TextStyle(
               fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
+              color: AdColors.brand,
             ),
           ),
         ],
