@@ -51,7 +51,13 @@ class FeatureControllerRegistry {
     if (!Get.isRegistered<VideoController>(tag: contextKey)) {
       return;
     }
-    Get.delete<VideoController>(tag: contextKey);
+    // ensureVideoController registers with permanent: true (the default,
+    // and every call site passes it explicitly). GetX's delete() silently
+    // refuses to remove a permanent instance unless force: true is passed
+    // -- without it, onClose() never fires and every unique contextKey
+    // (e.g. one per profile visited) stays registered for the app's
+    // lifetime.
+    Get.delete<VideoController>(tag: contextKey, force: true);
   }
 
   static UploadVideoController ensureUploadVideoController() {
