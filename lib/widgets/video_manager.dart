@@ -5,6 +5,7 @@ import 'dart:collection';
 import 'dart:io' show File, HandshakeException, HttpException, SocketException;
 import 'dart:math' show Random;
 
+import 'package:adfoot/controller/connectivity_controller.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/utils/video_cache_manager.dart' as custom_cache;
 import 'package:adfoot/utils/video_source_selector.dart';
@@ -168,6 +169,29 @@ class VideoManager {
       reason: 'bootstrap',
       markInitialized: false,
     );
+    _listenForConnectivityChanges();
+  }
+
+  // NetworkProfileService caches the detected tier for up to 10 minutes
+  // (or until the OS-reported transport changes), so a Wi-Fi connection
+  // that quietly degrades without switching transport can keep serving a
+  // stale "high tier" classification. A connectivity transition (offline
+  // <-> online, or a reconnect while switching networks) is a reasonable
+  // moment to force a fresh detection rather than wait out the TTL.
+  // ConnectivityService is itself a permanent app-wide singleton, and
+  // VideoManager is too (see the factory above), so this subscription is
+  // meant to live for the whole app process -- intentionally never stored
+  // or cancelled.
+  void _listenForConnectivityChanges() {
+    try {
+      ConnectivityService().connectionStream.listen(
+        (_) => unawaited(refreshNetworkProfile()),
+        onError: (_) {},
+      );
+    } catch (_) {
+      // connectivity_plus can fail to initialize on some devices/platforms;
+      // network-tier detection still works via its own TTL-based refresh.
+    }
   }
 
   static const String _firebaseStorageHost = 'firebasestorage.googleapis.com';
@@ -175,8 +199,9 @@ class VideoManager {
   static const Duration _firebaseRetryBaseDelay = Duration(milliseconds: 350);
   static const Duration _firebaseRetryMaxDelay = Duration(seconds: 3);
   static const Duration _cacheSizeCheckThrottle = Duration(minutes: 5);
-  static const Duration _activeAdaptiveSelectionBudget =
-      Duration(milliseconds: 450);
+  static const Duration _activeAdaptiveSelectionBudget = Duration(
+    milliseconds: 450,
+  );
   static const Duration _postInitStreamCacheWarmupDelay = Duration(seconds: 2);
   static const Duration _secondaryPreloadDelay = Duration(milliseconds: 220);
   static const Duration _maxPreloadStaggerDelay = Duration(milliseconds: 700);
@@ -194,9 +219,9 @@ class VideoManager {
   // ---------------------------------------------------------------------------
 
   final Map<String, LinkedHashMap<String, CachedVideoPlayerPlus>>
-      _lruByContext = {};
+  _lruByContext = {};
   final Map<String, Map<String, Future<CachedVideoPlayerPlus>>>
-      _initFuturesByContext = {};
+  _initFuturesByContext = {};
   final Map<String, Map<String, VideoLoadState>> _loadStatesByContext = {};
   final Map<String, Future<_VideoDownloadResult>> _downloadFuturesByUrl = {};
   final Map<String, int> _preloadRequestTokensByContext = {};
@@ -239,10 +264,7 @@ class VideoManager {
     notifier.value = next > 1000000 ? 0 : next;
   }
 
-  void _notifyUiStateChanged({
-    String? contextKey,
-    String? url,
-  }) {
+  void _notifyUiStateChanged({String? contextKey, String? url}) {
     _bumpRevision(uiRevision);
 
     if (contextKey == null || url == null) {
@@ -263,7 +285,10 @@ class VideoManager {
   }
 
   void _setResolvedUrl(
-      String contextKey, String originalUrl, String resolvedUrl) {
+    String contextKey,
+    String originalUrl,
+    String resolvedUrl,
+  ) {
     _resolvedUrlByContext.putIfAbsent(contextKey, () => {})[originalUrl] =
         resolvedUrl;
     _notifyUiStateChanged(contextKey: contextKey, url: originalUrl);
@@ -302,9 +327,7 @@ class VideoManager {
     } catch (_) {}
   }
 
-  Future<NetworkProfile> _scheduleNetworkProfileRefresh({
-    bool force = false,
-  }) {
+  Future<NetworkProfile> _scheduleNetworkProfileRefresh({bool force = false}) {
     if (!force && _networkProfileFuture != null) {
       return _networkProfileFuture!;
     }
@@ -313,21 +336,25 @@ class VideoManager {
     final future = _networkProfileService.detectProfile();
     _networkProfileFuture = future;
 
-    future.then((profile) {
-      if (!identical(_networkProfileFuture, future) ||
-          _networkProfileRequestToken != requestToken) {
-        return;
-      }
-      _networkProfileFuture = null;
-      _applyNetworkProfile(profile, reason: 'detected');
-    }).catchError((error, stackTrace) {
-      if (!identical(_networkProfileFuture, future) ||
-          _networkProfileRequestToken != requestToken) {
-        return;
-      }
-      _networkProfileFuture = null;
-      AppLogger.debug('[VideoManager] Network profile refresh failed: $error');
-    });
+    future
+        .then((profile) {
+          if (!identical(_networkProfileFuture, future) ||
+              _networkProfileRequestToken != requestToken) {
+            return;
+          }
+          _networkProfileFuture = null;
+          _applyNetworkProfile(profile, reason: 'detected');
+        })
+        .catchError((error, stackTrace) {
+          if (!identical(_networkProfileFuture, future) ||
+              _networkProfileRequestToken != requestToken) {
+            return;
+          }
+          _networkProfileFuture = null;
+          AppLogger.debug(
+            '[VideoManager] Network profile refresh failed: $error',
+          );
+        });
 
     return future;
   }
@@ -561,10 +588,7 @@ class VideoManager {
   String? getResolvedUrl(String contextKey, String originalUrl) =>
       _resolvedUrlByContext[contextKey]?[originalUrl];
 
-  List<String> _originalUrlsForResolved(
-    String contextKey,
-    String resolvedUrl,
-  ) {
+  List<String> _originalUrlsForResolved(String contextKey, String resolvedUrl) {
     final mapping = _resolvedUrlByContext[contextKey];
     if (mapping == null) return const [];
     return mapping.entries
@@ -839,9 +863,7 @@ class VideoManager {
           CachedVideoPlayerPlus player;
 
           if (kIsWeb) {
-            player = CachedVideoPlayerPlus.networkUrl(
-              Uri.parse(effectiveUrl),
-            );
+            player = CachedVideoPlayerPlus.networkUrl(Uri.parse(effectiveUrl));
           } else {
             file = await custom_cache.VideoCacheManager.getFileIfCached(
               effectiveUrl,
@@ -885,10 +907,13 @@ class VideoManager {
             CachedVideoPlayerPlus target, {
             required String stage,
           }) async {
-            await target.initialize().timeout(timeout, onTimeout: () {
-              _setLoadState(contextKey, url, VideoLoadState.errorTimeout);
-              throw TimeoutException("Init timeout ($stage) : $effectiveUrl");
-            });
+            await target.initialize().timeout(
+              timeout,
+              onTimeout: () {
+                _setLoadState(contextKey, url, VideoLoadState.errorTimeout);
+                throw TimeoutException("Init timeout ($stage) : $effectiveUrl");
+              },
+            );
 
             final v = target.controller.value;
             if (!v.isInitialized || v.hasError) {
@@ -923,10 +948,10 @@ class VideoManager {
 
             final shouldForceFreshDownload =
                 _shouldForceFreshDownloadAfterPrimaryInitFailure(
-              usedStreaming: usedStreaming,
-              isPreload: isPreload,
-              url: effectiveUrl,
-            );
+                  usedStreaming: usedStreaming,
+                  isPreload: isPreload,
+                  url: effectiveUrl,
+                );
             if (shouldForceFreshDownload) {
               if (file != null) {
                 await _safeDeleteFile(file);
@@ -997,11 +1022,7 @@ class VideoManager {
 
           AppLogger.debug(
             "[VideoManager] Init ${isPreload ? 'preload' : 'active'} "
-            "${kIsWeb ? 'web' : _playbackBranch(
-                usedCache: usedCache,
-                usedStreaming: usedStreaming,
-                usedStreamFallback: usedStreamFallback,
-              )} "
+            "${kIsWeb ? 'web' : _playbackBranch(usedCache: usedCache, usedStreaming: usedStreaming, usedStreamFallback: usedStreamFallback)} "
             "in ${stopwatch.elapsedMilliseconds}ms -> $effectiveUrl "
             "(recovery=$recoveryReason primary=${primaryInitDuration?.inMilliseconds} "
             "fallbackDownload=${fallbackDownloadDuration?.inMilliseconds} "
@@ -1034,8 +1055,9 @@ class VideoManager {
               fallbackDownloadDuration: fallbackDownloadDuration,
               fallbackInitDuration: fallbackInitDuration,
               fallbackCacheHit: usedStreamFallback ? fallbackCacheHit : null,
-              reusedInFlightDownload:
-                  usedStreamFallback ? reusedInFlightDownload : null,
+              reusedInFlightDownload: usedStreamFallback
+                  ? reusedInFlightDownload
+                  : null,
             ),
           );
 
@@ -1084,8 +1106,9 @@ class VideoManager {
               fallbackDownloadDuration: fallbackDownloadDuration,
               fallbackInitDuration: fallbackInitDuration,
               fallbackCacheHit: usedStreamFallback ? fallbackCacheHit : null,
-              reusedInFlightDownload:
-                  usedStreamFallback ? reusedInFlightDownload : null,
+              reusedInFlightDownload: usedStreamFallback
+                  ? reusedInFlightDownload
+                  : null,
             ),
           );
 
@@ -1212,10 +1235,7 @@ class VideoManager {
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         final info = await custom_cache.VideoCacheManager.getInstance().then(
-          (m) => m.downloadFile(
-            url,
-            force: force || attempt > 1,
-          ),
+          (m) => m.downloadFile(url, force: force || attempt > 1),
         );
 
         if (attempt > 1) {
@@ -1234,7 +1254,8 @@ class VideoManager {
         lastError = e;
         lastStackTrace = st;
 
-        final shouldRetry = isFirebaseStorage &&
+        final shouldRetry =
+            isFirebaseStorage &&
             attempt < maxAttempts &&
             _isRetryableFirebaseDownloadError(e);
 
@@ -1330,18 +1351,18 @@ class VideoManager {
   // LRU enforce
   // ---------------------------------------------------------------------------
 
-  Future<void> _enforceLimit(
-    String contextKey, {
-    String? activeUrl,
-  }) async {
+  Future<void> _enforceLimit(String contextKey, {String? activeUrl}) async {
     final lru = _lruByContext[contextKey];
     if (lru == null) return;
-    final resolvedActive =
-        activeUrl != null ? _resolveKey(contextKey, activeUrl) : null;
+    final resolvedActive = activeUrl != null
+        ? _resolveKey(contextKey, activeUrl)
+        : null;
 
     while (lru.length > _maxActive) {
-      final oldestKey =
-          lru.keys.firstWhere((k) => k != resolvedActive, orElse: () => '');
+      final oldestKey = lru.keys.firstWhere(
+        (k) => k != resolvedActive,
+        orElse: () => '',
+      );
       if (oldestKey.isEmpty) break;
 
       final player = lru.remove(oldestKey);
@@ -1435,7 +1456,8 @@ class VideoManager {
       );
     } catch (error) {
       AppLogger.debug(
-          '[VideoManager] Preload skipped for ${video.videoUrl}: $error');
+        '[VideoManager] Preload skipped for ${video.videoUrl}: $error',
+      );
     }
   }
 
@@ -1546,8 +1568,9 @@ class VideoManager {
 
   Future<void> pauseAllExcept(String contextKey, String? keepUrl) async {
     final lru = _lruByContext[contextKey] ?? {};
-    final resolvedKeep =
-        keepUrl != null ? _resolveKey(contextKey, keepUrl) : null;
+    final resolvedKeep = keepUrl != null
+        ? _resolveKey(contextKey, keepUrl)
+        : null;
 
     for (final entry in lru.entries.toList()) {
       if (entry.key == resolvedKeep) continue;
