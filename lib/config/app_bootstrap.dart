@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
@@ -41,6 +42,18 @@ class AppBootstrap {
       'FirebaseAuth.setLanguageCode',
       () async => FirebaseAuth.instance.setLanguageCode('fr'),
     );
+
+    if (!kIsWeb) {
+      // Off in debug builds so local development doesn't pollute Crashlytics
+      // with dev-machine noise; on for every real build (internal test,
+      // staging, production) so crashes are finally diagnosable.
+      await _runNonCritical(
+        'FirebaseCrashlytics.setCrashlyticsCollectionEnabled',
+        () => FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(
+          !kDebugMode,
+        ),
+      );
+    }
 
     if (kIsWeb) {
       await _runNonCritical(
@@ -138,6 +151,26 @@ class AppBootstrap {
       );
     } catch (_) {
       // Best-effort remote logging only; never let it mask the real error.
+    }
+
+    // Additive: AppLogger's own remote log stays the primary internal
+    // record. Crashlytics is what turns a previously invisible crash (e.g.
+    // the app dying when a phone call interrupts video playback) into a
+    // real stack trace we can act on, without replacing the existing log.
+    if (!kIsWeb) {
+      try {
+        unawaited(
+          FirebaseCrashlytics.instance.recordError(
+            error,
+            stackTrace,
+            reason: '$source: $message',
+            fatal: false,
+          ),
+        );
+      } catch (_) {
+        // Crashlytics may not be ready yet (e.g. a failure during Firebase
+        // bootstrap itself) — never let reporting mask the real error.
+      }
     }
   }
 

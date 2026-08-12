@@ -1,11 +1,19 @@
+import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/users/profile_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  // ProfileController's constructor eagerly touches VideoManager (for its
+  // per-profile playback context), which needs a Flutter test binding and
+  // mocked SharedPreferences before it can be built off the widget tree.
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
+
   group('ProfileRepository', () {
     test(
       'fetchUser returns null for missing profiles and parses existing users',
@@ -186,6 +194,47 @@ void main() {
       },
     );
 
+    test(
+      'updateProfilePatch persists a list of maps with a blank sub-field '
+      'without throwing (club recruitment needs with no priority)',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final user = _user(uid: 'club-1', name: 'Club Original');
+        final repository = _repository(firestore, uid: user.uid);
+
+        await firestore.collection('users').doc(user.uid).set(user.toMap());
+
+        // Mirrors ClubAdvancedFormState._parseNeeds(): an entry typed
+        // without a ":" yields a null priority.
+        final result = await repository.updateProfilePatch(user.uid, {
+          'clubProfile': {
+            'structureType': 'Club amateur',
+            'needs': [
+              {'position': 'Gardien', 'priority': '1'},
+              {'position': 'Attaquant', 'priority': null},
+            ],
+          },
+        });
+
+        final data = (await firestore.collection('users').doc(user.uid).get())
+            .data()!;
+        final clubProfile = Map<String, dynamic>.from(
+          data['clubProfile'] as Map,
+        );
+        final needs = List<Map<String, dynamic>>.from(
+          (clubProfile['needs'] as List).map(
+            (item) => Map<String, dynamic>.from(item as Map),
+          ),
+        );
+
+        expect(needs, [
+          {'position': 'Gardien', 'priority': '1'},
+          {'position': 'Attaquant'},
+        ]);
+        expect(result.appliedPatch['clubProfile'], isNotNull);
+      },
+    );
+
     test('hasAdvancedProfile ignores empty shells and false-only sections', () {
       final emptyShell = _user(uid: 'player-empty', name: 'Empty')
         ..playerProfile = {
@@ -362,6 +411,108 @@ void main() {
         'https://cdn.adfoot.test/legacy-thumb.jpg',
       );
     });
+  });
+
+  group('Basic profile edit -> profile screen end-to-end sync', () {
+    // Mirrors the exact patch shape EditProfileScreen._save() sends
+    // (lib/screens/edit_profil_screen.dart), and asserts on the exact
+    // fields ProfileScreen reads (user.nom/phone/bio/city/region/country/
+    // birthDate/position/team) — both from the in-memory state right after
+    // the edit (what the screen shows immediately) and from a fresh
+    // Firestore read (what a cold relaunch / different session shows).
+    test(
+      'every basic-edit field (name, contact, bio, location, birth date) '
+      'round-trips to both the in-memory user and a fresh Firestore fetch',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final user = _user(uid: 'player-sync', name: 'Original Name');
+        final repository = _repository(firestore, uid: user.uid);
+
+        await firestore.collection('users').doc(user.uid).set(user.toMap());
+
+        final controller = ProfileController(profileRepository: repository);
+        controller.user = await repository.fetchUser(
+          user.uid,
+          includePrivateFields: true,
+        );
+
+        await controller.updateProfilePatch(user.uid, {
+          'nom': 'Nom Modifie',
+          'phone': '+2250700000000',
+          'languages': ['Français', 'Anglais'],
+          'bio': 'Nouvelle présentation professionnelle',
+          'city': 'Abidjan',
+          'region': 'Lagunes',
+          'country': 'Côte d’Ivoire',
+          'birthDate': DateTime.utc(1999, 5, 12),
+          'position': 'Milieu',
+          'team': 'Academy A',
+          'clubActuel': 'Academy A',
+        });
+
+        // What ProfileScreen reads immediately after Navigator.pop(true),
+        // from the optimistically-updated in-memory user.
+        expect(controller.user?.nom, 'Nom Modifie');
+        expect(controller.user?.phone, '+2250700000000');
+        expect(controller.user?.languages, ['Français', 'Anglais']);
+        expect(controller.user?.bio, 'Nouvelle présentation professionnelle');
+        expect(controller.user?.city, 'Abidjan');
+        expect(controller.user?.region, 'Lagunes');
+        expect(controller.user?.country, 'Côte d’Ivoire');
+        expect(controller.user?.birthDate?.toUtc(), DateTime.utc(1999, 5, 12));
+        expect(controller.user?.position, 'Milieu');
+        expect(controller.user?.team, 'Academy A');
+
+        // What a fresh screen load (cold relaunch, or another session)
+        // reads straight from Firestore, independent of any in-memory
+        // optimistic state.
+        final reloaded = await repository.fetchUser(
+          user.uid,
+          includePrivateFields: true,
+        );
+        expect(reloaded?.nom, 'Nom Modifie');
+        expect(reloaded?.phone, '+2250700000000');
+        expect(reloaded?.bio, 'Nouvelle présentation professionnelle');
+        expect(reloaded?.city, 'Abidjan');
+        expect(reloaded?.region, 'Lagunes');
+        expect(reloaded?.country, 'Côte d’Ivoire');
+        expect(reloaded?.birthDate?.toUtc(), DateTime.utc(1999, 5, 12));
+      },
+    );
+
+    test(
+      'watchUser keeps emitting the current user when only the private '
+      'contact doc changes (phone/birthDate-only edits)',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final user = _user(uid: 'player-stream', name: 'Stream User');
+        final repository = _repository(firestore, uid: user.uid);
+
+        await firestore.collection('users').doc(user.uid).set(user.toMap());
+
+        final events = <AppUser?>[];
+        final subscription = repository
+            .watchUser(user.uid, includePrivateFields: true)
+            .listen(events.add);
+        addTearDown(subscription.cancel);
+
+        await Future<void>.delayed(Duration.zero);
+
+        // Exactly what a phone/birthDate-only edit does server-side: only
+        // users/{uid}/private/contact changes, the parent users/{uid} doc
+        // is untouched.
+        await firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('private')
+            .doc('contact')
+            .set({'phone': '+2250700000001'}, SetOptions(merge: true));
+
+        await Future<void>.delayed(Duration.zero);
+
+        expect(events.any((u) => u?.phone == '+2250700000001'), isTrue);
+      },
+    );
   });
 }
 

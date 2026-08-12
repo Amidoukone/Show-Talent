@@ -209,6 +209,9 @@ class VideoUiStrings {
   static const String uploadConnectionUnstable =
       'Connexion instable pendant le t\u00e9l\u00e9versement. V\u00e9rifiez votre r\u00e9seau '
       'puis r\u00e9essayez.';
+  static const String uploadSessionTimeout =
+      'Connexion s\u00e9curis\u00e9e trop longue \u00e0 s\u2019\u00e9tablir. '
+      'V\u00e9rifiez votre r\u00e9seau puis r\u00e9essayez.';
   static const String uploadUnknownError =
       'Erreur pendant le t\u00e9l\u00e9versement.';
   static const String uploadStageAnalyze = 'Analyse de la vid\u00e9o...';

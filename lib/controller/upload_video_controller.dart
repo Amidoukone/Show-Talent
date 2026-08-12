@@ -32,6 +32,7 @@ class _UploadStageException implements Exception {
 class UploadVideoController extends GetxController {
   static const Duration _optimizationOverallTimeout = Duration(seconds: 45);
   static const Duration _pollInterval = Duration(seconds: 10);
+  static const Duration _sessionCreationTimeout = Duration(seconds: 20);
 
   final isUploading = false.obs;
   final isOptimizing = false.obs;
@@ -279,8 +280,11 @@ class UploadVideoController extends GetxController {
       return;
     }
 
+    // Stays at 0/"still connecting" (rather than jumping to a fixed
+    // percentage) while the upload session is still being negotiated, so a
+    // slow/retrying App Check handshake reads as "in progress" instead of a
+    // stalled progress bar frozen at a number that never moves.
     uploadStage.value = VideoUiStrings.uploadStageInitialize;
-    uploadProgress.value = 0.18;
 
     UploadSessionState session;
 
@@ -299,13 +303,23 @@ class UploadVideoController extends GetxController {
         return;
       }
 
-      session = await _uploadClient.ensureSession(
-        localFilePath: selectedVideo!.path,
-        fileSizeBytes: fileSizeBytes,
-        contentType: 'video/mp4',
-      );
+      try {
+        session = await _uploadClient
+            .ensureSession(
+              localFilePath: selectedVideo!.path,
+              fileSizeBytes: fileSizeBytes,
+              contentType: 'video/mp4',
+            )
+            .timeout(_sessionCreationTimeout);
+      } on TimeoutException {
+        throw const _UploadStageException(
+          'session-creation-timeout',
+          VideoUiStrings.uploadSessionTimeout,
+        );
+      }
       if (!_isCurrentOperation(operation)) return;
       _activeSession = session;
+      uploadProgress.value = 0.18;
 
       uploadStage.value = VideoUiStrings.uploadStageUploading;
       _cancelToken = CancelToken();
@@ -461,6 +475,12 @@ class UploadVideoController extends GetxController {
         showErrorToast(_toUserMessage(e));
       }
       isUploading(false);
+      // A failure here means the upload did NOT complete, even if it
+      // happened after isOptimizing(true) was set while waiting on
+      // _waitForVideoStatusReady. Without this, the finally block below
+      // skips resetUploadState() (its guard is `!isOptimizing.value`) and
+      // the user is stuck on the optimizing overlay with no way out.
+      isOptimizing(false);
     } finally {
       if (_isCurrentOperation(operation)) {
         _cancelToken = null;

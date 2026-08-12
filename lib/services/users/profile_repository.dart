@@ -259,18 +259,63 @@ class ProfileRepository {
       });
     }
 
-    return _usersCollection.doc(uid).snapshots().asyncMap((snapshot) async {
-      final data = snapshot.data();
-      if (!snapshot.exists || data == null) {
-        return null;
+    return _watchUserWithPrivateContact(uid);
+  }
+
+  // phone/birthDate live in users/{uid}/private/contact (see
+  // _privateContactKeys), a *subcollection* document. Firestore listeners on
+  // the parent users/{uid} document never fire for a subcollection-only
+  // write, so a single doc(uid).snapshots().asyncMap(...) — which only
+  // re-fetches the private doc reactively when the parent doc itself also
+  // changes — silently goes stale after a phone/birthDate-only edit. Listen
+  // to both documents and re-emit a combined AppUser whenever either changes.
+  Stream<AppUser?> _watchUserWithPrivateContact(String uid) {
+    late final StreamController<AppUser?> controller;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? userSub;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? contactSub;
+
+    bool hasUserSnapshot = false;
+    bool userExists = false;
+    Map<String, dynamic>? userData;
+    Map<String, dynamic>? privateContact;
+
+    void emit() {
+      if (!hasUserSnapshot) {
+        return;
       }
-      final privateContact = await _fetchPrivateContact(uid);
-      return _parseUserSafely(
-        data,
-        privateContact: privateContact,
-        source: 'ProfileRepository.watchUser',
+      if (!userExists || userData == null) {
+        controller.add(null);
+        return;
+      }
+      controller.add(
+        _parseUserSafely(
+          userData!,
+          privateContact: privateContact,
+          source: 'ProfileRepository.watchUser',
+        ),
       );
-    });
+    }
+
+    controller = StreamController<AppUser?>.broadcast(
+      onListen: () {
+        userSub = _usersCollection.doc(uid).snapshots().listen((snapshot) {
+          hasUserSnapshot = true;
+          userExists = snapshot.exists;
+          userData = snapshot.data();
+          emit();
+        }, onError: controller.addError);
+        contactSub = _privateContactDoc(uid).snapshots().listen((snapshot) {
+          privateContact = snapshot.data();
+          emit();
+        }, onError: controller.addError);
+      },
+      onCancel: () async {
+        await userSub?.cancel();
+        await contactSub?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   Future<Map<String, dynamic>?> _fetchPrivateContact(String uid) async {
@@ -894,6 +939,24 @@ class ProfileRepository {
         if (sanitized is _ProfileNestedFieldDelete) {
           continue;
         }
+        // A Map nested inside a List can't carry the delete sentinel: Firestore
+        // has no concept of "delete this field of this array element", only
+        // whole-array-field deletes. Drop the sentinel-valued keys instead so
+        // the sentinel object never reaches the Firestore write.
+        if (sanitized is Map) {
+          final cleanedItem = <String, dynamic>{};
+          sanitized.forEach((key, itemValue) {
+            if (itemValue is _ProfileNestedFieldDelete) {
+              return;
+            }
+            cleanedItem[key.toString()] = itemValue;
+          });
+          if (cleanedItem.isEmpty) {
+            continue;
+          }
+          sanitizedItems.add(cleanedItem);
+          continue;
+        }
         sanitizedItems.add(sanitized);
       }
       return sanitizedItems.isEmpty
@@ -990,6 +1053,19 @@ class ProfileRepository {
         return;
       }
 
+      if (value is List) {
+        // Defense in depth: strip any residual delete sentinel before this
+        // list ever reaches Firestore.update(), even though the sanitize
+        // step above should already have removed them.
+        final sanitizedList = _stripListSentinels(value);
+        if (sanitizedList.isEmpty) {
+          patch[path] = FieldValue.delete();
+          return;
+        }
+        patch[path] = sanitizedList;
+        return;
+      }
+
       if (_isEmptyProfileValue(value)) {
         patch[path] = FieldValue.delete();
         return;
@@ -1005,6 +1081,39 @@ class ProfileRepository {
     return patch;
   }
 
+  static List<dynamic> _stripListSentinels(List<dynamic> value) {
+    final cleaned = <dynamic>[];
+    for (final item in value) {
+      if (item is _ProfileNestedFieldDelete) {
+        continue;
+      }
+      if (item is Map) {
+        final cleanedItem = <String, dynamic>{};
+        item.forEach((key, itemValue) {
+          if (itemValue is _ProfileNestedFieldDelete) {
+            return;
+          }
+          cleanedItem[key.toString()] = itemValue is List
+              ? _stripListSentinels(itemValue)
+              : itemValue;
+        });
+        if (cleanedItem.isNotEmpty) {
+          cleaned.add(cleanedItem);
+        }
+        continue;
+      }
+      if (item is List) {
+        final nested = _stripListSentinels(item);
+        if (nested.isNotEmpty) {
+          cleaned.add(nested);
+        }
+        continue;
+      }
+      cleaned.add(item);
+    }
+    return cleaned;
+  }
+
   static bool _isEmptyProfileValue(dynamic value) {
     if (value == null || value is _ProfileNestedFieldDelete) {
       return true;
@@ -1012,11 +1121,17 @@ class ProfileRepository {
     if (value is String) {
       return value.trim().isEmpty;
     }
+    // A Map/List is only *meaningfully* empty once every value inside it is
+    // itself empty/a delete sentinel — a map with 3 keys where only one
+    // holds real data (the rest were left blank in the form) is not empty,
+    // even though its key count is non-zero. Keeping this in sync with
+    // _pruneEmptyProfileMap's notion of "empty" avoids _deepMergeMap treating
+    // an all-blank nested block as real data to preserve.
     if (value is Map) {
-      return value.isEmpty;
+      return value.isEmpty || value.values.every(_isEmptyProfileValue);
     }
     if (value is List) {
-      return value.isEmpty;
+      return value.isEmpty || value.every(_isEmptyProfileValue);
     }
     return false;
   }

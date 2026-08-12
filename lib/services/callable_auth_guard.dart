@@ -114,8 +114,8 @@ class CallableAuthGuard {
       throw _DirectCallableException(
         code: 'failed-precondition',
         message:
-            'Vérification de sécurité indisponible. Vérifiez App Check, '
-            "redémarrez l'application puis réessayez.",
+            'Connexion sécurisée indisponible. Réessayez dans quelques '
+            'instants.',
       );
     }
 
