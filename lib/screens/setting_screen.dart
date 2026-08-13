@@ -15,6 +15,8 @@ import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -214,6 +216,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     await _authSessionService.signOut();
     Get.offAllNamed(AppRoutes.login);
+  }
+
+  Future<void> _confirmForceCrashlyticsTestCrash() async {
+    if (kDebugMode) {
+      AdFeedback.info(
+        'Build debug',
+        'Crashlytics est désactivé en debug. Utilisez un build profile ou release pour envoyer un rapport de test.',
+        duration: const Duration(seconds: 5),
+      );
+      return;
+    }
+
+    final confirmed = await AdDialogs.confirm(
+      context: context,
+      title: 'Forcer un crash de test',
+      message:
+          'Ceci va fermer l’application immédiatement pour envoyer un premier rapport à Crashlytics. À utiliser uniquement pendant la mise en place du suivi des crashs.',
+      confirmLabel: 'Forcer le crash',
+      cancelLabel: 'Annuler',
+      danger: true,
+    );
+    if (!confirmed) return;
+
+    FirebaseCrashlytics.instance.crash();
   }
 
   @override
@@ -494,20 +520,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AdColors.brand.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(AdRadius.lg),
-                  border: Border.all(
-                    color: AdColors.brand.withValues(alpha: 0.22),
+              GestureDetector(
+                // Internal-test-only diagnostic hook: not a user-facing
+                // feature, no visible affordance. Lets us force one
+                // Crashlytics report to complete the Firebase console setup
+                // (it stays on its onboarding screen until it receives a
+                // first report) without shipping a "Test Crash" button.
+                // Remove once the Crashlytics dashboard shows live data.
+                onLongPress: _confirmForceCrashlyticsTestCrash,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AdColors.brand.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(AdRadius.lg),
+                    border: Border.all(
+                      color: AdColors.brand.withValues(alpha: 0.22),
+                    ),
                   ),
-                ),
-                child: const Icon(
-                  Icons.tune_rounded,
-                  color: AdColors.brand,
-                  size: 25,
+                  child: const Icon(
+                    Icons.tune_rounded,
+                    color: AdColors.brand,
+                    size: 25,
+                  ),
                 ),
               ),
               const SizedBox(width: AdSpacing.md),
