@@ -32,7 +32,12 @@ class _UploadStageException implements Exception {
 class UploadVideoController extends GetxController {
   static const Duration _optimizationOverallTimeout = Duration(seconds: 45);
   static const Duration _pollInterval = Duration(seconds: 10);
-  static const Duration _sessionCreationTimeout = Duration(seconds: 20);
+  // A cold createUploadSession Cloud Function instance (no minInstances is
+  // configured -- see functions/src/function_runtime.ts) plus a fresh Play
+  // Integrity attestation can legitimately take longer than a few seconds
+  // on real devices/networks. 20s was tight enough that a single slow-but-
+  // healthy attempt routinely tripped the timeout.
+  static const Duration _sessionCreationTimeout = Duration(seconds: 35);
 
   final isUploading = false.obs;
   final isOptimizing = false.obs;
@@ -312,10 +317,26 @@ class UploadVideoController extends GetxController {
             )
             .timeout(_sessionCreationTimeout);
       } on TimeoutException {
-        throw const _UploadStageException(
-          'session-creation-timeout',
-          VideoUiStrings.uploadSessionTimeout,
-        );
+        // The first timeout is often just a cold function instance plus a
+        // fresh App Check attestation, not a real failure -- retry once
+        // before surfacing an error to the user. By now the function is
+        // warm and the App Check token is very likely cached, so this
+        // retry is usually fast even when the first attempt was slow.
+        if (!_isCurrentOperation(operation)) return;
+        try {
+          session = await _uploadClient
+              .ensureSession(
+                localFilePath: selectedVideo!.path,
+                fileSizeBytes: fileSizeBytes,
+                contentType: 'video/mp4',
+              )
+              .timeout(_sessionCreationTimeout);
+        } on TimeoutException {
+          throw const _UploadStageException(
+            'session-creation-timeout',
+            VideoUiStrings.uploadSessionTimeout,
+          );
+        }
       }
       if (!_isCurrentOperation(operation)) return;
       _activeSession = session;
