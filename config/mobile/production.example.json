@@ -2,6 +2,7 @@
   "APP_ENV": "production",
   "APP_CHECK_ENABLED": "true",
   "VIDEO_SHARE_BASE_URL": "https://adfoot.org",
+  "EMAIL_LINK_CUSTOM_HOST": "adfoot.org",
   "FIREBASE_PROJECT_ID": "your-production-project-id",
   "FIREBASE_MESSAGING_SENDER_ID": "1234567890",
   "FIREBASE_STORAGE_BUCKET": "your-production-storage-bucket",
