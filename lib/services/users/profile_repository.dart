@@ -70,10 +70,15 @@ class ProfileRepository {
        _authOverride = auth;
 
   static const ProfileFieldDelete deleteField = ProfileFieldDelete._();
-  static const Duration firestoreReadTimeout = Duration(seconds: 12);
-  static const Duration firestoreWriteTimeout = Duration(seconds: 15);
+  static const Duration firestoreReadTimeout = Duration(seconds: 15);
+  static const Duration firestoreWriteTimeout = Duration(seconds: 20);
   static const Duration storageWriteTimeout = Duration(seconds: 45);
-  static const Duration authRefreshTimeout = Duration(seconds: 8);
+  // _ensureAuthenticatedOwner does a *forced* token refresh before every
+  // write, then falls back to a second (non-forced) attempt on timeout --
+  // 8s per leg was tight enough on a slow/cellular connection that both
+  // legs could time out back to back before either one had a real chance
+  // to complete.
+  static const Duration authRefreshTimeout = Duration(seconds: 12);
   static const int maxCvPdfBytes = 5 * 1024 * 1024;
   static const String _profileInvalidationReason = 'profile_updated_by_user';
   static const List<int> _pdfHeader = <int>[0x25, 0x50, 0x44, 0x46, 0x2D];
@@ -182,6 +187,16 @@ class ProfileRepository {
   }
 
   static bool isTransientFirestoreError(Object error) {
+    // Plain Dart TimeoutExceptions (from the .timeout() wrappers used
+    // throughout this class, e.g. _ensureAuthenticatedOwner's token
+    // refresh) aren't FirebaseExceptions, so without this check a slow
+    // network hop fell through to the generic "Impossible de mettre a
+    // jour le profil" dead-end instead of the actionable "Connexion
+    // instable" message.
+    if (error is TimeoutException) {
+      return true;
+    }
+
     if (error is! FirebaseException) {
       return false;
     }
@@ -387,7 +402,17 @@ class ProfileRepository {
         return existingData!;
       }
 
-      final doc = await _getWithRetry(_usersCollection.doc(uid));
+      // Source.server, not the default serverAndCache: this result decides
+      // whether the profile is *currently* verified, which in turn decides
+      // whether this write includes the verification-reset fields the
+      // Firestore rule requires. A stale cached "not verified" read (silent
+      // fallback on a flaky connection) would omit them while the rule
+      // evaluates the real (verified) server state -- rejecting the whole
+      // write with permission-denied even for an innocuous nom/bio edit.
+      final doc = await _getWithRetry(
+        _usersCollection.doc(uid),
+        source: Source.server,
+      );
       existingData = doc.data() ?? <String, dynamic>{};
       return existingData!;
     }
@@ -651,12 +676,15 @@ class ProfileRepository {
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(
-    DocumentReference<Map<String, dynamic>> ref,
-  ) async {
+    DocumentReference<Map<String, dynamic>> ref, {
+    Source source = Source.serverAndCache,
+  }) async {
     int attempt = 0;
     while (attempt < 3) {
       try {
-        return await ref.get().timeout(firestoreReadTimeout);
+        return await ref
+            .get(GetOptions(source: source))
+            .timeout(firestoreReadTimeout);
       } catch (_) {
         attempt++;
         if (attempt >= 3) {
@@ -674,9 +702,17 @@ class ProfileRepository {
     Map<String, dynamic>? localPatch,
     Map<String, dynamic>? existingData,
   }) async {
+    // Source.server for the same reason as loadExistingData() in
+    // updateProfilePatch: this decides whether the verification-reset
+    // fields are included, and a stale cached read can disagree with what
+    // the Firestore rule sees, turning an ordinary photo/CV/profile write
+    // into a permission-denied.
     final data =
         existingData ??
-        (await _getWithRetry(_usersCollection.doc(uid))).data() ??
+        (await _getWithRetry(
+          _usersCollection.doc(uid),
+          source: Source.server,
+        )).data() ??
         <String, dynamic>{};
 
     if (!_isProfileCurrentlyVerified(data)) {
