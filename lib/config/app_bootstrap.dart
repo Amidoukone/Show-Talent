@@ -28,10 +28,12 @@ class AppBootstrap {
     _configureSystemUi();
     _configureFlutterErrors();
 
-    // Hard dependencies: the app genuinely cannot run without these, so
-    // they're allowed to propagate and abort startup (reportZoneError still
-    // captures and logs the failure remotely).
-    await FirebaseBootstrap.initialize();
+    // Hard dependency: the app genuinely cannot run without Firebase, so a
+    // final failure is still allowed to propagate and abort startup
+    // (reportZoneError still captures and logs it remotely; main() falls
+    // back to a retry screen instead of leaving a dead splash screen -- see
+    // _initializeFirebaseWithRetry).
+    await _initializeFirebaseWithRetry();
     await AppCheckService.initialize();
     AppBindings.registerPermanentDependencies();
 
@@ -98,6 +100,37 @@ class AppBootstrap {
     );
 
     await _initializeEmailLinkHandler();
+  }
+
+  // A cold app start with a weak/just-connecting network (the normal case
+  // for many testers) can make the very first Firebase.initializeApp() call
+  // fail transiently. Previously that single failure aborted startup before
+  // runApp() ever ran, which reads to the user as the app closing itself
+  // with no error and no way to recover. Retry a few times first --
+  // Firebase.initializeApp() is safe to call again (FirebaseBootstrap
+  // checks Firebase.apps.isEmpty) -- before letting main() fall back to a
+  // retry screen.
+  static const int _firebaseInitMaxAttempts = 3;
+  static const Duration _firebaseInitRetryDelay = Duration(seconds: 2);
+
+  static Future<void> _initializeFirebaseWithRetry() async {
+    for (var attempt = 1; attempt <= _firebaseInitMaxAttempts; attempt++) {
+      try {
+        await FirebaseBootstrap.initialize();
+        return;
+      } catch (error, stack) {
+        if (attempt >= _firebaseInitMaxAttempts) {
+          rethrow;
+        }
+        if (kDebugMode) {
+          AppLogger.debug(
+            'FirebaseBootstrap.initialize attempt $attempt failed, '
+            'retrying: $error\n$stack',
+          );
+        }
+        await Future.delayed(_firebaseInitRetryDelay * attempt);
+      }
+    }
   }
 
   static Future<void> _runNonCritical(

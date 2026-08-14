@@ -13,9 +13,75 @@ import 'theme/app_theme.dart';
 Future<void> main() async {
   runZonedGuarded(() async {
     Intl.defaultLocale = 'fr_FR';
+    await _bootstrapAndRun();
+  }, AppBootstrap.reportZoneError);
+}
+
+// AppBootstrap.initialize() already retries a flaky first Firebase call,
+// but if it still fails (e.g. no network at all on a cold start), the app
+// must not silently exit before runApp() ever executes -- that reads to
+// the user as the app closing itself with no explanation and no way to
+// recover. Fall back to a minimal screen offering a manual retry instead.
+Future<void> _bootstrapAndRun() async {
+  try {
     await AppBootstrap.initialize();
     runApp(const MyApp());
-  }, AppBootstrap.reportZoneError);
+  } catch (error, stack) {
+    AppBootstrap.reportZoneError(error, stack);
+    runApp(_StartupRetryApp(onRetry: _bootstrapAndRun));
+  }
+}
+
+class _StartupRetryApp extends StatelessWidget {
+  const _StartupRetryApp({required this.onRetry});
+
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light(),
+      home: Scaffold(
+        backgroundColor: AdColors.surface,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.wifi_off_rounded,
+                    size: 48,
+                    color: AdColors.onSurfaceMuted,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Connexion impossible',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Adfoot n’a pas pu se connecter. '
+                    'Vérifiez votre réseau puis réessayez.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AdColors.onSurfaceMuted),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () => onRetry(),
+                    child: const Text('Réessayer'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class AdfootApp extends StatelessWidget {
