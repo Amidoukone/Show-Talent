@@ -12,6 +12,12 @@ void main() {
       final tools = File('lib/utils/video_tools.dart').readAsStringSync();
 
       expect(controller, contains('VideoTools.prepareVideoFileForUpload'));
+      expect(
+        controller.indexOf(
+          'sourceFileSizeBytes > VideoTools.maxUploadFileSizeBytes',
+        ),
+        lessThan(controller.indexOf('VideoTools.prepareVideoFileForUpload')),
+      );
       expect(controller, isNot(contains('La duree depasse 60 secondes.')));
       expect(tools, contains('compressVideo('));
       expect(tools, contains('duration: maxDurationSeconds'));
@@ -27,6 +33,8 @@ void main() {
       contains('FeatureControllerRegistry.ensureUploadVideoController()'),
     );
     expect(form, isNot(contains('Get.find<UploadVideoController>()')));
+    expect(form, contains('with WidgetsBindingObserver'));
+    expect(form, contains('didChangeAppLifecycleState'));
   });
 
   test('upload form releases the preview player before heavy upload work', () {

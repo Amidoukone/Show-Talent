@@ -330,6 +330,36 @@ function Move-StaleBuildDirectory {
     return $destination
 }
 
+function Stop-AndroidGradleDaemons {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    $androidDir = Join-Path $RepoRoot "android"
+    $gradlew = Join-Path $androidDir "gradlew.bat"
+    if (-not (Test-Path -LiteralPath $gradlew)) {
+        $gradlew = Join-Path $androidDir "gradlew"
+    }
+
+    if (-not (Test-Path -LiteralPath $gradlew)) {
+        return
+    }
+
+    Write-Host "Stopping Gradle daemons before build cleanup..."
+    Push-Location $androidDir
+    try {
+        & $gradlew --stop
+        if ($LASTEXITCODE -gt 0) {
+            Write-Warning "Gradle daemon stop returned exit code $LASTEXITCODE. Continuing cleanup."
+        }
+    } catch {
+        Write-Warning "Unable to stop Gradle daemons before cleanup. Continuing cleanup. $($_.Exception.Message)"
+    } finally {
+        Pop-Location
+    }
+}
+
 function Clear-GeneratedBuildDirectory {
     param(
         [Parameter(Mandatory = $true)]
@@ -344,6 +374,8 @@ function Clear-GeneratedBuildDirectory {
     if (-not (Test-PathIsUnderDirectory -Path $buildDir -Directory $RepoRoot)) {
         throw "Refusing to clean build directory outside the repository: '$buildDir'."
     }
+
+    Stop-AndroidGradleDaemons -RepoRoot $RepoRoot
 
     $staleBuildDir = $null
     try {

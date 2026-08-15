@@ -1,16 +1,23 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/app_environment.dart';
+import 'app_check_service.dart';
 import 'package:adfoot/services/app_logger.dart';
 
 class CallableAuthGuard {
   CallableAuthGuard._();
+
+  static const Duration _authCachedTokenTimeout = Duration(seconds: 10);
+  static const Duration _authForcedTokenTimeout = Duration(seconds: 25);
+  static const Duration _appCheckCachedTokenTimeout = Duration(seconds: 10);
+  static const Duration _appCheckForcedTokenTimeout = Duration(seconds: 25);
+  static const Duration _directCallableTimeout = Duration(seconds: 50);
 
   static const bool _configuredAppCheckEnabled = bool.fromEnvironment(
     'APP_CHECK_ENABLED',
@@ -33,7 +40,7 @@ class CallableAuthGuard {
   static Future<void> prepareCall({bool forceRefresh = false}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      await user.getIdToken(forceRefresh);
+      await _readAuthToken(user, forceRefresh: forceRefresh);
     }
 
     await _readAppCheckToken(forceRefresh: forceRefresh);
@@ -102,7 +109,7 @@ class CallableAuthGuard {
     http.Client? httpClient,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    final token = await user?.getIdToken(true);
+    final token = await _readRequiredAuthToken(user);
     if (token == null || token.isEmpty) {
       throw _DirectCallableException(
         code: 'unauthenticated',
@@ -112,7 +119,7 @@ class CallableAuthGuard {
     final appCheckToken = await _readAppCheckToken(forceRefresh: true);
     if (_appCheckEnabled && appCheckToken == null) {
       throw _DirectCallableException(
-        code: 'failed-precondition',
+        code: 'unavailable',
         message:
             'Connexion sécurisée indisponible. Réessayez dans quelques '
             'instants.',
@@ -123,18 +130,27 @@ class CallableAuthGuard {
     final shouldCloseClient = httpClient == null;
 
     try {
-      final response = await client.post(
-        _callableUri(callableName),
-        headers: {
-          'Accept': 'application/json',
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-          'X-Firebase-AppCheck': ?appCheckToken,
-        },
-        body: jsonEncode({'data': parameters ?? <String, dynamic>{}}),
-      );
+      final response = await client
+          .post(
+            _callableUri(callableName),
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'X-Firebase-AppCheck': ?appCheckToken,
+            },
+            body: jsonEncode({'data': parameters ?? <String, dynamic>{}}),
+          )
+          .timeout(_directCallableTimeout);
 
       return _readDirectCallableResult<T>(response, callableName);
+    } on TimeoutException {
+      throw _DirectCallableException(
+        code: 'deadline-exceeded',
+        message:
+            'Le serveur met trop de temps à répondre. Vérifiez votre réseau '
+            'puis réessayez.',
+      );
     } finally {
       if (shouldCloseClient) {
         client.close();
@@ -224,15 +240,109 @@ class CallableAuthGuard {
     );
   }
 
+  static Future<void> _readAuthToken(
+    User user, {
+    required bool forceRefresh,
+  }) async {
+    try {
+      await user
+          .getIdToken(forceRefresh)
+          .timeout(
+            forceRefresh ? _authForcedTokenTimeout : _authCachedTokenTimeout,
+          );
+    } on TimeoutException catch (error) {
+      if (kDebugMode) {
+        AppLogger.debug(
+          '[CallableAuthGuard] Auth token warm-up timed out: $error',
+        );
+      }
+    } on FirebaseAuthException catch (error) {
+      if (!_isTransientAuthError(error)) {
+        rethrow;
+      }
+      if (kDebugMode) {
+        AppLogger.debug(
+          '[CallableAuthGuard] Auth token warm-up failed: ${error.code}',
+        );
+      }
+    }
+  }
+
+  static Future<String?> _readRequiredAuthToken(User? user) async {
+    if (user == null) {
+      return null;
+    }
+
+    final cachedToken = await _readRequiredAuthTokenAttempt(
+      user,
+      forceRefresh: false,
+    );
+    if (cachedToken != null && cachedToken.isNotEmpty) {
+      return cachedToken;
+    }
+
+    return _readRequiredAuthTokenAttempt(user, forceRefresh: true);
+  }
+
+  static Future<String?> _readRequiredAuthTokenAttempt(
+    User user, {
+    required bool forceRefresh,
+  }) async {
+    try {
+      final token = await user
+          .getIdToken(forceRefresh)
+          .timeout(
+            forceRefresh ? _authForcedTokenTimeout : _authCachedTokenTimeout,
+          );
+      final trimmed = token?.trim() ?? '';
+      return trimmed.isEmpty ? null : trimmed;
+    } on TimeoutException {
+      if (!forceRefresh) {
+        if (kDebugMode) {
+          AppLogger.debug(
+            '[CallableAuthGuard] Cached auth token unavailable before '
+            'HTTP fallback.',
+          );
+        }
+        return null;
+      }
+      throw _DirectCallableException(
+        code: 'deadline-exceeded',
+        message:
+            'Authentification trop longue. Vérifiez votre réseau puis '
+            'réessayez.',
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!forceRefresh && _isTransientAuthError(error)) {
+        if (kDebugMode) {
+          AppLogger.debug(
+            '[CallableAuthGuard] Cached auth token failed before HTTP '
+            'fallback: ${error.code}',
+          );
+        }
+        return null;
+      }
+      throw _DirectCallableException(
+        code: _isTransientAuthError(error) ? 'unavailable' : 'unauthenticated',
+        message:
+            error.message ??
+            'Authentification indisponible. Reconnectez-vous puis réessayez.',
+      );
+    }
+  }
+
   static Future<String?> _readAppCheckToken({bool forceRefresh = false}) async {
     if (!_shouldReadAppCheckToken) {
       return null;
     }
 
     try {
-      final token = await FirebaseAppCheck.instance.getToken(forceRefresh);
-      final trimmed = token?.trim() ?? '';
-      return trimmed.isEmpty ? null : trimmed;
+      return await AppCheckService.getToken(
+        forceRefresh: forceRefresh,
+        timeout: forceRefresh
+            ? _appCheckForcedTokenTimeout
+            : _appCheckCachedTokenTimeout,
+      );
     } catch (error) {
       if (kDebugMode) {
         AppLogger.debug(
@@ -240,6 +350,18 @@ class CallableAuthGuard {
         );
       }
       return null;
+    }
+  }
+
+  static bool _isTransientAuthError(FirebaseAuthException error) {
+    switch (error.code) {
+      case 'network-request-failed':
+      case 'too-many-requests':
+      case 'internal-error':
+      case 'unknown':
+        return true;
+      default:
+        return false;
     }
   }
 

@@ -53,6 +53,13 @@ void main() {
     expect(editProfile, contains("label: user.role == 'coach'"));
     expect(advancedEditor, contains('IndexedStack'));
     expect(advancedEditor, isNot(contains('TabBarView(')));
+    expect(advancedEditor, contains('_mergePatchMaps'));
+    expect(advancedEditor, contains('profileState.buildPatch()'));
+    expect(advancedEditor, contains('scoutState.buildPatch()'));
+    expect(
+      advancedEditor,
+      isNot(contains('_playerProfileKey.currentState?.save')),
+    );
     expect(advancedEditor, contains('Le profil joueur n’a pas été enregistré'));
     expect(advancedEditor, contains('Le dossier scout n’a pas été enregistré'));
     expect(controller, contains('bool _isAccessDenied(Object error)'));
@@ -67,6 +74,8 @@ void main() {
     expect(playerAdvanced, contains('} catch (_) {'));
     expect(playerAdvanced, contains('Sauvegarde refusée'));
     expect(playerStats, contains('} catch (_) {'));
+    expect(playerAdvanced, contains('Map<String, dynamic> buildPatch()'));
+    expect(playerStats, contains('Map<String, dynamic> buildPatch()'));
     expect(playerStats, contains('Sauvegarde refusée'));
     expect(playerAdvanced, contains("if (positions.isNotEmpty) 'position'"));
     expect(playerStats, contains("'openToOpportunities': _openToTrials"));

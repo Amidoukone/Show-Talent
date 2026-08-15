@@ -31,7 +31,7 @@ class UploadForm extends StatefulWidget {
   State<UploadForm> createState() => _UploadFormState();
 }
 
-class _UploadFormState extends State<UploadForm> {
+class _UploadFormState extends State<UploadForm> with WidgetsBindingObserver {
   late final UploadVideoController uploadVideoController;
 
   final _formKey = GlobalKey<FormState>();
@@ -47,6 +47,7 @@ class _UploadFormState extends State<UploadForm> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     uploadVideoController =
         FeatureControllerRegistry.ensureUploadVideoController();
     final controller = VideoPlayerController.file(widget.videoFile);
@@ -68,6 +69,7 @@ class _UploadFormState extends State<UploadForm> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     unawaited(_releasePreviewController(notify: false));
     descriptionController.dispose();
     captionController.dispose();
@@ -76,7 +78,29 @@ class _UploadFormState extends State<UploadForm> {
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.paused &&
+        state != AppLifecycleState.inactive &&
+        state != AppLifecycleState.detached) {
+      return;
+    }
+
+    final controller = _videoPlayerController;
+    if (controller == null || !controller.value.isInitialized) {
+      return;
+    }
+
+    unawaited(controller.pause().catchError((_) {}));
+    if (mounted && _isPlaying) {
+      setState(() => _isPlaying = false);
+    }
+  }
+
   void toggleVideoPlayback() {
+    if (!mounted) {
+      return;
+    }
     final controller = _videoPlayerController;
     if (controller != null && controller.value.isInitialized) {
       setState(() {

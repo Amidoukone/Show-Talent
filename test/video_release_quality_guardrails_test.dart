@@ -63,6 +63,25 @@ void main() {
       );
     });
 
+    test('upload callables use production-safe runtime options', () {
+      final runtime = File(
+        'functions/src/function_runtime.ts',
+      ).readAsStringSync();
+      final uploadSession = File(
+        'functions/src/upload_session.ts',
+      ).readAsStringSync();
+
+      expect(runtime, contains('UPLOAD_CALLABLE_OPTIONS'));
+      expect(runtime, contains('UPLOAD_CALLABLE_MIN_INSTANCES'));
+      expect(runtime, contains('UPLOAD_CALLABLE_TIMEOUT_SECONDS'));
+      expect(runtime, contains('ENFORCE_APP_CHECK ? 1 : 0'));
+      expect(uploadSession, contains('import {UPLOAD_CALLABLE_OPTIONS}'));
+      expect(uploadSession, contains('createUploadSession = onCall('));
+      expect(uploadSession, contains('requestThumbnailUploadUrl = onCall('));
+      expect(uploadSession, contains('finalizeUpload = onCall('));
+      expect(uploadSession, isNot(contains('LOW_CPU_CALLABLE_OPTIONS')));
+    });
+
     test('push notification copy is normalized before FCM send', () {
       final actions = File('functions/src/actions.ts').readAsStringSync();
       final adminActions = File(

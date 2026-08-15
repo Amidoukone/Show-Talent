@@ -87,6 +87,43 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
     }
   }
 
+  Map<String, dynamic> _mergePatchMaps(
+    Map<String, dynamic> base,
+    Map<String, dynamic> next,
+  ) {
+    final merged = Map<String, dynamic>.from(base);
+    next.forEach((key, value) {
+      final current = merged[key];
+      if (current is Map && value is Map) {
+        merged[key] = _mergePatchMaps(
+          Map<String, dynamic>.from(current),
+          Map<String, dynamic>.from(value),
+        );
+        return;
+      }
+      merged[key] = value;
+    });
+    return merged;
+  }
+
+  void _showSaveFailure({
+    int? tabIndex,
+    required String message,
+    String title = 'Sauvegarde impossible',
+  }) {
+    if (!mounted) {
+      return;
+    }
+    if (tabIndex != null && tabIndex >= 0 && tabIndex < _tabController.length) {
+      _tabController.animateTo(tabIndex);
+    }
+    setState(() {
+      _saveFailureTitle = title;
+      _saveFailureMessage = message;
+    });
+    AdFeedback.error(title, message, duration: const Duration(seconds: 6));
+  }
+
   Future<void> _save() async {
     if (_saving || !_hasAdvancedProfileSection) {
       return;
@@ -101,46 +138,50 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
       bool saved = false;
 
       if (_user.isPlayer) {
-        final profileSaved =
-            await _playerProfileKey.currentState?.save(showFeedback: false) ??
-            false;
-        if (!profileSaved) {
-          _tabController.animateTo(0);
-          final message =
-              _profileController.lastProfileWriteErrorMessage ??
-              'Le profil joueur n’a pas été enregistré. Vérifiez les champs ou la session, puis réessayez.';
-          if (mounted) {
-            setState(() {
-              _saveFailureTitle = 'Sauvegarde impossible';
-              _saveFailureMessage = message;
-            });
-          }
-          AdFeedback.error(
-            'Sauvegarde impossible',
-            message,
-            duration: const Duration(seconds: 6),
+        final profileState = _playerProfileKey.currentState;
+        final scoutState = _playerScoutKey.currentState;
+
+        if (profileState == null || !profileState.validate()) {
+          _showSaveFailure(
+            tabIndex: 0,
+            message:
+                'Le profil joueur n’a pas été enregistré. Vérifiez les champs, puis réessayez.',
           );
           return;
         }
 
-        final scoutSaved =
-            await _playerScoutKey.currentState?.save(showFeedback: false) ??
-            false;
-        if (!scoutSaved) {
-          _tabController.animateTo(1);
-          final message =
-              _profileController.lastProfileWriteErrorMessage ??
-              'Le dossier scout n’a pas été enregistré. Vérifiez les champs ou la session, puis réessayez.';
-          if (mounted) {
-            setState(() {
-              _saveFailureTitle = 'Sauvegarde impossible';
-              _saveFailureMessage = message;
-            });
-          }
-          AdFeedback.error(
-            'Sauvegarde impossible',
-            message,
-            duration: const Duration(seconds: 6),
+        if (scoutState == null || !scoutState.validate()) {
+          _showSaveFailure(
+            tabIndex: 1,
+            message:
+                'Le dossier scout n’a pas été enregistré. Vérifiez les champs, puis réessayez.',
+          );
+          return;
+        }
+
+        try {
+          final patch = _mergePatchMaps(
+            profileState.buildPatch(),
+            scoutState.buildPatch(),
+          );
+          await _profileController.updateProfilePatch(_user.uid, patch);
+        } on ProfileAccessRevokedException {
+          _showSaveFailure(
+            tabIndex: _tabController.index,
+            title:
+                _profileController.lastProfileWriteErrorTitle ??
+                'Sauvegarde refusée',
+            message:
+                _profileController.lastProfileWriteErrorMessage ??
+                'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.',
+          );
+          return;
+        } catch (_) {
+          _showSaveFailure(
+            tabIndex: _tabController.index,
+            message:
+                _profileController.lastProfileWriteErrorMessage ??
+                'Les informations avancées du joueur n’ont pas été enregistrées. Vérifiez votre connexion puis réessayez.',
           );
           return;
         }

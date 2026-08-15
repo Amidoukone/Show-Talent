@@ -9,6 +9,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
+import '../app_check_service.dart';
+
 class ProfileFieldDelete {
   const ProfileFieldDelete._();
 }
@@ -50,6 +52,9 @@ class ProfileVideoPage {
   final int fetchedCount;
 }
 
+typedef AppCheckReadyCallback =
+    Future<bool> Function({required bool forceRefresh, Duration? timeout});
+
 class _SanitizedProfilePatch {
   const _SanitizedProfilePatch({
     required this.firestorePatch,
@@ -65,20 +70,21 @@ class ProfileRepository {
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
     FirebaseAuth? auth,
+    AppCheckReadyCallback? appCheckReady,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _storageOverride = storage,
-       _authOverride = auth;
+       _authOverride = auth,
+       _appCheckReady = appCheckReady ?? _defaultAppCheckReady;
 
   static const ProfileFieldDelete deleteField = ProfileFieldDelete._();
-  static const Duration firestoreReadTimeout = Duration(seconds: 15);
-  static const Duration firestoreWriteTimeout = Duration(seconds: 20);
-  static const Duration storageWriteTimeout = Duration(seconds: 45);
-  // _ensureAuthenticatedOwner does a *forced* token refresh before every
-  // write, then falls back to a second (non-forced) attempt on timeout --
-  // 8s per leg was tight enough on a slow/cellular connection that both
-  // legs could time out back to back before either one had a real chance
-  // to complete.
-  static const Duration authRefreshTimeout = Duration(seconds: 12);
+  static const Duration firestoreReadTimeout = Duration(seconds: 20);
+  static const Duration firestoreWriteTimeout = Duration(seconds: 30);
+  static const Duration storageWriteTimeout = Duration(seconds: 90);
+  // Firestore/Storage attach the current Firebase Auth token themselves. This
+  // preflight only verifies that a matching signed-in user is still present;
+  // it must not force a network token refresh before every profile write.
+  static const Duration authRefreshTimeout = Duration(seconds: 10);
+  static const Duration appCheckWriteTimeout = Duration(seconds: 25);
   static const int maxCvPdfBytes = 5 * 1024 * 1024;
   static const String _profileInvalidationReason = 'profile_updated_by_user';
   static const List<int> _pdfHeader = <int>[0x25, 0x50, 0x44, 0x46, 0x2D];
@@ -127,6 +133,7 @@ class ProfileRepository {
   final FirebaseFirestore _firestore;
   final FirebaseStorage? _storageOverride;
   final FirebaseAuth? _authOverride;
+  final AppCheckReadyCallback _appCheckReady;
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
@@ -143,6 +150,39 @@ class ProfileRepository {
 
   String? get currentAuthUid => _auth.currentUser?.uid;
 
+  static Future<bool> _defaultAppCheckReady({
+    required bool forceRefresh,
+    Duration? timeout,
+  }) {
+    return AppCheckService.ensureReady(
+      forceRefresh: forceRefresh,
+      timeout: timeout,
+    );
+  }
+
+  Future<void> _ensureAppCheckReadyForWrite() async {
+    if (await _appCheckReady(
+      forceRefresh: false,
+      timeout: appCheckWriteTimeout,
+    )) {
+      return;
+    }
+
+    if (await _appCheckReady(
+      forceRefresh: true,
+      timeout: appCheckWriteTimeout,
+    )) {
+      return;
+    }
+
+    throw FirebaseException(
+      plugin: 'firebase_app_check',
+      code: 'unavailable',
+      message:
+          'Connexion sécurisée indisponible. Réessayez dans quelques instants.',
+    );
+  }
+
   Future<void> _ensureAuthenticatedOwner(String uid) async {
     final currentUser = _auth.currentUser;
     if (currentUser == null || currentUser.uid != uid) {
@@ -153,16 +193,27 @@ class ProfileRepository {
       );
     }
 
+    await _ensureAppCheckReadyForWrite();
+
     try {
-      await currentUser.getIdToken(true).timeout(authRefreshTimeout);
-    } on TimeoutException {
       await currentUser.getIdToken().timeout(authRefreshTimeout);
-    } on FirebaseException catch (error) {
+    } on TimeoutException catch (error, stackTrace) {
+      _logAuthTokenWarmupWarning(error, stackTrace);
+    } on FirebaseException catch (error, stackTrace) {
       if (!_isTransientAuthTokenRefreshError(error)) {
         rethrow;
       }
-      await currentUser.getIdToken().timeout(authRefreshTimeout);
+      _logAuthTokenWarmupWarning(error, stackTrace);
     }
+  }
+
+  static void _logAuthTokenWarmupWarning(Object error, StackTrace? stackTrace) {
+    developer.log(
+      'auth token warm-up warning; continuing with Firebase SDK token handling',
+      name: 'ProfileRepository._ensureAuthenticatedOwner',
+      error: error,
+      stackTrace: stackTrace,
+    );
   }
 
   static bool _isTransientAuthTokenRefreshError(FirebaseException error) {

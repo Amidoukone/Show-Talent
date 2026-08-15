@@ -22,6 +22,9 @@ void main() {
       final source = File(
         'lib/services/callable_auth_guard.dart',
       ).readAsStringSync();
+      final appCheckService = File(
+        'lib/services/app_check_service.dart',
+      ).readAsStringSync();
 
       expect(source, contains('bool.fromEnvironment('));
       expect(source, contains("'APP_CHECK_ENABLED'"));
@@ -31,8 +34,23 @@ void main() {
           '_configuredAppCheckEnabled || AppEnvironmentConfig.isProduction',
         ),
       );
-      expect(source, contains('FirebaseAppCheck.instance.getToken'));
+      expect(source, contains('AppCheckService.getToken'));
+      expect(source, isNot(contains('FirebaseAppCheck.instance.getToken')));
+      expect(appCheckService, contains('static Future<String?> getToken'));
+      expect(appCheckService, contains('_activationFuture ??= _activate'));
+      expect(appCheckService, contains('FirebaseAppCheck.instance'));
+      expect(source, contains('_appCheckCachedTokenTimeout'));
+      expect(source, contains('_appCheckForcedTokenTimeout'));
+      expect(source, contains('_directCallableTimeout'));
       expect(source, contains('_appCheckEnabled && appCheckToken == null'));
+      expect(
+        source,
+        contains(
+          "code: 'unavailable',\n"
+          '        message:\n'
+          "            'Connexion sécurisée indisponible.",
+        ),
+      );
       expect(source, contains("'X-Firebase-AppCheck': ?appCheckToken"));
     });
 

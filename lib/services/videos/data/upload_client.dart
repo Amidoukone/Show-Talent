@@ -115,9 +115,9 @@ class DioUploadHttpClient implements UploadHttpClient {
           dio ??
           Dio(
             BaseOptions(
-              connectTimeout: const Duration(seconds: 20),
-              receiveTimeout: const Duration(seconds: 20),
-              sendTimeout: const Duration(seconds: 20),
+              connectTimeout: const Duration(seconds: 30),
+              receiveTimeout: const Duration(seconds: 30),
+              sendTimeout: const Duration(seconds: 60),
               followRedirects: false,
               validateStatus: (status) => status != null && status < 500,
             ),
@@ -145,7 +145,8 @@ class UploadClient {
   static const _chunkSize = 1024 * 1024;
   static const _thumbnailChunkSize = 512 * 1024;
   static const _sessionCacheFile = 'upload_session.json';
-  static const _defaultMaxChunkRetries = 3;
+  static const _defaultMaxChunkRetries = 4;
+  static const Duration _callableTimeout = Duration(seconds: 75);
   static const Set<int> _terminalSuccessStatuses = {200, 201, 204};
 
   // Server-side rejections that retrying can never fix -- everything else
@@ -297,7 +298,10 @@ class UploadClient {
     String? sessionId,
     String contentType = 'video/mp4',
   }) async {
-    final callable = _functions.httpsCallable('createUploadSession');
+    final callable = _functions.httpsCallable(
+      'createUploadSession',
+      options: HttpsCallableOptions(timeout: _callableTimeout),
+    );
     final data = await _callCallableWithRetry<Map<String, dynamic>>(
       callable,
       'createUploadSession',
@@ -542,7 +546,10 @@ class UploadClient {
     final size = await _readValidFileLength(file: file, label: 'miniature');
     final hash = await _computeMd5(file);
 
-    final callable = _functions.httpsCallable('requestThumbnailUploadUrl');
+    final callable = _functions.httpsCallable(
+      'requestThumbnailUploadUrl',
+      options: HttpsCallableOptions(timeout: _callableTimeout),
+    );
     final data = await _callCallableWithRetry<Map<String, dynamic>>(
       callable,
       'requestThumbnailUploadUrl',
@@ -632,7 +639,10 @@ class UploadClient {
     required String sessionId,
     required Map<String, dynamic> metadata,
   }) async {
-    final callable = _functions.httpsCallable('finalizeUpload');
+    final callable = _functions.httpsCallable(
+      'finalizeUpload',
+      options: HttpsCallableOptions(timeout: _callableTimeout),
+    );
     final data = await _callCallableWithRetry<Map<String, dynamic>>(
       callable,
       'finalizeUpload',

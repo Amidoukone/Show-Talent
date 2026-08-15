@@ -99,30 +99,36 @@ class PlayerStatsAvailabilityFormState
     return null;
   }
 
+  bool validate() => _formKey.currentState?.validate() ?? false;
+
+  Map<String, dynamic> buildPatch() {
+    return {
+      'openToOpportunities': _openToTrials,
+      'playerProfile': {
+        'stats': {
+          'minutes': int.tryParse(_minutesController.text.trim()),
+          'goals': int.tryParse(_goalsController.text.trim()),
+          'assists': int.tryParse(_assistsController.text.trim()),
+        },
+        'availability': {
+          'open': _openToTrials,
+          'regions': _csvToList(_regionsController.text),
+        },
+      },
+    };
+  }
+
   Future<bool> save({bool showFeedback = true}) async {
     if (_saving) {
       return false;
     }
-    if (!(_formKey.currentState?.validate() ?? false)) {
+    if (!validate()) {
       return false;
     }
 
     setState(() => _saving = true);
     try {
-      final patch = {
-        'openToOpportunities': _openToTrials,
-        'playerProfile': {
-          'stats': {
-            'minutes': int.tryParse(_minutesController.text.trim()),
-            'goals': int.tryParse(_goalsController.text.trim()),
-            'assists': int.tryParse(_assistsController.text.trim()),
-          },
-          'availability': {
-            'open': _openToTrials,
-            'regions': _csvToList(_regionsController.text),
-          },
-        },
-      };
+      final patch = buildPatch();
 
       try {
         await widget.profileController.updateProfilePatch(

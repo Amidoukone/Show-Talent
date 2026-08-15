@@ -8,6 +8,8 @@ param(
   [switch]$Sequential,
   [Parameter(Mandatory = $false)]
   [string]$Project,
+  [Parameter(Mandatory = $false)]
+  [int]$DiscoveryTimeoutSeconds = 60,
   [switch]$SkipValidation
 )
 
@@ -113,10 +115,13 @@ if ($Functions.Count -gt 0) {
   Write-Host "Deploy scope  : $Only"
 }
 Write-Host "Project ID    : $resolvedProjectId"
+Write-Host "Discovery timeout : $DiscoveryTimeoutSeconds seconds"
 Write-Host ""
 
 Push-Location $repoRoot
 try {
+  Set-Item -Path Env:FUNCTIONS_DISCOVERY_TIMEOUT -Value ([string]$DiscoveryTimeoutSeconds)
+
   foreach ($entry in $effectiveEnv.GetEnumerator()) {
     Set-Item -Path ("Env:{0}" -f $entry.Key) -Value ([string]$entry.Value)
   }

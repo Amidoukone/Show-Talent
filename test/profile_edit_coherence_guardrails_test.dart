@@ -56,8 +56,16 @@ void main() {
     expect(repository, contains("'region'"));
     expect(repository, contains("'country'"));
     expect(repository, contains('authRefreshTimeout'));
-    expect(repository, contains('currentUser.getIdToken(true)'));
+    expect(repository, isNot(contains('currentUser.getIdToken(true).timeout')));
     expect(repository, contains('_isTransientAuthTokenRefreshError'));
     expect(repository, contains('currentUser.getIdToken().timeout'));
+    expect(repository, contains("import '../app_check_service.dart';"));
+    expect(repository, contains('appCheckWriteTimeout'));
+    expect(repository, contains('_ensureAppCheckReadyForWrite'));
+    expect(repository, contains('AppCheckService.ensureReady'));
+    expect(
+      repository.indexOf('await _ensureAppCheckReadyForWrite();'),
+      lessThan(repository.indexOf('currentUser.getIdToken().timeout')),
+    );
   });
 }

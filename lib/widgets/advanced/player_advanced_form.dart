@@ -88,31 +88,37 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
         .toList();
   }
 
+  bool validate() => _formKey.currentState?.validate() ?? false;
+
+  Map<String, dynamic> buildPatch() {
+    final positions = _csvToList(_positionsController.text);
+    final skills = _csvToList(_skillsController.text);
+    return <String, dynamic>{
+      if (positions.isNotEmpty) 'position': positions.first,
+      'playerProfile': {
+        'physical': {
+          'heightCm': int.tryParse(_heightController.text.trim()),
+          'weightKg': int.tryParse(_weightController.text.trim()),
+          'strongFoot': _strongFoot,
+        },
+        'positions': positions,
+        'skills': skills,
+        'licenseNumber': _trimOrNull(_licenseController.text),
+      },
+    };
+  }
+
   Future<bool> save({bool showFeedback = true}) async {
     if (_saving) {
       return false;
     }
-    if (!(_formKey.currentState?.validate() ?? false)) {
+    if (!validate()) {
       return false;
     }
 
     setState(() => _saving = true);
     try {
-      final positions = _csvToList(_positionsController.text);
-      final skills = _csvToList(_skillsController.text);
-      final patch = <String, dynamic>{
-        if (positions.isNotEmpty) 'position': positions.first,
-        'playerProfile': {
-          'physical': {
-            'heightCm': int.tryParse(_heightController.text.trim()),
-            'weightKg': int.tryParse(_weightController.text.trim()),
-            'strongFoot': _strongFoot,
-          },
-          'positions': positions,
-          'skills': skills,
-          'licenseNumber': _trimOrNull(_licenseController.text),
-        },
-      };
+      final patch = buildPatch();
 
       try {
         await widget.profileController.updateProfilePatch(

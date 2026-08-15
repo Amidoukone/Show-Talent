@@ -6,12 +6,10 @@
 import {createHash, randomUUID} from "crypto";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {db, fieldValue, storage} from "./firebase";
-import {LOW_CPU_CALLABLE_OPTIONS} from "./function_runtime";
+import {UPLOAD_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
-// Safe rollout: keep App Check optional until mobile clients are fully configured.
-const ENFORCE_APP_CHECK = process.env.ENFORCE_APPCHECK === "true";
 const VIDEO_UPLOADS_ENABLED = process.env.VIDEO_UPLOADS_ENABLED !== "false";
 const MAX_VIDEO_UPLOADS_PER_DAY = parsePositiveIntEnv(
   process.env.MAX_VIDEO_UPLOADS_PER_DAY,
@@ -512,7 +510,7 @@ const asPositiveInt = (value: unknown): number | undefined => {
 /* -------------------------------------------------------------------------- */
 
 export const createUploadSession = onCall(
-  {...LOW_CPU_CALLABLE_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
+  UPLOAD_CALLABLE_OPTIONS,
   async (request): Promise<Record<string, unknown>> => {
     const {uid, token} = await resolveCallableAuth(request);
     await assertUploadCallerEligible(
@@ -626,7 +624,7 @@ export const createUploadSession = onCall(
 /* -------------------------------------------------------------------------- */
 
 export const requestThumbnailUploadUrl = onCall(
-  {...LOW_CPU_CALLABLE_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
+  UPLOAD_CALLABLE_OPTIONS,
   async (request): Promise<Record<string, unknown>> => {
     const {uid, token} = await resolveCallableAuth(request);
     await assertUploadCallerEligible(
@@ -704,7 +702,7 @@ export const requestThumbnailUploadUrl = onCall(
 /* -------------------------------------------------------------------------- */
 
 export const finalizeUpload = onCall(
-  {...LOW_CPU_CALLABLE_OPTIONS, enforceAppCheck: ENFORCE_APP_CHECK},
+  UPLOAD_CALLABLE_OPTIONS,
   async (request): Promise<Record<string, unknown>> => {
     const {uid, token} = await resolveCallableAuth(request);
     await assertUploadCallerEligible(

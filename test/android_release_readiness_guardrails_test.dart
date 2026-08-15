@@ -107,6 +107,11 @@ void main() {
     expect(appCheckService, contains('TargetPlatform.android'));
     expect(appCheckService, contains('AndroidDebugProvider'));
     expect(appCheckService, contains('AndroidPlayIntegrityProvider'));
+    expect(appCheckService, contains('static Future<String?> getToken'));
+    expect(appCheckService, contains('static Future<bool> ensureReady'));
+    expect(appCheckService, contains('_activationFuture ??= _activate'));
+    expect(appCheckService, contains('developer.log'));
+    expect(appCheckService, isNot(contains('AppLogger.error')));
     expect(packageJson, contains('mobile:appcheck:debug:production'));
     expect(packageJson, contains('release:config:validate:playstore'));
     expect(packageJson, contains('release:android:check:playstore'));

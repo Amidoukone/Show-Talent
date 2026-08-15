@@ -194,46 +194,41 @@ void main() {
       },
     );
 
-    test(
-      'updateProfilePatch persists a list of maps with a blank sub-field '
-      'without throwing (club recruitment needs with no priority)',
-      () async {
-        final firestore = FakeFirebaseFirestore();
-        final user = _user(uid: 'club-1', name: 'Club Original');
-        final repository = _repository(firestore, uid: user.uid);
+    test('updateProfilePatch persists a list of maps with a blank sub-field '
+        'without throwing (club recruitment needs with no priority)', () async {
+      final firestore = FakeFirebaseFirestore();
+      final user = _user(uid: 'club-1', name: 'Club Original');
+      final repository = _repository(firestore, uid: user.uid);
 
-        await firestore.collection('users').doc(user.uid).set(user.toMap());
+      await firestore.collection('users').doc(user.uid).set(user.toMap());
 
-        // Mirrors ClubAdvancedFormState._parseNeeds(): an entry typed
-        // without a ":" yields a null priority.
-        final result = await repository.updateProfilePatch(user.uid, {
-          'clubProfile': {
-            'structureType': 'Club amateur',
-            'needs': [
-              {'position': 'Gardien', 'priority': '1'},
-              {'position': 'Attaquant', 'priority': null},
-            ],
-          },
-        });
+      // Mirrors ClubAdvancedFormState._parseNeeds(): an entry typed
+      // without a ":" yields a null priority.
+      final result = await repository.updateProfilePatch(user.uid, {
+        'clubProfile': {
+          'structureType': 'Club amateur',
+          'needs': [
+            {'position': 'Gardien', 'priority': '1'},
+            {'position': 'Attaquant', 'priority': null},
+          ],
+        },
+      });
 
-        final data = (await firestore.collection('users').doc(user.uid).get())
-            .data()!;
-        final clubProfile = Map<String, dynamic>.from(
-          data['clubProfile'] as Map,
-        );
-        final needs = List<Map<String, dynamic>>.from(
-          (clubProfile['needs'] as List).map(
-            (item) => Map<String, dynamic>.from(item as Map),
-          ),
-        );
+      final data = (await firestore.collection('users').doc(user.uid).get())
+          .data()!;
+      final clubProfile = Map<String, dynamic>.from(data['clubProfile'] as Map);
+      final needs = List<Map<String, dynamic>>.from(
+        (clubProfile['needs'] as List).map(
+          (item) => Map<String, dynamic>.from(item as Map),
+        ),
+      );
 
-        expect(needs, [
-          {'position': 'Gardien', 'priority': '1'},
-          {'position': 'Attaquant'},
-        ]);
-        expect(result.appliedPatch['clubProfile'], isNotNull);
-      },
-    );
+      expect(needs, [
+        {'position': 'Gardien', 'priority': '1'},
+        {'position': 'Attaquant'},
+      ]);
+      expect(result.appliedPatch['clubProfile'], isNotNull);
+    });
 
     test('hasAdvancedProfile ignores empty shells and false-only sections', () {
       final emptyShell = _user(uid: 'player-empty', name: 'Empty')
@@ -480,39 +475,36 @@ void main() {
       },
     );
 
-    test(
-      'watchUser keeps emitting the current user when only the private '
-      'contact doc changes (phone/birthDate-only edits)',
-      () async {
-        final firestore = FakeFirebaseFirestore();
-        final user = _user(uid: 'player-stream', name: 'Stream User');
-        final repository = _repository(firestore, uid: user.uid);
+    test('watchUser keeps emitting the current user when only the private '
+        'contact doc changes (phone/birthDate-only edits)', () async {
+      final firestore = FakeFirebaseFirestore();
+      final user = _user(uid: 'player-stream', name: 'Stream User');
+      final repository = _repository(firestore, uid: user.uid);
 
-        await firestore.collection('users').doc(user.uid).set(user.toMap());
+      await firestore.collection('users').doc(user.uid).set(user.toMap());
 
-        final events = <AppUser?>[];
-        final subscription = repository
-            .watchUser(user.uid, includePrivateFields: true)
-            .listen(events.add);
-        addTearDown(subscription.cancel);
+      final events = <AppUser?>[];
+      final subscription = repository
+          .watchUser(user.uid, includePrivateFields: true)
+          .listen(events.add);
+      addTearDown(subscription.cancel);
 
-        await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
 
-        // Exactly what a phone/birthDate-only edit does server-side: only
-        // users/{uid}/private/contact changes, the parent users/{uid} doc
-        // is untouched.
-        await firestore
-            .collection('users')
-            .doc(user.uid)
-            .collection('private')
-            .doc('contact')
-            .set({'phone': '+2250700000001'}, SetOptions(merge: true));
+      // Exactly what a phone/birthDate-only edit does server-side: only
+      // users/{uid}/private/contact changes, the parent users/{uid} doc
+      // is untouched.
+      await firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('private')
+          .doc('contact')
+          .set({'phone': '+2250700000001'}, SetOptions(merge: true));
 
-        await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
 
-        expect(events.any((u) => u?.phone == '+2250700000001'), isTrue);
-      },
-    );
+      expect(events.any((u) => u?.phone == '+2250700000001'), isTrue);
+    });
   });
 }
 
@@ -544,6 +536,7 @@ ProfileRepository _repository(
       signedIn: true,
       mockUser: MockUser(uid: uid, email: '$uid@example.com'),
     ),
+    appCheckReady: ({required forceRefresh, timeout}) async => true,
   );
 }
 

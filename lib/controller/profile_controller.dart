@@ -168,6 +168,18 @@ class ProfileController extends GetxController {
     return 'Impossible de mettre à jour le profil.';
   }
 
+  String _profilePhotoFailureMessage(Object error) {
+    if (error is FirebaseException && error.plugin == 'firebase_app_check') {
+      return 'Connexion sécurisée indisponible. Réessayez dans quelques instants.';
+    }
+
+    if (_isTransientFirestoreError(error)) {
+      return 'Connexion instable. Vérifiez votre réseau puis réessayez.';
+    }
+
+    return 'Impossible de mettre à jour la photo.';
+  }
+
   Future<void> _handleProtectedAccessDenied() async {
     if (!Get.isRegistered<UserController>()) {
       return;
@@ -580,10 +592,7 @@ class ProfileController extends GetxController {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
-      AdFeedback.error(
-        'Photo non mise à jour',
-        'Impossible de mettre à jour la photo.',
-      );
+      AdFeedback.error('Photo non mise à jour', _profilePhotoFailureMessage(e));
     } finally {
       isLoadingPhoto.value = false;
     }
