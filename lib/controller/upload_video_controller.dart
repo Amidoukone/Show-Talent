@@ -6,6 +6,8 @@ import 'package:get/get.dart';
 
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/video_observability_service.dart';
 import 'package:adfoot/services/videos/data/upload_client.dart';
 import 'package:adfoot/services/videos/upload_video_error_mapper.dart';
@@ -30,7 +32,23 @@ class _UploadStageException implements Exception {
 }
 
 class UploadVideoController extends GetxController {
-  static const Duration _optimizationOverallTimeout = Duration(seconds: 45);
+  // How long the upload screen keeps watching before it hands the user back
+  // to the feed with the "still processing" message.
+  //
+  // This was 45s, which was shorter than the work it was waiting for:
+  // optimizeMp4Video measured ~1m02 to ~1m24 warm and 4m14 on a cold
+  // instance, so the wait effectively always expired. Every successful upload
+  // ended on "optimisation en cours" and the video then disappeared — the
+  // profile only listed `status == 'ready'` videos, and the optimizer leaves
+  // them on `under_review` until an admin approves.
+  //
+  // 2 minutes covers the warm path with margin, so the common case now ends
+  // on the real outcome ("soumise à la revue") instead of a timeout. The cold
+  // path still expires, and that is fine: the profile grid now shows the
+  // video with its lifecycle badge, and admin approval sends a push
+  // (notifyVideoOwner in functions/src/admin_content_actions.ts). Raising
+  // this further would only trade an honest hand-off for a longer spinner.
+  static const Duration _optimizationOverallTimeout = Duration(seconds: 120);
   static const Duration _pollInterval = Duration(seconds: 10);
   // A cold createUploadSession Cloud Function instance plus a fresh Play
   // Integrity attestation can legitimately take longer than a few seconds on
@@ -49,9 +67,11 @@ class UploadVideoController extends GetxController {
     UploadClient? uploadClient,
     VideoObservabilityService? observability,
     UploadVideoRepository? uploadRepository,
+    AuthSessionService? authSessionService,
   }) : _uploadClient = uploadClient ?? UploadClient(),
        _observability = observability ?? VideoObservabilityService.instance,
-       _uploadRepository = uploadRepository ?? UploadVideoRepository();
+       _uploadRepository = uploadRepository ?? UploadVideoRepository(),
+       _authSessionService = authSessionService ?? AuthSessionService();
 
   File? selectedVideo;
   File? thumbnail;
@@ -62,6 +82,7 @@ class UploadVideoController extends GetxController {
   final UploadClient _uploadClient;
   final VideoObservabilityService _observability;
   final UploadVideoRepository _uploadRepository;
+  final AuthSessionService _authSessionService;
   CancelToken? _cancelToken;
 
   UploadSessionState? _activeSession;
@@ -257,6 +278,81 @@ class UploadVideoController extends GetxController {
     return null;
   }
 
+  /// Best-effort lookup of the uploader's profile.
+  ///
+  /// Returns `null` when the profile can't be hydrated — the upload proceeds
+  /// anyway. The profile is not authorization material: `finalizeUpload`
+  /// stamps the document with the uid decoded from the caller's ID token, and
+  /// `assertUploadCallerEligible` re-checks the role and account state
+  /// server-side. The only thing lost without it is the denormalized
+  /// `profilePhoto`, a cosmetic field the callable already treats as
+  /// optional.
+  ///
+  /// This used to throw "Impossible de charger le profil" and abort the whole
+  /// upload whenever the users/{uid} read was slow or failed — turning a
+  /// transient Firestore hiccup into a failed video upload for no security
+  /// benefit.
+  Future<AppUser?> _resolveCurrentUploadUser(int operation) async {
+    final authUid = _authSessionService.currentUid;
+    if (authUid == null || authUid.isEmpty) {
+      throw const _UploadStageException(
+        'auth-required',
+        VideoUiStrings.uploadAuthRequired,
+      );
+    }
+
+    if (!Get.isRegistered<UserController>()) {
+      return null;
+    }
+
+    final userController = Get.find<UserController>();
+    final cachedUser = userController.user;
+    if (cachedUser != null && cachedUser.uid == authUid) {
+      return cachedUser;
+    }
+
+    try {
+      await userController.ensureCurrentUserHydrated(force: true);
+    } catch (error, stackTrace) {
+      unawaited(
+        _observability.logUploadInfo(
+          event: 'upload_profile_hydration_skipped',
+          stage: 'prepare',
+          metadata: {
+            ..._uploadDiagnostics(operation: operation),
+            'error': error.toString(),
+          },
+        ),
+      );
+      AppLogger.debug(
+        '[UploadVideoController] profile hydration failed, continuing '
+        'without it: $error\n$stackTrace',
+      );
+      return null;
+    }
+
+    if (!_isCurrentOperation(operation)) {
+      return null;
+    }
+
+    final hydratedUser = userController.user;
+    if (hydratedUser != null && hydratedUser.uid == authUid) {
+      return hydratedUser;
+    }
+
+    unawaited(
+      _observability.logUploadInfo(
+        event: 'upload_profile_hydration_skipped',
+        stage: 'prepare',
+        metadata: {
+          ..._uploadDiagnostics(operation: operation),
+          'sessionLoadMessage': userController.sessionLoadMessage,
+        },
+      ),
+    );
+    return null;
+  }
+
   /* -------------------------------------------------------------------------- */
   /* Upload principal                                                          */
   /* -------------------------------------------------------------------------- */
@@ -294,11 +390,16 @@ class UploadVideoController extends GetxController {
     // percentage) while the upload session is still being negotiated, so a
     // slow/retrying App Check handshake reads as "in progress" instead of a
     // stalled progress bar frozen at a number that never moves.
-    uploadStage.value = VideoUiStrings.uploadStageInitialize;
+    uploadStage.value = VideoUiStrings.uploadStageLoadProfile;
 
     UploadSessionState session;
+    AppUser? uploadUser;
 
     try {
+      uploadUser = await _resolveCurrentUploadUser(operation);
+      if (!_isCurrentOperation(operation)) return;
+
+      uploadStage.value = VideoUiStrings.uploadStageInitialize;
       final fileSizeBytes =
           _preparedFileSizeBytes ?? await selectedVideo!.length();
       if (fileSizeBytes <= 0) {
@@ -408,14 +509,14 @@ class UploadVideoController extends GetxController {
       final durationSec = _preparedDurationSec;
       final w = _preparedWidth;
       final h = _preparedHeight;
-      final user = Get.find<UserController>().user;
+      final authUid = _authSessionService.currentUid ?? '';
 
       final finalized = await _uploadClient.finalizeUpload(
         sessionId: session.sessionId,
         metadata: {
           'id': session.sessionId,
-          'uid': user?.uid ?? '',
-          'profilePhoto': user?.photoProfil ?? '',
+          'uid': uploadUser?.uid ?? authUid,
+          'profilePhoto': uploadUser?.photoProfil ?? '',
           // songName is the legacy alias for description (not caption) —
           // Video.fromMap reads it back as description, see lib/models/video.dart.
           'description': desc,

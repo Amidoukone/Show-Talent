@@ -195,6 +195,52 @@ class _StatChip extends StatelessWidget {
   }
 }
 
+/// Visual treatment for a non-public lifecycle stage.
+class _VideoStateBadge {
+  const _VideoStateBadge({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  /// Returns `null` for a live video: the overwhelmingly common case must
+  /// stay visually clean, so only the states that need explaining get chrome.
+  static _VideoStateBadge? forVideo(Video video) {
+    switch (video.lifecycle) {
+      case VideoLifecycle.live:
+        return null;
+      case VideoLifecycle.processing:
+        return const _VideoStateBadge(
+          label: VideoUiStrings.videoStateProcessing,
+          icon: Icons.hourglass_top_rounded,
+          color: AdColors.info,
+        );
+      case VideoLifecycle.underReview:
+        return const _VideoStateBadge(
+          label: VideoUiStrings.videoStateUnderReview,
+          icon: Icons.shield_moon_outlined,
+          color: AdColors.warning,
+        );
+      case VideoLifecycle.moderated:
+        return const _VideoStateBadge(
+          label: VideoUiStrings.videoStateModerated,
+          icon: Icons.visibility_off_outlined,
+          color: AdColors.error,
+        );
+      case VideoLifecycle.failed:
+        return const _VideoStateBadge(
+          label: VideoUiStrings.videoStateFailed,
+          icon: Icons.error_outline_rounded,
+          color: AdColors.error,
+        );
+    }
+  }
+}
+
 class _VideoTile extends StatelessWidget {
   final Video video;
   final VoidCallback onTap;
@@ -215,22 +261,75 @@ class _VideoTile extends StatelessWidget {
       );
     }
 
+    // Only the owner ever receives a non-live video from the repository, so
+    // this badge is implicitly private to them (see fetchUserVideos).
+    final badge = _VideoStateBadge.forVideo(video);
+
+    Widget thumbnail = Image.network(
+      video.thumbnailUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => fallback(),
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          return child;
+        }
+
+        return fallback();
+      },
+    );
+
+    if (badge != null) {
+      // Dim the still so the badge stays readable over a bright frame, and so
+      // the tile reads as "not live yet" before the label is even parsed.
+      thumbnail = Stack(
+        fit: StackFit.expand,
+        children: [
+          thumbnail,
+          Container(color: Colors.black.withValues(alpha: 0.45)),
+          Positioned(
+            left: 4,
+            right: 4,
+            bottom: 4,
+            // Dark chip with a colored icon/label rather than a colored chip
+            // with white text: `warning` and `brand` are light enough that
+            // white-on-color would fail contrast, and a single chip treatment
+            // keeps the three states legible over any video frame.
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: AdColors.black.withValues(alpha: 0.72),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(badge.icon, size: 12, color: badge.color),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      badge.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: badge.color,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          video.thumbnailUrl,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => fallback(),
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) {
-              return child;
-            }
-
-            return fallback();
-          },
-        ),
+        child: thumbnail,
       ),
     );
   }

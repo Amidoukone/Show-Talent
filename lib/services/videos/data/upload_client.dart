@@ -161,6 +161,7 @@ class UploadClient {
     'failed-precondition',
     'not-found',
     'already-exists',
+    'resource-exhausted',
     'out-of-range',
     'unimplemented',
   };
@@ -635,6 +636,26 @@ class UploadClient {
     return digest.toString();
   }
 
+  // The server treats a repeated finalize as success (see finalizeUpload in
+  // functions/src/upload_session.ts). This catch is the safety net for the
+  // rollout window, where an app build can still be talking to a backend that
+  // predates that change: without it, a retry whose first attempt actually
+  // succeeded surfaces as a failed upload for a video that is already live.
+  static final RegExp _alreadyFinalizedPattern = RegExp(
+    r'd[eé]j[aà]\s+finalis',
+    caseSensitive: false,
+  );
+
+  bool _isAlreadyFinalizedError(Object error) {
+    if (error is! FirebaseFunctionsException) {
+      return false;
+    }
+    if (error.code != 'failed-precondition') {
+      return false;
+    }
+    return _alreadyFinalizedPattern.hasMatch(error.message ?? '');
+  }
+
   Future<bool> finalizeUpload({
     required String sessionId,
     required Map<String, dynamic> metadata,
@@ -643,11 +664,19 @@ class UploadClient {
       'finalizeUpload',
       options: HttpsCallableOptions(timeout: _callableTimeout),
     );
-    final data = await _callCallableWithRetry<Map<String, dynamic>>(
-      callable,
-      'finalizeUpload',
-      {'sessionId': sessionId, 'metadata': metadata},
-    );
-    return (data['ok'] as bool?) ?? false;
+
+    try {
+      final data = await _callCallableWithRetry<Map<String, dynamic>>(
+        callable,
+        'finalizeUpload',
+        {'sessionId': sessionId, 'metadata': metadata},
+      );
+      return (data['ok'] as bool?) ?? false;
+    } catch (error) {
+      if (_isAlreadyFinalizedError(error)) {
+        return true;
+      }
+      rethrow;
+    }
   }
 }

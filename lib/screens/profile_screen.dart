@@ -1,4 +1,6 @@
 // lib/screens/profile_screen.dart
+import 'dart:async';
+
 import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/video.dart';
@@ -24,6 +26,7 @@ import 'package:adfoot/widgets/video_manager.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/utils/video_ui_strings.dart';
 
 part 'profile_screen_widgets.dart';
 
@@ -195,6 +198,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<Video> _getVisibleVideos(List<Video> full) {
     if (full.length <= _visibleWindowSize) return full;
     return full.take(_visibleWindowSize).toList(growable: false);
+  }
+
+  /// Explains why tapping this tile did not open the player.
+  ///
+  /// Only reachable on the owner's own profile — nobody else is served a
+  /// non-live video (see ProfileRepository.fetchUserVideos).
+  void _notifyVideoNotPlayable(Video video) {
+    switch (video.lifecycle) {
+      case VideoLifecycle.live:
+        return;
+      case VideoLifecycle.processing:
+        AdFeedback.info(
+          VideoUiStrings.videoStateProcessing,
+          VideoUiStrings.videoNotPlayableProcessing,
+        );
+      case VideoLifecycle.underReview:
+        AdFeedback.info(
+          VideoUiStrings.videoStateUnderReview,
+          VideoUiStrings.videoNotPlayableUnderReview,
+        );
+      case VideoLifecycle.moderated:
+        AdFeedback.error(
+          VideoUiStrings.videoStateModerated,
+          VideoUiStrings.videoNotPlayableModerated,
+        );
+      case VideoLifecycle.failed:
+        AdFeedback.error(
+          VideoUiStrings.videoStateFailed,
+          VideoUiStrings.videoNotPlayableFailed,
+        );
+    }
   }
 
   @override
@@ -406,6 +440,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           return _VideoTile(
                             video: video,
                             onTap: () async {
+                              // The grid now also lists the owner's videos
+                              // that are still processing or awaiting admin
+                              // approval. Those have no playable asset (or no
+                              // clearance to play one), so they must never
+                              // reach the player — and the index handed to it
+                              // has to be recomputed against the playable
+                              // subset, not the grid position.
+                              if (!video.isPlayable) {
+                                _notifyVideoNotPlayable(video);
+                                return;
+                              }
+
+                              final playableVideos = visibleVideos
+                                  .where((item) => item.isPlayable)
+                                  .toList(growable: false);
+                              final playableIndex = playableVideos.indexWhere(
+                                (item) => item.id == video.id,
+                              );
+                              if (playableIndex < 0) {
+                                return;
+                              }
+
                               final contextKey = 'profile:${widget.uid}';
                               final videoController =
                                   FeatureControllerRegistry.ensureVideoController(
@@ -418,14 +474,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               await _profileController.pauseAll();
 
                               videoController.replaceVideos(
-                                visibleVideos,
-                                selectedIndex: index,
+                                playableVideos,
+                                selectedIndex: playableIndex,
                               );
 
                               await Get.to(
                                 () => ProfileVideoScrollView(
-                                  videos: visibleVideos,
-                                  initialIndex: index,
+                                  videos: playableVideos,
+                                  initialIndex: playableIndex,
                                   uid: widget.uid,
                                   contextKey: contextKey,
                                 ),
@@ -463,10 +519,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileLoadState(ProfileController controller) {
-    final errorMessage = controller.profileLoadErrorMessage;
-    if (errorMessage == null || errorMessage.trim().isEmpty) {
+    // Only spin while a load is genuinely running. Reaching this state with
+    // no load in flight and no attempt behind it used to leave a spinner that
+    // nothing would ever replace; re-arm the load instead so the screen
+    // always converges on a profile or on an actionable error.
+    if (controller.isLoadingUser) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+
+    if (!controller.hasAttemptedProfileLoad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(controller.updateUserId(widget.uid));
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    final errorMessage =
+        (controller.profileLoadErrorMessage?.trim().isNotEmpty ?? false)
+        ? controller.profileLoadErrorMessage!
+        : 'Chargement du profil impossible. Réessayez dans quelques instants.';
 
     return Scaffold(
       backgroundColor: kSurface,

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -48,19 +50,20 @@ void main() {
     expect(VideoUiStrings.formatPlaybackSpeed(1.0), '1x');
     expect(VideoUiStrings.formatPlaybackSpeed(1.5), '1.5x');
     expect(VideoUiStrings.formatPlaybackSpeed(0.75), '0.75x');
-    expect(
-      VideoUiStrings.selectPlaybackSpeed(1.5),
-      'Choisir la vitesse 1.5x',
-    );
+    expect(VideoUiStrings.selectPlaybackSpeed(1.5), 'Choisir la vitesse 1.5x');
   });
 
   test('video action and empty-state copy is centralized', () {
     expect(VideoUiStrings.emptyVideoFeedTitle, contains('vidéo'));
     expect(VideoUiStrings.emptyHomeVideoFeedTitle, contains('vidéo'));
     expect(
-        VideoUiStrings.emptyHomeVideoFeedPlayerMessage, contains('première'));
+      VideoUiStrings.emptyHomeVideoFeedPlayerMessage,
+      contains('première'),
+    );
     expect(
-        VideoUiStrings.emptyHomeVideoFeedPlayerMessage, contains('Soumettez'));
+      VideoUiStrings.emptyHomeVideoFeedPlayerMessage,
+      contains('Soumettez'),
+    );
     expect(VideoUiStrings.noInternetMessage, contains('réseau'));
     expect(VideoUiStrings.videoSearchUnavailable, contains('Réessayez'));
     expect(VideoUiStrings.emptyProfileVideoFeedMessage, contains('profil'));
@@ -81,10 +84,32 @@ void main() {
     expect(VideoUiStrings.uploadVideoButton, contains('Soumettre'));
     expect(VideoUiStrings.uploadSubmittedForReview, contains('revue admin'));
     expect(VideoUiStrings.uploadSubmittedForReview, contains('validation'));
-    expect(VideoUiStrings.uploadOptimizationPending, contains('revue admin'));
+    // Deliberately not "revue admin": at this point the video is still being
+    // optimized and has not reached moderation yet. What the message owes the
+    // user is somewhere to look and a promise it will come back to them —
+    // "it's processing", full stop, is what made an upload feel lost.
+    expect(VideoUiStrings.uploadOptimizationPending, contains('profil'));
+    expect(VideoUiStrings.uploadOptimizationPending, contains('notifié'));
     expect(VideoUiStrings.uploadReminder, contains('150 Mo'));
-    expect(VideoUiStrings.uploadCurrentStepLabel, contains('tape'));
+    expect(VideoUiStrings.uploadCurrentStepLabel, contains('Étape'));
     expect(VideoUiStrings.uploadStepPrepare, isNotEmpty);
     expect(VideoUiStrings.uploadStepFinalize, isNotEmpty);
+  });
+
+  test('video UI copy source stays UTF-8 and readable', () {
+    final source = File('lib/utils/video_ui_strings.dart').readAsStringSync();
+    final mojibakeMarkers = [
+      String.fromCharCode(0x00c3),
+      String.fromCharCode(0x00c2),
+      String.fromCharCode(0xfffd),
+    ];
+    final unicodeEscapeMarker = String.fromCharCodes([0x005c, 0x0075]);
+
+    for (final marker in mojibakeMarkers) {
+      expect(source, isNot(contains(marker)));
+    }
+    expect(source, isNot(contains(unicodeEscapeMarker)));
+    expect(source, contains('Vérifiez votre réseau'));
+    expect(source, contains('Téléversement'));
   });
 }

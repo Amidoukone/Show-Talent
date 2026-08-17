@@ -30,6 +30,10 @@ class UploadVideoErrorMapper {
         return VideoUiStrings.uploadAuthRequired;
       }
 
+      if (_isTransientCallableCode(error.code)) {
+        return VideoUiStrings.uploadConnectionUnstable;
+      }
+
       final message = (error.message ?? '').trim();
       if (message.isNotEmpty) {
         return message;
@@ -59,6 +63,19 @@ class UploadVideoErrorMapper {
       return VideoUiStrings.uploadUnknownError;
     }
     return normalized;
+  }
+
+  static bool _isTransientCallableCode(String code) {
+    switch (code) {
+      case 'unavailable':
+      case 'deadline-exceeded':
+      case 'internal':
+      case 'aborted':
+      case 'cancelled':
+        return true;
+      default:
+        return false;
+    }
   }
 
   // A statusCode means this came from _sendChunkWithRetry exhausting its

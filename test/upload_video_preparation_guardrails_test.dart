@@ -55,6 +55,17 @@ void main() {
     expect(controller, contains('final operation = ++_operationSerial;'));
     expect(controller, contains('_isCurrentOperation(operation)'));
     expect(controller, contains('_operationSerial++;'));
+    expect(controller, contains('Future<AppUser?> _resolveCurrentUploadUser'));
+    expect(controller, contains('ensureCurrentUserHydrated(force: true)'));
+    expect(controller, contains('VideoUiStrings.uploadStageLoadProfile'));
+    // A failed profile hydration must not abort the upload: the callable
+    // stamps the video with the uid from the ID token and re-checks the role
+    // server-side, so the profile is only a cosmetic profilePhoto lookup.
+    expect(controller, contains('upload_profile_hydration_skipped'));
+    expect(
+      controller,
+      isNot(contains("'profile-load-failed'")),
+    );
     expect(controller, contains('VideoUiStrings.uploadAlreadyInProgress'));
     expect(
       controller,
@@ -64,10 +75,14 @@ void main() {
     expect(controller, contains('VideoObservabilityService.instance'));
     expect(controller, contains('_observability.logUploadFailure'));
     expect(controller, contains('_uploadDiagnostics'));
+    // 45s used to expire before optimizeMp4Video had finished — measured at
+    // 1m02 to 4m14 in production — so the user was told "still processing"
+    // on essentially every upload. The wait must outlive a warm optimization
+    // pass; the pending message covers the cold-start tail.
     expect(
       controller,
       contains(
-        'static const Duration _optimizationOverallTimeout = Duration(seconds: 45);',
+        'static const Duration _optimizationOverallTimeout = Duration(seconds: 120);',
       ),
     );
     expect(controller, contains('await _releaseVideoProcessingResources();'));
@@ -122,6 +137,8 @@ void main() {
     expect(strings, contains('uploadMissingRequiredFields'));
     expect(strings, contains('uploadReminder'));
     expect(strings, contains('uploadSubmittedForReview'));
+    expect(strings, contains('uploadProfileLoadFailed'));
+    expect(strings, contains('uploadStageLoadProfile'));
     expect(strings, contains('maxFileSizeChip'));
   });
 

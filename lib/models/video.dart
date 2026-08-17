@@ -172,6 +172,40 @@ class VideoPlaybackContract {
   }
 }
 
+/// Where a video sits between "the upload finished" and "other people can
+/// watch it".
+///
+/// The backend spreads this across three fields — `status`, `optimized` and
+/// `moderationStatus` — and the transitions are not obvious from any one of
+/// them: `optimizeMp4Video` (functions/src/index.ts) lands a freshly uploaded
+/// video on `status: "under_review"`, *not* `ready`, and only an admin
+/// decision promotes it to `ready`. Reading `status == 'ready'` alone is
+/// therefore indistinguishable from "does not exist", which is exactly how an
+/// author's own video used to vanish from their profile the moment they
+/// finished uploading it.
+enum VideoLifecycle {
+  /// Uploaded, waiting for (or inside) the ffmpeg optimization pass.
+  processing,
+
+  /// Optimized, queued for admin moderation. Not visible to anyone else yet.
+  underReview,
+
+  /// Approved and public.
+  live,
+
+  /// Taken off the public feed by an admin decision (`hidden` / `removed`).
+  ///
+  /// Distinct from [underReview] on purpose. An admin who hides or removes a
+  /// video has already decided; without this state the author kept seeing
+  /// "en validation" and waited for an approval that was never coming. It is
+  /// also distinct from [failed], which is about the video breaking, not
+  /// about a human judging it.
+  moderated,
+
+  /// Optimization or moderation ended badly. Terminal.
+  failed,
+}
+
 class Video {
   String id;
   String videoUrl;
@@ -185,6 +219,8 @@ class Video {
   List<String> reports;
   int reportCount;
   String? status;
+  String? moderationStatus;
+  bool optimized;
   List<VideoSource> sources;
   VideoPlaybackContract? playback;
   String? resolvedUrl;
@@ -202,10 +238,57 @@ class Video {
     this.reports = const [],
     this.reportCount = 0,
     this.status,
+    this.moderationStatus,
+    this.optimized = false,
     this.sources = const [],
     this.playback,
     this.resolvedUrl,
   });
+
+  static const Set<String> _failureStatuses = {'error', 'failed', 'failure'};
+
+  /// Admin decisions that pull a video off the public feed.
+  ///
+  /// `adminSetVideoStatus` (functions/src/admin_content_actions.ts) writes
+  /// these to both `status` and `moderationStatus`.
+  static const Set<String> _moderatedStatuses = {'hidden', 'removed'};
+
+  /// Lifecycle stage derived from the backend's three fields.
+  ///
+  /// Order matters: a failure wins over everything (a rejected video may
+  /// still carry `optimized: true`), and `ready` wins over the moderation
+  /// field because admin approval is what sets it.
+  VideoLifecycle get lifecycle {
+    final normalizedStatus = (status ?? '').trim().toLowerCase();
+    final normalizedModeration = (moderationStatus ?? '').trim().toLowerCase();
+
+    if (_failureStatuses.contains(normalizedStatus) ||
+        normalizedModeration == 'rejected') {
+      return VideoLifecycle.failed;
+    }
+    if (normalizedStatus == 'ready') {
+      return VideoLifecycle.live;
+    }
+    // Before the `optimized` fallback below: a hidden or removed video is
+    // still `optimized: true`, so testing optimization first would report it
+    // as merely awaiting review — an approval that will never arrive.
+    if (_moderatedStatuses.contains(normalizedStatus) ||
+        _moderatedStatuses.contains(normalizedModeration)) {
+      return VideoLifecycle.moderated;
+    }
+    if (normalizedStatus == 'under_review' || optimized) {
+      return VideoLifecycle.underReview;
+    }
+    return VideoLifecycle.processing;
+  }
+
+  /// True when this video has a playable asset *and* is cleared for playback.
+  ///
+  /// An `under_review` video already has a `videoUrl` — the optimizer wrote
+  /// one — so a URL check alone would happily feed an unapproved video into
+  /// the player. Both conditions are required.
+  bool get isPlayable =>
+      lifecycle == VideoLifecycle.live && effectiveUrl.isNotEmpty;
 
   factory Video.fromMap(Map<String, dynamic> map) {
     String readString(dynamic value) =>
@@ -282,6 +365,8 @@ class Video {
           : const <String>[],
       reportCount: _asInt(map['reportCount']) ?? 0,
       status: map['status']?.toString(),
+      moderationStatus: map['moderationStatus']?.toString(),
+      optimized: map['optimized'] == true,
       sources: mergedSources,
       playback: playback,
     );
@@ -307,6 +392,8 @@ class Video {
       'reports': reports,
       'reportCount': reportCount,
       'status': status,
+      'moderationStatus': moderationStatus,
+      'optimized': optimized,
       'sources': sources.map((source) => source.toMap()).toList(),
       if (playback != null) 'playback': playback!.toMap(),
     };

@@ -41,6 +41,12 @@ void main() {
       final errorMapper = File(
         'lib/services/videos/upload_video_error_mapper.dart',
       ).readAsStringSync();
+      final uploadClient = File(
+        'lib/services/videos/data/upload_client.dart',
+      ).readAsStringSync();
+      final uploadRepository = File(
+        'lib/services/videos/upload_video_repository.dart',
+      ).readAsStringSync();
 
       expect(content, contains("status == 'ready' && optimized"));
       expect(
@@ -55,12 +61,25 @@ void main() {
       expect(content, contains('VideoUiStrings.uploadSubmittedForReview'));
       expect(content, isNot(contains("'videoId': videoId")));
       expect(content, isNot(contains("'autoplay': true")));
+      // Through the service, not the Firebase SDK: controllers must keep
+      // Firebase access behind services (see architecture_guardrails_test).
+      expect(content, contains('_authSessionService.currentUid'));
+      expect(content, isNot(contains('FirebaseAuth.instance')));
+      expect(content, contains('Get.isRegistered<UserController>()'));
+      expect(content, contains('_resolveCurrentUploadUser'));
+      expect(content, contains('ensureCurrentUserHydrated(force: true)'));
+      expect(content, contains('VideoUiStrings.uploadStageLoadProfile'));
       expect(content, contains('UploadVideoErrorMapper.toUserMessage(error)'));
       expect(errorMapper, contains("if (error.code == 'unauthenticated')"));
       expect(
         errorMapper.indexOf("if (error.code == 'unauthenticated')"),
         lessThan(errorMapper.indexOf("final message = (error.message ?? '')")),
       );
+      expect(errorMapper, contains('_isTransientCallableCode'));
+      expect(uploadClient, contains("'resource-exhausted',"));
+      expect(uploadRepository, contains('processingReadTimeout'));
+      expect(uploadRepository, contains('processingWatchTimeout'));
+      expect(uploadRepository, contains('.timeout(processingReadTimeout)'));
     });
 
     test('upload callables use production-safe runtime options', () {
@@ -74,12 +93,69 @@ void main() {
       expect(runtime, contains('UPLOAD_CALLABLE_OPTIONS'));
       expect(runtime, contains('UPLOAD_CALLABLE_MIN_INSTANCES'));
       expect(runtime, contains('UPLOAD_CALLABLE_TIMEOUT_SECONDS'));
-      expect(runtime, contains('ENFORCE_APP_CHECK ? 1 : 0'));
-      expect(uploadSession, contains('import {UPLOAD_CALLABLE_OPTIONS}'));
+      // The warm instance must not be tied to the App Check posture: the
+      // upload callables sit on the critical path of the app's core feature
+      // whether or not attestation is enforced. Coupling them meant relaxing
+      // App Check silently reintroduced cold starts.
+      expect(runtime, isNot(contains('ENFORCE_APP_CHECK ? 1 : 0')));
+      expect(runtime, contains('APP_CHECK_MODE'));
+      expect(runtime, contains('logAppCheckState'));
+      expect(uploadSession, contains('UPLOAD_CALLABLE_OPTIONS'));
       expect(uploadSession, contains('createUploadSession = onCall('));
       expect(uploadSession, contains('requestThumbnailUploadUrl = onCall('));
       expect(uploadSession, contains('finalizeUpload = onCall('));
       expect(uploadSession, isNot(contains('LOW_CPU_CALLABLE_OPTIONS')));
+    });
+
+    test('finalizeUpload is idempotent for the owner', () {
+      final uploadSession = File(
+        'functions/src/upload_session.ts',
+      ).readAsStringSync();
+      final uploadClient = File(
+        'lib/services/videos/data/upload_client.dart',
+      ).readAsStringSync();
+
+      // A retried finalize whose first attempt already succeeded must report
+      // success, not failed-precondition: production logs showed a user told
+      // their upload had failed while the video was already ready, optimized
+      // and public. The protection is "perform no write", not "throw".
+      expect(uploadSession, contains('alreadyFinalized: true'));
+
+      final finalizeIndex = uploadSession.indexOf('finalizeUpload = onCall(');
+      expect(finalizeIndex, isNonNegative);
+
+      // Comments are stripped first: the explanation above the guard quotes
+      // the old error message on purpose, and matching it there would make
+      // this assertion pass or fail on prose rather than on code.
+      final finalizeCode = uploadSession
+          .substring(finalizeIndex)
+          .split('\n')
+          .where((line) {
+            final trimmed = line.trimLeft();
+            return !trimmed.startsWith('//') && !trimmed.startsWith('*');
+          })
+          .join('\n');
+      expect(finalizeCode, isNot(contains('Session upload deja finalisee')));
+
+      // Client-side net for the window where an older app build still talks
+      // to a backend that predates the server fix.
+      expect(uploadClient, contains('_isAlreadyFinalizedError'));
+      expect(uploadClient, contains('_alreadyFinalizedPattern'));
+    });
+
+    test('video optimization is not serialized to a single instance', () {
+      final index = File('functions/src/index.ts').readAsStringSync();
+      final productionEnv = File(
+        'functions/.env.production.example',
+      ).readAsStringSync();
+
+      // maxInstances: 1 was a throughput ceiling, not a cost control: with no
+      // minInstances an idle optimizer costs nothing at any cap, so pinning it
+      // at 1 only queued every upload behind the previous one.
+      expect(index, contains('OPTIMIZE_MAX_INSTANCES'));
+      expect(index, contains('maxInstances: OPTIMIZE_MAX_INSTANCES'));
+      expect(index, isNot(contains('maxInstances: 1,')));
+      expect(productionEnv, contains('OPTIMIZE_MAX_INSTANCES='));
     });
 
     test('push notification copy is normalized before FCM send', () {

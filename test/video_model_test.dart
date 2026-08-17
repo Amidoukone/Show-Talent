@@ -250,4 +250,74 @@ void main() {
     ]);
     expect(video.playback?.effectiveModeForSourceType('mp4'), 'mp4_only');
   });
+
+  group('lifecycle mirrors what the admin backend writes', () {
+    Video build(Map<String, dynamic> overrides) => Video.fromMap({
+      'id': 'v1',
+      'videoUrl': 'https://cdn.example.com/video.mp4',
+      'uid': 'author-1',
+      ...overrides,
+    });
+
+    test('a freshly uploaded video is processing, then under review', () {
+      expect(
+        build({'status': 'processing', 'optimized': false}).lifecycle,
+        VideoLifecycle.processing,
+      );
+      // optimizeMp4Video lands on under_review, not ready.
+      expect(
+        build({'status': 'under_review', 'optimized': true}).lifecycle,
+        VideoLifecycle.underReview,
+      );
+    });
+
+    test('only an admin approval makes a video live and playable', () {
+      final approved = build({
+        'status': 'ready',
+        'optimized': true,
+        'moderationStatus': 'approved',
+      });
+      expect(approved.lifecycle, VideoLifecycle.live);
+      expect(approved.isPlayable, isTrue);
+    });
+
+    test('hidden and removed read as a decision, not as a pending wait', () {
+      // adminSetVideoStatus leaves optimized: true on these, so the earlier
+      // "optimized means under review" fallback reported them as awaiting an
+      // approval that was never coming.
+      for (final status in const ['hidden', 'removed']) {
+        final video = build({'status': status, 'optimized': true});
+        expect(
+          video.lifecycle,
+          VideoLifecycle.moderated,
+          reason: 'status=$status',
+        );
+        expect(video.isPlayable, isFalse);
+      }
+
+      expect(
+        build({
+          'status': 'under_review',
+          'optimized': true,
+          'moderationStatus': 'hidden',
+        }).lifecycle,
+        VideoLifecycle.moderated,
+      );
+    });
+
+    test('a rejection and a broken encode are both terminal failures', () {
+      expect(
+        build({
+          'status': 'under_review',
+          'optimized': true,
+          'moderationStatus': 'rejected',
+        }).lifecycle,
+        VideoLifecycle.failed,
+      );
+      expect(
+        build({'status': 'error', 'optimized': false}).lifecycle,
+        VideoLifecycle.failed,
+      );
+    });
+  });
 }

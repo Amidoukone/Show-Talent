@@ -38,12 +38,26 @@ class ProfileController extends GetxController {
   static const ProfileFieldDelete deleteField = ProfileRepository.deleteField;
   static const int maxCvPdfBytes = ProfileRepository.maxCvPdfBytes;
   static const Duration _userRefreshTimeout = Duration(seconds: 8);
+  static const Duration _profileLoadTimeout = Duration(seconds: 25);
 
   ProfileController({ProfileRepository? profileRepository})
     : _profileRepository = profileRepository ?? ProfileRepository();
 
   final ProfileRepository _profileRepository;
   final VideoManager _videoManager = VideoManager();
+
+  /// True when [uid] is the signed-in user, i.e. this profile's videos may be
+  /// listed in every lifecycle state rather than only the public `ready` ones.
+  ///
+  /// Reads the uid off the repository, like every other auth check in this
+  /// controller. Injecting an AuthSessionService for it instead would build a
+  /// FirebaseAuth *and* a FirebaseFunctions client eagerly in the
+  /// constructor, which makes ProfileController unconstructible wherever
+  /// Firebase has not been initialized.
+  bool isOwnProfile(String uid) {
+    final currentUid = _profileRepository.currentAuthUid;
+    return currentUid != null && currentUid.isNotEmpty && currentUid == uid;
+  }
 
   AppUser? user;
   StreamSubscription<AppUser?>? _userSubscription;
@@ -65,6 +79,7 @@ class ProfileController extends GetxController {
   bool _hasMoreVideos = true;
   bool _isLoadingVideos = false;
   Completer<void>? _loadingCompleter;
+  int _profileLoadSerial = 0;
 
   bool get hasMoreVideos => _hasMoreVideos;
   bool get isLoadingVideos => _isLoadingVideos;
@@ -217,30 +232,54 @@ class ProfileController extends GetxController {
     }
   }
 
+  /// True once a profile load attempt has settled for this controller.
+  ///
+  /// Lets the screen tell "still loading" apart from "loaded nothing", so a
+  /// `user == null` state can never render as a spinner with no attempt
+  /// behind it and nothing left to complete it.
+  bool hasAttemptedProfileLoad = false;
+
   Future<void> updateUserId(String uid) async {
+    final requestSerial = ++_profileLoadSerial;
     isLoadingUser = true;
     profileLoadErrorTitle = null;
     profileLoadErrorMessage = null;
+    if (user?.uid != uid) {
+      user = null;
+      videoList.clear();
+      _lastVideoCursor = null;
+      _hasMoreVideos = true;
+    }
     update();
 
     try {
-      final fetchedUser = await _profileRepository.fetchUser(
-        uid,
-        includePrivateFields: uid == _profileRepository.currentAuthUid,
-      );
+      final fetchedUser = await _profileRepository
+          .fetchUser(
+            uid,
+            includePrivateFields: uid == _profileRepository.currentAuthUid,
+          )
+          .timeout(_profileLoadTimeout);
+      if (requestSerial != _profileLoadSerial) {
+        return;
+      }
       if (fetchedUser == null) {
         throw const ProfileLoadException('Profil introuvable.');
       }
 
       user = fetchedUser;
       isLoadingUser = false;
+      hasAttemptedProfileLoad = true;
       update();
 
       _startUserListener(uid);
       await fetchUserVideos(uid, isRefresh: true);
     } catch (e, st) {
+      if (requestSerial != _profileLoadSerial) {
+        return;
+      }
       AppLogger.debug('updateUserId error: $e\n$st');
       isLoadingUser = false;
+      hasAttemptedProfileLoad = true;
       profileLoadErrorTitle = 'Profil indisponible';
       profileLoadErrorMessage = _profileLoadErrorMessage(e);
       update();
@@ -252,6 +291,22 @@ class ProfileController extends GetxController {
         'Profil indisponible',
         'Chargement du profil impossible.',
       );
+    } finally {
+      // Guarantees the screen can always leave its loading state: a settled
+      // attempt that produced neither a profile nor an error message would
+      // otherwise render as a spinner nothing will ever replace.
+      if (requestSerial == _profileLoadSerial) {
+        isLoadingUser = false;
+        hasAttemptedProfileLoad = true;
+        if (user == null &&
+            (profileLoadErrorMessage == null ||
+                profileLoadErrorMessage!.trim().isEmpty)) {
+          profileLoadErrorTitle = 'Profil indisponible';
+          profileLoadErrorMessage =
+              'Chargement du profil impossible. Réessayez dans quelques instants.';
+        }
+        update();
+      }
     }
   }
 
@@ -625,6 +680,7 @@ class ProfileController extends GetxController {
         uid: uid,
         limit: _videoFetchLimit,
         after: isRefresh ? null : _lastVideoCursor,
+        includeAllStates: isOwnProfile(uid),
       );
       if (page.fetchedCount == 0) {
         _hasMoreVideos = false;
@@ -804,11 +860,6 @@ class ProfileController extends GetxController {
   Future<void> pauseAll() async {
     final ctx = 'profile:${user?.uid ?? ''}';
     await _videoManager.pauseAll(ctx);
-  }
-
-  bool get isOwnProfile {
-    final current = _profileRepository.currentAuthUid;
-    return current != null && current == user?.uid;
   }
 
   void applyLocalFollowerChange({
