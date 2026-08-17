@@ -32,11 +32,26 @@ const STORAGE_BUCKET =
   FIREBASE_CONFIG?.storageBucket ||
   defaultStorageBucket(process.env.GCLOUD_PROJECT) ||
   "adfoot-production.firebasestorage.app";
+// maxInstances: 1 serialized *every* video optimization in the whole service.
+// Measured in production: 4m14s for a cold first run, then ~1m to 1m30 each.
+// At that rate a burst of uploads queues linearly — twenty near-simultaneous
+// uploads left the last user waiting half an hour, and pending Storage events
+// eventually expire rather than wait forever.
+//
+// Raising the ceiling costs nothing at rest: there is no minInstances here, so
+// instances exist only while an encode is actually running. It raises peak
+// concurrent spend during a burst, which is the trade this feature needs —
+// video is the product. Tunable per environment so the ceiling can be moved
+// without a code change.
+const OPTIMIZE_MAX_INSTANCES = parsePositiveIntEnv(
+  process.env.OPTIMIZE_MAX_INSTANCES,
+  3,
+);
 const OPTIMIZE_TRIGGER_OPTIONS = {
   region: OPTIMIZE_TRIGGER_REGION,
   memory: "2GiB" as const,
   timeoutSeconds: 540,
-  maxInstances: 1,
+  maxInstances: OPTIMIZE_MAX_INSTANCES,
   ...(STORAGE_BUCKET ? {bucket: STORAGE_BUCKET} : {}),
 };
 const MAX_OPTIMIZE_FILE_SIZE_BYTES = parsePositiveIntEnv(

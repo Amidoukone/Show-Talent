@@ -9,6 +9,7 @@ import {db, fieldValue, messaging, storage} from "./firebase";
 import {MOBILE_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 import {normalizeNotificationText} from "./notification_text";
+import {handlePushSendError, isUnregisteredTokenError, pruneUnregisteredToken} from "./push_delivery";
 
 type SuccessResponse<T> = {
   success: true;
@@ -40,6 +41,56 @@ const err = (code: string, message: string, retriable = false): ErrorResponse =>
   message,
   retriable,
 });
+
+/**
+ * Reads a positive integer from the environment, falling back on nonsense.
+ *
+ * @param {string | undefined} rawValue Raw environment variable value.
+ * @param {number} fallback Value used when the variable is unset or invalid.
+ * @return {number} Parsed integer or fallback.
+ */
+function parsePositiveIntEnv(
+  rawValue: string | undefined,
+  fallback: number,
+): number {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return Math.round(parsed);
+}
+
+// Blast-radius controls on the outbound push paths.
+//
+// These are the only mobile callables whose effect reaches beyond the caller:
+// one authenticated sendOfferFanout pushes a notification to *every* player in
+// the database. Ownership of the offer is checked, but owning an offer places
+// no ceiling on how often it may be announced, so nothing stopped a single
+// account from notifying the whole user base in a loop — at real FCM cost and
+// with users uninstalling over the spam.
+//
+// This matters more than it would elsewhere because App Check runs in "soft"
+// mode by design (see function_runtime.ts): there is no platform attestation
+// gate in front of these handlers, so the ceiling has to live here.
+// 10/hour, not tighter. The mobile client treats a fanout failure as silent
+// (ToastLevel.none) so the offer still publishes — which means a ceiling low
+// enough to catch a busy recruiter would drop real announcements with nobody
+// ever told. One fanout per published offer is the legitimate shape; ten in an
+// hour is already far past it, while still bounding a scripted loop.
+const MAX_FANOUTS_PER_HOUR = parsePositiveIntEnv(
+  process.env.MAX_FANOUTS_PER_HOUR,
+  10,
+);
+const FANOUT_WINDOW_MS = 60 * 60 * 1000;
+
+// Chat is the caller here, one push per message sent. Generous enough that a
+// heated real conversation never trips it, low enough to bound a scripted
+// loop. Rejection is safe by construction: ChatController.sendMessage already
+// treats push delivery as non-blocking, so the message itself still lands.
+const MAX_DIRECT_PUSHES_PER_MINUTE = parsePositiveIntEnv(
+  process.env.MAX_DIRECT_PUSHES_PER_MINUTE,
+  30,
+);
 
 type AuthenticatedCallableRequestLike = {
   auth?: {uid?: string; token?: Record<string, unknown> | null} | null;
@@ -545,21 +596,33 @@ async function assertEventOwner(senderUid: string, eventId: string): Promise<voi
   }
 }
 
-async function listPlayerTokens(excludedUid: string): Promise<string[]> {
+/** One reachable player: the token to send to, and who it belongs to. */
+type PlayerPushTarget = {uid: string; token: string};
+
+// Carries the uid alongside the token. Dropping it — as this used to, by
+// collecting bare tokens into a Set — makes the per-recipient failures that
+// sendEachForMulticast reports unattributable, so a dead token can never be
+// cleaned up and stays in the fanout forever, burning a send on every offer
+// and every event for the lifetime of the account.
+async function listPlayerTargets(
+  excludedUid: string,
+): Promise<PlayerPushTarget[]> {
   const usersSnap = await db
     .collection("users")
     .where("role", "==", "joueur")
     .select("fcmToken")
     .get();
 
-  const uniqueTokens = new Set<string>();
+  const byToken = new Map<string, PlayerPushTarget>();
   for (const doc of usersSnap.docs) {
     if (doc.id === excludedUid) continue;
     const token = getString(doc.data(), "fcmToken");
-    if (token) uniqueTokens.add(token);
+    if (token && !byToken.has(token)) {
+      byToken.set(token, {uid: doc.id, token});
+    }
   }
 
-  return Array.from(uniqueTokens);
+  return Array.from(byToken.values());
 }
 
 async function sendFanoutToPlayers(params: {
@@ -569,17 +632,18 @@ async function sendFanoutToPlayers(params: {
   contextType: "offre" | "event";
   contextData: string;
 }): Promise<FanoutStats> {
-  const tokens = await listPlayerTokens(params.senderUid);
-  if (!tokens.length) {
+  const targets = await listPlayerTargets(params.senderUid);
+  if (!targets.length) {
     return {targeted: 0, sent: 0, failed: 0};
   }
 
   let sent = 0;
   let failed = 0;
+  let pruned = 0;
 
-  for (const tokenChunk of chunkArray(tokens, 500)) {
+  for (const chunk of chunkArray(targets, 500)) {
     const response = await messaging.sendEachForMulticast({
-      tokens: tokenChunk,
+      tokens: chunk.map((target) => target.token),
       notification: {
         title: normalizeNotificationText(params.title, 120),
         body: normalizeNotificationText(params.body, 300),
@@ -607,10 +671,38 @@ async function sendFanoutToPlayers(params: {
 
     sent += response.successCount;
     failed += response.failureCount;
+
+    // responses is index-aligned with the tokens we submitted, which is what
+    // makes the uid recoverable here.
+    if (response.failureCount > 0) {
+      const prunes: Promise<boolean>[] = [];
+      response.responses.forEach((result, index) => {
+        if (result.success || !isUnregisteredTokenError(result.error)) {
+          return;
+        }
+        const target = chunk[index];
+        if (!target) return;
+        prunes.push(
+          pruneUnregisteredToken({
+            uid: target.uid,
+            token: target.token,
+            reason: `fanout_${params.contextType}`,
+          }),
+        );
+      });
+      pruned += (await Promise.all(prunes)).filter(Boolean).length;
+    }
+  }
+
+  if (pruned > 0) {
+    logger.info("fanout pruned unregistered tokens", {
+      contextType: params.contextType,
+      pruned,
+    });
   }
 
   return {
-    targeted: tokens.length,
+    targeted: targets.length,
     sent,
     failed,
   };
@@ -635,6 +727,12 @@ export const sendUserPush = onCall(
     }
 
     await assertPushPermission(uid, recipientUid, contextType, contextData);
+    await enforceCallRateLimit(
+      "push_call_limits",
+      `directPush_${uid}`,
+      MAX_DIRECT_PUSHES_PER_MINUTE,
+      60_000,
+    );
 
     const userSnap = await db.collection("users").doc(recipientUid).get();
     if (!userSnap.exists) {
@@ -673,6 +771,20 @@ export const sendUserPush = onCall(
 
       return ok("sent", "Notification envoyée.", {sent: true});
     } catch (error) {
+      // An unregistered token is a permanent condition, not a hiccup: the
+      // recipient reinstalled or restored the app and the stored token will
+      // now fail every single time. Clear it and answer accordingly, so the
+      // caller does not retry a send that can never succeed.
+      const unregistered = await handlePushSendError({
+        error,
+        uid: recipientUid,
+        token,
+        reason: "user_push",
+      });
+      if (unregistered) {
+        return err("token_stale", "Destinataire injoignable (token expiré).");
+      }
+
       logger.error("❌ sendUserPush error", error);
       return err("push_failed", "Échec envoi notification.", true);
     }
@@ -722,6 +834,12 @@ export const sendOfferFanout = onCall(
     }
 
     await assertOfferOwner(uid, offerId);
+    await enforceCallRateLimit(
+      "push_call_limits",
+      `fanout_${uid}`,
+      MAX_FANOUTS_PER_HOUR,
+      FANOUT_WINDOW_MS,
+    );
 
     const title =
       getString(request.data, "title").slice(0, 120) ||
@@ -757,6 +875,14 @@ export const sendEventFanout = onCall(
     }
 
     await assertEventOwner(uid, eventId);
+    // Shares the counter with sendOfferFanout on purpose: the cost and the
+    // spam land on the same players regardless of which one produced them.
+    await enforceCallRateLimit(
+      "push_call_limits",
+      `fanout_${uid}`,
+      MAX_FANOUTS_PER_HOUR,
+      FANOUT_WINDOW_MS,
+    );
 
     const title =
       getString(request.data, "title").slice(0, 120) ||

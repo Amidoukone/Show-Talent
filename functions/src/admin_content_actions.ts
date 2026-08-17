@@ -12,6 +12,7 @@ import {
   getString,
 } from "./admin_account_support";
 import {normalizeNotificationText} from "./notification_text";
+import {handlePushSendError} from "./push_delivery";
 
 const OFFER_STATUSES = new Set(["brouillon", "ouverte", "fermee", "archivee"]);
 const EVENT_STATUSES = new Set(["brouillon", "ouvert", "ferme", "archive"]);
@@ -580,32 +581,45 @@ async function notifyVideoOwner(params: {
       return false;
     }
 
-    await messaging.send({
-      token,
-      notification: {
-        title: normalizeNotificationText(params.title, 120),
-        body: normalizeNotificationText(params.body, 300),
-      },
-      data: {
-        type: "video_moderation",
-        videoId: params.videoId,
-        decision: params.decision,
-      },
-      android: {
-        priority: "high",
+    try {
+      await messaging.send({
+        token,
         notification: {
-          channelId: "high_importance_channel",
-          sound: "default",
+          title: normalizeNotificationText(params.title, 120),
+          body: normalizeNotificationText(params.body, 300),
         },
-      },
-      apns: {
-        payload: {
-          aps: {
+        data: {
+          type: "video_moderation",
+          videoId: params.videoId,
+          decision: params.decision,
+        },
+        android: {
+          priority: "high",
+          notification: {
+            channelId: "high_importance_channel",
             sound: "default",
           },
         },
-      },
-    });
+        apns: {
+          payload: {
+            aps: {
+              sound: "default",
+            },
+          },
+        },
+      });
+    } catch (sendError) {
+      // A dead token is not a transient failure: left in place it makes every
+      // future notification to this author fail silently, forever. Clearing it
+      // lets the next sign-in re-register a live one.
+      await handlePushSendError({
+        error: sendError,
+        uid: params.ownerUid,
+        token,
+        reason: "video_moderation",
+      });
+      throw sendError;
+    }
 
     return true;
   } catch (error) {

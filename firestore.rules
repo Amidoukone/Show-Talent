@@ -545,6 +545,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Push rate-limit counters (sendOfferFanout / sendEventFanout /
+    // sendUserPush). Written only by Cloud Functions through the Admin SDK,
+    // which bypasses these rules; spelled out rather than left to the
+    // catch-all so a client can never read its own remaining budget or reset
+    // the window.
+    match /push_call_limits/{docId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

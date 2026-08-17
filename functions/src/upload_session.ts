@@ -6,7 +6,7 @@
 import {createHash, randomUUID} from "crypto";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {db, fieldValue, storage} from "./firebase";
-import {UPLOAD_CALLABLE_OPTIONS} from "./function_runtime";
+import {UPLOAD_CALLABLE_OPTIONS, logAppCheckState} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
@@ -513,6 +513,7 @@ export const createUploadSession = onCall(
   UPLOAD_CALLABLE_OPTIONS,
   async (request): Promise<Record<string, unknown>> => {
     const {uid, token} = await resolveCallableAuth(request);
+    logAppCheckState("createUploadSession", request, uid);
     await assertUploadCallerEligible(
       uid,
       token ?? undefined,
@@ -627,6 +628,7 @@ export const requestThumbnailUploadUrl = onCall(
   UPLOAD_CALLABLE_OPTIONS,
   async (request): Promise<Record<string, unknown>> => {
     const {uid, token} = await resolveCallableAuth(request);
+    logAppCheckState("requestThumbnailUploadUrl", request, uid);
     await assertUploadCallerEligible(
       uid,
       token ?? undefined,
@@ -705,6 +707,7 @@ export const finalizeUpload = onCall(
   UPLOAD_CALLABLE_OPTIONS,
   async (request): Promise<Record<string, unknown>> => {
     const {uid, token} = await resolveCallableAuth(request);
+    logAppCheckState("finalizeUpload", request, uid);
     await assertUploadCallerEligible(
       uid,
       token ?? undefined,
@@ -723,17 +726,25 @@ export const finalizeUpload = onCall(
       throw new HttpsError("permission-denied", "Session appartenant à un autre utilisateur.");
     }
 
-    // Prevent re-finalizing an already-approved/under-review video: without
-    // this guard, a retried client call (or a deliberately repeated one)
-    // would reset moderationStatus/visibility/isPublic back to pending on a
-    // live video, and could overwrite likes/reports/reportCount/shareCount
-    // with attacker-supplied values (see the metadata parsing below, which
-    // no longer accepts those fields from the client at all).
+    // Idempotent, not an error.
+    //
+    // finalizeUpload is a retried operation: the client re-issues it when a
+    // response is lost (slow network, cold start), and by then the first call
+    // may already have succeeded server-side. Production logs showed exactly
+    // that — two "Session upload deja finalisee." failures surfaced to a user
+    // whose video was in fact already `ready`, `optimized` and public. The
+    // upload had worked; only the client believed otherwise, and it never
+    // entered the optimization wait.
+    //
+    // Returning success here keeps every protection the previous throw
+    // provided, because the protection was never the error itself — it was
+    // *not writing*. A repeated call, retried or deliberate, now performs no
+    // write at all: moderationStatus/visibility/isPublic cannot be reset on a
+    // live video, and no client-supplied metadata can land. Ownership is
+    // already enforced above, so the caller is the owner in every case that
+    // reaches this point.
     if (isFinalizedUploadSession(doc)) {
-      throw new HttpsError(
-        "failed-precondition",
-        "Session upload deja finalisee.",
-      );
+      return {ok: true, alreadyFinalized: true};
     }
 
     const persistedStoragePath = normalizeVideoStoragePath(

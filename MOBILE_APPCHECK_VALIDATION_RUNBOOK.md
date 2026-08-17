@@ -8,13 +8,107 @@ validation before the app is published on Play Store.
 
 ## Current security model
 
-- Mobile production config uses `APP_CHECK_ENABLED=true`.
-- Upload callables use `ENFORCE_APPCHECK=true` when deployed with production
-  env overrides.
-- The upload path is protected on all callable steps:
-  - `createUploadSession`
-  - `requestThumbnailUploadUrl`
-  - `finalizeUpload`
+App Check runs in **soft mode** in production (`APP_CHECK_MODE=soft` in
+`functions/.env.production`). The token is still requested by the client,
+still verified by the platform when present, and now logged per call — but a
+missing or invalid token no longer rejects the request.
+
+### Why soft and not enforce
+
+Production client logs (`client_logs` collection) showed Play Integrity
+attestation failing on real tester devices, both as
+`403 App attestation failed` and as repeated activation timeouts. Under
+`enforce`, that single failure took down **every** mobile callable, because
+`MOBILE_CALLABLE_OPTIONS` and `UPLOAD_CALLABLE_OPTIONS` both enforced it:
+video upload, likes, reports, shares, follows, FCM token registration,
+`completeEmailVerification` — and `logClientEvents`, which is why the
+failures were nearly invisible in our own telemetry.
+
+Play Integrity cannot be relied on as a hard gate for this device fleet: it
+requires a Play-certified device with current Google Play services, and a
+large share of low-cost Android handsets do not qualify. The App Check
+config is already at its most permissive (`allowUnrecognizedVersion: true`,
+`minDeviceRecognitionLevel: NO_INTEGRITY`, `requireLicensed: false`) and
+attestation still fails.
+
+### What actually protects the upload path
+
+App Check was never the thing holding the door shut. Every upload callable
+still enforces, server-side:
+
+- Firebase ID token verification (`resolveCallableAuth`).
+- Role/account state: `joueur`, not `authDisabled`, email verified
+  (`assertUploadCallerEligible`).
+- Per-user daily and concurrent upload quotas, transactionally
+  (`MAX_VIDEO_UPLOADS_PER_DAY`, `MAX_CONCURRENT_VIDEO_UPLOADS`).
+- File size and duration ceilings.
+- Ownership on every session/finalize step; the video document is stamped
+  with the uid decoded from the token, never a client-supplied one.
+- Short-lived, per-object signed resumable upload URLs.
+
+Firestore and Storage App Check enforcement is `UNENFORCED` for this project
+(verify with `node scripts/check-mobile-appcheck-status.mjs`), so no client
+read or write depends on a token either.
+
+### Client contract
+
+- `AppCheckService` never blocks: activation is fired and forgotten at
+  startup (`unawaited` in `AppBootstrap.initialize`), failures retry in the
+  background, and `getToken()` returns `null` rather than waiting.
+- `CallableAuthGuard` attaches `X-Firebase-AppCheck` only when a token is
+  available; a missing token never aborts a call.
+- `ProfileRepository` warms App Check in the background but never gates a
+  write on it.
+
+Guardrail tests lock all three behaviours in — see
+`test/callable_auth_guard_test.dart`,
+`test/profile_edit_coherence_guardrails_test.dart` and
+`test/android_release_readiness_guardrails_test.dart`.
+
+## Soft mode is the destination, not a waypoint
+
+**Decision: production stays on `APP_CHECK_MODE=soft` permanently.** This is
+settled, not a pending migration. Play Integrity attestation fails on a large
+share of the handsets this app actually serves, and enforcement traded a real,
+measurable outage — every mobile callable down at once — for a hypothetical
+attacker. There is no scheduled return to `enforce`.
+
+`test/app_check_posture_guardrails_test.dart` pins this, because the change
+that breaks it is a one-word edit in an env file and the damage only appears on
+real handsets: never in CI, never on a Play-certified developer device.
+
+### What replaces enforcement
+
+App Check was never what held the door shut. The controls that do:
+
+| Control | Where |
+| --- | --- |
+| Firebase ID token verified on every callable | `resolveCallableAuth` |
+| No self-signup — accounts are admin-provisioned only | admin web app |
+| Role and account state checked per call | `assertUploadCallerEligible` |
+| Per-user daily / concurrent / pending / public video quotas | `upload_session.ts` |
+| File size and duration limits | `upload_session.ts` |
+| Outbound push ceilings (`MAX_FANOUTS_PER_HOUR`, `MAX_DIRECT_PUSHES_PER_MINUTE`) | `actions.ts` |
+| Per-document and per-object ownership | `firestore.rules`, `storage.rules` |
+
+The push ceilings exist specifically because of this posture: `sendOfferFanout`
+notifies **every** player in one authenticated call, and with no platform
+attestation gate in front of it, the ceiling has to live in the handler.
+
+### Keeping attestation observable
+
+Soft is not off. Tokens are still read and attached to `request.app`, and every
+handler emits a structured line per call:
+
+```json
+{"event":"app_check_state","callable":"createUploadSession","appCheck":"valid|invalid|absent","mode":"soft","uid":"..."}
+```
+
+Read these as ongoing telemetry, not as a countdown. `absent` means the client
+never produced a token — expected on much of the fleet, and harmless.
+`invalid` means it produced one the platform refused; that is the anomaly worth
+investigating. A sudden collapse in `valid` points at a client or Play Integrity
+regression rather than at an attack.
 
 ## Pre-Play-Store release validation
 
@@ -74,9 +168,10 @@ On a real Android device:
 4. Confirm the video document eventually becomes `status == "ready"` and
    `optimized == true`.
 
-If the app shows `Verification de securite indisponible`, the client could not
-obtain a valid App Check token. Check the local config provider first, then the
-Firebase App Check registration for the Android app.
+In soft mode the app must never show an App Check error to the user. If an
+upload still fails, the cause is elsewhere (auth, role, quota, network) —
+read the failure code from `client_logs` and the `app_check_state` log line
+for the same call before touching App Check configuration.
 
 ## Closed-test emergency mitigation
 
