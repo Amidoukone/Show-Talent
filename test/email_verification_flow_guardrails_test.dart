@@ -13,7 +13,11 @@ void main() {
       expect(
           content, contains('await _refreshVerifiedUserIdToken(refreshed);'));
       expect(content, contains('markEmailVerifiedAndActivate('));
-      expect(content, contains("httpsCallable('completeEmailVerification',"));
+      // Formatting-insensitive: the callable name may sit on its own line
+      // once the argument list wraps. What matters is that the sync still
+      // goes through the callable, not that dartfmt kept it on one line.
+      expect(content, contains('httpsCallable('));
+      expect(content, contains("'completeEmailVerification'"));
       expect(content, contains('HttpsCallableOptions(timeout:'));
       expect(content, contains('_retryEmailVerificationSync('));
     });

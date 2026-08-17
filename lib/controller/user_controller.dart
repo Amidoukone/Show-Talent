@@ -36,6 +36,11 @@ class UserController extends GetxController with WidgetsBindingObserver {
   Timer? _accessHeartbeat;
   int _routeRequestVersion = 0;
 
+  final RxBool _isUserHydrationPending = false.obs;
+  final RxBool _hasAttemptedHydration = false.obs;
+  final RxString _sessionLoadMessage = ''.obs;
+  Completer<void>? _hydrationInFlight;
+
   bool _navigating = false;
   bool _navScheduled = false;
   bool _accessRevocationInProgress = false;
@@ -43,6 +48,10 @@ class UserController extends GetxController with WidgetsBindingObserver {
   dynamic _queuedArguments;
 
   static const Duration _accessHeartbeatInterval = Duration(seconds: 60);
+  static const Duration _userHydrationTimeout = Duration(seconds: 22);
+
+  bool get isUserHydrationPending => _isUserHydrationPending.value;
+  String get sessionLoadMessage => _sessionLoadMessage.value;
 
   @override
   void onInit() {
@@ -209,8 +218,44 @@ class UserController extends GetxController with WidgetsBindingObserver {
     _userList.value = const <AppUser>[];
   }
 
+  /// Uids already being fetched by [getUserById], so a grid rebuilding many
+  /// tiles for the same missing author issues one read instead of one per
+  /// frame.
+  final Set<String> _pendingCacheHydrations = <String>{};
+
   AppUser? getUserById(String uid) {
-    return usersCache[uid];
+    final cached = usersCache[uid];
+    if (cached != null) {
+      return cached;
+    }
+
+    // The directory listener is capped (UserRepository.directoryWatchLimit),
+    // so a uid outside that window is legitimately absent from the cache
+    // rather than nonexistent. Fetch it once in the background; `usersCache`
+    // is observable, so the caller repaints with the real author on the next
+    // frame instead of permanently rendering a placeholder.
+    unawaited(_hydrateCachedUser(uid));
+    return null;
+  }
+
+  Future<void> _hydrateCachedUser(String uid) async {
+    if (uid.trim().isEmpty ||
+        usersCache.containsKey(uid) ||
+        !_pendingCacheHydrations.add(uid)) {
+      return;
+    }
+
+    try {
+      final fetched = await _userRepository.fetchUserById(uid);
+      if (fetched != null) {
+        usersCache[fetched.uid] = fetched;
+        update();
+      }
+    } catch (error) {
+      AppLogger.debug('UserController getUserById hydration failed: $error');
+    } finally {
+      _pendingCacheHydrations.remove(uid);
+    }
   }
 
   Future<void> refreshUser() async {
@@ -219,10 +264,109 @@ class UserController extends GetxController with WidgetsBindingObserver {
       return;
     }
 
-    final refreshedUser = await _userRepository.fetchUserById(uid);
+    final refreshedUser = await _userRepository
+        .fetchUserById(uid)
+        .timeout(_userHydrationTimeout);
     if (refreshedUser != null) {
       _user.value = refreshedUser;
       usersCache[refreshedUser.uid] = refreshedUser;
+      _sessionLoadMessage.value = '';
+      update();
+    }
+  }
+
+  /// True once at least one hydration attempt has settled for this session.
+  ///
+  /// The UI needs this to tell "we haven't looked yet" apart from "we looked
+  /// and found nothing": without it, a screen showing a spinner while
+  /// `user == null` had no way to know the spinner would never end.
+  bool get hasAttemptedHydration => _hasAttemptedHydration.value;
+
+  Future<void> ensureCurrentUserHydrated({bool force = false}) async {
+    final uid = _authSessionService.currentUser?.uid;
+    if (uid == null || uid.isEmpty) {
+      _hasAttemptedHydration.value = true;
+      _sessionLoadMessage.value = 'Session expirée. Reconnectez-vous.';
+      return;
+    }
+
+    if (!force && _user.value?.uid == uid) {
+      _hasAttemptedHydration.value = true;
+      _sessionLoadMessage.value = '';
+      return;
+    }
+
+    // Join the in-flight attempt instead of returning immediately. Returning
+    // early made this method resolve while the profile was still unknown and
+    // no message had been set, so callers (MainScreen's spinner,
+    // UploadVideoController's profile pre-check) could not tell "loading"
+    // from "finished with nothing" — which is how the app ended up sitting on
+    // a spinner that never resolved.
+    final inFlight = _hydrationInFlight;
+    if (inFlight != null && !force) {
+      return inFlight.future;
+    }
+
+    final completer = Completer<void>();
+    _hydrationInFlight = completer;
+    _isUserHydrationPending.value = true;
+    _sessionLoadMessage.value = '';
+
+    try {
+      final hydrated = await _userRepository
+          .fetchUserById(uid)
+          .timeout(_userHydrationTimeout);
+      if (hydrated == null) {
+        _sessionLoadMessage.value =
+            'Impossible de charger le profil. Réessayez dans quelques instants.';
+        return;
+      }
+
+      _user.value = hydrated;
+      usersCache[hydrated.uid] = hydrated;
+      _sessionLoadMessage.value = '';
+      _listenAllUsers();
+      update();
+    } on FirebaseException catch (error) {
+      AppLogger.debug(
+        'UserController ensureCurrentUserHydrated Firebase error: $error',
+      );
+      if (AuthSessionService.isTransientFirebaseFailure(error)) {
+        _sessionLoadMessage.value =
+            'Connexion instable. Vérifiez votre réseau puis réessayez.';
+      } else if (_isPermissionDenied(error)) {
+        _sessionLoadMessage.value =
+            'Votre session ne permet pas de charger ce profil.';
+        unawaited(_enforceCurrentSessionAccess());
+      } else {
+        _sessionLoadMessage.value =
+            'Impossible de charger le profil. Réessayez dans quelques instants.';
+      }
+    } on TimeoutException catch (error) {
+      AppLogger.debug(
+        'UserController ensureCurrentUserHydrated timeout: $error',
+      );
+      _sessionLoadMessage.value =
+          'Connexion trop lente. Vérifiez votre réseau puis réessayez.';
+    } catch (error) {
+      AppLogger.debug('UserController ensureCurrentUserHydrated error: $error');
+      _sessionLoadMessage.value =
+          'Impossible de charger le profil. Réessayez dans quelques instants.';
+    } finally {
+      _hasAttemptedHydration.value = true;
+      // Belt and braces: every failure branch above sets a message, but if a
+      // future edit ever adds one that doesn't, the UI must still be able to
+      // leave the spinner. An empty message with no user is exactly the
+      // dead-end state this whole method exists to avoid.
+      if (_user.value == null && _sessionLoadMessage.value.isEmpty) {
+        _sessionLoadMessage.value =
+            'Impossible de charger le profil. Réessayez dans quelques instants.';
+      }
+      _isUserHydrationPending.value = false;
+      _hydrationInFlight = null;
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
       update();
     }
   }
@@ -575,9 +719,14 @@ class UserController extends GetxController with WidgetsBindingObserver {
         );
         return;
       case AuthSessionDestination.main:
-        _user.value = snapshot.appUser;
-        if (snapshot.appUser != null) {
-          usersCache[snapshot.appUser!.uid] = snapshot.appUser!;
+        final fallbackUser = _user.value?.uid == watchUid ? _user.value : null;
+        final resolvedUser = snapshot.appUser ?? fallbackUser;
+        _user.value = resolvedUser;
+        if (resolvedUser != null) {
+          usersCache[resolvedUser.uid] = resolvedUser;
+          _sessionLoadMessage.value = '';
+        } else {
+          unawaited(ensureCurrentUserHydrated());
         }
         _listenAllUsers();
         if (!_isLatestRouteRequest(requestVersion)) {

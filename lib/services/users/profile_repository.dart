@@ -84,7 +84,9 @@ class ProfileRepository {
   // preflight only verifies that a matching signed-in user is still present;
   // it must not force a network token refresh before every profile write.
   static const Duration authRefreshTimeout = Duration(seconds: 10);
-  static const Duration appCheckWriteTimeout = Duration(seconds: 25);
+  // Only bounds the background warm-up in _warmUpAppCheckForWrite(); no write
+  // ever waits on it.
+  static const Duration appCheckWriteTimeout = Duration(seconds: 6);
   static const int maxCvPdfBytes = 5 * 1024 * 1024;
   static const String _profileInvalidationReason = 'profile_updated_by_user';
   static const List<int> _pdfHeader = <int>[0x25, 0x50, 0x44, 0x46, 0x2D];
@@ -160,27 +162,18 @@ class ProfileRepository {
     );
   }
 
-  Future<void> _ensureAppCheckReadyForWrite() async {
-    if (await _appCheckReady(
-      forceRefresh: false,
-      timeout: appCheckWriteTimeout,
-    )) {
-      return;
-    }
-
-    if (await _appCheckReady(
-      forceRefresh: true,
-      timeout: appCheckWriteTimeout,
-    )) {
-      return;
-    }
-
-    throw FirebaseException(
-      plugin: 'firebase_app_check',
-      code: 'unavailable',
-      message:
-          'Connexion sécurisée indisponible. Réessayez dans quelques instants.',
-    );
+  // Fire-and-forget. App Check is UNENFORCED on both firestore.googleapis.com
+  // and firebasestorage.googleapis.com for this project, so a token is not
+  // required for any write below — it is only nudged along so the token is
+  // fresher for the callables that do read it.
+  //
+  // This used to *await* a token and throw
+  // "Connexion sécurisée indisponible" when none arrived. That turned a
+  // service Firestore does not even consult into a hard blocker on saving a
+  // profile, uploading a photo or attaching a CV, on every device where Play
+  // Integrity attestation fails.
+  void _warmUpAppCheckForWrite() {
+    unawaited(_appCheckReady(forceRefresh: false, timeout: appCheckWriteTimeout));
   }
 
   Future<void> _ensureAuthenticatedOwner(String uid) async {
@@ -193,7 +186,7 @@ class ProfileRepository {
       );
     }
 
-    await _ensureAppCheckReadyForWrite();
+    _warmUpAppCheckForWrite();
 
     try {
       await currentUser.getIdToken().timeout(authRefreshTimeout);
@@ -237,6 +230,14 @@ class ProfileRepository {
     return error is FirebaseException && error.code == 'unauthorized';
   }
 
+  /// The window between "signed in" and "Firestore knows it".
+  ///
+  /// Distinguished from a real authorization failure: the credential is on its
+  /// way, not refused. Worth waiting out rather than reporting.
+  static bool isTransientAuthPropagation(Object error) {
+    return error is FirebaseException && error.code == 'unauthenticated';
+  }
+
   static bool isTransientFirestoreError(Object error) {
     // Plain Dart TimeoutExceptions (from the .timeout() wrappers used
     // throughout this class, e.g. _ensureAuthenticatedOwner's token
@@ -259,6 +260,18 @@ class ProfileRepository {
       case 'cancelled':
       case 'resource-exhausted':
       case 'internal':
+        return true;
+      // Firestore reports 'unauthenticated' while the ID token has not
+      // reached its client yet — routinely for a second or two after a fresh
+      // sign-in, and reliably after the user clears app data and signs back
+      // in. It matched none of the buckets here, so it fell through to the
+      // generic "Chargement du profil impossible" dead end: no retry offered,
+      // no explanation, on a session that was about to be perfectly valid.
+      //
+      // A genuinely signed-out user also produces this, and treating it as
+      // transient costs nothing there: the auth state listener routes them to
+      // login regardless of what this message says.
+      case 'unauthenticated':
         return true;
     }
 
@@ -384,9 +397,32 @@ class ProfileRepository {
     return controller.stream;
   }
 
+  /// Supplementary contact fields, never a reason to fail the profile.
+  ///
+  /// `users/{uid}/private/contact` holds phone and birth date — extras shown
+  /// on your own profile. This read used to propagate, so a hiccup on that
+  /// one subdocument threw straight out of [fetchUser] and left the caller
+  /// with no user at all: the whole screen collapsed to "Profil indisponible"
+  /// over a phone number. Only [fetchUser] with `includePrivateFields` (i.e.
+  /// your own profile) even reaches here, so the failure was invisible on
+  /// everyone else's profile and hit exactly the owner.
+  ///
+  /// UserRepository's counterpart already swallowed this; the two are now
+  /// consistent. Degrading to a profile without the private extras beats
+  /// showing no profile.
   Future<Map<String, dynamic>?> _fetchPrivateContact(String uid) async {
-    final doc = await _getWithRetry(_privateContactDoc(uid));
-    return doc.data();
+    try {
+      final doc = await _getWithRetry(_privateContactDoc(uid));
+      return doc.data();
+    } catch (error, stackTrace) {
+      developer.log(
+        'ProfileRepository private contact unavailable for $uid',
+        name: 'ProfileRepository._fetchPrivateContact',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return null;
+    }
   }
 
   Future<void> saveUserProfile(AppUser updatedUser) async {
@@ -573,16 +609,35 @@ class ProfileRepository {
     return url;
   }
 
+  /// Loads a page of a profile's videos.
+  ///
+  /// [includeAllStates] must only be set when the signed-in user *is* [uid].
+  /// It drops the `status == 'ready'` filter so authors can see their own
+  /// videos while they are still being optimized or waiting on moderation.
+  /// Without it the author gets the same view as a stranger: a video is
+  /// invisible from the moment the upload finishes until an admin approves
+  /// it, which reads as "my video was lost".
+  ///
+  /// This is not a privacy hole — `canReadVideo()` in firestore.rules already
+  /// restricts non-`ready` documents to the owner and admin operators, so a
+  /// caller passing this flag for somebody else's uid gets a
+  /// permission-denied from the server rather than other people's drafts.
   Future<ProfileVideoPage> fetchUserVideos({
     required String uid,
     required int limit,
     ProfileVideoCursor? after,
+    bool includeAllStates = false,
   }) async {
-    Query<Map<String, dynamic>> query = _videosCollection
-        .where('uid', isEqualTo: uid)
-        .where('status', isEqualTo: 'ready')
-        .orderBy('updatedAt', descending: true)
-        .limit(limit);
+    Query<Map<String, dynamic>> query = _videosCollection.where(
+      'uid',
+      isEqualTo: uid,
+    );
+
+    if (!includeAllStates) {
+      query = query.where('status', isEqualTo: 'ready');
+    }
+
+    query = query.orderBy('updatedAt', descending: true).limit(limit);
 
     if (after != null) {
       query = query.startAfterDocument(after.snapshot);
@@ -591,7 +646,10 @@ class ProfileRepository {
     final snap = await query.get().timeout(firestoreReadTimeout);
     final videos = snap.docs
         .map(Video.fromDoc)
-        .where((video) => video.effectiveUrl.isNotEmpty)
+        // A video still being optimized has no playable URL yet — that is
+        // precisely the state the owner needs to see, so only the public
+        // view drops URL-less documents.
+        .where((video) => includeAllStates || video.effectiveUrl.isNotEmpty)
         .toList(growable: false);
 
     return ProfileVideoPage(
@@ -736,12 +794,19 @@ class ProfileRepository {
         return await ref
             .get(GetOptions(source: source))
             .timeout(firestoreReadTimeout);
-      } catch (_) {
+      } catch (error) {
         attempt++;
         if (attempt >= 3) {
           rethrow;
         }
-        await Future.delayed(Duration(milliseconds: 300 * attempt));
+        // A pending ID token needs real time, not a token gesture: 300ms and
+        // 600ms both land well before Firestore has one, so all three
+        // attempts failed on the same missing credential and the caller saw a
+        // hard error for a session that became valid a second later.
+        final backoff = isTransientAuthPropagation(error)
+            ? Duration(milliseconds: 900 * attempt)
+            : Duration(milliseconds: 300 * attempt);
+        await Future.delayed(backoff);
       }
     }
     throw Exception('Firestore retry failed');

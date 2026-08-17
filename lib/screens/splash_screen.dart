@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/screens/login_screen.dart';
 import 'package:adfoot/screens/main_screen.dart';
 import 'package:adfoot/screens/verify_email_screen.dart';
@@ -27,8 +30,12 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   final AuthSessionService _authSessionService = AuthSessionService();
 
+  static const Duration _authWatchdogDelay = Duration(seconds: 8);
+  static const Duration _sessionResolveTimeout = Duration(seconds: 18);
+
   bool _navigating = false;
   late final bool _authControllerPresent;
+  Timer? _authWatchdogTimer;
 
   @override
   void initState() {
@@ -44,15 +51,40 @@ class _SplashScreenState extends State<SplashScreen> {
     });
 
     if (!_authControllerPresent) {
-      _initializeFallback();
+      unawaited(_initializeFallback());
+    } else {
+      _authWatchdogTimer = Timer(_authWatchdogDelay, () {
+        unawaited(_initializeFallback(useSafeSessionResolve: true));
+      });
     }
   }
 
-  Future<void> _initializeFallback() async {
+  @override
+  void dispose() {
+    _authWatchdogTimer?.cancel();
+    super.dispose();
+  }
+
+  bool get _isStillOnSplashRoute {
+    final route = Get.currentRoute;
+    return route.isEmpty || route == AppRoutes.splash;
+  }
+
+  bool get _canRunFallback {
+    return mounted && !_navigating && _isStillOnSplashRoute;
+  }
+
+  Future<void> _initializeFallback({bool useSafeSessionResolve = false}) async {
     await Future.delayed(widget.fallbackInitializationDelay);
+    if (!_canRunFallback) {
+      return;
+    }
 
     if (widget.fallbackRouteBuilder != null) {
       final fallbackPage = await widget.fallbackRouteBuilder!.call();
+      if (!_canRunFallback) {
+        return;
+      }
       if (fallbackPage != null) {
         return _safeOffAll(fallbackPage);
       }
@@ -60,15 +92,14 @@ class _SplashScreenState extends State<SplashScreen> {
     }
 
     try {
-      final snapshot = await _authSessionService.resolveSession(
-        _authSessionService.currentUser,
-        waitForVerifiedUserDocument: true,
-        syncVerifiedUserRecord: true,
-        updateLastLogin: true,
-        signOutOnInvalid: true,
+      final snapshot = await _resolveSessionForFallback(
+        useSafeSessionResolve: useSafeSessionResolve,
       );
+      if (!_canRunFallback) {
+        return;
+      }
 
-      return _safeOffAll(_pageForDestination(snapshot.destination));
+      return _safeOffAllDestination(snapshot.destination);
     } catch (error) {
       AppLogger.debug('Splash fallback error: $error');
       try {
@@ -88,6 +119,70 @@ class _SplashScreenState extends State<SplashScreen> {
         return const VerifyEmailScreen();
       case AuthSessionDestination.main:
         return const MainScreen();
+    }
+  }
+
+  Future<AuthSessionSnapshot> _resolveSessionForFallback({
+    required bool useSafeSessionResolve,
+  }) {
+    final currentUser = _authSessionService.currentUser;
+    final sessionFuture = useSafeSessionResolve
+        ? _authSessionService.resolveSessionSafely(
+            currentUser,
+            waitForVerifiedUserDocument: true,
+            syncVerifiedUserRecord: true,
+            updateLastLogin: true,
+            signOutOnInvalid: true,
+          )
+        : _authSessionService.resolveSession(
+            currentUser,
+            waitForVerifiedUserDocument: true,
+            syncVerifiedUserRecord: true,
+            updateLastLogin: true,
+            signOutOnInvalid: true,
+          );
+
+    return sessionFuture.timeout(
+      _sessionResolveTimeout,
+      onTimeout: () {
+        final fallbackUser = _authSessionService.currentUser ?? currentUser;
+        if (fallbackUser == null) {
+          return const AuthSessionSnapshot(
+            destination: AuthSessionDestination.login,
+          );
+        }
+
+        return AuthSessionSnapshot(
+          destination: fallbackUser.emailVerified
+              ? AuthSessionDestination.main
+              : AuthSessionDestination.verifyEmail,
+          firebaseUser: fallbackUser,
+        );
+      },
+    );
+  }
+
+  Future<void> _safeOffAllDestination(
+    AuthSessionDestination destination,
+  ) async {
+    try {
+      await _safeOffAllNamed(destination.routeName);
+    } catch (error) {
+      AppLogger.debug('Splash named fallback navigation error: $error');
+      await _safeOffAll(_pageForDestination(destination));
+    }
+  }
+
+  Future<void> _safeOffAllNamed(String routeName) async {
+    if (_navigating) {
+      return;
+    }
+
+    _navigating = true;
+    try {
+      await Get.offAllNamed(routeName);
+    } finally {
+      _navigating = false;
     }
   }
 

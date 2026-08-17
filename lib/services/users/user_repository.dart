@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:adfoot/models/user.dart';
@@ -7,11 +8,7 @@ import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
-enum UserAccessIssue {
-  missingProfile,
-  adminPortalOnly,
-  disabledAccount,
-}
+enum UserAccessIssue { missingProfile, adminPortalOnly, disabledAccount }
 
 class UserAccessDecision {
   const UserAccessDecision({
@@ -45,11 +42,12 @@ class UserSettingsSnapshot {
 
 class UserRepository {
   UserRepository({FirebaseFirestore? firestore, FirebaseFunctions? functions})
-      : _firestore = firestore ?? FirebaseFirestore.instance,
-        _functions = functions ??
-            FirebaseFunctions.instanceFor(
-              region: AppEnvironmentConfig.functionsRegion,
-            );
+    : _firestore = firestore ?? FirebaseFirestore.instance,
+      _functions =
+          functions ??
+          FirebaseFunctions.instanceFor(
+            region: AppEnvironmentConfig.functionsRegion,
+          );
 
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
@@ -63,6 +61,10 @@ class UserRepository {
   static const String _adminPortalOnlyTitle = 'Accès refusé';
   static const String _disabledTitle = 'Compte désactivé';
 
+  static const Duration firestoreReadTimeout = Duration(seconds: 20);
+  static const Duration firestoreWriteTimeout = Duration(seconds: 25);
+  static const int _readRetryAttempts = 3;
+
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
 
@@ -71,7 +73,7 @@ class UserRepository {
 
   Future<Map<String, dynamic>?> _fetchPrivateContact(String uid) async {
     try {
-      final doc = await _privateContactDoc(uid).get();
+      final doc = await _getWithRetry(_privateContactDoc(uid));
       return doc.data();
     } catch (error, stackTrace) {
       developer.log(
@@ -148,11 +150,7 @@ class UserRepository {
       );
     }
 
-    return UserAccessDecision(
-      exists: true,
-      issue: null,
-      user: user,
-    );
+    return UserAccessDecision(exists: true, issue: null, user: user);
   }
 
   static AppUser buildPublicSignupUser({
@@ -166,8 +164,28 @@ class UserRepository {
     throw StateError(publicSignupDisabledMessage);
   }
 
-  Stream<List<AppUser>> watchAllUsers() {
-    return _usersCollection.snapshots().map(
+  /// Default ceiling on the directory listener.
+  ///
+  /// This stream feeds the messaging directory and the search author lookup,
+  /// which are client-side filters over whatever it delivers. Unbounded, it
+  /// re-reads and holds the *entire* `users` collection on every sign-in:
+  /// harmless at today's scale, but it grows without limit into a per-open
+  /// read bill, resident memory, and startup latency.
+  ///
+  /// 300 is well above the current population, so nothing is truncated today,
+  /// while the cost of a single app open stays bounded no matter how large
+  /// the collection gets. Documents past the cap are ordered by document id
+  /// (Firestore's implicit order) — deliberately not by a field such as
+  /// `nom`, because an `orderBy` would silently drop every document missing
+  /// that field. Anyone outside the window is still reachable through the
+  /// targeted [fetchUserById] hydration into `usersCache`.
+  static const int directoryWatchLimit = 300;
+
+  Stream<List<AppUser>> watchAllUsers({int limit = directoryWatchLimit}) {
+    return _usersCollection
+        .limit(limit)
+        .snapshots()
+        .map(
           (snapshot) => snapshot.docs
               .map(
                 (doc) => _parseUserSafely(
@@ -196,7 +214,7 @@ class UserRepository {
   }
 
   Future<AppUser?> fetchUserById(String uid) async {
-    final doc = await _usersCollection.doc(uid).get();
+    final doc = await _getWithRetry(_usersCollection.doc(uid));
     final data = doc.data();
     if (!doc.exists || data == null) {
       return null;
@@ -218,7 +236,7 @@ class UserRepository {
   }) async {
     final doc = waitForDocument
         ? await _waitForUserDoc(uid, attempts: attempts, delay: delay)
-        : await _usersCollection.doc(uid).get();
+        : await _getWithRetry(_usersCollection.doc(uid));
 
     if (doc == null || !doc.exists) {
       return const UserAccessDecision(
@@ -247,7 +265,7 @@ class UserRepository {
     bool updateLastLogin = false,
   }) async {
     final docRef = _usersCollection.doc(uid);
-    final existing = await docRef.get();
+    final existing = await _getWithRetry(docRef);
     if (!existing.exists) {
       return null;
     }
@@ -274,10 +292,12 @@ class UserRepository {
     }
 
     if (updates.isNotEmpty) {
-      await docRef.set(updates, SetOptions(merge: true));
+      await docRef
+          .set(updates, SetOptions(merge: true))
+          .timeout(firestoreWriteTimeout);
     }
 
-    final refreshed = await docRef.get();
+    final refreshed = await _getWithRetry(docRef);
     if (!refreshed.exists) {
       return null;
     }
@@ -314,7 +334,10 @@ class UserRepository {
       return;
     }
 
-    await _usersCollection.doc(uid).update(patch);
+    await _usersCollection
+        .doc(uid)
+        .update(patch)
+        .timeout(firestoreWriteTimeout);
   }
 
   Future<void> saveFcmToken(String uid, String token) async {
@@ -333,11 +356,61 @@ class UserRepository {
     }
 
     try {
-      await _usersCollection.doc(uid).set(
-        {'fcmToken': sanitized},
-        SetOptions(merge: true),
-      );
+      await _usersCollection
+          .doc(uid)
+          .set({'fcmToken': sanitized}, SetOptions(merge: true))
+          .timeout(firestoreWriteTimeout);
     } catch (_) {}
+  }
+
+  Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(
+    DocumentReference<Map<String, dynamic>> ref,
+  ) async {
+    for (var attempt = 1; attempt <= _readRetryAttempts; attempt++) {
+      try {
+        return await ref.get().timeout(firestoreReadTimeout);
+      } catch (error) {
+        if (attempt >= _readRetryAttempts || !_isRetryableReadError(error)) {
+          rethrow;
+        }
+        // A pending ID token outlives a 300ms pause; give it room rather than
+        // burning all three attempts on the same missing credential.
+        final isAuthPropagation =
+            error is FirebaseException && error.code == 'unauthenticated';
+        await Future.delayed(
+          Duration(milliseconds: (isAuthPropagation ? 900 : 300) * attempt),
+        );
+      }
+    }
+
+    throw TimeoutException('Firestore read retry exhausted.');
+  }
+
+  static bool _isRetryableReadError(Object error) {
+    if (error is TimeoutException) {
+      return true;
+    }
+    if (error is! FirebaseException) {
+      return false;
+    }
+
+    switch (error.code) {
+      case 'unavailable':
+      case 'deadline-exceeded':
+      case 'aborted':
+      case 'cancelled':
+      case 'resource-exhausted':
+      case 'internal':
+        return true;
+      // The ID token has not reached the Firestore client yet — normal for a
+      // second or two after signing in, and the reliable state after clearing
+      // app data. Retrying is the whole point; this allow-list previously
+      // excluded it, so the very first read of a fresh session failed hard.
+      case 'unauthenticated':
+        return true;
+      default:
+        return false;
+    }
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>?> _waitForUserDoc(
@@ -347,7 +420,7 @@ class UserRepository {
   }) async {
     DocumentSnapshot<Map<String, dynamic>>? doc;
     for (int i = 0; i < attempts; i++) {
-      doc = await _usersCollection.doc(uid).get();
+      doc = await _usersCollection.doc(uid).get().timeout(firestoreReadTimeout);
       if (doc.exists) {
         return doc;
       }

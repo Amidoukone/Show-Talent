@@ -1,4 +1,4 @@
-import 'dart:async' show unawaited;
+import 'dart:async' show TimeoutException, unawaited;
 
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/config/app_environment.dart';
@@ -11,11 +11,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:adfoot/services/app_logger.dart';
 
-enum AuthSessionDestination {
-  login,
-  verifyEmail,
-  main,
-}
+enum AuthSessionDestination { login, verifyEmail, main }
 
 extension AuthSessionDestinationRoute on AuthSessionDestination {
   String get routeName {
@@ -83,10 +79,7 @@ class EmailVerificationSendResult {
 }
 
 class SignUpFlowResult {
-  const SignUpFlowResult({
-    required this.session,
-    required this.emailDelivery,
-  });
+  const SignUpFlowResult({required this.session, required this.emailDelivery});
 
   final AuthSessionSnapshot session;
   final EmailVerificationSendResult emailDelivery;
@@ -97,12 +90,13 @@ class AuthSessionService {
     FirebaseAuth? auth,
     UserRepository? userRepository,
     FirebaseFunctions? functions,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _userRepository = userRepository ?? UserRepository(),
-        _functions = functions ??
-            FirebaseFunctions.instanceFor(
-              region: AppEnvironmentConfig.functionsRegion,
-            );
+  }) : _auth = auth ?? FirebaseAuth.instance,
+       _userRepository = userRepository ?? UserRepository(),
+       _functions =
+           functions ??
+           FirebaseFunctions.instanceFor(
+             region: AppEnvironmentConfig.functionsRegion,
+           );
 
   final FirebaseAuth _auth;
   final UserRepository _userRepository;
@@ -166,6 +160,7 @@ class AuthSessionService {
   }
 
   User? get currentUser => _auth.currentUser;
+  String? get currentUid => _auth.currentUser?.uid;
   String? get currentUserEmail => _auth.currentUser?.email;
   bool get isCurrentUserEmailVerified =>
       _auth.currentUser?.emailVerified == true;
@@ -269,8 +264,10 @@ class AuthSessionService {
     required bool updateLastLogin,
   }) async {
     try {
-      final callable = _functions.httpsCallable('completeEmailVerification',
-          options: HttpsCallableOptions(timeout: _verificationCallableTimeout));
+      final callable = _functions.httpsCallable(
+        'completeEmailVerification',
+        options: HttpsCallableOptions(timeout: _verificationCallableTimeout),
+      );
       await callable.call(<String, dynamic>{
         'updateLastLogin': updateLastLogin,
       });
@@ -320,7 +317,8 @@ class AuthSessionService {
     required AppUser? currentAppUser,
     required bool updateLastLogin,
   }) async {
-    var appUser = await _completeEmailVerificationViaCallable(
+    var appUser =
+        await _completeEmailVerificationViaCallable(
           uid: verifiedUser.uid,
           updateLastLogin: updateLastLogin,
         ) ??
@@ -331,7 +329,8 @@ class AuthSessionService {
     }
 
     try {
-      appUser = await _userRepository.markEmailVerifiedAndActivate(
+      appUser =
+          await _userRepository.markEmailVerifiedAndActivate(
             verifiedUser.uid,
             updateLastLogin: updateLastLogin,
           ) ??
@@ -367,24 +366,26 @@ class AuthSessionService {
   }) {
     unawaited(
       _syncVerifiedAppUserState(
-        verifiedUser: verifiedUser,
-        currentAppUser: currentAppUser,
-        updateLastLogin: updateLastLogin,
-      ).then((syncedUser) {
-        if (kDebugMode && syncedUser != null) {
-          AppLogger.debug(
-            'AuthSessionService background verification sync '
-            'for ${syncedUser.uid}: '
-            'emailVerified=${syncedUser.emailVerified} estActif=${syncedUser.estActif}',
-          );
-        }
-      }).catchError((Object error) {
-        if (kDebugMode) {
-          AppLogger.debug(
-            'AuthSessionService background verification sync error: $error',
-          );
-        }
-      }),
+            verifiedUser: verifiedUser,
+            currentAppUser: currentAppUser,
+            updateLastLogin: updateLastLogin,
+          )
+          .then((syncedUser) {
+            if (kDebugMode && syncedUser != null) {
+              AppLogger.debug(
+                'AuthSessionService background verification sync '
+                'for ${syncedUser.uid}: '
+                'emailVerified=${syncedUser.emailVerified} estActif=${syncedUser.estActif}',
+              );
+            }
+          })
+          .catchError((Object error) {
+            if (kDebugMode) {
+              AppLogger.debug(
+                'AuthSessionService background verification sync error: $error',
+              );
+            }
+          }),
     );
   }
 
@@ -407,7 +408,8 @@ class AuthSessionService {
     await user.reload();
     User? refreshed = _auth.currentUser;
     await refreshed?.getIdToken(true);
-    refreshed = await _refreshCurrentUserAfterVerification(
+    refreshed =
+        await _refreshCurrentUserAfterVerification(
           attempts: 3,
           retryDelay: const Duration(seconds: 1),
         ) ??
@@ -468,10 +470,7 @@ class AuthSessionService {
     required String code,
     required String newPassword,
   }) {
-    return _auth.confirmPasswordReset(
-      code: code,
-      newPassword: newPassword,
-    );
+    return _auth.confirmPasswordReset(code: code, newPassword: newPassword);
   }
 
   Future<EmailVerificationSendResult> sendCurrentUserEmailVerification({
@@ -663,13 +662,15 @@ class AuthSessionService {
     }
 
     var appUser = decision.user;
-    final needsVerifiedSync = appUser != null &&
+    final needsVerifiedSync =
+        appUser != null &&
         refreshed.emailVerified &&
         (!appUser.emailVerified || !appUser.estActif);
 
     if (syncVerifiedUserRecord) {
       final verifiedUser = await _refreshVerifiedUserIdToken(refreshed);
-      appUser = await _syncVerifiedAppUserState(
+      appUser =
+          await _syncVerifiedAppUserState(
             verifiedUser: verifiedUser,
             currentAppUser: appUser,
             updateLastLogin: updateLastLogin,
@@ -762,6 +763,14 @@ class AuthSessionService {
         failureTitle: _accessUnavailableTitle,
         failureMessage: _accessUnavailableMessage,
       );
+    } on TimeoutException catch (error) {
+      if (kDebugMode) {
+        AppLogger.debug(
+          'AuthSessionService timed out while checking access; '
+          'preserving current session: $error',
+        );
+      }
+      return _preserveCurrentSessionAfterTransientFailure(firebaseUser);
     }
   }
 

@@ -71,6 +71,9 @@ void main() {
     final appCheckService = File(
       'lib/services/app_check_service.dart',
     ).readAsStringSync();
+    final appBootstrap = File(
+      'lib/config/app_bootstrap.dart',
+    ).readAsStringSync();
     final packageJson = File('package.json').readAsStringSync();
     final appCheckDebugScript = File(
       'scripts/configure-mobile-appcheck-debug.mjs',
@@ -111,6 +114,12 @@ void main() {
     expect(appCheckService, contains('static Future<bool> ensureReady'));
     expect(appCheckService, contains('_activationFuture ??= _activate'));
     expect(appCheckService, contains('developer.log'));
+    // App Check activation must never be awaited on the startup path: doing
+    // so froze the splash for the whole Play Integrity timeout on every cold
+    // start. Guard both halves of that contract.
+    expect(appBootstrap, contains('unawaited(AppCheckService.initialize())'));
+    expect(appBootstrap, isNot(contains('await AppCheckService.initialize()')));
+    expect(appCheckService, contains('_scheduleActivationRetry'));
     expect(appCheckService, isNot(contains('AppLogger.error')));
     expect(packageJson, contains('mobile:appcheck:debug:production'));
     expect(packageJson, contains('release:config:validate:playstore'));

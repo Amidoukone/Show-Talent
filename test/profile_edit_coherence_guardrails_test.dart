@@ -61,11 +61,16 @@ void main() {
     expect(repository, contains('currentUser.getIdToken().timeout'));
     expect(repository, contains("import '../app_check_service.dart';"));
     expect(repository, contains('appCheckWriteTimeout'));
-    expect(repository, contains('_ensureAppCheckReadyForWrite'));
-    expect(repository, contains('AppCheckService.ensureReady'));
+    // App Check must stay a background warm-up here, never a gate: Firestore
+    // and Storage are UNENFORCED for this project, so blocking a profile
+    // write on a Play Integrity token only invents failures. Guard against
+    // the old awaited/throwing shape coming back.
+    expect(repository, contains('_warmUpAppCheckForWrite'));
+    expect(repository, isNot(contains('_ensureAppCheckReadyForWrite')));
     expect(
-      repository.indexOf('await _ensureAppCheckReadyForWrite();'),
-      lessThan(repository.indexOf('currentUser.getIdToken().timeout')),
+      repository,
+      isNot(contains("plugin: 'firebase_app_check'")),
     );
+    expect(repository, isNot(contains('await _appCheckReady(')));
   });
 }

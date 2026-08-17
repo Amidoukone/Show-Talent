@@ -13,12 +13,14 @@ void main() {
           'lib/services/callable_auth_guard.dart',
         ).readAsStringSync();
 
-        expect(source, contains("return error.code == 'unauthenticated';"));
-        expect(source, isNot(contains("error.code == 'permission-denied'")));
+        expect(source, contains("case 'unauthenticated':"));
+        expect(source, contains("case 'unavailable':"));
+        expect(source, contains("case 'deadline-exceeded':"));
+        expect(source, isNot(contains("case 'permission-denied':")));
       },
     );
 
-    test('keeps App Check on raw HTTP fallback for production callables', () {
+    test('attaches App Check opportunistically on the raw HTTP fallback', () {
       final source = File(
         'lib/services/callable_auth_guard.dart',
       ).readAsStringSync();
@@ -42,15 +44,13 @@ void main() {
       expect(source, contains('_appCheckCachedTokenTimeout'));
       expect(source, contains('_appCheckForcedTokenTimeout'));
       expect(source, contains('_directCallableTimeout'));
-      expect(source, contains('_appCheckEnabled && appCheckToken == null'));
-      expect(
-        source,
-        contains(
-          "code: 'unavailable',\n"
-          '        message:\n'
-          "            'Connexion sécurisée indisponible.",
-        ),
-      );
+      // A missing App Check token must never abort a call. Play Integrity
+      // attestation fails outright on part of the real device fleet, and the
+      // backend treats App Check as an anti-abuse signal only (see
+      // functions/src/function_runtime.ts). Guard against the old
+      // fail-closed shape returning.
+      expect(source, isNot(contains('_appCheckEnabled && appCheckToken')));
+      expect(source, isNot(contains('Connexion sécurisée indisponible')));
       expect(source, contains("'X-Firebase-AppCheck': ?appCheckToken"));
     });
 

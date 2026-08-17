@@ -15,8 +15,13 @@ class CallableAuthGuard {
 
   static const Duration _authCachedTokenTimeout = Duration(seconds: 10);
   static const Duration _authForcedTokenTimeout = Duration(seconds: 25);
-  static const Duration _appCheckCachedTokenTimeout = Duration(seconds: 10);
-  static const Duration _appCheckForcedTokenTimeout = Duration(seconds: 25);
+  // Tight on purpose: the App Check token is optional (see
+  // _callHttpsEndpoint), so waiting long for one only adds latency to every
+  // single callable on devices where attestation never succeeds. These used
+  // to be 10s/25s, which stacked on top of the auth token wait and made a
+  // failing upload take close to a minute before showing an error.
+  static const Duration _appCheckCachedTokenTimeout = Duration(seconds: 3);
+  static const Duration _appCheckForcedTokenTimeout = Duration(seconds: 6);
   static const Duration _directCallableTimeout = Duration(seconds: 50);
 
   static const bool _configuredAppCheckEnabled = bool.fromEnvironment(
@@ -100,7 +105,17 @@ class CallableAuthGuard {
   }
 
   static bool _shouldRetry(FirebaseFunctionsException error) {
-    return error.code == 'unauthenticated';
+    switch (error.code) {
+      case 'unauthenticated':
+      case 'unavailable':
+      case 'deadline-exceeded':
+      case 'internal':
+      case 'aborted':
+      case 'cancelled':
+        return true;
+      default:
+        return false;
+    }
   }
 
   static Future<T> _callHttpsEndpoint<T>(
@@ -116,15 +131,14 @@ class CallableAuthGuard {
         message: 'Authentification requise.',
       );
     }
-    final appCheckToken = await _readAppCheckToken(forceRefresh: true);
-    if (_appCheckEnabled && appCheckToken == null) {
-      throw _DirectCallableException(
-        code: 'unavailable',
-        message:
-            'Connexion sécurisée indisponible. Réessayez dans quelques '
-            'instants.',
-      );
-    }
+    // Opportunistic: the header is attached when attestation succeeded, and
+    // omitted otherwise. It must never decide whether the request is sent.
+    // Refusing here turned every device that can't run Play Integrity into a
+    // device that can't upload a video, post a like or follow anyone —
+    // while the backend itself (see functions/src/function_runtime.ts) only
+    // treats App Check as an anti-abuse signal, with authentication and
+    // authorization enforced separately on every callable.
+    final appCheckToken = await _readAppCheckToken();
 
     final client = httpClient ?? http.Client();
     final shouldCloseClient = httpClient == null;
