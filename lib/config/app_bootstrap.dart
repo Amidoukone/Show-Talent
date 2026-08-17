@@ -34,7 +34,17 @@ class AppBootstrap {
     // back to a retry screen instead of leaving a dead splash screen -- see
     // _initializeFirebaseWithRetry).
     await _initializeFirebaseWithRetry();
-    await AppCheckService.initialize();
+
+    // Never awaited. Activating App Check means a Play Integrity handshake,
+    // which on real devices routinely takes many seconds and often fails
+    // outright (Play-uncertified handsets, stale Play services, slow
+    // networks). Awaiting it here froze the native splash for the whole
+    // activation timeout on every cold start before runApp() could run --
+    // which is exactly what testers reported as "the loader spins forever".
+    // App Check is an anti-abuse signal, not a startup dependency: the app
+    // must render and stay usable whether or not a token ever arrives.
+    unawaited(AppCheckService.initialize());
+
     AppBindings.registerPermanentDependencies();
 
     // Everything below is best-effort: a failure here must never prevent
@@ -81,6 +91,16 @@ class AppBootstrap {
     await _runNonCritical(
       'NotificationService.listenForeground',
       () async => NotificationService.listenForeground(),
+    );
+
+    await _runNonCritical(
+      'NotificationService.listenTokenRefresh',
+      NotificationService.listenTokenRefresh,
+    );
+
+    await _runNonCritical(
+      'NotificationService.listenNotificationTaps',
+      NotificationService.listenNotificationTaps,
     );
 
     await _runNonCritical(

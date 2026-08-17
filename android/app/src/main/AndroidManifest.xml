@@ -104,5 +104,15 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Fallback channel for pushes that omit android.notification.channelId.
+             Every sender we control sets it explicitly, but without this default
+             Android drops such a notification silently on API 26+ rather than
+             showing it, so a single missing field on the backend would make
+             notifications disappear with no error anywhere. The id matches the
+             channel NotificationService.initLocal creates at startup. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="high_importance_channel" />
     </application>
 </manifest>

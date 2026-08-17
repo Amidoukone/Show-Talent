@@ -8,7 +8,10 @@ import 'package:adfoot/screens/conversation_screen.dart';
 import 'package:adfoot/screens/event_list_screen.dart';
 import 'package:adfoot/screens/home_screen.dart';
 import 'package:adfoot/screens/offre_screen.dart';
+import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/screens/setting_screen.dart';
+import 'package:adfoot/services/notification_route.dart';
+import 'package:adfoot/services/notifications.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -27,6 +30,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _hasHandledArguments = false;
 
   StreamSubscription<bool>? _connectivitySub;
+  StreamSubscription<NotificationRoute>? _notificationRouteSub;
 
   final UserController userController = Get.find<UserController>();
   final ChatController chatController = Get.find<ChatController>();
@@ -43,27 +47,83 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _listenConnectivity();
+    _listenNotificationRoutes();
+    unawaited(userController.ensureCurrentUserHydrated());
   }
 
   @override
   void dispose() {
     _connectivitySub?.cancel();
+    _notificationRouteSub?.cancel();
     super.dispose();
   }
 
-  void _listenConnectivity() {
-    _connectivitySub = ConnectivityService().connectionStream.listen(
-      (connected) {
-        if (!mounted) return;
-        setState(() => _isOnline = connected);
-      },
+  /// Turns a tapped notification into a destination.
+  ///
+  /// The shell is the right owner: it is the first widget that exists after
+  /// authentication, so it can navigate, and it already holds the tab index a
+  /// message/offer/event notification needs to reach.
+  void _listenNotificationRoutes() {
+    _notificationRouteSub = NotificationService.routeTaps.listen(
+      _openNotificationRoute,
       onError: (_) {},
     );
 
-    ConnectivityService().checkInitialConnection().then((connected) {
+    // A tap that launched the app from a killed state was captured during
+    // bootstrap, long before any screen could handle it. Replay it once the
+    // first frame is on screen, so the destination pushes over the shell
+    // rather than racing it.
+    final pending = NotificationService.takePendingRoute();
+    if (pending != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openNotificationRoute(pending);
+      });
+    }
+  }
+
+  void _openNotificationRoute(NotificationRoute route) {
+    if (!mounted) return;
+
+    switch (route.destination) {
+      case NotificationDestination.none:
+        return;
+      case NotificationDestination.ownProfile:
+        final uid = userController.user?.uid;
+        if (uid == null || uid.isEmpty) {
+          // Not hydrated yet (or signed out): the profile screen has nothing
+          // to load. Dropping the route is better than pushing a dead one.
+          return;
+        }
+        unawaited(Get.to(() => ProfileScreen(uid: uid, isReadOnly: false)));
+      case NotificationDestination.offers:
+        _selectTab(1);
+      case NotificationDestination.events:
+        _selectTab(2);
+      case NotificationDestination.conversations:
+        _selectTab(3);
+    }
+  }
+
+  void _selectTab(int index) {
+    if (!mounted || _selectedIndex == index) return;
+    setState(() => _selectedIndex = index);
+  }
+
+  void _listenConnectivity() {
+    _connectivitySub = ConnectivityService().connectionStream.listen((
+      connected,
+    ) {
       if (!mounted) return;
       setState(() => _isOnline = connected);
-    }).catchError((_) {});
+    }, onError: (_) {});
+
+    ConnectivityService()
+        .checkInitialConnection()
+        .then((connected) {
+          if (!mounted) return;
+          setState(() => _isOnline = connected);
+        })
+        .catchError((_) {});
   }
 
   @override
@@ -102,10 +162,7 @@ class _MainScreenState extends State<MainScreen> {
           const Positioned(
             right: -2,
             top: -2,
-            child: CircleAvatar(
-              radius: 4,
-              backgroundColor: AdColors.error,
-            ),
+            child: CircleAvatar(radius: 4, backgroundColor: AdColors.error),
           ),
       ],
     );
@@ -118,9 +175,83 @@ class _MainScreenState extends State<MainScreen> {
       final unread = chatController.totalUnread;
 
       if (appUser == null) {
-        return const Scaffold(
+        final isLoading = userController.isUserHydrationPending;
+        final hasAttempted = userController.hasAttemptedHydration;
+
+        // Self-heal. Reaching this branch with no attempt in flight and none
+        // ever completed used to leave a bare spinner running forever, with
+        // no code path left that would ever replace it. Kick a hydration
+        // instead so the screen always converges on a profile or on an
+        // actionable error.
+        if (!isLoading && !hasAttempted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            unawaited(userController.ensureCurrentUserHydrated());
+          });
+        }
+
+        // Only spin while something is actually running. Once an attempt has
+        // settled without producing a profile there is always a message to
+        // show (UserController.ensureCurrentUserHydrated guarantees it), so
+        // the user gets an explanation and a Réessayer button rather than an
+        // endless loader.
+        final message = isLoading || !hasAttempted
+            ? ''
+            : (userController.sessionLoadMessage.trim().isEmpty
+                  ? 'Impossible de charger le profil. '
+                        'Réessayez dans quelques instants.'
+                  : userController.sessionLoadMessage);
+
+        return Scaffold(
           body: Center(
-            child: CircularProgressIndicator(),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: message.isEmpty
+                  ? const CircularProgressIndicator()
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.account_circle_outlined,
+                          size: 56,
+                          color: AdColors.onSurfaceMuted,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Profil indisponible',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: AdColors.onSurfaceMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        FilledButton.icon(
+                          onPressed: isLoading
+                              ? null
+                              : () => userController.ensureCurrentUserHydrated(
+                                  force: true,
+                                ),
+                          icon: isLoading
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.refresh),
+                          label: const Text('Réessayer'),
+                        ),
+                      ],
+                    ),
+            ),
           ),
         );
       }
@@ -195,10 +326,7 @@ class _MainScreenState extends State<MainScreen> {
                       label: 'Events',
                     ),
                     BottomNavigationBarItem(
-                      icon: _ChatIconWithBadge(
-                        unread: unread,
-                        active: false,
-                      ),
+                      icon: _ChatIconWithBadge(unread: unread, active: false),
                       activeIcon: _ChatIconWithBadge(
                         unread: unread,
                         active: true,
@@ -225,10 +353,7 @@ class _ChatIconWithBadge extends StatelessWidget {
   final int unread;
   final bool active;
 
-  const _ChatIconWithBadge({
-    required this.unread,
-    required this.active,
-  });
+  const _ChatIconWithBadge({required this.unread, required this.active});
 
   @override
   Widget build(BuildContext context) {
@@ -276,10 +401,7 @@ class _NavIconShell extends StatelessWidget {
   final Widget child;
   final bool active;
 
-  const _NavIconShell({
-    required this.child,
-    required this.active,
-  });
+  const _NavIconShell({required this.child, required this.active});
 
   @override
   Widget build(BuildContext context) {
