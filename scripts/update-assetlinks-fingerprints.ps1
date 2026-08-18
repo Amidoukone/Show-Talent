@@ -216,7 +216,18 @@ if ($PrintOnly) {
     exit 0
 }
 
-Set-Content -LiteralPath $resolvedAssetLinksPath -Value $jsonOut -Encoding UTF8
+# NEVER use `Set-Content -Encoding UTF8` here. On Windows PowerShell 5.1 that
+# writes a UTF-8 BOM (EF BB BF), and Google's Digital Asset Links API refuses
+# the file outright: "Could not parse statement list (not valid JSON)". A
+# rejected statement list silently disables App Links verification for every
+# android:autoVerify intent-filter in AndroidManifest.xml -- email
+# verification links (/__/auth/action) and shared video links (/v/**) then
+# open in the browser instead of the app, with no error anywhere.
+[System.IO.File]::WriteAllText(
+    $resolvedAssetLinksPath,
+    $jsonOut,
+    (New-Object System.Text.UTF8Encoding($false))
+)
 
 Write-Host "assetlinks.json updated."
 Write-Host "Path                : $resolvedAssetLinksPath"

@@ -31,10 +31,16 @@ android {
         versionName = flutter.versionName
         multiDexEnabled true
         ndk {
-            // Production/staging target modern Android devices and Play's
-            // 64-bit requirement. Avoid configuring obsolete 32-bit ARM CMake
-            // toolchains that fail with recent Android NDK releases on Windows.
-            abiFilters "arm64-v8a"
+            // Both ARM ABIs on purpose. Play's rule is that a 64-bit variant
+            // must be *present*, not that the 32-bit one must be dropped —
+            // shipping arm64-v8a alone made the app simply invisible on the
+            // Play Store for every armeabi-v7a handset, which is a real share
+            // of the entry-level devices this audience actually owns.
+            //
+            // x86/x86_64 stay out: they only serve emulators, and the app
+            // bundle splits per ABI anyway, so adding armeabi-v7a costs
+            // download size on no one — each device downloads only its own.
+            abiFilters "armeabi-v7a", "arm64-v8a"
         }
     }
 

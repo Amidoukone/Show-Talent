@@ -305,6 +305,104 @@ void main() {
       },
     );
 
+    // The cascade cannot run on the client: clearing the departing uid from
+    // other users' followersList/followingsList means writing to documents
+    // the caller does not own, which firestore.rules refuses. The old
+    // implementation attempted it anyway and swallowed every
+    // permission-denied, so deleted accounts stayed referenced in everybody
+    // else's follow lists with inflated counters. Keep the client a thin
+    // caller of deleteOwnAccount.
+    test('account deletion runs server-side, not as a client-side cascade', () {
+      final cleanup = File(
+        'lib/services/account_cleanup_service.dart',
+      ).readAsStringSync();
+
+      expect(cleanup, contains('httpsCallable('));
+      expect(cleanup, contains("'deleteOwnAccount'"));
+
+      // Comments are stripped first: the class doc explains *why* the cascade
+      // moved off the client, and naming followersList/followingsList there is
+      // the point of the explanation. Only executable code may not mention
+      // them.
+      final cleanupCode = cleanup
+          .split('\n')
+          .where((line) => !line.trimLeft().startsWith('//'))
+          .join('\n');
+
+      for (final clientCascade in const <String>[
+        "collection('videos')",
+        "collection('offres')",
+        "collection('events')",
+        "collection('conversations')",
+        'followersList',
+        'followingsList',
+      ]) {
+        expect(
+          cleanupCode,
+          isNot(contains(clientCascade)),
+          reason:
+              '$clientCascade belongs to the server-side purge, not the client',
+        );
+      }
+
+      final callable = File(
+        'functions/src/account_deletion_actions.ts',
+      ).readAsStringSync();
+
+      // Recency is re-checked server-side because deleting through the Admin
+      // SDK bypasses Firebase Auth's own requires-recent-login guard, and it
+      // must happen before anything is erased so a refusal leaves the account
+      // intact and retryable.
+      expect(callable, contains('MAX_AUTH_AGE_SECONDS'));
+      expect(callable, contains('requires_recent_login'));
+      expect(callable, contains('purgeAccountData'));
+
+      final index = File('functions/src/index.ts').readAsStringSync();
+      expect(index, contains('deleteOwnAccount'));
+    });
+
+    // Everything used to be reported to Crashlytics as non-fatal, which left
+    // the crash-free-users metric permanently green no matter what happened
+    // on the device -- the reason spontaneous crash reports could never be
+    // corroborated.
+    test('uncaught errors reach Crashlytics as fatal', () {
+      final bootstrap = File(
+        'lib/config/app_bootstrap.dart',
+      ).readAsStringSync();
+
+      expect(bootstrap, contains('recordFlutterFatalError'));
+      expect(bootstrap, isNot(contains('fatal: false')));
+
+      // Scoped to the reporting call itself: searching the rest of the file
+      // would let one site's `fatal: true` vouch for the other's.
+      for (final fatalSite in const <String>[
+        "source: 'AppBootstrap.reportZoneError',",
+        "source: 'PlatformDispatcher.onError',",
+      ]) {
+        final index = bootstrap.indexOf(fatalSite);
+        expect(index, greaterThan(-1), reason: '$fatalSite disappeared');
+
+        final callSite = bootstrap.substring(
+          index,
+          (index + 200).clamp(0, bootstrap.length),
+        );
+        expect(
+          callSite,
+          contains('fatal: true'),
+          reason: '$fatalSite must report a fatal error',
+        );
+      }
+    });
+
+    // Play requires a 64-bit variant to be present, not the 32-bit one to be
+    // dropped. Shipping arm64-v8a alone made the app invisible on the Play
+    // Store for every armeabi-v7a handset.
+    test('the Android build ships both ARM ABIs', () {
+      final gradle = File('android/app/build.gradle').readAsStringSync();
+
+      expect(gradle, contains('abiFilters "armeabi-v7a", "arm64-v8a"'));
+    });
+
     test(
       'Sprint 4 phase D email link handler is test-safe and resilient to init failures',
       () {

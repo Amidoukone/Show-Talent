@@ -4,7 +4,7 @@
 import {randomBytes} from "crypto";
 import type {ActionCodeSettings} from "firebase-admin/auth";
 import {HttpsError} from "firebase-functions/v2/https";
-import {db} from "./firebase";
+import {auth, db} from "./firebase";
 import {
   LOW_CPU_CALLABLE_OPTIONS,
   LOW_CPU_REGION_OPTIONS,
@@ -231,6 +231,95 @@ function buildHostedAuthActionLink(
   }
 }
 
+// Firebase Auth refuses to mint an action link whose continueUrl points at a
+// domain missing from Authentication > Settings > Authorized domains. The
+// Admin SDK reports that as a plain FirebaseAuthError, which escaped both
+// callables uncaught and reached the admin portal as a bare "INTERNAL" —
+// production logs for adfoot-production show
+// `auth/unauthorized-continue-uri: Domain not allowlisted by project` while
+// the operator only ever saw "erreur interne". Since account creation is the
+// single entry point to the whole platform (there is no self-signup), that
+// unreadable error blocks onboarding entirely.
+const UNAUTHORIZED_CONTINUE_URI_CODES = new Set([
+  "auth/unauthorized-continue-uri",
+  "auth/invalid-continue-uri",
+  "auth/missing-continue-uri",
+]);
+
+function authErrorCode(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return "";
+  }
+  const candidate = error as {
+    errorInfo?: {code?: unknown};
+    code?: unknown;
+  };
+  const nested = candidate.errorInfo?.code;
+  if (typeof nested === "string") {
+    return nested;
+  }
+  return typeof candidate.code === "string" ? candidate.code : "";
+}
+
+function assertActionLinkDomainAllowed(error: unknown): never {
+  if (!UNAUTHORIZED_CONTINUE_URI_CODES.has(authErrorCode(error))) {
+    throw error;
+  }
+
+  const host = getEmailLinkHost() || "(EMAIL_LINK_CUSTOM_HOST non defini)";
+  throw new HttpsError(
+    "failed-precondition",
+    `Le domaine ${host} n'est pas autorise dans Firebase Authentication. ` +
+      "Ajoutez-le dans Authentication > Settings > Authorized domains du " +
+      "projet, puis relancez l'operation.",
+    {reason: "unauthorized_continue_uri", host},
+  );
+}
+
+/**
+ * Password-setup link on the hosted /account/reset page.
+ *
+ * @param {string} email Address the link is minted for.
+ * @return {Promise<string>} Hosted action link.
+ */
+async function generateHostedPasswordResetLink(
+  email: string,
+): Promise<string> {
+  try {
+    return buildHostedAuthActionLink(
+      await auth.generatePasswordResetLink(
+        email,
+        buildPasswordResetActionCodeSettings(),
+      ),
+      "/account/reset",
+    );
+  } catch (error) {
+    assertActionLinkDomainAllowed(error);
+  }
+}
+
+/**
+ * Email-verification link on the hosted /account/verify page.
+ *
+ * @param {string} email Address the link is minted for.
+ * @return {Promise<string>} Hosted action link.
+ */
+async function generateHostedEmailVerificationLink(
+  email: string,
+): Promise<string> {
+  try {
+    return buildHostedAuthActionLink(
+      await auth.generateEmailVerificationLink(
+        email,
+        buildEmailVerificationActionCodeSettings(),
+      ),
+      "/account/verify",
+    );
+  } catch (error) {
+    assertActionLinkDomainAllowed(error);
+  }
+}
+
 function cloneCallableValue(value: unknown): unknown {
   if (value === null) return null;
 
@@ -316,6 +405,8 @@ export {
   buildEmailVerificationActionCodeSettings,
   buildHostedAuthActionLink,
   buildPasswordResetActionCodeSettings,
+  generateHostedEmailVerificationLink,
+  generateHostedPasswordResetLink,
   buildTemporaryPassword,
   cloneCallableRecord,
   getOptionalString,

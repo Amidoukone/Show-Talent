@@ -10,10 +10,9 @@ import {
   LOW_CPU_CALLABLE_OPTIONS,
   assertAdminCaller,
   assertAdminProvisionedRole,
-  buildEmailVerificationActionCodeSettings,
-  buildHostedAuthActionLink,
-  buildPasswordResetActionCodeSettings,
   buildTemporaryPassword,
+  generateHostedEmailVerificationLink,
+  generateHostedPasswordResetLink,
   getString,
   isPrivilegedClaims,
   isUserNotFound,
@@ -140,22 +139,10 @@ export const provisionManagedAccount = onCall(
     }, {merge: true});
     await provisionBatch.commit();
 
-    const passwordSetupLink = buildHostedAuthActionLink(
-      await auth.generatePasswordResetLink(
-        email,
-        buildPasswordResetActionCodeSettings(),
-      ),
-      "/account/reset",
-    );
+    const passwordSetupLink = await generateHostedPasswordResetLink(email);
     const emailVerificationLink = userRecord.emailVerified ?
       null :
-      buildHostedAuthActionLink(
-        await auth.generateEmailVerificationLink(
-          email,
-          buildEmailVerificationActionCodeSettings(),
-        ),
-        "/account/verify",
-      );
+      await generateHostedEmailVerificationLink(email);
 
     return {
       success: true,

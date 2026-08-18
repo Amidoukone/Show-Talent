@@ -11,12 +11,11 @@ import {
   LOW_CPU_CALLABLE_OPTIONS,
   assertAdminCaller,
   assertAdminProvisionedRole,
-  buildEmailVerificationActionCodeSettings,
-  buildHostedAuthActionLink,
-  buildPasswordResetActionCodeSettings,
   cloneCallableRecord,
   getOptionalString,
   getPlainObject,
+  generateHostedEmailVerificationLink,
+  generateHostedPasswordResetLink,
   getString,
   isManagedRole,
   isPrivilegedClaims,
@@ -357,6 +356,45 @@ async function cleanupFollowReferences(uid: string): Promise<void> {
   }
 }
 
+/**
+ * Erases every document and storage object an account owns, then the account
+ * document itself. Does NOT touch Firebase Auth — callers decide that.
+ *
+ * Shared by the admin path (deleteManagedAccount) and the user-initiated path
+ * (deleteOwnAccount in account_deletion_actions.ts). It has to live on the
+ * server for both: cleanupFollowReferences() writes to *other* users'
+ * documents, which Security Rules forbid to any client
+ * (`allow update: if isOwner(userId)`). The mobile app used to attempt that
+ * cascade itself and swallow the resulting permission-denied, so a user who
+ * deleted their own account stayed in everybody else's followersList with
+ * their follower counts left over-counted.
+ *
+ * @param {string} uid Account whose data is being erased.
+ * @return {Promise<void>} Resolves once every owned document is gone.
+ */
+export async function purgeAccountData(uid: string): Promise<void> {
+  await deleteManagedVideos(uid);
+  await deleteOwnedDocs("offres", "recruteur.uid", uid);
+  await deleteOwnedDocs("events", "organisateur.uid", uid);
+  await deleteManagedConversations(uid);
+  await cleanupFollowReferences(uid);
+
+  // Deleting a document does NOT delete its subcollections in Firestore, so
+  // users/{uid}/private/contact (phone, birthDate, email) and
+  // private/adminNotes used to outlive the account they belong to --
+  // indefinitely, and unreachable from any UI. That is a data-retention
+  // defect on the exact fields that were moved into this subcollection
+  // *because* they are the sensitive ones. Delete them explicitly, before
+  // the parent doc, so a failure here aborts the deletion loudly instead of
+  // leaving the personal data behind with the profile already gone.
+  await Promise.all([
+    privateContactRef(uid).delete(),
+    privateAdminNotesRef(uid).delete(),
+  ]);
+
+  await db.collection("users").doc(uid).delete();
+}
+
 // Mirrors ownerProfileTrustFieldsChanged() in firestore.rules and
 // _trustSensitiveProfileKeys in the mobile app's profile_repository.dart.
 // Admin SDK writes bypass Security Rules, so that invariant (editing a
@@ -661,23 +699,11 @@ export const resendManagedAccountInvite = onCall(
       );
     }
 
-    const passwordSetupLink = buildHostedAuthActionLink(
-      await auth.generatePasswordResetLink(
-        email,
-        buildPasswordResetActionCodeSettings(),
-      ),
-      "/account/reset",
-    );
+    const passwordSetupLink = await generateHostedPasswordResetLink(email);
     const emailVerificationLink =
       target.userRecord?.emailVerified === true ?
         null :
-        buildHostedAuthActionLink(
-          await auth.generateEmailVerificationLink(
-            email,
-            buildEmailVerificationActionCodeSettings(),
-          ),
-          "/account/verify",
-        );
+        await generateHostedEmailVerificationLink(email);
 
     await target.userRef.set({
       invitedBy: adminUid,
@@ -898,13 +924,7 @@ export const deleteManagedAccount = onCall(
       deletedBy: adminUid,
     });
 
-    await deleteManagedVideos(uid);
-    await deleteOwnedDocs("offres", "recruteur.uid", uid);
-    await deleteOwnedDocs("events", "organisateur.uid", uid);
-    await deleteManagedConversations(uid);
-    await cleanupFollowReferences(uid);
-
-    await target.userRef.delete();
+    await purgeAccountData(uid);
 
     if (target.userRecord) {
       await auth.deleteUser(uid);

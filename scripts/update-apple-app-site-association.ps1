@@ -54,7 +54,15 @@ if ($PrintOnly) {
     exit 0
 }
 
-Set-Content -LiteralPath $resolvedFilePath -Value $jsonOut -Encoding UTF8
+# BOM-less on purpose -- see the matching comment in
+# update-assetlinks-fingerprints.ps1. `Set-Content -Encoding UTF8` emits a BOM
+# on Windows PowerShell 5.1, which breaks strict JSON parsers (Apple's CDN for
+# this file, Google's Digital Asset Links API for assetlinks.json).
+[System.IO.File]::WriteAllText(
+    $resolvedFilePath,
+    $jsonOut,
+    (New-Object System.Text.UTF8Encoding($false))
+)
 
 Write-Host "apple-app-site-association updated."
 Write-Host "Path    : $resolvedFilePath"

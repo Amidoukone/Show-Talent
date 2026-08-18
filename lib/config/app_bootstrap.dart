@@ -177,11 +177,14 @@ class AppBootstrap {
       AppLogger.debug('Uncaught zone error: $error\n$stack');
     }
 
+    // Fatal: nothing caught this. runZonedGuarded is the last line of defence,
+    // so anything arriving here already took a user-visible code path down.
     _safeReportError(
       'Uncaught zone error',
       source: 'AppBootstrap.reportZoneError',
       error: error,
       stackTrace: stack,
+      fatal: true,
     );
   }
 
@@ -189,11 +192,20 @@ class AppBootstrap {
   // initialized (e.g. errors during the bootstrap sequence), and
   // AppLogger.error transitively touches FirebaseFunctions.instanceFor,
   // which throws if called before Firebase.initializeApp() has resolved.
+  //
+  // [fatal] decides whether Crashlytics counts this against the crash-free
+  // users metric. It must be true for anything nothing caught (uncaught zone
+  // and platform errors) and false for handled failures such as a
+  // best-effort bootstrap step: everything used to be reported as non-fatal,
+  // which left the Crashlytics dashboard permanently green while the app was
+  // in fact dying on users' phones.
   static void _safeReportError(
     String message, {
     required String source,
     required Object error,
     StackTrace? stackTrace,
+    bool fatal = false,
+    bool reportToCrashlytics = true,
   }) {
     try {
       AppLogger.error(
@@ -210,14 +222,14 @@ class AppBootstrap {
     // record. Crashlytics is what turns a previously invisible crash (e.g.
     // the app dying when a phone call interrupts video playback) into a
     // real stack trace we can act on, without replacing the existing log.
-    if (!kIsWeb) {
+    if (!kIsWeb && reportToCrashlytics) {
       try {
         unawaited(
           FirebaseCrashlytics.instance.recordError(
             error,
             stackTrace,
             reason: '$source: $message',
-            fatal: false,
+            fatal: fatal,
           ),
         );
       } catch (_) {
@@ -246,20 +258,49 @@ class AppBootstrap {
       if (kDebugMode) {
         FlutterError.dumpErrorToConsole(details);
       }
+
+      // recordFlutterFatalError, not recordError: this is the hook Crashlytics
+      // expects for framework errors, and it is what makes the "crash-free
+      // users" metric mean anything. Reporting these as non-fatal kept the
+      // dashboard green no matter what happened on the device, which is
+      // exactly why the spontaneous crashes users reported were impossible to
+      // corroborate.
+      //
+      // The trade-off is that a recoverable framework error (a RenderFlex
+      // overflow, say) now also counts as a crash. That is the right default
+      // while the crash picture is still unknown; if the dashboard fills with
+      // layout noise later, downgrade *those* specific cases rather than
+      // going back to reporting everything as non-fatal.
+      if (!kIsWeb) {
+        try {
+          FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+        } catch (_) {
+          // Crashlytics may not be initialized yet (an error thrown during
+          // bootstrap itself) — never let reporting mask the real error.
+        }
+      }
+
+      // Kept alongside: AppLogger's remote log stays the primary internal
+      // record. Crashlytics is skipped here because the call above already
+      // recorded this exact error — reporting it twice would double-count it.
       _safeReportError(
         'Uncaught Flutter framework error',
         source: 'FlutterError.onError',
         error: details.exception,
         stackTrace: details.stack,
+        reportToCrashlytics: false,
       );
     };
 
     PlatformDispatcher.instance.onError = (error, stack) {
+      // Reached only when nothing else handled the error, so it is fatal by
+      // definition.
       _safeReportError(
         'Uncaught platform error',
         source: 'PlatformDispatcher.onError',
         error: error,
         stackTrace: stack,
+        fatal: true,
       );
       return true;
     };
