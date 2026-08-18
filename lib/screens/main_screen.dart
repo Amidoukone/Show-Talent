@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/connectivity_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
@@ -34,6 +35,7 @@ class _MainScreenState extends State<MainScreen> {
 
   final UserController userController = Get.find<UserController>();
   final ChatController chatController = Get.find<ChatController>();
+  final AuthController _authController = Get.find<AuthController>();
 
   final List<Widget> _screens = <Widget>[
     const HomeScreen(),
@@ -88,10 +90,17 @@ class _MainScreenState extends State<MainScreen> {
       case NotificationDestination.none:
         return;
       case NotificationDestination.ownProfile:
-        final uid = userController.user?.uid;
+        // Read the uid from auth, not from the hydrated profile. The common
+        // case for this route is a cold start: the phone was in a pocket, the
+        // "video approuvee" notification arrived, and the tap launches the app
+        // from a killed state. At that moment `userController.user` is still
+        // being fetched, so keying off it dropped the route in silence and
+        // landed the author on the feed — the one destination that does not
+        // show the video they were just told about. ProfileScreen loads the
+        // profile itself; all it needs is the uid.
+        final uid = _authController.currentUid;
         if (uid == null || uid.isEmpty) {
-          // Not hydrated yet (or signed out): the profile screen has nothing
-          // to load. Dropping the route is better than pushing a dead one.
+          // Genuinely signed out. Nothing to open.
           return;
         }
         unawaited(Get.to(() => ProfileScreen(uid: uid, isReadOnly: false)));

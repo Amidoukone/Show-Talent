@@ -1037,13 +1037,16 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () {
-                            final currentUserId =
-                                widget.userController.user?.uid;
-                            if (currentUserId == null ||
-                                currentUserId.trim().isEmpty) {
-                              return;
-                            }
-                            unawaited(_openPublisherProfile(currentUserId));
+                            // Deliberately unguarded. This used to bail out
+                            // when the signed-in profile had not hydrated
+                            // yet, so early in a session tapping a publisher's
+                            // name did nothing at all — no navigation, no
+                            // feedback, nothing to retry against.
+                            unawaited(
+                              _openPublisherProfile(
+                                widget.userController.user?.uid,
+                              ),
+                            );
                           },
                           child: Semantics(
                             button: true,
@@ -1199,8 +1202,16 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   // LIKE / DELETE / SHARE / RELOAD / WAKELOCK
   // ---------------------------------------------------------------------------
 
-  Future<void> _openPublisherProfile(String currentUserId) async {
-    final isOwner = widget.video.uid == currentUserId;
+  /// Opens the publisher's profile.
+  ///
+  /// [currentUserId] only decides whether the profile opens editable, so an
+  /// unknown identity is not a reason to refuse: it falls back to read-only,
+  /// which is both the safe default and what a viewer wants anyway.
+  Future<void> _openPublisherProfile(String? currentUserId) async {
+    final isOwner =
+        currentUserId != null &&
+        currentUserId.isNotEmpty &&
+        widget.video.uid == currentUserId;
 
     await _videoManager.pauseAll(widget.contextKey);
     await _setWakelock(false);

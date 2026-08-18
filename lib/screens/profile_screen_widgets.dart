@@ -265,18 +265,25 @@ class _VideoTile extends StatelessWidget {
     // this badge is implicitly private to them (see fetchUserVideos).
     final badge = _VideoStateBadge.forVideo(video);
 
-    Widget thumbnail = Image.network(
-      video.thumbnailUrl,
-      fit: BoxFit.cover,
-      errorBuilder: (_, _, _) => fallback(),
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
+    // An empty URL is a real case now that the owner sees videos before they
+    // are live: a still is only guaranteed once the upload has been
+    // finalized. Checking up front keeps it out of Image.network entirely
+    // rather than relying on it to fail its way into errorBuilder, which
+    // costs a failed resolution and logs an exception per tile per rebuild.
+    Widget thumbnail = video.thumbnailUrl.trim().isEmpty
+        ? fallback()
+        : Image.network(
+            video.thumbnailUrl,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => fallback(),
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) {
+                return child;
+              }
 
-        return fallback();
-      },
-    );
+              return fallback();
+            },
+          );
 
     if (badge != null) {
       // Dim the still so the badge stays readable over a bright frame, and so

@@ -95,6 +95,8 @@ class UploadVideoController extends GetxController {
 
   @override
   void onClose() {
+    _cancelOptimizationWatch?.call();
+    _cancelOptimizationWatch = null;
     VideoTools.dispose();
     super.onClose();
   }
@@ -607,6 +609,16 @@ class UploadVideoController extends GetxController {
   /* Attente optimisation                                                      */
   /* -------------------------------------------------------------------------- */
 
+  /// Tears down an optimization watch left running by a discarded controller.
+  ///
+  /// The watch lives up to [_optimizationOverallTimeout] and holds a Firestore
+  /// listener plus two timers. This controller is registered with
+  /// `permanent: false` (FeatureControllerRegistry), so leaving the upload
+  /// flow disposes it mid-wait — and the timers went on to fire a toast and a
+  /// `Get.offAllNamed` from a controller nobody was looking at any more,
+  /// yanking the user off whatever screen they had moved to.
+  void Function()? _cancelOptimizationWatch;
+
   Future<void> _waitForVideoStatusReady(String videoId) async {
     final completer = Completer<void>();
     StreamSubscription<UploadVideoProcessingState>? subscription;
@@ -673,6 +685,7 @@ class UploadVideoController extends GetxController {
     Future<void> closeOptimizationFlow(Future<void> Function() callback) async {
       if (completer.isCompleted) return;
 
+      _cancelOptimizationWatch = null;
       await subscription?.cancel();
       fallbackTimer?.cancel();
       timeoutTimer?.cancel();
@@ -681,6 +694,20 @@ class UploadVideoController extends GetxController {
         completer.complete();
       }
     }
+
+    // Abandon the watch without running any of the completion flows: the
+    // controller is going away, so a toast or a route change would land on
+    // whatever screen the user moved to instead. The upload itself is
+    // unaffected — it is finished server-side by this point, and the profile
+    // shows its state.
+    _cancelOptimizationWatch = () {
+      unawaited(subscription?.cancel());
+      fallbackTimer?.cancel();
+      timeoutTimer?.cancel();
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    };
 
     Future<void> inspectVideoState(UploadVideoProcessingState state) async {
       final status = state.status;
