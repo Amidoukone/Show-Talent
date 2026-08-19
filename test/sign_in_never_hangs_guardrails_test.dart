@@ -14,6 +14,21 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// These tests are about the *shape* of that failure, not any one trigger:
 /// whatever stalls, the flow must end somewhere the user can act on.
+/// Reads `static const Duration <name> = Duration(seconds: n)` out of the
+/// source, so the guardrail asserts the *relationship* between the budgets
+/// rather than pinning the numbers themselves.
+Duration? _durationOf(String source, String name) {
+  final match = RegExp(
+    'Duration $name = Duration\\((seconds|milliseconds): (\\d+)\\)',
+  ).firstMatch(source);
+  if (match == null) return null;
+
+  final value = int.parse(match.group(2)!);
+  return match.group(1) == 'seconds'
+      ? Duration(seconds: value)
+      : Duration(milliseconds: value);
+}
+
 void main() {
   group('sign-in is bounded at every level', () {
     late String service;
@@ -38,6 +53,44 @@ void main() {
       // is an interminable wait even though no single call ever timed out.
       expect(service, contains('_signInHandshakeTimeout'));
       expect(service, contains('Future<User> _signInHandshake('));
+    });
+
+    test('the verified-state repair fits inside the timeout that wraps it', () {
+      // The repair reconciles a profile still marked unverified while Firebase
+      // Auth says otherwise. It is the only sanctioned path -- Rules keep
+      // emailVerified/estActif out of the owner-writable allowlist -- so if it
+      // is cut off, the account can never open and can never upload.
+      //
+      // It used to be budgeted by attempt count: five tries of an 8s callable
+      // spaced 2s apart, ~48s, inside a 15s resolve timeout. The timeout won
+      // every time, and its onTimeout returns destination `main` with a null
+      // profile, which reads as success -- so the repair was abandoned in
+      // silence and re-abandoned identically on every later sign-in.
+      final budget = _durationOf(service, '_verifiedSyncBudget');
+      final resolveTimeout =
+          _durationOf(service, '_signInSessionResolveTimeout');
+      final callTimeout = _durationOf(service, '_verificationCallableTimeout');
+
+      expect(budget, isNotNull, reason: 'the repair must carry a clock budget');
+      expect(resolveTimeout, isNotNull);
+      expect(callTimeout, isNotNull);
+
+      expect(
+        budget!.inMilliseconds + callTimeout!.inMilliseconds,
+        lessThan(resolveTimeout!.inMilliseconds),
+        reason:
+            'the repair plus one in-flight call must finish before the wrapper '
+            'times out, or the repair is cut off with nothing recorded',
+      );
+    });
+
+    test('the repair retries against a deadline, not a retry count', () {
+      expect(service, contains('final deadline = DateTime.now().add('));
+      expect(
+        service,
+        isNot(contains('int attempts = 5')),
+        reason: 'a count-based budget cannot be reasoned about against a clock',
+      );
     });
 
     test('a timeout surfaces as an error the login screen already maps', () {

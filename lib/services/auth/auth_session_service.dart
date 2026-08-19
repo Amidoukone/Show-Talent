@@ -102,7 +102,32 @@ class AuthSessionService {
   final UserRepository _userRepository;
   final FirebaseFunctions _functions;
   static const Duration _verificationCallableTimeout = Duration(seconds: 8);
-  static const Duration _signInSessionResolveTimeout = Duration(seconds: 15);
+
+  /// Ceiling on the whole verified-state repair, deadline-driven.
+  ///
+  /// This repair is the only sanctioned way to reconcile a profile whose
+  /// `emailVerified`/`estActif` still say false while Firebase Auth says the
+  /// address is verified — Security Rules deliberately keep those two fields
+  /// out of the owner-writable allowlist, so the client cannot write them
+  /// directly. Every gate in the app and in the Cloud Functions reads the
+  /// profile copy, so until it is reconciled the account cannot open and
+  /// cannot upload.
+  ///
+  /// It used to be budgeted by attempt count instead of by clock: five tries
+  /// of an 8s callable spaced 2s apart, ~48s, inside a 15s
+  /// [_signInSessionResolveTimeout]. The timeout therefore won every single
+  /// time. Worse, its `onTimeout` returns destination `main` with a null
+  /// profile — which reads as success — so the repair was abandoned silently
+  /// and re-abandoned identically on every subsequent sign-in. A production
+  /// account sat unrepairable for three hours that way, showing its owner a
+  /// spinner and then "Profil indisponible", while the Functions log recorded
+  /// no call at all because the flow never got that far.
+  ///
+  /// Must stay comfortably below [_signInSessionResolveTimeout]; the guardrail
+  /// test asserts the relationship rather than the numbers.
+  static const Duration _verifiedSyncBudget = Duration(seconds: 9);
+  static const Duration _verifiedSyncRetryDelay = Duration(milliseconds: 600);
+  static const Duration _signInSessionResolveTimeout = Duration(seconds: 25);
 
   /// Ceiling on a single Firebase Auth network round-trip during sign-in.
   ///
@@ -326,13 +351,20 @@ class AuthSessionService {
     }
   }
 
+  /// Retries the verified-state repair until it succeeds or the budget runs out.
+  ///
+  /// Bounded by the clock, not by a retry count: an attempt is only started
+  /// when there is time left to finish it, so the total can no longer overrun
+  /// [_verifiedSyncBudget] and get cut off by the caller's timeout with the
+  /// repair half-done and no record of it.
   Future<AppUser?> _retryEmailVerificationSync({
     required String uid,
     required bool updateLastLogin,
-    int attempts = 5,
-    Duration retryDelay = const Duration(seconds: 2),
+    Duration? budget,
   }) async {
-    for (int attempt = 0; attempt < attempts; attempt++) {
+    final deadline = DateTime.now().add(budget ?? _verifiedSyncBudget);
+
+    while (true) {
       final syncedUser = await _completeEmailVerificationViaCallable(
         uid: uid,
         updateLastLogin: updateLastLogin,
@@ -344,9 +376,13 @@ class AuthSessionService {
         return syncedUser;
       }
 
-      if (attempt < attempts - 1) {
-        await Future.delayed(retryDelay);
+      final remaining = deadline.difference(DateTime.now());
+      // Only sleep and go round again if a further attempt could plausibly
+      // complete inside what is left.
+      if (remaining <= _verifiedSyncRetryDelay + _verificationCallableTimeout) {
+        break;
       }
+      await Future.delayed(_verifiedSyncRetryDelay);
     }
 
     return await _userRepository.fetchUserById(uid);
