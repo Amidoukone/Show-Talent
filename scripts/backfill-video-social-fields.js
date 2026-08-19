@@ -18,10 +18,14 @@
  * untouched, so this is safe to re-run.
  *
  * Usage:
- *   node .\scripts\backfill-video-social-fields.js --project-id adfoot-production \
- *     --credentials .credentials\adfoot-production-ops.json [--apply]
+ *   node .\scripts\backfill-video-social-fields.js --project-id <gcp-project> \
+ *     [--credentials <service-account.json>] [--apply]
  *
  * Without --apply it only reports what it would change.
+ *
+ * Never name a real service-account path here: secret scanners treat a
+ * committed path to a credentials file as an exposure, and they are right to
+ * — it tells a reader exactly where to look.
  */
 
 const admin = require("firebase-admin");

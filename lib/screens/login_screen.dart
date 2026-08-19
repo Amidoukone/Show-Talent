@@ -37,6 +37,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool get _isBusy => _isLoading || _isResettingPassword;
 
+  /// Above AuthSessionService's own 45s handshake ceiling, so its specific
+  /// messages win in the ordinary case and this only catches what it missed.
+  static const Duration _signInTimeout = Duration(seconds: 60);
+
   @override
   void initState() {
     super.initState();
@@ -64,10 +68,23 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final snapshot = await _authSessionService.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
+      // Belt and braces over AuthSessionService's own deadlines. This screen
+      // owns the spinner, so it is the only place that can promise the spinner
+      // always stops: whatever the service does — including a future change
+      // that reintroduces an unbounded await — the user gets an error they can
+      // act on instead of a loader turning forever with the app never opening.
+      final snapshot = await _authSessionService
+          .signInWithEmailAndPassword(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+          )
+          .timeout(
+            _signInTimeout,
+            onTimeout: () => throw const AuthFlowException(
+              'La connexion prend trop de temps. Vérifiez votre réseau puis '
+              'réessayez.',
+            ),
+          );
 
       if (snapshot.destination == AuthSessionDestination.login) {
         _showErrorSnackbar(

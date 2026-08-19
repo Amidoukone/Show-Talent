@@ -103,9 +103,49 @@ class AuthSessionService {
   final FirebaseFunctions _functions;
   static const Duration _verificationCallableTimeout = Duration(seconds: 8);
   static const Duration _signInSessionResolveTimeout = Duration(seconds: 15);
+
+  /// Ceiling on a single Firebase Auth network round-trip during sign-in.
+  ///
+  /// `signInWithEmailAndPassword`, `reload()` and `getIdToken(true)` each hit
+  /// the network and none of them times out on its own. Only the session
+  /// *resolution* that follows was bounded, so a stall in any of the earlier
+  /// calls left the caller awaiting forever — and the login screen's `finally`,
+  /// which clears the button's busy state, never ran. What the user sees is a
+  /// spinner that turns for as long as they are willing to watch it, with no
+  /// error and nothing to retry.
+  ///
+  /// Generous on purpose: a cold token refresh on a weak mobile connection is
+  /// legitimately slow. The point is not to be strict, it is to guarantee the
+  /// flow always ends somewhere the user can act on.
+  static const Duration _authCallTimeout = Duration(seconds: 20);
+
+  /// Ceiling on the whole pre-resolution phase of sign-in.
+  ///
+  /// Bounds the sequence as well as each call in it, so a chain of individually
+  /// slow-but-not-timed-out round-trips cannot add up to an unbounded wait.
+  static const Duration _signInHandshakeTimeout = Duration(seconds: 45);
+
   static const String _accessUnavailableTitle = 'Accès indisponible';
   static const String _accessUnavailableMessage =
       'Impossible de vérifier votre accès pour le moment. Réessayez dans quelques instants.';
+
+  /// Runs a Firebase Auth call under [_authCallTimeout].
+  ///
+  /// A timeout is reported as an [AuthFlowException] rather than a bare
+  /// [TimeoutException] because the login screen already maps that to a
+  /// message the user can read and act on.
+  static Future<T> _bounded<T>(
+    Future<T> Function() call,
+    String stage,
+  ) {
+    return call().timeout(
+      _authCallTimeout,
+      onTimeout: () => throw AuthFlowException(
+        'La connexion au serveur prend trop de temps ($stage). '
+        'Vérifiez votre réseau puis réessayez.',
+      ),
+    );
+  }
 
   static bool isDisabledAuthFailure(FirebaseAuthException error) {
     return error.code == 'user-disabled';
@@ -389,13 +429,21 @@ class AuthSessionService {
     );
   }
 
-  Future<AuthSessionSnapshot> signInWithEmailAndPassword({
+  /// Authenticates and brings the local [User] up to date, nothing more.
+  ///
+  /// Split out of [signInWithEmailAndPassword] so the whole credential
+  /// exchange can carry one deadline. Returns the freshest [User] the SDK
+  /// holds.
+  Future<User> _signInHandshake({
     required String email,
     required String password,
   }) async {
-    final userCred = await _auth.signInWithEmailAndPassword(
-      email: email,
-      password: password,
+    final userCred = await _bounded(
+      () => _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      ),
+      'authentification',
     );
 
     final user = userCred.user;
@@ -405,9 +453,11 @@ class AuthSessionService {
       );
     }
 
-    await user.reload();
+    await _bounded(() => user.reload(), 'profil');
     User? refreshed = _auth.currentUser;
-    await refreshed?.getIdToken(true);
+    if (refreshed != null) {
+      await _bounded(() => refreshed!.getIdToken(true), 'jeton');
+    }
     refreshed =
         await _refreshCurrentUserAfterVerification(
           attempts: 3,
@@ -418,6 +468,28 @@ class AuthSessionService {
       throw const AuthFlowException('Session introuvable après connexion.');
     }
 
+    return refreshed;
+  }
+
+  Future<AuthSessionSnapshot> signInWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
+    // Every await below reaches the network, and none of them times out on its
+    // own. Bounded individually *and* as a sequence: unbounded, a stall here
+    // never returns to the login screen at all, so its `finally` never clears
+    // the busy state and the user is left watching a spinner that cannot end.
+    final User refreshed = await _signInHandshake(
+      email: email,
+      password: password,
+    ).timeout(
+      _signInHandshakeTimeout,
+      onTimeout: () => throw const AuthFlowException(
+        'La connexion prend trop de temps. Vérifiez votre réseau puis '
+        'réessayez.',
+      ),
+    );
+
     return resolveSessionSafely(
       refreshed,
       waitForVerifiedUserDocument: true,
@@ -427,17 +499,10 @@ class AuthSessionService {
     ).timeout(
       _signInSessionResolveTimeout,
       onTimeout: () {
-        if (refreshed != null && refreshed.emailVerified) {
-          return AuthSessionSnapshot(
-            destination: AuthSessionDestination.main,
-            firebaseUser: refreshed,
-          );
-        }
-
         return AuthSessionSnapshot(
-          destination: refreshed != null && !refreshed.emailVerified
-              ? AuthSessionDestination.verifyEmail
-              : AuthSessionDestination.login,
+          destination: refreshed.emailVerified
+              ? AuthSessionDestination.main
+              : AuthSessionDestination.verifyEmail,
           firebaseUser: refreshed,
         );
       },

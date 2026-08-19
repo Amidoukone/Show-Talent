@@ -10,7 +10,14 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 const DEFAULT_PROJECT_ID = 'adfoot-production';
 const DEFAULT_REGION = 'europe-west1';
-const DEFAULT_SERVICE_ACCOUNT = path.join('.credentials', 'adfoot-production-ops.json');
+// Resolved from the environment, never hard-coded: a committed path to a
+// service-account file is what secret scanners flag, and rightly so — it tells
+// a reader exactly which file to go looking for. Set
+// GOOGLE_APPLICATION_CREDENTIALS (or pass --service-account <path>) instead.
+const DEFAULT_SERVICE_ACCOUNT =
+  process.env.GOOGLE_APPLICATION_CREDENTIALS ??
+  process.env.ADFOOT_OPS_SERVICE_ACCOUNT ??
+  '';
 const DEFAULT_ADMIN_CLAIM = 'admin';
 
 function parseArgs(argv) {
@@ -101,8 +108,15 @@ function buildEphemeralPassword(role, runId) {
 }
 
 function readServiceAccount(filePath) {
+  if (!filePath || !filePath.trim()) {
+    throw new Error(
+      'No service account configured. Set GOOGLE_APPLICATION_CREDENTIALS ' +
+        'or pass --service-account <path>.',
+    );
+  }
+
   const resolved = path.resolve(filePath);
-  if (!fs.existsSync(resolved)) {
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
     throw new Error(`Service account not found: ${resolved}`);
   }
 

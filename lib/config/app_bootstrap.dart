@@ -199,6 +199,25 @@ class AppBootstrap {
   // best-effort bootstrap step: everything used to be reported as non-fatal,
   // which left the Crashlytics dashboard permanently green while the app was
   // in fact dying on users' phones.
+  /// Swallows a reporting future's outcome, value and error alike.
+  ///
+  /// `unawaited()` is the wrong tool here: it documents that nobody waits for
+  /// the result, but a rejection still escapes as an unhandled asynchronous
+  /// error. Inside an error reporter that is a cycle — the rejection lands in
+  /// the zone handler, which reports it, which fails the same way.
+  static void _reportSilently(Future<void> future) {
+    future.catchError((Object _) {});
+  }
+
+  /// True while an error is already being reported.
+  ///
+  /// Reporting an error must never be able to trigger reporting another one.
+  /// Without this, a single reliably-failing Crashlytics or logging call turns
+  /// every error into an unbounded recursion that pins the UI isolate: the app
+  /// stops progressing without ever crashing, which from the outside looks
+  /// exactly like a spinner that never stops.
+  static bool _reportingInFlight = false;
+
   static void _safeReportError(
     String message, {
     required String source,
@@ -207,35 +226,46 @@ class AppBootstrap {
     bool fatal = false,
     bool reportToCrashlytics = true,
   }) {
-    try {
-      AppLogger.error(
-        message,
-        source: source,
-        error: error,
-        stackTrace: stackTrace,
-      );
-    } catch (_) {
-      // Best-effort remote logging only; never let it mask the real error.
+    if (_reportingInFlight) {
+      return;
     }
+    _reportingInFlight = true;
 
-    // Additive: AppLogger's own remote log stays the primary internal
-    // record. Crashlytics is what turns a previously invisible crash (e.g.
-    // the app dying when a phone call interrupts video playback) into a
-    // real stack trace we can act on, without replacing the existing log.
-    if (!kIsWeb && reportToCrashlytics) {
+    try {
       try {
-        unawaited(
-          FirebaseCrashlytics.instance.recordError(
-            error,
-            stackTrace,
-            reason: '$source: $message',
-            fatal: fatal,
-          ),
+        AppLogger.error(
+          message,
+          source: source,
+          error: error,
+          stackTrace: stackTrace,
         );
       } catch (_) {
-        // Crashlytics may not be ready yet (e.g. a failure during Firebase
-        // bootstrap itself) — never let reporting mask the real error.
+        // Best-effort remote logging only; never let it mask the real error.
       }
+
+      // Additive: AppLogger's own remote log stays the primary internal
+      // record. Crashlytics is what turns a previously invisible crash (e.g.
+      // the app dying when a phone call interrupts video playback) into a
+      // real stack trace we can act on, without replacing the existing log.
+      if (!kIsWeb && reportToCrashlytics) {
+        try {
+          _reportSilently(
+            FirebaseCrashlytics.instance.recordError(
+              error,
+              stackTrace,
+              reason: '$source: $message',
+              fatal: fatal,
+            ),
+          );
+        } catch (_) {
+          // Crashlytics may not be ready yet (e.g. a failure during Firebase
+          // bootstrap itself) — never let reporting mask the real error.
+        }
+      }
+    } finally {
+      // Synchronous scope only: the guard blocks re-entry *while reporting*,
+      // it does not stop the next genuine error from being reported.
+      _reportingInFlight = false;
     }
   }
 
@@ -272,8 +302,18 @@ class AppBootstrap {
       // layout noise later, downgrade *those* specific cases rather than
       // going back to reporting everything as non-fatal.
       if (!kIsWeb) {
+        // The `try` only catches a *synchronous* throw. recordFlutterFatalError
+        // returns a Future, and a bare call leaks its rejection as an unhandled
+        // asynchronous error — which runZonedGuarded routes straight back into
+        // reportZoneError, into _safeReportError, into another Crashlytics call
+        // that fails the same way. That is a self-feeding loop on the UI
+        // isolate, and a framework error that repeats every frame (a layout
+        // overflow does) is enough to start it. `_reportSilently` is what keeps
+        // the reporter from becoming the outage.
         try {
-          FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+          _reportSilently(
+            FirebaseCrashlytics.instance.recordFlutterFatalError(details),
+          );
         } catch (_) {
           // Crashlytics may not be initialized yet (an error thrown during
           // bootstrap itself) — never let reporting mask the real error.
