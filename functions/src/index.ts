@@ -47,9 +47,16 @@ const OPTIMIZE_MAX_INSTANCES = parsePositiveIntEnv(
   process.env.OPTIMIZE_MAX_INSTANCES,
   3,
 );
+// Raising the quality ceiling to 1080p roughly triples the pixels x264 has to
+// chew through per clip, and the 540s budget has to cover download, encode and
+// re-upload. Two vCPUs keeps a worst-case 3-minute 1080p encode comfortably
+// inside it. Nothing runs at rest -- there is no minInstances here -- so this
+// only costs more while an encode is actually happening.
+const OPTIMIZE_CPU = parsePositiveIntEnv(process.env.OPTIMIZE_CPU, 2);
 const OPTIMIZE_TRIGGER_OPTIONS = {
   region: OPTIMIZE_TRIGGER_REGION,
   memory: "2GiB" as const,
+  cpu: OPTIMIZE_CPU,
   timeoutSeconds: 540,
   maxInstances: OPTIMIZE_MAX_INSTANCES,
   ...(STORAGE_BUCKET ? {bucket: STORAGE_BUCKET} : {}),
@@ -58,32 +65,77 @@ const MAX_OPTIMIZE_FILE_SIZE_BYTES = parsePositiveIntEnv(
   process.env.MAX_OPTIMIZE_FILE_SIZE_BYTES,
   150 * 1024 * 1024,
 );
+// Quality ceiling, not a target. A clip is only ever scaled *down*, and only
+// when its short edge exceeds this. Everything at or under it keeps the exact
+// pixel dimensions the phone recorded.
+//
+// The previous ladder stopped at 720p and, worse, picked the largest preset
+// *below* the source's short edge — so a 1024x576 upload was re-encoded to
+// 853x480 at 900 kbps and a 1080x1920 one to 720x1280. Users saw exactly that:
+// heavier clips came back visibly softer than the file in their gallery.
+const MAX_OUTPUT_SHORT_EDGE = parsePositiveIntEnv(
+  process.env.MAX_OUTPUT_SHORT_EDGE,
+  1080,
+);
+
+// Rate ceilings by output short edge. With CRF driving the encode these are
+// caps for pathological scenes (confetti, grass in motion, crowd pans), not
+// the bitrate every clip lands on -- a calm 1080p clip typically finishes far
+// below its ceiling.
 const MP4_RENDITION_PRESETS: readonly Mp4RenditionPreset[] = [
   {
     label: "360p",
     height: 360,
-    videoBitrate: 450000,
-    maxRate: 600000,
-    bufSize: 900000,
-    audioBitrate: 64000,
+    videoBitrate: 900000,
+    maxRate: 1200000,
+    bufSize: 2400000,
+    audioBitrate: 96000,
   },
   {
     label: "480p",
     height: 480,
-    videoBitrate: 900000,
-    maxRate: 1100000,
-    bufSize: 1650000,
-    audioBitrate: 96000,
+    videoBitrate: 1600000,
+    maxRate: 2200000,
+    bufSize: 4400000,
+    audioBitrate: 128000,
   },
   {
     label: "720p",
     height: 720,
-    videoBitrate: 1800000,
-    maxRate: 2200000,
-    bufSize: 3300000,
+    videoBitrate: 3500000,
+    maxRate: 4500000,
+    bufSize: 9000000,
     audioBitrate: 128000,
   },
+  {
+    label: "1080p",
+    height: 1080,
+    videoBitrate: 6500000,
+    maxRate: 8500000,
+    bufSize: 17000000,
+    audioBitrate: 160000,
+  },
 ];
+
+// Constant Rate Factor: the encoder spends whatever bits the picture needs to
+// hit a visual quality target, instead of forcing every clip through the same
+// average bitrate. 20 is visually transparent for phone footage at these
+// resolutions.
+const OUTPUT_CRF = parsePositiveIntEnv(process.env.OUTPUT_CRF, 20);
+
+// x264 speed/efficiency trade-off. "veryfast" was chosen when the ceiling was
+// 720p; at 1080p it wastes roughly a third of the bitrate for the same
+// quality. "faster" costs a little more CPU per clip and stays well inside the
+// 540s budget.
+const OUTPUT_X264_PRESET = process.env.OUTPUT_X264_PRESET || "faster";
+
+// Upper bound on a source we are willing to pass through untouched (see
+// shouldRemuxWithoutReencoding). Beyond it the file is re-encoded so a single
+// huge upload can't become a huge download for every viewer on mobile data.
+const MAX_PASSTHROUGH_BITRATE = parsePositiveIntEnv(
+  process.env.MAX_PASSTHROUGH_BITRATE,
+  12000000,
+);
 type StorageClient = {
   bucket: (name: string) => {
     file: (path: string) => {
@@ -234,6 +286,15 @@ interface VideoDimensions {
   height: number;
 }
 
+interface ProbedMedia extends VideoDimensions {
+  // Lowercase ffmpeg codec name ("h264", "hevc", ...), null when unreadable.
+  videoCodec: string | null;
+  // Lowercase ffmpeg codec name, null when the file carries no audio stream.
+  audioCodec: string | null;
+  // Container bitrate in bits per second, null when ffmpeg did not report it.
+  bitrate: number | null;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Download token helper                                                       */
 /* -------------------------------------------------------------------------- */
@@ -321,6 +382,22 @@ function asPositiveInt(value: unknown): number | null {
   return Math.round(value);
 }
 
+/**
+ * Rate ceiling to apply to an output of the given short edge.
+ *
+ * The smallest preset at or above the output resolution — never one below it,
+ * which is what used to starve a 576-tall clip on a 480p budget.
+ *
+ * @param {number} outputShortEdge Short edge of the encoded output, in pixels.
+ * @return {Mp4RenditionPreset} Bitrate ceilings and label for that size.
+ */
+function selectRatePreset(outputShortEdge: number): Mp4RenditionPreset {
+  const preset = MP4_RENDITION_PRESETS.find(
+    (candidate) => candidate.height >= outputShortEdge,
+  );
+  return preset ?? MP4_RENDITION_PRESETS[MP4_RENDITION_PRESETS.length - 1];
+}
+
 function buildSingleMp4Rendition(
   sourceWidth: number | null,
   sourceHeight: number | null
@@ -332,26 +409,14 @@ function buildSingleMp4Rendition(
       Math.min(normalizedWidth, normalizedHeight) :
       normalizedHeight ?? normalizedWidth;
 
-  let preset =
-    shortEdge ?
-      [...MP4_RENDITION_PRESETS]
-        .reverse()
-        .find((candidate) => candidate.height <= shortEdge) :
-      undefined;
-
-  if (!preset) {
-    const smallestPreset = MP4_RENDITION_PRESETS[0];
-    const fallbackHeight = toEven(shortEdge ?? smallestPreset.height);
-    preset = {
-      ...smallestPreset,
-      label: `${fallbackHeight}p`,
-      height: fallbackHeight,
-    };
-  }
-
+  // No source dimensions at all: encode as-is and only cap at the ceiling.
   const actualHeight = shortEdge ?
-    toEven(Math.min(preset.height, shortEdge)) :
-    preset.height;
+    toEven(Math.min(shortEdge, MAX_OUTPUT_SHORT_EDGE)) :
+    MAX_OUTPUT_SHORT_EDGE;
+  const preset = selectRatePreset(actualHeight);
+
+  // Which dimension the short edge *is*, so the scale filter caps that one and
+  // lets the other follow the source aspect ratio (-2 keeps it even).
   const scaleDimension =
     normalizedWidth && normalizedHeight && normalizedWidth <= normalizedHeight ?
       "width" :
@@ -359,10 +424,76 @@ function buildSingleMp4Rendition(
 
   return {
     ...preset,
+    label: `${actualHeight}p`,
     actualHeight,
     scaleDimension,
-    outputFileName: `${preset.label}.mp4`,
+    outputFileName: `${actualHeight}p.mp4`,
   };
+}
+
+/**
+ * True when the upload can be served as-is, with only its metadata rewritten.
+ *
+ * Re-encoding an already-fine H.264/AAC MP4 is pure generation loss: the
+ * picture can only come back softer than the file the user picked in their
+ * gallery, and it costs an ffmpeg run per upload. Every condition here is
+ * about what the *player* needs — a codec the app can decode, a resolution
+ * within the ceiling, and a bitrate a phone on mobile data can pull — so when
+ * they all hold, the honest thing is to keep the user's own pixels.
+ *
+ * @param {ProbedMedia | null} media Probe result for the uploaded file.
+ * @return {boolean} Whether the file can be remuxed instead of re-encoded.
+ */
+function shouldRemuxWithoutReencoding(media: ProbedMedia | null): boolean {
+  if (!media || !media.width || !media.height) {
+    return false;
+  }
+  if (media.videoCodec !== "h264") {
+    return false;
+  }
+  // No audio stream is fine; a non-AAC one is not, since it would have to be
+  // re-encoded anyway and a mixed copy/encode run buys nothing.
+  if (media.audioCodec !== null && media.audioCodec !== "aac") {
+    return false;
+  }
+  if (Math.min(media.width, media.height) > MAX_OUTPUT_SHORT_EDGE) {
+    return false;
+  }
+  if (media.bitrate !== null && media.bitrate > MAX_PASSTHROUGH_BITRATE) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Rewrites the container without touching a single encoded frame.
+ *
+ * `-movflags +faststart` is the whole point: it moves the moov atom to the
+ * front so playback can start before the file has finished downloading.
+ *
+ * @param {string} inputPath Local path of the uploaded file.
+ * @param {string} outputPath Local path to write.
+ * @return {Promise<void>} Resolves once the remux completes.
+ */
+async function remuxMp4(
+  inputPath: string,
+  outputPath: string,
+): Promise<void> {
+  const ffmpeg = await getFfmpeg();
+
+  await new Promise<void>((resolve, reject) => {
+    const cmd = ffmpeg(inputPath)
+      .outputOptions([
+        "-y",
+        "-c copy",
+        "-movflags +faststart",
+      ])
+      .on("end", () => resolve())
+      .on("error", (err: unknown) => reject(err))
+      .save(outputPath);
+
+    void cmd;
+  });
 }
 
 async function transcodeMp4Rendition(
@@ -371,6 +502,8 @@ async function transcodeMp4Rendition(
   rendition: Mp4Rendition
 ): Promise<void> {
   const ffmpeg = await getFfmpeg();
+  // `min(...)` in the filter means a source already at or below the ceiling is
+  // never upscaled — it passes through at its native size.
   const scaleFilter =
     rendition.scaleDimension === "width" ?
       `scale='min(${rendition.actualHeight},trunc(iw/2)*2)':-2` :
@@ -381,14 +514,18 @@ async function transcodeMp4Rendition(
       .outputOptions([
         "-y",
         "-c:v libx264",
-        "-profile:v main",
-        "-preset veryfast",
+        // High profile: better compression at the same quality than main, and
+        // universally decodable on the Android/iOS versions this app targets.
+        "-profile:v high",
+        "-level 4.1",
+        `-preset ${OUTPUT_X264_PRESET}`,
         "-pix_fmt yuv420p",
         "-movflags +faststart",
         `-vf ${scaleFilter}`,
-        "-g 30",
-        "-keyint_min 30",
-        `-b:v ${toKbps(rendition.videoBitrate)}`,
+        "-g 60",
+        "-keyint_min 60",
+        // CRF drives quality; maxrate/bufsize only cap the worst case.
+        `-crf ${OUTPUT_CRF}`,
         `-maxrate ${toKbps(rendition.maxRate)}`,
         `-bufsize ${toKbps(rendition.bufSize)}`,
         "-c:a aac",
@@ -404,12 +541,57 @@ async function transcodeMp4Rendition(
   });
 }
 
-function parseVideoDimensionsFromFfmpegLog(
+/**
+ * Reads dimensions, codecs and overall bitrate out of `ffmpeg -i` stderr.
+ *
+ * The lines of interest look like:
+ *   Duration: 00:01:09.32, start: 0.000000, bitrate: 4821 kb/s
+ *   Stream #0:0(und): Video: h264 (High) (avc1 / ...), yuv420p, 1080x1920, ...
+ *   Stream #0:1(und): Audio: aac (LC) (mp4a / ...), 48000 Hz, stereo, ...
+ *
+ * Every field is optional on purpose: a missing one only costs the caller the
+ * remux fast path, never the upload.
+ *
+ * @param {string} logOutput Raw stderr captured from `ffmpeg -i`.
+ * @return {ProbedMedia | null} Parsed media facts, or null without dimensions.
+ */
+function parseProbedMediaFromFfmpegLog(
   logOutput: string
-): VideoDimensions | null {
+): ProbedMedia | null {
+  let dimensions: VideoDimensions | null = null;
+  let videoCodec: string | null = null;
+  let audioCodec: string | null = null;
+  let bitrate: number | null = null;
+
   for (const rawLine of logOutput.split(/\r?\n/)) {
     const line = rawLine.trim();
+
+    if (bitrate === null && line.startsWith("Duration:")) {
+      const rateMatch = /bitrate:\s*(\d+)\s*kb\/s/i.exec(line);
+      if (rateMatch) {
+        bitrate = Number.parseInt(rateMatch[1], 10) * 1000;
+      }
+    }
+
+    if (audioCodec === null && line.includes("Audio:")) {
+      const codecMatch = /Audio:\s*([a-z0-9_]+)/i.exec(line);
+      if (codecMatch) {
+        audioCodec = codecMatch[1].toLowerCase();
+      }
+    }
+
     if (!line.includes("Video:")) {
+      continue;
+    }
+
+    if (videoCodec === null) {
+      const codecMatch = /Video:\s*([a-z0-9_]+)/i.exec(line);
+      if (codecMatch) {
+        videoCodec = codecMatch[1].toLowerCase();
+      }
+    }
+
+    if (dimensions) {
       continue;
     }
 
@@ -421,16 +603,26 @@ function parseVideoDimensionsFromFfmpegLog(
     const width = asPositiveInt(Number.parseInt(match[1], 10));
     const height = asPositiveInt(Number.parseInt(match[2], 10));
     if (width && height) {
-      return {width, height};
+      dimensions = {width, height};
     }
   }
 
-  return null;
+  if (!dimensions) {
+    return null;
+  }
+
+  return {
+    width: dimensions.width,
+    height: dimensions.height,
+    videoCodec,
+    audioCodec,
+    bitrate,
+  };
 }
 
-async function probeVideoDimensions(
+async function probeMedia(
   inputPath: string
-): Promise<VideoDimensions | null> {
+): Promise<ProbedMedia | null> {
   const ffmpegPath = await getFfmpegPath();
   return new Promise((resolve) => {
     const proc = spawn(ffmpegPath, ["-i", inputPath], {
@@ -447,7 +639,7 @@ async function probeVideoDimensions(
     });
 
     proc.on("error", () => resolve(null));
-    proc.on("close", () => resolve(parseVideoDimensionsFromFfmpegLog(stderr)));
+    proc.on("close", () => resolve(parseProbedMediaFromFfmpegLog(stderr)));
   });
 }
 
@@ -621,11 +813,11 @@ export const optimizeMp4Video = onObjectFinalized(
       const videoDoc = videoSnap.data() as VideoDoc | undefined;
       const persistedWidth = asPositiveInt(videoDoc?.width) ?? null;
       const persistedHeight = asPositiveInt(videoDoc?.height) ?? null;
-      const probedDimensions = await probeVideoDimensions(tempInput);
-      const sourceWidth = probedDimensions?.width ?? persistedWidth;
-      const sourceHeight = probedDimensions?.height ?? persistedHeight;
+      const probedMedia = await probeMedia(tempInput);
+      const sourceWidth = probedMedia?.width ?? persistedWidth;
+      const sourceHeight = probedMedia?.height ?? persistedHeight;
 
-      if (probedDimensions) {
+      if (probedMedia) {
         await videoRef.set(
           {
             width: sourceWidth,
@@ -635,7 +827,9 @@ export const optimizeMp4Video = onObjectFinalized(
         );
 
         console.log(
-          `Playback source probed from media: ${sourceWidth}x${sourceHeight}`,
+          `Playback source probed from media: ${sourceWidth}x${sourceHeight} ` +
+            `${probedMedia.videoCodec ?? "?"}/${probedMedia.audioCodec ?? "none"} ` +
+            `@${probedMedia.bitrate ?? "?"} bps`,
         );
       } else if (sourceWidth && sourceHeight) {
         console.log(
@@ -647,8 +841,14 @@ export const optimizeMp4Video = onObjectFinalized(
         sourceWidth,
         sourceHeight,
       );
+      const canRemux = shouldRemuxWithoutReencoding(probedMedia);
 
-      if (sourceWidth && sourceHeight) {
+      if (canRemux) {
+        console.log(
+          `Passthrough: source already streamable at ${sourceWidth}x${sourceHeight}, ` +
+            "remuxing without re-encoding.",
+        );
+      } else if (sourceWidth && sourceHeight) {
         console.log(
           `Single MP4 output selected: ${sourceWidth}x${sourceHeight} -> ${fallbackMp4Rendition.label}`,
         );
@@ -659,7 +859,15 @@ export const optimizeMp4Video = onObjectFinalized(
       }
 
       console.log("🎬 FFmpeg optimisation…");
-      await transcodeMp4Rendition(tempInput, optimizedFile, fallbackMp4Rendition);
+      if (canRemux) {
+        await remuxMp4(tempInput, optimizedFile);
+      } else {
+        await transcodeMp4Rendition(
+          tempInput,
+          optimizedFile,
+          fallbackMp4Rendition,
+        );
+      }
 
       console.log("⬆️ Upload optimisé…");
       await bucket.upload(optimizedFile, {
@@ -674,10 +882,23 @@ export const optimizeMp4Video = onObjectFinalized(
       console.log("Uploading canonical MP4 contract...");
       const videoToken = await ensureDownloadToken(bucketName, filePath);
       const videoUrl = buildStorageDownloadUrl(bucketName, filePath, videoToken);
+      // On the passthrough path the delivered asset is the source itself, so
+      // the contract must advertise the source's own height and bitrate --
+      // the rendition ceiling would misreport what viewers actually receive,
+      // and the feed-quality metrics are read straight off these fields.
+      const deliveredRendition = canRemux && probedMedia ?
+        {
+          label: `${Math.min(probedMedia.width, probedMedia.height)}p`,
+          actualHeight: Math.min(probedMedia.width, probedMedia.height),
+          videoBitrate:
+            probedMedia.bitrate ?? fallbackMp4Rendition.videoBitrate,
+        } :
+        fallbackMp4Rendition;
+
       const fallbackSource = buildMp4PlaybackSource(
         videoUrl,
         filePath,
-        fallbackMp4Rendition,
+        deliveredRendition,
       );
       const mp4Sources: PlaybackSource[] = [fallbackSource];
       const playback = buildPlaybackContract(

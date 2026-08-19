@@ -596,6 +596,18 @@ export const createUploadSession = onCall(
           ...(isExistingSession ? {} : {
             createdAt: fieldValue.serverTimestamp(),
             submittedForReviewAt: fieldValue.serverTimestamp(),
+            // Seeded here, once, on the document's only creation point.
+            //
+            // finalizeUpload deliberately refuses client-supplied counters, so
+            // without this a fresh video carried no `likes`/`reports` field at
+            // all. The mobile model then read them back as an immutable empty
+            // list and the first tap on the heart threw UnsupportedError out of
+            // an unawaited callback -- the like silently did nothing. Existing
+            // sessions are left alone so a retry can never wipe real counts.
+            likes: [],
+            reports: [],
+            reportCount: 0,
+            shareCount: 0,
           }),
         },
         {merge: true},

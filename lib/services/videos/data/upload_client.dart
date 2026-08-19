@@ -6,6 +6,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../config/app_environment.dart';
 import '../../callable_auth_guard.dart';
@@ -197,6 +198,23 @@ class UploadClient {
   final int _maxChunkRetries;
   final int _maxCallableRetries;
 
+  /// How long [ensureSession] can legitimately take before it has failed.
+  ///
+  /// Derived rather than guessed: the caller used to cut session creation off
+  /// at a flat 125s while this layer's own budget — [_maxCallableRetries]
+  /// attempts of [_callableTimeout] plus linear backoff — ran to nearly twice
+  /// that. A cold start that the last retry would have absorbed surfaced as
+  /// "Connexion sécurisée trop longue à s'établir" *after* the server had
+  /// already created the session, which is the shape of the production
+  /// session-creation-timeout failures.
+  Duration get sessionCreationBudget {
+    var total = _callableTimeout * _maxCallableRetries;
+    for (var attempt = 1; attempt < _maxCallableRetries; attempt++) {
+      total += _callableRetryBaseDelay * attempt;
+    }
+    return total + const Duration(seconds: 5);
+  }
+
   late final FirebaseFunctions _functions =
       _functionsOverride ??
       FirebaseFunctions.instanceFor(
@@ -284,12 +302,41 @@ class UploadClient {
   }) async {
     final persisted = await loadPersistedSession();
     if (persisted != null && persisted.localFilePath == localFilePath) {
-      return persisted.isExpired ? refreshSession(persisted) : persisted;
+      // A reservation (no upload URL yet) and an expired session are the same
+      // case here: re-negotiate, reusing the id we already claimed.
+      return persisted.isExpired || persisted.uploadUrl.isEmpty
+          ? refreshSession(persisted)
+          : persisted;
     }
     return _createSession(
       localFilePath: localFilePath,
       fileSizeBytes: fileSizeBytes,
       contentType: contentType,
+    );
+  }
+
+  /// Records the id this attempt will use *before* asking the server for it.
+  ///
+  /// createUploadSession is idempotent per sessionId — it merges into the
+  /// videos/{sessionId} document rather than creating a new one — but only if
+  /// the client can name the same id twice. Letting the server mint the id
+  /// meant a lost or timed-out response left the client with nothing to
+  /// resume from, so the next attempt created a *second* document stuck at
+  /// status "processing" with no Storage object behind it. Those count toward
+  /// MAX_CONCURRENT_VIDEO_UPLOADS (2), so two abandoned attempts locked the
+  /// user out of uploading for the three hours it takes
+  /// reapAbandonedUploadSessions to clear them. Production showed exactly one
+  /// such orphan after a session-creation timeout.
+  Future<void> _reserveSession(String localFilePath, String sessionId) {
+    return persistSession(
+      UploadSessionState(
+        sessionId: sessionId,
+        uploadUrl: '',
+        expiresAt: DateTime.fromMillisecondsSinceEpoch(0),
+        videoPath: '',
+        thumbnailPath: '',
+        localFilePath: localFilePath,
+      ),
     );
   }
 
@@ -299,6 +346,9 @@ class UploadClient {
     String? sessionId,
     String contentType = 'video/mp4',
   }) async {
+    final effectiveSessionId = sessionId ?? const Uuid().v4();
+    await _reserveSession(localFilePath, effectiveSessionId);
+
     final callable = _functions.httpsCallable(
       'createUploadSession',
       options: HttpsCallableOptions(timeout: _callableTimeout),
@@ -307,7 +357,7 @@ class UploadClient {
       callable,
       'createUploadSession',
       {
-        'sessionId': ?sessionId,
+        'sessionId': effectiveSessionId,
         'contentType': contentType,
         'fileSizeBytes': fileSizeBytes,
       },

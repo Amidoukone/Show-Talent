@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
@@ -40,6 +42,59 @@ class TiktokVideoPlayer extends StatefulWidget {
 
   @override
   State<TiktokVideoPlayer> createState() => _TiktokVideoPlayerState();
+
+  /// Largest share of the frame `BoxFit.cover` may throw away before the video
+  /// is letterboxed instead.
+  ///
+  /// A vertical feed viewport is roughly 9:16, so covering it with a 16:9
+  /// clip means cropping ~68% of the picture width — and what disappears is
+  /// both side bands, which in football footage is precisely where the play
+  /// is: the winger on the touchline, the run off the ball, the defender
+  /// closing in. Users reported it as "the video is not shown at its real
+  /// size, the action on the left and right no longer comes out" while the
+  /// same file plays whole in the phone's gallery.
+  ///
+  /// A small tolerance is still worth keeping: clips shot at 3:4 or 1:1, or a
+  /// 1080x1912 export that misses 9:16 by a few pixels, look better filling
+  /// the screen than pinned between two bands.
+  static const double maxCoverCropFraction = 0.12;
+
+  /// Chooses between filling the viewport and showing the whole frame.
+  ///
+  /// Returns [BoxFit.cover] while cover would crop no more than
+  /// [maxCoverCropFraction] of the picture, and [BoxFit.contain] beyond that.
+  /// Falls back to [BoxFit.cover] when the dimensions are not yet known, which
+  /// is the pre-existing full-bleed look for the first frames.
+  static BoxFit resolveVideoFit({
+    required double videoWidth,
+    required double videoHeight,
+    required double viewportWidth,
+    required double viewportHeight,
+  }) {
+    if (videoWidth <= 0 ||
+        videoHeight <= 0 ||
+        viewportWidth <= 0 ||
+        viewportHeight <= 0 ||
+        !videoWidth.isFinite ||
+        !videoHeight.isFinite ||
+        !viewportWidth.isFinite ||
+        !viewportHeight.isFinite) {
+      return BoxFit.cover;
+    }
+
+    final videoAspect = videoWidth / videoHeight;
+    final viewportAspect = viewportWidth / viewportHeight;
+    final ratio = videoAspect / viewportAspect;
+
+    // Cover scales by the *larger* factor, so the excess along the other axis
+    // is what gets cropped: 1 - 1/ratio for a wider clip, 1 - ratio for a
+    // taller one.
+    final croppedFraction = ratio >= 1 ? 1 - (1 / ratio) : 1 - ratio;
+
+    return croppedFraction <= maxCoverCropFraction
+        ? BoxFit.cover
+        : BoxFit.contain;
+  }
 }
 
 class _VideoGestureFeedback {
@@ -416,17 +471,34 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
       );
     }
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        _buildThumbnail(
-          fadeOut:
-              value.isInitialized &&
-              (_didRenderFrame(value) || widget.hasFirstFrame),
-        ),
-        if (value.isInitialized) _buildVideo(),
-        if (showLoader) _buildLoadingIndicator(),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fit = TiktokVideoPlayer.resolveVideoFit(
+          videoWidth: value.size.width,
+          videoHeight: value.size.height,
+          viewportWidth: constraints.maxWidth,
+          viewportHeight: constraints.maxHeight,
+        );
+        final isLetterboxed = fit == BoxFit.contain;
+        final hasFrame =
+            value.isInitialized &&
+            (_didRenderFrame(value) || widget.hasFirstFrame);
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // A letterboxed video leaves bare bands top/bottom or left/right.
+            // Keeping the poster behind it — blurred and dimmed — fills them
+            // with the video's own colours instead of a black slab.
+            _buildThumbnail(
+              fadeOut: hasFrame && !isLetterboxed,
+              asAmbientBackdrop: isLetterboxed,
+            ),
+            if (value.isInitialized) _buildVideo(fit),
+            if (showLoader) _buildLoadingIndicator(),
+          ],
+        );
+      },
     );
   }
 
@@ -466,15 +538,15 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     return hasPosition || (value.isPlaying && hasVideoSize);
   }
 
-  Widget _buildThumbnail({required bool fadeOut}) {
+  Widget _buildThumbnail({required bool fadeOut, bool asAmbientBackdrop = false}) {
     return AnimatedOpacity(
       opacity: fadeOut ? 0.0 : 1.0,
       duration: const Duration(milliseconds: 300),
-      child: _buildThumbnailImage(),
+      child: _buildThumbnailImage(asAmbientBackdrop: asAmbientBackdrop),
     );
   }
 
-  Widget _buildThumbnailImage() {
+  Widget _buildThumbnailImage({bool asAmbientBackdrop = false}) {
     final thumb = widget.thumbnailUrl.trim();
     if (thumb.isEmpty) {
       return _buildThumbnailFallback();
@@ -483,16 +555,33 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        CachedNetworkImage(
-          imageUrl: thumb,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.low,
-          fadeInDuration: Duration.zero,
-          fadeOutDuration: Duration.zero,
-          placeholder: (_, _) => _buildThumbnailFallback(),
-          errorWidget: (_, _, _) => _buildThumbnailFallback(),
-        ),
-        _buildPosterReadabilityScrim(),
+        if (asAmbientBackdrop)
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: CachedNetworkImage(
+              imageUrl: thumb,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.low,
+              fadeInDuration: Duration.zero,
+              fadeOutDuration: Duration.zero,
+              placeholder: (_, _) => _buildThumbnailFallback(),
+              errorWidget: (_, _, _) => _buildThumbnailFallback(),
+            ),
+          )
+        else
+          CachedNetworkImage(
+            imageUrl: thumb,
+            fit: BoxFit.cover,
+            filterQuality: FilterQuality.low,
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+            placeholder: (_, _) => _buildThumbnailFallback(),
+            errorWidget: (_, _, _) => _buildThumbnailFallback(),
+          ),
+        if (asAmbientBackdrop)
+          const ColoredBox(color: Color(0x8C000000))
+        else
+          _buildPosterReadabilityScrim(),
       ],
     );
   }
@@ -533,7 +622,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     );
   }
 
-  Widget _buildVideo() {
+  Widget _buildVideo(BoxFit fit) {
     final ctrl = widget.controller;
     if (ctrl == null) return const SizedBox.shrink();
 
@@ -549,7 +638,7 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
 
     return Positioned.fill(
       child: FittedBox(
-        fit: BoxFit.cover,
+        fit: fit,
         alignment: Alignment.center,
         child: SizedBox(
           width: videoW,

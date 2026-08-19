@@ -52,10 +52,13 @@ class UploadVideoController extends GetxController {
   static const Duration _pollInterval = Duration(seconds: 10);
   // A cold createUploadSession Cloud Function instance plus a fresh Play
   // Integrity attestation can legitimately take longer than a few seconds on
-  // real devices/networks. Keep this above UploadClient's callable timeout so
-  // its bounded retry/fallback path can finish without the controller creating
-  // a second session after an outer timeout.
-  static const Duration _sessionCreationTimeout = Duration(seconds: 125);
+  // real devices/networks. The ceiling is read from UploadClient rather than
+  // written here as a constant: a flat 125s sat *below* that layer's own
+  // retry budget, so the controller aborted sessions the last retry would
+  // have completed -- and production logged the result as
+  // `session-creation-timeout` on an upload whose session the server had in
+  // fact just created.
+  Duration get _sessionCreationTimeout => _uploadClient.sessionCreationBudget;
 
   final isUploading = false.obs;
   final isOptimizing = false.obs;

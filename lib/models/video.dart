@@ -214,6 +214,18 @@ class Video {
   String caption;
   String profilePhoto;
   String uid;
+
+  /// Always a *growable* list — never `const []`.
+  ///
+  /// The optimistic like toggle mutates this list in place before the
+  /// callable answers (`_setLocalLikeState` in smart_video_player.dart, and
+  /// `_applyLikeState` in video_controller.dart). A video document created by
+  /// the upload pipeline has no `likes` field at all — `finalizeUpload`
+  /// deliberately refuses client-supplied counters — so `fromMap` used to fall
+  /// back to `const <String>[]`, and the first tap on the heart threw
+  /// `UnsupportedError` out of an unawaited callback. Production stack traces
+  /// showed exactly that (`UnmodifiableListMixin.removeWhere`), and the user
+  /// saw nothing happen at all. Same story for [reports] and the report flow.
   List<String> likes;
   int shareCount;
   List<String> reports;
@@ -233,9 +245,9 @@ class Video {
     required this.caption,
     required this.profilePhoto,
     required this.uid,
-    this.likes = const [],
+    List<String> likes = const [],
     this.shareCount = 0,
-    this.reports = const [],
+    List<String> reports = const [],
     this.reportCount = 0,
     this.status,
     this.moderationStatus,
@@ -243,7 +255,8 @@ class Video {
     this.sources = const [],
     this.playback,
     this.resolvedUrl,
-  });
+  }) : likes = List<String>.of(likes),
+       reports = List<String>.of(reports);
 
   static const Set<String> _failureStatuses = {'error', 'failed', 'failure'};
 

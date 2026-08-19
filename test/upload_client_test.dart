@@ -46,10 +46,12 @@ class RefreshingUploadClient extends UploadClient {
 
   final UploadSessionState refreshedSession;
   int refreshCalls = 0;
+  final List<String> refreshedSessionIds = <String>[];
 
   @override
   Future<UploadSessionState> refreshSession(UploadSessionState session) async {
     refreshCalls += 1;
+    refreshedSessionIds.add(session.sessionId);
     return refreshedSession;
   }
 }
@@ -111,6 +113,110 @@ void main() {
       contentType: 'image/jpeg',
     );
   }
+
+  // A session that was claimed but never negotiated: the id is reserved on
+  // disk before createUploadSession is called, so a timed-out or lost response
+  // leaves something to resume from instead of an orphaned videos/{id} doc
+  // stuck at status "processing".
+  UploadSessionState buildReservedSession() {
+    return UploadSessionState(
+      sessionId: 'reserved-session',
+      uploadUrl: '',
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(0),
+      videoPath: '',
+      thumbnailPath: '',
+      localFilePath: '${tempDir.path}/video.mp4',
+    );
+  }
+
+  group('an interrupted session is resumed, never duplicated', () {
+    test('a reserved session is renegotiated under the same id', () async {
+      final client = RefreshingUploadClient(
+        httpClient: TestUploadHttpClient(
+          (path, {data, options, cancelToken}) async => buildResponse(200),
+        ),
+        refreshedSession: buildSession(),
+        cachePathProvider: () async => '${tempDir.path}/reserved.json',
+      );
+
+      await client.persistSession(buildReservedSession());
+
+      final session = await client.ensureSession(
+        localFilePath: '${tempDir.path}/video.mp4',
+        fileSizeBytes: 4,
+      );
+
+      expect(client.refreshCalls, 1);
+      expect(client.refreshedSessionIds, ['reserved-session']);
+      expect(session.uploadUrl, isNotEmpty);
+    });
+
+    test('a live session is reused as-is, with no renegotiation', () async {
+      final client = RefreshingUploadClient(
+        httpClient: TestUploadHttpClient(
+          (path, {data, options, cancelToken}) async => buildResponse(200),
+        ),
+        refreshedSession: buildSession(),
+        cachePathProvider: () async => '${tempDir.path}/live.json',
+      );
+
+      await client.persistSession(buildSession());
+
+      final session = await client.ensureSession(
+        localFilePath: '${tempDir.path}/video.mp4',
+        fileSizeBytes: 4,
+      );
+
+      expect(client.refreshCalls, 0);
+      expect(session.sessionId, 'session-1');
+    });
+
+    test('an expired session is renegotiated under the same id', () async {
+      final client = RefreshingUploadClient(
+        httpClient: TestUploadHttpClient(
+          (path, {data, options, cancelToken}) async => buildResponse(200),
+        ),
+        refreshedSession: buildSession(),
+        cachePathProvider: () async => '${tempDir.path}/expired.json',
+      );
+
+      await client.persistSession(
+        UploadSessionState(
+          sessionId: 'session-1',
+          uploadUrl: 'https://upload.example.com/video',
+          expiresAt: DateTime.now().subtract(const Duration(minutes: 1)),
+          videoPath: 'videos/session-1.mp4',
+          thumbnailPath: 'thumbnails/session-1.jpg',
+          localFilePath: '${tempDir.path}/video.mp4',
+        ),
+      );
+
+      await client.ensureSession(
+        localFilePath: '${tempDir.path}/video.mp4',
+        fileSizeBytes: 4,
+      );
+
+      expect(client.refreshedSessionIds, ['session-1']);
+    });
+  });
+
+  test('the session budget covers this layer\'s own retries', () {
+    // The controller used to cut session creation off at a flat 125s while
+    // this layer would still be retrying, so it abandoned sessions the last
+    // attempt would have completed -- and the server had already created them.
+    final client = UploadClient(
+      httpClient: TestUploadHttpClient(
+        (path, {data, options, cancelToken}) async => buildResponse(200),
+      ),
+      cachePathProvider: () async => '${tempDir.path}/budget.json',
+      maxCallableRetries: 3,
+    );
+
+    expect(
+      client.sessionCreationBudget,
+      greaterThan(const Duration(seconds: 75) * 3),
+    );
+  });
 
   test('uploadFile accepts 200, 201 and 204 terminal statuses', () async {
     for (final statusCode in const [200, 201, 204]) {
