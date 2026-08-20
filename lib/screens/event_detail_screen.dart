@@ -1,3 +1,4 @@
+import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -123,15 +124,11 @@ class EventDetailsScreen extends StatelessWidget {
               isReadOnly: true,
             ),
           ),
-          child: CircleAvatar(
+          child: AdAvatar(
             radius: 26,
             backgroundColor: AdColors.surfaceCardAlt,
-            backgroundImage: hasPhoto
-                ? NetworkImage(currentEvent.organisateur.photoProfil)
-                : null,
-            child: hasPhoto
-                ? null
-                : const Icon(Icons.person, color: Colors.white70),
+            photoUrl: hasPhoto ? currentEvent.organisateur.photoProfil : '',
+            fallback: const Icon(Icons.person, color: Colors.white70),
           ),
         ),
         const SizedBox(width: 12),
@@ -290,14 +287,10 @@ class EventDetailsScreen extends StatelessWidget {
               final hasPhoto = p.photoProfil.trim().startsWith('http');
               return ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: CircleAvatar(
+                leading: AdAvatar(
                   backgroundColor: AdColors.surfaceCardAlt,
-                  backgroundImage: hasPhoto
-                      ? NetworkImage(p.photoProfil)
-                      : null,
-                  child: hasPhoto
-                      ? null
-                      : const Icon(Icons.person, color: Colors.white70),
+                  photoUrl: hasPhoto ? p.photoProfil : '',
+                  fallback: const Icon(Icons.person, color: Colors.white70),
                 ),
                 title: Text(
                   p.nom,
@@ -643,14 +636,10 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
 
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(
+                    leading: AdAvatar(
                       backgroundColor: AdColors.surfaceCardAlt,
-                      backgroundImage: hasPhoto
-                          ? NetworkImage(p.photoProfil)
-                          : null,
-                      child: hasPhoto
-                          ? null
-                          : const Icon(Icons.person, color: Colors.white70),
+                      photoUrl: hasPhoto ? p.photoProfil : '',
+                      fallback: const Icon(Icons.person, color: Colors.white70),
                     ),
                     title: Text(
                       p.nom,

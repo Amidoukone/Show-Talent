@@ -371,7 +371,31 @@ void main() {
       ).readAsStringSync();
 
       expect(bootstrap, contains('recordFlutterFatalError'));
-      expect(bootstrap, isNot(contains('fatal: false')));
+
+      // Narrowed from a blanket `isNot(contains('fatal: false'))`. That caught
+      // the original regression -- every error reported as non-fatal, leaving
+      // the dashboard green while the app died on users' phones -- but it also
+      // forbade ever classifying a whole *category* correctly. Image resource
+      // failures are the case in point: Flutter routes an unlistened image
+      // failure through FlutterError.onError, so a profile photo whose Storage
+      // object was deleted counted as a crash and buried the very metric this
+      // test exists to protect.
+      //
+      // The invariant that actually matters is unchanged: nothing *uncaught*
+      // is downgraded. So the file may contain exactly one `fatal: false`, and
+      // it must sit inside the image branch, ahead of the fatal report.
+      expect('fatal: false'.allMatches(bootstrap).length, 1);
+      expect(
+        bootstrap.indexOf('if (_isImageResourceFailure(details)) {'),
+        allOf(
+          greaterThan(-1),
+          lessThan(bootstrap.indexOf('fatal: false')),
+        ),
+      );
+      expect(
+        bootstrap.indexOf('fatal: false'),
+        lessThan(bootstrap.indexOf('recordFlutterFatalError(details)')),
+      );
 
       // Scoped to the reporting call itself: searching the rest of the file
       // would let one site's `fatal: true` vouch for the other's.

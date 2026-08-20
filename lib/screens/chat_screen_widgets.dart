@@ -400,18 +400,14 @@ class _ChatHeaderAvatar extends StatelessWidget {
 
     return Stack(
       children: [
-        CircleAvatar(
+        AdAvatar(
           radius: ChatUi.avatarRadius,
           backgroundColor: fallbackBg,
-          backgroundImage: user.photoProfil.isNotEmpty
-              ? NetworkImage(user.photoProfil)
-              : null,
-          child: user.photoProfil.isEmpty
-              ? Text(
-                  initial,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                )
-              : null,
+          photoUrl: user.photoProfil,
+          fallback: Text(
+            initial,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
         ),
         Positioned(
           right: 0,

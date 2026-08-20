@@ -419,6 +419,13 @@ class UploadVideoController extends GetxController {
         return;
       }
 
+      // Only *failures* of session creation were ever recorded, so the logs
+      // could say the budget had been exceeded but never by how much — or how
+      // much headroom a successful call actually had. Timing the successful
+      // path is what turns the next decision about
+      // UploadClient.sessionCreationBudget (~233s, derived from three 75s
+      // attempts plus backoff) into a percentile instead of a guess.
+      final sessionStopwatch = Stopwatch()..start();
       try {
         session = await _uploadClient
             .ensureSession(
@@ -434,8 +441,21 @@ class UploadVideoController extends GetxController {
           VideoUiStrings.uploadSessionTimeout,
         );
       }
+      sessionStopwatch.stop();
       if (!_isCurrentOperation(operation)) return;
       _activeSession = session;
+      unawaited(
+        _observability.logUploadInfo(
+          event: 'upload_session_created',
+          stage: 'initialize',
+          sessionId: session.sessionId,
+          metadata: {
+            ..._uploadDiagnostics(operation: operation),
+            'elapsedMs': sessionStopwatch.elapsedMilliseconds,
+            'budgetMs': _sessionCreationTimeout.inMilliseconds,
+          },
+        ),
+      );
       uploadProgress.value = 0.18;
 
       uploadStage.value = VideoUiStrings.uploadStageUploading;
@@ -629,6 +649,16 @@ class UploadVideoController extends GetxController {
     Timer? timeoutTimer;
     const failureStatuses = {'error', 'failed', 'failure'};
 
+    // Claimed synchronously, before the first `await` inside
+    // closeOptimizationFlow. Three independent sources can close this watch —
+    // the Firestore listener, the 10s fallback poll and the overall timeout —
+    // and `completer.isCompleted` could not arbitrate between them: the
+    // completer is only completed *after* `await callback()`, so a second
+    // closer arriving during that await passed the guard too. The result was
+    // two toasts and two `Get.offAllNamed` for the same upload, the second
+    // one landing on whatever screen the first had just navigated to.
+    var isClosingOptimization = false;
+
     Future<void> navigateBackToFeed() async {
       await Future.delayed(const Duration(milliseconds: 200));
       Get.offAllNamed(AppRoutes.main, arguments: {'tab': 0, 'refresh': true});
@@ -686,7 +716,8 @@ class UploadVideoController extends GetxController {
     }
 
     Future<void> closeOptimizationFlow(Future<void> Function() callback) async {
-      if (completer.isCompleted) return;
+      if (isClosingOptimization || completer.isCompleted) return;
+      isClosingOptimization = true;
 
       _cancelOptimizationWatch = null;
       await subscription?.cancel();
@@ -704,6 +735,7 @@ class UploadVideoController extends GetxController {
     // unaffected — it is finished server-side by this point, and the profile
     // shows its state.
     _cancelOptimizationWatch = () {
+      isClosingOptimization = true;
       unawaited(subscription?.cancel());
       fallbackTimer?.cancel();
       timeoutTimer?.cancel();

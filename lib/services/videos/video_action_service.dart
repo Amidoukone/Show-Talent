@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -19,6 +21,20 @@ class VideoActionService {
 
   final FirebaseFunctions _functions;
   final Connectivity _connectivity;
+
+  /// Ceiling on one user-visible action (like, share, report, delete).
+  ///
+  /// Only the single callable invocation was bounded, at 10s. What actually
+  /// runs is [CallableAuthGuard.callDataWithHttpFallback], which layers a
+  /// token warm-up, the call, a forced-refresh warm-up, a second call and
+  /// finally a direct HTTPS fallback on top of each other — worst case well
+  /// past two minutes. Share, report and delete each hold a spinner for that
+  /// whole time with nothing for the user to read or retry, which is the same
+  /// failure shape sign-in was fixed for in 1.0.7+17.
+  ///
+  /// Generous enough that a slow-but-working network still lands the action,
+  /// short enough that a broken one ends in a message instead of a spinner.
+  static const Duration _actionTimeout = Duration(seconds: 30);
 
   Future<ActionResponse> callAction(
     String functionName,
@@ -42,8 +58,14 @@ class VideoActionService {
         callable,
         functionName,
         payload,
-      );
+      ).timeout(_actionTimeout);
       return ActionResponse.fromMap(data);
+    } on TimeoutException {
+      return ActionResponse.failure(
+        message: VideoUiStrings.actionTimedOut,
+        code: 'deadline-exceeded',
+        retriable: true,
+      );
     } on FirebaseFunctionsException catch (error) {
       if (isAuthAccessFailure(error)) {
         return authRequiredResponse();

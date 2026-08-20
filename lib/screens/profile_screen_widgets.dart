@@ -55,23 +55,28 @@ class _HeaderCard extends StatelessWidget {
                           color: AdColors.brand.withValues(alpha: 0.42),
                         ),
                       ),
-                      child: CircleAvatar(
-                        backgroundColor: AdColors.surfaceCardAlt,
-                        backgroundImage: user.photoProfil.isNotEmpty
-                            ? NetworkImage(user.photoProfil)
-                            : null,
-                        child: profileController.isLoadingPhoto.value
-                            ? const CircularProgressIndicator()
-                            : (user.photoProfil.isEmpty
-                                  ? Text(
-                                      _profileInitials(user),
-                                      style: const TextStyle(
-                                        color: AdColors.onSurface,
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    )
-                                  : null),
+                      // Stack rather than CircleAvatar's `child`: the
+                      // upload spinner has to sit *over* the photo already on
+                      // screen, which a `child` cannot do once a background
+                      // image is set.
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          AdAvatar(
+                            backgroundColor: AdColors.surfaceCardAlt,
+                            photoUrl: user.photoProfil,
+                            fallback: Text(
+                              _profileInitials(user),
+                              style: const TextStyle(
+                                color: AdColors.onSurface,
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          if (profileController.isLoadingPhoto.value)
+                            const Center(child: CircularProgressIndicator()),
+                        ],
                       ),
                     ),
                   ),

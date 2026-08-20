@@ -38,6 +38,17 @@ class ClientLogger {
   Timer? _flushTimer;
   bool _flushing = false;
 
+  /// Hard cap on the retry buffer.
+  ///
+  /// A failed flush puts its whole batch back at the head of the queue, and
+  /// the flush that fails is precisely the one running on a broken network —
+  /// where new entries keep arriving because everything else is failing too.
+  /// Unbounded, that queue grew for as long as the outage lasted, and each
+  /// retry then tried to ship the entire accumulated history in one callable
+  /// payload. Diagnostics must never be able to become the incident: past
+  /// this many entries the oldest are dropped.
+  static const int _maxBufferedEntries = 200;
+
   final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
     region: AppEnvironmentConfig.functionsRegion,
   );
@@ -56,6 +67,7 @@ class ClientLogger {
 
   void _enqueue(ClientLogEntry entry) {
     _buffer.add(entry);
+    _trimBuffer();
 
     if (_buffer.length >= 10) {
       unawaited(_flush());
@@ -92,11 +104,20 @@ class ClientLogger {
     } catch (_) {
       // Remettre en file pour une prochaine tentative
       _buffer.insertAll(0, payload);
+      _trimBuffer();
       _flushTimer ??= Timer(const Duration(seconds: 8), () {
         unawaited(_flush());
       });
     } finally {
       _flushing = false;
+    }
+  }
+
+  /// Drops the oldest entries once the buffer exceeds its cap.
+  void _trimBuffer() {
+    final overflow = _buffer.length - _maxBufferedEntries;
+    if (overflow > 0) {
+      _buffer.removeRange(0, overflow);
     }
   }
 

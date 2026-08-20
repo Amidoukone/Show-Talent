@@ -1,3 +1,4 @@
+import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -65,13 +66,11 @@ class AdCompactIdentityRow extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircleAvatar(
+          AdAvatar(
             radius: 13,
             backgroundColor: AdColors.surfaceCardAlt,
-            backgroundImage: _hasPhoto ? NetworkImage(user.photoProfil) : null,
-            child: _hasPhoto
-                ? null
-                : const Icon(Icons.person, size: 14, color: Colors.white70),
+            photoUrl: _hasPhoto ? user.photoProfil : '',
+            fallback: const Icon(Icons.person, size: 14, color: Colors.white70),
           ),
           const SizedBox(width: 8),
           Flexible(

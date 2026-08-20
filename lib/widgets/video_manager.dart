@@ -205,6 +205,24 @@ class VideoManager {
   static const Duration _postInitStreamCacheWarmupDelay = Duration(seconds: 2);
   static const Duration _secondaryPreloadDelay = Duration(milliseconds: 220);
   static const Duration _maxPreloadStaggerDelay = Duration(milliseconds: 700);
+
+  /// How long an init may wait for a concurrency slot before going anyway.
+  ///
+  /// [_maxConcurrentInits] is a tuning knob (1 on a low-tier network), not a
+  /// correctness constraint, but the wait for it was an unbounded loop. A slot
+  /// is released by `whenComplete`, so it is held for as long as `loadVideo()`
+  /// runs — and that path can include a `downloadFile` on a video of up to
+  /// 150 MB through `flutter_cache_manager`'s `HttpFileService`, which sets no
+  /// socket deadline of its own. One connection that stalls without closing
+  /// therefore pinned the only slot, and every later init in the app —
+  /// active playback included — waited behind it forever. The feed simply
+  /// stopped loading, showing a spinner with no error, until the app was
+  /// killed.
+  ///
+  /// Briefly running one init over the limit is a far smaller cost than that,
+  /// so the wait expires and proceeds.
+  static const Duration _initSlotWaitTimeout = Duration(seconds: 20);
+  static const Duration _initSlotPollInterval = Duration(milliseconds: 80);
   static const NetworkProfile _bootstrapNetworkProfile = NetworkProfile(
     tier: NetworkProfileTier.medium,
     hasConnection: true,
@@ -292,6 +310,22 @@ class VideoManager {
     _resolvedUrlByContext.putIfAbsent(contextKey, () => {})[originalUrl] =
         resolvedUrl;
     _notifyUiStateChanged(contextKey: contextKey, url: originalUrl);
+  }
+
+  /// Wakes every widget still watching this context after a teardown.
+  ///
+  /// `disposeAllForContext` dropped the load states and resolved URLs but only
+  /// bumped the global revision, so a widget listening to its own per-URL
+  /// notifier kept rendering the state it had before the teardown until
+  /// something else happened to rebuild it. The entries themselves stay:
+  /// they are owned by `watchVideoUi`/`unwatchVideoUi`, i.e. by the widgets'
+  /// own lifecycle, not by the context.
+  void _notifyContextWatchers(String contextKey) {
+    final byUrl = _uiWatchersByContext[contextKey];
+    if (byUrl == null) return;
+    for (final entry in byUrl.values) {
+      _bumpRevision(entry.notifier);
+    }
   }
 
   void _removeUiTracking(String contextKey, String url) {
@@ -1130,9 +1164,22 @@ class VideoManager {
         }
       }
 
-      // 3) Concurrency limit
+      // 3) Concurrency limit — bounded, and abandoned if the context goes
+      // away while we are queued (nobody is left to watch the result).
+      final slotDeadline = DateTime.now().add(_initSlotWaitTimeout);
       while (_activeInits >= _maxConcurrentInits) {
-        await Future.delayed(const Duration(milliseconds: 80));
+        if (!_isContextActive(contextKey, lru, futures)) {
+          throw const _VideoInitCancelled('context_disposed_waiting_for_slot');
+        }
+        if (!DateTime.now().isBefore(slotDeadline)) {
+          AppLogger.debug(
+            '[VideoManager] Init slot wait expired after '
+            '${_initSlotWaitTimeout.inSeconds}s (active=$_activeInits, '
+            'max=$_maxConcurrentInits); proceeding anyway -> $effectiveUrl',
+          );
+          break;
+        }
+        await Future.delayed(_initSlotPollInterval);
       }
 
       _activeInits++;
@@ -1620,6 +1667,7 @@ class VideoManager {
     _resolvedUrlByContext.remove(contextKey);
     _preloadRequestTokensByContext.remove(contextKey);
     _notifyUiStateChanged();
+    _notifyContextWatchers(contextKey);
   }
 
   Future<void> disposeUrls(String contextKey, List<String> urls) async {

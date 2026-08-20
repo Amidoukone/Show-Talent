@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -278,6 +279,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           child: AdStatePanel.loading(
                             title: 'Chargement des messages',
                             message: 'Synchronisation de la conversation.',
+                          ),
+                        );
+                      }
+
+                      // A failed stream also arrives here with no data, and
+                      // without this branch it fell through to the "aucun
+                      // message" state — telling the user their conversation
+                      // was empty when in fact it could not be read (offline,
+                      // or a rules rejection). Losing a history is not the
+                      // same thing as never having had one.
+                      if (snapshot.hasError) {
+                        AppLogger.debug(
+                          'ChatScreen messages stream error: '
+                          '${snapshot.error}',
+                        );
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: AdStatePanel.error(
+                            title: 'Messages indisponibles',
+                            message:
+                                'Impossible de charger la conversation. '
+                                'Vérifiez votre réseau puis réessayez.',
                           ),
                         );
                       }

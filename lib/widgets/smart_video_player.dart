@@ -115,6 +115,28 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   static const Duration _firstFrameTimeout = Duration(seconds: 6);
 
   bool _isRecovering = false;
+
+  /// How many times playback may be rebuilt automatically before the player
+  /// stops trying and hands the decision back to the user.
+  ///
+  /// Every automatic recovery path — the first-frame watchdog (6s), the stall
+  /// watchdog (~3s), the buffering watchdog, a runtime value error — ends in
+  /// [_purgeAndReloadController], which re-arms the very watchdog that fired
+  /// it. Nothing counted the attempts, so a source that can never render a
+  /// first frame (a Storage object deleted behind a still-listed document, a
+  /// codec the device cannot decode, a captive-portal network) looped
+  /// forever: dispose the controller, re-download the whole file, log a
+  /// `logPlaybackRetry` callable, wait 6s, repeat — for as long as the video
+  /// stayed on screen. The user watched a spinner that could not end while
+  /// the phone burned battery, mobile data and Cloud Functions quota.
+  ///
+  /// Three attempts covers the failures that are genuinely transient (a
+  /// stalled stream, a half-written cache file). Past that, the honest answer
+  /// is the error overlay, whose "Réessayer" resets this budget — a retry the
+  /// user asked for is not a retry loop.
+  static const int _maxAutomaticRecoveries = 3;
+  int _automaticRecoveryAttempts = 0;
+  bool _automaticRecoveryExhausted = false;
   late final FeedPlaybackMetricsLogger _playbackMetricsLogger;
   late final VideoObservabilityService _observability;
   FeedPlaybackSessionTracker? _playbackSession;
@@ -215,6 +237,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _detachListener(_ctrl);
       _player = null;
       _hasFirstFrame = false;
+      // A recycled tile must not inherit the previous video's failures.
+      _resetAutomaticRecoveryBudget();
       _stopFirstFrameWatchdog();
       _stopStallWatchdog();
 
@@ -364,6 +388,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _showPlayIcon.value = !value.isPlaying;
       if (_didRenderFirstFrame(value)) {
         _hasFirstFrame = true;
+        _resetAutomaticRecoveryBudget();
         _playbackSession?.markFirstFrameRendered();
         _stopFirstFrameWatchdog();
       } else {
@@ -521,6 +546,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     if (!_hasFirstFrame && _didRenderFirstFrame(v)) {
       _hasFirstFrame = true;
       _bufferingStrikes = 0;
+      // Playback works: whatever it took to get here is spent, not owed.
+      _resetAutomaticRecoveryBudget();
       _playbackSession?.markFirstFrameRendered();
       _stopFirstFrameWatchdog();
       if (mounted && !_isDisposed) setState(() {});
@@ -751,8 +778,39 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _firstFrameTimer = null;
   }
 
+  /// Gives playback a clean slate: the source changed, or it finally worked.
+  void _resetAutomaticRecoveryBudget() {
+    _automaticRecoveryAttempts = 0;
+    _automaticRecoveryExhausted = false;
+  }
+
   Future<void> _recoverPlayback({required String reason}) async {
-    if (_isDisposed || _isRecovering) return;
+    if (_isDisposed || _isRecovering || _automaticRecoveryExhausted) return;
+
+    if (_automaticRecoveryAttempts >= _maxAutomaticRecoveries) {
+      // Stop rebuilding and say so. Leaving the watchdogs armed would restart
+      // the loop on the next tick; the overlay's retry is the way back in.
+      _automaticRecoveryExhausted = true;
+      _stopFirstFrameWatchdog();
+      _stopStallWatchdog();
+      _finishPlaybackSession(endReason: 'recovery_exhausted');
+      unawaited(
+        _observability.logPlaybackError(
+          videoId: widget.video.id,
+          videoUrl: widget.videoUrl,
+          contextKey: widget.contextKey,
+          reason: 'recovery_exhausted',
+          error:
+              'Automatic playback recovery gave up after '
+              '$_maxAutomaticRecoveries attempts (last reason: $reason).',
+          metadata: _playbackDiagnostics(),
+        ),
+      );
+      if (mounted && !_isDisposed) setState(() {});
+      return;
+    }
+
+    _automaticRecoveryAttempts++;
     _isRecovering = true;
     try {
       _playbackSession?.recordRecoveryAttempt(reason);
@@ -814,11 +872,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           widget.contextKey,
           widget.videoUrl,
         );
-        final errorMessage =
-            _getErrorMessage(loadState) ??
-            (value?.hasError == true
-                ? VideoUiStrings.playbackInterruptedRetry
-                : null);
+        final errorMessage = _automaticRecoveryExhausted
+            ? VideoUiStrings.playbackInterruptedRetry
+            : (_getErrorMessage(loadState) ??
+                  (value?.hasError == true
+                      ? VideoUiStrings.playbackInterruptedRetry
+                      : null));
 
         return Stack(
           fit: StackFit.expand,
@@ -845,10 +904,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                           : _scheduleMaybePlay();
                     }
                   },
-                  onRetry: () => _purgeAndReloadController(
-                    purgeCachedFile: true,
-                    recoveryReason: 'manual_retry',
-                  ),
+                  onRetry: () {
+                    // The user asked for this one, so it re-opens the
+                    // automatic budget rather than spending from it.
+                    _resetAutomaticRecoveryBudget();
+                    unawaited(
+                      _purgeAndReloadController(
+                        purgeCachedFile: true,
+                        recoveryReason: 'manual_retry',
+                      ),
+                    );
+                  },
                 );
               },
             ),

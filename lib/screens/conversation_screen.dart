@@ -1,3 +1,4 @@
+import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -462,19 +463,14 @@ class _Avatar extends StatelessWidget {
 
     return Stack(
       children: [
-        CircleAvatar(
+        AdAvatar(
           radius: 26,
           backgroundColor: background,
-          backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-          child: photoUrl.isEmpty
-              ? Text(
-                  initial,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                  ),
-                )
-              : null,
+          photoUrl: photoUrl,
+          fallback: Text(
+            initial,
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+          ),
         ),
         Positioned(
           bottom: 2,

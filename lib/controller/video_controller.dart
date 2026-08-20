@@ -104,6 +104,28 @@ class VideoController extends GetxController {
   // ------------------------------------------------------------------
 
   Completer<void>? _fetchLock;
+
+  /// Releases the in-flight guard without ever surfacing an error.
+  ///
+  /// [_fetchLock] is only ever read as a boolean ("is a page already being
+  /// fetched?"): nothing awaits its future. Completing it with
+  /// `completeError` therefore produced a rejection with no listener — an
+  /// unhandled asynchronous error, which `runZonedGuarded` in main() routes
+  /// to `AppBootstrap.reportZoneError` and Crashlytics records as **fatal**.
+  /// Every feed page that failed for an entirely ordinary reason (offline,
+  /// a permission-denied while the session was being revoked) was booked as
+  /// a crash, and the failure the user actually saw was drowned in it.
+  ///
+  /// Completing from a single place also removes the second hazard: the old
+  /// code completed inside `try` and completed *again* from `catch` whenever
+  /// anything after the first completion threw, which is a StateError.
+  void _releaseFetchLock() {
+    final lock = _fetchLock;
+    if (lock != null && !lock.isCompleted) {
+      lock.complete();
+    }
+  }
+
   StreamSubscription<VideoLiveBatch>? _videoSubscription;
   Timer? _streamDebouncer;
   final Set<String> _thumbnailPrefetchInFlight = <String>{};
@@ -215,7 +237,6 @@ class VideoController extends GetxController {
       );
       if (page.fetchedCount == 0) {
         _hasMore = false;
-        _fetchLock?.complete();
         return false;
       }
 
@@ -238,17 +259,16 @@ class VideoController extends GetxController {
       _lastCursor = page.cursor;
       if (fetched.length < _limit) _hasMore = false;
 
-      _fetchLock?.complete();
       return true;
     } catch (e) {
       AppLogger.debug('fetchPaginatedVideos error: $e');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
       }
-      _fetchLock?.completeError(e);
       return false;
     } finally {
       _isLoading = false;
+      _releaseFetchLock();
     }
   }
 
@@ -297,24 +317,22 @@ class VideoController extends GetxController {
       if (fetched.isEmpty) {
         currentIndex.value = -1;
         videoList.clear();
-        _fetchLock?.complete();
         return false;
       }
 
       videoList.assignAll(fetched);
       currentIndex.value = 0;
       _prefetchThumbnailsAround(0);
-      _fetchLock?.complete();
       return true;
     } catch (e) {
       AppLogger.debug('refreshVideosKeepingFeed error: $e');
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
       }
-      _fetchLock?.completeError(e);
       return false;
     } finally {
       _isLoading = false;
+      _releaseFetchLock();
     }
   }
 

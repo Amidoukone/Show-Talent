@@ -283,6 +283,17 @@ class AppBootstrap {
     await _runNonCritical('EmailLinkHandler.init', EmailLinkHandler.init);
   }
 
+  /// True for the errors Flutter raises when an image fails to resolve.
+  ///
+  /// Matches on the library name the framework stamps on them
+  /// (`ImageStreamCompleter.reportError`), which is stable and does not
+  /// depend on the exception type — image failures arrive as
+  /// `NetworkImageLoadException`, `HttpException`, `SocketException` and
+  /// several others depending on where the fetch died.
+  static bool _isImageResourceFailure(FlutterErrorDetails details) {
+    return details.library == 'image resource service';
+  }
+
   static void _configureFlutterErrors() {
     FlutterError.onError = (FlutterErrorDetails details) {
       if (kDebugMode) {
@@ -301,6 +312,40 @@ class AppBootstrap {
       // while the crash picture is still unknown; if the dashboard fills with
       // layout noise later, downgrade *those* specific cases rather than
       // going back to reporting everything as non-fatal.
+      // A failed image is not a crash, and it is the single most common
+      // framework error this app produces: a profile photo whose Storage
+      // object is gone, a thumbnail fetched on a network that dropped, an
+      // expired download token. Every one of them reaches here (Flutter
+      // reports image failures through FlutterError with
+      // `library: 'image resource service'` whenever no error listener is
+      // attached), and the two lines below turned each into a *fatal*
+      // Crashlytics event plus a remote `logClientEvents` callable.
+      //
+      // The result was self-reinforcing: the worse the network, the more
+      // images failed, the more requests the app fired to report them — and
+      // the crash-free-users metric, the whole reason fatal reporting was
+      // turned on, was buried under broken avatars.
+      //
+      // Still recorded, so a genuinely broken asset is visible, but as a
+      // non-fatal and without the remote log.
+      if (_isImageResourceFailure(details)) {
+        if (!kIsWeb) {
+          try {
+            _reportSilently(
+              FirebaseCrashlytics.instance.recordError(
+                details.exception,
+                details.stack,
+                reason: 'FlutterError.onError: image resource failure',
+                fatal: false,
+              ),
+            );
+          } catch (_) {
+            // Crashlytics may not be ready yet.
+          }
+        }
+        return;
+      }
+
       if (!kIsWeb) {
         // The `try` only catches a *synchronous* throw. recordFlutterFatalError
         // returns a Future, and a bare call leaks its rejection as an unhandled

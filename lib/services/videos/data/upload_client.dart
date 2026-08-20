@@ -150,6 +150,16 @@ class UploadClient {
   static const Duration _callableTimeout = Duration(seconds: 75);
   static const Set<int> _terminalSuccessStatuses = {200, 201, 204};
 
+  // Google's resumable endpoint answers 404 (and 410 after a cleanup) once
+  // the upload session behind an upload URL no longer exists. `validateStatus`
+  // lets anything under 500 through as a normal response, so those arrived
+  // here as "unexpected HTTP status", were retried four times against a URL
+  // that will never work again, and then failed the whole upload -- even
+  // though a fresh session is exactly what recovers it. Only clock-based
+  // expiry (`session.isExpired`) was handled, and the server can drop a
+  // session before its advertised expiry.
+  static const Set<int> _sessionGoneStatuses = {404, 410};
+
   // Server-side rejections that retrying can never fix -- everything else
   // reaching this layer (timeouts, DNS/connection resets, transient
   // 'unavailable'/'deadline-exceeded'/'internal' Functions errors) is worth
@@ -258,6 +268,45 @@ class UploadClient {
     throw UploadClientException('Échec appel $callableName.');
   }
 
+  /// Reads a required String out of a callable payload.
+  ///
+  /// The response fields used to be assigned straight into
+  /// [UploadSessionState], whose fields are non-nullable: a truncated or
+  /// malformed payload surfaced as a raw `TypeError` from deep inside the
+  /// client, which the controller could only map to its generic "unexpected"
+  /// branch and Crashlytics recorded as a crash. An [UploadClientException]
+  /// is what the upload error mapper already knows how to turn into
+  /// something the user can act on.
+  static String _requireString(
+    Map<String, dynamic> data,
+    String key,
+    String callableName,
+  ) {
+    final value = data[key];
+    if (value is String && value.trim().isNotEmpty) {
+      return value;
+    }
+    throw UploadClientException(
+      'Réponse incomplète du serveur pendant $callableName '
+      '(champ « $key »).',
+    );
+  }
+
+  static int _requireEpochMs(
+    Map<String, dynamic> data,
+    String key,
+    String callableName,
+  ) {
+    final value = data[key];
+    if (value is num && value > 0) {
+      return value.toInt();
+    }
+    throw UploadClientException(
+      'Réponse incomplète du serveur pendant $callableName '
+      '(champ « $key »).',
+    );
+  }
+
   Future<String> _cachePath() async {
     final override = _cachePathProvider;
     if (override != null) return override();
@@ -363,14 +412,15 @@ class UploadClient {
       },
     );
 
-    final expiresAtMs = (data['expiresAt'] as num?)?.toInt() ?? 0;
-
+    const callableName = 'createUploadSession';
     final session = UploadSessionState(
-      sessionId: data['sessionId'],
-      uploadUrl: data['uploadUrl'],
-      videoPath: data['videoPath'],
-      thumbnailPath: data['thumbnailPath'],
-      expiresAt: DateTime.fromMillisecondsSinceEpoch(expiresAtMs),
+      sessionId: _requireString(data, 'sessionId', callableName),
+      uploadUrl: _requireString(data, 'uploadUrl', callableName),
+      videoPath: _requireString(data, 'videoPath', callableName),
+      thumbnailPath: _requireString(data, 'thumbnailPath', callableName),
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(
+        _requireEpochMs(data, 'expiresAt', callableName),
+      ),
       localFilePath: localFilePath,
     );
 
@@ -425,6 +475,7 @@ class UploadClient {
     required CancelToken? cancelToken,
     required Duration retryDelay,
     required String uploadLabel,
+    bool failFastOnSessionGone = false,
   }) async {
     int? lastStatusCode;
 
@@ -449,6 +500,17 @@ class UploadClient {
         );
       } catch (error) {
         if (cancelToken?.isCancelled == true) rethrow;
+
+        // A dead resumable session cannot be retried at this level: the
+        // caller has to negotiate a new upload URL, so retrying here only
+        // burns the budget against one that will never answer again. Opt-in,
+        // because only the video transfer has somewhere to go afterwards.
+        if (failFastOnSessionGone &&
+            error is UploadClientException &&
+            error.statusCode != null &&
+            _sessionGoneStatuses.contains(error.statusCode)) {
+          rethrow;
+        }
 
         if (error is UploadClientException) {
           lastStatusCode = error.statusCode ?? lastStatusCode;
@@ -554,18 +616,41 @@ class UploadClient {
       final end = (chunkStart + _chunkSize - 1).clamp(0, totalBytes - 1);
       final length = end - chunkStart + 1;
 
-      final response = await _sendChunkWithRetry(
-        uploadUrl: current.uploadUrl,
-        dataFactory: () => file.openRead(chunkStart, end + 1),
-        headers: {
-          'Content-Length': '$length',
-          'Content-Range': 'bytes $chunkStart-$end/$totalBytes',
-          'Content-Type': 'video/mp4',
-        },
-        cancelToken: cancelToken,
-        retryDelay: _videoRetryDelay,
-        uploadLabel: 'video',
-      );
+      final Response<dynamic> response;
+      try {
+        response = await _sendChunkWithRetry(
+          uploadUrl: current.uploadUrl,
+          dataFactory: () => file.openRead(chunkStart, end + 1),
+          headers: {
+            'Content-Length': '$length',
+            'Content-Range': 'bytes $chunkStart-$end/$totalBytes',
+            'Content-Type': 'video/mp4',
+          },
+          cancelToken: cancelToken,
+          retryDelay: _videoRetryDelay,
+          uploadLabel: 'video',
+          failFastOnSessionGone: true,
+        );
+      } on UploadClientException catch (error) {
+        final isSessionGone =
+            error.statusCode != null &&
+            _sessionGoneStatuses.contains(error.statusCode);
+        if (!isSessionGone || sessionRefreshCount >= _maxSessionRefreshes) {
+          rethrow;
+        }
+
+        // Same recovery as a clock-expired session: renegotiate under the id
+        // we already claimed (createUploadSession merges on it) and restart
+        // the transfer, rather than failing an upload whose bytes are still
+        // sitting on the device.
+        sessionRefreshCount++;
+        current = await refreshSession(current);
+        uploadedBytes = 0;
+        await persistSession(current.copyWith(uploadedBytes: 0));
+        onUrlRefreshed?.call();
+        onProgress(0);
+        continue;
+      }
 
       if (response.statusCode == 308) {
         final lastPersistedByte = _extractLastByte(
@@ -613,10 +698,13 @@ class UploadClient {
       },
     );
 
+    const callableName = 'requestThumbnailUploadUrl';
     return ThumbnailUploadTicket(
-      uploadUrl: data['uploadUrl'],
-      thumbnailPath: data['thumbnailPath'],
-      expiresAt: DateTime.fromMillisecondsSinceEpoch(data['expiresAt']),
+      uploadUrl: _requireString(data, 'uploadUrl', callableName),
+      thumbnailPath: _requireString(data, 'thumbnailPath', callableName),
+      expiresAt: DateTime.fromMillisecondsSinceEpoch(
+        _requireEpochMs(data, 'expiresAt', callableName),
+      ),
       expectedHash: hash,
       expectedSize: size,
       contentType: contentType,

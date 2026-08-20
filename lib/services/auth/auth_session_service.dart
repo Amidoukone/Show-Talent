@@ -362,6 +362,24 @@ class AuthSessionService {
     required bool updateLastLogin,
     Duration? budget,
   }) async {
+    // The callable's very first check is `auth.getUser(uid).emailVerified`,
+    // and it answers `failed-precondition` when that is false — a code this
+    // client classifies as retriable. So on an account Firebase Auth itself
+    // reports as unverified, the loop below spent its entire budget (~9s and
+    // two to three invocations) on calls that could not succeed, on every
+    // sign-in and every cold start of every unverified account. It also
+    // filled the Functions log with `failed-precondition` errors, which is
+    // exactly where a real verification failure would have been visible.
+    //
+    // `resolveSession` has just called `reload()`, so this flag reflects the
+    // server, not a stale local copy. Skipping straight to the profile read
+    // keeps every outcome the loop could produce: the account may still have
+    // been repaired elsewhere (another device, an admin action), and that is
+    // what the read below finds.
+    if (!isCurrentUserEmailVerified) {
+      return await _userRepository.fetchUserById(uid);
+    }
+
     final deadline = DateTime.now().add(budget ?? _verifiedSyncBudget);
 
     while (true) {
@@ -556,15 +574,26 @@ class AuthSessionService {
     throw const AuthFlowException(publicSignupDisabledMessage);
   }
 
+  /// Sends the reset link under [_authCallTimeout].
+  ///
+  /// Same reasoning as sign-in: this reaches the network and does not time out
+  /// on its own, and the login screen's "Mot de passe oublié ?" owns a busy
+  /// state cleared only in its `finally`. Unbounded, a stall left that button
+  /// spinning for as long as the user was willing to watch it, with no error
+  /// and nothing to retry.
   Future<void> sendPasswordResetEmail({
     required String email,
     ActionCodeSettings? actionCodeSettings,
   }) {
-    return _auth.sendPasswordResetEmail(
-      email: email,
-      actionCodeSettings:
-          actionCodeSettings ?? _defaultPasswordResetActionCodeSettings,
-    );
+    Future<void> send() {
+      return _auth.sendPasswordResetEmail(
+        email: email,
+        actionCodeSettings:
+            actionCodeSettings ?? _defaultPasswordResetActionCodeSettings,
+      );
+    }
+
+    return _bounded(send, 'réinitialisation du mot de passe');
   }
 
   Future<void> confirmPasswordReset({
@@ -584,10 +613,17 @@ class AuthSessionService {
       );
     }
 
-    try {
+    Future<void> send() async {
       await user.sendEmailVerification(
         actionCodeSettings ?? _defaultEmailVerificationActionCodeSettings,
       );
+    }
+
+    try {
+      // Bounded for the same reason as the reset link above: the verify-email
+      // screen's "Renvoyer" clears its busy state in a `finally` that an
+      // unbounded await never reaches.
+      await _bounded(send, 'envoi de l’e-mail de vérification');
       return EmailVerificationSendResult(
         sent: true,
         sentAtMs: DateTime.now().millisecondsSinceEpoch,

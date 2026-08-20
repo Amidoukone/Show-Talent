@@ -1,3 +1,4 @@
+import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/follow_controller.dart';
@@ -182,11 +183,11 @@ class _FollowListScreenState extends State<FollowListScreen> {
                         horizontal: AdSpacing.md,
                         vertical: AdSpacing.xs,
                       ),
-                      leading: CircleAvatar(
-                        backgroundImage: u.photoProfil.isNotEmpty
-                            ? NetworkImage(u.photoProfil)
-                            : const AssetImage('assets/default_avatar.jpg')
-                                as ImageProvider,
+                      leading: AdAvatar(
+                        photoUrl: u.photoProfil,
+                        fallbackImage: const AssetImage(
+                          'assets/default_avatar.jpg',
+                        ),
                         backgroundColor: AdColors.surfaceCardAlt,
                       ),
                       title: Text(

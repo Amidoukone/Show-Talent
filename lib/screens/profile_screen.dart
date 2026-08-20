@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:adfoot/config/feature_controller_registry.dart';
+import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/screens/profil_video_scrollview.dart';

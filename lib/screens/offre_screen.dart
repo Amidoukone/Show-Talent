@@ -1,4 +1,5 @@
 import 'package:adfoot/controller/chat_controller.dart';
+import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/offre_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
@@ -1414,15 +1415,16 @@ class _OffreScreenState extends State<OffreScreen> {
                             ),
                           );
                         },
-                        child: CircleAvatar(
+                        child: AdAvatar(
                           radius: 24,
                           backgroundColor: AdColors.surfaceCardAlt,
-                          backgroundImage: validPhoto
-                              ? NetworkImage(offre.recruteur.photoProfil)
-                              : null,
-                          child: validPhoto
-                              ? null
-                              : const Icon(Icons.person, color: Colors.white70),
+                          photoUrl: validPhoto
+                              ? offre.recruteur.photoProfil
+                              : '',
+                          fallback: const Icon(
+                            Icons.person,
+                            color: Colors.white70,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1609,12 +1611,10 @@ class _OffreScreenState extends State<OffreScreen> {
 
                       return Row(
                         children: [
-                          CircleAvatar(
+                          AdAvatar(
                             backgroundColor: AdColors.surfaceCardAlt,
-                            backgroundImage: valid
-                                ? NetworkImage(candidat.photoProfil)
-                                : null,
-                            child: valid ? null : const Icon(Icons.person),
+                            photoUrl: valid ? candidat.photoProfil : '',
+                            fallback: const Icon(Icons.person),
                           ),
                           const SizedBox(width: 12),
                           Expanded(

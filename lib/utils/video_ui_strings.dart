@@ -25,6 +25,9 @@ class VideoUiStrings {
   static const String loadingTooLong =
       'Le chargement prend trop de temps. Réessayez.';
   static const String playbackError = 'Erreur de lecture';
+  static const String actionTimedOut =
+      'Le serveur met trop de temps à répondre. Vérifiez votre réseau puis '
+      'réessayez.';
   static const String genericActionImpossible = 'Action impossible.';
   static const String genericActionRetry = 'Action impossible pour le moment.';
   static const String defaultPublisherName = 'Profil Adfoot';

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 
@@ -149,14 +150,11 @@ class VideoActionRail extends StatelessWidget {
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => _run(onOpenProfile),
-                  child: CircleAvatar(
+                  child: AdAvatar(
                     radius: 24,
                     backgroundColor: Colors.white,
-                    backgroundImage:
-                        photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                    child: photoUrl.isEmpty
-                        ? const Icon(Icons.person, color: Colors.black)
-                        : null,
+                    photoUrl: photoUrl,
+                    fallback: const Icon(Icons.person, color: Colors.black),
                   ),
                 ),
               ),

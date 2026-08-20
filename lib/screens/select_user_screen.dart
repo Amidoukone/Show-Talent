@@ -1,3 +1,4 @@
+import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -309,21 +310,17 @@ class _UserCard extends StatelessWidget {
             padding: const EdgeInsets.all(AdSpacing.md),
             child: Row(
               children: [
-                CircleAvatar(
+                AdAvatar(
                   radius: 26,
                   backgroundColor: cs.surfaceContainerHighest,
-                  backgroundImage: user.photoProfil.isNotEmpty
-                      ? NetworkImage(user.photoProfil)
-                      : null,
-                  child: user.photoProfil.isEmpty
-                      ? Text(
-                          initial,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
-                          ),
-                        )
-                      : null,
+                  photoUrl: user.photoProfil,
+                  fallback: Text(
+                    initial,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      fontSize: 18,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
