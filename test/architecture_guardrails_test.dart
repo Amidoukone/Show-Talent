@@ -397,10 +397,32 @@ void main() {
     // Play requires a 64-bit variant to be present, not the 32-bit one to be
     // dropped. Shipping arm64-v8a alone made the app invisible on the Play
     // Store for every armeabi-v7a handset.
-    test('the Android build ships both ARM ABIs', () {
+    //
+    // Read what this test does and does not prove. It pins the declaration,
+    // not the outcome: the Flutter Gradle plugin calls abiFilters.clear() and
+    // then addAll(PLATFORM_ABI_LIST) on defaultConfig (configureAbiWithoutSplits
+    // in FlutterPlugin.kt), so the line below is overwritten on every ordinary
+    // build and the bundle ships arm32 + arm64 + x86_64 whatever it says. The
+    // line becomes live again only under --split-per-abi or the
+    // `disable-abi-filtering` Gradle property, and it is kept — and pinned here
+    // — so that those paths inherit the right value rather than a stale one.
+    //
+    // The ABI set of a real artifact is verified where it is actually true, by
+    // scripts/check-aab-native-alignment.ps1, which fails when either ARM ABI
+    // is missing from the built bundle.
+    test('the Android build declares both ARM ABIs as its fallback', () {
       final gradle = File('android/app/build.gradle').readAsStringSync();
 
       expect(gradle, contains('abiFilters "armeabi-v7a", "arm64-v8a"'));
+    });
+
+    test('the artifact checker enforces the ARM ABIs it cannot read from source',
+        () {
+      final checker =
+          File('scripts/check-aab-native-alignment.ps1').readAsStringSync();
+
+      expect(checker, contains(r'$requiredAbis = @("armeabi-v7a", "arm64-v8a")'));
+      expect(checker, contains('ABI manquante'));
     });
 
     test(

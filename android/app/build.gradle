@@ -31,15 +31,34 @@ android {
         versionName = flutter.versionName
         multiDexEnabled true
         ndk {
-            // Both ARM ABIs on purpose. Play's rule is that a 64-bit variant
-            // must be *present*, not that the 32-bit one must be dropped —
+            // Both ARM ABIs must ship. Play's rule is that a 64-bit variant
+            // must be *present*, not that the 32-bit one must be dropped --
             // shipping arm64-v8a alone made the app simply invisible on the
             // Play Store for every armeabi-v7a handset, which is a real share
             // of the entry-level devices this audience actually owns.
             //
-            // x86/x86_64 stay out: they only serve emulators, and the app
-            // bundle splits per ABI anyway, so adding armeabi-v7a costs
-            // download size on no one — each device downloads only its own.
+            // This line is not what delivers that, and the artifact says so:
+            // the shipped bundle carries armeabi-v7a, arm64-v8a *and* x86_64.
+            // The Flutter Gradle plugin calls abiFilters.clear() then
+            // addAll(PLATFORM_ABI_LIST) on defaultConfig -- see
+            // configureAbiWithoutSplits in FlutterPlugin.kt -- so whatever is
+            // written here is replaced on every build by its own list of
+            // arm32 + arm64 + x86_64. (The plugin's own comment claims user
+            // filters take precedence; the code does not, and the bundle
+            // agrees with the code.)
+            //
+            // The line stays as the fallback for the two cases where the
+            // plugin stands back and this value becomes live again:
+            // --split-per-abi, and the `disable-abi-filtering` Gradle
+            // property.
+            //
+            // Shipping x86_64 costs users nothing -- Play splits the bundle
+            // per ABI, so each device downloads only its own -- and it is
+            // what keeps the app installable on x86_64 Chromebooks and
+            // emulators. There is no reason to fight the plugin for it.
+            //
+            // The ABI set is only ever true of an artifact, so verify it
+            // there: scripts/check-aab-native-alignment.ps1
             abiFilters "armeabi-v7a", "arm64-v8a"
         }
     }
@@ -98,9 +117,24 @@ android {
 
     packagingOptions {
         jniLibs {
-            // Keep native library packaging explicit for Play's 16 KB page-size
-            // compatibility path. NDK r29 handles 16 KB ELF alignment.
-            useLegacyPackaging true
+            // Uncompressed, which is the recommended path from AGP 8.5.1 on and
+            // what this project builds with (8.11.1). `useLegacyPackaging true`
+            // is documented as the fallback for AGP 8.5 and below.
+            //
+            // 16 KB page-size compliance does NOT come from this flag: it comes
+            // from ELF segment alignment, supplied by NDK r29. Verified on the
+            // shipped bundle -- every 64-bit LOAD segment reports p_align 16384
+            // or 65536.
+            //
+            // What the flag actually decided was how many copies of each .so
+            // live on the device. Compressed, Android extracts them into
+            // /data at install time, so the APK's copy and the extracted copy
+            // coexist: ~8.9 MB of duplicate arm64 payload (~8.5 MB on
+            // armeabi-v7a) on exactly the low-storage handsets this audience
+            // owns, and Google's own guidance warns it makes installs fail more
+            // often. Play compresses at delivery either way, so the download
+            // does not grow.
+            useLegacyPackaging false
         }
     }
 }

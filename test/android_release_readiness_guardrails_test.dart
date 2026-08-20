@@ -18,7 +18,10 @@ void main() {
     expect(gradle, contains('ndkVersion = "29.0.13599879"'));
     expect(gradle, contains('minifyEnabled true'));
     expect(gradle, contains('shrinkResources true'));
-    expect(gradle, contains('useLegacyPackaging true'));
+    // Uncompressed on purpose: 16 KB compliance comes from NDK ELF alignment,
+    // not from this flag, and compressing duplicated every .so on the device
+    // (APK copy + copy extracted into /data at install).
+    expect(gradle, contains('useLegacyPackaging false'));
     expect(
       gradle,
       contains('rootProject.file(keystoreProperties["storeFile"])'),
@@ -40,7 +43,7 @@ void main() {
     expect(script, contains(r'$expectedBuildToolsVersion = "35.0.0"'));
     expect(script, contains(r'$expectedNdkVersion = "29.0.13599879"'));
     expect(script, contains('16 KB page-size'));
-    expect(script, contains('useLegacyPackaging=true'));
+    expect(script, contains('useLegacyPackaging=false'));
     expect(script, contains('release keystore SHA-256'));
     expect(script, contains('assetlinks.json fingerprint for org.adfoot.app'));
     expect(script, contains('storeFile relative to the android rootProject'));

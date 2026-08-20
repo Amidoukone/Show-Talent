@@ -535,9 +535,9 @@ if ($errors.Count -eq 0) {
         )
     }
 
-    if ($gradleRaw -notmatch '(?s)jniLibs\s*\{.*?useLegacyPackaging\s+true') {
+    if ($gradleRaw -notmatch '(?s)jniLibs\s*\{.*?useLegacyPackaging\s+false') {
         $errors.Add(
-            "Android native library packaging does not enable useLegacyPackaging=true for 16 KB page-size compatibility."
+            "Android native libraries must ship uncompressed (useLegacyPackaging=false). 16 KB page-size compliance comes from NDK ELF alignment, not from this flag, and compressing duplicates every .so on the device."
         )
     }
 
