@@ -47,7 +47,23 @@ class UserController extends GetxController with WidgetsBindingObserver {
   String? _queuedRoute;
   dynamic _queuedArguments;
 
-  static const Duration _accessHeartbeatInterval = Duration(seconds: 60);
+  /// Backstop against a dead access listener — not the revocation path.
+  ///
+  /// Revocation actually arrives through [UserRepository.watchUserAccess], a
+  /// `snapshots()` held open on `users/{uid}`: the admin disable flow writes
+  /// `authDisabled`/`estActif` to Firestore *as well as* calling
+  /// `auth.updateUser({disabled: true})` (functions/src/admin_account_actions.ts),
+  /// so the listener sees every real revocation the moment it happens, and
+  /// `evaluateUserData` turns it into a forced sign-out. Access is re-checked
+  /// on top of that at every app resume, on any `permission-denied` from any
+  /// stream, and on every refused protected action.
+  ///
+  /// At 60s this timer woke the cellular radio sixty times an hour — one Auth
+  /// `reload()` round-trip plus one Firestore read each — to re-confirm what an
+  /// already-open connection watches continuously. The only case this interval
+  /// governs is a listener that died silently while the app stayed foregrounded
+  /// without a single resume.
+  static const Duration _accessHeartbeatInterval = Duration(minutes: 5);
   static const Duration _userHydrationTimeout = Duration(seconds: 22);
 
   bool get isUserHydrationPending => _isUserHydrationPending.value;

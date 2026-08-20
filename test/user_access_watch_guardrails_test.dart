@@ -16,6 +16,6 @@ void main() {
       ),
     );
     expect(source, contains('isDisabledAuthFailure(error)'));
-    expect(source, contains('Duration(seconds: 60)'));
+    expect(source, contains('Duration(minutes: 5)'));
   });
 }
