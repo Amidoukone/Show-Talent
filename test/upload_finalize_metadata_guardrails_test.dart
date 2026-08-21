@@ -74,6 +74,34 @@ void main() {
       expect(gated, contains('isPublic: false,'));
     });
 
+    // The mirror of the race above, and the regression that fixing it caused.
+    //
+    // Making a first finalize always write meant it could finally reach
+    // resolveUploadLifecycleState with a document the optimizer had already
+    // finished. That function only preserved "ready", so "under_review" --
+    // exactly what optimizeMp4Video writes on success -- fell through to the
+    // default and pushed a finished video back to processing/not-optimized,
+    // where no admin could approve it. Seen in production on a 1.4 MB clip:
+    // "Vidéo prête" logged at 23:38:58.200, overwritten at 23:38:58.992.
+    test('a finished optimization is never pushed back to processing', () {
+      final resolver =
+          uploadSession.indexOf('function resolveUploadLifecycleState(');
+      expect(resolver, isNonNegative);
+
+      final body = uploadSession.substring(resolver, resolver + 1400);
+      expect(body, contains('status === "under_review"'));
+      expect(
+        body,
+        contains('return {status, optimized: true};'),
+        reason: 'both terminal states must be preserved, not just "ready"',
+      );
+      expect(
+        body,
+        isNot(contains('return {status: "ready", optimized: true};')),
+        reason: 'preserving only "ready" is what stranded the video',
+      );
+    });
+
     test('the canonical and legacy aliases are still both written', () {
       expect(
         uploadSession,

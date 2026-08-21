@@ -150,8 +150,25 @@ function resolveUploadLifecycleState(
 ): {status: string; optimized: boolean} {
   const status = typeof doc?.status === "string" ? doc.status : "";
 
-  if (status === "ready" && doc?.optimized === true) {
-    return {status: "ready", optimized: true};
+  // Both of the optimizer's terminal states, not just "ready".
+  //
+  // finalizeUpload could not reach this case before: the old guard returned
+  // early whenever the optimizer had finished, so this function only ever saw
+  // a document still mid-flight. Making a first finalize always write opened
+  // the path, and "under_review" -- which is exactly what optimizeMp4Video
+  // writes when it succeeds -- fell through to the default and pushed a
+  // finished video back to processing/not-optimized.
+  //
+  // Observed in production on a 1.4 MB clip: the optimizer logged
+  // "Vidéo prête" at 23:38:58.200, finalizeUpload overwrote it at
+  // 23:38:58.992, and the video could no longer be approved. It is the mirror
+  // of the race this guard was changed to fix -- on a light clip the
+  // optimizer wins, and its result has to survive.
+  if (
+    (status === "ready" || status === "under_review") &&
+    doc?.optimized === true
+  ) {
+    return {status, optimized: true};
   }
 
   if (["error", "failed", "failure"].includes(status)) {
