@@ -73,6 +73,29 @@ void main() {
       expect(player, contains("recoveryReason: 'manual_retry'"));
     });
 
+    // Reported from production on 1.0.7+18: a video showed the exhausted
+    // state after an upload, and the manual retry played it instantly. That is
+    // the signature of three identical attempts -- VideoManager opens a cached
+    // file whenever one exists and only reads `preferDownloadedFile` on a
+    // cache miss, so every automatic retry re-opened the same bytes. A
+    // first-frame timeout is not an init failure either, so the manager's own
+    // fresh-download fallback (which needs init to *throw*) never ran.
+    //
+    // A budget of three is only worth three if the attempts differ.
+    test('attempts escalate rather than repeating the same one', () {
+      expect(player, contains('final isFirstAttempt ='));
+      expect(player, contains('purgeCachedFile: !isFirstAttempt,'));
+      expect(
+        player,
+        contains('preferDownloadedFile: isFirstAttempt && resolvedUrl.isNotEmpty,'),
+        reason: 'later attempts must stream, which is what the manual retry does',
+      );
+    });
+
+    test('purging a cached video drops its cache entry, not just the bytes', () {
+      expect(player, contains('VideoCacheManager.removeCachedFile(cacheUrl)'));
+    });
+
     test('giving up shows the error state, not an endless spinner', () {
       expect(
         player,

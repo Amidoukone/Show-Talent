@@ -810,6 +810,25 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       return;
     }
 
+    // Escalate. The first three automatic attempts used to be the *same*
+    // attempt three times, which is worth exactly one: VideoManager opens a
+    // cached file whenever one exists and only consults `preferDownloadedFile`
+    // when the cache misses, so every retry re-opened the identical bytes.
+    //
+    // That is not hypothetical. A first-frame timeout is not an init failure —
+    // `initialize()` succeeds on a truncated file, it simply never renders —
+    // so VideoManager's own fresh-download fallback, which only triggers when
+    // init *throws*, never ran either. Reported from production: a video
+    // showed "Lecture interrompue" after an upload, and the manual retry
+    // played it instantly. The manual path purges the cached file and streams;
+    // the automatic path did neither. The budget was being spent proving the
+    // same thing three times.
+    //
+    // So: attempt one reuses what is there, because a genuinely transient
+    // stall needs nothing more and re-fetching a good file is wasteful. Every
+    // attempt after that does what the manual retry demonstrably does —
+    // discard the cached file and stream.
+    final isFirstAttempt = _automaticRecoveryAttempts == 0;
     _automaticRecoveryAttempts++;
     _isRecovering = true;
     try {
@@ -820,7 +839,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           widget.video.effectiveUrl;
 
       await _purgeAndReloadController(
-        preferDownloadedFile: resolvedUrl.isNotEmpty,
+        purgeCachedFile: !isFirstAttempt,
+        preferDownloadedFile: isFirstAttempt && resolvedUrl.isNotEmpty,
         recoveryReason: reason,
       );
     } finally {
@@ -1633,6 +1653,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     if (!kIsWeb && purgeCachedFile) {
       try {
         final cacheUrl = resolvedUrl ?? widget.videoUrl;
+        // removeFile as well as deleting the bytes: deleting only the file
+        // leaves the cache repository still holding a CacheObject that points
+        // at nothing, so the entry lingers and counts against the store
+        // forever. `getFileIfCached` tolerates that — it checks `exists()` —
+        // but the phantom never expires on its own.
+        await custom_cache.VideoCacheManager.removeCachedFile(cacheUrl);
         final file = await custom_cache.VideoCacheManager.getFileIfCached(
           cacheUrl,
         );
