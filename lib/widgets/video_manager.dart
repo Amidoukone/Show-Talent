@@ -1819,6 +1819,12 @@ class VideoManager {
 
     for (final entry in lru.entries.toList()) {
       if (entry.key == resolvedKeep) continue;
+      // Pausing a controller ends whatever it was pulling off the network, so
+      // it no longer competes with anything. Leaving the mark set kept a video
+      // the user had already scrolled past counted as an active stream, and
+      // this runs on every index change -- the exact moment the previous
+      // video stops being one.
+      _markStreaming(contextKey, entry.key, isStreaming: false);
       bool isInitialized = false;
       try {
         isInitialized = entry.value.controller.value.isInitialized;
