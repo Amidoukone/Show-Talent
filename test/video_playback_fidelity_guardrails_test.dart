@@ -149,10 +149,34 @@ void main() {
       expect(optimizer, contains('MAX_OUTPUT_SHORT_EDGE'));
       expect(optimizer, contains('process.env.MAX_OUTPUT_SHORT_EDGE'));
       expect(optimizer, contains('label: "1080p"'));
+
+      // The clamp used to read `Math.min(shortEdge, MAX_OUTPUT_SHORT_EDGE)`
+      // inline. It moved into buildMp4RenditionForCeiling when the companion
+      // rendition started sharing the same scaling rules, so the guarantee is
+      // now pinned in two halves: the clamp can still only ever scale *down*,
+      // and the delivered asset is still the one built at the 1080p ceiling.
+      // A companion ceiling silently substituted here is exactly the
+      // regression that would bring "les videos reviennent floues" back.
       expect(
         optimizer,
-        contains('Math.min(shortEdge, MAX_OUTPUT_SHORT_EDGE)'),
+        contains('Math.min(shortEdge, ceiling)'),
         reason: 'a source within the ceiling must keep its own dimensions',
+      );
+      expect(
+        optimizer,
+        contains(
+          'return buildMp4RenditionForCeiling(\n'
+          '    sourceWidth,\n'
+          '    sourceHeight,\n'
+          '    MAX_OUTPUT_SHORT_EDGE,\n'
+          '  );',
+        ),
+        reason: 'the delivered asset is built at the full ceiling, not a companion one',
+      );
+      expect(
+        optimizer,
+        contains('const fallbackMp4Rendition = buildSingleMp4Rendition('),
+        reason: 'and it is that builder the delivered asset goes through',
       );
     });
 

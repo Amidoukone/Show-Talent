@@ -136,6 +136,38 @@ const MAX_PASSTHROUGH_BITRATE = parsePositiveIntEnv(
   process.env.MAX_PASSTHROUGH_BITRATE,
   12000000,
 );
+
+// --- Companion rendition ---------------------------------------------------
+//
+// A *second*, lighter MP4 published next to the delivered asset — never
+// instead of it. The primary keeps the exact pixels and bitrate it has today:
+// a recruiter on wifi sees what the phone filmed, untouched, passthrough
+// included.
+//
+// The point is the other end of the fleet. The app already ships the whole
+// adaptive ladder (VideoSourceSelector picks `_bestAtMost(sorted, 540)` on a
+// low-tier network) and has never had anything to choose from, because this
+// function emits exactly one source. On a connection that cannot sustain a
+// 12 Mb/s stream, "one source" means buffering with no way out; the companion
+// turns that into a video that plays.
+//
+// Off by default. Turning it on adds one encode per upload, and on the
+// non-passthrough path that is a *second* encode sharing the same 540s budget
+// as a worst-case 1080p one — measure a 3-minute clip before enabling this
+// fleet-wide. Nothing about the primary asset changes either way.
+const COMPANION_RENDITION_ENABLED =
+  process.env.COMPANION_RENDITION_ENABLED === "true";
+const COMPANION_RENDITION_HEIGHT = parsePositiveIntEnv(
+  process.env.COMPANION_RENDITION_HEIGHT,
+  480,
+);
+// Below this delivered bitrate the primary already streams anywhere, and a
+// companion would be pure cost: an encode, an object, a token, for a file
+// nobody would ever be served.
+const COMPANION_MIN_SOURCE_BITRATE = parsePositiveIntEnv(
+  process.env.COMPANION_MIN_SOURCE_BITRATE,
+  2500000,
+);
 type StorageClient = {
   bucket: (name: string) => {
     file: (path: string) => {
@@ -402,6 +434,31 @@ function buildSingleMp4Rendition(
   sourceWidth: number | null,
   sourceHeight: number | null
 ): Mp4Rendition {
+  return buildMp4RenditionForCeiling(
+    sourceWidth,
+    sourceHeight,
+    MAX_OUTPUT_SHORT_EDGE,
+  );
+}
+
+/**
+ * Builds the rendition an encode should target for a given short-edge ceiling.
+ *
+ * Extracted so the companion rendition goes through the exact same scaling
+ * rules as the delivered asset — same `min()` guard against upscaling, same
+ * short-edge detection, same rate preset lookup — with nothing but the
+ * ceiling differing between them.
+ *
+ * @param {number | null} sourceWidth Probed width, null when unknown.
+ * @param {number | null} sourceHeight Probed height, null when unknown.
+ * @param {number} ceiling Largest short edge the output may have, in pixels.
+ * @return {Mp4Rendition} Scale plan, rate ceilings and output file name.
+ */
+function buildMp4RenditionForCeiling(
+  sourceWidth: number | null,
+  sourceHeight: number | null,
+  ceiling: number,
+): Mp4Rendition {
   const normalizedWidth = asPositiveInt(sourceWidth);
   const normalizedHeight = asPositiveInt(sourceHeight);
   const shortEdge =
@@ -411,8 +468,8 @@ function buildSingleMp4Rendition(
 
   // No source dimensions at all: encode as-is and only cap at the ceiling.
   const actualHeight = shortEdge ?
-    toEven(Math.min(shortEdge, MAX_OUTPUT_SHORT_EDGE)) :
-    MAX_OUTPUT_SHORT_EDGE;
+    toEven(Math.min(shortEdge, ceiling)) :
+    ceiling;
   const preset = selectRatePreset(actualHeight);
 
   // Which dimension the short edge *is*, so the scale filter caps that one and
@@ -429,6 +486,80 @@ function buildSingleMp4Rendition(
     scaleDimension,
     outputFileName: `${actualHeight}p.mp4`,
   };
+}
+
+/**
+ * Bitrate viewers will actually be served for the delivered asset.
+ *
+ * On the passthrough path that is the source's own bitrate, not the rendition
+ * ceiling — the ceiling would describe an encode that never ran.
+ *
+ * @param {ProbedMedia | null} media Probe result for the uploaded file.
+ * @param {Mp4Rendition} rendition Rendition plan for the delivered asset.
+ * @param {boolean} canRemux Whether the asset ships without re-encoding.
+ * @return {number | null} Delivered bitrate in bps, null when unknown.
+ */
+function deliveredBitrate(
+  media: ProbedMedia | null,
+  rendition: Mp4Rendition,
+  canRemux: boolean,
+): number | null {
+  if (canRemux) {
+    return media?.bitrate ?? null;
+  }
+  return rendition.videoBitrate;
+}
+
+/**
+ * True when a lighter companion rendition is worth encoding and publishing.
+ *
+ * Deliberately conservative: every "no" here leaves the video exactly as it
+ * ships today, with a single source.
+ *
+ * @param {ProbedMedia | null} media Probe result for the uploaded file.
+ * @param {number | null} delivered Bitrate viewers get for the primary asset.
+ * @return {boolean} Whether to build the companion.
+ */
+function shouldBuildCompanionRendition(
+  media: ProbedMedia | null,
+  delivered: number | null,
+): boolean {
+  if (!COMPANION_RENDITION_ENABLED) {
+    return false;
+  }
+  // Without real dimensions the scale filter has nothing to preserve the
+  // aspect ratio against, and a companion that reframes the picture is worse
+  // than no companion at all.
+  if (!media || !media.width || !media.height) {
+    return false;
+  }
+  // Never upscale, and never publish a "lighter" source that is not actually
+  // lighter than the one it is meant to relieve.
+  if (Math.min(media.width, media.height) <= COMPANION_RENDITION_HEIGHT) {
+    return false;
+  }
+  if (delivered === null || delivered < COMPANION_MIN_SOURCE_BITRATE) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Object path for a rendition published beside the delivered asset.
+ *
+ * `mp4/{videoId}/...`, never `videos/...`: optimizeMp4Video triggers on every
+ * finalized `videos/**.mp4`, so publishing a companion there would re-enter
+ * this function with a videoId of `{videoId}_something` and merge a ghost
+ * document into the `videos` collection. The `mp4/` prefix is outside the
+ * trigger, already public-readable in storage.rules, already owner-deletable
+ * there, and already whitelisted by the admin asset collector.
+ *
+ * @param {string} videoId Firestore document id of the video.
+ * @param {string} fileName Rendition file name, e.g. "480p.mp4".
+ * @return {string} Full object path inside the bucket.
+ */
+function buildRenditionObjectPath(videoId: string, fileName: string): string {
+  return `mp4/${videoId}/${fileName}`;
 }
 
 /**
@@ -806,6 +937,9 @@ export const optimizeMp4Video = onObjectFinalized(
     const bucket = storage.bucket(bucketName);
     const tempInput = join(tmpdir(), fileName);
     const optimizedFile = join(tmpdir(), `optimized_${fileName}`);
+    // Named here so the `finally` below can reclaim it whether the companion
+    // encode succeeded, failed halfway, or never ran.
+    let companionFile: string | null = null;
 
     try {
       await robustDownload(bucketName, filePath, tempInput);
@@ -901,6 +1035,77 @@ export const optimizeMp4Video = onObjectFinalized(
         deliveredRendition,
       );
       const mp4Sources: PlaybackSource[] = [fallbackSource];
+
+      // The delivered asset is already uploaded and contracted at this point.
+      // Everything below is additive and fully isolated: a companion that
+      // fails to encode, upload or tokenize leaves the video exactly as it
+      // ships without this feature -- one source, full quality, published.
+      // A lighter fallback is never worth failing an upload over.
+      const companionRendition = shouldBuildCompanionRendition(
+        probedMedia,
+        deliveredBitrate(probedMedia, fallbackMp4Rendition, canRemux),
+      ) ?
+        buildMp4RenditionForCeiling(
+          sourceWidth,
+          sourceHeight,
+          COMPANION_RENDITION_HEIGHT,
+        ) :
+        null;
+
+      if (companionRendition) {
+        try {
+          console.log(
+            `Companion rendition: ${sourceWidth}x${sourceHeight} -> ` +
+              `${companionRendition.label}`,
+          );
+          companionFile = join(
+            tmpdir(),
+            `companion_${companionRendition.actualHeight}p_${fileName}`,
+          );
+          await transcodeMp4Rendition(
+            tempInput,
+            companionFile,
+            companionRendition,
+          );
+
+          const companionPath = buildRenditionObjectPath(
+            videoId,
+            companionRendition.outputFileName,
+          );
+          await bucket.upload(companionFile, {
+            destination: companionPath,
+            metadata: {
+              contentType: "video/mp4",
+              cacheControl: "public,max-age=86400",
+              // Belt and braces: `mp4/` is outside the trigger prefix, but a
+              // future trigger widening must not turn this into a loop.
+              metadata: {optimized: "true"},
+            },
+          });
+
+          const companionToken = await ensureDownloadToken(
+            bucketName,
+            companionPath,
+          );
+          const companionSource = buildMp4PlaybackSource(
+            buildStorageDownloadUrl(bucketName, companionPath, companionToken),
+            companionPath,
+            companionRendition,
+          );
+          // Appended, never prepended: `playback.fallback`, `sourceAsset` and
+          // any consumer reading `sources.first` must keep resolving to the
+          // full-quality asset exactly as they do today. Only the adaptive
+          // selector, which sorts by height itself, looks further.
+          mp4Sources.push(companionSource);
+          console.log(`Companion rendition published: ${companionPath}`);
+        } catch (companionError) {
+          console.warn(
+            "⚠️ Companion rendition skipped:",
+            (companionError as Error).message,
+          );
+        }
+      }
+
       const playback = buildPlaybackContract(
         mp4Sources,
         fallbackSource,
@@ -946,7 +1151,11 @@ export const optimizeMp4Video = onObjectFinalized(
         {merge: true}
       );
     } finally {
-      for (const f of [tempInput, optimizedFile]) {
+      const tempFiles = [tempInput, optimizedFile];
+      if (companionFile) {
+        tempFiles.push(companionFile);
+      }
+      for (const f of tempFiles) {
         if (existsSync(f)) {
           try {
             unlinkSync(f);

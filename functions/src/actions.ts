@@ -177,7 +177,58 @@ function collectOwnedVideoAssetPaths(
     paths.add(thumbnailPath);
   }
 
+  // Companion renditions live under `mp4/{videoId}/`, outside the four fixed
+  // paths above. Without this, an owner deleting their own video left every
+  // extra rendition behind in the bucket forever -- billed, publicly
+  // readable, and unreachable by anything but a manual sweep. The admin
+  // deletion path already walked `sources`; this one never did.
+  for (const source of collectSourceRecords(data)) {
+    const renditionPath = getSafeStoragePath(source.path, {
+      prefix: "mp4/",
+      videoId,
+    });
+    if (renditionPath) {
+      paths.add(renditionPath);
+    }
+  }
+
   return Array.from(paths);
+}
+
+/**
+ * Every playback-source record a video document can carry.
+ *
+ * Reads both the flat `sources` array and the `playback` contract, because a
+ * document written by an older function version may have only one of them.
+ * @param {Record<string, unknown>} data Video document data.
+ * @return {Array<Record<string, unknown>>} Source records found, if any.
+ */
+function collectSourceRecords(
+  data: Record<string, unknown>
+): Array<Record<string, unknown>> {
+  const records: Array<Record<string, unknown>> = [];
+
+  const push = (value: unknown): void => {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      records.push(value as Record<string, unknown>);
+    }
+  };
+
+  if (Array.isArray(data.sources)) {
+    for (const source of data.sources) push(source);
+  }
+
+  const playback = data.playback;
+  if (playback && typeof playback === "object" && !Array.isArray(playback)) {
+    const contract = playback as Record<string, unknown>;
+    push(contract.sourceAsset);
+    push(contract.fallback);
+    if (Array.isArray(contract.sources)) {
+      for (const source of contract.sources) push(source);
+    }
+  }
+
+  return records;
 }
 
 async function deleteStorageObjectIfExists(path: string): Promise<void> {
