@@ -18,6 +18,14 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# $IsWindows exists on PowerShell 6+ only; on Windows PowerShell 5.1 it is
+# undefined, and Set-StrictMode would throw on reading it.
+$IsWindowsPlatform = if ($null -ne (Get-Variable -Name IsWindows -ErrorAction SilentlyContinue)) {
+    $IsWindows
+} else {
+    $true
+}
 $ErrorActionPreference = "Stop"
 
 if ($ReleaseGate -and -not $PSBoundParameters.ContainsKey("RequireSigning")) {
@@ -507,6 +515,61 @@ function Assert-NoConflictingAndroidBuildProcess {
     }
 }
 
+function Set-BuildKeepAwake {
+    <#
+      Keeps the machine from sleeping while the build runs.
+
+      A release build takes close to an hour. This machine sleeps after 15
+      minutes on mains power and 10 on battery, so stepping away from the
+      keyboard was enough to kill a build outright -- an hour lost, with no
+      output and nothing to explain it.
+
+      SetThreadExecutionState rather than powercfg: it is scoped to this
+      process, needs no elevation, and Windows drops it automatically when the
+      process ends, including on a crash or Ctrl-C. Mutating the global power
+      scheme would risk leaving a laptop that never sleeps again if the build
+      died before restoring the old value.
+
+      ES_SYSTEM_REQUIRED only, deliberately. The display may still switch off:
+      that costs nothing and saves power. It is sleep, not a dark screen, that
+      interrupts a build.
+    #>
+    param([switch]$Release)
+
+    if (-not $IsWindowsPlatform) { return }
+
+    try {
+        if (-not ('Adfoot.PowerRequest' -as [type])) {
+            Add-Type -Namespace Adfoot -Name PowerRequest -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+public static extern uint SetThreadExecutionState(uint esFlags);
+'@
+        }
+
+        # Decimal on purpose: Windows PowerShell 5.1 parses 0x80000000 as a
+        # signed Int32 (-2147483648) before the cast, and the cast then fails.
+        $ES_CONTINUOUS = [uint32]2147483648      # 0x80000000
+        $ES_SYSTEM_REQUIRED = [uint32]1          # 0x00000001
+
+        if ($Release) {
+            # Back to normal: the next idle timeout applies again.
+            [void][Adfoot.PowerRequest]::SetThreadExecutionState($ES_CONTINUOUS)
+        } else {
+            $previous = [Adfoot.PowerRequest]::SetThreadExecutionState(
+                $ES_CONTINUOUS -bor $ES_SYSTEM_REQUIRED
+            )
+            if ($previous -eq 0) {
+                Write-Host "Note: could not hold the machine awake; keep it from sleeping manually." -ForegroundColor Yellow
+            } else {
+                Write-Host "Veille systeme suspendue pour la duree du build (l'ecran peut s'eteindre)."
+            }
+        }
+    } catch {
+        # Never let power management stop a build.
+        Write-Host "Note: keep-awake unavailable ($($_.Exception.Message))." -ForegroundColor Yellow
+    }
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $effectiveNativeEnvironment = Get-EffectiveNativeEnvironment -EnvironmentName $Environment
 $preflightScript = Join-Path $repoRoot "scripts/check-android-release-readiness.ps1"
@@ -518,6 +581,7 @@ try {
     if (-not $PrintOnly) {
         Assert-NoConflictingAndroidBuildProcess -RepoRoot $repoRoot
         $releaseBuildLock = New-AndroidReleaseBuildLock -RepoRoot $repoRoot
+        Set-BuildKeepAwake
     }
 
     if (-not $SkipPreflight) {
@@ -689,6 +753,7 @@ try {
     Write-Host "Artifact   : $artifactPath"
     Write-Host "Size (MB)  : $artifactSizeMb"
 } finally {
+    Set-BuildKeepAwake -Release
     if ($null -ne $releaseBuildLock) {
         $releaseBuildLock.Dispose()
     }
