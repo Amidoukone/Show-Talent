@@ -59,6 +59,7 @@ interface VideoDoc {
   isPublic?: boolean;
   optimized?: boolean;
   createdAt?: unknown;
+  finalizedAt?: unknown;
 }
 
 interface CallerProfile {
@@ -160,10 +161,53 @@ function resolveUploadLifecycleState(
   return {status: "processing", optimized: false};
 }
 
+/**
+ * True when finalizeUpload has already written this session's metadata.
+ *
+ * It used to read `optimized === true && status in (ready, under_review)` --
+ * which is the exact state optimizeMp4Video writes when it finishes, and has
+ * nothing to do with whether the *owner's* metadata ever landed. The two are
+ * independent, and the upload flow races them: the client uploads the video
+ * (starting the optimizer), then the thumbnail, and only then calls
+ * finalizeUpload, the sole writer of description, caption and duration.
+ *
+ * On a light clip the optimizer wins that race, so finalizeUpload declared
+ * itself a duplicate, wrote nothing, and returned {ok: true}. Production has
+ * two videos from 2026-08-21 that are ready, approved and public with
+ * description, caption and duration never written -- legacy aliases included.
+ * On a heavy clip the client wins, and the text is there. That is exactly the
+ * "the text is missing, but it shows up when the video is heavy" report.
+ *
+ * The marker is now what finalizeUpload itself writes, so a retry is still a
+ * no-op and a first call is never mistaken for one.
+ *
+ * @param {VideoDoc | undefined} doc Video document for the session.
+ * @return {boolean} Whether a previous finalizeUpload already wrote.
+ */
 function isFinalizedUploadSession(doc: VideoDoc | undefined): boolean {
-  const status = typeof doc?.status === "string" ? doc.status : "";
-  return doc?.optimized === true &&
-    (status === "ready" || status === "under_review");
+  return doc?.finalizedAt !== undefined && doc?.finalizedAt !== null;
+}
+
+/**
+ * True when the video is already published to the feed.
+ *
+ * finalizeUpload resets moderationStatus/visibility/isPublic, which is correct
+ * for a video being submitted and catastrophic for one already approved and
+ * public -- a video owner could send their own live video back to pending. The
+ * old guard blocked that as a side effect of refusing to run at all; now that
+ * a legacy document with no `finalizedAt` can reach the write, the protection
+ * has to be stated instead of inherited.
+ *
+ * @param {VideoDoc | undefined} doc Video document for the session.
+ * @return {boolean} Whether the moderation fields must be left untouched.
+ */
+function isLiveVideoDoc(doc: VideoDoc | undefined): boolean {
+  if (doc?.status !== "ready") {
+    return false;
+  }
+  return doc?.moderationStatus === "approved" ||
+    doc?.visibility === "public" ||
+    doc?.isPublic === true;
 }
 
 function isPendingReviewVideo(data: VideoDoc): boolean {
@@ -755,6 +799,8 @@ export const finalizeUpload = onCall(
     // live video, and no client-supplied metadata can land. Ownership is
     // already enforced above, so the caller is the owner in every case that
     // reaches this point.
+    const alreadyLive = isLiveVideoDoc(doc);
+
     if (isFinalizedUploadSession(doc)) {
       return {ok: true, alreadyFinalized: true};
     }
@@ -828,10 +874,19 @@ export const finalizeUpload = onCall(
       {
         uid,
         status: lifecycle.status,
-        moderationStatus: "pending",
-        visibility: "private",
-        isPublic: false,
+        // Submission state, but never a downgrade: a legacy document carries
+        // no `finalizedAt`, so an already-approved video can now reach this
+        // write, and sending it back to pending/private would unpublish it.
+        ...(alreadyLive ? {} : {
+          moderationStatus: "pending",
+          visibility: "private",
+          isPublic: false,
+        }),
         optimized: lifecycle.optimized,
+
+        // What this call is the only writer of. Recorded so a retry is a
+        // no-op for the right reason -- see isFinalizedUploadSession.
+        finalizedAt: fieldValue.serverTimestamp(),
 
         // ✅ CANONIQUE (nouveau standard)
         ...(safe.description ? {description: safe.description} : {}),
