@@ -160,6 +160,22 @@ class _VideoUiWatchEntry {
   int watcherCount = 0;
 }
 
+/// A `preloadSurrounding` call held back because the active video is still
+/// streaming, replayed verbatim once that stream is healthy.
+class _DeferredPreloadRequest {
+  const _DeferredPreloadRequest({
+    required this.videos,
+    required this.index,
+    required this.preferForward,
+    this.activeUrl,
+  });
+
+  final List<Video> videos;
+  final int index;
+  final bool preferForward;
+  final String? activeUrl;
+}
+
 class VideoManager {
   static final VideoManager _instance = VideoManager._internal();
   factory VideoManager() => _instance;
@@ -243,6 +259,18 @@ class VideoManager {
   final Map<String, Map<String, VideoLoadState>> _loadStatesByContext = {};
   final Map<String, Future<_VideoDownloadResult>> _downloadFuturesByUrl = {};
   final Map<String, int> _preloadRequestTokensByContext = {};
+
+  /// Resolved URLs currently being played straight off the network, per
+  /// context. A preload is a *full file download*, so starting two or three
+  /// of them next to a stream means the video on screen competes with its own
+  /// neighbours for the same connection — the buffering loop reported on
+  /// every freshly published video, which "fixed itself after a few scrolls"
+  /// only because the clip had by then been downloaded as somebody's
+  /// neighbour and played from disk.
+  final Map<String, Set<String>> _streamingUrlsByContext = {};
+
+  /// The preload request each context owes, once its stream is healthy.
+  final Map<String, _DeferredPreloadRequest> _deferredPreloadsByContext = {};
 
   /// originalUrl -> resolvedUrl
   final Map<String, Map<String, String>> _resolvedUrlByContext = {};
@@ -342,6 +370,80 @@ class VideoManager {
     return identical(_lruByContext[contextKey], lru) &&
         identical(_initFuturesByContext[contextKey], futures);
   }
+
+  // ---------------------------------------------------------------------------
+  // Streaming bandwidth arbitration
+  // ---------------------------------------------------------------------------
+
+  void _markStreaming(
+    String contextKey,
+    String resolvedUrl, {
+    required bool isStreaming,
+  }) {
+    if (isStreaming) {
+      _streamingUrlsByContext
+          .putIfAbsent(contextKey, () => <String>{})
+          .add(resolvedUrl);
+      return;
+    }
+
+    final streaming = _streamingUrlsByContext[contextKey];
+    if (streaming == null) return;
+    streaming.remove(resolvedUrl);
+    if (streaming.isEmpty) {
+      _streamingUrlsByContext.remove(contextKey);
+    }
+  }
+
+  bool _isStreamingUrl(String contextKey, String? resolvedUrl) {
+    if (resolvedUrl == null || resolvedUrl.isEmpty) return false;
+    return _streamingUrlsByContext[contextKey]?.contains(resolvedUrl) ?? false;
+  }
+
+  /// Reports that the visible video has been playing smoothly long enough for
+  /// background downloads to be safe again.
+  ///
+  /// The stream keeps the connection to itself until this arrives, so the
+  /// clip the user is actually watching gets the bandwidth first. Called by
+  /// SmartVideoPlayer's stall watchdog once playback has advanced over
+  /// several consecutive ticks without buffering.
+  void markActivePlaybackStable(String contextKey, String url) {
+    final resolved = _resolveKey(contextKey, url);
+    _markStreaming(contextKey, resolved, isStreaming: false);
+    _flushDeferredPreload(contextKey);
+  }
+
+  void _flushDeferredPreload(String contextKey) {
+    final pending = _deferredPreloadsByContext.remove(contextKey);
+    if (pending == null) return;
+
+    unawaited(
+      preloadSurrounding(
+        contextKey,
+        pending.videos,
+        pending.index,
+        activeUrl: pending.activeUrl,
+        preferForward: pending.preferForward,
+      ),
+    );
+  }
+
+  @visibleForTesting
+  bool isStreamingUrlForTests(String contextKey, String resolvedUrl) =>
+      _isStreamingUrl(contextKey, resolvedUrl);
+
+  @visibleForTesting
+  void markStreamingForTests(
+    String contextKey,
+    String resolvedUrl, {
+    required bool isStreaming,
+  }) {
+    _markStreaming(contextKey, resolvedUrl, isStreaming: isStreaming);
+  }
+
+  @visibleForTesting
+  bool hasDeferredPreloadForTests(String contextKey) =>
+      _deferredPreloadsByContext.containsKey(contextKey);
 
   void setNetworkProfile(NetworkProfile profile) {
     _networkProfileRequestToken++;
@@ -749,19 +851,25 @@ class VideoManager {
     return !usedStreaming && !isPreload && _isFirebaseStorageUrl(url);
   }
 
-  /// Always false: the streaming path already caches itself.
-  ///
-  /// `CachedVideoPlayerPlus.networkUrl(...).initialize()` fires its own
-  /// unawaited `downloadFile` of the whole video whenever the URL is not in
-  /// *its* cache, and then streams the same URL for playback. Warming the
-  /// cache here added a third concurrent transfer of the identical bytes.
+  /// Always false: a stream gets the connection to itself.
   ///
   /// Reported from production: a freshly published video -- the only one in
   /// no cache at all -- paused and resumed continuously for its whole
   /// duration, on the tile and again after scrolling away and back, while
   /// every already-cached video played normally. No recovery ran and nothing
-  /// was logged, because nothing failed: the player was simply starved by two
-  /// downloads of the file it was trying to stream.
+  /// was logged, because nothing failed: the player was simply starved by
+  /// concurrent downloads of the file it was trying to stream.
+  ///
+  /// One of those downloads was the player's own: left at its default,
+  /// `CachedVideoPlayerPlus.networkUrl(...).initialize()` fires an unawaited
+  /// `downloadFile` of the whole video whenever the URL is missing from *its*
+  /// private cache, then streams the same URL anyway. That one is gone --
+  /// the streaming branch now passes `skipCache: true`. Warming the cache
+  /// here would simply put it back under a different name.
+  ///
+  /// The active video reaches the cache the same way every other video does:
+  /// as somebody's neighbour, through the preload path, once the stream has
+  /// reported itself healthy (see [markActivePlaybackStable]).
   ///
   /// Kept as a method rather than deleted so the decision stays visible at the
   /// call site, and so the guardrail can pin it.
@@ -947,11 +1055,24 @@ class VideoManager {
                 }
                 player = CachedVideoPlayerPlus.file(file);
               } else {
-                // Active playback: start immediately on network stream,
-                // then warm the cache after startup has stabilized.
+                // Active playback: start immediately on the network stream.
+                //
+                // `skipCache: true` is the whole point. Left at its default,
+                // CachedVideoPlayerPlus fires an unawaited downloadFile of the
+                // *same* URL into its own private cache the moment it finds no
+                // entry there, then streams that URL for playback. Two
+                // transfers of identical bytes, and the one the user is
+                // watching loses the race -- which is exactly the "pause /
+                // reprise" loop reported on every freshly published video.
+                //
+                // That private cache is also invisible to VideoCacheManager,
+                // so it was never purged and quietly held a second copy of
+                // every video ever streamed. This app owns its cache: the
+                // preload path fills it, VideoCacheManager purges it.
                 usedStreaming = true;
                 player = CachedVideoPlayerPlus.networkUrl(
                   Uri.parse(effectiveUrl),
+                  skipCache: true,
                 );
               }
             } else {
@@ -1078,6 +1199,19 @@ class VideoManager {
 
           _setLoadState(contextKey, url, VideoLoadState.ready);
 
+          if (!isPreload) {
+            // A preload is never a stream, and it deliberately skips the
+            // active URL, so only the active init can speak for it here.
+            _markStreaming(
+              contextKey,
+              cacheKey,
+              isStreaming: usedStreaming,
+            );
+            if (!usedStreaming) {
+              _flushDeferredPreload(contextKey);
+            }
+          }
+
           if (autoPlay && !player.controller.value.isPlaying) {
             await player.controller.play().catchError((_) {});
           }
@@ -1136,6 +1270,11 @@ class VideoManager {
           unawaited(_checkCacheSizeThrottled());
           return player;
         } catch (e, st) {
+          // Whatever happens next, nothing is streaming this URL any more:
+          // leaving the mark set would suppress this context's preloads for
+          // good.
+          _markStreaming(contextKey, cacheKey, isStreaming: false);
+
           if (e is _VideoInitCancelled) {
             lru.remove(cacheKey);
             return Future.error(e);
@@ -1418,8 +1557,10 @@ class VideoManager {
   Future<void> _readAndReportCacheSize() async {
     if (!kIsWeb) {
       final size = await _cacheSizeProvider();
-      if (size > custom_cache.VideoCacheManager.maxCacheSizeMB) {
-        AppLogger.debug("⚠️ Cache >300MB: ${size}MB");
+      final limit = custom_cache.VideoCacheManager.maxCacheSizeMB;
+      if (size > limit) {
+        AppLogger.debug("⚠️ Cache >${limit}MB: ${size}MB");
+        unawaited(custom_cache.VideoCacheManager.purgeIfNeeded());
       }
     }
   }
@@ -1448,6 +1589,7 @@ class VideoManager {
       await safeDispose(player);
 
       _initFuturesByContext[contextKey]?.remove(oldestKey);
+      _markStreaming(contextKey, oldestKey, isStreaming: false);
 
       for (final original in _originalUrlsForResolved(contextKey, oldestKey)) {
         _removeUiTracking(contextKey, original);
@@ -1471,6 +1613,32 @@ class VideoManager {
     _ensureNetworkProfileWarm();
     final radius = _preloadRadius;
     if (radius <= 0) return;
+
+    // Hold the neighbours back while the visible video is still pulling its
+    // own bytes off the network. Each preload downloads a whole file, so
+    // firing two or three of them alongside a live stream is what turned a
+    // freshly published video into a pause/resume loop for its entire
+    // duration. The request is replayed as soon as the stream reports itself
+    // healthy (markActivePlaybackStable) or the active video switches to a
+    // cached file -- so a normal network still preloads exactly as before,
+    // only a couple of seconds later.
+    final resolvedActive = activeUrl == null || activeUrl.trim().isEmpty
+        ? null
+        : _resolveKey(contextKey, activeUrl);
+    if (_isStreamingUrl(contextKey, resolvedActive)) {
+      _deferredPreloadsByContext[contextKey] = _DeferredPreloadRequest(
+        videos: videos,
+        index: index,
+        preferForward: preferForward,
+        activeUrl: activeUrl,
+      );
+      AppLogger.debug(
+        '[VideoManager] Preload deferred: active video still streaming '
+        '-> $resolvedActive',
+      );
+      return;
+    }
+    _deferredPreloadsByContext.remove(contextKey);
 
     final token = (_preloadRequestTokensByContext[contextKey] ?? 0) + 1;
     _preloadRequestTokensByContext[contextKey] = token;
@@ -1682,6 +1850,8 @@ class VideoManager {
     _loadStatesByContext.remove(contextKey);
     _resolvedUrlByContext.remove(contextKey);
     _preloadRequestTokensByContext.remove(contextKey);
+    _streamingUrlsByContext.remove(contextKey);
+    _deferredPreloadsByContext.remove(contextKey);
     _notifyUiStateChanged();
     _notifyContextWatchers(contextKey);
   }
@@ -1700,8 +1870,11 @@ class VideoManager {
       }
 
       _initFuturesByContext[contextKey]?.remove(resolved);
+      _markStreaming(contextKey, resolved, isStreaming: false);
       _removeUiTracking(contextKey, url);
     }
+
+    _flushDeferredPreload(contextKey);
   }
 
   Future<void> safePause(CachedVideoPlayerPlus player) async {

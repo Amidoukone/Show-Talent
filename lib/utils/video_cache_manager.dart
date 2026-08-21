@@ -3,68 +3,121 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:adfoot/services/app_logger.dart';
 
+/// Le seul propriétaire du cache vidéo sur disque.
+///
+/// L'application a longtemps eu *deux* caches vidéo qui s'ignoraient :
+/// celui-ci, rempli par les préchargements, et celui que
+/// `cached_video_player_plus` ouvre tout seul dès qu'on lui donne une URL
+/// réseau (`libCachedVideoPlayerPlusData`, dans le dossier cache de l'OS).
+/// Chaque vidéo lue en streaming était donc téléchargée intégralement une
+/// seconde fois, dans un dossier que cette classe ne purgeait jamais — d'où
+/// un stockage qui grimpait bien au-delà de la limite annoncée, et surtout
+/// une lecture qui se mettait en pause en boucle parce que le lecteur se
+/// faisait voler sa bande passante par le téléchargement de ses propres
+/// octets.
+///
+/// VideoManager passe désormais `skipCache: true` sur la branche streaming :
+/// le lecteur ne télécharge plus rien derrière notre dos, et ce cache-ci est
+/// le seul qui existe. [performStartupMaintenance] efface l'ancien.
 class VideoCacheManager extends CacheManager {
   static const key = 'videoCache';
+
+  /// Ancien dossier de blobs (`getApplicationSupportDirectory()/videoCache`).
+  ///
+  /// Il comptait comme « données utilisateur » sous Android : invisible pour
+  /// le bouton « Vider le cache », jamais récupérable par le système sous
+  /// pression de stockage. Les blobs vivent maintenant dans le dossier cache
+  /// de l'OS, là où un cache doit être.
+  static const String _legacySupportDirName = key;
+
+  /// Cache interne de `cached_video_player_plus`, désormais orphelin.
+  static const String _legacyPackageCacheDirName =
+      'libCachedVideoPlayerPlusData';
+
+  /// Plafond du cache en Mo : au-delà, on purge.
+  static const int maxCacheSizeMB = 600;
+
+  /// Cible visée par une purge, en Mo.
+  ///
+  /// Purger jusqu'à une cible plutôt que de libérer un bloc fixe évite de
+  /// repurger à chaque téléchargement une fois le plafond atteint :
+  /// l'ancienne version libérait 50 Mo puis se retrouvait à nouveau au
+  /// plafond deux vidéos plus loin.
+  static const int targetCacheSizeMB = 420;
+
+  /// Nombre max d'entrées suivies par flutter_cache_manager.
+  static const int maxCacheObjects = 150;
+
+  /// Durée de vie d'une entrée non revue.
+  static const Duration stalePeriod = Duration(days: 15);
+
+  /// Une purge ne touche jamais un fichier utilisé aussi récemment.
+  ///
+  /// La vidéo en cours de lecture et ses voisines préchargées sont, par
+  /// construction, les plus récemment utilisées ; ce délai les met hors
+  /// d'atteinte sans que la purge ait besoin de connaître le lecteur.
+  static const Duration _recentUseGracePeriod = Duration(minutes: 3);
+
+  static const int _bytesPerMB = 1024 * 1024;
+
   static VideoCacheManager? _instance;
-
-  /// Limite max du cache en Mo
-  static const int maxCacheSizeMB = 300;
-
-  /// Taille minimale à libérer lors d’un purge (Mo)
-  static const int purgeBlockSizeMB = 50;
+  static Future<VideoCacheManager>? _instanceFuture;
+  static String? _cacheDirectoryPath;
 
   /// Empêche les purges concurrentes
   static bool _purgeLock = false;
 
-  factory VideoCacheManager() {
-    return _instance ??= VideoCacheManager._internal();
-  }
-
-  VideoCacheManager._internal()
-      : super(
-          Config(
-            key,
-            stalePeriod: const Duration(days: 15),
-            maxNrOfCacheObjects: 100, // on augmente légèrement
-            repo: JsonCacheInfoRepository(databaseName: key),
-            fileService: HttpFileService(),
-            fileSystem: IOFileSystem(Directory.systemTemp.path),
-          ),
-        );
-
-  /// 🔧 Retourne un chemin de cache dédié aux vidéos
+  /// 🔧 Retourne le chemin du dossier de blobs vidéo.
+  ///
+  /// Doit rester cohérent avec le `IOFileSystem(key)` de la config :
+  /// celui-ci joint toujours sa clé au dossier temporaire de l'OS.
   static Future<String> getCacheDirectoryPath() async {
-    final supportDir = await getApplicationSupportDirectory();
-    final videoCacheDir = Directory('${supportDir.path}/$key');
+    final cached = _cacheDirectoryPath;
+    if (cached != null) return cached;
+
+    final baseDir = await getTemporaryDirectory();
+    final videoCacheDir = Directory(p.join(baseDir.path, key));
 
     if (!await videoCacheDir.exists()) {
       await videoCacheDir.create(recursive: true);
       AppLogger.debug(
           '[VideoCacheManager] Created directory at ${videoCacheDir.path}');
     }
+    _cacheDirectoryPath = videoCacheDir.path;
     return videoCacheDir.path;
   }
 
-  /// Singleton avec chemin correct
-  static Future<VideoCacheManager> getInstance() async {
-    if (_instance != null) return _instance!;
-    final cachePath = await getCacheDirectoryPath();
-    _instance = VideoCacheManager._withCustomPath(cachePath);
-    return _instance!;
+  /// Singleton. Une seule construction, même sous appels concurrents.
+  static Future<VideoCacheManager> getInstance() {
+    final ready = _instance;
+    if (ready != null) return Future.value(ready);
+    return _instanceFuture ??= _createInstance();
   }
 
-  VideoCacheManager._withCustomPath(String path)
+  static Future<VideoCacheManager> _createInstance() async {
+    // Garantit que le dossier existe avant le premier accès disque.
+    await getCacheDirectoryPath();
+    final created = VideoCacheManager._internal();
+    _instance = created;
+    _instanceFuture = null;
+    return created;
+  }
+
+  VideoCacheManager._internal()
       : super(
           Config(
             key,
-            stalePeriod: const Duration(days: 15),
-            maxNrOfCacheObjects: 100,
+            stalePeriod: stalePeriod,
+            maxNrOfCacheObjects: maxCacheObjects,
             repo: JsonCacheInfoRepository(databaseName: key),
             fileService: HttpFileService(),
-            fileSystem: IOFileSystem(path),
+            // IOFileSystem attend une *clé* de dossier, pas un chemin : il la
+            // joint lui-même au dossier temporaire de l'OS.
+            fileSystem: IOFileSystem(key),
           ),
         );
 
@@ -79,7 +132,7 @@ class VideoCacheManager extends CacheManager {
     final fileInfo = await super
         .downloadFile(url, authHeaders: authHeaders, force: force, key: key);
     AppLogger.debug('[VideoCacheManager] Cached: $url');
-    unawaited(_autoPurgeIfNeeded());
+    unawaited(purgeIfNeeded());
     return fileInfo;
   }
 
@@ -90,6 +143,7 @@ class VideoCacheManager extends CacheManager {
       final fileInfo = await manager.getFileFromCache(url);
       if (fileInfo != null && await fileInfo.file.exists()) {
         AppLogger.debug('[VideoCacheManager] File found in cache: $url');
+        unawaited(_markUsed(fileInfo.file));
         return fileInfo.file;
       }
     } catch (e) {
@@ -120,7 +174,7 @@ class VideoCacheManager extends CacheManager {
       await for (var f in dir.list(recursive: true)) {
         if (f is File) total += await f.length();
       }
-      final sizeMB = total ~/ (1024 * 1024);
+      final sizeMB = total ~/ _bytesPerMB;
       AppLogger.debug('[VideoCacheManager] Cache size: $sizeMB MB');
       return sizeMB;
     } catch (e) {
@@ -129,8 +183,73 @@ class VideoCacheManager extends CacheManager {
     }
   }
 
-  /// 🔧 Purge automatique si la taille dépasse la limite
-  Future<void> _autoPurgeIfNeeded() async {
+  /// Ménage au démarrage : récupère l'espace des caches abandonnés, puis
+  /// ramène le cache courant sous son plafond.
+  ///
+  /// Best-effort de bout en bout : c'est du disque, jamais un prérequis de
+  /// démarrage. Appelé sans `await` depuis AppBootstrap.
+  static Future<void> performStartupMaintenance() async {
+    await _deleteLegacyCacheDirectories();
+    await purgeIfNeeded();
+  }
+
+  static Future<void> _deleteLegacyCacheDirectories() async {
+    final currentPath = await getCacheDirectoryPath();
+
+    Future<void> deleteIfObsolete(Directory dir) async {
+      try {
+        if (p.equals(dir.path, currentPath)) return;
+        if (!await dir.exists()) return;
+        final freedMB = await _directorySizeMB(dir);
+        await dir.delete(recursive: true);
+        AppLogger.debug(
+          '[VideoCacheManager] Reclaimed $freedMB MB from ${dir.path}',
+        );
+      } catch (e) {
+        AppLogger.debug('[VideoCacheManager] Legacy cleanup skipped: $e');
+      }
+    }
+
+    try {
+      final supportDir = await getApplicationSupportDirectory();
+      await deleteIfObsolete(
+        Directory(p.join(supportDir.path, _legacySupportDirName)),
+      );
+    } catch (e) {
+      AppLogger.debug('[VideoCacheManager] Support dir unavailable: $e');
+    }
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      await deleteIfObsolete(
+        Directory(p.join(tempDir.path, _legacyPackageCacheDirName)),
+      );
+    } catch (e) {
+      AppLogger.debug('[VideoCacheManager] Temp dir unavailable: $e');
+    }
+  }
+
+  static Future<int> _directorySizeMB(Directory dir) async {
+    int total = 0;
+    try {
+      await for (final entity
+          in dir.list(recursive: true, followLinks: false)) {
+        if (entity is File) {
+          try {
+            total += await entity.length();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    return total ~/ _bytesPerMB;
+  }
+
+  /// 🔧 Purge automatique si la taille dépasse la limite.
+  ///
+  /// Supprime du plus anciennement utilisé au plus récent, jusqu'à
+  /// [targetCacheSizeMB]. Les fichiers utilisés dans les dernières minutes
+  /// sont épargnés : c'est la vidéo à l'écran et ses voisines.
+  static Future<void> purgeIfNeeded({bool force = false}) async {
     if (_purgeLock) return; // évite purges concurrentes
     _purgeLock = true;
 
@@ -139,58 +258,83 @@ class VideoCacheManager extends CacheManager {
       final dir = Directory(cacheDirPath);
       if (!await dir.exists()) return;
 
-      final files = <File>[];
-      await for (var entity in dir.list(recursive: true, followLinks: false)) {
-        if (entity is File) files.add(entity);
-      }
-
-      final fileData = <File, int>{};
+      final entries = <_CachedBlob>[];
       int totalSize = 0;
-      for (final file in files) {
+      await for (final entity
+          in dir.list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
         try {
-          final size = await file.length();
-          fileData[file] = size;
-          totalSize += size;
+          final stat = await entity.stat();
+          entries.add(_CachedBlob(entity, stat.size, _lastUsedAt(stat)));
+          totalSize += stat.size;
         } catch (_) {}
       }
 
-      final totalMB = totalSize ~/ (1024 * 1024);
+      final totalMB = totalSize ~/ _bytesPerMB;
       AppLogger.debug(
           '[VideoCacheManager] Cache size before purge: $totalMB MB');
 
-      if (totalMB <= maxCacheSizeMB) return;
+      if (!force && totalMB <= maxCacheSizeMB) return;
 
       AppLogger.debug('[VideoCacheManager] Purging cache...');
-      final sorted = fileData.entries.toList()
-        ..sort((a, b) {
-          final aTime = _safeModifiedTime(a.key);
-          final bTime = _safeModifiedTime(b.key);
-          return aTime.compareTo(bTime); // plus ancien d’abord
-        });
+      entries.sort((a, b) => a.lastUsedAt.compareTo(b.lastUsedAt));
 
-      int freed = 0;
-      const toFreeBytes = purgeBlockSizeMB * 1024 * 1024;
-      for (final e in sorted) {
+      final protectedAfter = DateTime.now().subtract(_recentUseGracePeriod);
+      final targetBytes = targetCacheSizeMB * _bytesPerMB;
+      var remaining = totalSize;
+      var freed = 0;
+
+      for (final entry in entries) {
+        if (remaining <= targetBytes) break;
+        if (entry.lastUsedAt.isAfter(protectedAfter)) continue;
         try {
-          await e.key.delete();
-          freed += e.value;
-          if (freed >= toFreeBytes) break;
+          await entry.file.delete();
+          remaining -= entry.size;
+          freed += entry.size;
         } catch (_) {}
       }
 
-      final freedMB = freed ~/ (1024 * 1024);
-      AppLogger.debug('[VideoCacheManager] Freed $freedMB MB from cache');
+      final freedMB = freed ~/ _bytesPerMB;
+      final remainingMB = remaining ~/ _bytesPerMB;
+      AppLogger.debug(
+        '[VideoCacheManager] Freed $freedMB MB from cache '
+        '(now $remainingMB MB, target $targetCacheSizeMB MB)',
+      );
+    } catch (e) {
+      AppLogger.debug('[VideoCacheManager] purgeIfNeeded error: $e');
     } finally {
       _purgeLock = false;
     }
   }
 
-  /// 🔧 Récupère la date de dernière modif en toute sécurité
-  DateTime _safeModifiedTime(File f) {
+  /// Marque un fichier comme utilisé pour que la purge soit un vrai LRU.
+  ///
+  /// Sans ça, l'ordre de purge était l'ordre de *téléchargement* : une vidéo
+  /// revue tous les jours se faisait supprimer avant une vidéo téléchargée
+  /// plus tard et jamais relue.
+  static Future<void> _markUsed(File file) async {
+    final now = DateTime.now();
     try {
-      return f.statSync().modified;
+      await file.setLastAccessed(now);
     } catch (_) {
-      return DateTime.fromMillisecondsSinceEpoch(0);
+      // Certains systèmes de fichiers montés en noatime refusent atime.
+      try {
+        await file.setLastModified(now);
+      } catch (_) {}
     }
   }
+
+  static DateTime _lastUsedAt(FileStat stat) {
+    final accessed = stat.accessed;
+    final modified = stat.modified;
+    return accessed.isAfter(modified) ? accessed : modified;
+  }
+}
+
+class _CachedBlob {
+  const _CachedBlob(this.file, this.size, this.lastUsedAt);
+
+  final File file;
+  final int size;
+  final DateTime lastUsedAt;
 }

@@ -114,6 +114,19 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   static const int _bufferingMaxStrikesBeforeReload = 8;
   static const Duration _firstFrameTimeout = Duration(seconds: 6);
 
+  /// Consecutive watchdog ticks where playback advanced without buffering.
+  ///
+  /// VideoManager holds this context's preloads — full file downloads — back
+  /// while the visible video is still streaming, so that the clip on screen
+  /// gets the connection to itself. Something has to tell it when the stream
+  /// is healthy enough to share, and the stall watchdog is already sampling
+  /// exactly that, every 700ms. Five clean ticks is ~3.5s of real playback:
+  /// long enough to mean the network is keeping up, short enough that a good
+  /// connection barely notices the delay before neighbours start caching.
+  int _smoothPlaybackTicks = 0;
+  bool _reportedPlaybackStable = false;
+  static const int _smoothTicksBeforeStable = 5;
+
   bool _isRecovering = false;
 
   /// How many times playback may be rebuilt automatically before the player
@@ -368,6 +381,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _detachListener(_ctrl);
     _player = p;
     _hasFirstFrame = false;
+    _smoothPlaybackTicks = 0;
+    _reportedPlaybackStable = false;
 
     final resolved = _videoManager.getResolvedUrl(
       widget.contextKey,
@@ -706,6 +721,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _lastKnownPos = currentValue.position;
     _stallStrikes = 0;
     _bufferingStrikes = 0;
+    // _smoothPlaybackTicks is deliberately NOT reset here. This method is
+    // re-armed with forceRestart from _maybePlay, which runs again on any
+    // rebuild that reschedules a play -- even when the controller is already
+    // playing and nothing happened. Clearing the count there meant one extra
+    // rebuild path could keep it below its threshold forever, and the only
+    // symptom would be a cache that silently never fills. The count belongs
+    // to the attached player (_bindPlayer) and to actual playback trouble
+    // (buffering, no progress), not to the timer's lifecycle.
 
     _stallTimer = Timer.periodic(_stallCheckInterval, (_) async {
       if (_isDisposed || token != _attachToken) {
@@ -725,6 +748,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       }
 
       if (v.isBuffering) {
+        _smoothPlaybackTicks = 0;
         if (!_hasFirstFrame) {
           _bufferingStrikes++;
           if (_bufferingStrikes >= _bufferingMaxStrikesBeforeReload) {
@@ -739,6 +763,21 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _bufferingStrikes = 0;
 
       if (v.position <= _lastKnownPos) {
+        // Every controller here is looping, so a clip rewinds to zero once
+        // per cycle and lands in this branch with a position *below* the last
+        // one. That is healthy playback, not a stall. Counting it against the
+        // smooth-playback run meant a clip shorter than the stability window
+        // reset on every loop and could never reach the threshold — its
+        // neighbours would have stayed deferred for as long as the user
+        // watched it, silently, with nothing ever reaching the cache.
+        //
+        // The stall strike itself is left exactly as it was: a loop has
+        // always cost one, and the next tick clears it.
+        if (v.position < _lastKnownPos) {
+          _reportPlaybackStableIfSmooth();
+        } else {
+          _smoothPlaybackTicks = 0;
+        }
         _stallStrikes++;
         if (_stallStrikes >= _stallMaxStrikesBeforeReload) {
           _stallStrikes = 0;
@@ -746,6 +785,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         }
       } else {
         _stallStrikes = 0;
+        _reportPlaybackStableIfSmooth();
       }
 
       _lastKnownPos = v.position;
@@ -757,7 +797,24 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _stallTimer = null;
     _stallStrikes = 0;
     _bufferingStrikes = 0;
+    _smoothPlaybackTicks = 0;
     _lastKnownPos = Duration.zero;
+  }
+
+  /// Releases this context's deferred preloads once the stream has proven it
+  /// can keep up. Fires once per attached player: re-arming the watchdog must
+  /// not re-open the question after the answer is in.
+  void _reportPlaybackStableIfSmooth() {
+    if (_reportedPlaybackStable || !_hasFirstFrame) return;
+
+    _smoothPlaybackTicks++;
+    if (_smoothPlaybackTicks < _smoothTicksBeforeStable) return;
+
+    _reportedPlaybackStable = true;
+    _videoManager.markActivePlaybackStable(
+      widget.contextKey,
+      widget.videoUrl,
+    );
   }
 
   void _startFirstFrameWatchdog() {

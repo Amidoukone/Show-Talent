@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import '../services/app_check_service.dart';
 import '../services/email_link_handler.dart';
 import '../services/notifications.dart';
+import '../utils/video_cache_manager.dart';
 import '../utils/video_tools.dart';
 import 'app_bindings.dart';
 import 'firebase_bootstrap.dart';
@@ -118,6 +119,20 @@ class AppBootstrap {
         VideoTools.cleanupStaleTempFiles,
       ),
     );
+
+    // Same deal, for the video cache: reclaims the two directories the app
+    // no longer writes to -- the old blob folder under application support,
+    // which Android counted as user data and no "clear cache" could touch,
+    // and the private cache cached_video_player_plus used to fill behind our
+    // back -- then brings the current cache back under its ceiling.
+    if (!kIsWeb) {
+      unawaited(
+        _runNonCritical(
+          'VideoCacheManager.performStartupMaintenance',
+          VideoCacheManager.performStartupMaintenance,
+        ),
+      );
+    }
 
     await _initializeEmailLinkHandler();
   }
