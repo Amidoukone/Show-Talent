@@ -749,12 +749,28 @@ class VideoManager {
     return !usedStreaming && !isPreload && _isFirebaseStorageUrl(url);
   }
 
+  /// Always false: the streaming path already caches itself.
+  ///
+  /// `CachedVideoPlayerPlus.networkUrl(...).initialize()` fires its own
+  /// unawaited `downloadFile` of the whole video whenever the URL is not in
+  /// *its* cache, and then streams the same URL for playback. Warming the
+  /// cache here added a third concurrent transfer of the identical bytes.
+  ///
+  /// Reported from production: a freshly published video -- the only one in
+  /// no cache at all -- paused and resumed continuously for its whole
+  /// duration, on the tile and again after scrolling away and back, while
+  /// every already-cached video played normally. No recovery ran and nothing
+  /// was logged, because nothing failed: the player was simply starved by two
+  /// downloads of the file it was trying to stream.
+  ///
+  /// Kept as a method rather than deleted so the decision stays visible at the
+  /// call site, and so the guardrail can pin it.
   bool _shouldWarmCacheAfterStreamInit({
     required bool isPreload,
     required bool usedStreaming,
     required bool usedStreamFallback,
   }) {
-    return !isPreload && usedStreaming && !usedStreamFallback;
+    return false;
   }
 
   @visibleForTesting

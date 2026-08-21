@@ -120,24 +120,30 @@ void main() {
     );
   });
 
-  test('background cache warmup waits until stream init succeeds', () {
-    expect(
-      manager.shouldWarmCacheAfterStreamInitForTests(
-        isPreload: false,
-        usedStreaming: true,
-        usedStreamFallback: false,
-      ),
-      isTrue,
-    );
-
-    expect(
-      manager.shouldWarmCacheAfterStreamInitForTests(
-        isPreload: false,
-        usedStreaming: true,
-        usedStreamFallback: true,
-      ),
-      isFalse,
-    );
+  // Was: "background cache warmup waits until stream init succeeds", asserting
+  // the warmup fires for a successful stream. It must never fire.
+  //
+  // CachedVideoPlayerPlus.networkUrl().initialize() already starts its own
+  // unawaited downloadFile of the whole video whenever the URL is not in its
+  // cache, and then streams that same URL for playback. Warming the cache on
+  // top added a third concurrent transfer of identical bytes.
+  //
+  // Production symptom: a freshly published video -- the only one in no cache
+  // -- paused and resumed continuously for its whole duration, while every
+  // cached video played normally. Nothing was logged because nothing failed;
+  // the player was starved by two downloads of the file it was streaming.
+  test('the streaming path never adds a duplicate cache download', () {
+    for (final usedStreamFallback in [false, true]) {
+      expect(
+        manager.shouldWarmCacheAfterStreamInitForTests(
+          isPreload: false,
+          usedStreaming: true,
+          usedStreamFallback: usedStreamFallback,
+        ),
+        isFalse,
+        reason: 'the player caches itself; a second download starves the stream',
+      );
+    }
   });
 
   test('purging resolved UI tracking uses a snapshot and avoids map mutation',
