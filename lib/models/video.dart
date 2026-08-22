@@ -206,36 +206,44 @@ enum VideoLifecycle {
   failed,
 }
 
+/// An immutable snapshot of a video document.
+///
+/// It used to be mutable, and eleven places wrote to it: five in
+/// `smart_video_player.dart`, five in `video_controller.dart`, one in each
+/// direction on the same counters. Sometimes they held the same instance and
+/// agreed by accident; sometimes they held different instances of the same
+/// document — a search result and a feed entry are two objects — and drifted
+/// apart with nothing to notice.
+///
+/// The first casualty was recorded in production: `finalizeUpload` refuses
+/// client-supplied counters, so a fresh document has no `likes` field, `fromMap`
+/// fell back to `const <String>[]`, and the first tap on the heart threw
+/// `UnmodifiableListMixin.removeWhere` out of an unawaited callback. Nothing
+/// surfaced; the heart simply never changed. The fix at the time — copying the
+/// list in the constructor — made that one crash go away without touching what
+/// caused it: a value object that anyone could write to.
+///
+/// Now nobody can. [likes] and [reports] are unmodifiable views, every field is
+/// `final`, and a new state is produced with [copyWith] by the single owner
+/// (`VideoController`). The class of bug is gone by construction rather than
+/// by defence.
 class Video {
-  String id;
-  String videoUrl;
-  String thumbnailUrl;
-  String description;
-  String caption;
-  String profilePhoto;
-  String uid;
-
-  /// Always a *growable* list — never `const []`.
-  ///
-  /// The optimistic like toggle mutates this list in place before the
-  /// callable answers (`_setLocalLikeState` in smart_video_player.dart, and
-  /// `_applyLikeState` in video_controller.dart). A video document created by
-  /// the upload pipeline has no `likes` field at all — `finalizeUpload`
-  /// deliberately refuses client-supplied counters — so `fromMap` used to fall
-  /// back to `const <String>[]`, and the first tap on the heart threw
-  /// `UnsupportedError` out of an unawaited callback. Production stack traces
-  /// showed exactly that (`UnmodifiableListMixin.removeWhere`), and the user
-  /// saw nothing happen at all. Same story for [reports] and the report flow.
-  List<String> likes;
-  int shareCount;
-  List<String> reports;
-  int reportCount;
-  String? status;
-  String? moderationStatus;
-  bool optimized;
-  List<VideoSource> sources;
-  VideoPlaybackContract? playback;
-  String? resolvedUrl;
+  final String id;
+  final String videoUrl;
+  final String thumbnailUrl;
+  final String description;
+  final String caption;
+  final String profilePhoto;
+  final String uid;
+  final List<String> likes;
+  final int shareCount;
+  final List<String> reports;
+  final int reportCount;
+  final String? status;
+  final String? moderationStatus;
+  final bool optimized;
+  final List<VideoSource> sources;
+  final VideoPlaybackContract? playback;
 
   Video({
     required this.id,
@@ -254,9 +262,74 @@ class Video {
     this.optimized = false,
     this.sources = const [],
     this.playback,
-    this.resolvedUrl,
-  }) : likes = List<String>.of(likes),
-       reports = List<String>.of(reports);
+  }) : likes = List<String>.unmodifiable(likes),
+       reports = List<String>.unmodifiable(reports);
+
+  /// The only way to produce a changed video.
+  ///
+  /// Deliberately narrow: it exposes just the fields the social actions move.
+  /// Identity, playback contract and lifecycle come from the server, and an
+  /// optimistic update has no business inventing them.
+  Video copyWith({
+    List<String>? likes,
+    int? shareCount,
+    List<String>? reports,
+    int? reportCount,
+  }) {
+    return Video(
+      id: id,
+      videoUrl: videoUrl,
+      thumbnailUrl: thumbnailUrl,
+      description: description,
+      caption: caption,
+      profilePhoto: profilePhoto,
+      uid: uid,
+      likes: likes ?? this.likes,
+      shareCount: shareCount ?? this.shareCount,
+      reports: reports ?? this.reports,
+      reportCount: reportCount ?? this.reportCount,
+      status: status,
+      moderationStatus: moderationStatus,
+      optimized: optimized,
+      sources: sources,
+      playback: playback,
+    );
+  }
+
+  /// This video with [userId] added to or removed from [likes].
+  Video withLike(String userId, {required bool liked}) {
+    final alreadyLiked = likes.contains(userId);
+    if (alreadyLiked == liked) return this;
+
+    final next = List<String>.of(likes);
+    if (liked) {
+      next.add(userId);
+    } else {
+      next.remove(userId);
+    }
+    return copyWith(likes: next);
+  }
+
+  /// This video with [userId]'s report recorded.
+  ///
+  /// [reportCount] is the server's number when it gave one; the local
+  /// increment is only a stand-in until it does.
+  Video withReport(String userId, {int? reportCount}) {
+    if (reports.contains(userId)) {
+      return reportCount == null ? this : copyWith(reportCount: reportCount);
+    }
+
+    final next = List<String>.of(reports)..add(userId);
+    return copyWith(
+      reports: next,
+      reportCount: reportCount ?? (this.reportCount + 1),
+    );
+  }
+
+  /// This video with a share recorded.
+  Video withShare({int? shareCount}) {
+    return copyWith(shareCount: shareCount ?? (this.shareCount + 1));
+  }
 
   static const Set<String> _failureStatuses = {'error', 'failed', 'failure'};
 
@@ -412,10 +485,15 @@ class Video {
     };
   }
 
+  /// The URL this document points at, before any playback decision.
+  ///
+  /// A `resolvedUrl` field used to sit in front of these — the rendition
+  /// actually being played, written back onto the model from the player's
+  /// `_bindPlayer`. It was a cache of something `VideoManager` already owns
+  /// (`getResolvedUrl`), every reader consulted the manager first and only
+  /// fell through to the field, and it was the one piece of *playback* state
+  /// living on a *document* model. It is gone; ask the manager.
   String get effectiveUrl {
-    if (resolvedUrl != null && resolvedUrl!.isNotEmpty) {
-      return resolvedUrl!;
-    }
     if (videoUrl.isNotEmpty) {
       return videoUrl;
     }

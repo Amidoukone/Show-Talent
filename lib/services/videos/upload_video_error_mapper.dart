@@ -2,10 +2,64 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:dio/dio.dart';
 
 import 'package:adfoot/services/videos/data/upload_client.dart';
+import 'package:adfoot/utils/video_publication_quota.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 
 class UploadVideoErrorMapper {
   UploadVideoErrorMapper._();
+
+  /// True when `createUploadSession` refused because the account already
+  /// holds its full allowance of public videos.
+  ///
+  /// `resource-exhausted` alone is not enough: the same code carries four
+  /// different refusals from `assertUploadRateLimits` (concurrent uploads,
+  /// daily uploads, pending reviews, public videos) plus the global upload
+  /// kill switch, and only this one is answered by asking the agency to
+  /// raise a cap.
+  ///
+  /// Structured `details` are read first so the day the callable starts
+  /// sending them the match stops depending on prose at all. Until then the
+  /// message is the only discriminator available, so it is normalised for
+  /// accents — the deployed text is accent-free ASCII, and a French
+  /// rewording of it would not be.
+  static bool isPublicVideoQuotaFailure(Object error) {
+    if (error is! FirebaseFunctionsException) return false;
+    if (error.code != 'resource-exhausted') return false;
+
+    final details = error.details;
+    if (details is Map && details['reason'] == 'public_video_quota') {
+      return true;
+    }
+
+    final normalized = _stripAccents((error.message ?? '').toLowerCase());
+    return normalized.contains('video') && normalized.contains('publique');
+  }
+
+  static String _stripAccents(String value) {
+    const replacements = <String, String>{
+      'à': 'a',
+      'â': 'a',
+      'ä': 'a',
+      'é': 'e',
+      'è': 'e',
+      'ê': 'e',
+      'ë': 'e',
+      'î': 'i',
+      'ï': 'i',
+      'ô': 'o',
+      'ö': 'o',
+      'ù': 'u',
+      'û': 'u',
+      'ü': 'u',
+      'ç': 'c',
+    };
+
+    var normalized = value;
+    replacements.forEach((accented, plain) {
+      normalized = normalized.replaceAll(accented, plain);
+    });
+    return normalized;
+  }
 
   static String failureCode(Object error) {
     if (error is FirebaseFunctionsException) {
@@ -32,6 +86,15 @@ class UploadVideoErrorMapper {
 
       if (_isTransientCallableCode(error.code)) {
         return VideoUiStrings.uploadConnectionUnstable;
+      }
+
+      // Before the pass-through below: the server's own wording is
+      // accent-free and tells the player to "archiver une video", which is
+      // not something the application lets anyone do.
+      if (isPublicVideoQuotaFailure(error)) {
+        return VideoUiStrings.uploadQuotaReachedShort(
+          VideoPublicationQuota.maxPublishedVideos,
+        );
       }
 
       final message = (error.message ?? '').trim();

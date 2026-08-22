@@ -230,9 +230,14 @@ void main() {
       expect(content, contains('_prefetchThumbnailsAround(clampedIndex);'));
     });
 
-    test('video feed screen releases its contextual controller on dispose', () {
+    // Repointé depuis `video_feed_screen.dart`, supprimé. L'invariant reste
+    // le même et compte davantage depuis que le registre compte ses
+    // références : un feed scopé doit appareiller son `ensure` avec un
+    // `release`, sans quoi le contexte — son abonnement Firestore et tous les
+    // lecteurs natifs que VideoManager tient pour lui — survit à l'écran.
+    test('a scoped video feed releases the controller it claimed', () {
       final content = File(
-        'lib/screens/video_feed_screen.dart',
+        'lib/screens/profil_video_scrollview.dart',
       ).readAsStringSync();
 
       expect(
@@ -275,6 +280,10 @@ void main() {
       ).readAsStringSync();
 
       expect(player, contains('ShareResultStatus.dismissed'));
+      final runner = File(
+        'lib/videos/domain/video_action_runner.dart',
+      ).readAsStringSync();
+
       expect(player, contains('ShareResultStatus.unavailable'));
       expect(
         player,
@@ -282,7 +291,10 @@ void main() {
       );
       expect(player, contains('_buildShareText(shareUrl)'));
       expect(player, contains('sharePositionOrigin: _sharePositionOrigin()'));
-      expect(player, contains('controller.partagerVideo(widget.video.id)'));
+      // La vidéo, plus son seul identifiant : une vidéo affichée n'est pas
+      // toujours dans `videoList` (recherche, profil), et le contrôleur ne
+      // pouvait alors pas retrouver quoi mettre à jour.
+      expect(runner, contains('videoController.partagerVideo(video)'));
       expect(player, isNot(contains('widget.video.effectiveUrl.trim()')));
       expect(
         player,
@@ -345,15 +357,39 @@ void main() {
         'lib/widgets/video_action_rail.dart',
       ).readAsStringSync();
 
-      expect(player, contains('_isLikeActionLoading'));
-      expect(player, contains('_queuedLikeTarget'));
+      // Les sept booléens `_isXActionLoading` et la file du like vivaient
+      // ici, chacun tenu à la main dans sa propre paire de `setState`. Ils
+      // sont maintenant dans VideoActionRunner, qui détient les six
+      // préoccupations transverses une seule fois — c'est là qu'il faut les
+      // épingler.
+      final runner = File(
+        'lib/videos/domain/video_action_runner.dart',
+      ).readAsStringSync();
+
+      expect(runner, contains('class VideoActionRunner'));
+      expect(runner, contains('_queuedLikeTarget'));
+      expect(runner, contains('Future<T?> _guard<T>('));
+      expect(runner, contains('if (_inFlight.contains(action)) return null;'));
+
+      expect(player, contains('late final VideoActionRunner _actions;'));
+      // Le like reste optimiste et sans spinner : le cœur a déjà changé.
       expect(player, contains('isLikeLoading: false'));
-      expect(player, contains('_setLocalLikeState'));
-      expect(player, contains('_resolvedLikeState'));
-      expect(player, isNot(contains('isLikeLoading: _isLikeActionLoading')));
-      expect(player, contains('_isReportActionLoading'));
-      expect(player, contains('_isDeleteActionLoading'));
-      expect(player, contains('_isAddVideoActionLoading'));
+      expect(
+        player,
+        contains('isShareLoading: _actions.isRunning(VideoAction.share)'),
+      );
+      expect(
+        player,
+        contains('isReportLoading: _actions.isRunning(VideoAction.report)'),
+      );
+      expect(
+        player,
+        contains('isDeleteLoading: _actions.isRunning(VideoAction.delete)'),
+      );
+      expect(
+        player,
+        contains('isFollowLoading: _actions.isRunning(VideoAction.follow)'),
+      );
       expect(player, contains('VideoActionRail('));
       expect(actionRail, contains('class VideoActionRail'));
       expect(actionRail, contains('VideoUiStrings.delete'));
@@ -404,9 +440,6 @@ void main() {
       final repository = File(
         'lib/services/videos/video_repository.dart',
       ).readAsStringSync();
-      final videoFeed = File(
-        'lib/screens/video_feed_screen.dart',
-      ).readAsStringSync();
       final profileFeed = File(
         'lib/screens/profil_video_scrollview.dart',
       ).readAsStringSync();
@@ -417,8 +450,6 @@ void main() {
         'lib/utils/video_ui_strings.dart',
       ).readAsStringSync();
 
-      expect(videoFeed, contains('VideoUiStrings.emptyVideoFeedTitle'));
-      expect(videoFeed, contains('VideoUiStrings.emptyVideoFeedMessage'));
       expect(
         profileFeed,
         contains('VideoUiStrings.emptyProfileVideoFeedTitle'),
@@ -439,7 +470,7 @@ void main() {
         contains('VideoUiStrings.forwardTenSecondsFeedback'),
       );
       expect(tiktokPlayer, contains('VideoUiStrings.rewindTenSecondsFeedback'));
-      expect(videoStrings, contains('emptyVideoFeedTitle'));
+      expect(videoStrings, contains('emptyProfileVideoFeedTitle'));
       expect(videoStrings, contains('emptyHomeVideoFeedTitle'));
       expect(videoStrings, contains('noInternetMessage'));
       expect(videoStrings, contains('videoSearchUnavailable'));
@@ -541,7 +572,16 @@ void main() {
         final playerSheets = File(
           'lib/widgets/smart_video_player_sheets.dart',
         ).readAsStringSync();
-        final playerSurface = '$player\n$playerSheets';
+        // La colonne de métadonnées est sortie du lecteur : c'est de la
+        // présentation pure, elle ne lit aucun état de lecture. Les
+        // invariants — la légende ne passe jamais sous le rail d'actions ni
+        // sous la barre de progression, « Voir plus » n'apparaît que si le
+        // texte déborde vraiment — n'ont pas changé de nature, seulement de
+        // fichier.
+        final overlay = File(
+          'lib/widgets/video_metadata_overlay.dart',
+        ).readAsStringSync();
+        final playerSurface = '$player\n$playerSheets\n$overlay';
         final tiktokPlayer = File(
           'lib/widgets/tiktok_video_player.dart',
         ).readAsStringSync();
@@ -553,26 +593,28 @@ void main() {
           'lib/screens/profil_video_scrollview.dart',
         ).readAsStringSync();
 
-        expect(player, contains('_buildVideoReadabilityScrim()'));
-        expect(player, isNot(contains('heightFactor: 0.46')));
-        expect(player, isNot(contains('alpha: 0.74')));
+        expect(player, contains('const VideoReadabilityScrim()'));
+        expect(overlay, isNot(contains('heightFactor: 0.46')));
+        expect(overlay, isNot(contains('alpha: 0.74')));
         expect(player, contains('_buildVideoMetadataOverlay(context)'));
-        expect(player, isNot(contains('_buildPublisherAvatar')));
-        expect(player, isNot(contains('_publisherInitials')));
-        expect(player, isNot(contains('_videoPublisherAvatarSize')));
-        expect(player, contains('VideoActionRail.reservedWidth'));
-        expect(player, contains('media.viewPadding.bottom'));
-        expect(player, contains('maxLines: _captionCollapsedMaxLines'));
+        expect(overlay, isNot(contains('_buildPublisherAvatar')));
+        expect(overlay, isNot(contains('_publisherInitials')));
+        expect(overlay, isNot(contains('_videoPublisherAvatarSize')));
+        // La légende s'arrête là où le rail commence, et remonte au-dessus de
+        // la barre de progression quand celle-ci est affichée.
+        expect(overlay, contains('VideoActionRail.reservedWidth'));
+        expect(overlay, contains('media.viewPadding.bottom'));
+        expect(overlay, contains('maxLines: captionCollapsedMaxLines'));
         expect(player, contains('_showCaptionSheet'));
         expect(playerSurface, contains('_VideoCaptionSheet'));
         expect(
           playerSurface,
           contains('VideoUiStrings.videoCaptionSheetTitle'),
         );
-        expect(player, contains('VideoUiStrings.seeMore'));
+        expect(overlay, contains('VideoUiStrings.seeMore'));
         expect(playerSurface, contains('SingleChildScrollView'));
         expect(
-          player,
+          overlay,
           contains('VideoUiStrings.videoPublisherProfileSemantic'),
         );
         expect(
@@ -599,14 +641,11 @@ void main() {
       final player = File(
         'lib/widgets/smart_video_player.dart',
       ).readAsStringSync();
-      final manager = File('lib/widgets/video_manager.dart').readAsStringSync();
+      final manager = File('lib/videos/video_manager.dart').readAsStringSync();
       final orchestrator = File(
         'lib/videos/domain/video_focus_orchestrator.dart',
       ).readAsStringSync();
       final home = File('lib/screens/home_screen.dart').readAsStringSync();
-      final videoFeed = File(
-        'lib/screens/video_feed_screen.dart',
-      ).readAsStringSync();
       final profileScroll = File(
         'lib/screens/profil_video_scrollview.dart',
       ).readAsStringSync();
@@ -617,7 +656,6 @@ void main() {
       expect(player, isNot(contains('alternatePlaybackRequested')));
       expect(player, isNot(contains('_forceMp4Fallback')));
       expect(home, isNot(contains('alternatePlaybackForVideo')));
-      expect(videoFeed, isNot(contains('alternatePlaybackForVideo')));
       expect(profileScroll, isNot(contains('alternatePlaybackForVideo')));
     });
 
@@ -625,20 +663,45 @@ void main() {
       'video preload keeps active playback first and staggers cache work',
       () {
         final manager = File(
-          'lib/widgets/video_manager.dart',
+          'lib/videos/video_manager.dart',
         ).readAsStringSync();
         final orchestrator = File(
           'lib/videos/domain/video_focus_orchestrator.dart',
         ).readAsStringSync();
 
+        // L'ordonnancement des préchargements vit désormais dans
+        // VideoPreloadScheduler. Le manager garde ce qui est vraiment à lui :
+        // les rayons par palier réseau, et le fait que le préchargement ne
+        // démarre qu'après la vidéo visible.
+        final scheduler = File(
+          'lib/videos/domain/video_preload_scheduler.dart',
+        ).readAsStringSync();
+
         expect(orchestrator, contains('await videoManager.pauseAllExcept'));
         expect(orchestrator, contains('videoManager.preloadSurrounding'));
-        expect(manager, contains('_preloadRequestTokensByContext'));
-        expect(manager, contains('_secondaryPreloadDelay'));
-        expect(manager, contains('_preloadVideoAfterDelay'));
+        expect(scheduler, contains('class VideoPreloadScheduler'));
+        expect(scheduler, contains('_requestTokensByContext'));
+        expect(scheduler, contains('_secondaryPreloadDelay'));
+        expect(scheduler, contains('_preloadAfterDelay'));
         expect(manager, contains('preloadPositionDelayForTests'));
-        expect(manager, contains('preloadRadius: 2'));
-        expect(manager, contains('preloadRadius: 3'));
+
+        // Les rayons par palier réseau ont suivi le palier lui-même dans
+        // VideoNetworkTuningController : c'est la conséquence du débit
+        // mesuré, pas une propriété du cache de contrôleurs.
+        final tuning = File(
+          'lib/videos/domain/video_network_tuning.dart',
+        ).readAsStringSync();
+        expect(tuning, contains('preloadRadius: 2'));
+        expect(tuning, contains('preloadRadius: 3'));
+        expect(
+          tuning,
+          contains('preloadRadius: 0'),
+          reason: 'un lien lent ne précharge rien',
+        );
+        // Le manager lit le réglage, il n'en garde pas de copie : une copie
+        // périmée continuerait de réclamer la rendition la plus lourde après
+        // une re-mesure à la baisse.
+        expect(manager, contains('int get _preloadRadius => _network.tuning'));
       },
     );
 

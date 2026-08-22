@@ -1,5 +1,5 @@
 import 'package:adfoot/services/video_metrics_observer.dart';
-import 'package:adfoot/widgets/video_manager.dart';
+import 'package:adfoot/videos/video_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class LoggedMetricCall {

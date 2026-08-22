@@ -44,7 +44,11 @@ class FeatureFlagService {
   static final FeatureFlagService _instance = FeatureFlagService._internal();
   factory FeatureFlagService() => _instance;
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // Résolu à l'usage, comme dans les autres services de la chaîne vidéo : ce
+  // singleton est construit depuis `VideoController.onInit`, et un champ
+  // initialisé lèverait avant même que la première question sur un drapeau
+  // soit posée.
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
   FeatureFlagConfig _cached = const FeatureFlagConfig();
   DateTime _lastFetch = DateTime.fromMillisecondsSinceEpoch(0);
 

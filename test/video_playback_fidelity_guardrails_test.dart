@@ -17,47 +17,70 @@ void main() {
     // Production stack traces: UnmodifiableListMixin.removeWhere, thrown from
     // _setLocalLikeState out of an unawaited callback. Nothing surfaced to the
     // user; the heart just never changed.
-    test('likes stay mutable when the document carries no likes field', () {
-      final video = Video.fromMap({
-        'id': 'v1',
-        'videoUrl': 'https://example.test/clip.mp4',
-        'uid': 'author',
-      });
-
-      expect(video.likes, isEmpty);
-      expect(() => video.likes.add('viewer'), returnsNormally);
-      expect(() => video.likes.remove('viewer'), returnsNormally);
-      expect(() => video.likes.removeWhere((id) => true), returnsNormally);
+    //
+    // The first fix copied the list in the constructor, which made that one
+    // crash go away without touching what caused it: a value object eleven
+    // call sites could write to, from two owners that did not know about each
+    // other. Now nothing can write to it at all — the optimistic update
+    // produces a *new* video — so the crash is gone by construction and the
+    // assertions below are its inverse.
+    Video bareVideo() => Video.fromMap({
+      'id': 'v1',
+      'videoUrl': 'https://example.test/clip.mp4',
+      'uid': 'author',
     });
 
-    test('reports stay mutable when the document carries no reports field', () {
-      final video = Video.fromMap({
-        'id': 'v1',
-        'videoUrl': 'https://example.test/clip.mp4',
-        'uid': 'author',
-      });
-
-      expect(() => video.reports.add('viewer'), returnsNormally);
+    test('a document that carries no likes field still yields an empty list',
+        () {
+      expect(bareVideo().likes, isEmpty);
     });
 
-    test('a caller passing a const list does not poison the model', () {
-      final video = Video(
-        id: 'v1',
-        videoUrl: 'https://example.test/clip.mp4',
-        thumbnailUrl: '',
-        description: '',
-        caption: '',
-        profilePhoto: '',
-        uid: 'author',
-        likes: const <String>[],
-        reports: const <String>[],
+    test('nobody can write to a video in place', () {
+      final video = bareVideo();
+
+      expect(() => video.likes.add('viewer'), throwsUnsupportedError);
+      expect(() => video.likes.remove('viewer'), throwsUnsupportedError);
+      expect(
+        () => video.likes.removeWhere((id) => true),
+        throwsUnsupportedError,
       );
-
-      expect(() => video.likes.add('viewer'), returnsNormally);
-      expect(() => video.reports.add('viewer'), returnsNormally);
+      expect(() => video.reports.add('viewer'), throwsUnsupportedError);
     });
 
-    test('existing likes are preserved, and copied rather than aliased', () {
+    // This is the path the heart actually takes now, and it has to work on
+    // the document shape that used to crash: no likes field at all.
+    test('the optimistic like produces a new video, on any document', () {
+      final video = bareVideo();
+
+      final liked = video.withLike('viewer', liked: true);
+      expect(liked.likes, ['viewer']);
+      expect(video.likes, isEmpty, reason: 'the original is untouched');
+
+      final unliked = liked.withLike('viewer', liked: false);
+      expect(unliked.likes, isEmpty);
+
+      // Idempotent: a double tap that lands on the state already shown must
+      // not append a second entry.
+      expect(identical(liked.withLike('viewer', liked: true), liked), isTrue);
+    });
+
+    test('a report and a share each produce a new video', () {
+      final video = bareVideo();
+
+      final reported = video.withReport('viewer');
+      expect(reported.reports, ['viewer']);
+      expect(reported.reportCount, 1);
+      expect(video.reports, isEmpty);
+
+      // The server's number wins over the local increment when it gives one.
+      expect(video.withReport('viewer', reportCount: 7).reportCount, 7);
+
+      expect(video.withShare().shareCount, 1);
+      expect(video.withShare(shareCount: 42).shareCount, 42);
+      expect(video.shareCount, 0);
+    });
+
+    test('a caller list is copied, not aliased', () {
       final source = <String>['a', 'b'];
       final video = Video(
         id: 'v1',
@@ -72,8 +95,32 @@ void main() {
 
       expect(video.likes, ['a', 'b']);
 
-      video.likes.add('c');
-      expect(source, ['a', 'b'], reason: 'the caller list must not be mutated');
+      source.add('c');
+      expect(
+        video.likes,
+        ['a', 'b'],
+        reason: 'the model must not observe later edits to the caller list',
+      );
+    });
+
+    // Playback state has no business on a document model: VideoManager owns
+    // the resolved rendition, every reader already asked it first, and the
+    // field was only ever a copy written back from the player's _bindPlayer.
+    test('a video carries no playback state', () {
+      // Comments are stripped first: both files keep a note explaining what
+      // was removed and why, and that history is worth more than a literal
+      // string match.
+      String code(String path) => File(path)
+          .readAsStringSync()
+          .split('\n')
+          .where((line) => !line.trimLeft().startsWith('//'))
+          .join('\n');
+
+      expect(code('lib/models/video.dart'), isNot(contains('resolvedUrl')));
+      expect(
+        code('lib/widgets/smart_video_player.dart'),
+        isNot(contains('widget.video.resolvedUrl')),
+      );
     });
 
     test('new videos are created with the social counters already present', () {

@@ -36,7 +36,8 @@ class NetworkProfileService {
     Connectivity? connectivity,
     http.Client? client,
     SharedPreferences? preferences,
-    this.downloadUri = 'https://speed.cloudflare.com/__down?bytes=8000',
+    this.downloadUri =
+        'https://speed.cloudflare.com/__down?bytes=$_throughputProbeBytes',
     this.probeUri = 'https://speed.cloudflare.com/__down?bytes=1',
     this.internalDownloadUri,
     this.internalProbeUri,
@@ -64,6 +65,28 @@ class NetworkProfileService {
   final Duration cacheTtl;
 
   static const _cacheKey = 'networkProfile:last';
+
+  /// Bytes the throughput probe pulls.
+  ///
+  /// This used to be 8 000. Eight kilobytes over a connection the CDN probe
+  /// has just warmed is not a throughput measurement: it is one round trip,
+  /// and the number it produces says how far away Cloudflare is, not how fast
+  /// the link runs. 256 KB takes long enough that the transfer, and not the
+  /// setup, dominates the sample.
+  ///
+  /// The cost is the point of the trade: ~256 KB per detection, at most once
+  /// per [cacheTtl] or per transport change, against video assets that
+  /// adfoot-production serves at 5.2 to 9.7 Mb/s.
+  static const int _throughputProbeBytes = 262144;
+
+  /// The download probe gets its own, longer budget than the reachability
+  /// HEAD: [measureTimeout] is about "is the CDN answering at all", and 2 s
+  /// of it would put a 1 Mb/s floor under a measurement whose whole job is to
+  /// recognise connections below that.
+  static const Duration _throughputProbeTimeout = Duration(seconds: 4);
+
+  /// Sentinel status used by the probe's own `onTimeout`.
+  static const int _probeTimeoutStatus = 408;
 
   /* -------------------------------------------------------------------------- */
   /* Public API                                                                 */
@@ -235,7 +258,8 @@ class NetworkProfileService {
     try {
       final response = await _client.head(uri).timeout(
             measureTimeout,
-            onTimeout: () => http.Response.bytes([], 408),
+            onTimeout: () =>
+                http.Response.bytes([], _probeTimeoutStatus),
           );
       return response.statusCode >= 200 && response.statusCode < 400;
     } catch (_) {
@@ -260,6 +284,12 @@ class NetworkProfileService {
   /// sat at 0.04%. The tier was not describing the network, it was describing
   /// the era when the ceiling was 720p.
   ///
+  /// Raising the bar was necessary but not sufficient: [_measureThroughput]
+  /// was also handing this method bit/s while the thresholds were written in
+  /// kbps, so *no* bar placed here could have discriminated anything. Both
+  /// halves are fixed; the thresholds below only mean what they say now that
+  /// the number arriving is genuinely kilobits per second.
+  ///
   /// This is still a coarse proxy. The honest version compares the measured
   /// throughput against each source's own declared `bitrate`, which the
   /// backend now writes on every rendition — worth doing, but it changes the
@@ -271,6 +301,32 @@ class NetworkProfileService {
     return NetworkProfileTier.low;
   }
 
+  /// Measured throughput in **kilobits per second**, or `null` when the probe
+  /// could not produce a number at all.
+  ///
+  /// Two things were wrong here, and together they made every device on every
+  /// network report itself as [NetworkProfileTier.high].
+  ///
+  /// The first is arithmetic. `bits / milliseconds` *is* kbps — one bit per
+  /// millisecond is one thousand bits per second is one kbit/s — so the
+  /// trailing `* 1000` converted the result to bit/s and handed it to
+  /// [_tierFromThroughput], whose thresholds are written in kbps. A phone
+  /// measuring a genuine 213 kbps reported 213 333 and cleared the 6 000 bar
+  /// a thousandfold. adfoot-production bears this out: over the fourteen days
+  /// to 2026-08-22, **63 of 63** logged playback sessions carried
+  /// `networkTier: "high"`, and the 1080p sessions among them came back at a
+  /// 55% rebuffer rate against 4.7% for 720p.
+  ///
+  /// The second is the sample. 8 KB across a connection the reachability HEAD
+  /// has already opened is one round trip; fixing only the unit would have
+  /// swung every device to `low` for the opposite non-reason. See
+  /// [_throughputProbeBytes].
+  ///
+  /// The result is deliberately conservative: connection setup is left inside
+  /// the sample, so a link measuring 6 000 kbps here is running nearer 10 Mb/s
+  /// in reality. That is the right bias — `high` is the only tier that asks
+  /// for the heaviest rendition, and headroom over a 9.7 Mb/s asset is exactly
+  /// what it should be claiming.
   Future<double?> _measureThroughput() async {
     try {
       final uri = _resolveDownloadUri();
@@ -283,18 +339,31 @@ class NetworkProfileService {
 
       final stopwatch = Stopwatch()..start();
       final response = await _client.get(uri).timeout(
-            measureTimeout,
-            onTimeout: () => http.Response.bytes([], 408),
+            _throughputProbeTimeout,
+            onTimeout: () =>
+                http.Response.bytes([], _probeTimeoutStatus),
           );
+      stopwatch.stop();
+
+      // A probe that ran out of budget is a measurement, not a failure: this
+      // connection could not pull _throughputProbeBytes inside
+      // _throughputProbeTimeout. Returning `null` for it sent precisely the
+      // slowest links back to the optimistic transport baseline (`medium` on
+      // Wi-Fi and mobile), which is the one place the baseline must not win.
+      if (response.statusCode == _probeTimeoutStatus) {
+        AppLogger.debug(
+          '[NetworkProfile] Throughput probe timed out after '
+          '${_throughputProbeTimeout.inSeconds}s → low',
+        );
+        return 0;
+      }
 
       if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
         return null;
       }
 
-      stopwatch.stop();
       final durationMs = max(stopwatch.elapsedMilliseconds, 1);
-      final kbps = (response.bodyBytes.length * 8) / durationMs;
-      return kbps * 1000;
+      return (response.bodyBytes.length * 8) / durationMs;
     } catch (_) {
       return null;
     }

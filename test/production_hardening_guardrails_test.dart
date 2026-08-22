@@ -10,7 +10,15 @@ import 'package:flutter_test/flutter_test.dart';
 /// destroyed by its own reporting. Source-level assertions, in the style the
 /// rest of `test/` already uses, so a refactor that removes the fix has to
 /// say so out loud.
-String _read(String path) => File(path).readAsStringSync();
+/// Reads a source file with its line endings normalised.
+///
+/// The multi-line assertions below match across a newline, and until this
+/// normalisation they were matching whatever line ending that particular
+/// region of the file happened to carry. A file with mixed endings — which
+/// this repository had — made them pass or fail on an invisible property of
+/// the bytes rather than on the code they are there to pin.
+String _read(String path) =>
+    File(path).readAsStringSync().replaceAll('\r\n', '\n');
 
 void main() {
   group('a failed feed page is not a crash', () {
@@ -262,7 +270,7 @@ void main() {
 
   group('one stuck download cannot freeze video playback', () {
     test('waiting for an init slot has a deadline', () {
-      final manager = _read('lib/widgets/video_manager.dart');
+      final manager = _read('lib/videos/video_manager.dart');
 
       // The slot is released by whenComplete, and loadVideo() can include a
       // downloadFile of up to 150 MB through HttpFileService, which sets no

@@ -1,4 +1,4 @@
-import 'package:adfoot/widgets/video_manager.dart';
+import 'package:adfoot/videos/video_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

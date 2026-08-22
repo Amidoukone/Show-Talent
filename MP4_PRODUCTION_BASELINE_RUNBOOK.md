@@ -137,6 +137,30 @@ Key outputs to watch:
 - `avgEstimatedBytesPlayed`
 - breakdowns by `networkTier`, `finalSourceHeight`, `entryContext`
 
+### Reading `networkTier` and `avgTimeToFirstFrameMs` across the 2026-08-22 line
+
+Two of these outputs mean something different before and after the build that
+follows 1.0.7+21. Do not compare across that line.
+
+- **`networkTier` was not a measurement until then.** `_measureThroughput`
+  divided bits by milliseconds — which is already kbps — and multiplied the
+  result by a thousand before comparing it against thresholds written in kbps.
+  Every connection that answered at all cleared the `high` bar by three orders
+  of magnitude. In `adfoot-production`, all 63 sessions logged in the fourteen
+  days to 2026-08-22 read `high`; the 1080p ones among them averaged a **55%**
+  rebuffer rate against 4.7% for 720p. Any `byNetworkTier` breakdown from
+  before the fix says only "the app was running".
+- **`avgTimeToFirstFrameMs` was structurally 0.** The session tracker was
+  created one line before `play()`, by which point `VideoFocusOrchestrator`
+  had already initialised *and* started the controller, so the first frame was
+  usually on screen before the clock started. The tracker now starts when the
+  tile becomes the active video.
+- **`hadFirstFrameRate` was 1 for the same reason**, and equally meaningless: a
+  video that never obtained a usable controller produced no session at all, so
+  the worst outcomes were the ones missing from the sample. They are logged
+  now, which means this figure should be expected to *fall* below 1 — that is
+  the metric starting to work, not playback getting worse.
+
 ## 7) Rollback
 
 Fast rollback if you want to keep the playback contract fields but stop using the MP4 adaptive selection path:

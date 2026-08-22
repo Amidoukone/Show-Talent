@@ -49,7 +49,12 @@ class ClientLogger {
   /// this many entries the oldest are dropped.
   static const int _maxBufferedEntries = 200;
 
-  final FirebaseFunctions _functions = FirebaseFunctions.instanceFor(
+  // Résolu à l'usage. En champ initialisé, il s'exécutait à la construction
+  // du singleton — c'est-à-dire au tout premier `ClientLogger.instance`, y
+  // compris sur un chemin d'erreur atteint avant que Firebase ne soit
+  // démarré. Le service chargé de rapporter les pannes lançait alors sa
+  // propre exception, et l'erreur d'origine disparaissait derrière.
+  FirebaseFunctions get _functions => FirebaseFunctions.instanceFor(
     region: AppEnvironmentConfig.functionsRegion,
   );
 

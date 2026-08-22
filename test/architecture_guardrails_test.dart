@@ -28,7 +28,6 @@ void main() {
           'lib/screens/home_screen.dart',
           'lib/screens/select_user_screen.dart',
           'lib/screens/conversation_screen.dart',
-          'lib/screens/video_feed_screen.dart',
           'lib/screens/profile_screen.dart',
           'lib/screens/profil_video_scrollview.dart',
         ];
@@ -258,14 +257,22 @@ void main() {
       },
     );
 
+    // Repointé depuis `video_feed_screen.dart`, supprimé : c'était une
+    // troisième copie du feed vidéo qu'aucun écran n'ouvrait, divergente des
+    // deux autres. L'invariant qu'elle portait — un feed vidéo écoute sa
+    // liste et sait dire qu'elle est vide — appartient maintenant au feed
+    // immersif du profil, qui est le feed scopé qui reste.
     test(
-      'Sprint 4 phase B video feed screen stays reactive and handles empty state',
+      'Sprint 4 phase B scoped video feed stays reactive and handles empty state',
       () {
         final content = File(
-          'lib/screens/video_feed_screen.dart',
+          'lib/screens/profil_video_scrollview.dart',
         ).readAsStringSync();
         expect(content, contains('Obx(()'));
-        expect(content, contains('VideoUiStrings.emptyVideoFeedTitle'));
+        expect(
+          content,
+          contains('VideoUiStrings.emptyProfileVideoFeedTitle'),
+        );
       },
     );
 

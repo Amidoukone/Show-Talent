@@ -33,11 +33,21 @@ class VideoLiveBatch {
 
 class VideoRepository {
   VideoRepository({FirebaseFirestore? firestore, FirebaseAuth? auth})
-    : _firestore = firestore ?? FirebaseFirestore.instance,
-      _auth = auth ?? FirebaseAuth.instance;
+    : _injectedFirestore = firestore,
+      _injectedAuth = auth;
 
-  final FirebaseFirestore _firestore;
-  final FirebaseAuth _auth;
+  // Résolus à l'usage, pas à la construction. `FirebaseFirestore.instance`
+  // lève dès qu'aucune app Firebase n'est démarrée, ce qui rendait ce
+  // repository — et donc `VideoController`, et donc tout le registre de
+  // contextes vidéo — impossible à instancier hors d'un runtime complet.
+  // Un repository qui ne peut pas exister sans son backend n'est testable par
+  // personne.
+  final FirebaseFirestore? _injectedFirestore;
+  final FirebaseAuth? _injectedAuth;
+
+  FirebaseFirestore get _firestore =>
+      _injectedFirestore ?? FirebaseFirestore.instance;
+  FirebaseAuth get _auth => _injectedAuth ?? FirebaseAuth.instance;
 
   CollectionReference<Map<String, dynamic>> get _videosCollection =>
       _firestore.collection('videos');

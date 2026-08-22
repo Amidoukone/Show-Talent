@@ -7,7 +7,7 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/services/users/profile_repository.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
-import 'package:adfoot/widgets/video_manager.dart';
+import 'package:adfoot/videos/video_manager.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/services/app_logger.dart';

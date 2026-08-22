@@ -4,7 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 
 import '../services/client_logger.dart';
-import '../widgets/video_manager.dart';
+import '../videos/video_manager.dart';
 
 typedef ClientLogEmitter =
     Future<void> Function(

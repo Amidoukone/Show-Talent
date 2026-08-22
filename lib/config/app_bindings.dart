@@ -9,7 +9,7 @@ import '../controller/follow_controller.dart';
 import '../controller/offre_controller.dart';
 import '../controller/user_controller.dart';
 import '../services/video_metrics_observer.dart';
-import '../widgets/video_manager.dart';
+import '../videos/video_manager.dart';
 
 class AppBindings {
   AppBindings._();

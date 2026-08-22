@@ -1,22 +1,26 @@
 import 'dart:async';
 
 import 'package:adfoot/config/feature_controller_registry.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/follow_controller.dart';
+import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/immersive_video_chrome.dart';
-import 'package:adfoot/widgets/smart_video_player.dart';
-import 'package:adfoot/widgets/video_manager.dart';
-import 'package:adfoot/widgets/video_page_scroll_physics.dart';
+import 'package:adfoot/widgets/video_feed_pager.dart';
+import 'package:adfoot/videos/video_manager.dart';
 import 'package:adfoot/controller/video_controller.dart';
-import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
 
+/// A profile's videos, full screen.
+///
+/// Everything that makes a vertical video feed work — the page controller,
+/// the index bookkeeping, the focus orchestrator, the lifecycle pausing, the
+/// haptics — now lives in [VideoFeedPager]. This screen is the part that is
+/// actually about *a profile*: which videos, how to leave, and where the next
+/// page comes from.
 class ProfileVideoScrollView extends StatefulWidget {
   final List<Video> videos;
   final int initialIndex;
@@ -35,17 +39,13 @@ class ProfileVideoScrollView extends StatefulWidget {
   State<ProfileVideoScrollView> createState() => _ProfileVideoScrollViewState();
 }
 
-class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
-    with WidgetsBindingObserver {
-  late final PageController _pageController;
+class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
   late final VideoController _vc;
   final UserController _userController = Get.find<UserController>();
   final FollowController _followController = Get.find<FollowController>();
-
+  final VideoFeedPagerController _pager = VideoFeedPagerController();
   final VideoManager _videoManager = VideoManager();
-  late final VideoFocusOrchestrator _focusOrchestrator;
 
-  late int _currentIndex;
   bool _isDisposed = false;
   bool _isExiting = false;
 
@@ -54,10 +54,6 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-
-    _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: _currentIndex);
 
     _vc = FeatureControllerRegistry.ensureVideoController(
       contextKey: widget.contextKey,
@@ -65,42 +61,43 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
       enableFeedFetch: false,
       permanent: true,
     );
-    _vc.replaceVideos(widget.videos, selectedIndex: _currentIndex);
-
-    _focusOrchestrator = VideoFocusOrchestrator(
-      contextKey: widget.contextKey,
-      videoManager: _videoManager,
-      videos: _currentVideos,
-      disposeWindow: _videoSlidingWindowLimit,
-    );
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_isDisposed && !_isExiting) {
-        unawaited(_handleIndexChange(_currentIndex));
-      }
-    });
+    _vc.replaceVideos(widget.videos, selectedIndex: widget.initialIndex);
   }
 
   @override
   void dispose() {
     _isDisposed = true;
-    WidgetsBinding.instance.removeObserver(this);
-
-    _pageController.dispose();
-    unawaited(_focusOrchestrator.onDispose());
     FeatureControllerRegistry.releaseVideoController(widget.contextKey);
-
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_isDisposed || _isExiting) return;
+  List<Video> get _currentVideos => _vc.videoList.toList(growable: false);
 
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      unawaited(_videoManager.pauseAll(widget.contextKey));
+  /// Loads the next page of this profile's videos as the user reaches the end.
+  ///
+  /// This screen used to receive a fixed snapshot of whatever the profile grid
+  /// had loaded when it was opened, and scroll to the end of it — full stop.
+  /// The pagination existed all along on [ProfileController]; nothing was
+  /// wired to it, because only the home feed had a "load more" hook and there
+  /// was no shared feed to put one in.
+  Future<void> _loadMoreProfileVideos() async {
+    if (_isDisposed || _isExiting) return;
+    if (!Get.isRegistered<ProfileController>(tag: widget.uid)) return;
+
+    final profileController = Get.find<ProfileController>(tag: widget.uid);
+    if (!profileController.hasMoreVideos || profileController.isLoadingVideos) {
+      return;
     }
+
+    await profileController.fetchUserVideos(widget.uid);
+    if (_isDisposed || !mounted) return;
+
+    final playable = profileController.videoList
+        .where((video) => video.isPlayable)
+        .toList(growable: false);
+    if (playable.length <= _currentVideos.length) return;
+
+    _vc.replaceVideos(playable, selectedIndex: _pager.currentIndex);
   }
 
   Future<void> _safeExit() async {
@@ -120,46 +117,6 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
     }
   }
 
-  Future<void> _handleIndexChange(int idx) async {
-    if (_isDisposed || _isExiting) return;
-
-    final videos = _currentVideos;
-    if (idx < 0 || idx >= videos.length) return;
-
-    _currentIndex = idx;
-    _vc.currentIndex.value = idx;
-
-    _focusOrchestrator.updateVideos(videos);
-    await _focusOrchestrator.onIndexChanged(idx);
-  }
-
-  void _triggerPageChangeHaptic() {
-    unawaited(HapticFeedback.selectionClick().catchError((_) {}));
-  }
-
-  List<Video> get _currentVideos => _vc.videoList.toList(growable: false);
-
-  void _syncPageWithFeedLength(int length) {
-    if (_isDisposed || _isExiting || length <= 0) return;
-
-    final clampedIndex = _currentIndex.clamp(0, length - 1).toInt();
-    if (clampedIndex == _currentIndex) return;
-
-    _currentIndex = clampedIndex;
-    _vc.currentIndex.value = clampedIndex;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_isDisposed || _isExiting || !_pageController.hasClients) return;
-
-      final currentPage = _pageController.page?.round() ?? _currentIndex;
-      if (currentPage != clampedIndex) {
-        _pageController.jumpToPage(clampedIndex);
-      }
-
-      unawaited(_handleIndexChange(clampedIndex));
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return PopScope<void>(
@@ -172,7 +129,6 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
         backgroundColor: Colors.black,
         body: Obx(() {
           final videos = _currentVideos;
-          _syncPageWithFeedLength(videos.length);
 
           return Stack(
             children: [
@@ -186,49 +142,19 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView>
                   actionLabel: VideoUiStrings.back,
                   onAction: () => unawaited(_safeExit()),
                 )
-              else if (_currentIndex >= videos.length)
-                const SizedBox.shrink()
               else
                 Positioned.fill(
-                  child: PageView.builder(
-                    controller: _pageController,
-                    scrollDirection: Axis.vertical,
-                    physics: const VideoPageScrollPhysics(),
-                    dragStartBehavior: DragStartBehavior.down,
-                    allowImplicitScrolling: false,
-                    itemCount: videos.length,
-                    onPageChanged: (idx) {
-                      if (idx < 0 || idx >= videos.length) return;
-                      if (idx != _currentIndex) {
-                        _triggerPageChangeHaptic();
-                      }
-                      unawaited(_handleIndexChange(idx));
-                    },
-                    itemBuilder: (_, idx) {
-                      final video = videos[idx];
-                      final player = _videoManager.getController(
-                        widget.contextKey,
-                        video.videoUrl,
-                      );
-
-                      return SmartVideoPlayer(
-                        key: ValueKey(video.id),
-                        player: player,
-                        videoController: _vc,
-                        userController: _userController,
-                        followController: _followController,
-                        contextKey: widget.contextKey,
-                        videoUrl: video.videoUrl,
-                        video: video,
-                        currentIndex: idx,
-                        videoList: videos,
-                        enableTapToPlay: true,
-                        autoPlay: true,
-                        showControls: true,
-                        showProgressBar: true,
-                        showProfileAction: false,
-                      );
-                    },
+                  child: VideoFeedPager(
+                    pagerController: _pager,
+                    contextKey: widget.contextKey,
+                    videos: videos,
+                    videoController: _vc,
+                    userController: _userController,
+                    followController: _followController,
+                    initialIndex: widget.initialIndex,
+                    disposeWindow: _videoSlidingWindowLimit,
+                    showProfileAction: false,
+                    onRequestMore: _loadMoreProfileVideos,
                   ),
                 ),
               if (!_isExiting && videos.isNotEmpty)

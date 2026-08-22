@@ -140,6 +140,28 @@ class _TiktokVideoPlayerState extends State<TiktokVideoPlayer> {
     _startProgressUpdater();
   }
 
+  /// Keeps the speed badge honest when the controller underneath changes.
+  ///
+  /// The speed lives on the native player, not on this widget, so a new
+  /// controller always starts at 1x — and this state does not. Every path
+  /// that swaps the controller does it silently: an automatic recovery, a
+  /// manual retry, an adaptive quality change, or simply the manager handing
+  /// over a controller it finished initialising. The player then ran at 1x
+  /// while the control row still read "1.5x", with no way to get back to the
+  /// selected speed other than choosing it twice.
+  @override
+  void didUpdateWidget(covariant TiktokVideoPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (identical(oldWidget.controller, widget.controller)) return;
+
+    _isDragging = false;
+    _localDragProgress = 0.0;
+    if (_playbackSpeed != 1.0) {
+      _playbackSpeed = 1.0;
+    }
+  }
+
   @override
   void dispose() {
     _isDisposed = true;

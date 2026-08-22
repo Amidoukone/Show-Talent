@@ -24,7 +24,12 @@ void main() {
     expect(profileSurface, contains('overflow: TextOverflow.ellipsis'));
     expect(profileSurface, contains('user.isProfileTrusted'));
     expect(profileSurface, contains('Vérifié par Adfoot'));
-    expect(profileSurface, contains('errorBuilder: (_, _, _) => fallback()'));
+    // Une miniature cassée montre le repli, jamais une image brisée.
+    // Le mécanisme a changé — `CachedNetworkImage` remplace `Image.network`,
+    // qui n'avait aucun cache disque et ignorait le préchargement du
+    // contrôleur — mais l'invariant est le même.
+    expect(profileSurface, contains('errorWidget: (_, _, _) => fallback()'));
+    expect(profileSurface, contains('placeholder: (_, _) => fallback()'));
     expect(
       profileSurface,
       contains('loadingBuilder: (context, child, loadingProgress)'),

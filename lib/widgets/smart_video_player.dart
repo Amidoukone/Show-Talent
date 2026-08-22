@@ -11,7 +11,6 @@ import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:adfoot/controller/follow_controller.dart';
-import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/screens/add_video.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/screens/success_toast.dart';
@@ -22,13 +21,15 @@ import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/video_cache_manager.dart' as custom_cache;
 import 'package:adfoot/utils/video_share_links.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
+import 'package:adfoot/videos/domain/video_action_runner.dart';
 import 'package:adfoot/widgets/tiktok_video_player.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/widgets/video_action_rail.dart';
+import 'package:adfoot/widgets/video_metadata_overlay.dart';
 import 'package:adfoot/services/app_logger.dart';
-import 'package:adfoot/widgets/video_manager.dart';
+import 'package:adfoot/videos/video_manager.dart';
 
 part 'smart_video_player_sheets.dart';
 
@@ -41,7 +42,6 @@ class SmartVideoPlayer extends StatefulWidget {
   final String contextKey;
   final String videoUrl;
   final int currentIndex;
-  final List<Video> videoList;
   final bool enableTapToPlay;
   final bool autoPlay;
   final bool showControls;
@@ -60,7 +60,6 @@ class SmartVideoPlayer extends StatefulWidget {
     required this.contextKey,
     required this.videoUrl,
     required this.currentIndex,
-    required this.videoList,
     required this.enableTapToPlay,
     required this.autoPlay,
     required this.showControls,
@@ -93,13 +92,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   bool _isTryingToPlay = false;
   bool _wakelockOn = false;
   bool _isDisposed = false;
-  bool _isFollowActionLoading = false;
-  bool _isLikeActionLoading = false;
-  bool? _queuedLikeTarget;
-  bool _isReportActionLoading = false;
-  bool _isShareActionLoading = false;
-  bool _isDeleteActionLoading = false;
-  bool _isAddVideoActionLoading = false;
+
+  /// Every video action, and the six cross-cutting concerns they all share.
+  ///
+  /// This replaced seven booleans and a queue field, each maintained by hand
+  /// in its own `setState` pair.
+  late final VideoActionRunner _actions;
 
   Timer? _playDebounceTimer;
   static const Duration _playDebounce = Duration(milliseconds: 120);
@@ -120,12 +118,20 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   /// while the visible video is still streaming, so that the clip on screen
   /// gets the connection to itself. Something has to tell it when the stream
   /// is healthy enough to share, and the stall watchdog is already sampling
-  /// exactly that, every 700ms. Five clean ticks is ~3.5s of real playback:
-  /// long enough to mean the network is keeping up, short enough that a good
-  /// connection barely notices the delay before neighbours start caching.
+  /// exactly that, every 700ms.
+  ///
+  /// Three clean ticks is ~2.1s of real playback. It was five (~3.5s), chosen
+  /// when the tier detection reported every device as `high` and the deferral
+  /// was the only thing standing between a stream and its neighbours' full
+  /// downloads. Now that a slow link is actually classified as one — and gets
+  /// `preloadRadius: 0`, so it defers nothing because it preloads nothing —
+  /// the window only has to outlast the opening seconds of a stream, not
+  /// stand in for the bandwidth measurement. Shortening it is what lets a
+  /// second swipe land on a cached neighbour instead of another cold stream,
+  /// which is the whole difference between this feed and a fast one.
   int _smoothPlaybackTicks = 0;
   bool _reportedPlaybackStable = false;
-  static const int _smoothTicksBeforeStable = 5;
+  static const int _smoothTicksBeforeStable = 3;
 
   bool _isRecovering = false;
 
@@ -154,15 +160,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   late final VideoObservabilityService _observability;
   FeedPlaybackSessionTracker? _playbackSession;
 
-  static const double _videoMetadataLeft = 16;
-  static const double _videoBottomMinimumOffset = 84;
-  static const double _videoBottomSafeGap = 18;
-  static const double _videoProgressReservedHeight = 36;
-  static const int _captionCollapsedMaxLines = 2;
-  static const int _descriptionMaxLines = 1;
-  static const List<Shadow> _videoMetadataTextShadow = <Shadow>[
-    Shadow(offset: Offset(0, 1), blurRadius: 3, color: Color(0x99000000)),
-  ];
 
   // ---------------------------------------------------------------------------
   // LIFECYCLE
@@ -183,6 +180,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     );
 
     _vc = widget.videoController;
+    _actions = VideoActionRunner(
+      videoController: _vc,
+      followController: widget.followController,
+    )..addListener(_onActionsChanged);
     _bindIndexWorker();
 
     if (widget.player != null) {
@@ -203,6 +204,9 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     } catch (_) {}
 
     _videoManager.unwatchVideoUi(widget.contextKey, widget.videoUrl);
+    _actions
+      ..removeListener(_onActionsChanged)
+      ..dispose();
     _detachListener(_ctrl);
     _showPlayIcon.dispose();
     _playDebounceTimer?.cancel();
@@ -384,16 +388,9 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _smoothPlaybackTicks = 0;
     _reportedPlaybackStable = false;
 
-    final resolved = _videoManager.getResolvedUrl(
-      widget.contextKey,
-      widget.videoUrl,
-    );
-    if (resolved != null &&
-        resolved.isNotEmpty &&
-        widget.video.resolvedUrl != resolved) {
-      widget.video.resolvedUrl = resolved;
-    }
-
+    // VideoManager owns the resolved URL; this used to copy it back onto the
+    // Video model as well, which made a document object carry playback state
+    // and gave two answers to one question.
     _updatePlaybackSessionSource();
 
     final ctrl = _ctrl;
@@ -416,6 +413,21 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
     if (mounted && !_isDisposed) setState(() {});
     _updateWakelock();
+  }
+
+  /// The video as its controller currently holds it.
+  ///
+  /// `widget.video` is the document as the host handed it over. Its social
+  /// counters move — and they move in `VideoController`, which is the only
+  /// writer now. Reading them from here means a like applied while the search
+  /// results are on screen shows up immediately, even though that list is not
+  /// the controller's own and would never have been rebuilt by
+  /// `videoList.refresh()`.
+  Video get _video => _vc.hydrate(widget.video);
+
+  /// Repaints the rail when an action starts, settles, or moves the counters.
+  void _onActionsChanged() {
+    if (mounted && !_isDisposed) setState(() {});
   }
 
   bool _isControllerValid(VideoPlayerController? ctrl) {
@@ -449,7 +461,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   VideoSource? _currentPlaybackSource() {
     final resolvedUrl =
         _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
-        widget.video.resolvedUrl ??
         widget.video.videoUrl;
 
     for (final source in widget.video.sources) {
@@ -478,7 +489,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   void _ensurePlaybackSession() {
     final resolvedUrl =
         _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
-        widget.video.resolvedUrl ??
         widget.video.videoUrl;
     final source = _currentPlaybackSource();
 
@@ -513,7 +523,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     currentSession.updateSource(
       resolvedUrl:
           _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
-          widget.video.resolvedUrl ??
           widget.video.videoUrl,
       source: _currentPlaybackSource(),
     );
@@ -618,6 +627,25 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   }
 
   void _scheduleMaybePlay() {
+    // Start the clock here, not in _maybePlay.
+    //
+    // timeToFirstFrame is supposed to answer "how long after this video
+    // became the one on screen did the user see a picture" — the single
+    // number that says whether the feed feels fast. It was measured from the
+    // creation of the session tracker, and the tracker was created inside
+    // _maybePlay, one line before play(). By then VideoFocusOrchestrator has
+    // already initialised *and* started the controller, so the first frame
+    // was usually already rendered and the tracker recorded it on the spot.
+    // adfoot-production shows the consequence exactly: `timeToFirstFrameMs: 0`
+    // on all 63 playback sessions logged in the fourteen days to 2026-08-22,
+    // including the ones that rebuffered for twenty seconds.
+    //
+    // This is the moment the tile becomes the active video, which is the
+    // moment the question is about. The tracker is idempotent, so _maybePlay
+    // keeps its call — it is what refreshes the resolved source.
+    if (_isActuallyVisible()) {
+      _ensurePlaybackSession();
+    }
     _playDebounceTimer?.cancel();
     _playDebounceTimer = Timer(_playDebounce, _maybePlay);
   }
@@ -635,8 +663,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       if (!_isControllerValid(c) || !_isActuallyVisible()) return;
       final token = _attachToken;
       final resolvedUrl =
-          _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
-          widget.video.resolvedUrl;
+          _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl);
       final shouldReuseCurrent = _videoManager.shouldReuseControllerForRequest(
         originalUrl: widget.videoUrl,
         resolvedUrl: resolvedUrl,
@@ -892,7 +919,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _playbackSession?.recordRecoveryAttempt(reason);
       final resolvedUrl =
           _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
-          widget.video.resolvedUrl ??
           widget.video.effectiveUrl;
 
       await _purgeAndReloadController(
@@ -995,7 +1021,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                 );
               },
             ),
-            if (widget.showControls) _buildVideoReadabilityScrim(),
+            if (widget.showControls) const VideoReadabilityScrim(),
             if (widget.showControls) _buildVideoMetadataOverlay(context),
             if (widget.showControls)
               _buildActions(context, videoController, userController),
@@ -1019,8 +1045,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   Map<String, dynamic> _playbackDiagnostics() {
     final value = _safeValue(_ctrl);
     final resolvedUrl =
-        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
-        widget.video.resolvedUrl;
+        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl);
     final loadState = _videoManager.getLoadState(
       widget.contextKey,
       widget.videoUrl,
@@ -1043,238 +1068,25 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     };
   }
 
-  double _videoOverlayBottomOffset(MediaQueryData media) {
-    var bottom =
-        media.viewPadding.bottom +
-        _videoBottomSafeGap +
-        (widget.showProgressBar ? _videoProgressReservedHeight : 0);
-    if (bottom < _videoBottomMinimumOffset) {
-      bottom = _videoBottomMinimumOffset;
-    }
-    return bottom;
-  }
-
-  double _videoActionSpacing(MediaQueryData media) =>
-      media.size.height < 700 ? 16 : 20;
-
-  double _videoSectionSpacing(MediaQueryData media) =>
-      media.size.height < 700 ? 20 : 24;
-
-  Widget _buildVideoReadabilityScrim() {
-    return IgnorePointer(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: FractionallySizedBox(
-          heightFactor: 0.16,
-          widthFactor: 1,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0.18),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  bool _captionNeedsExpansion({
-    required BuildContext context,
-    required String text,
-    required TextStyle style,
-    required double maxWidth,
-  }) {
-    if (text.trim().isEmpty || maxWidth <= 0) return false;
-
-    final painter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      maxLines: _captionCollapsedMaxLines,
-      textDirection: Directionality.of(context),
-    )..layout(maxWidth: maxWidth);
-
-    return painter.didExceedMaxLines;
-  }
+  double _videoOverlayBottomOffset(MediaQueryData media) =>
+      VideoOverlayMetrics.bottomOffset(
+        media,
+        showProgressBar: widget.showProgressBar,
+      );
 
   Widget _buildVideoMetadataOverlay(BuildContext context) {
-    final media = MediaQuery.of(context);
-    final bottomOffset = _videoOverlayBottomOffset(media);
-    final description = widget.video.description.trim();
-    final rawCaption = widget.video.caption.trim();
-    final caption = rawCaption;
     final publisher = widget.userController.usersCache[widget.video.uid];
-    final publisherName = (publisher?.nom ?? '').trim();
-    final publisherRole = (publisher?.role ?? '').trim();
-    final hasPublisher = publisherName.isNotEmpty;
-    final hasDescription = description.isNotEmpty;
 
-    final publisherStyle = const TextStyle(
-      color: Colors.white,
-      fontSize: 15,
-      fontWeight: FontWeight.w700,
-      height: 1.2,
-      shadows: _videoMetadataTextShadow,
-    );
-    final descriptionStyle = const TextStyle(
-      color: Colors.white,
-      fontSize: 13,
-      fontWeight: FontWeight.w600,
-      height: 1.22,
-      shadows: _videoMetadataTextShadow,
-    );
-    final captionStyle = const TextStyle(
-      color: Colors.white70,
-      fontSize: 13,
-      height: 1.28,
-      shadows: _videoMetadataTextShadow,
-    );
-    final linkStyle = const TextStyle(
-      color: Colors.white,
-      fontSize: 13,
-      fontWeight: FontWeight.w700,
-      height: 1.2,
-      shadows: _videoMetadataTextShadow,
-    );
-
-    return Positioned(
-      left: _videoMetadataLeft + media.viewPadding.left,
-      right: VideoActionRail.reservedWidth + media.viewPadding.right,
-      bottom: bottomOffset,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final needsExpansion =
-              rawCaption.isNotEmpty &&
-              _captionNeedsExpansion(
-                context: context,
-                text: caption,
-                style: captionStyle,
-                maxWidth: constraints.maxWidth,
-              );
-
-          final captionText = Text(
-            caption,
-            style: captionStyle,
-            maxLines: _captionCollapsedMaxLines,
-            overflow: TextOverflow.ellipsis,
-          );
-
-          return AnimatedSize(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.bottomLeft,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (hasPublisher || hasDescription)
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (hasPublisher)
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () {
-                            // Deliberately unguarded. This used to bail out
-                            // when the signed-in profile had not hydrated
-                            // yet, so early in a session tapping a publisher's
-                            // name did nothing at all — no navigation, no
-                            // feedback, nothing to retry against.
-                            unawaited(
-                              _openPublisherProfile(
-                                widget.userController.user?.uid,
-                              ),
-                            );
-                          },
-                          child: Semantics(
-                            button: true,
-                            label: VideoUiStrings.videoPublisherProfileSemantic,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    publisherName,
-                                    style: publisherStyle,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (publisherRole.isNotEmpty) ...[
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.32,
-                                      ),
-                                      borderRadius: BorderRadius.circular(999),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.18,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      publisherRole,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w800,
-                                        height: 1.2,
-                                        shadows: _videoMetadataTextShadow,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                      if (hasDescription)
-                        Text(
-                          description,
-                          style: descriptionStyle,
-                          maxLines: _descriptionMaxLines,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
-                  ),
-                if ((hasPublisher || hasDescription) && caption.isNotEmpty)
-                  const SizedBox(height: 8),
-                if (caption.isNotEmpty) captionText,
-                if (needsExpansion)
-                  Semantics(
-                    button: true,
-                    label: VideoUiStrings.videoCaptionOpen,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => _showCaptionSheet(
-                        publisherName: publisherName,
-                        description: description,
-                        caption: caption,
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 6, bottom: 4),
-                        child: Text(VideoUiStrings.seeMore, style: linkStyle),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
+    return VideoMetadataOverlay(
+      description: widget.video.description,
+      caption: widget.video.caption,
+      publisherName: publisher?.nom ?? '',
+      publisherRole: publisher?.role ?? '',
+      showProgressBar: widget.showProgressBar,
+      onOpenPublisher: () => unawaited(
+        _openPublisherProfile(widget.userController.user?.uid),
       ),
+      onOpenCaption: _showCaptionSheet,
     );
   }
 
@@ -1315,29 +1127,39 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
     final media = MediaQuery.of(context);
     return VideoActionRail(
-      video: widget.video,
+      video: _video,
       currentUser: currentUser,
       publisher: userController.usersCache[widget.video.uid],
       bottomOffset: _videoOverlayBottomOffset(media),
       safeRightInset: media.viewPadding.right,
-      actionSpacing: _videoActionSpacing(media),
-      sectionSpacing: _videoSectionSpacing(media),
+      actionSpacing: VideoOverlayMetrics.actionSpacing(media),
+      sectionSpacing: VideoOverlayMetrics.sectionSpacing(media),
       showDeleteAction: widget.showDeleteAction,
       showProfileAction: widget.showProfileAction,
+      // The like stays deliberately un-spinnered: it is optimistic, so the
+      // heart has already changed and a spinner over it would only contradict
+      // what the user can see.
       isLikeLoading: false,
-      isShareLoading: _isShareActionLoading,
-      isReportLoading: _isReportActionLoading,
-      isDeleteLoading: _isDeleteActionLoading,
-      isAddVideoLoading: _isAddVideoActionLoading,
-      isFollowLoading: _isFollowActionLoading,
-      onDelete: () async => _confirmDelete(context, videoController),
-      onLike: () => _toggleLike(videoController, currentUser.uid),
-      onShare: () => _shareVideo(videoController),
-      onReport: () async =>
-          _confirmReport(context, videoController, currentUser.uid),
+      isShareLoading: _actions.isRunning(VideoAction.share),
+      isReportLoading: _actions.isRunning(VideoAction.report),
+      isDeleteLoading: _actions.isRunning(VideoAction.delete),
+      isAddVideoLoading: _actions.isRunning(VideoAction.addVideo),
+      isFollowLoading: _actions.isRunning(VideoAction.follow),
+      onDelete: () async => _confirmDelete(context),
+      onLike: () => _actions.toggleLike(
+        video: widget.video,
+        userId: currentUser.uid,
+      ),
+      onShare: () => _shareVideo(),
+      onReport: () async => _confirmReport(context, currentUser.uid),
       onAddVideo: () => _openAddVideo(videoController),
       onOpenProfile: () => _openPublisherProfile(currentUser.uid),
-      onFollowPublisher: () => _followPublisher(currentUser.uid),
+      onFollowPublisher: () => _actions.followPublisher(
+        video: widget.video,
+        currentUserId: currentUser.uid,
+        isAlreadyFollowing:
+            currentUser.followingsList.contains(widget.video.uid),
+      ),
     );
   }
 
@@ -1357,6 +1179,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         widget.video.uid == currentUserId;
 
     await _videoManager.pauseAll(widget.contextKey);
+    // A profile opens its own video context on top of this one, and the two
+    // budgets add up on a device that has a single pool of decoders. Hand
+    // this feed's back before the second surface asks for any, keeping only
+    // the video the user will return to.
+    await _videoManager.releaseControllersExcept(
+      widget.contextKey,
+      widget.videoUrl,
+    );
     await _setWakelock(false);
     await Get.to(
       () => ProfileScreen(uid: widget.video.uid, isReadOnly: !isOwner),
@@ -1366,86 +1196,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     }
   }
 
-  Future<void> _followPublisher(String currentUserId) async {
-    final currentUser = widget.userController.user;
-    final isOwner = widget.video.uid == currentUserId;
-    final isFollowing =
-        currentUser?.followingsList.contains(widget.video.uid) ?? false;
-    if (_isFollowActionLoading || isOwner || isFollowing) return;
-
-    setState(() => _isFollowActionLoading = true);
-    final success = await widget.followController.followUser(
-      currentUserId,
-      widget.video.uid,
-    );
-    if (!success && mounted && !_isDisposed) {
-      showErrorToast(VideoUiStrings.followUnavailable);
-    }
-    if (mounted && !_isDisposed) {
-      setState(() => _isFollowActionLoading = false);
-    }
-  }
-
-  Future<void> _toggleLike(VideoController controller, String userId) async {
-    final targetLiked = !widget.video.likes.contains(userId);
-    _queuedLikeTarget = targetLiked;
-    _setLocalLikeState(userId, targetLiked);
-
-    if (_isLikeActionLoading) {
-      return;
-    }
-
-    _isLikeActionLoading = true;
-    var confirmedLiked = !targetLiked;
-    try {
-      while (mounted && !_isDisposed && _queuedLikeTarget != null) {
-        final targetForRequest = _queuedLikeTarget!;
-        final response = await controller.likeVideo(widget.video.id, userId);
-        if (!mounted || _isDisposed) {
-          return;
-        }
-
-        if (!response.success) {
-          _queuedLikeTarget = null;
-          _setLocalLikeState(userId, confirmedLiked);
-          return;
-        }
-
-        confirmedLiked = _resolvedLikeState(response, targetForRequest);
-        final latestTarget = _queuedLikeTarget;
-        if (latestTarget == null || latestTarget == confirmedLiked) {
-          _queuedLikeTarget = null;
-          _setLocalLikeState(userId, confirmedLiked);
-          return;
-        }
-
-        _setLocalLikeState(userId, latestTarget);
-      }
-    } finally {
-      _isLikeActionLoading = false;
-    }
-  }
-
-  void _setLocalLikeState(String userId, bool liked) {
-    widget.video.likes.remove(userId);
-    if (liked) {
-      widget.video.likes.add(userId);
-    }
-    if (mounted && !_isDisposed) {
-      setState(() {});
-    }
-  }
-
-  bool _resolvedLikeState(ActionResponse response, bool fallback) {
-    final rawLiked = response.data?['liked'];
-    return rawLiked is bool ? rawLiked : fallback;
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    VideoController controller,
-  ) async {
-    if (_isDeleteActionLoading) return;
+  Future<void> _confirmDelete(BuildContext context) async {
+    if (_actions.isRunning(VideoAction.delete)) return;
 
     await _showVideoActionSheet(
       context: context,
@@ -1457,7 +1209,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       secondaryLabel: VideoUiStrings.deleteVideoSecondaryAction,
       toneColor: AdColors.error,
       primaryForegroundColor: AdColors.white,
-      onConfirm: () => _deleteVideo(controller),
+      onConfirm: () => _actions.delete(video: widget.video),
     );
   }
 
@@ -1495,28 +1247,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     );
   }
 
-  Future<void> _deleteVideo(VideoController controller) async {
-    if (_isDeleteActionLoading) return;
-
-    if (mounted && !_isDisposed) {
-      setState(() => _isDeleteActionLoading = true);
-    }
-
-    try {
-      await controller.deleteVideo(widget.video.id);
-    } finally {
-      if (mounted && !_isDisposed) {
-        setState(() => _isDeleteActionLoading = false);
-      }
-    }
-  }
-
-  Future<void> _confirmReport(
-    BuildContext context,
-    VideoController controller,
-    String userId,
-  ) async {
-    if (_isReportActionLoading) return;
+  Future<void> _confirmReport(BuildContext context, String userId) async {
+    if (_actions.isRunning(VideoAction.report)) return;
 
     await _showVideoActionSheet(
       context: context,
@@ -1528,45 +1260,23 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       secondaryLabel: VideoUiStrings.reportVideoSecondaryAction,
       toneColor: AdColors.warning,
       primaryForegroundColor: AdColors.brandOn,
-      onConfirm: () => _reportVideo(controller, userId),
+      onConfirm: () => _actions.report(video: widget.video, userId: userId),
     );
   }
 
-  Future<void> _reportVideo(VideoController controller, String userId) async {
-    if (_isReportActionLoading) return;
-
-    if (mounted && !_isDisposed) {
-      setState(() => _isReportActionLoading = true);
-    }
-
-    try {
-      final response = await controller.signalerVideo(widget.video.id, userId);
-      if (response.success) {
-        if (!widget.video.reports.contains(userId)) {
-          widget.video.reports.add(userId);
-        }
-        final updatedCount = response.data?['reportCount'] as int?;
-        if (updatedCount != null) {
-          widget.video.reportCount = updatedCount;
-        }
-      }
-      if (mounted && !_isDisposed) setState(() {});
-    } finally {
-      if (mounted && !_isDisposed) {
-        setState(() => _isReportActionLoading = false);
-      }
-    }
-  }
-
+  /// Navigation and refresh stay here — they need a route and this widget's
+  /// playback — while the in-flight flag the rail reads lives with every
+  /// other action.
   Future<void> _openAddVideo(VideoController controller) async {
-    if (_isAddVideoActionLoading) return;
-
-    if (mounted && !_isDisposed) {
-      setState(() => _isAddVideoActionLoading = true);
-    }
-
-    try {
+    await _actions.runAddVideo(() async {
       await _videoManager.pauseAll(widget.contextKey);
+      // The upload flow opens a preview player of its own and then runs an
+      // ffmpeg pass; both want the resources this feed is only holding on to
+      // in case the user comes straight back.
+      await _videoManager.releaseControllersExcept(
+        widget.contextKey,
+        widget.videoUrl,
+      );
       await _setWakelock(false);
       final result = await Get.to(() => const AddVideo());
       if (result == true) {
@@ -1579,15 +1289,15 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       } else {
         _scheduleMaybePlay();
       }
-    } finally {
-      if (mounted && !_isDisposed) {
-        setState(() => _isAddVideoActionLoading = false);
-      }
-    }
+    });
   }
 
-  Future<void> _shareVideo(VideoController controller) async {
-    if (_isShareActionLoading) return;
+  /// Opens the platform share sheet, then records the share if it happened.
+  ///
+  /// The sheet needs a `BuildContext` and an anchor rect, so it stays here;
+  /// the counter, the toast and the in-flight flag are the runner's.
+  Future<void> _shareVideo() async {
+    if (_actions.isRunning(VideoAction.share)) return;
 
     final shareUrl = VideoShareLinks.buildVideoUrl(widget.video.id);
     if (shareUrl == null || shareUrl.isEmpty) {
@@ -1607,10 +1317,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       return;
     }
 
-    if (mounted && !_isDisposed) {
-      setState(() => _isShareActionLoading = true);
-    }
-
     try {
       final result = await SharePlus.instance.share(
         ShareParams(
@@ -1623,20 +1329,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
       switch (result.status) {
         case ShareResultStatus.dismissed:
+          // A share the user backed out of is not a share.
           return;
         case ShareResultStatus.success:
         case ShareResultStatus.unavailable:
           break;
       }
 
-      final response = await controller.partagerVideo(widget.video.id);
-      if (response.success) {
-        final updatedCount = response.data?['shareCount'] as int?;
-        if (updatedCount != null) {
-          widget.video.shareCount = updatedCount;
-        }
-        if (mounted && !_isDisposed) setState(() {});
-      }
+      await _actions.recordShare(video: widget.video);
     } catch (error, stackTrace) {
       unawaited(
         _observability.logActionFailure(
@@ -1652,10 +1352,6 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         ),
       );
       showErrorToast(VideoUiStrings.shareUnavailable);
-    } finally {
-      if (mounted && !_isDisposed) {
-        setState(() => _isShareActionLoading = false);
-      }
     }
   }
 
@@ -1704,8 +1400,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _bindPlayer(null);
 
     final resolvedUrl =
-        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl) ??
-        widget.video.resolvedUrl;
+        _videoManager.getResolvedUrl(widget.contextKey, widget.videoUrl);
     await _videoManager.disposeUrls(widget.contextKey, [widget.videoUrl]);
     if (!kIsWeb && purgeCachedFile) {
       try {

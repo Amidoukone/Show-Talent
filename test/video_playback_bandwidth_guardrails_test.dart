@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/videos/domain/network_profile.dart';
-import 'package:adfoot/widgets/video_manager.dart';
+import 'package:adfoot/videos/video_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -35,7 +35,7 @@ void main() {
     late String player;
 
     setUpAll(() {
-      manager = _read('lib/widgets/video_manager.dart');
+      manager = _read('lib/videos/video_manager.dart');
       player = _read('lib/widgets/smart_video_player.dart');
     });
 
@@ -60,11 +60,23 @@ void main() {
     // A preload is a full file download. Firing the two or three neighbours
     // alongside a live stream starves it just as effectively as the
     // player own duplicate download did.
+    //
+    // The decision now lives in PlaybackBandwidthArbiter rather than inside
+    // VideoManager. It is a decision with an incident behind it, not
+    // plumbing, and it earned a name; the behavioural tests below are what
+    // actually prove it still holds.
     test('preloads wait for the active stream to prove itself', () {
-      expect(manager, contains('_streamingUrlsByContext'));
-      expect(manager, contains('_deferredPreloadsByContext'));
+      final arbiter = _read('lib/videos/domain/playback_bandwidth_arbiter.dart');
+
+      expect(arbiter, contains('class PlaybackBandwidthArbiter'));
+      expect(arbiter, contains('_streamingUrlsByContext'));
+      expect(arbiter, contains('_deferredByContext'));
       expect(manager, contains('void markActivePlaybackStable('));
-      expect(manager, contains('if (_isStreamingUrl(contextKey, resolvedActive)) {'));
+      expect(
+        manager,
+        contains('if (_isStreamingUrl(contextKey, resolvedActive)) {'),
+      );
+      expect(manager, contains('_bandwidth.defer('));
     });
 
     test('the player reports a healthy stream from the stall watchdog', () {

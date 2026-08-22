@@ -9,6 +9,7 @@ import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/utils/adfoot_support.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
@@ -19,7 +20,6 @@ import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -475,18 +475,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  static const String _supportPhoneDisplay = '+223 70 45 33 45';
-  static const String _supportWhatsappNumber = '22370453345';
+  // Le numéro vit dans AdfootSupport : l'écran d'ajout de vidéo renvoie vers
+  // la même agence pour faire relever un plafond, et deux copies d'un numéro
+  // de téléphone finissent toujours par diverger.
+  static const String _supportPhoneDisplay = AdfootSupport.phoneDisplay;
 
   Future<void> _showSupportNotice() async {
-    final uri = Uri.parse('https://wa.me/$_supportWhatsappNumber');
-    try {
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (opened) {
-        return;
-      }
-    } catch (_) {
-      // Fall through to the informational toast below.
+    final opened = await AdfootSupport.openWhatsApp();
+    if (opened) {
+      return;
     }
 
     if (!mounted) {
@@ -494,7 +491,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     AdFeedback.info(
       'Équipe Adfoot',
-      'Faites vérifier toute opportunité via adfoot.org ou WhatsApp : $_supportPhoneDisplay.',
+      'Faites vérifier toute opportunité via ${AdfootSupport.website} ou WhatsApp : $_supportPhoneDisplay.',
       duration: const Duration(seconds: 5),
     );
   }

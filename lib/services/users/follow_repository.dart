@@ -32,15 +32,24 @@ class FollowMutationResult {
 
 class FollowRepository {
   FollowRepository({FirebaseFirestore? firestore, FirebaseFunctions? functions})
-    : _firestore = firestore ?? FirebaseFirestore.instance,
-      _functions =
-          functions ??
-          FirebaseFunctions.instanceFor(
-            region: AppEnvironmentConfig.functionsRegion,
-          );
+    : _injectedFirestore = firestore,
+      _injectedFunctions = functions;
 
-  final FirebaseFirestore _firestore;
-  final FirebaseFunctions _functions;
+  // Résolus à l'usage. `FirebaseFirestore.instance` et
+  // `FirebaseFunctions.instanceFor` lèvent tant qu'aucune app Firebase n'est
+  // démarrée, si bien que construire ce repository — donc FollowController,
+  // donc tout ce qui en dépend — exigeait un runtime Firebase complet, y
+  // compris dans un test qui n'allait jamais suivre personne.
+  final FirebaseFirestore? _injectedFirestore;
+  final FirebaseFunctions? _injectedFunctions;
+
+  FirebaseFirestore get _firestore =>
+      _injectedFirestore ?? FirebaseFirestore.instance;
+  FirebaseFunctions get _functions =>
+      _injectedFunctions ??
+      FirebaseFunctions.instanceFor(
+        region: AppEnvironmentConfig.functionsRegion,
+      );
 
   Future<FollowMutationResult> followUser(String targetUserId) {
     return _runFollowMutationWithRetry('followUser', targetUserId);

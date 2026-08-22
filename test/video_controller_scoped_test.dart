@@ -162,7 +162,14 @@ void main() {
         buildVideo('v2'),
       ]);
 
-      final shouldApplyBufferedLive = controller.updateCurrentIndex(0);
+      // `updateCurrentIndex` wrote the index *and* answered this question in
+      // one call, which is why the answer could not survive the index moving
+      // into VideoFeedPager: it depends on where the user came from.
+      final shouldApplyBufferedLive = controller.shouldSurfacePendingLiveAt(
+        previousIndex: controller.currentIndex.value,
+        index: 0,
+      );
+      controller.currentIndex.value = 0;
       final inserted = controller.applyBufferedLiveVideos();
 
       expect(shouldApplyBufferedLive, isTrue);

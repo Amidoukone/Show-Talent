@@ -4,11 +4,10 @@ import 'dart:ui';
 
 import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:adfoot/screens/add_video.dart';
-import 'package:flutter/gestures.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
@@ -23,12 +22,10 @@ import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/utils/video_search_matcher.dart';
 
 import 'package:adfoot/screens/profile_screen.dart';
-import 'package:adfoot/videos/domain/video_focus_orchestrator.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
-import 'package:adfoot/widgets/smart_video_player.dart';
-import 'package:adfoot/widgets/video_manager.dart';
-import 'package:adfoot/widgets/video_page_scroll_physics.dart';
+import 'package:adfoot/widgets/video_feed_pager.dart';
+import 'package:adfoot/videos/video_manager.dart';
 import 'package:adfoot/services/app_logger.dart';
 
 part 'home_screen_search_sheet.dart';
@@ -45,16 +42,16 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> {
   late final VideoController videoController;
   final UserController userController = Get.find<UserController>();
   final FollowController followController = Get.find<FollowController>();
-  final PageController _pageController = PageController();
+  final VideoFeedPagerController _pager = VideoFeedPagerController();
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   final ValueNotifier<int> _searchUiRevision = ValueNotifier<int>(0);
   final VideoManager videoManager = VideoManager();
-  late final VideoFocusOrchestrator _focusOrchestrator;
+
 
   static const int _searchUidBatchSize = 10;
   static const int _searchResultLimit = 60;
@@ -69,52 +66,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   StreamSubscription<bool>? _connectivitySubscription;
   Timer? _searchDebounce;
-  bool _wakelockOn = false;
   bool _hasHandledRouteRefresh = false;
   bool _routeRefreshRequested = false;
   String? _routeFocusVideoId;
   bool _isSearchSheetOpen = false;
   bool _wasHomeFeedEmpty = true;
-  int? _silencedPageChangeIndex;
   int _searchRequestToken = 0;
   int? _feedIndexBeforeSearch;
 
   bool get _isSearchActive => _searchQuery.trim().isNotEmpty;
 
   // ---------------------------------------------------------------------------
-  // Wakelock helpers
+  // Wakelock
   // ---------------------------------------------------------------------------
-
-  Future<void> _setWakelock(bool enable) async {
-    if (_wakelockOn == enable) return;
-    _wakelockOn = enable;
-    try {
-      enable ? await WakelockPlus.enable() : await WakelockPlus.disable();
-    } catch (e) {
-      AppLogger.debug('⚠️ Wakelock error: $e');
-    }
-  }
-
-  Future<void> _updateWakelockForCurrent() async {
-    final idx = videoController.currentIndex.value;
-    final videos = _currentVideos;
-    if (idx < 0 || idx >= videos.length) {
-      await _setWakelock(false);
-      return;
-    }
-
-    final url = videos[idx].videoUrl;
-    final player = videoManager.getController('home', url);
-    final ctrl = player?.controller;
-
-    final shouldKeepAwake =
-        ctrl != null &&
-        ctrl.value.isInitialized &&
-        ctrl.value.isPlaying &&
-        !ctrl.value.isBuffering;
-
-    await _setWakelock(shouldKeepAwake);
-  }
+  //
+  // Owned by SmartVideoPlayer, and only by it.
+  //
+  // `WakelockPlus` is a single device-wide switch, and this screen used to
+  // drive it too, from its own cached boolean. Two owners, one switch, two
+  // caches that could not see each other: the player disabling it on pause
+  // left this screen still believing it was on, so the next
+  // `_setWakelock(true)` short-circuited on `_wakelockOn == enable` and never
+  // re-enabled anything — the screen could dim in the middle of a video.
+  //
+  // The player is also the only one that can answer the question correctly:
+  // it is driven by the controller's own tick, where this screen sampled
+  // `isPlaying` once, 50 ms after a focus, and hoped.
 
   // ---------------------------------------------------------------------------
   // Focus orchestrator helpers
@@ -123,10 +100,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<Video> get _currentVideos => _isSearchActive
       ? _searchResults.toList(growable: false)
       : videoController.videoList.toList(growable: false);
-
-  void _refreshFocusVideos() {
-    _focusOrchestrator.updateVideos(_currentVideos);
-  }
 
   void _captureRoutePlaybackRequest() {
     if (_hasHandledRouteRefresh) return;
@@ -176,7 +149,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .where((item) => item.id != video.id)
           .toList(growable: false);
       videoController.replaceVideos([video, ...current], selectedIndex: 0);
-      _refreshFocusVideos();
       return 0;
     } catch (error) {
       AppLogger.debug('[HomeScreen] focused video lookup failed: $error');
@@ -190,15 +162,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }) async {
     final videos = _currentVideos;
     if (index < 0 || index >= videos.length) {
-      await _setWakelock(false);
       return false;
     }
 
-    if (alignPageView && _pageController.hasClients) {
-      final currentPage = (_pageController.page ?? 0).round();
-      if (currentPage != index) {
-        _jumpToPageSilently(index);
-      }
+    if (alignPageView) {
+      _jumpToPageSilently(index);
     }
 
     await _onPageChanged(index);
@@ -218,11 +186,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!mounted) return refreshed;
 
     if (!refreshed || videoController.videoList.isEmpty) {
-      await _setWakelock(false);
       return false;
     }
 
-    _refreshFocusVideos();
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return false;
 
@@ -246,7 +212,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _openAddVideo() async {
     await videoManager.pauseAll('home');
-    await _setWakelock(false);
     final result = await Get.to(() => const AddVideo());
     if (result == true) {
       await _refreshHomeFeed();
@@ -258,13 +223,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!mounted || inserted == 0) return;
 
     unawaited(HapticFeedback.lightImpact().catchError((_) {}));
-    _refreshFocusVideos();
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return;
 
-    if (_pageController.hasClients) {
-      _jumpToPageSilently(0);
-    }
+    _jumpToPageSilently(0);
 
     await _onPageChanged(0);
   }
@@ -279,31 +241,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .clamp(0, videoController.videoList.length - 1)
           .toInt();
       videoController.currentIndex.value = safeIndex;
-      _refreshFocusVideos();
 
-      if (_pageController.hasClients) {
-        _jumpToPageSilently(safeIndex);
-      }
+      _jumpToPageSilently(safeIndex);
 
       unawaited(_onPageChanged(safeIndex));
     });
   }
 
-  void _jumpToPageSilently(int index) {
-    if (!_pageController.hasClients) {
-      return;
-    }
-    final currentPage = (_pageController.page ?? 0).round();
-    if (currentPage == index) {
-      _silencedPageChangeIndex = null;
-      return;
-    }
-    _silencedPageChangeIndex = index;
-    _pageController.jumpToPage(index);
-  }
+  void _jumpToPageSilently(int index) => _pager.jumpToPage(index);
 
-  void _triggerPageChangeHaptic() {
-    unawaited(HapticFeedback.selectionClick().catchError((_) {}));
+  /// Loads the next feed page as the user nears the end.
+  ///
+  /// Never during a search: those results are a fixed answer to a question,
+  /// not a window onto the feed.
+  Future<void> _loadMoreHomeVideos() async {
+    if (_isSearchActive) return;
+    if (!videoController.hasMore || videoController.isLoading) return;
+    await videoController.fetchPaginatedVideos();
   }
 
   void _notifySearchUi() {
@@ -317,7 +271,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _captureRoutePlaybackRequest();
 
     videoController = FeatureControllerRegistry.ensureVideoController(
@@ -325,24 +278,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       enableLiveStream: true,
       enableFeedFetch: true,
       permanent: true,
-    );
-
-    _focusOrchestrator = VideoFocusOrchestrator(
-      contextKey: 'home',
-      videoManager: videoManager,
-      videos: _currentVideos,
-      disposeWindow: 25,
-      onRequestMore: () async {
-        if (_isSearchActive) {
-          return;
-        }
-        if (videoController.hasMore && !videoController.isLoading) {
-          final fetched = await videoController.fetchPaginatedVideos();
-          if (fetched) {
-            _refreshFocusVideos();
-          }
-        }
-      },
     );
 
     _initConnectivityListener();
@@ -357,42 +292,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _searchDebounce?.cancel();
     _searchFocusNode.dispose();
     _searchController.dispose();
     _searchUiRevision.dispose();
-    _pageController.dispose();
     _connectivitySubscription?.cancel();
-    unawaited(_setWakelock(false));
-    unawaited(_focusOrchestrator.onDispose());
     super.dispose();
   }
 
-  @override
-  void deactivate() {
-    videoManager.pauseAll('home');
-    unawaited(_setWakelock(false));
-    super.deactivate();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive) {
-      videoManager.pauseAll('home');
-      unawaited(_setWakelock(false));
-    } else if (state == AppLifecycleState.resumed) {
-      final idx = videoController.currentIndex.value;
-      if (idx >= 0 && idx < _currentVideos.length) {
-        unawaited(_onPageChanged(idx));
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          unawaited(_updateWakelockForCurrent());
-        });
-      }
-    }
-    super.didChangeAppLifecycleState(state);
-  }
+  // Pausing on background and re-focusing on resume belong to
+  // VideoFeedPager, which observes the lifecycle for every feed. This screen
+  // did both as well: the app was paused twice, and on resume the current
+  // video was focused twice — once by the pager, once from here.
 
   // ---------------------------------------------------------------------------
   // Connectivity & initial load
@@ -409,7 +320,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             final ok = await videoController.fetchPaginatedVideos();
             if (ok && mounted && videoController.videoList.isNotEmpty) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                _refreshFocusVideos();
                 unawaited(_activateHomeIndex(0, alignPageView: true));
               });
             }
@@ -430,13 +340,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (connected && videoController.videoList.isEmpty) {
       await videoController.fetchPaginatedVideos();
-      _refreshFocusVideos();
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final videos = videoController.videoList;
       if (videos.isNotEmpty) {
-        _refreshFocusVideos();
         final targetIndex = await _ensureFocusedVideoVisible(
           _routeFocusVideoId,
         );
@@ -489,7 +397,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       if (videoController.videoList.isEmpty) {
         _feedIndexBeforeSearch = null;
-        unawaited(_setWakelock(false));
         return;
       }
       final restoreIndex = (_feedIndexBeforeSearch ?? 0)
@@ -497,7 +404,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           .toInt();
       _feedIndexBeforeSearch = null;
       _jumpToPageSilently(restoreIndex);
-      _refreshFocusVideos();
       unawaited(_onPageChanged(restoreIndex));
     });
   }
@@ -564,7 +470,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _searchError = VideoUiStrings.videoSearchUnavailable;
       });
       _notifySearchUi();
-      await _setWakelock(false);
     }
   }
 
@@ -664,12 +569,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _activateFirstSearchResult() async {
     await videoManager.pauseAll('home');
     if (_searchResults.isEmpty) {
-      await _setWakelock(false);
       return;
     }
 
     _jumpToPageSilently(0);
-    _refreshFocusVideos();
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return;
     await _onPageChanged(0);
@@ -682,7 +585,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     _jumpToPageSilently(index);
-    _refreshFocusVideos();
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) return;
     await _onPageChanged(index);
@@ -694,7 +596,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     await videoManager.pauseAll('home');
-    await _setWakelock(false);
 
     if (!mounted) return;
     setState(() => _isSearchSheetOpen = true);
@@ -736,39 +637,49 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     if (!mounted) return;
-    await _updateWakelockForCurrent();
   }
 
   // ---------------------------------------------------------------------------
   // Page change / playback orchestration
   // ---------------------------------------------------------------------------
 
-  Future<void> _onPageChanged(int index) async {
-    final videos = _currentVideos;
-    if (index < 0 || index >= videos.length) return;
+  /// Moves the feed to [index] and focuses it.
+  ///
+  /// Kept as the home screen's own entry point — route focus, search restore,
+  /// empty-feed activation and the profile round trip all call it — while the
+  /// page controller, the orchestrator and the lifecycle belong to
+  /// [VideoFeedPager].
+  Future<void> _onPageChanged(int index) => _pager.activate(index);
 
-    if (_isSearchActive) {
-      videoController.currentIndex.value = index;
-    } else {
-      final shouldApplyPendingLiveOnTop = videoController.updateCurrentIndex(
-        index,
-      );
-      if (shouldApplyPendingLiveOnTop) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          unawaited(_openPendingLiveVideos());
-        });
-        return;
-      }
+  /// Runs before the pager focuses [index].
+  ///
+  /// Returning `false` hands the move back: reaching the top of the feed with
+  /// live videos waiting means the feed is about to change under us, so
+  /// focusing this index would only be undone by the jump that follows.
+  Future<bool> _onBeforeIndexChanged(
+    int index, {
+    required int previousIndex,
+  }) async {
+    if (_isSearchActive) return true;
 
-      videoController.prefetchThumbnailsAroundIndex(index);
-    }
+    final shouldApplyPendingLiveOnTop = videoController
+        .shouldSurfacePendingLiveAt(
+          previousIndex: previousIndex,
+          index: index,
+        );
+    if (!shouldApplyPendingLiveOnTop) return true;
 
-    _refreshFocusVideos();
-    await _focusOrchestrator.onIndexChanged(index);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_openPendingLiveVideos());
+    });
+    return false;
+  }
 
+  /// Runs once the pager has attached [index]'s controller.
+  Future<void> _onIndexFocused(int index) async {
     await Future.delayed(const Duration(milliseconds: 50));
-    await _updateWakelockForCurrent();
+    if (!mounted) return;
   }
 
   // ---------------------------------------------------------------------------
@@ -1193,14 +1104,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   GestureDetector(
                     onTap: () async {
                       await videoManager.pauseAll('home');
-                      await _setWakelock(false);
                       await Get.to(
                         () => ProfileScreen(uid: user.uid, isReadOnly: false),
                       );
                       videoController.currentIndex.refresh();
-                      _refreshFocusVideos();
                       await _onPageChanged(videoController.currentIndex.value);
-                      await _updateWakelockForCurrent();
                     },
                     child: Tooltip(
                       message: VideoUiStrings.profile,
@@ -1256,49 +1164,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 _scheduleHomeFeedActivationAfterEmptyFeed();
               }
 
-              return PageView.builder(
-                controller: _pageController,
-                scrollDirection: Axis.vertical,
-                itemCount: videos.length,
-                physics: const VideoPageScrollPhysics(),
-                dragStartBehavior: DragStartBehavior.down,
-                allowImplicitScrolling: false,
-                onPageChanged: (i) {
-                  if (_silencedPageChangeIndex == i) {
-                    _silencedPageChangeIndex = null;
-                    return;
-                  }
-                  if (i != videoController.currentIndex.value) {
-                    _triggerPageChangeHaptic();
-                  }
-                  unawaited(_onPageChanged(i));
-                },
-                itemBuilder: (context, index) {
-                  final video = videos[index];
-                  final player = videoManager.getController(
-                    'home',
-                    video.videoUrl,
-                  );
-
-                  return SmartVideoPlayer(
-                    key: ValueKey(video.id),
-                    player: player,
-                    videoController: videoController,
-                    userController: userController,
-                    followController: followController,
-                    contextKey: 'home',
-                    videoUrl: video.videoUrl,
-                    video: video,
-                    currentIndex: index,
-                    videoList: videos,
-                    enableTapToPlay: true,
-                    autoPlay: true,
-                    showControls: true,
-                    showProgressBar: true,
-                    showDeleteAction: false,
-                    onRefreshRequested: _refreshHomeFeed,
-                  );
-                },
+              return VideoFeedPager(
+                pagerController: _pager,
+                contextKey: 'home',
+                videos: videos,
+                videoController: videoController,
+                userController: userController,
+                followController: followController,
+                onBeforeIndexChanged: _onBeforeIndexChanged,
+                onIndexFocused: _onIndexFocused,
+                onRequestMore: _loadMoreHomeVideos,
+                onRefreshRequested: _refreshHomeFeed,
+                // L'auteur supprime depuis son profil, pas depuis le feed
+                // public.
+                showDeleteAction: false,
               );
             }),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerTop,

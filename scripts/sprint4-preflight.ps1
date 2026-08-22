@@ -104,7 +104,7 @@ try {
                 "lib/controller/profile_controller.dart",
                 "lib/controller/upload_video_controller.dart",
                 "lib/screens/upload_form.dart",
-                "lib/screens/video_feed_screen.dart",
+                "lib/screens/profil_video_scrollview.dart",
                 "lib/controller/chat_controller.dart",
                 "lib/screens/chat_screen.dart",
                 "lib/screens/select_user_screen.dart",

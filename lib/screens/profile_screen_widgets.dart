@@ -272,22 +272,24 @@ class _VideoTile extends StatelessWidget {
 
     // An empty URL is a real case now that the owner sees videos before they
     // are live: a still is only guaranteed once the upload has been
-    // finalized. Checking up front keeps it out of Image.network entirely
-    // rather than relying on it to fail its way into errorBuilder, which
+    // finalized. Checking up front keeps it out of the image widget entirely
+    // rather than relying on it to fail its way into an error builder, which
     // costs a failed resolution and logs an exception per tile per rebuild.
+    //
+    // CachedNetworkImage, not Image.network: `VideoController` already warms
+    // these stills into `DefaultCacheManager`, and that is the store
+    // CachedNetworkImage reads. `Image.network` has no disk cache at all, so
+    // it ignored the prefetch entirely and re-downloaded every thumbnail on
+    // every scroll — and again after every app restart.
     Widget thumbnail = video.thumbnailUrl.trim().isEmpty
         ? fallback()
-        : Image.network(
-            video.thumbnailUrl,
+        : CachedNetworkImage(
+            imageUrl: video.thumbnailUrl,
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => fallback(),
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) {
-                return child;
-              }
-
-              return fallback();
-            },
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+            placeholder: (_, _) => fallback(),
+            errorWidget: (_, _, _) => fallback(),
           );
 
     if (badge != null) {

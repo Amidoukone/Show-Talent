@@ -7,6 +7,7 @@ import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/screens/profil_video_scrollview.dart';
 import 'package:adfoot/widgets/contact_intake_sheet.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -23,7 +24,7 @@ import 'package:adfoot/screens/follow_list_screen.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_profile_cards.dart';
-import 'package:adfoot/widgets/video_manager.dart';
+import 'package:adfoot/videos/video_manager.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:adfoot/theme/ad_colors.dart';
@@ -488,10 +489,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               );
 
-                              await _videoManager.disposeAllForContext(
-                                contextKey,
-                              );
-
+                              // Un seul propriétaire par contexte : c'est
+                              // ProfileVideoScrollView qui crée les lecteurs
+                              // (via son VideoFocusOrchestrator) et qui les
+                              // détruit dans son `dispose`. La grille, elle,
+                              // n'affiche que des images. Détruire une
+                              // seconde fois ici ne faisait que masquer la
+                              // question de savoir à qui appartient le
+                              // contexte ; `VideoController.onClose` reste le
+                              // filet, déclenché par le release ci-dessous
+                              // quand plus personne ne tient la référence.
                               FeatureControllerRegistry.releaseVideoController(
                                 contextKey,
                               );

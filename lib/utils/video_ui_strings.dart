@@ -40,10 +40,11 @@ class VideoUiStrings {
   static const String videoPublisherProfileSemantic =
       'Ouvrir le profil du joueur';
   static const String back = 'Retour';
-  static const String emptyVideoFeedTitle =
-      'Aucune vidéo disponible pour le moment.';
-  static const String emptyVideoFeedMessage =
-      'Revenez au feed principal pour actualiser la liste.';
+  // `emptyVideoFeedTitle` / `emptyVideoFeedMessage` sont partis avec
+  // `video_feed_screen.dart`, leur seul lecteur : un troisième feed vidéo
+  // qu'aucun écran n'ouvrait plus. Les deux feeds qui restent ont leur propre
+  // formulation, `emptyProfileVideoFeed*` et `emptyHomeVideoFeed*`, parce que
+  // « aucune vidéo » ne se dit pas pareil sur un profil et sur l'accueil.
   static const String emptyProfileVideoFeedTitle = 'Aucune vidéo à afficher';
   static const String emptyProfileVideoFeedMessage =
       'Ce profil n’a pas encore de vidéo disponible.';
@@ -196,6 +197,32 @@ class VideoUiStrings {
   static const String uploadOptimizationPending =
       'Votre vidéo est en cours de traitement. Suivez son avancement '
       'dans votre profil ; vous serez notifié dès sa validation.';
+
+  /* ------------------------ Plafond de publication ------------------------- */
+
+  // Le message serveur, « Vous avez deja 10 videos publiques. Archivez une
+  // video avant d'en ajouter une nouvelle. », remontait tel quel à l'écran.
+  // Il est sans accents, et surtout il demande une action qu'un joueur ne
+  // peut pas faire : archiver n'existe pas dans l'application. La seule issue
+  // réelle est de faire relever le plafond par l'agence, donc c'est ce que le
+  // message doit dire.
+  static const String uploadQuotaReachedTitle = 'Plafond de vidéos atteint';
+
+  static String uploadQuotaReachedMessage(int limit) =>
+      'Votre compte a atteint son plafond de $limit vidéos publiées. '
+      'Pour en publier davantage, demandez à l’agence Adfoot d’augmenter '
+      'votre plafond.';
+
+  static String uploadQuotaReachedShort(int limit) =>
+      'Plafond de $limit vidéos atteint. Contactez l’agence Adfoot pour '
+      'l’augmenter.';
+
+  static const String uploadQuotaContactAction = 'Contacter l’agence Adfoot';
+  static const String uploadQuotaDismissAction = 'Fermer';
+
+  static String uploadQuotaContactFallback(String phone, String website) =>
+      'Écrivez à l’agence Adfoot sur WhatsApp au $phone, ou passez par '
+      '$website, pour faire augmenter votre plafond de vidéos.';
 
   /* ------------------------------ Cycle de vie ----------------------------- */
 

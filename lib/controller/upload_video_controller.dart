@@ -12,6 +12,7 @@ import 'package:adfoot/services/video_observability_service.dart';
 import 'package:adfoot/services/videos/data/upload_client.dart';
 import 'package:adfoot/services/videos/upload_video_error_mapper.dart';
 import 'package:adfoot/services/videos/upload_video_repository.dart';
+import 'package:adfoot/utils/video_publication_quota.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/utils/video_tools.dart';
 import 'package:adfoot/screens/success_toast.dart';
@@ -105,6 +106,50 @@ class UploadVideoController extends GetxController {
   }
 
   bool _isCurrentOperation(int operation) => operation == _operationSerial;
+
+  /* -------------------------------------------------------------------------- */
+  /* Plafond de publication                                                     */
+  /* -------------------------------------------------------------------------- */
+
+  /// Says whether this account still has room under its publication cap,
+  /// before the user is asked to pick anything.
+  ///
+  /// Advisory only. `createUploadSession` re-counts inside the transaction
+  /// that creates the video document and remains the authority; this exists
+  /// so a player at the cap is told so in one tap instead of after choosing a
+  /// clip, waiting through the trim, the thumbnail and the start of the
+  /// transfer.
+  ///
+  /// A failed read never blocks: [VideoPublicationQuotaState.unknown] lets
+  /// the flow continue and the server answer, because refusing to publish
+  /// over one flaky Firestore read would be a worse bug than the one this
+  /// prevents.
+  Future<VideoPublicationQuotaState> checkPublicationQuota() async {
+    final uid = _authSessionService.currentUid;
+    if (uid == null || uid.isEmpty) {
+      return VideoPublicationQuotaState.unknown;
+    }
+
+    try {
+      final published = await _uploadRepository.countPublishedVideos(uid);
+      return published >= VideoPublicationQuota.maxPublishedVideos
+          ? VideoPublicationQuotaState.exhausted
+          : VideoPublicationQuotaState.allowed;
+    } catch (error, stackTrace) {
+      unawaited(
+        _observability.logUploadInfo(
+          event: 'upload_quota_check_skipped',
+          stage: 'prepare',
+          metadata: {'error': error.toString()},
+        ),
+      );
+      AppLogger.debug(
+        '[UploadVideoController] publication quota check failed, '
+        'letting the server decide: $error\n$stackTrace',
+      );
+      return VideoPublicationQuotaState.unknown;
+    }
+  }
 
   /* -------------------------------------------------------------------------- */
   /* Préparation                                                               */

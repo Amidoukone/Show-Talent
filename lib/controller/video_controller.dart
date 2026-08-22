@@ -11,7 +11,7 @@ import '../services/videos/video_action_service.dart';
 import '../services/videos/video_repository.dart';
 import '../services/video_observability_service.dart';
 import '../utils/video_ui_strings.dart';
-import '../widgets/video_manager.dart';
+import '../videos/video_manager.dart';
 import '../screens/success_toast.dart';
 import 'user_controller.dart';
 import 'package:adfoot/services/app_logger.dart';
@@ -241,13 +241,16 @@ class VideoController extends GetxController {
       }
 
       final fetched = page.videos;
+      _releaseSettledLocalState(fetched);
 
       if (isRefresh) {
         _clearPendingLiveHead();
-        videoList.assignAll(fetched);
+        videoList.assignAll(hydrateAll(fetched));
       } else {
         final currentIds = videoList.map((v) => v.id).toSet();
-        videoList.addAll(fetched.where((v) => !currentIds.contains(v.id)));
+        videoList.addAll(
+          hydrateAll(fetched.where((v) => !currentIds.contains(v.id))),
+        );
       }
 
       if (videoList.isNotEmpty) {
@@ -283,6 +286,9 @@ class VideoController extends GetxController {
     try {
       await videoManager.disposeAllForContext(contextKey);
       _clearPendingLiveHead();
+      // A full refresh is a clean slate: nothing local outlives it, pending
+      // or not.
+      _localVideoState.clear();
       _lastCursor = null;
       _hasMore = true;
       currentIndex.value = -1;
@@ -308,6 +314,7 @@ class VideoController extends GetxController {
     try {
       final page = await _videoRepository.fetchReadyVideosPage(limit: _limit);
       final fetched = page.videos;
+      _releaseSettledLocalState(fetched);
 
       await videoManager.disposeAllForContext(contextKey);
       _clearPendingLiveHead();
@@ -320,7 +327,7 @@ class VideoController extends GetxController {
         return false;
       }
 
-      videoList.assignAll(fetched);
+      videoList.assignAll(hydrateAll(fetched));
       currentIndex.value = 0;
       _prefetchThumbnailsAround(0);
       return true;
@@ -337,16 +344,6 @@ class VideoController extends GetxController {
   }
 
   Future<void> pauseAll() => videoManager.pauseAll(contextKey);
-
-  bool updateCurrentIndex(int index) {
-    final previousIndex = currentIndex.value;
-    currentIndex.value = index;
-
-    return enableLiveStream &&
-        previousIndex > 0 &&
-        index == 0 &&
-        hasPendingLiveVideos;
-  }
 
   int applyBufferedLiveVideos({bool moveToTop = false}) {
     if (_pendingLiveHead.isEmpty) {
@@ -380,14 +377,42 @@ class VideoController extends GetxController {
   }
 
   void prefetchThumbnailsAroundIndex(int index) {
-    if (videoList.isEmpty) return;
-    if (index < 0 || index >= videoList.length) return;
-    _prefetchThumbnailsAround(index);
+    prefetchThumbnailsFor(videoList, index);
+  }
+
+  /// Warms the thumbnails around [centerIndex] of the list actually on screen.
+  ///
+  /// [prefetchThumbnailsAroundIndex] indexes into [videoList], which is only
+  /// the right list for the main feed. A search result set and a profile's
+  /// videos are different lists of different objects, so pointing the old
+  /// method at them either warmed the wrong thumbnails or — as the home
+  /// feed's search branch concluded — had to be skipped entirely, and those
+  /// surfaces got no prefetching at all.
+  void prefetchThumbnailsFor(List<Video> videos, int centerIndex) {
+    if (videos.isEmpty) return;
+    if (centerIndex < 0 || centerIndex >= videos.length) return;
+    _prefetchThumbnailsAround(centerIndex, videos: videos);
+  }
+
+  /// Whether reaching [index] should surface the buffered live videos.
+  ///
+  /// Split out of `updateCurrentIndex` so the pager can own the index and the
+  /// host can still answer this question: the answer depends on where the
+  /// user came *from*, which is lost the moment the index is written.
+  bool shouldSurfacePendingLiveAt({
+    required int previousIndex,
+    required int index,
+  }) {
+    return enableLiveStream &&
+        previousIndex > 0 &&
+        index == 0 &&
+        hasPendingLiveVideos;
   }
 
   void replaceVideos(List<Video> videos, {int? selectedIndex}) {
     _clearPendingLiveHead();
-    videoList.assignAll(videos);
+    _releaseSettledLocalState(videos);
+    videoList.assignAll(hydrateAll(videos));
 
     if (videos.isEmpty) {
       currentIndex.value = -1;
@@ -405,7 +430,16 @@ class VideoController extends GetxController {
   // ACTIONS VIA CLOUD FUNCTIONS
   // ------------------------------------------------------------------
 
-  Future<ActionResponse> likeVideo(String videoId, String userId) async {
+  // Les actions prennent la vidéo, plus son identifiant seul.
+  //
+  // Une vidéo affichée n'est pas forcément dans `videoList` : les résultats de
+  // recherche et les vidéos d'un profil sont des instances distinctes du même
+  // document. Chercher par identifiant dans `videoList` faisait donc échouer
+  // silencieusement la mise à jour locale sur toutes ces surfaces — et, pour
+  // la suppression, empêchait même de libérer le lecteur natif de la vidéo
+  // supprimée, faute de retrouver son URL.
+  Future<ActionResponse> likeVideo(Video video, String userId) async {
+    final videoId = video.id;
     var response = await _callAction('likeVideo', {
       'videoId': videoId,
     }, offlineMessage: VideoUiStrings.likeOffline);
@@ -416,7 +450,7 @@ class VideoController extends GetxController {
 
     if (response.success) {
       final liked = response.data?['liked'] == true;
-      _applyLikeState(videoId, userId, liked);
+      _applyLikeState(video, userId, liked);
     } else {
       unawaited(
         _logActionFailure(
@@ -433,7 +467,8 @@ class VideoController extends GetxController {
     return response;
   }
 
-  Future<ActionResponse> signalerVideo(String videoId, String userId) async {
+  Future<ActionResponse> signalerVideo(Video video, String userId) async {
+    final videoId = video.id;
     var response = await _callAction('reportVideo', {
       'videoId': videoId,
     }, offlineMessage: VideoUiStrings.reportOffline);
@@ -449,7 +484,7 @@ class VideoController extends GetxController {
     final resolved = response.copyWith(toast: toastLevel);
 
     if (resolved.success) {
-      _applyReportState(videoId, userId, resolved.data?['reportCount'] as int?);
+      _applyReportState(video, userId, resolved.data?['reportCount'] as int?);
     } else {
       unawaited(
         _logActionFailure(
@@ -465,20 +500,23 @@ class VideoController extends GetxController {
     return resolved;
   }
 
-  Future<ActionResponse> deleteVideo(String videoId) async {
+  Future<ActionResponse> deleteVideo(Video video) async {
+    final videoId = video.id;
     final response = await _callAction('deleteVideo', {
       'videoId': videoId,
     }, offlineMessage: VideoUiStrings.deleteOffline);
 
     if (response.success) {
+      _localVideoState.remove(videoId);
       final removedIndex = videoList.indexWhere((v) => v.id == videoId);
-      final removedUrl = removedIndex != -1
-          ? videoList[removedIndex].videoUrl
-          : null;
+      // L'URL vient de la vidéo supprimée, pas d'une recherche dans la liste :
+      // depuis une recherche ou un profil, elle n'y est pas, et le lecteur
+      // natif restait alors alloué sur une vidéo qui n'existe plus.
+      final removedUrl = video.videoUrl;
 
       await videoManager.pauseAll(contextKey);
 
-      if (removedUrl != null && removedUrl.isNotEmpty) {
+      if (removedUrl.isNotEmpty) {
         await videoManager.disposeUrls(contextKey, [removedUrl]);
       }
 
@@ -516,7 +554,8 @@ class VideoController extends GetxController {
   // SHARE (Function + anti-spam)
   // ------------------------------------------------------------------
 
-  Future<ActionResponse> partagerVideo(String videoId) async {
+  Future<ActionResponse> partagerVideo(Video video) async {
+    final videoId = video.id;
     var response = await _callAction('shareVideo', {
       'videoId': videoId,
     }, offlineMessage: VideoUiStrings.shareOffline);
@@ -530,7 +569,7 @@ class VideoController extends GetxController {
         : response;
 
     if (resolved.success) {
-      _applyShareState(videoId, resolved.data?['shareCount'] as int?);
+      _applyShareState(video, resolved.data?['shareCount'] as int?);
     } else if (resolved.code != 'resource-exhausted') {
       unawaited(
         _logActionFailure(
@@ -601,43 +640,106 @@ class VideoController extends GetxController {
     return response;
   }
 
-  void _applyLikeState(String videoId, String userId, bool liked) {
-    final idx = videoList.indexWhere((v) => v.id == videoId);
-    if (idx == -1) return;
+  // ------------------------------------------------------------------
+  // LOCAL VIDEO STATE — the single writer
+  // ------------------------------------------------------------------
 
-    final video = videoList[idx];
-    video.likes.remove(userId);
-    if (liked) video.likes.add(userId);
+  /// Local state for videos this controller has acted on, keyed by video id.
+  ///
+  /// Keyed by id, and not simply written onto the object, because the same
+  /// document is a *different instance* on every surface: the feed builds one
+  /// from its snapshot, the search builds another from its own query, the
+  /// profile a third. In-place mutation only ever reached the instance the
+  /// caller happened to be holding, so liking a video in the search results
+  /// left the feed's copy of it untouched — and the reverse.
+  ///
+  /// [_LocalVideoState.pending] is what keeps an optimistic update on screen.
+  /// The live Firestore stream pushes a batch whenever *any* video document
+  /// changes, so without it a like would visibly snap back to the old count
+  /// on the next unrelated snapshot, then jump forward again when the
+  /// callable's own write finally arrived.
+  final Map<String, _LocalVideoState> _localVideoState =
+      <String, _LocalVideoState>{};
 
-    videoList[idx] = video;
+  /// The video as it should be shown: the server's document, plus whatever
+  /// local state this controller holds for it.
+  ///
+  /// Call it on any list this controller does not own — search results,
+  /// a profile's videos. Entries of [videoList] are already up to date.
+  Video hydrate(Video video) => _localVideoState[video.id]?.video ?? video;
+
+  List<Video> hydrateAll(Iterable<Video> videos) => [
+    for (final video in videos) hydrate(video),
+  ];
+
+  /// Produces and publishes a new state for [video].
+  ///
+  /// The only place a video's social state changes. [pending] marks an
+  /// optimistic value that must survive incoming snapshots until the server
+  /// has spoken; a settled value yields to the next server document.
+  Video applyLocalVideoState(
+    Video video,
+    Video Function(Video current) update, {
+    required bool pending,
+  }) {
+    final current = _localVideoState[video.id]?.video ?? video;
+    final next = update(current);
+
+    _localVideoState[video.id] = _LocalVideoState(
+      video: next,
+      pending: pending,
+    );
+
+    final idx = videoList.indexWhere((item) => item.id == video.id);
+    if (idx != -1) {
+      videoList[idx] = next;
+    }
     videoList.refresh();
+
+    return next;
   }
 
-  void _applyReportState(String videoId, String userId, int? reportCount) {
-    final idx = videoList.indexWhere((v) => v.id == videoId);
-    if (idx == -1) return;
+  /// Forgets local state for videos the server has just spoken about.
+  ///
+  /// A settled value has no claim over a fresh document; a pending one does,
+  /// until its action reports back.
+  void _releaseSettledLocalState(Iterable<Video> incoming) {
+    if (_localVideoState.isEmpty) return;
 
-    final video = videoList[idx];
-    if (!video.reports.contains(userId)) {
-      video.reports.add(userId);
+    for (final video in incoming) {
+      final local = _localVideoState[video.id];
+      if (local != null && !local.pending) {
+        _localVideoState.remove(video.id);
+      }
     }
-    if (reportCount != null) {
-      video.reportCount = reportCount;
-    }
-
-    videoList[idx] = video;
-    videoList.refresh();
   }
 
-  void _applyShareState(String videoId, int? shareCount) {
-    final idx = videoList.indexWhere((v) => v.id == videoId);
-    if (idx == -1) return;
+  @visibleForTesting
+  bool hasPendingLocalStateForTests(String videoId) =>
+      _localVideoState[videoId]?.pending ?? false;
 
-    final video = videoList[idx];
-    video.shareCount = shareCount ?? (video.shareCount + 1);
+  void _applyLikeState(Video video, String userId, bool liked) {
+    applyLocalVideoState(
+      video,
+      (current) => current.withLike(userId, liked: liked),
+      pending: false,
+    );
+  }
 
-    videoList[idx] = video;
-    videoList.refresh();
+  void _applyReportState(Video video, String userId, int? reportCount) {
+    applyLocalVideoState(
+      video,
+      (current) => current.withReport(userId, reportCount: reportCount),
+      pending: false,
+    );
+  }
+
+  void _applyShareState(Video video, int? shareCount) {
+    applyLocalVideoState(
+      video,
+      (current) => current.withShare(shareCount: shareCount),
+      pending: false,
+    );
   }
 
   void _restoreFromStreamSoon(String videoId) {
@@ -664,21 +766,28 @@ class VideoController extends GetxController {
   }
 
   List<Video> _applyLiveWindow(List<Video> incoming) {
+    _releaseSettledLocalState(incoming);
+
     final existing = videoList.toList();
     if (existing.isEmpty) {
       _clearPendingLiveHead();
       if (currentIndex.value < 0 || currentIndex.value >= incoming.length) {
         currentIndex.value = 0;
       }
-      videoList.assignAll(incoming);
-      return incoming;
+      final hydrated = hydrateAll(incoming);
+      videoList.assignAll(hydrated);
+      return hydrated;
     }
 
     final existingIds = existing.map((video) => video.id).toSet();
     final incomingById = {for (final video in incoming) video.id: video};
 
+    // hydrate() is what keeps an optimistic like on screen: this batch fires
+    // whenever *any* video document changes, so an unrelated snapshot would
+    // otherwise replace the entry the user just tapped with its pre-tap
+    // counters, and the heart would visibly flip back and forth.
     final stableFeed = [
-      for (final video in existing) incomingById[video.id] ?? video,
+      for (final video in existing) hydrate(incomingById[video.id] ?? video),
     ];
 
     final nextPendingHead = _buildPendingLiveHead(
@@ -785,18 +894,19 @@ class VideoController extends GetxController {
     _thumbnailPrefetched.clear();
   }
 
-  void _prefetchThumbnailsAround(int centerIndex) {
-    if (videoList.isEmpty) return;
+  void _prefetchThumbnailsAround(int centerIndex, {List<Video>? videos}) {
+    final source = videos ?? videoList;
+    if (source.isEmpty) return;
 
     final start = (centerIndex - _thumbnailPrefetchRadius)
-        .clamp(0, videoList.length - 1)
+        .clamp(0, source.length - 1)
         .toInt();
     final end = (centerIndex + _thumbnailPrefetchRadius)
-        .clamp(0, videoList.length - 1)
+        .clamp(0, source.length - 1)
         .toInt();
 
     for (int i = start; i <= end; i++) {
-      final thumbUrl = videoList[i].thumbnailUrl.trim();
+      final thumbUrl = source[i].thumbnailUrl.trim();
       if (_shouldSkipThumbnailPrefetch(thumbUrl)) {
         continue;
       }
@@ -839,4 +949,17 @@ class VideoController extends GetxController {
       _thumbnailPrefetchInFlight.remove(thumbUrl);
     }
   }
+}
+
+/// One video's locally-held social state.
+///
+/// [pending] separates "the user just tapped this and the server has not
+/// answered yet" from "the server answered and this is what it said". Only
+/// the first survives an incoming snapshot; the second yields to it, which is
+/// what stops local state from outliving the truth.
+class _LocalVideoState {
+  const _LocalVideoState({required this.video, required this.pending});
+
+  final Video video;
+  final bool pending;
 }

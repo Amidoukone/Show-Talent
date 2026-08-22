@@ -12,9 +12,12 @@ import 'package:adfoot/controller/upload_video_controller.dart';
 import 'upload_form.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
+import 'package:adfoot/utils/adfoot_support.dart';
+import 'package:adfoot/utils/video_publication_quota.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'success_toast.dart';
@@ -33,9 +36,55 @@ class _AddVideoState extends State<AddVideo> {
   final ImagePicker _picker = ImagePicker();
   final RxBool isLoading = false.obs;
 
+  /// Explains that the account is at its publication cap, and offers the only
+  /// action that actually lifts it.
+  ///
+  /// The server already refuses the upload, but it refuses it at
+  /// `createUploadSession` — after the clip has been chosen, trimmed and
+  /// thumbnailed — with "Archivez une video avant d'en ajouter une nouvelle",
+  /// an instruction this application offers no way to follow. Both problems
+  /// are answered here: the refusal arrives before any work, and it points at
+  /// the agency.
+  Future<void> _showPublicationQuotaNotice() async {
+    final wantsContact = await AdDialogs.confirm(
+      context: context,
+      title: VideoUiStrings.uploadQuotaReachedTitle,
+      message: VideoUiStrings.uploadQuotaReachedMessage(
+        VideoPublicationQuota.maxPublishedVideos,
+      ),
+      confirmLabel: VideoUiStrings.uploadQuotaContactAction,
+      cancelLabel: VideoUiStrings.uploadQuotaDismissAction,
+    );
+
+    if (!wantsContact) return;
+
+    final opened = await AdfootSupport.openWhatsApp();
+    if (opened || !mounted) return;
+
+    AdFeedback.info(
+      VideoUiStrings.uploadQuotaReachedTitle,
+      VideoUiStrings.uploadQuotaContactFallback(
+        AdfootSupport.phoneDisplay,
+        AdfootSupport.website,
+      ),
+      duration: const Duration(seconds: 6),
+    );
+  }
+
   Future<void> _pickVideoFromGallery() async {
     try {
       isLoading.value = true;
+
+      final quota = await uploadVideoController.checkPublicationQuota();
+      if (!mounted) {
+        isLoading.value = false;
+        return;
+      }
+      if (quota == VideoPublicationQuotaState.exhausted) {
+        isLoading.value = false;
+        await _showPublicationQuotaNotice();
+        return;
+      }
 
       // Galerie uniquement (caméra désactivée)
       final pickedFile = await _picker.pickVideo(source: ImageSource.gallery);

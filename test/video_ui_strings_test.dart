@@ -54,7 +54,9 @@ void main() {
   });
 
   test('video action and empty-state copy is centralized', () {
-    expect(VideoUiStrings.emptyVideoFeedTitle, contains('vidéo'));
+    // `emptyVideoFeedTitle` est parti avec `video_feed_screen.dart`, son seul
+    // lecteur. Les deux feeds atteignables ont chacun leur formulation.
+    expect(VideoUiStrings.emptyProfileVideoFeedTitle, contains('vidéo'));
     expect(VideoUiStrings.emptyHomeVideoFeedTitle, contains('vidéo'));
     expect(
       VideoUiStrings.emptyHomeVideoFeedPlayerMessage,

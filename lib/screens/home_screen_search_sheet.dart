@@ -281,10 +281,23 @@ class _VideoSearchResultTile extends StatelessWidget {
                             color: AdColors.brand,
                           ),
                         )
-                      : Image.network(
-                          video.thumbnailUrl.trim(),
+                      // Le même magasin que le préchargement du contrôleur :
+                      // `Image.network` n'a aucun cache disque et
+                      // retéléchargeait chaque miniature à chaque défilement,
+                      // puis encore après chaque redémarrage.
+                      : CachedNetworkImage(
+                          imageUrl: video.thumbnailUrl.trim(),
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => const ColoredBox(
+                          fadeInDuration: Duration.zero,
+                          fadeOutDuration: Duration.zero,
+                          placeholder: (_, _) => const ColoredBox(
+                            color: AdColors.surface,
+                            child: Icon(
+                              Icons.play_arrow_rounded,
+                              color: AdColors.brand,
+                            ),
+                          ),
+                          errorWidget: (_, _, _) => const ColoredBox(
                             color: AdColors.surface,
                             child: Icon(
                               Icons.play_arrow_rounded,

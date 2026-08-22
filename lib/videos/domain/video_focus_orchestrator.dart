@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:adfoot/models/video.dart';
-import 'package:adfoot/widgets/video_manager.dart';
+import 'package:adfoot/videos/video_manager.dart';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 
 class VideoFocusOrchestrator {
@@ -11,6 +11,8 @@ class VideoFocusOrchestrator {
     required List<Video> videos,
     this.onRequestMore,
     this.disposeWindow = 25,
+    this.settleDelay = const Duration(milliseconds: 120),
+    this.now = DateTime.now,
   }) : _videos = List.of(videos);
 
   final String contextKey;
@@ -18,10 +20,31 @@ class VideoFocusOrchestrator {
   final Future<void> Function()? onRequestMore;
   final int disposeWindow;
 
+  /// How long a focus request that lands on the heels of another one waits to
+  /// see whether the user is still moving.
+  ///
+  /// A vertical `PageView` reports every page a fling crosses, not just the
+  /// one it lands on, and each report opened a controller: six pages flicked
+  /// past meant six network streams and six native players started for videos
+  /// nobody would watch — all of them competing for bandwidth and for the
+  /// device's decoder instances with the one video that was about to be on
+  /// screen. The request token already discarded their *results*; nothing
+  /// stopped them being started.
+  ///
+  /// 120 ms is shorter than any deliberate swipe and longer than the gap
+  /// between the page reports of a single fling, so a normal scroll is
+  /// untouched and a fling collapses to the page it settles on.
+  final Duration settleDelay;
+
+  /// Injectable clock, so the settle window can be exercised in tests without
+  /// making them wait on wall time.
+  final DateTime Function() now;
+
   List<Video> _videos;
   bool _isDisposed = false;
   int _requestToken = 0;
   int? _lastFocusedIndex;
+  DateTime? _lastRequestAt;
 
   void updateVideos(List<Video> videos) {
     _videos = List.of(videos);
@@ -32,6 +55,22 @@ class VideoFocusOrchestrator {
     if (index < 0 || index >= _videos.length) return null;
 
     final localToken = ++_requestToken;
+
+    // Only a request arriving on the heels of another one waits. A deliberate
+    // swipe, and the first activation of a freshly opened feed, pay nothing.
+    final previousRequestAt = _lastRequestAt;
+    final requestedAt = now();
+    _lastRequestAt = requestedAt;
+    if (shouldWaitForScrollToSettle(
+      previousRequestAt: previousRequestAt,
+      requestedAt: requestedAt,
+    )) {
+      await Future<void>.delayed(settleDelay);
+      if (_isStale(localToken)) return null;
+      // The feed can shrink under us while we wait (a delete, a refresh).
+      if (index >= _videos.length) return null;
+    }
+
     final currentVideo = _videos[index];
     final currentUrl = currentVideo.videoUrl;
     final preferForwardPreload =
@@ -123,6 +162,24 @@ class VideoFocusOrchestrator {
     _requestToken++;
     await videoManager.pauseAll(contextKey);
     await videoManager.disposeAllForContext(contextKey);
+  }
+
+  /// Whether this focus request should hold back and see where the scroll
+  /// lands.
+  ///
+  /// Only a request that arrives inside [settleDelay] of the previous one
+  /// waits, which is what separates a fling — many page reports in quick
+  /// succession — from a deliberate swipe. The first request of a freshly
+  /// opened feed has no predecessor and never waits, so cold start is
+  /// untouched.
+  bool shouldWaitForScrollToSettle({
+    required DateTime? previousRequestAt,
+    required DateTime requestedAt,
+  }) {
+    if (settleDelay <= Duration.zero || previousRequestAt == null) {
+      return false;
+    }
+    return requestedAt.difference(previousRequestAt) < settleDelay;
   }
 
   bool _isStale(int token) => _isDisposed || token != _requestToken;

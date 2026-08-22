@@ -13,14 +13,21 @@ class VideoActionService {
   VideoActionService({
     FirebaseFunctions? functions,
     Connectivity? connectivity,
-  })  : _functions = functions ??
-            FirebaseFunctions.instanceFor(
-              region: AppEnvironmentConfig.functionsRegion,
-            ),
-        _connectivity = connectivity ?? Connectivity();
+  })  : _injectedFunctions = functions,
+        _injectedConnectivity = connectivity;
 
-  final FirebaseFunctions _functions;
-  final Connectivity _connectivity;
+  // Même raison que dans VideoRepository : `FirebaseFunctions.instanceFor`
+  // lève sans app Firebase démarrée, et ce service est construit par défaut
+  // dans le constructeur de VideoController.
+  final FirebaseFunctions? _injectedFunctions;
+  final Connectivity? _injectedConnectivity;
+
+  FirebaseFunctions get _functions =>
+      _injectedFunctions ??
+      FirebaseFunctions.instanceFor(
+        region: AppEnvironmentConfig.functionsRegion,
+      );
+  Connectivity get _connectivity => _injectedConnectivity ?? Connectivity();
 
   /// Ceiling on one user-visible action (like, share, report, delete).
   ///
