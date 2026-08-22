@@ -192,8 +192,13 @@ class NetworkProfileService {
   NetworkProfileTier _baselineTier(ConnectivityResult result) {
     switch (result) {
       case ConnectivityResult.ethernet:
-      case ConnectivityResult.wifi:
         return NetworkProfileTier.high;
+      // Wi-Fi is a transport, not a speed. This baseline is only used when the
+      // throughput probe fails -- exactly the situation where the connection
+      // is least likely to sustain a 9 Mb/s asset -- and calling it `high`
+      // there asks for the heaviest rendition on the flimsiest evidence
+      // available. `medium` still plays; it just plays the lighter source.
+      case ConnectivityResult.wifi:
       case ConnectivityResult.mobile:
       case ConnectivityResult.vpn:
         return NetworkProfileTier.medium;
@@ -238,9 +243,31 @@ class NetworkProfileService {
     }
   }
 
+  /// Thresholds are a statement about what the *top rendition costs*, not
+  /// about what feels fast.
+  ///
+  /// `high` is the only tier that asks for the heaviest source
+  /// (`VideoSourceSelector._bestAtLeast(700)`); every other tier asks for
+  /// `_bestAtMost(540)`. So "high" has to mean "can actually pull the biggest
+  /// file we serve", and the biggest file we serve is no longer a 720p at
+  /// ~2 Mb/s. adfoot-production on 2026-08-21 held 1080p passthrough assets at
+  /// 5.17 and 9.66 Mb/s.
+  ///
+  /// At the old 1500 kbps a connection measuring 1.5 Mb/s was called `high`
+  /// and handed a 9.66 Mb/s file — a six-fold mismatch. Every one of the eight
+  /// playback sessions logged that day was tier `high`, and the 1080p ones
+  /// came back at 103% rebuffer rate with 0% completion while the 720p ones
+  /// sat at 0.04%. The tier was not describing the network, it was describing
+  /// the era when the ceiling was 720p.
+  ///
+  /// This is still a coarse proxy. The honest version compares the measured
+  /// throughput against each source's own declared `bitrate`, which the
+  /// backend now writes on every rendition — worth doing, but it changes the
+  /// selector's signature and its pinned tests, so it is not a release-eve
+  /// change.
   NetworkProfileTier _tierFromThroughput(double kbps) {
-    if (kbps >= 1500) return NetworkProfileTier.high;
-    if (kbps >= 700) return NetworkProfileTier.medium;
+    if (kbps >= 6000) return NetworkProfileTier.high;
+    if (kbps >= 2000) return NetworkProfileTier.medium;
     return NetworkProfileTier.low;
   }
 
