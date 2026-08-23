@@ -148,7 +148,13 @@ void main() {
     // The budget is the structural version: `_maxActive` is per context, and
     // the device's decoder pool is not.
     test('the budget is app-wide, not per context', () {
-      expect(manager, contains('static const int _globalMaxActive = 8;'));
+      // Four, not the eight this test first pinned. Eight was chosen to
+      // match the largest per-context budget so a single feed would never be
+      // constrained -- and on 2026-08-23 the same MediaCodec error came back
+      // on a *preload*, with the budget in place and only the home feed open.
+      // The ceiling belongs where the hardware is, not where the software
+      // would prefer it.
+      expect(manager, contains('static const int _globalMaxActive = 4;'));
       expect(manager, contains('int get _totalActiveControllers =>'));
       expect(manager, contains('await _enforceGlobalLimit(contextKey,'));
 
@@ -215,16 +221,18 @@ void main() {
     test('a deferred preload carries the context it was scheduled with', () {
       final scheduler = _read('lib/videos/domain/video_preload_scheduler.dart');
 
+      expect(scheduler, contains('String contextKey,'));
+      expect(scheduler, contains('required bool warmFileOnly,'));
       expect(
         scheduler,
-        contains(
-          'Future<void> Function(String contextKey, Video video, '
-          '{String? activeUrl})',
-        ),
+        contains('await preload('),
+        reason: 'the context must travel with the call, not be read from '
+            'shared state after the delay',
       );
+      final call = scheduler.indexOf('await preload(');
       expect(
-        scheduler,
-        contains('await preload(contextKey, video, activeUrl: activeUrl);'),
+        scheduler.substring(call, call + 160),
+        contains('contextKey,'),
       );
     });
   });

@@ -4,8 +4,23 @@ import 'package:adfoot/models/video.dart';
 import 'package:adfoot/services/app_logger.dart';
 
 /// Starts one neighbour's preload. Supplied by `VideoManager`.
+///
+/// `warmFileOnly` is the difference between putting the bytes on disk and
+/// opening a hardware decoder for them. Every neighbour used to do both:
+/// a radius of 3 meant six extra `MediaCodec` instances alive at once for
+/// videos nobody was watching yet, and adfoot-production recorded the result
+/// on 2026-08-23 — `MediaCodecVideoRenderer error ... format_supported=YES`
+/// on a 1080p preload, twice in three seconds. The device could decode the
+/// format; it had no instance left to decode it with.
+///
+/// Only the neighbour the user is about to reach earns a player.
 typedef PreloadVideo =
-    Future<void> Function(String contextKey, Video video, {String? activeUrl});
+    Future<void> Function(
+      String contextKey,
+      Video video, {
+      String? activeUrl,
+      required bool warmFileOnly,
+    });
 
 /// Decides which neighbours to warm, in what order, and how far apart.
 ///
@@ -67,6 +82,9 @@ class VideoPreloadScheduler {
           requestToken: token,
           delay: delayForPosition(position),
           activeUrl: activeUrl,
+          // Only the nearest neighbour is worth a native player. See
+          // [PreloadVideo].
+          warmFileOnly: position > 0,
         ),
       );
       position++;
@@ -83,6 +101,7 @@ class VideoPreloadScheduler {
     required Video video,
     required int requestToken,
     required Duration delay,
+    required bool warmFileOnly,
     String? activeUrl,
   }) async {
     if (delay > Duration.zero) {
@@ -93,7 +112,12 @@ class VideoPreloadScheduler {
     if (_requestTokensByContext[contextKey] != requestToken) return;
 
     try {
-      await preload(contextKey, video, activeUrl: activeUrl);
+      await preload(
+        contextKey,
+        video,
+        activeUrl: activeUrl,
+        warmFileOnly: warmFileOnly,
+      );
     } catch (error) {
       AppLogger.debug(
         '[VideoPreloadScheduler] Preload skipped for ${video.videoUrl}: $error',

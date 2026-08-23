@@ -7,7 +7,6 @@ class _VideoActionConfirmationSheet extends StatelessWidget {
     required this.message,
     required this.badgeLabel,
     required this.primaryLabel,
-    required this.secondaryLabel,
     required this.toneColor,
     required this.primaryForegroundColor,
     required this.onConfirm,
@@ -18,24 +17,30 @@ class _VideoActionConfirmationSheet extends StatelessWidget {
   final String message;
   final String badgeLabel;
   final String primaryLabel;
-  final String secondaryLabel;
   final Color toneColor;
   final Color primaryForegroundColor;
   final Future<void> Function() onConfirm;
 
   @override
   Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.43,
-      minChildSize: 0.34,
-      maxChildSize: 0.72,
-      expand: false,
-      builder: (context, scrollController) {
-        return Align(
-          alignment: Alignment.bottomCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 540),
-            child: DecoratedBox(
+    // Sized by its content, not by a fraction of the screen.
+    //
+    // This was a DraggableScrollableSheet opening at 43% of the viewport,
+    // with the buttons as the last children of a scroll view. On a phone the
+    // content is taller than that, so the confirm button sat at the very edge
+    // and anything below it was off-screen until the sheet was dragged up —
+    // which is not a gesture anyone makes when a sheet already looks complete.
+    // A confirmation whose actions cannot be reached is worse than no
+    // confirmation at all.
+    final maxHeight = MediaQuery.of(context).size.height * 0.8;
+
+    return Align(
+      alignment: Alignment.bottomCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 540, maxHeight: maxHeight),
+        child: Builder(
+          builder: (context) {
+            return DecoratedBox(
               decoration: BoxDecoration(
                 color: AdColors.surfaceCard,
                 borderRadius: const BorderRadius.vertical(
@@ -47,7 +52,6 @@ class _VideoActionConfirmationSheet extends StatelessWidget {
               child: SafeArea(
                 top: false,
                 child: SingleChildScrollView(
-                  controller: scrollController,
                   padding: const EdgeInsets.fromLTRB(
                     AdSpacing.xl,
                     AdSpacing.md,
@@ -147,32 +151,15 @@ class _VideoActionConfirmationSheet extends StatelessWidget {
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        const SizedBox(height: AdSpacing.sm),
-                        OutlinedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            foregroundColor: AdColors.onSurface,
-                            side: const BorderSide(color: AdColors.divider),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AdRadius.md),
-                            ),
-                            textStyle: const TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                            ),
-                          ),
-                          child: Text(secondaryLabel),
-                        ),
                       ],
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
   }
 }

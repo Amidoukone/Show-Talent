@@ -174,9 +174,13 @@ class VideoNetworkTuningController {
 
   static VideoNetworkTuning _tuningFor(NetworkProfileTier tier) {
     switch (tier) {
+      // maxActive counts *players*, and a player is a hardware decoder.
+      // Since a preload past the nearest neighbour now warms the file without
+      // opening one, these numbers no longer have to cover the whole preload
+      // radius -- the radius costs downloads, this costs decoders.
       case NetworkProfileTier.high:
         return const VideoNetworkTuning(
-          maxActive: 8,
+          maxActive: 4,
           maxConcurrentInits: 3,
           preloadRadius: 3,
           preloadTimeout: Duration(seconds: 8),
@@ -184,7 +188,7 @@ class VideoNetworkTuningController {
         );
       case NetworkProfileTier.medium:
         return const VideoNetworkTuning(
-          maxActive: 6,
+          maxActive: 3,
           maxConcurrentInits: 2,
           preloadRadius: 2,
           preloadTimeout: Duration(seconds: 10),
@@ -192,7 +196,7 @@ class VideoNetworkTuningController {
         );
       case NetworkProfileTier.low:
         return const VideoNetworkTuning(
-          maxActive: 4,
+          maxActive: 2,
           maxConcurrentInits: 1,
           preloadRadius: 0,
           preloadTimeout: Duration(seconds: 12),

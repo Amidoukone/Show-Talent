@@ -196,6 +196,91 @@ void main() {
     });
   });
 
+  // Reported after the 1.0.7+22 build: every tile spinning with no playback
+  // after adding a video, a slow first launch, videos apparently out of order,
+  // and the profile feed dying outright. One cause underneath all four.
+  group('a focus request is never lost', () {
+    late String pager;
+
+    setUpAll(() {
+      pager = _read('lib/widgets/video_feed_pager.dart');
+    });
+
+    // The hosts ask for an index from a post-frame callback; the pager is
+    // only built on the frame after that, so `_state` was still null and the
+    // request evaporated. Nothing focused, no controller attached, every tile
+    // spinning — while `videoController.currentIndex` named a page the user
+    // was not on, so the visible tile believed it was not the active one and
+    // refused to play. That mismatch is what looked like "wrong order".
+    test('an index asked for before the pager exists is replayed', () {
+      expect(pager, contains('int? _pendingIndex;'));
+
+      final attach = pager.indexOf('void _attach(_VideoFeedPagerState state)');
+      expect(attach, isNonNegative);
+      final body = pager.substring(attach, attach + 400);
+      expect(body, contains('state._jumpToPage(pending)'));
+      expect(body, contains('unawaited(state._focus(pending))'));
+
+      for (final method in ['void jumpToPage(int index)',
+                            'Future<void> activate(int index)']) {
+        final start = pager.indexOf(method);
+        expect(start, isNonNegative, reason: method);
+        expect(
+          pager.substring(start, start + 260),
+          contains('_pendingIndex = index;'),
+          reason: '$method must not be a silent no-op',
+        );
+      }
+    });
+
+    // Each of the three screens used to do this from its own initState. When
+    // the page view moved into the pager, the profile feed lost it entirely
+    // and opened on a video that never initialised.
+    test('the pager focuses what it opened on', () {
+      final initState = pager.indexOf('void initState()');
+      expect(initState, isNonNegative);
+      final body = pager.substring(
+        initState,
+        pager.indexOf('void didUpdateWidget', initState),
+      );
+
+      expect(body, contains('addPostFrameCallback'));
+      expect(body, contains('unawaited(_focus(_currentIndex))'));
+    });
+  });
+
+  group('a preload warms bytes, not a decoder', () {
+    // adfoot-production, 2026-08-23 01:43:14 and 01:43:17:
+    //   MediaCodecVideoRenderer error ... format_supported=YES
+    // on `isPreload: true`, 1080p. The device could decode the format; every
+    // instance was taken. A radius of 3 meant six extra hardware decoders
+    // alive for videos nobody was watching.
+    test('only the nearest neighbour gets a player', () {
+      final scheduler = _read('lib/videos/domain/video_preload_scheduler.dart');
+      final manager = _read('lib/videos/video_manager.dart');
+
+      expect(scheduler, contains('required bool warmFileOnly'));
+      expect(scheduler, contains('warmFileOnly: position > 0'));
+      expect(manager, contains('Future<void> warmVideoFile(Video video)'));
+
+      final callback = manager.indexOf('preload: (contextKey, video,');
+      expect(callback, isNonNegative);
+      final body = manager.substring(callback, callback + 420);
+      expect(body, contains('if (warmFileOnly)'));
+      expect(body, contains('return warmVideoFile(video);'));
+    });
+
+    // The ceiling has to sit where the hardware sits. Eight was chosen to
+    // match the largest per-context budget, and the error came back anyway
+    // with only the home feed open.
+    test('the decoder budget is the hardware budget', () {
+      expect(
+        _read('lib/videos/video_manager.dart'),
+        contains('static const int _globalMaxActive = 4;'),
+      );
+    });
+  });
+
   group('one owner per concern', () {
     late String pager;
     late String home;

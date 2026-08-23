@@ -65,7 +65,6 @@ class VideoUiStrings {
       'Cette vidéo sera retirée du feed et ne pourra plus '
       'être lue par les autres utilisateurs.';
   static const String deleteVideoPrimaryAction = 'Supprimer définitivement';
-  static const String deleteVideoSecondaryAction = 'Conserver la vidéo';
   static const String deleteVideoSemantic = 'Supprimer la vidéo';
   static const String cancel = 'Annuler';
 
@@ -83,7 +82,6 @@ class VideoUiStrings {
       'Notre équipe vérifiera cette vidéo. Le créateur '
       'ne verra pas ton identité.';
   static const String reportVideoPrimaryAction = 'Envoyer le signalement';
-  static const String reportVideoSecondaryAction = 'Continuer la lecture';
   static const String sensitiveActionWarning = 'Action sensible';
   static const String moderationReviewLabel = 'Revue modération';
   static const String moreVideoActions = 'Plus';

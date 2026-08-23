@@ -31,7 +31,33 @@ typedef VideoFeedIndexCallback = Future<void> Function(int index);
 class VideoFeedPagerController {
   _VideoFeedPagerState? _state;
 
-  void _attach(_VideoFeedPagerState state) => _state = state;
+  /// An index asked for while no pager was listening.
+  ///
+  /// Every one of these calls used to be a silent no-op when `_state` was
+  /// null, and null is the normal state at exactly the moments that matter:
+  /// the feed has just gone from empty to loaded, an upload has sent the app
+  /// back to the home route, a search has been cleared. The host asks for an
+  /// index from a post-frame callback, the pager is only built on the frame
+  /// after that, and the request vanished.
+  ///
+  /// What the user saw was every tile spinning forever: nothing had focused,
+  /// so no controller was ever attached — while `videoController.currentIndex`
+  /// said a different page was current, so the visible tile believed it was
+  /// not the active one and refused to play. Relaunching the app "fixed" it
+  /// because the first swipe went through `onPageChanged`, which never
+  /// depended on this.
+  int? _pendingIndex;
+
+  void _attach(_VideoFeedPagerState state) {
+    _state = state;
+
+    final pending = _pendingIndex;
+    _pendingIndex = null;
+    if (pending != null) {
+      state._jumpToPage(pending);
+      unawaited(state._focus(pending));
+    }
+  }
 
   void _detach(_VideoFeedPagerState state) {
     if (identical(_state, state)) _state = null;
@@ -39,18 +65,32 @@ class VideoFeedPagerController {
 
   bool get isAttached => _state != null;
 
-  int get currentIndex => _state?._currentIndex ?? 0;
+  int get currentIndex => _state?._currentIndex ?? _pendingIndex ?? 0;
 
   /// Moves to [index] without reporting it as a page change.
   ///
   /// A programmatic jump must not be mistaken for the user swiping: that
   /// double-fired the focus work and, on the home feed, could re-trigger the
   /// very "new videos at the top" flow that had just performed the jump.
-  void jumpToPage(int index) => _state?._jumpToPage(index);
+  void jumpToPage(int index) {
+    final state = _state;
+    if (state == null) {
+      _pendingIndex = index;
+      return;
+    }
+    state._jumpToPage(index);
+  }
 
   /// Focuses [index]: pauses the others, attaches its controller, preloads
   /// its neighbours.
-  Future<void> activate(int index) async => _state?._focus(index);
+  Future<void> activate(int index) async {
+    final state = _state;
+    if (state == null) {
+      _pendingIndex = index;
+      return;
+    }
+    await state._focus(index);
+  }
 }
 
 /// The one vertical video feed.
@@ -130,6 +170,14 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
     );
 
     widget.pagerController._attach(this);
+
+    // Focus what we opened on. The three screens each used to do this from
+    // their own initState; when the page view moved in here, the profile feed
+    // lost it entirely and opened on a video that never initialised.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_focus(_currentIndex));
+    });
   }
 
   @override

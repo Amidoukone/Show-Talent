@@ -81,14 +81,42 @@ class VideoManager {
 
   /// Which neighbours to warm, in what order, and how far apart.
   late final VideoPreloadScheduler _preloads = VideoPreloadScheduler(
-    preload: (contextKey, video, {activeUrl}) => initializeController(
-      contextKey,
-      video.videoUrl,
-      sources: video.sources,
-      isPreload: true,
-      activeUrl: activeUrl,
-    ),
+    preload: (contextKey, video, {activeUrl, required warmFileOnly}) {
+      if (warmFileOnly) {
+        return warmVideoFile(video);
+      }
+      return initializeController(
+        contextKey,
+        video.videoUrl,
+        sources: video.sources,
+        isPreload: true,
+        activeUrl: activeUrl,
+      );
+    },
   );
+
+  /// Puts a video's bytes on disk without opening a player for it.
+  ///
+  /// A cached file still makes the next swipe fast — the controller opens
+  /// from local storage instead of the network — but it costs no decoder,
+  /// which is the resource the device actually runs out of.
+  Future<void> warmVideoFile(Video video) async {
+    if (kIsWeb) return;
+
+    final source = VideoSourceSelector.preferredSource(
+      fallbackUrl: video.videoUrl,
+      sources: video.sources,
+      adaptiveEnabled: adaptiveSourcesEnabled,
+      highBandwidth: _isHighBandwidth,
+    );
+    final url = source?.url ?? video.videoUrl;
+    if (url.isEmpty) return;
+
+    final cached = await custom_cache.VideoCacheManager.getFileIfCached(url);
+    if (cached != null && await cached.exists()) return;
+
+    await _downloads.download(url);
+  }
 
 
   // ---------------------------------------------------------------------------
@@ -118,10 +146,18 @@ class VideoManager {
   /// out of instances to decode it with, in a `profile:<uid>` context opened
   /// on top of a `home` context that was still holding its own.
   ///
-  /// Set to the largest per-context budget, so one feed on its own is never
-  /// constrained by this. It only binds when a second context is alive, which
-  /// is precisely the situation that produced the error.
-  static const int _globalMaxActive = 8;
+  /// Four, not eight. Eight was chosen to match the largest per-context
+  /// budget so a single feed would never be constrained -- which turned out
+  /// to be the wrong instinct entirely: on 2026-08-23 the same error appeared
+  /// again on a *preload*, with the budget in place and only the home feed
+  /// open. The ceiling has to sit where the hardware sits, not where the
+  /// software would like it to.
+  ///
+  /// Now that a preload past the nearest neighbour warms the file without
+  /// opening a player, a feed needs two: the video being watched and the one
+  /// after it. Four leaves room for a second context -- a profile pushed over
+  /// the feed -- and nothing more.
+  static const int _globalMaxActive = 4;
 
   int _activeInits = 0;
 

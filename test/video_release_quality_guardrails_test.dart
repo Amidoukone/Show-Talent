@@ -420,10 +420,23 @@ void main() {
 
       expect(player, contains('showModalBottomSheet<void>'));
       expect(playerSurface, contains('_VideoActionConfirmationSheet'));
+      // La feuille de légende reste glissable — un long texte gagne à l'être.
+      // La feuille de confirmation, non : elle s'ouvrait à 43 % de la hauteur
+      // d'écran avec ses boutons en derniers enfants d'une zone défilante, et
+      // sur un téléphone le bouton secondaire tombait hors champ. Un
+      // utilisateur a signalé « Conserver » comme ne fonctionnant pas ; il
+      // était simplement inatteignable. Elle se dimensionne maintenant sur son
+      // contenu, et n'a plus qu'une seule action — annuler, c'est toucher
+      // hors de la feuille ou la faire glisser.
       expect(playerSurface, contains('DraggableScrollableSheet'));
       expect(playerSurface, contains('SafeArea('));
       expect(playerSurface, contains('FilledButton.icon'));
-      expect(playerSurface, contains('OutlinedButton'));
+      expect(
+        playerSurface,
+        isNot(contains('OutlinedButton')),
+        reason: 'une action de confirmation hors champ est pire qu\'aucune',
+      );
+      expect(playerSurface, isNot(contains('secondaryLabel')));
       expect(player, contains('VideoUiStrings.deleteVideoSheetMessage'));
       expect(player, contains('VideoUiStrings.reportVideoSheetMessage'));
       expect(playerSurface, isNot(contains('AlertDialog(')));
