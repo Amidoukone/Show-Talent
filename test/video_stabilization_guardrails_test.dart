@@ -338,6 +338,31 @@ void main() {
             'controller is already playing',
       );
     });
+
+    // `_scheduleMaybePlay` is reached through `ever(currentIndex)`, and the
+    // tile a feed opens on never sees that worker fire: the value is already
+    // the one it is waiting for. So the one session a cold start produces
+    // still began after `_attachOrInitialize` had finished — after the
+    // picture was on screen. Production kept reporting 0 ms with the fix in
+    // the build: every session up to 2026-08-23 01:43:27.
+    test('the tile a feed opens on starts its own clock', () {
+      final player = _read('lib/widgets/smart_video_player.dart');
+
+      final start = player.indexOf('void initState() {');
+      expect(start, isNonNegative);
+      final body = player.substring(
+        start,
+        player.indexOf('void dispose() {', start),
+      );
+
+      expect(body, contains('final isOpeningTile ='));
+      expect(body, contains('if (isOpeningTile) {'));
+      expect(
+        body.indexOf('_ensurePlaybackSession();'),
+        lessThan(body.indexOf('unawaited(_attachOrInitialize());')),
+        reason: 'the clock starts before the work it is measuring',
+      );
+    });
   });
 
   group('the controls describe the controller they are attached to', () {

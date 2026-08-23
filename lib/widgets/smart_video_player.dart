@@ -186,9 +186,28 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     )..addListener(_onActionsChanged);
     _bindIndexWorker();
 
+    final isOpeningTile = _vc.currentIndex.value == widget.currentIndex;
+    if (isOpeningTile) {
+      // The clock for time-to-first-frame starts here, for this tile only.
+      //
+      // `_scheduleMaybePlay` starts it everywhere else, and `ever(currentIndex)`
+      // is what calls it — but the tile a feed *opens* on never sees that
+      // worker fire, because the value is already the one it is waiting for.
+      // Its session was therefore created at the end of `_attachOrInitialize`,
+      // by which time the picture was on screen and the tracker recorded the
+      // first frame on the spot.
+      //
+      // adfoot-production, every session logged up to 2026-08-23 01:43:27:
+      // `timeToFirstFrameMs: 0`, `hadFirstFrame: true` — including the ones
+      // sitting next to `loadState: "errorTimeout"` and eighteen taps on
+      // "Réessayer". A cold start is precisely the case the number is asked
+      // about, and it was the one case it could not see.
+      _ensurePlaybackSession();
+    }
+
     if (widget.player != null) {
       _bindPlayer(widget.player);
-    } else if (_vc.currentIndex.value == widget.currentIndex) {
+    } else if (isOpeningTile) {
       unawaited(_attachOrInitialize());
     }
   }

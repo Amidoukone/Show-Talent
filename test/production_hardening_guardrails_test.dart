@@ -289,5 +289,40 @@ void main() {
         reason: 'the unbounded busy-wait is the bug',
       );
     });
+
+    // Two callers ask for the active video at the same moment: the
+    // orchestrator from onIndexChanged, and the tile from
+    // _attachOrInitialize. With the slot wait sitting between the in-flight
+    // check and the registration, both found nothing registered, both
+    // blocked, and both started a player when a slot freed. The second
+    // overwrote lru[cacheKey], leaving the first native player reachable
+    // from no map at all: never disposed, never counted against either
+    // budget, holding a MediaCodec instance for the rest of the session.
+    test('an in-flight init is claimed before it queues', () {
+      final manager = _read('lib/videos/video_manager.dart');
+
+      expect(manager, contains('Future<CachedVideoPlayerPlus> queueThenLoad()'));
+
+      final claim = manager.indexOf('futures[cacheKey] = future;');
+      final wait = manager.indexOf('while (_activeInits >= _maxConcurrentInits)');
+      expect(claim, isNonNegative);
+      expect(wait, isNonNegative);
+      expect(
+        wait,
+        lessThan(claim),
+        reason: 'the wait must live inside the future being registered, so '
+            'the registration itself stays synchronous',
+      );
+
+      // Nothing may suspend between starting the load and claiming the key:
+      // the two statements have to be neighbours.
+      final started = manager.indexOf('final future = queueThenLoad();');
+      expect(started, isNonNegative);
+      expect(
+        manager.substring(started, started + 80),
+        contains('futures[cacheKey] = future;'),
+        reason: 'anything between these two reopens the double-init race',
+      );
+    });
   });
 }

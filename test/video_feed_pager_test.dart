@@ -218,8 +218,7 @@ void main() {
       final attach = pager.indexOf('void _attach(_VideoFeedPagerState state)');
       expect(attach, isNonNegative);
       final body = pager.substring(attach, attach + 400);
-      expect(body, contains('state._jumpToPage(pending)'));
-      expect(body, contains('unawaited(state._focus(pending))'));
+      expect(body, contains('state._applyPendingIndex(pending)'));
 
       for (final method in ['void jumpToPage(int index)',
                             'Future<void> activate(int index)']) {
@@ -231,6 +230,65 @@ void main() {
           reason: '$method must not be a silent no-op',
         );
       }
+    });
+
+    // Replaying the request as a `_jumpToPage` put the fault back. `_attach`
+    // runs from initState, where the page controller either does not exist
+    // yet or has just been constructed on `initialIndex`; with no clients
+    // `_jumpToPage` moves `_currentIndex` and returns, leaving the page view
+    // on a different page from the one every other part of the app believes
+    // is current. That mismatch is the spinning tile.
+    test('the page controller is built on the index we replayed', () {
+      final initState = pager.indexOf('void initState()');
+      final didUpdate = pager.indexOf('void didUpdateWidget', initState);
+      expect(initState, isNonNegative);
+      final body = pager.substring(initState, didUpdate);
+
+      final attach = body.indexOf('widget.pagerController._attach(this);');
+      final build = body.indexOf('_pageController = PageController(');
+      expect(attach, isNonNegative);
+      expect(build, isNonNegative);
+      expect(
+        attach,
+        lessThan(build),
+        reason: 'a replayed index must be able to become the opening page',
+      );
+
+      expect(pager, contains('bool _hasPageController = false;'));
+
+      final apply = pager.indexOf('void _applyPendingIndex(int index)');
+      expect(apply, isNonNegative);
+      final applyBody = pager.substring(apply, apply + 420);
+      expect(applyBody, contains('if (!_hasPageController)'));
+      expect(applyBody, contains('_currentIndex = clamped;'));
+    });
+
+    // initState's post-frame callback focuses `_currentIndex` on its own. A
+    // replay that focused as well landed inside the orchestrator's 120 ms
+    // settle window: the first request was discarded as stale and the second
+    // paid a delay a feed's first focus is meant never to pay.
+    test('opening a feed focuses once', () {
+      final attach = pager.indexOf('void _attach(_VideoFeedPagerState state)');
+      expect(
+        pager.substring(attach, attach + 400),
+        isNot(contains('_focus(')),
+        reason: 'initState already focuses what it opened on',
+      );
+
+      // The home feed asks for its opening index itself, from a post-frame
+      // callback registered while the pager was still being built — so both
+      // fire on the same frame, 0 ms apart, and cold start paid the settle
+      // delay for a scroll nobody made. The pager's own request is a fallback
+      // for hosts that do not ask.
+      expect(pager, contains('bool _hasFocusedOnce = false;'));
+      expect(pager, contains('if (!mounted || _hasFocusedOnce) return;'));
+
+      final focus = pager.indexOf('Future<void> _focus(int index) async');
+      expect(focus, isNonNegative);
+      expect(
+        pager.substring(focus, focus + 320),
+        contains('_hasFocusedOnce = true;'),
+      );
     });
 
     // Each of the three screens used to do this from its own initState. When
@@ -277,6 +335,40 @@ void main() {
       expect(
         _read('lib/videos/video_manager.dart'),
         contains('static const int _globalMaxActive = 4;'),
+      );
+    });
+
+    // Preloads used to queue on _maxConcurrentInits because they went through
+    // initializeController. Warming the file instead — which is what stops
+    // them opening decoders — took them out from under that gate too, and a
+    // radius of 3 starts five whole-file downloads inside 700 ms against the
+    // video being watched. The decoder budget was not the only budget the
+    // preload path was spending.
+    test('a warm still queues for the network', () {
+      final manager = _read('lib/videos/video_manager.dart');
+      expect(manager, contains('static const int _maxConcurrentWarms = 2;'));
+
+      final warm = manager.indexOf('Future<void> warmVideoFile(Video video)');
+      expect(warm, isNonNegative);
+      final body = manager.substring(warm, warm + 900);
+
+      expect(body, contains('if (_activeWarms >= _maxConcurrentWarms) return;'));
+      expect(body, contains('_activeWarms++;'));
+      expect(body, contains('_activeWarms--;'));
+      expect(
+        body,
+        contains('finally'),
+        reason: 'a failed warm must give its slot back',
+      );
+
+      // Claimed with no await between the check and the increment, or the
+      // limit is only a suggestion.
+      final check = body.indexOf('if (_activeWarms >= _maxConcurrentWarms)');
+      final claim = body.indexOf('_activeWarms++;');
+      expect(
+        body.substring(check, claim),
+        isNot(contains('await')),
+        reason: 'the slot must be claimed atomically',
       );
     });
   });

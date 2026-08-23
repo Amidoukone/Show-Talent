@@ -54,8 +54,7 @@ class VideoFeedPagerController {
     final pending = _pendingIndex;
     _pendingIndex = null;
     if (pending != null) {
-      state._jumpToPage(pending);
-      unawaited(state._focus(pending));
+      state._applyPendingIndex(pending);
     }
   }
 
@@ -151,6 +150,18 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
   int? _silencedPageIndex;
   bool _isActive = true;
 
+  /// False until [initState] has built [_pageController].
+  ///
+  /// [_attach] runs from inside `initState`, so a replayed request can arrive
+  /// before there is any page view to move.
+  bool _hasPageController = false;
+
+  /// Whether any index has been focused yet, from any caller.
+  ///
+  /// Read only by the opening focus in [initState], which is a fallback for
+  /// hosts that do not ask for an index themselves — not a second request.
+  bool _hasFocusedOnce = false;
+
   @override
   void initState() {
     super.initState();
@@ -159,7 +170,6 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
     _currentIndex = widget.initialIndex
         .clamp(0, widget.videos.isEmpty ? 0 : widget.videos.length - 1)
         .toInt();
-    _pageController = PageController(initialPage: _currentIndex);
 
     _orchestrator = VideoFocusOrchestrator(
       contextKey: widget.contextKey,
@@ -169,15 +179,63 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
       onRequestMore: widget.onRequestMore,
     );
 
+    // Attached *before* the page controller exists, so a pending index becomes
+    // the page we open on rather than a jump away from one we have already
+    // been built on. See [_applyPendingIndex].
     widget.pagerController._attach(this);
 
-    // Focus what we opened on. The three screens each used to do this from
-    // their own initState; when the page view moved in here, the profile feed
-    // lost it entirely and opened on a video that never initialised.
+    _pageController = PageController(initialPage: _currentIndex);
+    _hasPageController = true;
+
+    // Focus what we opened on, unless something already has. The three screens
+    // each used to do this from their own initState; when the page view moved
+    // in here, the profile feed lost it entirely and opened on a video that
+    // never initialised.
+    //
+    // The home feed still asks for its opening index itself, from a post-frame
+    // callback registered while this widget was being built — so it is the
+    // *earlier* callback, and both fire on the same frame. Two focus requests
+    // 0 ms apart land inside the orchestrator's 120 ms settle window: the
+    // first is discarded as stale after it has already paused the context, and
+    // the second waits out a delay meant to absorb a fling. That is a cold
+    // start paying for a scroll nobody made.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || _hasFocusedOnce) return;
       unawaited(_focus(_currentIndex));
     });
+  }
+
+  /// Replays an index that was asked for while no pager was listening.
+  ///
+  /// Before the page controller exists this only moves the opening index, and
+  /// that is the whole point. Replaying it as a `_jumpToPage` instead put the
+  /// fault straight back: with no clients, `_jumpToPage` moves `_currentIndex`
+  /// and returns, while `_pageController` keeps the `initialPage` it was
+  /// constructed with. The feed would then open on one video while
+  /// `_currentIndex` and `videoController.currentIndex` named another — the
+  /// same mismatch that made every tile spin, reachable whenever the pending
+  /// index is not [VideoFeedPager.initialIndex]: a feed that empties and
+  /// reloads while the user is on page five asks for five and opens on zero.
+  ///
+  /// It also focused twice. `initState`'s post-frame callback focuses
+  /// `_currentIndex` anyway, and the two requests land inside the
+  /// orchestrator's 120 ms settle window, so the first was discarded as stale
+  /// and the second paid a delay that a feed's first focus is meant never to
+  /// pay. Writing `videoController.currentIndex` from `initState` — which runs
+  /// during the host's build — could mark an `Obx` dirty mid-build as well.
+  void _applyPendingIndex(int index) {
+    final videos = widget.videos;
+    final clamped = index
+        .clamp(0, videos.isEmpty ? 0 : videos.length - 1)
+        .toInt();
+
+    if (!_hasPageController) {
+      _currentIndex = clamped;
+      return;
+    }
+
+    _jumpToPage(clamped);
+    unawaited(_focus(clamped));
   }
 
   @override
@@ -275,6 +333,8 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
 
     final videos = widget.videos;
     if (index < 0 || index >= videos.length) return;
+
+    _hasFocusedOnce = true;
 
     final previousIndex = _currentIndex;
     _currentIndex = index;

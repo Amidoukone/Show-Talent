@@ -95,6 +95,26 @@ class VideoManager {
     },
   );
 
+  /// How many neighbour files may be pulled off the network at once.
+  ///
+  /// A warm is a whole-file download, and it was the one path that took the
+  /// connection without asking. Preloads used to run through
+  /// [initializeController], which queues on [_maxConcurrentInits] — 3 on a
+  /// high-tier network, 1 on a low one. Moving the far neighbours onto
+  /// [warmVideoFile], so they stop opening hardware decoders, took them out
+  /// from under that gate at the same time: a radius of 3 starts five of them
+  /// inside 700 ms, unthrottled, against the video the user is watching.
+  /// That is the pause/resume loop this pipeline has already been fixed for
+  /// twice, arriving by a third route.
+  ///
+  /// Over the limit a warm is dropped rather than queued. The scheduler runs
+  /// again on every index change, and the neighbour that was dropped is
+  /// nearer by then — so the cache still fills in the direction of travel,
+  /// while a queue would hold the connection for pages the user has left.
+  static const int _maxConcurrentWarms = 2;
+
+  int _activeWarms = 0;
+
   /// Puts a video's bytes on disk without opening a player for it.
   ///
   /// A cached file still makes the next swipe fast — the controller opens
@@ -102,20 +122,28 @@ class VideoManager {
   /// which is the resource the device actually runs out of.
   Future<void> warmVideoFile(Video video) async {
     if (kIsWeb) return;
+    // Checked and claimed with no `await` in between, which is what makes the
+    // counter a limit rather than a suggestion.
+    if (_activeWarms >= _maxConcurrentWarms) return;
+    _activeWarms++;
 
-    final source = VideoSourceSelector.preferredSource(
-      fallbackUrl: video.videoUrl,
-      sources: video.sources,
-      adaptiveEnabled: adaptiveSourcesEnabled,
-      highBandwidth: _isHighBandwidth,
-    );
-    final url = source?.url ?? video.videoUrl;
-    if (url.isEmpty) return;
+    try {
+      final source = VideoSourceSelector.preferredSource(
+        fallbackUrl: video.videoUrl,
+        sources: video.sources,
+        adaptiveEnabled: adaptiveSourcesEnabled,
+        highBandwidth: _isHighBandwidth,
+      );
+      final url = source?.url ?? video.videoUrl;
+      if (url.isEmpty) return;
 
-    final cached = await custom_cache.VideoCacheManager.getFileIfCached(url);
-    if (cached != null && await cached.exists()) return;
+      final cached = await custom_cache.VideoCacheManager.getFileIfCached(url);
+      if (cached != null && await cached.exists()) return;
 
-    await _downloads.download(url);
+      await _downloads.download(url);
+    } finally {
+      _activeWarms--;
+    }
   }
 
 
@@ -259,11 +287,7 @@ class VideoManager {
   bool hasDeferredPreloadForTests(String contextKey) =>
       _bandwidth.hasDeferred(contextKey);
 
-  void setNetworkProfile(NetworkProfile profile) => _network.override(profile);
-
   Future<void> warmNetworkProfile() => _network.warm();
-
-  Future<void> refreshNetworkProfile() => _network.refresh();
 
   @visibleForTesting
   void resetNetworkProfileStateForTests({
@@ -933,24 +957,48 @@ class VideoManager {
 
       // 3) Concurrency limit — bounded, and abandoned if the context goes
       // away while we are queued (nobody is left to watch the result).
-      final slotDeadline = DateTime.now().add(_initSlotWaitTimeout);
-      while (_activeInits >= _maxConcurrentInits) {
-        if (!_isContextActive(contextKey, lru, futures)) {
-          throw const _VideoInitCancelled('context_disposed_waiting_for_slot');
+      Future<CachedVideoPlayerPlus> queueThenLoad() async {
+        final slotDeadline = DateTime.now().add(_initSlotWaitTimeout);
+        while (_activeInits >= _maxConcurrentInits) {
+          if (!_isContextActive(contextKey, lru, futures)) {
+            throw const _VideoInitCancelled('context_disposed_waiting_for_slot');
+          }
+          if (!DateTime.now().isBefore(slotDeadline)) {
+            AppLogger.debug(
+              '[VideoManager] Init slot wait expired after '
+              '${_initSlotWaitTimeout.inSeconds}s (active=$_activeInits, '
+              'max=$_maxConcurrentInits); proceeding anyway -> $effectiveUrl',
+            );
+            break;
+          }
+          await Future.delayed(_initSlotPollInterval);
         }
-        if (!DateTime.now().isBefore(slotDeadline)) {
-          AppLogger.debug(
-            '[VideoManager] Init slot wait expired after '
-            '${_initSlotWaitTimeout.inSeconds}s (active=$_activeInits, '
-            'max=$_maxConcurrentInits); proceeding anyway -> $effectiveUrl',
-          );
-          break;
+
+        _activeInits++;
+        try {
+          return await loadVideo();
+        } finally {
+          _activeInits--;
         }
-        await Future.delayed(_initSlotPollInterval);
       }
 
-      _activeInits++;
-      final future = loadVideo().whenComplete(() => _activeInits--);
+      // The URL is claimed *before* the queue, not after it.
+      //
+      // Two callers ask for the active video at the same moment — the
+      // orchestrator, from `onIndexChanged`, and the tile itself, from
+      // `_attachOrInitialize` — and on a cold start they do it for the same
+      // index. The wait for a slot used to sit between the check at (2) and
+      // this registration, with an `await` in it: both callers found nothing
+      // registered, both blocked in the loop, and both started a player when
+      // a slot freed. The second one's `lru[cacheKey] = player` overwrote the
+      // first, so the first native player was left reachable from no map at
+      // all — never disposed, never counted, and holding a MediaCodec
+      // instance for the rest of the session. That is the resource this file
+      // spends its whole length protecting, leaked by the code protecting it.
+      //
+      // Putting the wait inside `queueThenLoad` means the call returns its
+      // future synchronously, so nothing can interleave between (2) and here.
+      final future = queueThenLoad();
       futures[cacheKey] = future;
 
       try {
@@ -1378,28 +1426,5 @@ class VideoManager {
     try {
       await player.dispose();
     } catch (_) {}
-  }
-
-  Future<void> waitUntilInitialized(String contextKey, String url) async {
-    final resolved = _resolveKey(contextKey, url);
-    final player = _lruByContext[contextKey]?[resolved];
-    if (player == null || player.controller.value.isInitialized) return;
-
-    final c = player.controller;
-    final completer = Completer<void>();
-
-    void listener() {
-      if (c.value.isInitialized) {
-        c.removeListener(listener);
-        if (!completer.isCompleted) completer.complete();
-      }
-    }
-
-    c.addListener(listener);
-    try {
-      await completer.future.timeout(_activeTimeout);
-    } catch (_) {
-      c.removeListener(listener);
-    }
   }
 }
