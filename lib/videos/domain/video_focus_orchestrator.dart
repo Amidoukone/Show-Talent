@@ -116,6 +116,21 @@ class VideoFocusOrchestrator {
 
     if (_isStale(localToken)) return player;
 
+    // The manager may have released this controller while we were awaiting
+    // it, and a disposed `CachedVideoPlayerPlus` still reports
+    // `isInitialized == true` with no error — which is exactly why
+    // `VideoManager.attempt()` re-checks before handing one back from its
+    // LRU. Nothing re-checked here.
+    //
+    // `_purgeAndReloadController` reaches `disposeUrls` for this very URL on
+    // an adaptive rendition change, on automatic recovery and on a manual
+    // retry, all of which can land while this await is suspended. Playing the
+    // result then calls into a native player id that no longer exists, from a
+    // future nobody is watching. If the manager no longer holds it, it is not
+    // ours to start.
+    final live = videoManager.getController(contextKey, currentUrl);
+    if (live == null || !identical(live, player)) return null;
+
     final actualCtrl = player?.controller;
     bool shouldPlay = false;
     try {

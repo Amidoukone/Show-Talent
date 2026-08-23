@@ -180,6 +180,7 @@ void main() {
         'lib/videos/domain/video_ui_signals.dart': '_ui',
         'lib/videos/domain/video_network_tuning.dart': '_network',
         'lib/videos/domain/video_playback_metrics.dart': '_metrics',
+        'lib/videos/domain/player_lifetime_registry.dart': '_lifetimes',
       };
 
       final manager = _read('lib/videos/video_manager.dart');

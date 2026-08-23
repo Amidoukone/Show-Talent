@@ -314,6 +314,28 @@ void main() {
             'the registration itself stays synchronous',
       );
 
+      // A preload's init downloads the whole file before it opens anything,
+      // and both it and the active video used the same queue -- two slots on
+      // a medium tier, one on a low tier. adfoot-production, 2026-08-23 at
+      // 17:21: a 1080p video reported `loadState: "loading"` for 25 s with no
+      // init error, because nothing had failed. It had not started.
+      expect(
+        manager,
+        contains('if (isPreload) {'),
+        reason: 'only background work queues for a slot',
+      );
+      final gate = manager.indexOf('if (isPreload) {');
+      final loop = manager.indexOf('while (_activeInits >= _maxConcurrentInits)');
+      final take = manager.indexOf('_activeInits++;');
+      expect(gate, isNonNegative);
+      expect(gate, lessThan(loop), reason: 'the wait is what is gated');
+      expect(
+        loop,
+        lessThan(take),
+        reason: 'an active init still takes a slot, so preloads back off for '
+            'it -- it just never waits for one',
+      );
+
       // Nothing may suspend between starting the load and claiming the key:
       // the two statements have to be neighbours.
       final started = manager.indexOf('final future = queueThenLoad();');

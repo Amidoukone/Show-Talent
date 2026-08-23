@@ -365,6 +365,77 @@ void main() {
     });
   });
 
+  // A disposed CachedVideoPlayerPlus still reports isInitialized == true with
+  // no error -- VideoManager.attempt() says so at its LRU hit, and re-checks.
+  // The orchestrator did not, and `_purgeAndReloadController` reaches
+  // `disposeUrls` for the same URL on an adaptive rendition change, on
+  // automatic recovery and on a manual retry -- all of which can land while
+  // the orchestrator's await is suspended.
+  group('nobody starts a player the manager has let go', () {
+    test('the orchestrator re-checks before it plays', () {
+      final orchestrator = _read(
+        'lib/videos/domain/video_focus_orchestrator.dart',
+      );
+
+      final play = orchestrator.indexOf('final actualCtrl = player?.controller;');
+      expect(play, isNonNegative);
+
+      final before = orchestrator.substring(0, play);
+      expect(
+        before,
+        contains('final live = videoManager.getController(contextKey, currentUrl);'),
+      );
+      expect(before, contains('if (live == null || !identical(live, player)) return null;'));
+    });
+  });
+
+  // adfoot-production, 1.0.7+24: the app died during playback on the first
+  // launch and Crashlytics reported 100% crash-free sessions for that
+  // release. No Dart or Java exception was ever raised, which is what a call
+  // into a released native player looks like from this side.
+  group('a released player cannot be called into', () {
+    test('the manager records what it disposes', () {
+      final registry = _read(
+        'lib/videos/domain/player_lifetime_registry.dart',
+      );
+      expect(registry, contains('class PlayerLifetimeRegistry'));
+      expect(registry, contains('Expando<bool>'));
+
+      final manager = _read('lib/videos/video_manager.dart');
+      final dispose = manager.indexOf(
+        'Future<void> safeDispose(CachedVideoPlayerPlus player) async {',
+      );
+      expect(dispose, isNonNegative);
+      final body = manager.substring(
+        dispose,
+        (dispose + 320).clamp(0, manager.length),
+      );
+
+      expect(body, contains('_lifetimes.markReleased(player);'));
+      expect(
+        body.indexOf('_lifetimes.markReleased(player);'),
+        lessThan(body.indexOf('await player.dispose();')),
+        reason: 'a holder checking mid-dispose must be told no, not yes',
+      );
+    });
+
+    // dispose() leaves isInitialized true, so this check was the one place
+    // that could not tell a live player from a released one -- and every
+    // play, pause, seek, tick and wakelock decision in the file runs through
+    // it.
+    test('the tile asks the manager, not the controller', () {
+      final player = _read('lib/widgets/smart_video_player.dart');
+      final start = player.indexOf(
+        'bool _isControllerValid(VideoPlayerController? ctrl) {',
+      );
+      expect(start, isNonNegative);
+      expect(
+        player.substring(start, start + 320),
+        contains('_videoManager.isPlayerLive(_player)'),
+      );
+    });
+  });
+
   group('the controls describe the controller they are attached to', () {
     // Playback speed lives on the native player, so a replacement controller
     // always starts at 1x. This widget's state did not, and every path that

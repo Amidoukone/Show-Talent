@@ -146,4 +146,19 @@ flutter {
 dependencies {
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
     implementation "androidx.multidex:multidex:2.0.1"
+
+    // Native crash reporting.
+    //
+    // The Crashlytics Flutter plugin reports Dart errors, and the Android
+    // Crashlytics SDK reports uncaught Java/Kotlin exceptions. Neither of them
+    // sees a native signal -- a SIGSEGV or SIGABRT raised inside the media
+    // stack -- and that is precisely the hole 1.0.7+24 fell into: the app died
+    // during playback on 2026-08-23 and Crashlytics reported 100% crash-free
+    // users *and* sessions for the release, because no exception was ever
+    // raised on either side.
+    //
+    // The version comes from the BoM pinned in the root build.gradle, which is
+    // the same one the FlutterFire plugins resolve against.
+    implementation platform("com.google.firebase:firebase-bom:${rootProject.ext.FirebaseSDKVersion}")
+    implementation "com.google.firebase:firebase-crashlytics-ndk"
 }

@@ -3,6 +3,22 @@
 // Compatible with Flutter 3.44.x / AGP 8.11.x / Gradle 8.14.x / Kotlin 2.2.x
 // ============================================================================
 
+// One Firebase SDK version for every module.
+//
+// The FlutterFire plugins each apply the Firebase BoM themselves, reading
+// `rootProject.ext.FirebaseSDKVersion` first and falling back to the version
+// bundled in firebase_core's own gradle.properties. The :app module needs the
+// BoM too -- it declares firebase-crashlytics-ndk, which has no version of its
+// own -- and Crashlytics NDK must match the Crashlytics version exactly or the
+// native reports do not attach to the Java ones.
+//
+// Declaring it here rather than in :app is what keeps those two from drifting:
+// pinning it in :app alone would leave the plugins free to move without it.
+// This value must be kept in step with firebase_core's default when that
+// package is upgraded; `test/native_crash_reporting_guardrails_test.dart`
+// fails if the two disagree.
+ext.FirebaseSDKVersion = "34.17.0"
+
 allprojects {
     repositories {
         google()

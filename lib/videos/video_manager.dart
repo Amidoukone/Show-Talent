@@ -10,6 +10,7 @@ import 'package:adfoot/utils/video_source_selector.dart';
 import 'package:adfoot/videos/data/video_download_service.dart';
 import 'package:adfoot/videos/domain/network_profile.dart';
 import 'package:adfoot/videos/domain/playback_bandwidth_arbiter.dart';
+import 'package:adfoot/videos/domain/player_lifetime_registry.dart';
 import 'package:adfoot/videos/domain/video_network_tuning.dart';
 import 'package:adfoot/videos/domain/video_playback_metrics.dart';
 import 'package:adfoot/videos/domain/video_preload_scheduler.dart';
@@ -78,6 +79,14 @@ class VideoManager {
 
   /// Who gets the connection: the video on screen, or its neighbours.
   final PlaybackBandwidthArbiter _bandwidth = PlaybackBandwidthArbiter();
+
+  /// Which native players have been released. See [PlayerLifetimeRegistry].
+  final PlayerLifetimeRegistry _lifetimes = PlayerLifetimeRegistry();
+
+  /// Whether [player] is still ours to call into.
+  ///
+  /// The only way to tell: `dispose()` leaves `isInitialized` true.
+  bool isPlayerLive(CachedVideoPlayerPlus? player) => _lifetimes.isLive(player);
 
   /// Which neighbours to warm, in what order, and how far apart.
   late final VideoPreloadScheduler _preloads = VideoPreloadScheduler(
@@ -165,26 +174,21 @@ class VideoManager {
   ///
   /// An initialised `CachedVideoPlayerPlus` holds a MediaCodec instance for as
   /// long as it lives, and mid-range Android devices run out of them well
-  /// before a Dart list would notice. adfoot-production, 2026-08-22 at 09:19:
+  /// before a Dart list would notice. adfoot-production logged
+  /// `MediaCodecVideoRenderer error ... format_supported=YES` on 1080p twice:
+  /// 2026-08-22 09:19 in a `profile:<uid>` opened over a `home` still holding
+  /// its own, and 2026-08-23 01:43 on a *preload* with a budget of eight and
+  /// only the home feed open. The device could decode the format both times;
+  /// it had no instance left to decode it with.
   ///
-  ///     MediaCodecVideoRenderer error ... format_supported=YES
-  ///     ... [1920, 1080, 25.0, ...]
+  /// Eight matched the largest per-context budget, which was the wrong
+  /// instinct: the ceiling has to sit where the hardware sits. Now that a
+  /// preload past the nearest neighbour warms the file without opening a
+  /// player, a feed needs two -- the video being watched and the next one --
+  /// and four leaves room for a second context and nothing more.
   ///
-  /// The device could decode that format -- it says so -- it had simply run
-  /// out of instances to decode it with, in a `profile:<uid>` context opened
-  /// on top of a `home` context that was still holding its own.
-  ///
-  /// Four, not eight. Eight was chosen to match the largest per-context
-  /// budget so a single feed would never be constrained -- which turned out
-  /// to be the wrong instinct entirely: on 2026-08-23 the same error appeared
-  /// again on a *preload*, with the budget in place and only the home feed
-  /// open. The ceiling has to sit where the hardware sits, not where the
-  /// software would like it to.
-  ///
-  /// Now that a preload past the nearest neighbour warms the file without
-  /// opening a player, a feed needs two: the video being watched and the one
-  /// after it. Four leaves room for a second context -- a profile pushed over
-  /// the feed -- and nothing more.
+  /// Eviction is therefore the normal case, not the rare one, which is what
+  /// made [PlayerLifetimeRegistry] necessary.
   static const int _globalMaxActive = 4;
 
   int _activeInits = 0;
@@ -958,20 +962,37 @@ class VideoManager {
       // 3) Concurrency limit — bounded, and abandoned if the context goes
       // away while we are queued (nobody is left to watch the result).
       Future<CachedVideoPlayerPlus> queueThenLoad() async {
-        final slotDeadline = DateTime.now().add(_initSlotWaitTimeout);
-        while (_activeInits >= _maxConcurrentInits) {
-          if (!_isContextActive(contextKey, lru, futures)) {
-            throw const _VideoInitCancelled('context_disposed_waiting_for_slot');
+        // The video on screen never queues; only a preload does.
+        //
+        // [_maxConcurrentInits] keeps *background* work off the connection,
+        // and the video the user is looking at is not background work. Both
+        // used this queue, and a preload's init downloads the whole file
+        // before it opens anything -- two slots on a medium tier, one on low.
+        // adfoot-production, 2026-08-23 17:21: a 1080p video reported
+        // `loadState: "loading"` for 25 s with no init error, because nothing
+        // had failed -- it had not started. The wait allows 20 s and spent
+        // them, and the 12 s activeTimeout only begins after the queue.
+        //
+        // An active init still *takes* a slot, so preloads keep backing off
+        // for it. It simply never waits for one.
+        if (isPreload) {
+          final slotDeadline = DateTime.now().add(_initSlotWaitTimeout);
+          while (_activeInits >= _maxConcurrentInits) {
+            if (!_isContextActive(contextKey, lru, futures)) {
+              throw const _VideoInitCancelled(
+                'context_disposed_waiting_for_slot',
+              );
+            }
+            if (!DateTime.now().isBefore(slotDeadline)) {
+              AppLogger.debug(
+                '[VideoManager] Init slot wait expired after '
+                '${_initSlotWaitTimeout.inSeconds}s (active=$_activeInits, '
+                'max=$_maxConcurrentInits); proceeding anyway -> $effectiveUrl',
+              );
+              break;
+            }
+            await Future.delayed(_initSlotPollInterval);
           }
-          if (!DateTime.now().isBefore(slotDeadline)) {
-            AppLogger.debug(
-              '[VideoManager] Init slot wait expired after '
-              '${_initSlotWaitTimeout.inSeconds}s (active=$_activeInits, '
-              'max=$_maxConcurrentInits); proceeding anyway -> $effectiveUrl',
-            );
-            break;
-          }
-          await Future.delayed(_initSlotPollInterval);
         }
 
         _activeInits++;
@@ -1305,23 +1326,11 @@ class VideoManager {
 
   /// Frees every native player this context holds except the one on screen.
   ///
-  /// An initialised `CachedVideoPlayerPlus` holds a MediaCodec instance for
-  /// as long as it lives, and pausing it does not give that back — only
-  /// disposing does. Contexts are independent (`home`, `profile:<uid>`), each
-  /// with its own [_maxActive] budget, and a context is *not* torn down when
-  /// a route is pushed on top of it. Opening a publisher's profile from the
-  /// feed therefore stacks a second budget on the first, on a device whose
-  /// decoder count is neither per-context nor per-app.
-  ///
-  /// adfoot-production, 2026-08-22 at 09:19, in `profile:zDuzNuDD…`:
-  ///
-  ///     MediaCodecVideoRenderer error … format_supported=YES
-  ///     … [1920, 1080, 25.0, …]
-  ///
-  /// The device could decode that format perfectly well — it says so — it had
-  /// simply run out of instances to decode it with. The session ended on the
-  /// error overlay, and the user's answer was the retry button, eighteen
-  /// times across the logged window.
+  /// Pausing a controller does not give its MediaCodec instance back; only
+  /// disposing does. Contexts are independent and a context is *not* torn
+  /// down when a route is pushed over it, so opening a publisher's profile
+  /// from the feed stacks a second [_maxActive] budget on the first. See
+  /// [_globalMaxActive] for what production made of that.
   ///
   /// The controller left alive is the one being watched, so coming back to
   /// this feed resumes instantly. Its neighbours return through the preload
@@ -1423,6 +1432,9 @@ class VideoManager {
   }
 
   Future<void> safeDispose(CachedVideoPlayerPlus player) async {
+    // Marked *before* the await: a holder that checks while dispose() is in
+    // flight must be told no, not yes.
+    _lifetimes.markReleased(player);
     try {
       await player.dispose();
     } catch (_) {}

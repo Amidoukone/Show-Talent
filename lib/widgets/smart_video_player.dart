@@ -449,9 +449,25 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     if (mounted && !_isDisposed) setState(() {});
   }
 
+  /// Whether [ctrl] can still be called into.
+  ///
+  /// The manager's answer is part of this, and it has to be: `dispose()`
+  /// leaves `isInitialized` true, so this used to return `true` for a player
+  /// whose native id no longer existed. This widget holds `_player` for its
+  /// whole life while `VideoManager` releases controllers from six places --
+  /// the per-context budget, the app-wide budget, `disposeUrls`,
+  /// `releaseControllersExcept`, `disposeAllForContext`, and the failure paths
+  /// of `attempt()` -- and none of them tells the widget. `_attachToken` only
+  /// guards against *this* widget re-attaching.
+  ///
+  /// Every play, pause, seek, tick and wakelock decision in this file goes
+  /// through here, so asking once here is what makes the rule uniform rather
+  /// than something each call site has to remember.
   bool _isControllerValid(VideoPlayerController? ctrl) {
     try {
-      return !_isDisposed && ctrl != null && ctrl.value.isInitialized;
+      if (_isDisposed || ctrl == null) return false;
+      if (!_videoManager.isPlayerLive(_player)) return false;
+      return ctrl.value.isInitialized;
     } catch (_) {
       return false;
     }
