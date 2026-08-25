@@ -10,6 +10,7 @@ import 'package:adfoot/utils/video_source_selector.dart';
 import 'package:adfoot/videos/data/video_download_service.dart';
 import 'package:adfoot/videos/domain/network_profile.dart';
 import 'package:adfoot/videos/domain/playback_bandwidth_arbiter.dart';
+import 'package:adfoot/videos/domain/active_init_registry.dart';
 import 'package:adfoot/videos/domain/player_lifetime_registry.dart';
 import 'package:adfoot/videos/domain/video_network_tuning.dart';
 import 'package:adfoot/videos/domain/video_playback_metrics.dart';
@@ -21,8 +22,7 @@ import 'package:adfoot/videos/domain/video_ui_signals.dart';
 // for it keep working.
 export 'package:adfoot/videos/domain/video_playback_metrics.dart'
     show VideoMetricEvent, VideoMetricType;
-export 'package:adfoot/videos/domain/video_ui_signals.dart'
-    show VideoLoadState;
+export 'package:adfoot/videos/domain/video_ui_signals.dart' show VideoLoadState;
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:adfoot/services/app_logger.dart';
@@ -49,22 +49,17 @@ class VideoManager {
   ///
   /// [_maxConcurrentInits] is a tuning knob (1 on a low-tier network), not a
   /// correctness constraint, but the wait for it was an unbounded loop. A slot
-  /// is released by `whenComplete`, so it is held for as long as `loadVideo()`
-  /// runs — and that path can include a `downloadFile` on a video of up to
-  /// 150 MB through `flutter_cache_manager`'s `HttpFileService`, which sets no
-  /// socket deadline of its own. One connection that stalls without closing
-  /// therefore pinned the only slot, and every later init in the app —
-  /// active playback included — waited behind it forever. The feed simply
-  /// stopped loading, showing a spinner with no error, until the app was
-  /// killed.
-  ///
-  /// Briefly running one init over the limit is a far smaller cost than that,
-  /// so the wait expires and proceeds.
+  /// is held for as long as `loadVideo()` runs, and that path can include a
+  /// `downloadFile` through `flutter_cache_manager`'s `HttpFileService`, which
+  /// sets no socket deadline. One connection stalling without closing pinned
+  /// the only slot and every later init waited behind it forever: a feed
+  /// showing a spinner with no error until the app was killed. Briefly running
+  /// one init over the limit costs far less, so the wait expires.
   static const Duration _initSlotWaitTimeout = Duration(seconds: 20);
   static const Duration _initSlotPollInterval = Duration(milliseconds: 80);
-  /// Getting bytes onto disk, and keeping the disk cache in budget.
-  ///
-  /// A URL goes in and a file comes out; nothing here knows about players or
+
+  /// Getting bytes onto disk, and keeping the disk cache in budget. A URL
+  /// goes in and a file comes out; nothing here knows about players or
   /// contexts, which is why it was the first thing to come out of this class.
   final VideoDownloadService _downloads = VideoDownloadService();
 
@@ -88,7 +83,7 @@ class VideoManager {
   /// The only way to tell: `dispose()` leaves `isInitialized` true.
   bool isPlayerLive(CachedVideoPlayerPlus? player) => _lifetimes.isLive(player);
 
-  /// Which neighbours to warm, in what order, and how far apart.
+  /// Which neighbours to prepare, in what order, and how far apart.
   late final VideoPreloadScheduler _preloads = VideoPreloadScheduler(
     preload: (contextKey, video, {activeUrl, required warmFileOnly}) {
       if (warmFileOnly) {
@@ -104,57 +99,22 @@ class VideoManager {
     },
   );
 
-  /// How many neighbour files may be pulled off the network at once.
+  /// Puts a neighbour's bytes on disk without opening a player for it.
   ///
-  /// A warm is a whole-file download, and it was the one path that took the
-  /// connection without asking. Preloads used to run through
-  /// [initializeController], which queues on [_maxConcurrentInits] — 3 on a
-  /// high-tier network, 1 on a low one. Moving the far neighbours onto
-  /// [warmVideoFile], so they stop opening hardware decoders, took them out
-  /// from under that gate at the same time: a radius of 3 starts five of them
-  /// inside 700 ms, unthrottled, against the video the user is watching.
-  /// That is the pause/resume loop this pipeline has already been fixed for
-  /// twice, arriving by a third route.
-  ///
-  /// Over the limit a warm is dropped rather than queued. The scheduler runs
-  /// again on every index change, and the neighbour that was dropped is
-  /// nearer by then — so the cache still fills in the direction of travel,
-  /// while a queue would hold the connection for pages the user has left.
-  static const int _maxConcurrentWarms = 2;
+  /// The manager picks *which* file — the rendition this tier would play; the
+  /// throttle lives with the transfers ([VideoDownloadService.warmFile]).
+  Future<void> warmVideoFile(Video video) {
+    if (kIsWeb) return Future<void>.value();
 
-  int _activeWarms = 0;
+    final source = VideoSourceSelector.preferredSource(
+      fallbackUrl: video.videoUrl,
+      sources: video.sources,
+      adaptiveEnabled: adaptiveSourcesEnabled,
+      highBandwidth: _isHighBandwidth,
+    );
 
-  /// Puts a video's bytes on disk without opening a player for it.
-  ///
-  /// A cached file still makes the next swipe fast — the controller opens
-  /// from local storage instead of the network — but it costs no decoder,
-  /// which is the resource the device actually runs out of.
-  Future<void> warmVideoFile(Video video) async {
-    if (kIsWeb) return;
-    // Checked and claimed with no `await` in between, which is what makes the
-    // counter a limit rather than a suggestion.
-    if (_activeWarms >= _maxConcurrentWarms) return;
-    _activeWarms++;
-
-    try {
-      final source = VideoSourceSelector.preferredSource(
-        fallbackUrl: video.videoUrl,
-        sources: video.sources,
-        adaptiveEnabled: adaptiveSourcesEnabled,
-        highBandwidth: _isHighBandwidth,
-      );
-      final url = source?.url ?? video.videoUrl;
-      if (url.isEmpty) return;
-
-      final cached = await custom_cache.VideoCacheManager.getFileIfCached(url);
-      if (cached != null && await cached.exists()) return;
-
-      await _downloads.download(url);
-    } finally {
-      _activeWarms--;
-    }
+    return _downloads.warmFile(source?.url ?? video.videoUrl);
   }
-
 
   // ---------------------------------------------------------------------------
   // Network profile
@@ -163,7 +123,8 @@ class VideoManager {
   /// Detecting the connection's tier, and what that tier costs.
   final VideoNetworkTuningController _network = VideoNetworkTuningController();
 
-  ValueNotifier<NetworkProfile?> get profileNotifier => _network.profileNotifier;
+  ValueNotifier<NetworkProfile?> get profileNotifier =>
+      _network.profileNotifier;
 
   /// Load states, resolved renditions, and the notifiers widgets rebuild on.
   final VideoUiSignals _ui = VideoUiSignals();
@@ -181,17 +142,19 @@ class VideoManager {
   /// only the home feed open. The device could decode the format both times;
   /// it had no instance left to decode it with.
   ///
-  /// Eight matched the largest per-context budget, which was the wrong
-  /// instinct: the ceiling has to sit where the hardware sits. Now that a
-  /// preload past the nearest neighbour warms the file without opening a
-  /// player, a feed needs two -- the video being watched and the next one --
-  /// and four leaves room for a second context and nothing more.
-  ///
-  /// Eviction is therefore the normal case, not the rare one, which is what
-  /// made [PlayerLifetimeRegistry] necessary.
+  /// Eight matched the largest per-context budget; the ceiling has to sit
+  /// where the hardware sits. A preload past the nearest neighbour warms the
+  /// file without opening a player, so a feed needs two -- the video being
+  /// watched and the next one -- and four leaves room for a second context
+  /// and nothing more. Eviction is therefore the normal case, not the rare
+  /// one, which is what made [PlayerLifetimeRegistry] necessary.
   static const int _globalMaxActive = 4;
 
   int _activeInits = 0;
+
+  /// Which URLs the video on screen owns, so a preload queued for one stops
+  /// waiting the moment the user swipes onto it.
+  final ActiveInitRegistry _activeInitClaims = ActiveInitRegistry();
 
   NetworkProfile? get currentProfile => _network.profile;
 
@@ -236,11 +199,7 @@ class VideoManager {
     String resolvedUrl, {
     required bool isStreaming,
   }) {
-    _bandwidth.markStreaming(
-      contextKey,
-      resolvedUrl,
-      isStreaming: isStreaming,
-    );
+    _bandwidth.markStreaming(contextKey, resolvedUrl, isStreaming: isStreaming);
   }
 
   bool _isStreamingUrl(String contextKey, String? resolvedUrl) =>
@@ -253,6 +212,35 @@ class VideoManager {
   /// clip the user is actually watching gets the bandwidth first. Called by
   /// SmartVideoPlayer's stall watchdog once playback has advanced over
   /// several consecutive ticks without buffering.
+  /// Reports that the visible video has rendered its first frame.
+  ///
+  /// The point at which preparing the *next* player stops being a risk to it.
+  /// Only that neighbour is released here; the whole-file warms behind it wait
+  /// for [markActivePlaybackStable], because those are what starved a live
+  /// stream in production. Releasing both at stability — three smooth 700 ms
+  /// ticks, longer than a scrolled feed ever spends on one video — is what
+  /// made every swipe pay a cold start.
+  void markActivePlaybackStarted(String contextKey, String url) {
+    _bandwidth.markRendered(contextKey, _resolveKey(contextKey, url));
+    _releaseDeferredPlayers(contextKey);
+  }
+
+  /// Starts the neighbour that earns a player; the warms stay deferred.
+  void _releaseDeferredPlayers(String contextKey) {
+    final pending = _bandwidth.takeDeferredPlayers(contextKey);
+    if (pending == null) return;
+
+    _preloads.scheduleAround(
+      contextKey: contextKey,
+      videos: pending.videos,
+      index: pending.index,
+      radius: _preloadRadius,
+      activeUrl: pending.activeUrl,
+      preferForward: pending.preferForward,
+      allowFileWarms: false,
+    );
+  }
+
   void markActivePlaybackStable(String contextKey, String url) {
     final resolved = _resolveKey(contextKey, url);
     _markStreaming(contextKey, resolved, isStreaming: false);
@@ -359,10 +347,6 @@ class VideoManager {
   void Function(VideoMetricEvent event)? get onMetrics => _metrics.onMetrics;
 
   void _registerMetric(VideoMetricEvent event) => _metrics.record(event);
-
-  // ---------------------------------------------------------------------------
-  // Connectivity
-  // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
   // URL helpers
@@ -492,28 +476,22 @@ class VideoManager {
     required bool isPreload,
     required String url,
   }) {
-    return !usedStreaming && !isPreload && VideoDownloadService.isFirebaseStorageUrl(url);
+    return !usedStreaming &&
+        !isPreload &&
+        VideoDownloadService.isFirebaseStorageUrl(url);
   }
 
   /// Always false: a stream gets the connection to itself.
   ///
   /// Reported from production: a freshly published video -- the only one in
-  /// no cache at all -- paused and resumed continuously for its whole
-  /// duration, on the tile and again after scrolling away and back, while
-  /// every already-cached video played normally. No recovery ran and nothing
-  /// was logged, because nothing failed: the player was simply starved by
-  /// concurrent downloads of the file it was trying to stream.
-  ///
-  /// One of those downloads was the player's own: left at its default,
-  /// `CachedVideoPlayerPlus.networkUrl(...).initialize()` fires an unawaited
-  /// `downloadFile` of the whole video whenever the URL is missing from *its*
-  /// private cache, then streams the same URL anyway. That one is gone --
-  /// the streaming branch now passes `skipCache: true`. Warming the cache
-  /// here would simply put it back under a different name.
-  ///
-  /// The active video reaches the cache the same way every other video does:
-  /// as somebody's neighbour, through the preload path, once the stream has
-  /// reported itself healthy (see [markActivePlaybackStable]).
+  /// no cache at all -- paused and resumed for its whole duration while every
+  /// already-cached video played normally. Nothing failed and nothing was
+  /// logged; the player was starved by concurrent downloads of the file it
+  /// was streaming, one of them its own. `skipCache: true` removed that one,
+  /// and warming the cache here would put it straight back under another
+  /// name. The active video reaches the cache as somebody's neighbour,
+  /// through the preload path, once the stream is healthy (see
+  /// [markActivePlaybackStable]).
   ///
   /// Kept as a method rather than deleted so the decision stays visible at the
   /// call site, and so the guardrail can pin it.
@@ -543,13 +521,11 @@ class VideoManager {
     required bool isPreload,
     required bool usedStreaming,
     required bool usedStreamFallback,
-  }) {
-    return _shouldWarmCacheAfterStreamInit(
-      isPreload: isPreload,
-      usedStreaming: usedStreaming,
-      usedStreamFallback: usedStreamFallback,
-    );
-  }
+  }) => _shouldWarmCacheAfterStreamInit(
+    isPreload: isPreload,
+    usedStreaming: usedStreaming,
+    usedStreamFallback: usedStreamFallback,
+  );
 
   // ---------------------------------------------------------------------------
   // Controller initialization (CRITICAL PATH)
@@ -716,15 +692,24 @@ class VideoManager {
                 );
               }
             } else {
-              final downloadResult = await _downloads.download(
-                effectiveUrl,
-                force: true,
+              // A preload prepares the *next* player the same way the active
+              // one is prepared: it opens the stream and stops at "ready to
+              // render".
+              //
+              // Downloading the whole file first bets that the transfer beats
+              // the swipe, and adfoot-production's catalogue does not let
+              // that bet be won — its heaviest ready video is 71 MB at
+              // 10.6 Mb/s with no lighter rendition, against a preload
+              // timeout of 8-12 s. The download could not finish, so the
+              // preload failed, so the swipe landed on a cold start: 18
+              // sessions for that video on 2026-08-24, 7 with
+              // `timeToFirstFrameMs: null`. A stream init costs the header
+              // and enough samples to render, whatever the file weighs.
+              usedStreaming = true;
+              player = CachedVideoPlayerPlus.networkUrl(
+                Uri.parse(effectiveUrl),
+                skipCache: true,
               );
-              file = downloadResult.file;
-              if (!await file.exists()) {
-                throw Exception("Fichier introuvable : $effectiveUrl");
-              }
-              player = CachedVideoPlayerPlus.file(file);
             }
           }
 
@@ -759,7 +744,9 @@ class VideoManager {
             }
           } catch (streamError) {
             final canFallbackToDownloaded =
-                !kIsWeb && !isPreload && VideoDownloadService.isFirebaseStorageUrl(effectiveUrl);
+                !kIsWeb &&
+                !isPreload &&
+                VideoDownloadService.isFirebaseStorageUrl(effectiveUrl);
             if (!canFallbackToDownloaded) {
               rethrow;
             }
@@ -839,17 +826,13 @@ class VideoManager {
 
           _setLoadState(contextKey, url, VideoLoadState.ready);
 
-          if (!isPreload) {
-            // A preload is never a stream, and it deliberately skips the
-            // active URL, so only the active init can speak for it here.
-            _markStreaming(
-              contextKey,
-              cacheKey,
-              isStreaming: usedStreaming,
-            );
-            if (!usedStreaming) {
-              _flushDeferredPreload(contextKey);
-            }
+          // Which players are pulling bytes off the network, active or not.
+          // A preloaded stream carries the flag with it: the moment the user
+          // swipes onto it, it *is* the active stream, and the arbiter must
+          // know that before releasing the whole-file warms behind it.
+          _markStreaming(contextKey, cacheKey, isStreaming: usedStreaming);
+          if (!isPreload && !usedStreaming) {
+            _flushDeferredPreload(contextKey);
           }
 
           if (autoPlay && !player.controller.value.isPlaying) {
@@ -904,7 +887,9 @@ class VideoManager {
             usedStreaming: usedStreaming,
             usedStreamFallback: usedStreamFallback,
           )) {
-            unawaited(_downloads.warmCacheAfterPlaybackStabilizes(effectiveUrl));
+            unawaited(
+              _downloads.warmCacheAfterPlaybackStabilizes(effectiveUrl),
+            );
           }
 
           unawaited(_downloads.checkCacheSizeThrottled());
@@ -966,15 +951,14 @@ class VideoManager {
         //
         // [_maxConcurrentInits] keeps *background* work off the connection,
         // and the video the user is looking at is not background work. Both
-        // used this queue, and a preload's init downloads the whole file
-        // before it opens anything -- two slots on a medium tier, one on low.
-        // adfoot-production, 2026-08-23 17:21: a 1080p video reported
-        // `loadState: "loading"` for 25 s with no init error, because nothing
-        // had failed -- it had not started. The wait allows 20 s and spent
-        // them, and the 12 s activeTimeout only begins after the queue.
+        // used this queue: adfoot-production, 2026-08-23 17:21, a 1080p video
+        // reported `loadState: "loading"` for 25 s with no init error,
+        // because nothing had failed -- it had not started. The wait allows
+        // 20 s and spent them, and the 12 s activeTimeout only begins after.
         //
         // An active init still *takes* a slot, so preloads keep backing off
-        // for it. It simply never waits for one.
+        // for it. It simply never waits for one -- and a preload the user
+        // swipes onto stops waiting too, the moment it is claimed.
         if (isPreload) {
           final slotDeadline = DateTime.now().add(_initSlotWaitTimeout);
           while (_activeInits >= _maxConcurrentInits) {
@@ -982,6 +966,15 @@ class VideoManager {
               throw const _VideoInitCancelled(
                 'context_disposed_waiting_for_slot',
               );
+            }
+            // The user swiped onto this one while it waited: no longer
+            // background work, which is all this queue holds back.
+            if (_activeInitClaims.isClaimed(contextKey, cacheKey)) {
+              AppLogger.debug(
+                '[VideoManager] Preload claimed by the active request; '
+                'skipping the slot wait -> $effectiveUrl',
+              );
+              break;
             }
             if (!DateTime.now().isBefore(slotDeadline)) {
               AppLogger.debug(
@@ -1007,18 +1000,14 @@ class VideoManager {
       //
       // Two callers ask for the active video at the same moment — the
       // orchestrator, from `onIndexChanged`, and the tile itself, from
-      // `_attachOrInitialize` — and on a cold start they do it for the same
-      // index. The wait for a slot used to sit between the check at (2) and
-      // this registration, with an `await` in it: both callers found nothing
-      // registered, both blocked in the loop, and both started a player when
-      // a slot freed. The second one's `lru[cacheKey] = player` overwrote the
-      // first, so the first native player was left reachable from no map at
-      // all — never disposed, never counted, and holding a MediaCodec
-      // instance for the rest of the session. That is the resource this file
-      // spends its whole length protecting, leaked by the code protecting it.
-      //
-      // Putting the wait inside `queueThenLoad` means the call returns its
-      // future synchronously, so nothing can interleave between (2) and here.
+      // `_attachOrInitialize`. The wait for a slot used to sit between the
+      // check at (2) and this registration, with an `await` in it: both
+      // callers found nothing registered, both blocked, and both started a
+      // player when a slot freed. The second one's `lru[cacheKey] = player`
+      // overwrote the first, leaving a native player reachable from no map at
+      // all — never disposed, holding a MediaCodec instance for the rest of
+      // the session. Putting the wait inside `queueThenLoad` makes the call
+      // return its future synchronously, so nothing can interleave here.
       final future = queueThenLoad();
       futures[cacheKey] = future;
 
@@ -1041,6 +1030,12 @@ class VideoManager {
       final effectiveUrl = candidate.url;
       _setResolvedUrl(contextKey, url, effectiveUrl);
 
+      // Claimed here, before `attempt` can await anything, and released
+      // whichever way this candidate ends. See [ActiveInitRegistry].
+      if (!isPreload) {
+        _activeInitClaims.claim(contextKey, effectiveUrl);
+      }
+
       try {
         final player = await attempt(
           candidate,
@@ -1060,6 +1055,10 @@ class VideoManager {
         lastError = e;
         fallbackFromSourceType ??= sourceTypeFor(candidate);
         _setLoadState(contextKey, url, VideoLoadState.loading);
+      } finally {
+        if (!isPreload) {
+          _activeInitClaims.release(contextKey, effectiveUrl);
+        }
       }
     }
 
@@ -1073,10 +1072,6 @@ class VideoManager {
       lastError ?? Exception("Aucune source vidéo disponible"),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Download / cache
-  // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
   // LRU enforce
@@ -1186,14 +1181,17 @@ class VideoManager {
     final radius = _preloadRadius;
     if (radius <= 0) return;
 
-    // Hold the neighbours back while the visible video is still pulling its
-    // own bytes off the network. Each preload downloads a whole file, so
-    // firing two or three of them alongside a live stream is what turned a
-    // freshly published video into a pause/resume loop for its entire
-    // duration. The request is replayed as soon as the stream reports itself
-    // healthy (markActivePlaybackStable) or the active video switches to a
-    // cached file -- so a normal network still preloads exactly as before,
-    // only a couple of seconds later.
+    // While the visible video is still pulling its own bytes off the network,
+    // the request is held in two stages. Nothing starts until it renders --
+    // firing whole-file warms alongside a live stream is what turned a freshly
+    // published video into a pause/resume loop for its entire duration -- then
+    // the next player is released alone, and the warms go on waiting for a
+    // healthy stream (markActivePlaybackStable).
+    //
+    // The first frame and this call race: a video promoted from a preload has
+    // already rendered by the time this runs. Reading the recorded answer
+    // rather than waiting to be told is what makes the order irrelevant, and
+    // what keeps the chain going at scroll speed.
     final resolvedActive = activeUrl == null || activeUrl.trim().isEmpty
         ? null
         : _resolveKey(contextKey, activeUrl);
@@ -1207,6 +1205,10 @@ class VideoManager {
           activeUrl: activeUrl,
         ),
       );
+
+      if (_bandwidth.hasRendered(contextKey, resolvedActive)) {
+        _releaseDeferredPlayers(contextKey);
+      }
       return;
     }
     _bandwidth.clearDeferred(contextKey);
@@ -1396,6 +1398,7 @@ class VideoManager {
       );
     }
     _initFuturesByContext.remove(contextKey);
+    _activeInitClaims.forgetContext(contextKey);
     _ui.forgetContext(contextKey);
     _preloads.forgetContext(contextKey);
     _bandwidth.forgetContext(contextKey);

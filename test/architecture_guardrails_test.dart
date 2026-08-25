@@ -388,20 +388,50 @@ void main() {
       // object was deleted counted as a crash and buried the very metric this
       // test exists to protect.
       //
+      // The second classified category is the teardown artefact
+      // `cloud_firestore` raises after a completed `runTransaction`:
+      //   MissingPluginException(No implementation found for method cancel on
+      //   channel plugins.flutter.io/firebase_firestore/transaction/<uuid>)
+      // The native side removes the stream handler when the transaction
+      // resolves and the Dart side then cancels against a channel that has
+      // none. adfoot-production booked twelve of them as crashes, two within a
+      // second of each other on 2026-08-24 at 11:55, right after a feed
+      // playback session -- a like and a share that had both succeeded.
+      //
       // The invariant that actually matters is unchanged: nothing *uncaught*
-      // is downgraded. So the file may contain exactly one `fatal: false`, and
-      // it must sit inside the image branch, ahead of the fatal report.
-      expect('fatal: false'.allMatches(bootstrap).length, 1);
-      expect(
-        bootstrap.indexOf('if (_isImageResourceFailure(details)) {'),
-        allOf(
+      // is downgraded. So every `fatal: false` in the file must belong to a
+      // named, classified category whose branch returns before the fatal
+      // report, and there must be exactly as many as there are categories.
+      const classified = <String>[
+        'if (_isFirestoreTransactionTeardown(details.exception)) {',
+        'if (_isImageResourceFailure(details)) {',
+      ];
+
+      expect('fatal: false'.allMatches(bootstrap).length, classified.length);
+
+      final fatalReport = bootstrap.indexOf('recordFlutterFatalError(details)');
+      expect(fatalReport, greaterThan(-1));
+
+      for (final branch in classified) {
+        final branchIndex = bootstrap.indexOf(branch);
+        expect(branchIndex, greaterThan(-1), reason: '$branch disappeared');
+
+        final downgrade = bootstrap.indexOf('fatal: false', branchIndex);
+        expect(
+          downgrade,
           greaterThan(-1),
-          lessThan(bootstrap.indexOf('fatal: false')),
-        ),
-      );
+          reason: '$branch must be the one downgrading',
+        );
+        expect(
+          bootstrap.indexOf('return;', downgrade),
+          lessThan(fatalReport),
+          reason: '$branch must return before the fatal report',
+        );
+      }
+
       expect(
         bootstrap.indexOf('fatal: false'),
-        lessThan(bootstrap.indexOf('recordFlutterFatalError(details)')),
+        lessThan(fatalReport),
       );
 
       // Scoped to the reporting call itself: searching the rest of the file

@@ -20,6 +20,7 @@ import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/video_cache_manager.dart' as custom_cache;
 import 'package:adfoot/utils/video_share_links.dart';
+import 'package:adfoot/utils/publisher_headline.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/videos/domain/video_action_runner.dart';
 import 'package:adfoot/widgets/tiktok_video_player.dart';
@@ -29,6 +30,7 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/widgets/video_action_rail.dart';
 import 'package:adfoot/widgets/video_metadata_overlay.dart';
 import 'package:adfoot/services/app_logger.dart';
+import 'package:adfoot/videos/data/watched_video_store.dart';
 import 'package:adfoot/videos/video_manager.dart';
 
 part 'smart_video_player_sheets.dart';
@@ -132,6 +134,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   int _smoothPlaybackTicks = 0;
   bool _reportedPlaybackStable = false;
   static const int _smoothTicksBeforeStable = 3;
+
+  /// Whether this tile has already told the manager it rendered.
+  ///
+  /// One report per attached player: the first frame happens once, and the
+  /// release it triggers must not be re-asked for on every tick after it.
+  bool _reportedFirstFrame = false;
 
   bool _isRecovering = false;
 
@@ -406,6 +414,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _hasFirstFrame = false;
     _smoothPlaybackTicks = 0;
     _reportedPlaybackStable = false;
+    _reportedFirstFrame = false;
 
     // VideoManager owns the resolved URL; this used to copy it back onto the
     // Video model as well, which made a document object carry playback state
@@ -422,6 +431,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         _resetAutomaticRecoveryBudget();
         _playbackSession?.markFirstFrameRendered();
         _stopFirstFrameWatchdog();
+        _reportFirstFrameRendered();
       } else {
         _startFirstFrameWatchdog();
       }
@@ -572,6 +582,24 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _playbackSession = null;
     final summary = currentSession.finish(endReason: endReason);
     unawaited(_playbackMetricsLogger.logSession(summary));
+    _recordWatchIfSeen(summary);
+  }
+
+  /// Remembers that this video was actually watched, so the feed stops
+  /// opening on it.
+  ///
+  /// The session summary already carries the two numbers the decision needs —
+  /// they were computed for the metrics and then thrown away. See
+  /// [WatchedVideoPolicy] for where the thresholds come from.
+  void _recordWatchIfSeen(FeedPlaybackSessionSummary summary) {
+    final watched = WatchedVideoPolicy.countsAsWatched(
+      hadFirstFrame: summary.hadFirstFrame,
+      maxPosition: summary.maxPosition,
+      completionRate: summary.completionRate,
+    );
+    if (!watched) return;
+
+    unawaited(WatchedVideoStore.instance.markWatched(summary.videoId));
   }
 
   // ---------------------------------------------------------------------------
@@ -611,6 +639,14 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       _stopFirstFrameWatchdog();
       if (mounted && !_isDisposed) setState(() {});
     }
+
+    // Not inside the block above: a tile promoted from a preload rendered
+    // while it was still a neighbour, so it arrives here with `_hasFirstFrame`
+    // already true and that block never runs again. That is precisely the
+    // video whose neighbour most needs preparing, and it is the one case the
+    // release would have been skipped in. Both guards inside make this a
+    // boolean test on every other tick.
+    if (_hasFirstFrame) _reportFirstFrameRendered();
 
     _playbackSession?.recordPlaybackSample(
       position: v.position,
@@ -861,6 +897,26 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _bufferingStrikes = 0;
     _smoothPlaybackTicks = 0;
     _lastKnownPos = Duration.zero;
+  }
+
+  /// Releases the *next* player once this one has rendered.
+  ///
+  /// Only the tile the user is actually on speaks for the context: an
+  /// off-screen tile reaching its first frame says nothing about the
+  /// connection the visible video is using.
+  ///
+  /// The whole-file warms stay held until [_reportPlaybackStableIfSmooth];
+  /// this is the earlier, cheaper half of the same release, and it is what
+  /// keeps a fast scroll from paying a cold start on every swipe.
+  void _reportFirstFrameRendered() {
+    if (_reportedFirstFrame) return;
+    if (_vc.currentIndex.value != widget.currentIndex) return;
+
+    _reportedFirstFrame = true;
+    _videoManager.markActivePlaybackStarted(
+      widget.contextKey,
+      widget.videoUrl,
+    );
   }
 
   /// Releases this context's deferred preloads once the stream has proven it
@@ -1116,7 +1172,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       description: widget.video.description,
       caption: widget.video.caption,
       publisherName: publisher?.nom ?? '',
-      publisherRole: publisher?.role ?? '',
+      // A player's poste, not the word "joueur": the surrounding context
+      // already says it is a player, and a recruiter needs the position.
+      publisherRole: PublisherHeadline.badge(
+        role: publisher?.role,
+        position: publisher?.position,
+      ),
+      publisherDetails: PublisherHeadline.details(
+        club: publisher?.clubActuel,
+        team: publisher?.team,
+        city: publisher?.city,
+      ),
       showProgressBar: widget.showProgressBar,
       onOpenPublisher: () => unawaited(
         _openPublisherProfile(widget.userController.user?.uid),

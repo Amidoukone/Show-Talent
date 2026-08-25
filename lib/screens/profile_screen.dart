@@ -20,6 +20,7 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/edit_advanced_profile_screen.dart';
 import 'package:adfoot/screens/edit_profil_screen.dart';
+import 'package:adfoot/screens/setting_screen.dart';
 import 'package:adfoot/screens/follow_list_screen.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
@@ -264,6 +265,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
             subtitle: _profileRoleLabel(user),
             showBottomDivider: true,
             actions: [
+              // Settings live here now, not in the navigation bar.
+              //
+              // "Outils" — Compte, Confidentialité, Sécurité, Suppression —
+              // was a top-level destination while the profile was not, which
+              // is backwards: settings are visited rarely, a profile
+              // constantly. They swapped places, and this is the one tap that
+              // still reaches them.
+              if (isOwnProfile && !widget.isReadOnly)
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined),
+                  tooltip: 'Outils',
+                  onPressed: () => unawaited(Get.to(() => SettingsScreen())),
+                ),
               if (isOwnProfile && !widget.isReadOnly)
                 IconButton(
                   icon: const Icon(Icons.edit),

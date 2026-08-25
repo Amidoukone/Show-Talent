@@ -79,6 +79,54 @@ void main() {
         completes,
       );
     });
+
+    // releaseControllersExcept had no caller at all until backgrounding
+    // started using it, so nothing had ever exercised its edges. It runs on
+    // every trip to the home screen now, and the two inputs it gets there are
+    // exactly these: a context with nothing in it, and no URL to keep because
+    // the user was on the end-of-feed page.
+    test('releasing a context that holds nothing is a no-op', () async {
+      SharedPreferences.setMockInitialValues({});
+      final videoManager = VideoManager();
+
+      await expectLater(
+        videoManager.releaseControllersExcept('never-created', 'a-url'),
+        completes,
+      );
+    });
+
+    test('releasing with nothing to keep is a no-op on an empty context', () async {
+      SharedPreferences.setMockInitialValues({});
+      final videoManager = VideoManager();
+
+      await expectLater(
+        videoManager.releaseControllersExcept('never-created', null),
+        completes,
+      );
+      await expectLater(
+        videoManager.releaseControllersExcept('never-created', '   '),
+        completes,
+      );
+    });
+
+    // Whatever it releases must also stop counting: a URL still marked as
+    // streaming would keep this context's whole-file warms deferred for good.
+    test('releasing clears what the released players were counted in', () {
+      final start = manager.indexOf(
+        'Future<void> releaseControllersExcept(',
+      );
+      expect(start, isNonNegative);
+      final body = manager.substring(start, start + 1600);
+
+      expect(body, contains('_markStreaming(contextKey, key, isStreaming: false)'));
+      expect(body, contains('_initFuturesByContext[contextKey]?.remove(key)'));
+      expect(body, contains('_removeUiTracking(contextKey, original)'));
+      expect(
+        body,
+        contains('await safeDispose(player);'),
+        reason: 'pausing does not give a MediaCodec instance back',
+      );
+    });
   });
 
   group('decoders are handed back before a second video surface opens', () {

@@ -172,6 +172,48 @@ class VideoDownloadService {
     throw Exception("Download failed without explicit error: $url");
   }
 
+  /// How many neighbour files may be pulled off the network at once.
+  ///
+  /// A warm is a whole-file download, and it was the one path that took the
+  /// connection without asking. Preloads used to run through
+  /// `VideoManager.initializeController`, which queues on the tier's
+  /// `maxConcurrentInits` — 3 on a high-tier network, 1 on a low one. Moving
+  /// the far neighbours onto [warmFile], so they stop opening hardware
+  /// decoders, took them out from under that gate at the same time: a radius
+  /// of 3 starts five of them inside 700 ms, unthrottled, against the video
+  /// the user is watching. That is the pause/resume loop this pipeline has
+  /// already been fixed for twice, arriving by a third route.
+  ///
+  /// Over the limit a warm is dropped rather than queued. The scheduler runs
+  /// again on every index change, and the neighbour that was dropped is
+  /// nearer by then — so the cache still fills in the direction of travel,
+  /// while a queue would hold the connection for pages the user has left.
+  static const int maxConcurrentWarms = 2;
+
+  int _activeWarms = 0;
+
+  /// Puts [url]'s bytes on disk, if the connection has room for it.
+  ///
+  /// A cached file makes the next swipe fast — the controller opens from
+  /// local storage instead of the network — and it costs no decoder, which is
+  /// the resource the device actually runs out of.
+  Future<void> warmFile(String url) async {
+    if (kIsWeb || url.isEmpty) return;
+    // Checked and claimed with no `await` in between, which is what makes the
+    // counter a limit rather than a suggestion.
+    if (_activeWarms >= maxConcurrentWarms) return;
+    _activeWarms++;
+
+    try {
+      final cached = await custom_cache.VideoCacheManager.getFileIfCached(url);
+      if (cached != null && await cached.exists()) return;
+
+      await download(url);
+    } finally {
+      _activeWarms--;
+    }
+  }
+
   Future<void> warmCacheInBackground(String url) async {
     try {
       await download(url);

@@ -89,21 +89,83 @@ class _ProfileVideoScrollViewState extends State<ProfileVideoScrollView> {
       return;
     }
 
+    // Which video the user is on, by identity rather than by position.
+    //
+    // `ProfileController` keeps its list to 25 entries and drops the excess
+    // from the *front* (`_videoMemoryLimit`), so the page that adds twenty
+    // videos also removes fifteen. Every index into the old list is then off
+    // by fifteen, and handing the old index back moved the user fifteen
+    // videos forward from the one they were watching. Only an id survives a
+    // window that slides.
+    final before = _currentVideos;
+    final anchorIndex = before.isEmpty
+        ? 0
+        : _pager.currentIndex.clamp(0, before.length - 1).toInt();
+    final anchorId = before.isEmpty ? null : before[anchorIndex].id;
+
     await profileController.fetchUserVideos(widget.uid);
     if (_isDisposed || !mounted) return;
+
+    // The profile's list is refreshed by a fetch, not by the deletion, so it
+    // still holds anything deleted from the player since this screen opened.
+    // Handing those back would put a document that no longer exists in front
+    // of the user, with a URL that no longer resolves.
+    profileController.removeVideosLocally(_vc.deletedVideoIds);
 
     final playable = profileController.videoList
         .where((video) => video.isPlayable)
         .toList(growable: false);
-    if (playable.length <= _currentVideos.length) return;
+    if (playable.isEmpty) return;
 
-    _vc.replaceVideos(playable, selectedIndex: _pager.currentIndex);
+    // Same videos in the same order: the page brought nothing this screen can
+    // use, and replacing the list would only churn the tiles.
+    final beforeIds = before.map((video) => video.id).toList(growable: false);
+    final afterIds = playable.map((video) => video.id).toList(growable: false);
+    if (beforeIds.length == afterIds.length) {
+      var identical = true;
+      for (var i = 0; i < afterIds.length; i++) {
+        if (beforeIds[i] != afterIds[i]) {
+          identical = false;
+          break;
+        }
+      }
+      if (identical) return;
+    }
+
+    final foundAt = anchorId == null
+        ? -1
+        : playable.indexWhere((video) => video.id == anchorId);
+    final nextIndex = foundAt >= 0
+        ? foundAt
+        : anchorIndex.clamp(0, playable.length - 1).toInt();
+
+    _vc.replaceVideos(playable, selectedIndex: nextIndex);
+
+    // The page view does not follow `currentIndex` on its own. Left behind,
+    // it would show one video while every tile believed a different one was
+    // active — so nothing would play at all.
+    if (nextIndex == anchorIndex) return;
+
+    await WidgetsBinding.instance.endOfFrame;
+    if (_isDisposed || !mounted) return;
+
+    _pager.jumpToPage(nextIndex);
+    await _pager.activate(nextIndex);
   }
 
   Future<void> _safeExit() async {
     if (_isDisposed || _isExiting) return;
 
     setState(() => _isExiting = true);
+
+    // The grid the user is going back to reads its own list. Anything deleted
+    // in here has to leave that list too, or the profile shows a video that
+    // no longer exists until something else refreshes it.
+    if (Get.isRegistered<ProfileController>(tag: widget.uid)) {
+      Get.find<ProfileController>(
+        tag: widget.uid,
+      ).removeVideosLocally(_vc.deletedVideoIds);
+    }
 
     try {
       _vc.currentIndex.value = -1;

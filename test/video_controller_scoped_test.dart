@@ -123,6 +123,73 @@ void main() {
     },
   );
 
+  // adfoot-production, 2026-08-24: 14 documents with `status: "ready"`. The
+  // feed loads a page of 10 (`_limit`) and the live stream watches 30
+  // (`_liveWindowLimit`), so the four documents past page one were in the
+  // window, absent from `videoList`, and announced as "4 nouvelles vidéos"
+  // before the user had scrolled anywhere. Pagination was always going to
+  // bring them in; they were never new.
+  test('a live window deeper than the loaded feed announces nothing', () {
+    final controller = VideoController(
+      contextKey: 'home',
+      enableLiveStream: true,
+      enableFeedFetch: true,
+    );
+
+    final ready = [for (var i = 0; i < 14; i++) buildVideo('ready-$i')];
+
+    // What one page of the feed put on screen.
+    controller.replaceVideos(ready.take(10).toList(), selectedIndex: 0);
+
+    // What the live stream sees: the same ordering, four documents deeper.
+    controller.applyLiveWindowForTests(ready);
+
+    expect(controller.pendingLiveCount.value, 0);
+    expect(controller.videoList.length, 10);
+  });
+
+  // Same feed, one genuinely new publication: it sorts above everything the
+  // user already has, which is exactly what the banner is for.
+  test('a video published above the feed head is announced', () {
+    final controller = VideoController(
+      contextKey: 'home',
+      enableLiveStream: true,
+      enableFeedFetch: true,
+    );
+
+    final ready = [for (var i = 0; i < 14; i++) buildVideo('ready-$i')];
+    controller.replaceVideos(ready.take(10).toList(), selectedIndex: 0);
+    controller.applyLiveWindowForTests(ready);
+    expect(controller.pendingLiveCount.value, 0);
+
+    controller.applyLiveWindowForTests([buildVideo('just-published'), ...ready]);
+
+    expect(controller.pendingLiveCount.value, 1);
+    expect(controller.applyBufferedLiveVideos(moveToTop: true), 1);
+    expect(controller.videoList.first.id, 'just-published');
+  });
+
+  // Opening a shared link prepends a video fetched by id, so the feed holds
+  // one document the page query did not return. The batch that follows must
+  // not read that difference as news either.
+  test('a deep-linked video does not make the rest of the window new', () {
+    final controller = VideoController(
+      contextKey: 'home',
+      enableLiveStream: true,
+      enableFeedFetch: true,
+    );
+
+    final ready = [for (var i = 0; i < 14; i++) buildVideo('ready-$i')];
+    controller.replaceVideos([
+      ready.last,
+      ...ready.take(10),
+    ], selectedIndex: 0);
+
+    controller.applyLiveWindowForTests(ready);
+
+    expect(controller.pendingLiveCount.value, 0);
+  });
+
   test('live feed activates the first ready video after an empty refresh', () {
     final controller = VideoController(
       contextKey: 'home',

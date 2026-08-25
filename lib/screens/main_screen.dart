@@ -6,14 +6,19 @@ import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/connectivity_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/screens/conversation_screen.dart';
-import 'package:adfoot/screens/event_list_screen.dart';
 import 'package:adfoot/screens/home_screen.dart';
-import 'package:adfoot/screens/offre_screen.dart';
+import 'package:adfoot/screens/add_video.dart';
+import 'package:adfoot/screens/event_form_screen.dart';
+import 'package:adfoot/screens/offres_form.dart';
+import 'package:adfoot/screens/opportunities_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
-import 'package:adfoot/screens/setting_screen.dart';
+import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/notification_route.dart';
+import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/services/notifications.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
+import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -37,13 +42,73 @@ class _MainScreenState extends State<MainScreen> {
   final ChatController chatController = Get.find<ChatController>();
   final AuthController _authController = Get.find<AuthController>();
 
-  final List<Widget> _screens = <Widget>[
-    const HomeScreen(),
-    OffreScreen(),
-    const EventListScreen(),
-    const ConversationsScreen(),
-    SettingsScreen(),
-  ];
+  /// Where the tapped notification wants the Opportunités screen to open.
+  ///
+  /// The screen is built fresh on every tab change, so a plain `initialTab`
+  /// would be read once and never again. The serial is what makes a second
+  /// request for the same tab still count as a request.
+  int _opportunitiesTab = 0;
+  int _opportunitiesTabSerial = 0;
+
+  /// The four destinations, in bar order.
+  ///
+  /// `Outils` is not among them. It is a settings screen — Compte,
+  /// Confidentialité, Sécurité, Suppression — and settings are visited
+  /// rarely, while a profile is what a player checks constantly and what a
+  /// recruiter's whole workflow ends on. The profile used to be reachable
+  /// only through the avatar on the *home* app bar, which meant that from
+  /// Offres, Events or Chat there was no way to your own profile at all
+  /// without going back to the feed first. They have swapped places: Profil
+  /// is a destination, Outils is one tap inside it.
+  static const int _homeTab = 0;
+  static const int _opportunitiesDestination = 1;
+  static const int _chatTab = 2;
+  static const int _profileTab = 3;
+
+  Widget _destination(int index, AppUser user) {
+    switch (index) {
+      case _opportunitiesDestination:
+        return OpportunitiesScreen(
+          initialTab: _opportunitiesTab,
+          tabRequestSerial: _opportunitiesTabSerial,
+        );
+      case _chatTab:
+        return const ConversationsScreen();
+      case _profileTab:
+        return ProfileScreen(uid: user.uid, isReadOnly: false);
+      case _homeTab:
+      default:
+        return const HomeScreen();
+    }
+  }
+
+  /// Whether this account has anything to publish.
+  ///
+  /// A player publishes videos; a club, a recruiter or an agent publishes
+  /// offers and events. A fan publishes nothing, and gets no button — a
+  /// disabled one would be worse than none.
+  bool _canPublish(AppUser user) =>
+      normalizeUserRole(user.role) == 'joueur' ||
+      isOpportunityPublisherRole(user.role);
+
+  /// Bar slots, as destination indices, with `null` for the publish action.
+  ///
+  /// The action sits in the middle because that is where a thumb rests and
+  /// because the video surface has no room left for it: top is chrome, right
+  /// is the action rail, bottom-left is the metadata. On an immersive feed
+  /// the create action belongs to the navigation, not to the screen.
+  List<int?> _barSlots(AppUser user) {
+    if (!_canPublish(user)) {
+      return const <int?>[_homeTab, _opportunitiesDestination, _chatTab, _profileTab];
+    }
+    return const <int?>[
+      _homeTab,
+      _opportunitiesDestination,
+      null,
+      _chatTab,
+      _profileTab,
+    ];
+  }
 
   @override
   void initState() {
@@ -105,17 +170,34 @@ class _MainScreenState extends State<MainScreen> {
         }
         unawaited(Get.to(() => ProfileScreen(uid: uid, isReadOnly: false)));
       case NotificationDestination.offers:
-        _selectTab(1);
+        _openOpportunities(tab: 0);
       case NotificationDestination.events:
-        _selectTab(2);
+        _openOpportunities(tab: 1);
       case NotificationDestination.conversations:
-        _selectTab(3);
+        _selectTab(_chatTab);
     }
   }
 
   void _selectTab(int index) {
     if (!mounted || _selectedIndex == index) return;
     setState(() => _selectedIndex = index);
+  }
+
+  /// Opens Opportunités on one of its two tabs.
+  ///
+  /// Offres and Événements were two destinations holding, on
+  /// adfoot-production, one offer and two events between them — forty percent
+  /// of the navigation bar for three documents. They are also the same thing
+  /// seen twice: an opportunity published by a club, a recruiter or an agent
+  /// for a player to answer. One destination, two tabs, and the slot that
+  /// frees pays for the publish action the bar never had.
+  void _openOpportunities({required int tab}) {
+    if (!mounted) return;
+    setState(() {
+      _selectedIndex = _opportunitiesDestination;
+      _opportunitiesTab = tab;
+      _opportunitiesTabSerial++;
+    });
   }
 
   void _listenConnectivity() {
@@ -153,12 +235,205 @@ class _MainScreenState extends State<MainScreen> {
     _hasHandledArguments = true;
   }
 
-  void _onItemTapped(int index) {
+  void _onBarItemTapped(int barIndex, AppUser user) {
     HapticFeedback.selectionClick();
 
-    setState(() {
-      _selectedIndex = index;
-    });
+    final slots = _barSlots(user);
+    if (barIndex < 0 || barIndex >= slots.length) return;
+
+    final destination = slots[barIndex];
+    if (destination == null) {
+      unawaited(_openPublishAction(user));
+      return;
+    }
+
+    _selectTab(destination);
+  }
+
+  /// What "Publier" means for this account.
+  ///
+  /// Deliberately role-aware rather than player-only. A slot in the middle of
+  /// the bar that serves one role out of five would be dead space for
+  /// everyone else; one that means "add a video" to a player and "publish an
+  /// opportunity" to a club earns its place for every account that can create
+  /// anything at all.
+  ///
+  /// Never a destination: it opens, and hands the current tab back.
+  Future<void> _openPublishAction(AppUser user) async {
+    if (normalizeUserRole(user.role) == 'joueur') {
+      await Get.to(() => const AddVideo());
+      return;
+    }
+    if (!isOpportunityPublisherRole(user.role)) return;
+    if (!mounted) return;
+
+    await _showPublishOpportunitySheet();
+  }
+
+  Future<void> _showPublishOpportunitySheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useRootNavigator: true,
+      backgroundColor: AdColors.surfaceAlt,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AdColors.divider,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(
+                  Icons.local_offer_rounded,
+                  color: AdColors.brand,
+                ),
+                title: const Text(
+                  'Publier une offre',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: const Text('Un poste, un essai, une opportunité.'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _openOpportunities(tab: 0);
+                  unawaited(Get.to(() => const OffreFormScreen()));
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.event_available_rounded,
+                  color: AdColors.brand,
+                ),
+                title: const Text(
+                  'Créer un événement',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                subtitle: const Text('Une détection, un tournoi, une date.'),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _openOpportunities(tab: 1);
+                  unawaited(Get.to(() => const EventFormScreen()));
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Where the current destination sits in this account's bar.
+  int _barIndexFor(int destination, AppUser user) {
+    final index = _barSlots(user).indexOf(destination);
+    return index < 0 ? 0 : index;
+  }
+
+  List<BottomNavigationBarItem> _buildBarItems(AppUser user, int unread) {
+    return <BottomNavigationBarItem>[
+      for (final slot in _barSlots(user))
+        if (slot == null)
+          _publishBarItem()
+        else
+          switch (slot) {
+            _opportunitiesDestination => const BottomNavigationBarItem(
+              icon: Icon(Icons.local_offer_outlined),
+              activeIcon: Icon(Icons.local_offer_rounded),
+              label: 'Opportunités',
+            ),
+            _chatTab => BottomNavigationBarItem(
+              icon: _ChatIconWithBadge(unread: unread, active: false),
+              activeIcon: _ChatIconWithBadge(unread: unread, active: true),
+              label: 'Chat',
+            ),
+            _profileTab => BottomNavigationBarItem(
+              icon: _buildProfileIcon(user: user, active: false),
+              activeIcon: _buildProfileIcon(user: user, active: true),
+              label: 'Profil',
+            ),
+            _ => BottomNavigationBarItem(
+              icon: _buildHomeIcon(active: false),
+              activeIcon: _buildHomeIcon(active: true),
+              label: 'Accueil',
+            ),
+          },
+    ];
+  }
+
+  /// The create action, styled as the one thing in the bar that is not a place.
+  ///
+  /// Labelled rather than a bare glyph: "+" is unambiguous to a player and
+  /// means nothing to a club. One word that is true for both.
+  BottomNavigationBarItem _publishBarItem() {
+    final icon = Container(
+      width: 38,
+      height: 30,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AdColors.brand,
+        borderRadius: BorderRadius.circular(AdRadius.md),
+      ),
+      child: const Icon(Icons.add_rounded, color: AdColors.brandOn, size: 22),
+    );
+
+    return BottomNavigationBarItem(
+      icon: icon,
+      activeIcon: icon,
+      label: 'Publier',
+      tooltip: 'Publier',
+    );
+  }
+
+  /// The profile tab, wearing the user's own photo.
+  ///
+  /// A generic glyph says "a profile"; the photo says "yours", which is the
+  /// difference between a destination and *your* destination — and it is the
+  /// one tab whose content is different for every account.
+  ///
+  /// [AdAvatar] is what makes it safe to put a network image in a bar that
+  /// rebuilds on every unread-count change: it caches to disk rather than
+  /// refetching, and a photo whose Storage object is gone falls back instead
+  /// of reporting itself to Crashlytics as a fatal error.
+  ///
+  /// The fallback is the glyph this replaced, not generated initials: two
+  /// letters inside a 22 px circle are not legible, and the large avatar on
+  /// the profile screen is where initials still earn their place.
+  Widget _buildProfileIcon({required AppUser user, required bool active}) {
+    // The bar grows its glyphs from 24 to 26 when selected
+    // (`selectedIconTheme`), and an `IconTheme` does not reach a
+    // `CircleAvatar` — so the same two steps are spelled out here, or this one
+    // tab would sit still while its neighbours moved.
+    final diameter = active ? 26.0 : 24.0;
+
+    return _NavIconShell(
+      active: active,
+      child: SizedBox(
+        width: diameter,
+        height: diameter,
+        child: AdAvatar(
+          photoUrl: user.photoProfil,
+          radius: diameter / 2,
+          backgroundColor: active
+              ? AdColors.brand.withValues(alpha: 0.24)
+              : AdColors.onSurfaceMuted.withValues(alpha: 0.18),
+          fallback: Icon(
+            active ? Icons.person_rounded : Icons.person_outline_rounded,
+            size: diameter * 0.66,
+            color: active ? AdColors.brand : AdColors.onSurfaceMuted,
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildHomeIcon({required bool active}) {
@@ -266,7 +541,7 @@ class _MainScreenState extends State<MainScreen> {
       }
 
       return Scaffold(
-        body: _screens[_selectedIndex],
+        body: _destination(_selectedIndex, appUser),
         bottomNavigationBar: SafeArea(
           top: false,
           child: ClipRRect(
@@ -302,8 +577,8 @@ class _MainScreenState extends State<MainScreen> {
                   backgroundColor: Colors.transparent,
                   selectedItemColor: AdColors.brand,
                   unselectedItemColor: AdColors.onSurfaceMuted,
-                  currentIndex: _selectedIndex,
-                  onTap: _onItemTapped,
+                  currentIndex: _barIndexFor(_selectedIndex, appUser),
+                  onTap: (index) => _onBarItemTapped(index, appUser),
                   type: BottomNavigationBarType.fixed,
                   showUnselectedLabels: true,
                   selectedFontSize: 12,
@@ -318,36 +593,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                   selectedIconTheme: const IconThemeData(size: 26),
                   unselectedIconTheme: const IconThemeData(size: 24),
-                  items: <BottomNavigationBarItem>[
-                    BottomNavigationBarItem(
-                      icon: _buildHomeIcon(active: false),
-                      activeIcon: _buildHomeIcon(active: true),
-                      label: 'Accueil',
-                    ),
-                    const BottomNavigationBarItem(
-                      icon: Icon(Icons.local_offer_outlined),
-                      activeIcon: Icon(Icons.local_offer_rounded),
-                      label: 'Offres',
-                    ),
-                    const BottomNavigationBarItem(
-                      icon: Icon(Icons.event_outlined),
-                      activeIcon: Icon(Icons.event_available_rounded),
-                      label: 'Events',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: _ChatIconWithBadge(unread: unread, active: false),
-                      activeIcon: _ChatIconWithBadge(
-                        unread: unread,
-                        active: true,
-                      ),
-                      label: 'Chat',
-                    ),
-                    const BottomNavigationBarItem(
-                      icon: Icon(Icons.settings_outlined),
-                      activeIcon: Icon(Icons.settings_rounded),
-                      label: 'Outils',
-                    ),
-                  ],
+                  items: _buildBarItems(appUser, unread),
                 ),
               ),
             ),

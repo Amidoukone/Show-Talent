@@ -184,7 +184,14 @@ void main() {
     // end of the list. Only the two scoped feeds guarded against it.
     test('the pager clamps an index the feed no longer has', () {
       expect(pager, contains('void _syncIndexWithFeedLength()'));
-      expect(pager, contains('_currentIndex.clamp(0, length - 1)'));
+      // The last index is the last video, plus the end-of-feed page when the
+      // feed has one — clamping to the last *video* would drop the user off
+      // that page every time the list changed under it.
+      expect(
+        pager,
+        contains('final lastIndex = length - 1 + (_hasEndOfFeedPage ? 1 : 0);'),
+      );
+      expect(pager, contains('_currentIndex.clamp(0, lastIndex)'));
     });
 
     // A programmatic jump must not be reported as a swipe: on the home feed
@@ -286,7 +293,7 @@ void main() {
       final focus = pager.indexOf('Future<void> _focus(int index) async');
       expect(focus, isNonNegative);
       expect(
-        pager.substring(focus, focus + 320),
+        pager.substring(focus, focus + 900),
         contains('_hasFocusedOnce = true;'),
       );
     });
@@ -307,6 +314,82 @@ void main() {
     });
   });
 
+  group('a backgrounded feed gives back what it was holding', () {
+    // Pausing was enough while a preloaded neighbour was a finished file
+    // download: it held a decoder, and that was all. A preload now opens the
+    // stream instead, and `playWhenReady` false does not stop ExoPlayer
+    // filling its buffer -- so a feed left in the background kept pulling a
+    // neighbour nobody had asked for off the user's mobile data.
+    test('background releases the neighbours and keeps the visible one', () {
+      final pager = _read('lib/widgets/video_feed_pager.dart');
+
+      final lifecycle = pager.indexOf('void didChangeAppLifecycleState(');
+      expect(lifecycle, isNonNegative);
+      expect(
+        pager.substring(lifecycle, lifecycle + 400),
+        contains('_releaseNeighboursForBackground()'),
+      );
+
+      final release = pager.indexOf(
+        'Future<void> _releaseNeighboursForBackground() async {',
+      );
+      expect(release, isNonNegative);
+      final body = pager.substring(release, release + 700);
+
+      expect(body, contains('_videoManager.pauseAll(widget.contextKey)'));
+      expect(
+        body,
+        contains('_videoManager.releaseControllersExcept('),
+        reason: 'a paused player still holds a decoder and still buffers',
+      );
+      // Resuming has to be instant, and the visible video is the one player
+      // whose bytes are not wasted.
+      expect(body, contains('videos[_currentIndex].videoUrl'));
+      // On the end-of-feed page there is nothing to come back to.
+      expect(body, contains(': null'));
+    });
+
+    // Two buttons open the upload flow. Only the one on the video itself gave
+    // the feed's decoders back, and what follows needs them: the upload form
+    // opens a preview player of its own, then an ffmpeg pass runs over the
+    // clip, while a paused feed player still holds a decoder and still fills
+    // its buffer.
+    test('both doors to the upload flow hand the feed back', () {
+      final player = _read('lib/widgets/smart_video_player.dart');
+      final home = _read('lib/screens/home_screen.dart');
+
+      final inPlayer = player.indexOf('Future<void> _openAddVideo(');
+      expect(inPlayer, isNonNegative);
+      expect(
+        player.substring(inPlayer, inPlayer + 700),
+        contains('_videoManager.releaseControllersExcept('),
+      );
+
+      final fromHome = home.indexOf('Future<void> _openAddVideo() async {');
+      expect(fromHome, isNonNegative);
+      final homeBody = home.substring(fromHome, fromHome + 1100);
+      expect(homeBody, contains("videoManager.releaseControllersExcept('home'"));
+      expect(
+        homeBody,
+        contains('videos[index].videoUrl'),
+        reason: 'the video being watched is kept, so coming back is free',
+      );
+    });
+
+    // The tile of a released neighbour is still mounted and still holds the
+    // reference. dispose() leaves isInitialized true, so only the registry
+    // can answer whether it is still ours to call into.
+    test('a released player cannot be called into', () {
+      final player = _read('lib/widgets/smart_video_player.dart');
+      final valid = player.indexOf('bool _isControllerValid(');
+      expect(valid, isNonNegative);
+      expect(
+        player.substring(valid, valid + 300),
+        contains('_videoManager.isPlayerLive(_player)'),
+      );
+    });
+  });
+
   group('a preload warms bytes, not a decoder', () {
     // adfoot-production, 2026-08-23 01:43:14 and 01:43:17:
     //   MediaCodecVideoRenderer error ... format_supported=YES
@@ -318,7 +401,7 @@ void main() {
       final manager = _read('lib/videos/video_manager.dart');
 
       expect(scheduler, contains('required bool warmFileOnly'));
-      expect(scheduler, contains('warmFileOnly: position > 0'));
+      expect(scheduler, contains('final warmFileOnly = position > 0;'));
       expect(manager, contains('Future<void> warmVideoFile(Video video)'));
 
       final callback = manager.indexOf('preload: (contextKey, video,');
@@ -345,14 +428,18 @@ void main() {
     // video being watched. The decoder budget was not the only budget the
     // preload path was spending.
     test('a warm still queues for the network', () {
-      final manager = _read('lib/videos/video_manager.dart');
-      expect(manager, contains('static const int _maxConcurrentWarms = 2;'));
+      // The throttle moved next to the transfers it throttles: a warm is a
+      // download that is dropped rather than queued when the connection is
+      // busy, and VideoDownloadService already owns "a URL goes in, a file
+      // comes out".
+      final downloads = _read('lib/videos/data/video_download_service.dart');
+      expect(downloads, contains('static const int maxConcurrentWarms = 2;'));
 
-      final warm = manager.indexOf('Future<void> warmVideoFile(Video video)');
+      final warm = downloads.indexOf('Future<void> warmFile(String url)');
       expect(warm, isNonNegative);
-      final body = manager.substring(warm, warm + 900);
+      final body = downloads.substring(warm, warm + 900);
 
-      expect(body, contains('if (_activeWarms >= _maxConcurrentWarms) return;'));
+      expect(body, contains('if (_activeWarms >= maxConcurrentWarms) return;'));
       expect(body, contains('_activeWarms++;'));
       expect(body, contains('_activeWarms--;'));
       expect(
@@ -363,13 +450,18 @@ void main() {
 
       // Claimed with no await between the check and the increment, or the
       // limit is only a suggestion.
-      final check = body.indexOf('if (_activeWarms >= _maxConcurrentWarms)');
+      final check = body.indexOf('if (_activeWarms >= maxConcurrentWarms)');
       final claim = body.indexOf('_activeWarms++;');
       expect(
         body.substring(check, claim),
         isNot(contains('await')),
         reason: 'the slot must be claimed atomically',
       );
+
+      // And the manager still picks which rendition gets warmed.
+      final manager = _read('lib/videos/video_manager.dart');
+      expect(manager, contains('_downloads.warmFile('));
+      expect(manager, contains('VideoSourceSelector.preferredSource('));
     });
   });
 

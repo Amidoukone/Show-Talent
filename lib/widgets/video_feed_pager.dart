@@ -118,6 +118,7 @@ class VideoFeedPager extends StatefulWidget {
     this.onRefreshRequested,
     this.showDeleteAction = true,
     this.showProfileAction = true,
+    this.endOfFeedBuilder,
     this.disposeWindow = 25,
   });
 
@@ -134,6 +135,14 @@ class VideoFeedPager extends StatefulWidget {
   final Future<bool> Function()? onRefreshRequested;
   final bool showDeleteAction;
   final bool showProfileAction;
+
+  /// Builds the page that follows the last video, or null for no such page.
+  ///
+  /// Only the feed that can actually be exhausted asks for one. A search
+  /// result set is an answer to a question, and a profile's videos are that
+  /// player's filmography: neither is a fil the user runs to the end of.
+  final WidgetBuilder? endOfFeedBuilder;
+
   final int disposeWindow;
 
   @override
@@ -155,6 +164,20 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
   /// [_attach] runs from inside `initState`, so a replayed request can arrive
   /// before there is any page view to move.
   bool _hasPageController = false;
+
+  /// Whether a page follows the last video.
+  ///
+  /// Never on an empty feed: the host already shows its own empty state
+  /// there, and "you are up to date" is the wrong thing to say to somebody
+  /// who has been shown nothing.
+  bool get _hasEndOfFeedPage =>
+      widget.endOfFeedBuilder != null && widget.videos.isNotEmpty;
+
+  /// The index of that page, or -1 when there is none.
+  int get _endOfFeedIndex => _hasEndOfFeedPage ? widget.videos.length : -1;
+
+  bool _isEndOfFeedIndex(int index) =>
+      _hasEndOfFeedPage && index == _endOfFeedIndex;
 
   /// Whether any index has been focused yet, from any caller.
   ///
@@ -271,7 +294,7 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
     _isActive = state == AppLifecycleState.resumed;
 
     if (!_isActive) {
-      unawaited(_videoManager.pauseAll(widget.contextKey));
+      unawaited(_releaseNeighboursForBackground());
       return;
     }
 
@@ -279,6 +302,32 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
       if (!mounted) return;
       unawaited(_focus(_currentIndex));
     });
+  }
+
+  /// Gives back everything the feed was holding for a video nobody is
+  /// watching, and keeps the one on screen.
+  ///
+  /// Pausing was enough while a preloaded neighbour was a finished file
+  /// download: it held a decoder, and that was all. It is not enough now that
+  /// a preload opens the stream instead — `playWhenReady` false does not stop
+  /// ExoPlayer filling its buffer, so a feed left in the background kept
+  /// pulling a neighbour nobody had asked for off the user's mobile data,
+  /// for as long as the app stayed there.
+  ///
+  /// The visible video is deliberately kept: resuming has to be instant, and
+  /// it is the one player whose bytes are not wasted. Its neighbours come
+  /// back through the preload path on the focus that follows the resume,
+  /// which is the same path that put them there in the first place.
+  Future<void> _releaseNeighboursForBackground() async {
+    await _videoManager.pauseAll(widget.contextKey);
+
+    final videos = widget.videos;
+    final keepUrl = _currentIndex >= 0 && _currentIndex < videos.length
+        ? videos[_currentIndex].videoUrl
+        // On the end-of-feed page there is nothing to come back to.
+        : null;
+
+    await _videoManager.releaseControllersExcept(widget.contextKey, keepUrl);
   }
 
   // ---------------------------------------------------------------------------
@@ -295,7 +344,8 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
     final length = widget.videos.length;
     if (length <= 0) return;
 
-    final clamped = _currentIndex.clamp(0, length - 1).toInt();
+    final lastIndex = length - 1 + (_hasEndOfFeedPage ? 1 : 0);
+    final clamped = _currentIndex.clamp(0, lastIndex).toInt();
     if (clamped == _currentIndex) return;
 
     _currentIndex = clamped;
@@ -324,6 +374,11 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
       return;
     }
 
+    // The index moves with the page, not only when a focus follows. A jump
+    // away from the end-of-feed page is the case that needs it: the refresh
+    // it triggers shortens the feed, and a stale index past the new last
+    // video would be clamped onto the wrong one and focused there.
+    _currentIndex = index;
     _silencedPageIndex = index;
     _pageController.jumpToPage(index);
   }
@@ -332,6 +387,19 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
     if (!mounted || !_isActive) return;
 
     final videos = widget.videos;
+
+    // The end-of-feed page is not a video, and nothing may keep playing
+    // behind it. Writing the index past the last tile is what makes every
+    // SmartVideoPlayer see itself as inactive and go passive; the explicit
+    // pause covers whatever the manager still holds for this context.
+    if (_isEndOfFeedIndex(index)) {
+      _hasFocusedOnce = true;
+      _currentIndex = index;
+      widget.videoController.currentIndex.value = index;
+      await _videoManager.pauseAll(widget.contextKey);
+      return;
+    }
+
     if (index < 0 || index >= videos.length) return;
 
     _hasFocusedOnce = true;
@@ -363,7 +431,8 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
   }
 
   void _onPageChanged(int index) {
-    if (index < 0 || index >= widget.videos.length) return;
+    if (index < 0 || index > widget.videos.length) return;
+    if (index == widget.videos.length && !_hasEndOfFeedPage) return;
 
     if (_silencedPageIndex == index) {
       _silencedPageIndex = null;
@@ -385,7 +454,9 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
   Widget build(BuildContext context) {
     final videos = widget.videos;
     if (videos.isEmpty) return const SizedBox.shrink();
-    if (_currentIndex >= videos.length) return const SizedBox.shrink();
+
+    final pageCount = videos.length + (_hasEndOfFeedPage ? 1 : 0);
+    if (_currentIndex >= pageCount) return const SizedBox.shrink();
 
     return PageView.builder(
       controller: _pageController,
@@ -393,9 +464,13 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
       physics: const VideoPageScrollPhysics(),
       dragStartBehavior: DragStartBehavior.down,
       allowImplicitScrolling: false,
-      itemCount: videos.length,
+      itemCount: pageCount,
       onPageChanged: _onPageChanged,
       itemBuilder: (context, index) {
+        if (_isEndOfFeedIndex(index)) {
+          return widget.endOfFeedBuilder!(context);
+        }
+
         final video = videos[index];
         return SmartVideoPlayer(
           key: ValueKey(video.id),

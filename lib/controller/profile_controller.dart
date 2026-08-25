@@ -653,6 +653,24 @@ class ProfileController extends GetxController {
     }
   }
 
+  /// Drops videos this profile still lists but that no longer exist.
+  ///
+  /// The full-screen player owns the deletion and its own copy of the list;
+  /// this one is refreshed by a fetch that may not come for a while, and
+  /// until it does the grid shows a video whose document is gone and
+  /// pagination hands it back to the player. Reconciling by id costs one pass
+  /// and removes both symptoms.
+  void removeVideosLocally(Iterable<String> videoIds) {
+    final ids = videoIds.toSet();
+    if (ids.isEmpty) return;
+
+    final before = videoList.length;
+    videoList.removeWhere((video) => ids.contains(video.id));
+    if (videoList.length != before) {
+      update();
+    }
+  }
+
   Future<void> fetchUserVideos(String uid, {bool isRefresh = false}) async {
     if (_loadingCompleter != null) {
       return _loadingCompleter!.future;

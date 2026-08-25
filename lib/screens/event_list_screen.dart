@@ -22,7 +22,10 @@ import 'package:intl/intl.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 
 class EventListScreen extends StatefulWidget {
-  const EventListScreen({super.key});
+  const EventListScreen({super.key, this.showAppBar = true});
+
+  /// False when a host already provides the chrome. See [OffreScreen].
+  final bool showAppBar;
 
   @override
   State<EventListScreen> createState() => _EventListScreenState();
@@ -67,11 +70,13 @@ class _EventListScreenState extends State<EventListScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: const AdAppBar(
-        title: 'Événements',
-        subtitle: 'Opportunités et rencontres',
-        showBottomDivider: true,
-      ),
+      appBar: widget.showAppBar
+          ? const AdAppBar(
+              title: 'Événements',
+              subtitle: 'Opportunités et rencontres',
+              showBottomDivider: true,
+            )
+          : null,
       body: Obx(() {
         final currentUser = userController.user;
         if (currentUser == null) {
@@ -227,7 +232,10 @@ class _EventListScreenState extends State<EventListScreen> {
           ],
         );
       }),
-      floatingActionButton: _buildFloatingActionButton(userController.user),
+      // See OffreScreen: the host's Publier button owns creation.
+      floatingActionButton: widget.showAppBar
+          ? _buildFloatingActionButton(userController.user)
+          : null,
     );
   }
 

@@ -11,6 +11,12 @@ class AdAppBar extends StatelessWidget implements PreferredSizeWidget {
   final Widget? leading;
   final bool showBottomDivider;
 
+  /// A widget under the title — a `TabBar`, in practice.
+  ///
+  /// Takes precedence over [showBottomDivider]: a tab bar draws its own
+  /// separation, and a hairline under it would read as a second one.
+  final PreferredSizeWidget? bottom;
+
   const AdAppBar({
     super.key,
     required this.title,
@@ -19,10 +25,16 @@ class AdAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.centerTitle = true,
     this.leading,
     this.showBottomDivider = false,
+    this.bottom,
   });
 
   @override
-  Size get preferredSize => Size.fromHeight(subtitle == null ? 56 : 72);
+  Size get preferredSize {
+    final base = subtitle == null ? 56.0 : 72.0;
+    // The divider is deliberately not counted: it never was, and every bar in
+    // the app is laid out against these two numbers.
+    return Size.fromHeight(base + (bottom?.preferredSize.height ?? 0));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,15 +89,17 @@ class AdAppBar extends StatelessWidget implements PreferredSizeWidget {
       titleSpacing: AdSpacing.md,
       title: titleWidget,
       actions: actions,
-      bottom: showBottomDivider
-          ? PreferredSize(
-              preferredSize: const Size.fromHeight(1),
-              child: Container(
-                height: 1,
-                color: AdColors.divider,
-              ),
-            )
-          : null,
+      bottom:
+          bottom ??
+          (showBottomDivider
+              ? PreferredSize(
+                  preferredSize: const Size.fromHeight(1),
+                  child: Container(
+                    height: 1,
+                    color: AdColors.divider,
+                  ),
+                )
+              : null),
     );
   }
 }

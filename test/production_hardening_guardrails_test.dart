@@ -298,6 +298,50 @@ void main() {
     // overwrote lru[cacheKey], leaving the first native player reachable
     // from no map at all: never disposed, never counted against either
     // budget, holding a MediaCodec instance for the rest of the session.
+    // The invariant above held only while the video on screen had not been
+    // preloaded first -- which is the one case the preload exists to make
+    // fast. Step (2) of the pipeline hands the active request the preload's
+    // future, and with it the preload's place in a queue that allows a 20 s
+    // wait. The wait then belongs to the video the user is looking at.
+    test('a preload the user swiped onto stops waiting for a slot', () {
+      final manager = _read('lib/videos/video_manager.dart');
+      final registry = _read('lib/videos/domain/active_init_registry.dart');
+
+      expect(registry, contains('class ActiveInitRegistry'));
+      expect(registry, contains('void claim(String contextKey, String url)'));
+      expect(registry, contains('bool isClaimed(String contextKey, String url)'));
+      expect(registry, contains('void release(String contextKey, String url)'));
+
+      // Claimed before `attempt` can await anything -- a preload suspended in
+      // the slot queue polls for it -- and released whichever way the
+      // candidate ends. A claim that outlived its request would let every
+      // later preload of that URL skip the queue for the rest of the session.
+      final claim = manager.indexOf('_activeInitClaims.claim(contextKey, effectiveUrl);');
+      final call = manager.indexOf('final player = await attempt(');
+      final release = manager.indexOf('_activeInitClaims.release(contextKey, effectiveUrl);');
+      expect(claim, isNonNegative);
+      expect(call, isNonNegative);
+      expect(release, isNonNegative);
+      expect(claim, lessThan(call), reason: 'the claim must precede the await');
+      expect(
+        manager.substring(release - 120, release),
+        contains('} finally {'),
+        reason: 'released on every exit, including the error paths',
+      );
+
+      // And read inside the wait it is meant to end.
+      final loop = manager.indexOf(
+        'while (_activeInits >= _maxConcurrentInits)',
+      );
+      final take = manager.indexOf('_activeInits++;');
+      final read = manager.indexOf(
+        'if (_activeInitClaims.isClaimed(contextKey, cacheKey)) {',
+      );
+      expect(read, isNonNegative);
+      expect(loop, lessThan(read));
+      expect(read, lessThan(take));
+    });
+
     test('an in-flight init is claimed before it queues', () {
       final manager = _read('lib/videos/video_manager.dart');
 

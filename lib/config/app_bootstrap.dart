@@ -309,6 +309,37 @@ class AppBootstrap {
     return details.library == 'image resource service';
   }
 
+  /// True for the teardown artefact `cloud_firestore` raises on a completed
+  /// transaction.
+  ///
+  /// Every `runTransaction` opens a per-transaction `EventChannel` named
+  /// `plugins.flutter.io/firebase_firestore/transaction/<uuid>`. The native
+  /// side removes its stream handler as soon as the transaction resolves, and
+  /// the Dart side then cancels the subscription against a channel that no
+  /// longer has one:
+  ///
+  ///   MissingPluginException(No implementation found for method cancel on
+  ///   channel plugins.flutter.io/firebase_firestore/transaction/01f127c3-…)
+  ///
+  /// It arrives with no listener, so it reaches `FlutterError.onError` and was
+  /// booked as a *fatal* Crashlytics event plus a remote `logClientEvents`
+  /// call. adfoot-production recorded two of them within a second of each
+  /// other on 2026-08-24 at 11:55, right after a feed playback session — the
+  /// shape of a like and a share going through
+  /// `VideoRepository`'s Firestore fallbacks, both of which had already
+  /// succeeded.
+  ///
+  /// Nothing failed, nothing is recoverable, and counting it as a crash is
+  /// how a release ships looking broken. Deliberately narrow: only `cancel`,
+  /// only on that channel prefix. A `MissingPluginException` anywhere else
+  /// means a plugin really is missing and must still be fatal.
+  static bool _isFirestoreTransactionTeardown(Object error) {
+    if (error is! MissingPluginException) return false;
+    final message = error.message ?? '';
+    return message.contains('method cancel') &&
+        message.contains('plugins.flutter.io/firebase_firestore/transaction/');
+  }
+
   static void _configureFlutterErrors() {
     FlutterError.onError = (FlutterErrorDetails details) {
       if (kDebugMode) {
@@ -327,6 +358,24 @@ class AppBootstrap {
       // while the crash picture is still unknown; if the dashboard fills with
       // layout noise later, downgrade *those* specific cases rather than
       // going back to reporting everything as non-fatal.
+      if (_isFirestoreTransactionTeardown(details.exception)) {
+        if (!kIsWeb) {
+          try {
+            _reportSilently(
+              FirebaseCrashlytics.instance.recordError(
+                details.exception,
+                details.stack,
+                reason: 'FlutterError.onError: firestore transaction teardown',
+                fatal: false,
+              ),
+            );
+          } catch (_) {
+            // Crashlytics may not be ready yet.
+          }
+        }
+        return;
+      }
+
       // A failed image is not a crash, and it is the single most common
       // framework error this app produces: a profile photo whose Storage
       // object is gone, a thumbnail fetched on a network that dropped, an

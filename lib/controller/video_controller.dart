@@ -11,6 +11,7 @@ import '../services/videos/video_action_service.dart';
 import '../services/videos/video_repository.dart';
 import '../services/video_observability_service.dart';
 import '../utils/video_ui_strings.dart';
+import '../videos/data/watched_video_store.dart';
 import '../videos/video_manager.dart';
 import '../screens/success_toast.dart';
 import 'user_controller.dart';
@@ -47,7 +48,12 @@ class VideoController extends GetxController {
   // ------------------------------------------------------------------
 
   VideoFeedCursor? _lastCursor;
-  bool _hasMore = true;
+  /// Whether the server still has a page the feed has not asked for.
+  ///
+  /// Observable because the end-of-feed page depends on it and on nothing
+  /// else: a plain field flips inside a fetch that may add no video at all,
+  /// so the host had no way to learn the feed had ended.
+  final hasMoreVideos = true.obs;
   bool _isLoading = false;
   static const int _limit = 10;
   static const int _liveWindowLimit = 30;
@@ -55,7 +61,7 @@ class VideoController extends GetxController {
   static const int _pendingLiveThumbnailWarmupLimit = 4;
   static const int _thumbnailPrefetchRadius = 2;
 
-  bool get hasMore => _hasMore;
+  bool get hasMore => hasMoreVideos.value;
   bool get isLoading => _isLoading;
   bool get hasPendingLiveVideos => pendingLiveCount.value > 0;
 
@@ -133,6 +139,119 @@ class VideoController extends GetxController {
   final List<Video> _pendingLiveHead = <Video>[];
   Future<void> Function(String thumbUrl)? _thumbnailPrefetchOverride;
 
+  /// Every video document this session has already been told about.
+  ///
+  /// "Nouvelle vidéo" has to mean *published since we looked*, and nothing
+  /// else. It used to mean "in the live window but not in `videoList`", and
+  /// those are not the same set: [_liveWindowLimit] is 30 while a feed page
+  /// is [_limit] = 10, so a cold start on adfoot-production — 14 ready
+  /// documents on 2026-08-24 — loaded ten and announced the other four as new
+  /// before the user had scrolled anywhere. Opening a shared link did the
+  /// same, off a feed of a different size, which is where the "1 nouvelle
+  /// vidéo" came from.
+  ///
+  /// Pagination brings those four in on its own. They were never new.
+  final Set<String> _knownVideoIds = <String>{};
+
+  void _markVideoIdsKnown(Iterable<Video> videos) {
+    for (final video in videos) {
+      _knownVideoIds.add(video.id);
+    }
+  }
+
+  /// Videos deleted through this controller since it was created.
+  ///
+  /// `deleteVideo` removes the document and this context's copy of it, and
+  /// that used to be the whole story. It is not, on a profile: the grid and
+  /// the full-screen player read from *two different lists* — the grid from
+  /// `ProfileController.videoList`, the player from this one — so a video
+  /// deleted from the player stayed in the grid, and the profile's own
+  /// pagination handed it straight back to the player with a URL that no
+  /// longer resolves.
+  ///
+  /// The ids are what the other list needs to reconcile, and only the
+  /// controller that performed the deletion can supply them.
+  final Set<String> _deletedVideoIds = <String>{};
+
+  /// Ids deleted through this controller, for a surface holding its own list.
+  Set<String> get deletedVideoIds => Set.unmodifiable(_deletedVideoIds);
+
+  /// Which videos this device has already watched. See [WatchedVideoStore].
+  final WatchedVideoStore _watched = WatchedVideoStore.instance;
+
+  /// [videos] with everything unwatched first, in server order, then the
+  /// already-watched ones least-recently-seen first.
+  ///
+  /// The catalogue is bounded — a player may publish ten videos, and
+  /// adfoot-production held fourteen in total on 2026-08-24 — so a feed
+  /// ordered by publication date alone opens on the same clip every session
+  /// until somebody uploads. That is the opposite of what this app is for: a
+  /// recruiter's question is "which players have I not seen yet", and the
+  /// feed is the answer to it.
+  ///
+  /// Stable in both halves, so a video never moves for a reason the user
+  /// cannot see. Applied only where the feed is (re)built — never while it is
+  /// on screen, or the list would reorder under a scrolling thumb.
+  List<Video> _watchedAwareOrder(List<Video> videos) {
+    if (!enableFeedFetch || videos.length < 2) return videos;
+    // Nothing read yet: server order is a correct answer, just a less useful
+    // one. Blocking the feed on a preferences read would not be.
+    if (!_watched.isLoaded) return videos;
+
+    final unwatched = <Video>[];
+    final watched = <Video>[];
+
+    for (final video in videos) {
+      if (_watched.hasWatched(video.id)) {
+        watched.add(video);
+      } else {
+        unwatched.add(video);
+      }
+    }
+
+    // Nothing seen yet: the server order is already the right answer.
+    //
+    // The reverse is *not* a shortcut. A feed where everything has been
+    // watched is the case this ordering matters most in — it decides whether
+    // coming back opens on the clip just finished or on the one seen
+    // longest ago.
+    if (watched.isEmpty) return videos;
+
+    watched.sort((a, b) {
+      final left = _watched.watchedAtMs(a.id) ?? 0;
+      final right = _watched.watchedAtMs(b.id) ?? 0;
+      return left.compareTo(right);
+    });
+
+    return [...unwatched, ...watched];
+  }
+
+  /// How many videos after [index] this device has not watched yet.
+  ///
+  /// The feed's supply of *new* material, which is not the same thing as its
+  /// length: a recruiter three videos from the end of a list they have
+  /// already seen has nothing ahead of them at all. Pagination is driven by
+  /// this rather than by distance to the end, so the page that holds the
+  /// unseen videos is asked for while there is still something to watch.
+  int unwatchedAfter(int index) {
+    if (!_watched.isLoaded) return videoList.length - index - 1;
+
+    var count = 0;
+    for (var i = index + 1; i < videoList.length; i++) {
+      if (!_watched.hasWatched(videoList[i].id)) count++;
+    }
+    return count;
+  }
+
+  /// Forgets what this session knew.
+  ///
+  /// Only for a genuine clean slate ([refreshVideos]): a reload that keeps
+  /// the feed keeps the knowledge, otherwise the reload itself would make
+  /// every video look new again.
+  void _forgetKnownVideoIds() {
+    _knownVideoIds.clear();
+  }
+
   bool _isPermissionDenied(Object error) =>
       VideoRepository.isPermissionDenied(error);
 
@@ -157,6 +276,7 @@ class VideoController extends GetxController {
 
     _videoManager.updateAdaptiveFlag(false);
     unawaited(_initFeatureFlags());
+    unawaited(_watched.ensureLoaded());
 
     if (enableLiveStream) {
       listenToVideos();
@@ -223,7 +343,7 @@ class VideoController extends GetxController {
     if (_isLoading || (_fetchLock?.isCompleted == false)) {
       return false;
     }
-    if (!isRefresh && !_hasMore) {
+    if (!isRefresh && !hasMoreVideos.value) {
       return false;
     }
 
@@ -231,26 +351,37 @@ class VideoController extends GetxController {
     _fetchLock = Completer<void>();
 
     try {
+      // Read before the ordering needs it, and alongside the network call
+      // rather than after it, so it costs nothing on the critical path.
+      final watchedLoaded = _watched.ensureLoaded();
       final page = await _videoRepository.fetchReadyVideosPage(
         limit: _limit,
         startAfter: !isRefresh ? _lastCursor : null,
       );
+      await watchedLoaded;
       if (page.fetchedCount == 0) {
-        _hasMore = false;
+        hasMoreVideos.value = false;
         return false;
       }
 
       final fetched = page.videos;
       _releaseSettledLocalState(fetched);
+      // A page the user has been handed is not news, whichever order it
+      // arrives in relative to the live stream.
+      _markVideoIdsKnown(fetched);
 
       if (isRefresh) {
         _clearPendingLiveHead();
-        videoList.assignAll(hydrateAll(fetched));
+        videoList.assignAll(hydrateAll(_watchedAwareOrder(fetched)));
       } else {
         final currentIds = videoList.map((v) => v.id).toSet();
-        videoList.addAll(
-          hydrateAll(fetched.where((v) => !currentIds.contains(v.id))),
-        );
+        final incoming = fetched
+            .where((v) => !currentIds.contains(v.id))
+            .toList(growable: false);
+
+        if (incoming.isNotEmpty) {
+          videoList.assignAll(_appendBelowCurrent(hydrateAll(incoming)));
+        }
       }
 
       if (videoList.isNotEmpty) {
@@ -260,7 +391,7 @@ class VideoController extends GetxController {
       }
 
       _lastCursor = page.cursor;
-      if (fetched.length < _limit) _hasMore = false;
+      if (fetched.length < _limit) hasMoreVideos.value = false;
 
       return true;
     } catch (e) {
@@ -287,10 +418,12 @@ class VideoController extends GetxController {
       await videoManager.disposeAllForContext(contextKey);
       _clearPendingLiveHead();
       // A full refresh is a clean slate: nothing local outlives it, pending
-      // or not.
+      // or not — including what this session had been told about, since the
+      // feed those ids described no longer exists.
+      _forgetKnownVideoIds();
       _localVideoState.clear();
       _lastCursor = null;
-      _hasMore = true;
+      hasMoreVideos.value = true;
       currentIndex.value = -1;
       videoList.clear();
       return await fetchPaginatedVideos(isRefresh: true);
@@ -312,14 +445,17 @@ class VideoController extends GetxController {
     _fetchLock = Completer<void>();
 
     try {
+      final watchedLoaded = _watched.ensureLoaded();
       final page = await _videoRepository.fetchReadyVideosPage(limit: _limit);
+      await watchedLoaded;
       final fetched = page.videos;
       _releaseSettledLocalState(fetched);
+      _markVideoIdsKnown(fetched);
 
       await videoManager.disposeAllForContext(contextKey);
       _clearPendingLiveHead();
       _lastCursor = page.cursor;
-      _hasMore = fetched.length >= _limit;
+      hasMoreVideos.value = fetched.length >= _limit;
 
       if (fetched.isEmpty) {
         currentIndex.value = -1;
@@ -327,7 +463,7 @@ class VideoController extends GetxController {
         return false;
       }
 
-      videoList.assignAll(hydrateAll(fetched));
+      videoList.assignAll(hydrateAll(_watchedAwareOrder(fetched)));
       currentIndex.value = 0;
       _prefetchThumbnailsAround(0);
       return true;
@@ -394,6 +530,30 @@ class VideoController extends GetxController {
     _prefetchThumbnailsAround(centerIndex, videos: videos);
   }
 
+  /// Merges [incoming] into the part of the feed the user has not reached,
+  /// and re-orders that part alone.
+  ///
+  /// Appending a page to the end is why the ordering stopped short of being
+  /// useful: the unseen videos of page two landed *below* the watched tail of
+  /// page one, so reaching them meant scrolling through everything already
+  /// seen. Ordering the whole list instead would move videos the user is
+  /// looking at.
+  ///
+  /// Everything up to and including the current index is frozen, so nothing
+  /// can move under a scrolling thumb; everything after it is off screen, and
+  /// re-ordering it is invisible by construction.
+  List<Video> _appendBelowCurrent(List<Video> incoming) {
+    final frozenCount = (currentIndex.value + 1).clamp(0, videoList.length);
+    final frozen = videoList.take(frozenCount).toList();
+    final tail = <Video>[...videoList.skip(frozenCount), ...incoming];
+
+    return [...frozen, ..._watchedAwareOrder(tail)];
+  }
+
+  @visibleForTesting
+  List<Video> appendBelowCurrentForTests(List<Video> incoming) =>
+      _appendBelowCurrent(incoming);
+
   /// Whether reaching [index] should surface the buffered live videos.
   ///
   /// Split out of `updateCurrentIndex` so the pager can own the index and the
@@ -412,6 +572,9 @@ class VideoController extends GetxController {
   void replaceVideos(List<Video> videos, {int? selectedIndex}) {
     _clearPendingLiveHead();
     _releaseSettledLocalState(videos);
+    // Opening a shared link prepends a video fetched by id. It is on screen,
+    // so it is known — and so is everything else the caller just handed us.
+    _markVideoIdsKnown(videos);
     videoList.assignAll(hydrateAll(videos));
 
     if (videos.isEmpty) {
@@ -508,6 +671,7 @@ class VideoController extends GetxController {
 
     if (response.success) {
       _localVideoState.remove(videoId);
+      _deletedVideoIds.add(videoId);
       final removedIndex = videoList.indexWhere((v) => v.id == videoId);
       // L'URL vient de la vidéo supprimée, pas d'une recherche dans la liste :
       // depuis une recherche ou un profil, elle n'y est pas, et le lecteur
@@ -774,8 +938,9 @@ class VideoController extends GetxController {
       if (currentIndex.value < 0 || currentIndex.value >= incoming.length) {
         currentIndex.value = 0;
       }
-      final hydrated = hydrateAll(incoming);
+      final hydrated = hydrateAll(_watchedAwareOrder(incoming));
       videoList.assignAll(hydrated);
+      _markVideoIdsKnown(incoming);
       return hydrated;
     }
 
@@ -796,6 +961,7 @@ class VideoController extends GetxController {
     );
 
     _replacePendingLiveHead(nextPendingHead);
+    _markVideoIdsKnown(incoming);
     videoList.assignAll(stableFeed);
     return stableFeed;
   }
@@ -813,8 +979,38 @@ class VideoController extends GetxController {
         if (!existingIds.contains(video.id)) video.id: video,
     };
 
-    for (final video in incoming) {
+    // Where the feed's own head sits in this batch.
+    //
+    // The batch is ordered by `updatedAt` descending, exactly like the pages
+    // the feed is built from, so everything before that position was
+    // published after the newest video the user already has — and everything
+    // after it is a video the feed has simply not paged to yet.
+    //
+    // That distinction is the whole fix. The live window is [_liveWindowLimit]
+    // = 30 documents deep while a page is [_limit] = 10, so "in the window
+    // and not in `videoList`" announced the four documents beyond page one as
+    // "4 nouvelles vidéos" on every cold start against adfoot-production's 14
+    // ready videos, and the same arithmetic off a different feed size is what
+    // produced the "1 nouvelle vidéo" after opening a shared link.
+    var feedHeadRank = incoming.length;
+    for (var i = 0; i < incoming.length; i++) {
+      if (existingIds.contains(incoming[i].id)) {
+        feedHeadRank = i;
+        break;
+      }
+    }
+
+    for (var i = 0; i < incoming.length; i++) {
+      final video = incoming[i];
       if (existingIds.contains(video.id)) continue;
+      final alreadyBuffered = bufferedById.containsKey(video.id);
+      // Never announce the same document twice: a video this session has
+      // already been handed — by a page, by a deep link, by an earlier batch
+      // — is not news, whatever its rank.
+      if (!alreadyBuffered) {
+        if (i >= feedHeadRank) continue;
+        if (_knownVideoIds.contains(video.id)) continue;
+      }
       bufferedById[video.id] = video;
     }
 

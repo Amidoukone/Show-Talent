@@ -21,9 +21,9 @@ import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/utils/video_search_matcher.dart';
 
-import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
+import 'package:adfoot/widgets/video_feed_end_card.dart';
 import 'package:adfoot/widgets/video_feed_pager.dart';
 import 'package:adfoot/videos/video_manager.dart';
 import 'package:adfoot/services/app_logger.dart';
@@ -212,6 +212,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _openAddVideo() async {
     await videoManager.pauseAll('home');
+
+    // The same hand-back the in-player entry to this flow already does.
+    //
+    // Two buttons open the upload flow — this one and the one on the video
+    // itself — and only the other one gave the feed's resources up. What
+    // follows needs them: the upload form opens a preview player of its own,
+    // and then an ffmpeg pass runs over the clip. Meanwhile a paused feed
+    // player still holds a decoder and, since a preload now opens the stream
+    // rather than a finished file, still fills its buffer.
+    //
+    // The video the user is on is kept, so coming straight back costs
+    // nothing.
+    final videos = _currentVideos;
+    final index = videoController.currentIndex.value;
+    final keepUrl = index >= 0 && index < videos.length
+        ? videos[index].videoUrl
+        : null;
+    await videoManager.releaseControllersExcept('home', keepUrl);
+
     final result = await Get.to(() => const AddVideo());
     if (result == true) {
       await _refreshHomeFeed();
@@ -676,144 +695,41 @@ class _HomeScreenState extends State<HomeScreen> {
     return false;
   }
 
+  /// How thin the supply of unseen videos may get before the next page is
+  /// asked for.
+  ///
+  /// The pager already requests one two pages from the end, which is the
+  /// right rule for a feed whose value is its length. It is the wrong rule
+  /// for this one: a recruiter opening a catalogue they have mostly seen has
+  /// two unwatched videos at the top and eight watched ones under them, and
+  /// the page holding the unseen rest is only fetched after they have
+  /// scrolled through all eight — which nobody does.
+  static const int _minUnwatchedAhead = 3;
+
   /// Runs once the pager has attached [index]'s controller.
   Future<void> _onIndexFocused(int index) async {
     await Future.delayed(const Duration(milliseconds: 50));
     if (!mounted) return;
+
+    await _loadMoreIfShortOfUnwatched(index);
+  }
+
+  /// Fetches the next page while there is still something unseen to watch.
+  ///
+  /// The guards inside [_loadMoreHomeVideos] make this safe to call on every
+  /// focus: it is a no-op during a search, while a fetch is in flight, and
+  /// once the server has no more pages.
+  Future<void> _loadMoreIfShortOfUnwatched(int index) async {
+    if (_isSearchActive) return;
+    if (!videoController.hasMore || videoController.isLoading) return;
+    if (videoController.unwatchedAfter(index) >= _minUnwatchedAhead) return;
+
+    await _loadMoreHomeVideos();
   }
 
   // ---------------------------------------------------------------------------
   // UI
   // ---------------------------------------------------------------------------
-
-  String _firstRune(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return '';
-    return String.fromCharCode(trimmed.runes.first);
-  }
-
-  String _profileInitials(AppUser user) {
-    final parts = user.nom
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.trim().isNotEmpty)
-        .toList(growable: false);
-
-    if (parts.isEmpty) return 'AD';
-
-    if (parts.length == 1) {
-      final letters = parts.first.runes
-          .take(2)
-          .map(String.fromCharCode)
-          .join()
-          .toUpperCase();
-      return letters.isEmpty ? 'AD' : letters;
-    }
-
-    final initials = parts.take(2).map(_firstRune).join().toUpperCase();
-    return initials.isEmpty ? 'AD' : initials;
-  }
-
-  IconData _profileRoleIcon(AppUser user) {
-    if (user.isPlayer) return Icons.sports_soccer_rounded;
-    if (user.isClub) return Icons.business_rounded;
-    if (user.isRecruiter) return Icons.workspace_premium_rounded;
-    if (user.isCoach) return Icons.groups_rounded;
-    return Icons.person_rounded;
-  }
-
-  Widget _buildProfileInitialsSurface(AppUser user) {
-    return Container(
-      alignment: Alignment.center,
-      color: AdColors.surfaceCardAlt,
-      child: Text(
-        _profileInitials(user),
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: AdColors.onSurface,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileRoleBadge(AppUser user) {
-    return Container(
-      width: 16,
-      height: 16,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AdColors.surface,
-        border: Border.all(color: AdColors.brand, width: 1.4),
-      ),
-      child: Icon(_profileRoleIcon(user), color: AdColors.brand, size: 9.5),
-    );
-  }
-
-  Widget _buildHomeProfileAvatar(AppUser user) {
-    final photoUrl = user.photoProfil.trim();
-    final fallback = _buildProfileInitialsSurface(user);
-
-    return Semantics(
-      label: VideoUiStrings.profile,
-      button: true,
-      child: SizedBox.square(
-        dimension: 40,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned.fill(
-              child: Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AdColors.brand,
-                ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AdColors.surfaceCard,
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.14),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(1),
-                    child: ClipOval(
-                      child: photoUrl.isEmpty
-                          ? fallback
-                          : Image.network(
-                              photoUrl,
-                              fit: BoxFit.cover,
-                              cacheWidth: 96,
-                              cacheHeight: 96,
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return fallback;
-                                  },
-                              errorBuilder: (context, error, stackTrace) {
-                                return fallback;
-                              },
-                            ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              right: -1,
-              bottom: -1,
-              child: _buildProfileRoleBadge(user),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildVideoSearchLauncher() {
     final active = _isSearchActive;
@@ -942,16 +858,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// How far below the top edge the "new videos" chip sits.
+  ///
+  /// One explicit computation instead of a `SafeArea` wrapping a
+  /// `kToolbarHeight` padding. The body starts at y = 0 —
+  /// `extendBodyBehindAppBar` is what puts the video under the bar — so the
+  /// chip has to clear the status bar *and* the bar itself, and saying so in
+  /// one expression is the only way that stays true on a device whose insets
+  /// are not the ones this was written on.
+  double _pendingChipTopOffset(BuildContext context) =>
+      MediaQuery.paddingOf(context).top + kToolbarHeight + 10;
+
   Widget _buildPendingLiveVideosChip(int pending) {
     final label = VideoUiStrings.pendingVideosLabel(pending);
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.only(
-          top: kToolbarHeight + 10,
-          left: AdSpacing.md,
-          right: AdSpacing.md,
-        ),
+    return Padding(
+      padding: EdgeInsets.only(
+        top: _pendingChipTopOffset(context),
+        left: AdSpacing.md,
+        right: AdSpacing.md,
+      ),
+      child: Center(
         child: Semantics(
           button: true,
           label: VideoUiStrings.pendingVideosSemantic(pending),
@@ -1056,77 +983,39 @@ class _HomeScreenState extends State<HomeScreen> {
         titleSpacing: 12,
         centerTitle: false,
         title: _buildVideoSearchLauncher(),
-        actions: [
-          Obx(() {
-            final user = userController.user;
-            if (user == null) {
-              return const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                ),
-              );
-            }
-            return Padding(
-              padding: const EdgeInsets.only(right: AdSpacing.xs),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (user.role == 'joueur') ...[
-                    Tooltip(
-                      message: VideoUiStrings.addVideoSemantic,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(AdRadius.pill),
-                        onTap: () => unawaited(_openAddVideo()),
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: AdColors.brand,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.add_rounded,
-                            color: AdColors.brandOn,
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AdSpacing.xs),
-                  ],
-                  GestureDetector(
-                    onTap: () async {
-                      await videoManager.pauseAll('home');
-                      await Get.to(
-                        () => ProfileScreen(uid: user.uid, isReadOnly: false),
-                      );
-                      videoController.currentIndex.refresh();
-                      await _onPageChanged(videoController.currentIndex.value);
-                    },
-                    child: Tooltip(
-                      message: VideoUiStrings.profile,
-                      child: Hero(
-                        tag: 'profileAvatar',
-                        child: _buildHomeProfileAvatar(user),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
+        actions: const [],
       ),
       body: !_isConnected
           ? _buildNoInternet()
-          : Obx(() {
+          : Stack(
+              children: [
+                Positioned.fill(child: _buildFeedBody()),
+                // Above the feed, and only as tall as itself.
+                //
+                // It used to live in the Scaffold's floatingActionButton slot
+                // with a hand-rolled offset pushing it under the app bar. That
+                // slot belongs to an action; this is a notification, and
+                // renting it meant the Scaffold's own FAB positioning and
+                // transitions were driving a chip they know nothing about.
+                //
+                // Pinned to the top edge rather than filling the stack: an
+                // overlay the size of the screen sits between the thumb and
+                // the feed, and whether it swallows a swipe then depends on
+                // which widgets in it happen to hit-test. This one cannot.
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildPendingLiveVideosOverlay(),
+                ),
+              ],
+            ),
+    );
+  }
+
+  /// The feed itself, or whichever state stands in for it.
+  Widget _buildFeedBody() {
+    return Obx(() {
               final feedVideos = videoController.videoList;
               final videos = _currentVideos;
               final feedBecameAvailable =
@@ -1164,10 +1053,32 @@ class _HomeScreenState extends State<HomeScreen> {
                 _scheduleHomeFeedActivationAfterEmptyFeed();
               }
 
+              // Read inside the Obx so the page appears the moment the last
+              // page comes back short, which is a fetch that may add no
+              // video at all and so would rebuild nothing on its own.
+              final feedIsComplete =
+                  !_isSearchActive && !videoController.hasMoreVideos.value;
+
               return VideoFeedPager(
                 pagerController: _pager,
                 contextKey: 'home',
                 videos: videos,
+                endOfFeedBuilder: feedIsComplete
+                    ? (context) => VideoFeedEndCard(
+                        videoCount: videos.length,
+                        // The body runs behind the app bar, so the card has to
+                        // reserve the same room every video tile's overlays do.
+                        topInset: kToolbarHeight,
+                        onRefresh: () async {
+                          // Leave the end page before the feed shrinks under
+                          // it, or the clamp lands on the last video instead
+                          // of the top.
+                          _jumpToPageSilently(0);
+                          await _refreshHomeFeed();
+                        },
+                        onSearch: () => unawaited(_openVideoSearchSheet()),
+                      )
+                    : null,
                 videoController: videoController,
                 userController: userController,
                 followController: followController,
@@ -1179,28 +1090,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 // public.
                 showDeleteAction: false,
               );
-            }),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerTop,
-      floatingActionButton: Obx(() {
-        final pending = videoController.pendingLiveCount.value;
-        if (pending <= 0 ||
-            !_isConnected ||
-            _isSearchActive ||
-            _isSearchSheetOpen) {
-          return const SizedBox.shrink();
-        }
+    });
+  }
 
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 180),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          child: KeyedSubtree(
-            key: ValueKey<int>(pending),
-            child: _buildPendingLiveVideosChip(pending),
-          ),
-        );
-      }),
-    );
+  /// The "N nouvelles vidéos" chip, when there is something to announce.
+  Widget _buildPendingLiveVideosOverlay() {
+    return Obx(() {
+      final pending = videoController.pendingLiveCount.value;
+      if (pending <= 0 ||
+          !_isConnected ||
+          _isSearchActive ||
+          _isSearchSheetOpen) {
+        return const SizedBox.shrink();
+      }
+
+      return AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: KeyedSubtree(
+          key: ValueKey<int>(pending),
+          child: _buildPendingLiveVideosChip(pending),
+        ),
+      );
+    });
   }
 
   Widget _buildEmptyFeed({required String? userRole}) {

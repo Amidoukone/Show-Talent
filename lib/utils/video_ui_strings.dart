@@ -147,6 +147,22 @@ class VideoUiStrings {
   static const String videoSearchResultHint = 'Ouvrir cette vidéo';
   static const String pendingVideosAction = 'Voir';
 
+  /* --------------------------- Fin du fil vidéo --------------------------- */
+
+  static const String feedEndTitle = 'Vous êtes à jour';
+
+  static String feedEndMessage(int count) {
+    if (count <= 1) {
+      return 'C’est la fin du fil : la seule vidéo disponible a été '
+          'affichée. Revenez plus tard pour les nouveautés.';
+    }
+    return 'C’est la fin du fil : les $count vidéos disponibles ont toutes '
+        'été affichées. Revenez plus tard pour les nouveautés.';
+  }
+
+  static const String feedEndRefreshAction = 'Rafraîchir le fil';
+  static const String feedEndSearchAction = 'Rechercher un poste';
+
   static String pendingVideosLabel(int count) {
     return count > 1 ? '$count nouvelles vidéos' : '1 nouvelle vidéo';
   }

@@ -30,7 +30,15 @@ import 'package:adfoot/theme/ad_tokens.dart';
 part 'offre_screen_widgets.dart';
 
 class OffreScreen extends StatefulWidget {
-  const OffreScreen({super.key});
+  const OffreScreen({super.key, this.showAppBar = true});
+
+  /// False when a host already provides the chrome.
+  ///
+  /// This screen is one of two tabs inside `OpportunitiesScreen`, which owns
+  /// the title and the tab bar; keeping its own app bar there would stack two
+  /// headers on top of each other. Default true, so nothing changes for a
+  /// caller that shows it on its own.
+  final bool showAppBar;
 
   @override
   State<OffreScreen> createState() => _OffreScreenState();
@@ -91,11 +99,13 @@ class _OffreScreenState extends State<OffreScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const AdAppBar(
-        title: 'Offres',
-        subtitle: 'Opportunites, candidatures et suivi',
-        showBottomDivider: true,
-      ),
+      appBar: widget.showAppBar
+          ? const AdAppBar(
+              title: 'Offres',
+              subtitle: 'Opportunites, candidatures et suivi',
+              showBottomDivider: true,
+            )
+          : null,
       body: Obx(() {
         final currentUser = userController.user;
         final allOffres = offreController.offres;
@@ -278,7 +288,12 @@ class _OffreScreenState extends State<OffreScreen> {
           ],
         );
       }),
-      floatingActionButton: _buildFloatingButton(),
+      // Only when this screen stands on its own. Inside `OpportunitiesScreen`
+      // the navigation bar's Publier button already creates, and two create
+      // buttons fifty pixels apart is worse than the extra tap either saves.
+      floatingActionButton: widget.showAppBar
+          ? _buildFloatingButton()
+          : null,
     );
   }
 

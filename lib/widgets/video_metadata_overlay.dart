@@ -83,6 +83,7 @@ class VideoMetadataOverlay extends StatelessWidget {
     required this.caption,
     required this.publisherName,
     required this.publisherRole,
+    this.publisherDetails = '',
     required this.showProgressBar,
     required this.onOpenPublisher,
     required this.onOpenCaption,
@@ -99,6 +100,12 @@ class VideoMetadataOverlay extends StatelessWidget {
   final String caption;
   final String publisherName;
   final String publisherRole;
+
+  /// Where this player plays, and from where. See [PublisherHeadline.details].
+  ///
+  /// Empty for a profile that has not filled it in, and the row is then not
+  /// built at all — an empty line under a name reads as a rendering bug.
+  final String publisherDetails;
   final bool showProgressBar;
   final VoidCallback onOpenPublisher;
 
@@ -140,6 +147,7 @@ class VideoMetadataOverlay extends StatelessWidget {
     final trimmedCaption = caption.trim();
     final trimmedPublisher = publisherName.trim();
     final trimmedRole = publisherRole.trim();
+    final trimmedDetails = publisherDetails.trim();
     final hasPublisher = trimmedPublisher.isNotEmpty;
     final hasDescription = trimmedDescription.isNotEmpty;
 
@@ -258,6 +266,22 @@ class VideoMetadataOverlay extends StatelessWidget {
                                   ),
                                 ],
                               ],
+                            ),
+                          ),
+                        ),
+                      if (hasPublisher && trimmedDetails.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(
+                            trimmedDetails,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              height: 1.2,
+                              shadows: textShadow,
                             ),
                           ),
                         ),

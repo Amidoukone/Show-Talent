@@ -79,6 +79,121 @@ void main() {
       expect(manager, contains('_bandwidth.defer('));
     });
 
+    // The other half of the same decision. A preload that downloads the whole
+    // file is a bet that the transfer finishes before the swipe does, and
+    // adfoot-production's catalogue does not let that bet be won: the
+    // heaviest ready video is 71 MB at 10.6 Mb/s with no lighter rendition,
+    // against a preload timeout of 8-12 s. On 2026-08-24 its client_logs show
+    // 18 playback sessions, 7 of them with `timeToFirstFrameMs: null` -- no
+    // frame ever rendered.
+    test('a preload prepares a stream, not a whole file', () {
+      final marker = manager.indexOf('// A preload prepares the *next* player');
+      expect(
+        marker,
+        isNonNegative,
+        reason: 'the isPreload branch of loadVideo is the one that streams',
+      );
+      final body = manager.substring(marker, marker + 1600);
+      expect(body, contains('usedStreaming = true;'));
+      expect(body, contains('CachedVideoPlayerPlus.networkUrl('));
+      expect(body, contains('skipCache: true,'));
+      expect(
+        body.substring(0, body.indexOf('skipCache: true,')),
+        isNot(contains('_downloads.download(')),
+        reason: 'a whole-file transfer cannot finish inside a preload timeout',
+      );
+    });
+
+    // A preloaded stream becomes the active stream the moment the user swipes
+    // onto it, without passing through initializeController again -- the
+    // orchestrator finds it in the LRU. If the flag did not travel with it,
+    // the arbiter would believe the newly active video was playing from cache
+    // and release the whole-file warms straight into it.
+    test('a preloaded stream is known to be a stream', () {
+      final flag = manager.indexOf('isStreaming: usedStreaming');
+      expect(flag, isNonNegative);
+      final preceding = manager.substring(flag - 700, flag);
+      expect(
+        preceding,
+        isNot(contains('if (!isPreload) {')),
+        reason: 'the flag belongs to the transfer, not to who asked for it',
+      );
+    });
+
+    // Holding *everything* back meant the next player was prepared only once
+    // the stream had reported itself healthy -- three smooth 700 ms ticks
+    // after the first frame. A feed scrolled at any pace never spends that
+    // long on one video, so nothing was ever prepared and every swipe paid a
+    // cold start: the "les videos du bas mettent plus de temps" report.
+    //
+    // The release is now in two stages. The visible video keeps the
+    // connection strictly to itself until it renders; from that point the
+    // next player may open its stream, while the whole-file warms -- the
+    // thing that actually starved a stream in production -- keep waiting for
+    // stability.
+    test('the next player is released at the first frame, warms at stability',
+        () {
+      final scheduler = _read('lib/videos/domain/video_preload_scheduler.dart');
+      final arbiter = _read('lib/videos/domain/playback_bandwidth_arbiter.dart');
+      final player = _read('lib/widgets/smart_video_player.dart');
+
+      expect(scheduler, contains('bool allowFileWarms = true,'));
+      expect(scheduler, contains('if (warmFileOnly && !allowFileWarms) {'));
+
+      // Stage one hands the request over once and leaves it held.
+      expect(arbiter, contains('DeferredPreloadRequest? takeDeferredPlayers('));
+      expect(arbiter, contains('if (request == null || request.playersReleased) return null;'));
+      expect(
+        arbiter,
+        contains('request.playersReleased = true;'),
+        reason: 'stage two replays the whole request; the player must not be '
+            'asked for twice',
+      );
+
+      expect(
+        manager,
+        contains('void markActivePlaybackStarted(String contextKey, String url) {'),
+      );
+      final release = manager.indexOf('void _releaseDeferredPlayers(');
+      expect(release, isNonNegative);
+      final body = manager.substring(release, release + 500);
+      expect(body, contains('_bandwidth.takeDeferredPlayers(contextKey)'));
+      expect(body, contains('allowFileWarms: false,'));
+
+      // The first frame and the preload request race, and a video promoted
+      // from a preload renders before its own preloadSurrounding call is even
+      // made. Recording the answer instead of reacting to it is what makes
+      // the order irrelevant.
+      expect(arbiter, contains('void markRendered(String contextKey, String resolvedUrl)'));
+      expect(arbiter, contains('bool hasRendered(String contextKey, String? resolvedUrl)'));
+      expect(
+        manager,
+        contains('if (_bandwidth.hasRendered(contextKey, resolvedActive)) {'),
+      );
+
+      // Only the tile the user is on speaks for the context.
+      expect(player, contains('void _reportFirstFrameRendered() {'));
+      final report = player.indexOf('void _reportFirstFrameRendered() {');
+      final reportBody = player.substring(report, report + 420);
+      expect(reportBody, contains('if (_reportedFirstFrame) return;'));
+      expect(
+        reportBody,
+        contains('if (_vc.currentIndex.value != widget.currentIndex) return;'),
+      );
+      expect(
+        reportBody,
+        contains('_videoManager.markActivePlaybackStarted('),
+      );
+
+      // And the flag is per attached player, like the stability one.
+      final bind = player.indexOf('void _bindPlayer(');
+      expect(bind, isNonNegative);
+      expect(
+        player.substring(bind, bind + 400),
+        contains('_reportedFirstFrame = false;'),
+      );
+    });
+
     test('the player reports a healthy stream from the stall watchdog', () {
       expect(player, contains('_smoothPlaybackTicks'));
       expect(player, contains('_reportedPlaybackStable'));

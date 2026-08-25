@@ -47,6 +47,12 @@ class VideoPreloadScheduler {
   final Map<String, int> _requestTokensByContext = {};
 
   /// Warms the neighbours of [index] within [radius].
+  ///
+  /// [allowFileWarms] false keeps only the neighbour that earns a player —
+  /// the one the user is about to reach. The whole-file warms behind it are
+  /// what compete with a live stream for the connection, so while the visible
+  /// video is still pulling its own bytes they are held back and this call
+  /// prepares the next player alone.
   void scheduleAround({
     required String contextKey,
     required List<Video> videos,
@@ -54,6 +60,7 @@ class VideoPreloadScheduler {
     required int radius,
     String? activeUrl,
     bool preferForward = true,
+    bool allowFileWarms = true,
   }) {
     if (radius <= 0) return;
 
@@ -75,6 +82,14 @@ class VideoPreloadScheduler {
       if (candidateUrl.isEmpty || candidateUrl == active) continue;
       if (!seenUrls.add(candidateUrl)) continue;
 
+      // Only the nearest neighbour is worth a native player. See
+      // [PreloadVideo].
+      final warmFileOnly = position > 0;
+      if (warmFileOnly && !allowFileWarms) {
+        position++;
+        continue;
+      }
+
       unawaited(
         _preloadAfterDelay(
           contextKey: contextKey,
@@ -82,9 +97,7 @@ class VideoPreloadScheduler {
           requestToken: token,
           delay: delayForPosition(position),
           activeUrl: activeUrl,
-          // Only the nearest neighbour is worth a native player. See
-          // [PreloadVideo].
-          warmFileOnly: position > 0,
+          warmFileOnly: warmFileOnly,
         ),
       );
       position++;

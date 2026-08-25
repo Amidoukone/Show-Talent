@@ -865,7 +865,15 @@ void main() {
       expect(home, contains('_buildPendingLiveVideosChip'));
       expect(home, contains('VideoUiStrings.pendingVideosLabel(pending)'));
       expect(home, contains('VideoUiStrings.pendingVideosSemantic(pending)'));
-      expect(home, contains('top: kToolbarHeight + 10'));
+      // The offset is computed rather than assumed. `extendBodyBehindAppBar`
+      // puts the body at y = 0, so clearing the bar means clearing the status
+      // bar *and* the toolbar -- a `SafeArea` wrapping a `kToolbarHeight`
+      // constant said that in two places, and only stayed true while the chip
+      // lived in the floatingActionButton slot.
+      expect(
+        home,
+        contains('MediaQuery.paddingOf(context).top + kToolbarHeight + 10'),
+      );
       expect(home, contains('_isSearchSheetOpen'));
       expect(home, contains('HapticFeedback.lightImpact'));
       expect(home, isNot(contains("pending > 1 ? '\$pending nouvelles")));
@@ -904,18 +912,28 @@ void main() {
     });
 
     test(
-      'home profile action uses a professional generated avatar fallback',
+      'the profile action left the feed for the navigation bar',
       () {
         final home = File('lib/screens/home_screen.dart').readAsStringSync();
+        final main = File('lib/screens/main_screen.dart').readAsStringSync();
+        final profile = File(
+          'lib/screens/profile_screen.dart',
+        ).readAsStringSync();
 
-        expect(home, isNot(contains("assets/default_avatar.jpg")));
-        expect(home, contains('_buildHomeProfileAvatar'));
-        expect(home, contains('_profileInitials'));
-        expect(home, contains('_buildProfileInitialsSurface'));
-        expect(home, contains('Image.network'));
-        expect(home, contains('errorBuilder'));
-        expect(home, contains('Icons.sports_soccer_rounded'));
-        expect(home, contains('Semantics('));
+        // The avatar was the only way to your own profile, and it was on the
+        // *home* app bar — so from Offres, Events or Chat there was no way
+        // there at all without going back to the feed first. It is a
+        // destination now, reachable from every tab.
+        expect(home, isNot(contains('_buildHomeProfileAvatar')));
+        expect(home, contains('actions: const [],'));
+        expect(main, contains("label: 'Profil',"));
+        expect(main, contains('ProfileScreen(uid: user.uid, isReadOnly: false)'));
+
+        // What the avatar guarded still holds where the avatar now lives: no
+        // shipped placeholder photo, initials generated from the name.
+        expect(profile, isNot(contains('assets/default_avatar.jpg')));
+        expect(profile, contains('String _profileInitials(AppUser user)'));
+        expect(profile, contains('errorBuilder'));
       },
     );
   });

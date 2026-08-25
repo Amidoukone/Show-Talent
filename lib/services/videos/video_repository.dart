@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:adfoot/models/action_response.dart';
@@ -52,30 +55,141 @@ class VideoRepository {
   CollectionReference<Map<String, dynamic>> get _videosCollection =>
       _firestore.collection('videos');
 
-  Stream<VideoLiveBatch> watchReadyVideos({required int limit}) {
+  /// The field the public feed is ordered by, and the one it falls back to.
+  ///
+  ///
+  /// `approvedAt`, not `updatedAt`: they hold the same instant on every one
+  /// of adfoot-production's fourteen ready documents today, but they answer
+  /// different questions. `updatedAt` moves on *any* admin write —
+  /// `adminSetVideoStatus` stamps it on hide, on re-approve, on every
+  /// moderation pass (functions/src/admin_content_actions.ts) — so a video
+  /// hidden and put back six months later would re-enter at the top of the
+  /// feed and be announced as new. `approvedAt` is the moment it became
+  /// public, written once by the same transaction that sets `status: ready`,
+  /// which is the only path to that status. Every ready video therefore has
+  /// it, and no ready video can be missing from the ordering.
+  /// Ordering by it needs a composite index (`status` ASC, `approvedAt` DESC)
+  /// that has to exist in the project before a build that uses it reaches a
+  /// phone. It does not exist yet in adfoot-production, and a Firestore index
+  /// is not instant even once deployed — it builds, and the query fails
+  /// `failed-precondition` until it is ready.
+  ///
+  /// So the release and the index are deliberately decoupled: the first
+  /// query that finds no index downgrades the whole app to [_legacyOrderField]
+  /// for the rest of the process, and the feed keeps working exactly as it
+  /// does today. Without this the two would have to ship in the right order,
+  /// and getting it wrong means an empty home screen for everyone.
+  static const String _feedOrderField = 'approvedAt';
+  static const String _legacyOrderField = 'updatedAt';
+
+  /// Process-wide, because the answer is a property of the project, not of a
+  /// repository instance: every surface asks the same Firestore the same
+  /// question, and one of them finding out is enough.
+  static String _activeOrderField = _feedOrderField;
+
+  @visibleForTesting
+  static String get activeOrderField => _activeOrderField;
+
+  @visibleForTesting
+  static void resetOrderFieldForTests() {
+    _activeOrderField = _feedOrderField;
+  }
+
+  /// True when Firestore refused a query for want of an index.
+  static bool _isMissingIndex(Object error) {
+    if (error is! FirebaseException) return false;
+    if (error.code == 'failed-precondition') return true;
+    // The Android SDK reports this one as `unknown` with the index message in
+    // the body often enough to be worth matching on.
+    return (error.message ?? '').toLowerCase().contains('requires an index');
+  }
+
+  void _downgradeOrderField() {
+    if (_activeOrderField == _legacyOrderField) return;
+    _activeOrderField = _legacyOrderField;
+  }
+
+  Query<Map<String, dynamic>> _readyVideosQuery({
+    required int limit,
+    required String orderField,
+  }) {
     return _videosCollection
         .where('status', isEqualTo: 'ready')
-        .orderBy('updatedAt', descending: true)
-        .limit(limit)
-        .snapshots()
-        .map((snapshot) {
-          return VideoLiveBatch(
-            videos: _playableVideos(snapshot.docs),
-            cursor: snapshot.docs.isEmpty
-                ? null
-                : VideoFeedCursor._(snapshot.docs.last),
+        .orderBy(orderField, descending: true)
+        .limit(limit);
+  }
+
+  static VideoLiveBatch _toLiveBatch(QuerySnapshot<Map<String, dynamic>> snap) {
+    return VideoLiveBatch(
+      videos: _playableVideos(snap.docs),
+      cursor: snap.docs.isEmpty ? null : VideoFeedCursor._(snap.docs.last),
+    );
+  }
+
+  Stream<VideoLiveBatch> watchReadyVideos({required int limit}) {
+    late final StreamController<VideoLiveBatch> controller;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? subscription;
+
+    void subscribe(String orderField) {
+      unawaited(subscription?.cancel());
+      subscription = _readyVideosQuery(limit: limit, orderField: orderField)
+          .snapshots()
+          .listen(
+            (snapshot) => controller.add(_toLiveBatch(snapshot)),
+            onError: (Object error, StackTrace stackTrace) {
+              if (orderField != _legacyOrderField && _isMissingIndex(error)) {
+                _downgradeOrderField();
+                subscribe(_legacyOrderField);
+                return;
+              }
+              controller.addError(error, stackTrace);
+            },
           );
-        });
+    }
+
+    controller = StreamController<VideoLiveBatch>(
+      onListen: () => subscribe(_activeOrderField),
+      onCancel: () async {
+        await subscription?.cancel();
+        subscription = null;
+      },
+    );
+
+    return controller.stream;
   }
 
   Future<VideoFeedPage> fetchReadyVideosPage({
     required int limit,
     VideoFeedCursor? startAfter,
   }) async {
-    Query<Map<String, dynamic>> query = _videosCollection
-        .where('status', isEqualTo: 'ready')
-        .orderBy('updatedAt', descending: true)
-        .limit(limit);
+    try {
+      return await _fetchReadyVideosPage(
+        limit: limit,
+        startAfter: startAfter,
+        orderField: _activeOrderField,
+      );
+    } catch (error) {
+      if (_activeOrderField == _legacyOrderField || !_isMissingIndex(error)) {
+        rethrow;
+      }
+      _downgradeOrderField();
+      return _fetchReadyVideosPage(
+        limit: limit,
+        startAfter: startAfter,
+        orderField: _legacyOrderField,
+      );
+    }
+  }
+
+  Future<VideoFeedPage> _fetchReadyVideosPage({
+    required int limit,
+    required VideoFeedCursor? startAfter,
+    required String orderField,
+  }) async {
+    Query<Map<String, dynamic>> query = _readyVideosQuery(
+      limit: limit,
+      orderField: orderField,
+    );
 
     if (startAfter != null) {
       query = query.startAfterDocument(startAfter.snapshot);
