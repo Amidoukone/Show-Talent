@@ -1,9 +1,7 @@
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/user_controller.dart';
-import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/users/user_repository.dart';
-import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/services/account_cleanup_service.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/theme/ad_colors.dart';
@@ -261,8 +259,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
 
-    final currentUser = _currentUser;
-
     return Scaffold(
       appBar: AdAppBar(
         title: 'Outils',
@@ -286,21 +282,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildToolsHeader(currentUser),
+                    _buildToolsHeader(),
                     const SizedBox(height: 16),
                     _buildSectionCard(
                       title: 'Compte',
                       icon: Icons.manage_accounts_outlined,
                       children: [
-                        _buildActionTile(
-                          icon: Icons.person_outline,
-                          title: 'Voir le profil',
-                          subtitle:
-                              'Contrôler les informations visibles par les autres utilisateurs.',
-                          enabled: !_isDeleting,
-                          onTap: _openProfile,
-                        ),
-                        _buildDivider(),
                         _buildActionTile(
                           icon: Icons.logout_rounded,
                           title: 'Se déconnecter',
@@ -421,26 +408,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // OUTILS UI HELPERS
   // =========================================================
 
-  AppUser? get _currentUser {
-    if (!Get.isRegistered<UserController>()) {
-      return null;
-    }
-    return Get.find<UserController>().user;
-  }
-
-  Future<void> _openProfile() async {
-    final uid = _currentUser?.uid ?? _authSessionService.currentUser?.uid;
-    if (uid == null || uid.trim().isEmpty) {
-      AdFeedback.error(
-        'Profil indisponible',
-        'Impossible d’ouvrir le profil pour cette session.',
-      );
-      return;
-    }
-
-    await Get.to(() => ProfileScreen(uid: uid, isReadOnly: false));
-  }
-
   void _showDataUsageNotice() {
     AdFeedback.info(
       'Utilisation des données',
@@ -470,19 +437,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildToolsHeader(AppUser? user) {
-    final userName = user?.nom.trim();
-    final userEmail = user?.email.trim();
-    final displayName = userName != null && userName.isNotEmpty
-        ? userName
-        : 'Compte Adfoot';
-    final displayEmail = userEmail != null && userEmail.isNotEmpty
-        ? userEmail
-        : 'Session connectée';
-    final role = normalizeUserRole(user?.role).isNotEmpty
-        ? normalizeUserRole(user?.role)
-        : _role;
-
+  /// The header of Outils, deliberately anonymous.
+  ///
+  /// It used to carry the account's name, e-mail, role badge and a "Voir
+  /// profil" button — a second, half-complete copy of the profile living
+  /// inside a settings screen, and the reason the same information could be
+  /// edited from two places. Identity, and everything editable about it, now
+  /// belongs to the Profil destination. Outils keeps the session and the
+  /// account controls, and only says where the rest went.
+  Widget _buildToolsHeader() {
     return AdSurfaceCard(
       padding: const EdgeInsets.all(AdSpacing.lg),
       child: Column(
@@ -508,26 +471,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(width: AdSpacing.md),
-              Expanded(
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      'Paramètres du compte',
+                      style: TextStyle(
                         color: AdColors.onSurface,
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
-                      displayEmail,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      'Confidentialité, sécurité et session de cet appareil.',
+                      style: TextStyle(
                         color: AdColors.onSurfaceMuted,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -539,56 +498,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           const SizedBox(height: AdSpacing.md),
-          Wrap(
-            spacing: AdSpacing.xs,
-            runSpacing: AdSpacing.xs,
-            children: [
-              _buildStatusPill(
-                icon: Icons.badge_outlined,
-                label: _roleDisplayLabel(role),
-                color: AdColors.info,
-              ),
-              _buildStatusPill(
-                icon: _profilePublic ? Icons.visibility : Icons.visibility_off,
-                label: _role == 'fan'
-                    ? 'Profil limité'
-                    : (_profilePublic ? 'Profil visible' : 'Profil restreint'),
-                color: _profilePublic ? AdColors.success : AdColors.warning,
-              ),
-              if (_role == 'joueur' || isOpportunityPublisherRole(_role))
-                _buildStatusPill(
-                  icon: _allowMessages
-                      ? Icons.mark_chat_read_outlined
-                      : Icons.chat_bubble_outline,
-                  label: _allowMessages
-                      ? 'Messages ouverts'
-                      : 'Messages fermés',
-                  color: _allowMessages ? AdColors.success : AdColors.warning,
-                ),
-            ],
-          ),
-          const SizedBox(height: AdSpacing.md),
-          Wrap(
-            spacing: AdSpacing.xs,
-            runSpacing: AdSpacing.xs,
-            children: [
-              AdButton(
-                label: 'Voir profil',
-                leading: Icons.person_outline,
-                kind: AdButtonKind.tonal,
-                size: AdButtonSize.compact,
-                expanded: false,
-                onPressed: _isDeleting ? null : _openProfile,
-              ),
-              AdButton(
-                label: 'Actualiser',
-                leading: Icons.refresh_rounded,
-                kind: AdButtonKind.outline,
-                size: AdButtonSize.compact,
-                expanded: false,
-                onPressed: _isDeleting ? null : _retryLoadUserSettings,
-              ),
-            ],
+          _buildInfoBlock(
+            icon: Icons.person_outline,
+            title: 'Vos informations sont dans Profil',
+            message:
+                'Nom, photo, bio et profil complet se consultent et se '
+                'modifient depuis l’onglet Profil.',
           ),
         ],
       ),
@@ -878,67 +793,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildStatusPill({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AdSpacing.sm,
-        vertical: 7,
-      ),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(AdRadius.pill),
-        border: Border.all(color: color.withValues(alpha: 0.22)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 15),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildDivider() {
     return const Divider(
       height: AdSpacing.lg,
       thickness: 1,
       color: AdColors.divider,
     );
-  }
-
-  String _roleDisplayLabel(String? role) {
-    switch (normalizeUserRole(role)) {
-      case 'joueur':
-        return 'Joueur';
-      case 'coach':
-        return 'Coach';
-      case 'club':
-        return 'Club';
-      case 'recruteur':
-        return 'Recruteur';
-      case 'agent':
-        return 'Agent';
-      case 'fan':
-        return 'Supporter';
-      default:
-        final fallback = role?.trim();
-        return fallback != null && fallback.isNotEmpty
-            ? fallback
-            : 'Utilisateur';
-    }
   }
 
   // =========================================================

@@ -3,6 +3,7 @@ import 'dart:async' show TimeoutException, unawaited;
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/users/user_repository.dart';
 import 'package:adfoot/utils/auth_error_mapper.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -596,11 +597,22 @@ class AuthSessionService {
     return _bounded(send, 'réinitialisation du mot de passe');
   }
 
+  /// Applies the new password under [_authCallTimeout].
+  ///
+  /// Bounded for the same reason as the two calls above, and it was the one
+  /// that was not: the reset screen owns a spinner it clears in a `finally`,
+  /// so an unbounded await left "Valider" spinning with no error and no way
+  /// to retry — on the one screen a user reaches when they are already
+  /// locked out.
   Future<void> confirmPasswordReset({
     required String code,
     required String newPassword,
   }) {
-    return _auth.confirmPasswordReset(code: code, newPassword: newPassword);
+    Future<void> confirm() {
+      return _auth.confirmPasswordReset(code: code, newPassword: newPassword);
+    }
+
+    return _bounded(confirm, 'changement du mot de passe');
   }
 
   Future<EmailVerificationSendResult> sendCurrentUserEmailVerification({
@@ -890,6 +902,18 @@ class AuthSessionService {
       if (error.code != 'permission-denied') {
         rethrow;
       }
+
+      // The user is about to be signed out and sent back to login, and until
+      // now that happened without a word anywhere. A permission-denied here
+      // means the rules refused a read this session is supposed to be allowed
+      // — a real defect on our side, not a network hiccup, and the single
+      // most likely cause of a tester reporting "l'application m'a
+      // déconnecté".
+      AuthDiagnostics.failure(
+        'access check denied; signing the session out',
+        stage: 'session_resolve',
+        error: error,
+      );
 
       if (signOutOnInvalid) {
         await signOut();

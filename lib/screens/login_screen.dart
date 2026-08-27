@@ -140,7 +140,18 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await _authSessionService.sendPasswordResetEmail(email: email);
 
-      AdFeedback.success('Succès', 'E-mail de réinitialisation envoyé.');
+      // The spam folder is named on purpose. The link is sent by Firebase
+      // Auth's own mailer from noreply@<projet>.firebaseapp.com, a domain
+      // that carries none of Adfoot's DNS reputation, and testers reported
+      // finding it filtered. Until the sender moves to an authenticated
+      // adfoot.org address, telling the user where to look is the difference
+      // between a reset that works and one they believe never arrived.
+      AdFeedback.success(
+        'E-mail envoyé',
+        'Lien de réinitialisation envoyé à $email. '
+        'Pensez à vérifier vos spams si vous ne le voyez pas.',
+        duration: const Duration(seconds: 6),
+      );
     } on FirebaseAuthException catch (error) {
       _showErrorSnackbar(
         AuthErrorMapper.toMessage(error),

@@ -19,6 +19,7 @@ import {
   normalizeRole,
   privateContactRef,
 } from "./admin_account_support";
+import {EMAIL_SECRETS, sendAccountInviteEmail} from "./email_delivery";
 
 type ProvisionedManagedAccount = {
   uid: string;
@@ -27,10 +28,20 @@ type ProvisionedManagedAccount = {
   existingUser: boolean;
   passwordSetupLink: string;
   emailVerificationLink: string | null;
+  /**
+   * Whether the invitation was e-mailed to the new member.
+   *
+   * `passwordSetupLink` stays in the response whatever this says. The portal
+   * shows it either way, so an SMTP outage costs an extra copy-paste and
+   * never an account nobody can reach.
+   */
+  inviteEmailSent: boolean;
+  /** Coarse reason the invitation was not sent, when it was not. */
+  inviteEmailReason: string | null;
 };
 
 export const provisionManagedAccount = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  {...LOW_CPU_CALLABLE_OPTIONS, secrets: EMAIL_SECRETS},
   async (request) => {
     const adminUid = await assertAdminCaller(request);
 
@@ -144,6 +155,16 @@ export const provisionManagedAccount = onCall(
       null :
       await generateHostedEmailVerificationLink(email);
 
+    // Last, and after the commit above on purpose. The account exists in Auth
+    // and Firestore by now, so a relay that refuses the message costs an
+    // e-mail, not a half-created member. sendAccountInviteEmail never throws
+    // for the same reason.
+    const invite = await sendAccountInviteEmail({
+      to: email,
+      displayName,
+      passwordSetupLink,
+    });
+
     return {
       success: true,
       code: existingUser ?
@@ -159,6 +180,8 @@ export const provisionManagedAccount = onCall(
         existingUser,
         passwordSetupLink,
         emailVerificationLink,
+        inviteEmailSent: invite.sent,
+        inviteEmailReason: invite.reason ?? null,
       } satisfies ProvisionedManagedAccount,
     };
   },

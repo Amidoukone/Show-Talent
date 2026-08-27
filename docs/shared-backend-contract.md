@@ -126,6 +126,14 @@ Le portail admin recupere :
 - `existingUser`
 - `passwordSetupLink`
 - `emailVerificationLink`
+- `inviteEmailSent` : le backend a expedie l invitation lui meme
+- `inviteEmailReason` : `not_configured` | `send_failed` | `invalid_recipient`,
+  ou `null` quand l envoi a reussi
+
+`passwordSetupLink` est retourne dans tous les cas, envoi reussi ou non. C est
+le repli de l admin, et c est ce qui fait qu une panne du relais SMTP coute un
+copier coller et jamais un compte injoignable. Un portail plus ancien, qui ne
+lit pas les deux nouveaux champs, continue de fonctionner a l identique.
 
 Le cycle de vie d un compte provisionne repose uniquement sur :
 

@@ -29,6 +29,7 @@ class AppRoutes {
       name: resetPassword,
       page: () => ResetPasswordScreen(
         oobCode: _resolveResetPasswordCode(),
+        accountEmail: _resolveResetPasswordEmail(),
       ),
     ),
   ];
@@ -50,5 +51,22 @@ class AppRoutes {
     }
 
     return params['oobCode'] ?? '';
+  }
+
+  /// The address the reset code was minted for, when the handler knows it.
+  ///
+  /// `verifyPasswordResetCode` returns it, and it costs nothing to carry:
+  /// a screen that asks for a new password without naming the account it
+  /// belongs to is exactly the screen a phishing page imitates.
+  static String? _resolveResetPasswordEmail() {
+    final args = Get.arguments;
+    if (args is Map) {
+      final email = args['email'];
+      if (email is String && email.trim().isNotEmpty) {
+        return email.trim();
+      }
+    }
+
+    return null;
   }
 }

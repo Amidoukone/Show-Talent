@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/services/auth/password_reset_flow.dart';
 import 'package:adfoot/services/users/user_repository.dart';
 import 'package:adfoot/utils/auth_error_mapper.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
@@ -78,8 +80,16 @@ class UserController extends GetxController with WidgetsBindingObserver {
       (User? firebaseUser) async {
         await _routeFromAuth(firebaseUser);
       },
-      onError: (error) =>
-          AppLogger.debug('UserController idTokenChanges error: $error'),
+      // The auth stream itself failed. Nothing re-subscribes, so from here on
+      // the app stops reacting to sign-ins, sign-outs and token refreshes
+      // entirely — it simply stays on whatever screen it was on. That was the
+      // most invisible failure in the whole flow: no message, no navigation,
+      // and `debug` writes nowhere in a release build.
+      onError: (Object error) => AuthDiagnostics.failure(
+        'auth state stream failed; session routing has stopped',
+        stage: 'auth_stream',
+        error: error,
+      ),
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -184,7 +194,14 @@ class UserController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
-      AppLogger.debug('UserController _routeFromAuth error: $error');
+      // Session routing fell through to its last resort: everything is
+      // dropped and the user lands on login. Nothing above this caught it,
+      // so this is the only place it can be seen from.
+      AuthDiagnostics.failure(
+        'session routing failed; falling back to login',
+        stage: 'route_from_auth',
+        error: error,
+      );
       await _syncCurrentUserAccessWatch(null);
       await _stopAllUsersWatch();
       _user.value = null;
@@ -365,7 +382,13 @@ class UserController extends GetxController with WidgetsBindingObserver {
       _sessionLoadMessage.value =
           'Connexion trop lente. Vérifiez votre réseau puis réessayez.';
     } catch (error) {
-      AppLogger.debug('UserController ensureCurrentUserHydrated error: $error');
+      // This is the "Profil indisponible" screen the user is now looking
+      // at, with a Réessayer button and no idea why.
+      AuthDiagnostics.failure(
+        'profile hydration failed',
+        stage: 'hydrate_profile',
+        error: error,
+      );
       _sessionLoadMessage.value =
           'Impossible de charger le profil. Réessayez dans quelques instants.';
     } finally {
@@ -430,7 +453,17 @@ class UserController extends GetxController with WidgetsBindingObserver {
           },
           onError: (error) {
             _currentUserAccessSub = null;
-            AppLogger.debug('UserController watchUserAccess error: $error');
+            // The access-revocation watcher just died, and the line above is
+            // what makes this serious: nothing re-subscribes. Only a
+            // permission-denied is acted on below; any other error leaves the
+            // session running with no watcher at all, so an account disabled
+            // later stays inside the app until it is restarted. A security
+            // control that stops enforcing must never do it quietly.
+            AuthDiagnostics.failure(
+              'access watcher stopped; revocation is no longer enforced',
+              stage: 'access_watch',
+              error: error,
+            );
 
             if (_isPermissionDenied(error)) {
               unawaited(_enforceCurrentSessionAccess());
@@ -480,7 +513,13 @@ class UserController extends GetxController with WidgetsBindingObserver {
       await _authSessionService.signOut();
       await _safeOffAllNamed(AppRoutes.login, arguments: notice);
     } catch (error) {
-      AppLogger.debug('UserController forced sign-out error: $error');
+      // Access was revoked and the eviction itself failed, so the user may
+      // still be sitting in the app with a session that should be gone.
+      AuthDiagnostics.failure(
+        'forced sign-out failed after access revocation',
+        stage: 'force_sign_out',
+        error: error,
+      );
     } finally {
       _accessRevocationInProgress = false;
     }
@@ -772,6 +811,24 @@ class UserController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> _safeOffAllNamed(String route, {dynamic arguments}) async {
+    // A password reset owns the screen until it is finished.
+    //
+    // This controller navigates on every `idTokenChanges` event, and one of
+    // those always fires on the cold start that a tapped reset link produces.
+    // It used to win that race and replace the reset screen with login or
+    // main — the app "opening directly" before a password could be typed.
+    //
+    // The guard sits here rather than at the call sites so it also covers the
+    // queued route drained in the `finally` below, which is how the losing
+    // navigation usually arrived: scheduled while another one was in flight,
+    // and replayed after the reset screen had already mounted. State updates
+    // above are untouched; only the navigation waits. A notice bound for the
+    // login screen stays in `_pendingSessionNotice` and is shown when the
+    // reset flow releases the screen.
+    if (PasswordResetFlow.isInProgress && route != AppRoutes.resetPassword) {
+      return;
+    }
+
     if (Get.key.currentState == null) {
       if (_navScheduled) {
         return;
@@ -802,7 +859,13 @@ class UserController extends GetxController with WidgetsBindingObserver {
       await (navFuture ?? Future<void>.value()).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          AppLogger.debug('UserController navigation timeout for route=$route');
+          // Ten seconds for a navigation that normally takes one frame. The
+          // screen the user is on is not the one the app decided they should
+          // be on, and nothing will correct it.
+          AuthDiagnostics.failure(
+            'navigation timed out for route=$route',
+            stage: 'navigate',
+          );
         },
       );
     } finally {

@@ -4,7 +4,9 @@ import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/screens/login_screen.dart';
 import 'package:adfoot/screens/main_screen.dart';
 import 'package:adfoot/screens/verify_email_screen.dart';
+import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/services/auth/password_reset_flow.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -71,6 +73,13 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   bool get _canRunFallback {
+    // The second owner of the cold-start race a tapped reset link creates:
+    // this fallback resolves the session and replaces the stack, which used
+    // to take the reset screen away again. See [PasswordResetFlow].
+    if (PasswordResetFlow.isInProgress) {
+      return false;
+    }
+
     return mounted && !_navigating && _isStillOnSplashRoute;
   }
 
@@ -101,7 +110,14 @@ class _SplashScreenState extends State<SplashScreen> {
 
       return _safeOffAllDestination(snapshot.destination);
     } catch (error) {
-      AppLogger.debug('Splash fallback error: $error');
+      // The app could not decide where this launch belongs, so it signs
+      // out and shows login. To the user that is "l'application m'a
+      // déconnecté au démarrage", and it left no trace at all.
+      AuthDiagnostics.failure(
+        'startup session resolution failed; signing out',
+        stage: 'splash_fallback',
+        error: error,
+      );
       try {
         await _authSessionService.signOut();
       } catch (signOutError) {
@@ -168,7 +184,11 @@ class _SplashScreenState extends State<SplashScreen> {
     try {
       await _safeOffAllNamed(destination.routeName);
     } catch (error) {
-      AppLogger.debug('Splash named fallback navigation error: $error');
+      AuthDiagnostics.handled(
+        'named startup navigation failed; falling back to a direct page',
+        stage: 'splash_fallback',
+        error: error,
+      );
       await _safeOffAll(_pageForDestination(destination));
     }
   }

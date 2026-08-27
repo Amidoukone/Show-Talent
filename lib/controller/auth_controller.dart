@@ -1,6 +1,7 @@
 import 'dart:async' show unawaited;
 
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/email_link_handler.dart';
 import 'package:adfoot/services/notifications.dart';
@@ -76,7 +77,14 @@ class AuthController extends GetxController {
       await _updateFcmToken(refreshed);
       await _ensureSystemNotificationPromptOnce(refreshed);
     } catch (error) {
-      AppLogger.debug('AuthController _syncState error: $error');
+      // Handled, not fatal: the session stands and the profile is retried
+      // below. Worth a sampled record because a high rate here is what a
+      // rules or connectivity problem looks like from the client.
+      AuthDiagnostics.handled(
+        'session sync failed; keeping the session and retrying the profile',
+        stage: 'sync_state',
+        error: error,
+      );
       // Only the profile snapshot is unknown here — the session itself is
       // not. Access revocation has its own enforcement path (UserController's
       // access heartbeat and watchUserAccess), so discarding a profile we
@@ -161,9 +169,15 @@ class AuthController extends GetxController {
   static const Duration _rehydrateDelay = Duration(seconds: 2);
 
   Future<void> signOut() async {
+    // Clear what this session handled, but keep listening. Disposing here
+    // cancelled the app-link subscription for the rest of the process, and
+    // nothing re-initialised it — so a reset link tapped after a sign-out
+    // reached a deaf app. See EmailLinkHandler.resetForNewSession.
     try {
-      await EmailLinkHandler.dispose();
-    } catch (_) {}
+      EmailLinkHandler.resetForNewSession();
+    } catch (error) {
+      AppLogger.debug('AuthController link handler reset error: $error');
+    }
 
     await _authSessionService.signOut();
     // Invalidate any retry still in flight, so a slow read cannot land a

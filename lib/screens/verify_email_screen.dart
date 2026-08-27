@@ -1,4 +1,5 @@
 import 'package:adfoot/config/app_routes.dart';
+import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/verify_email_throttle.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -125,8 +126,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           );
           return;
         } on FirebaseAuthException catch (error) {
-          AppLogger.debug(
-            'applyActionCode error: ${error.code} - ${error.message}',
+          // The verification twin of a refused reset link, and reported the
+          // same way. The user is told on screen, so this is `handled` rather
+          // than `failure` — but a rise in the rate is how a broken link flow
+          // shows up, and that has to be visible somewhere other than a debug
+          // log release builds discard.
+          AuthDiagnostics.handled(
+            'verifyEmail link refused (${error.code})',
+            stage: 'verify_email_link',
+            error: error,
           );
           if (mounted) {
             setState(() {

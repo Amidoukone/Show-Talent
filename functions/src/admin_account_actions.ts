@@ -24,6 +24,7 @@ import {
   privateAdminNotesRef,
   privateContactRef,
 } from "./admin_account_support";
+import {EMAIL_SECRETS, sendAccountInviteEmail} from "./email_delivery";
 
 type ManagedTargetContext = {
   uid: string;
@@ -682,7 +683,7 @@ export const enableManagedAccountAuth = onCall(
 );
 
 export const resendManagedAccountInvite = onCall(
-  LOW_CPU_CALLABLE_OPTIONS,
+  {...LOW_CPU_CALLABLE_OPTIONS, secrets: EMAIL_SECRETS},
   async (request) => {
     const adminUid = await assertAdminCaller(request);
     const uid = getTargetUid(request.data);
@@ -712,14 +713,29 @@ export const resendManagedAccountInvite = onCall(
       updatedAt: fieldValue.serverTimestamp(),
     }, {merge: true});
 
+    // Same contract as provisioning: the links are returned whatever the
+    // relay does, so "renvoyer l'invitation" degrades to what it does today
+    // rather than failing.
+    const invite = await sendAccountInviteEmail({
+      to: email,
+      displayName:
+        target.userRecord?.displayName ?? getString(target.userData, "nom"),
+      passwordSetupLink,
+      resend: true,
+    });
+
     return {
       success: true,
       code: "managed_account_invite_resent",
-      message: "Liens d invitation regeneres.",
+      message: invite.sent ?
+        "Invitation envoyée par e-mail." :
+        "Liens d invitation regeneres.",
       data: {
         ...buildManagedAccountSummary(target),
         passwordSetupLink,
         emailVerificationLink,
+        inviteEmailSent: invite.sent,
+        inviteEmailReason: invite.reason ?? null,
       },
     };
   },

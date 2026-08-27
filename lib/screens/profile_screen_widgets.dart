@@ -105,6 +105,43 @@ class _HeaderCard extends StatelessWidget {
                         letterSpacing: 0,
                       ),
                     ),
+                    // The account's e-mail, for its owner only.
+                    //
+                    // It used to live in the Outils header, which was the one
+                    // surface telling you *which* account this device is
+                    // signed in as — and Outils no longer carries any
+                    // identity at all. The line belongs to the profile, so it
+                    // moved here rather than disappearing. Never shown to a
+                    // visitor: an e-mail address is credential-adjacent, not
+                    // public profile data, and no other profile field on this
+                    // card is hidden from anyone.
+                    if (isOwnProfile &&
+                        !isReadOnly &&
+                        user.email.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.alternate_email_rounded,
+                            size: 15,
+                            color: AdColors.onSurfaceMuted,
+                          ),
+                          const SizedBox(width: 5),
+                          Expanded(
+                            child: Text(
+                              user.email.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AdColors.onSurfaceMuted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 8,

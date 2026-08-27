@@ -272,6 +272,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // is backwards: settings are visited rarely, a profile
               // constantly. They swapped places, and this is the one tap that
               // still reaches them.
+              //
+              // The link is one-way on purpose. Outils used to open a second
+              // full copy of the profile — same header, same editors, same
+              // "Compléter le profil" — so the same fields could be reached
+              // by two routes and the settings screen had to carry the
+              // account's name and e-mail to make its own header look right.
+              // Everything about the profile is now on this screen and only
+              // on it; Outils owns the session, privacy, safety and deletion,
+              // and nothing else.
               if (isOwnProfile && !widget.isReadOnly)
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),

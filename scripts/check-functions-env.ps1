@@ -198,6 +198,43 @@ if ($effective.ContainsKey("ANDROID_APP_DOWNLOAD_URL")) {
   }
 }
 
+# Outbound invitation e-mail (Brevo). SMTP_USER is the switch: blank means
+# nothing is sent and the admin portal falls back to showing the link, which
+# is the shipped default. Once it is filled in, a half-filled configuration is
+# worse than none at all -- it fails per invitation, at the moment an account
+# is created, rather than at deploy time.
+if ($effective.ContainsKey("SMTP_USER")) {
+  $smtpUser = [string]$effective["SMTP_USER"]
+  if (-not [string]::IsNullOrWhiteSpace($smtpUser)) {
+    $fromAddress = ""
+    if ($effective.ContainsKey("MAIL_FROM_ADDRESS")) {
+      $fromAddress = [string]$effective["MAIL_FROM_ADDRESS"]
+    }
+
+    if ([string]::IsNullOrWhiteSpace($fromAddress)) {
+      $errors.Add("SMTP_USER is set but MAIL_FROM_ADDRESS is empty: no invitation would ever be sent.")
+    }
+    elseif ($fromAddress -notmatch "^[^\s@]+@[^\s@]+\.[^\s@]{2,}$") {
+      $errors.Add("MAIL_FROM_ADDRESS is not a valid address: $fromAddress")
+    }
+    elseif ($fromAddress -notmatch "@adfoot\.org$") {
+      # Not fatal, but it defeats the point: an unaligned From is exactly what
+      # puts the message in the spam folder. See AUTH_EMAIL_DELIVERABILITY_RUNBOOK.md.
+      $warnings.Add("MAIL_FROM_ADDRESS is not on adfoot.org; DKIM alignment will fail and mail may be filtered: $fromAddress")
+    }
+
+    if ($effective.ContainsKey("SMTP_PORT")) {
+      $smtpPortRaw = [string]$effective["SMTP_PORT"]
+      $smtpPort = 0
+      if (-not [int]::TryParse($smtpPortRaw, [ref]$smtpPort) -or $smtpPort -lt 1) {
+        $errors.Add("Invalid SMTP_PORT: $smtpPortRaw")
+      }
+    }
+
+    $warnings.Add("Invitation e-mail is ENABLED. The BREVO_SMTP_KEY secret must exist, or the deploy will be rejected: firebase functions:secrets:set BREVO_SMTP_KEY")
+  }
+}
+
 Write-Host "Environment: $Environment"
 Write-Host "Base file   : $baseEnvPath"
 Write-Host "Override    : $envSpecificPath"
