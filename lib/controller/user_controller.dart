@@ -166,7 +166,17 @@ class UserController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
-      AppLogger.debug('UserController _routeFromAuth auth error: $error');
+      // Same outcome as the last-resort branch further down — the session is
+      // dropped and the user lands on login — so it has to be just as
+      // visible. A non-transient FirebaseAuthException is the likeliest of
+      // the three branches to fire, and it was still writing nowhere in a
+      // release build: `debug` is dropped outright by _shouldSendToRemote.
+      AuthDiagnostics.failure(
+        'session routing rejected the auth check (${error.code}); '
+        'falling back to login',
+        stage: 'route_from_auth',
+        error: error,
+      );
       await _syncCurrentUserAccessWatch(null);
       await _stopAllUsersWatch();
       _user.value = null;
@@ -184,7 +194,17 @@ class UserController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
-      AppLogger.debug('UserController _routeFromAuth Firebase error: $error');
+      // Transient failures already returned above, so what reaches here is
+      // almost always a rules refusal on the access check — a defect on our
+      // side rather than a network hiccup — and it ejects the user exactly
+      // like the branch above. It is also the single most likely cause of a
+      // tester reporting "l'application m'a déconnecté".
+      AuthDiagnostics.failure(
+        'session routing rejected the Firestore access check (${error.code}); '
+        'falling back to login',
+        stage: 'route_from_auth',
+        error: error,
+      );
       await _syncCurrentUserAccessWatch(null);
       await _stopAllUsersWatch();
       _user.value = null;

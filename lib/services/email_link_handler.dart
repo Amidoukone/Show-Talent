@@ -154,9 +154,17 @@ class EmailLinkHandler {
       _logDebug('EmailLinkHandler applied verifyEmail action successfully.');
       return true;
     } on FirebaseAuthException catch (e) {
+      // The reset path already reasons this way and this one did not: the
+      // code is claimed *before* the call, so a refusal that came from the
+      // network rather than from the code itself burned the link for the
+      // rest of the process — the second tap was dropped as a duplicate,
+      // in silence. Re-tapping a genuinely expired link only shows the same
+      // error again, which is the far cheaper failure of the two.
+      _handledOobCodes.remove(oob);
       _logIssue('verifyEmail link refused (${e.code})', error: e);
       return false;
     } catch (e) {
+      _handledOobCodes.remove(oob);
       _logIssue('verifyEmail link failed unexpectedly', error: e);
       return false;
     }

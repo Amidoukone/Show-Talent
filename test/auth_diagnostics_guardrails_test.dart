@@ -110,12 +110,36 @@ void main() {
       expect(auth, contains("stage: 'sync_state'"));
     });
 
+    // _routeFromAuth has three exits and all three do the same visible
+    // thing: drop the session, forget the profile, land the user on login.
+    // Only the last-resort `catch` was given a report. The two typed
+    // branches above it are the ones that actually fire -- a non-transient
+    // FirebaseAuthException, and a rules refusal on the access check -- and
+    // they still logged at `debug`, which release builds discard.
+    test('every branch that ejects the user reports, not just the last', () {
+      final controller = _read('lib/controller/user_controller.dart');
+
+      final start = controller.indexOf('Future<void> _routeFromAuth(');
+      expect(start, isNonNegative);
+      final end = controller.indexOf('void _listenAllUsers()', start);
+      expect(end, isNonNegative);
+
+      final method = controller.substring(start, end);
+      expect(
+        RegExp("stage: 'route_from_auth'").allMatches(method).length,
+        3,
+        reason: 'each exit that signs the user out has to be visible',
+      );
+    });
+
     test('those sites no longer log at a level release builds discard', () {
       final controller = _read('lib/controller/user_controller.dart');
       final splash = _read('lib/screens/splash_screen.dart');
 
       for (final discarded in const <String>[
         "AppLogger.debug('UserController _routeFromAuth error:",
+        "AppLogger.debug('UserController _routeFromAuth auth error:",
+        "AppLogger.debug('UserController _routeFromAuth Firebase error:",
         "AppLogger.debug('UserController ensureCurrentUserHydrated error:",
         "AppLogger.debug('UserController forced sign-out error:",
         "AppLogger.debug('UserController navigation timeout",

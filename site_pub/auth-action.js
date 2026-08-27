@@ -17,6 +17,13 @@
         "Vous pouvez maintenant vous connecter à Adfoot.",
       invalidLink:
         "Ce lien est invalide ou expiré. Demandez un nouveau lien à l'administration.",
+      missingTitle: "Aucun lien à traiter",
+      missingCode:
+        "Cette page a été ouverte sans lien d'action. Si vous venez de " +
+        "définir votre mot de passe, il est bien enregistré : ouvrez " +
+        "l'application Adfoot et connectez-vous. Sinon, ouvrez le lien " +
+        "complet reçu par e-mail, ou demandez-en un nouveau à " +
+        "l'administration.",
     },
     verify: {
       initialTitle: "Vérification e-mail",
@@ -28,6 +35,12 @@
         "Ouvrez le lien de création du mot de passe.",
       invalidLink:
         "Ce lien est invalide ou expiré. Demandez un nouveau lien à l'administration.",
+      missingTitle: "Aucun lien à traiter",
+      missingCode:
+        "Cette page a été ouverte sans lien d'action. Si vous venez de " +
+        "valider votre adresse, c'est fait : ouvrez le lien de création du " +
+        "mot de passe reçu par e-mail. Sinon, ouvrez le lien complet reçu " +
+        "par e-mail, ou demandez-en un nouveau à l'administration.",
     },
   }[action];
 
@@ -159,10 +172,39 @@
     }
   }
 
+  /**
+   * The page was opened with no oobCode at all.
+   *
+   * This is not the same thing as a bad link, and treating it as one was a
+   * defect the user could see. `ActionCodeSettings.url` sends the mobile
+   * flows here as their *continueUrl* — the page Firebase's own action
+   * handler forwards to once the reset has already succeeded — and it
+   * forwards without any code, because there is nothing left to apply. The
+   * reward for changing your password in a browser was therefore a red
+   * "Ce lien est invalide ou expiré. Demandez un nouveau lien à
+   * l'administration."
+   *
+   * A genuinely expired or reused link is a different branch: it carries an
+   * oobCode, reaches Firebase, and is refused there with its own message. So
+   * nothing legitimate is softened by making this one calm — and it stays
+   * honest about the other way of arriving here, a truncated link.
+   */
+  function showMissingCode() {
+    setState("info", copy.missingTitle, copy.missingCode, "");
+    if (resetForm) resetForm.hidden = true;
+    if (hintNode) hintNode.hidden = true;
+  }
+
   function initReset(params) {
     var apiKey = params.apiKey;
     var oobCode = params.oobCode;
-    if (!apiKey || !oobCode) {
+    if (!oobCode) {
+      showMissingCode();
+      return;
+    }
+    // An oobCode with no apiKey is a link that really was mangled, so this
+    // stays the hard error it was.
+    if (!apiKey) {
       setState("danger", copy.initialTitle, copy.invalidLink, copy.invalidLink);
       return;
     }
@@ -233,7 +275,11 @@
   function initVerify(params) {
     var apiKey = params.apiKey;
     var oobCode = params.oobCode;
-    if (!apiKey || !oobCode) {
+    if (!oobCode) {
+      showMissingCode();
+      return;
+    }
+    if (!apiKey) {
       setState("danger", copy.initialTitle, copy.invalidLink, copy.invalidLink);
       return;
     }

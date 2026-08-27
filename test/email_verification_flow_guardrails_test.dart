@@ -122,6 +122,58 @@ void main() {
       expect(content, contains('blockMode: fieldValue.delete()'));
     });
 
+    // The mobile flows pass `<host>/account/reset` and `/account/verify` as
+    // their ActionCodeSettings.url -- which is a *continueUrl*: the page
+    // Firebase's own action handler forwards to once the code has already
+    // been applied, and it forwards without one, because there is nothing
+    // left to apply. Treating that as a bad link meant the reward for
+    // resetting your password in a browser was a red "Ce lien est invalide
+    // ou expiré. Demandez un nouveau lien à l'administration."
+    test('landing here with no code is not reported as a broken link', () {
+      final script = File('site_pub/auth-action.js').readAsStringSync();
+
+      expect(script, contains('function showMissingCode()'));
+      expect(script, contains('if (!oobCode) {'));
+      expect(script, contains('showMissingCode();'));
+      expect(script, contains('missingCode:'));
+
+      // A link that really was mangled still says so, and so does an
+      // expired or reused code -- that one carries an oobCode, reaches
+      // Firebase and is refused there with its own message.
+      expect(script, contains('if (!apiKey) {'));
+      expect(script, contains('copy.invalidLink'));
+      expect(
+        script,
+        isNot(contains('if (!apiKey || !oobCode) {')),
+        reason: 'the missing-code case must not share the broken-link branch',
+      );
+    });
+
+    // The verify path claimed the oobCode before the call and never released
+    // it, so a network refusal burned the link: the second tap was dropped
+    // as a duplicate, in silence. The reset path already reasoned this way.
+    test('a refused verification link can be tapped again', () {
+      final handler =
+          File('lib/services/email_link_handler.dart').readAsStringSync();
+
+      final start = handler.indexOf("if (mode != 'verifyEmail'");
+      expect(start, isNonNegative);
+      final end = handler.indexOf(
+        'static Future<bool> _handlePasswordResetLink(',
+        start,
+      );
+      expect(end, isNonNegative);
+
+      final verifyBranch = handler.substring(start, end);
+      expect(
+        RegExp(r'_handledOobCodes\.remove\(oob\);')
+            .allMatches(verifyBranch)
+            .length,
+        2,
+        reason: 'both catch blocks have to release the code',
+      );
+    });
+
     test('hosting auth action page applies Firebase codes before success', () {
       final script = File('site_pub/auth-action.js').readAsStringSync();
       final resetPage = File('site_pub/reset/index.html').readAsStringSync();
