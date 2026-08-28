@@ -324,8 +324,26 @@ class VideoController extends GetxController {
               }
             });
           },
-          onError: (e) {
-            AppLogger.debug('Video stream error: $e');
+          onError: (Object e) {
+            // Terminal for the session, and worth being exact about.
+            //
+            // Unlike the offers, events and chat watches, nothing here is
+            // blocked by a stale handle — `listenToVideos` cancels and
+            // re-subscribes unconditionally. The problem is that nothing
+            // calls it: `onInit` is its only caller, so once this stream
+            // errors the feed stops receiving live updates for good. What is
+            // left is pull-to-refresh and pagination, which is why this is
+            // degradation rather than an outage — and why it went unnoticed.
+            //
+            // `debug` is dropped outright by AppLogger in a release build, so
+            // there was no record of it at all.
+            AppLogger.error(
+              'video feed stream stopped; this context will receive no '
+              'further live updates until the app is restarted',
+              source: 'videos/watch',
+              error: e,
+            );
+
             if (_isPermissionDenied(e)) {
               unawaited(_handleProtectedAccessDenied());
             }

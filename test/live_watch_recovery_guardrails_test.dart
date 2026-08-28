@@ -95,6 +95,24 @@ void main() {
       );
     });
 
+    // The video feed is the odd one out: nothing is blocked by a stale
+    // handle, because `listenToVideos` cancels and re-subscribes
+    // unconditionally. The trouble is that `onInit` is its only caller, so
+    // once the stream errors the feed receives no further live updates for
+    // the session. Pull-to-refresh and pagination still work, which is why
+    // it reads as degradation and went unnoticed.
+    test('the video feed reports that it has gone static', () {
+      final videos = _read('lib/controller/video_controller.dart');
+
+      expect(videos, contains("source: 'videos/watch'"));
+      expect(videos, contains('AppLogger.error('));
+      expect(
+        videos,
+        isNot(contains("AppLogger.debug('Video stream error")),
+        reason: 'release builds discard debug entirely',
+      );
+    });
+
     test('no watch failure is left to developer.log alone', () {
       final offers = _read('lib/controller/offre_controller.dart');
 

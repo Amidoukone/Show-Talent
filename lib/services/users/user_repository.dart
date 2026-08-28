@@ -3,10 +3,12 @@ import 'dart:developer' as developer;
 
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/config/app_environment.dart';
+import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/services/callable_auth_guard.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 enum UserAccessIssue { missingProfile, adminPortalOnly, disabledAccount }
 
@@ -340,16 +342,62 @@ class UserRepository {
         .timeout(firestoreWriteTimeout);
   }
 
+  /// How many further goes the background retry gets after the first failure.
+  static const int _fcmTokenRetryAttempts = 3;
+
+  /// Multiplied by the attempt number, so 4s, 8s, then 12s.
+  static const Duration _fcmTokenRetryDelay = Duration(seconds: 4);
+
+  /// Invalidates a retry whose token has been superseded.
+  ///
+  /// Static because callers construct `UserRepository()` fresh each time, so
+  /// an instance field would give every call its own counter and arbitrate
+  /// nothing. FCM can hand us a new token while a retry for the previous one
+  /// is still sleeping, and a late success would then write the *old* token
+  /// over the new one — which is precisely the dead-token state this is
+  /// supposed to prevent.
+  static int _fcmTokenSaveSerial = 0;
+
+  /// Persists the device's FCM token, and keeps trying if the first go fails.
+  ///
+  /// This used to swallow both failures and return as though it had worked.
+  /// The cost was invisible and severe: the backend kept the previous token,
+  /// FCM rejected it on the next send, `pruneUnregisteredToken` deleted it,
+  /// and the device then received **no notifications at all** until FCM
+  /// happened to rotate the token again — which can be months. Nothing was
+  /// logged, and the `try`/`catch` wrapped around this call in
+  /// `NotificationService.listenTokenRefresh` was dead code, because this
+  /// method could not throw.
+  ///
+  /// The first attempt is deliberately unchanged — one callable, one
+  /// Firestore fallback, no delay. Three of this method's callers `await` it,
+  /// and one of them sits in `AuthController._syncState`, on the path a
+  /// sign-in waits for. Retrying inline would put up to 24 seconds of backoff
+  /// in front of the session, which is exactly the class of bug this codebase
+  /// has been digging itself out of. The retry therefore runs detached, and
+  /// the caller returns as quickly as it always did.
   Future<void> saveFcmToken(String uid, String token) async {
     final sanitized = token.trim();
     if (uid.trim().isEmpty || sanitized.isEmpty) {
       return;
     }
 
+    final serial = ++_fcmTokenSaveSerial;
+
+    if (await _writeFcmToken(uid, sanitized)) {
+      return;
+    }
+
+    // Not awaited, and that is the whole point — see above.
+    unawaited(_retryFcmTokenSave(uid, sanitized, serial));
+  }
+
+  /// One full attempt: the callable, then the direct write. True if either won.
+  Future<bool> _writeFcmToken(String uid, String token) async {
     try {
       final callable = _functions.httpsCallable('saveUserFcmToken');
-      await CallableAuthGuard.call(callable, {'token': sanitized});
-      return;
+      await CallableAuthGuard.call(callable, {'token': token});
+      return true;
     } catch (_) {
       // FCM is non-critical. Keep a direct fallback for environments where the
       // callable has not been deployed yet, but never block login/upload.
@@ -358,9 +406,44 @@ class UserRepository {
     try {
       await _usersCollection
           .doc(uid)
-          .set({'fcmToken': sanitized}, SetOptions(merge: true))
+          .set({'fcmToken': token}, SetOptions(merge: true))
           .timeout(firestoreWriteTimeout);
+      return true;
     } catch (_) {}
+
+    return false;
+  }
+
+  Future<void> _retryFcmTokenSave(String uid, String token, int serial) async {
+    for (var attempt = 1; attempt <= _fcmTokenRetryAttempts; attempt++) {
+      await Future<void>.delayed(_fcmTokenRetryDelay * attempt);
+
+      // A newer token arrived; that call owns the field now.
+      if (serial != _fcmTokenSaveSerial) {
+        return;
+      }
+
+      // Signed out, or a different account signed in while we slept. Writing
+      // now would either fail on the rules or attach this device's token to
+      // the wrong profile.
+      if (FirebaseAuth.instance.currentUser?.uid != uid) {
+        return;
+      }
+
+      if (await _writeFcmToken(uid, token)) {
+        return;
+      }
+    }
+
+    // Reported, because the user has now silently lost notifications and no
+    // screen will ever tell them. `error` rather than `warning`: warnings are
+    // sampled at 15% and this is a per-device capability loss, not noise.
+    AppLogger.error(
+      'FCM token could not be saved after '
+      '${_fcmTokenRetryAttempts + 1} attempts; this device will receive no '
+      'notifications until the token rotates again',
+      source: 'notifications/token_save',
+    );
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(

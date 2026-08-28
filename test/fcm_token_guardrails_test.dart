@@ -32,6 +32,64 @@ void main() {
     expect(bootstrap, contains('NotificationService.listenTokenRefresh'));
   });
 
+  // saveFcmToken swallowed both its failures and returned as though it had
+  // worked. The backend then kept the previous token, FCM rejected it on the
+  // next send, pruneUnregisteredToken deleted it, and the device received no
+  // notifications at all until FCM happened to rotate again -- which can be
+  // months. Nothing was logged, and the try/catch wrapped around the call in
+  // listenTokenRefresh was dead code, because the method could not throw.
+  test('a failed token save is retried, and reported if it never lands', () {
+    final repository =
+        File('lib/services/users/user_repository.dart').readAsStringSync();
+
+    expect(repository, contains('Future<bool> _writeFcmToken('));
+    expect(repository, contains('Future<void> _retryFcmTokenSave('));
+    expect(repository, contains('static const int _fcmTokenRetryAttempts'));
+
+    // Reported at `error`: `warning` is sampled at 15%, and this is a
+    // per-device capability loss rather than noise.
+    expect(repository, contains("source: 'notifications/token_save'"));
+    expect(repository, contains('AppLogger.error('));
+  });
+
+  // Three callers await saveFcmToken and one of them sits in
+  // AuthController._syncState, on the path a sign-in waits for. Retrying
+  // inline would put up to 24 seconds of backoff in front of the session.
+  test('the retry never delays a caller', () {
+    final repository =
+        File('lib/services/users/user_repository.dart').readAsStringSync();
+
+    final save = repository.indexOf('Future<void> saveFcmToken(');
+    expect(save, isNonNegative);
+    final body = repository.substring(save, save + 700);
+
+    expect(body, contains('unawaited(_retryFcmTokenSave('));
+    expect(
+      body,
+      isNot(contains('await _retryFcmTokenSave(')),
+      reason: 'a sign-in must never wait on the backoff',
+    );
+    // The first attempt keeps its original shape: no delay before it.
+    expect(body, contains('if (await _writeFcmToken(uid, sanitized))'));
+  });
+
+  // FCM can hand over a new token while a retry for the previous one is
+  // still sleeping. A late success would then write the *old* token over the
+  // new one -- the dead-token state this is meant to prevent.
+  test('a superseded token cannot overwrite a newer one', () {
+    final repository =
+        File('lib/services/users/user_repository.dart').readAsStringSync();
+
+    expect(repository, contains('static int _fcmTokenSaveSerial'));
+    expect(repository, contains('final serial = ++_fcmTokenSaveSerial;'));
+    expect(repository, contains('if (serial != _fcmTokenSaveSerial)'));
+    // And it must not attach this device's token to another account.
+    expect(
+      repository,
+      contains('if (FirebaseAuth.instance.currentUser?.uid != uid)'),
+    );
+  });
+
   test('dead tokens are pruned server-side on every send path', () {
     final pushDelivery =
         File('functions/src/push_delivery.ts').readAsStringSync();
