@@ -5,6 +5,7 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/events/event_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -73,8 +74,15 @@ class EventController extends GetxController {
 
         fetchEvents();
       },
-      onError: (error) {
-        AppLogger.debug('EventController auth listen error: $error');
+      onError: (Object error) {
+        // Nothing re-subscribes, so events stop following the session
+        // entirely from here on. Same stream and same failure as
+        // UserController's and ChatController's — one incident, one stage.
+        AuthDiagnostics.failure(
+          'auth state stream failed; events have stopped following the session',
+          stage: 'auth_stream',
+          error: error,
+        );
       },
     );
 
@@ -134,9 +142,32 @@ class EventController extends GetxController {
             update();
             _isLoading.value = false;
           },
-          onError: (error) {
+          onError: (Object error) {
             _isLoading.value = false;
-            AppLogger.debug('Firestore events stream failed: $error');
+
+            // Dropped because the stream is finished — a Firestore snapshot
+            // subscription does not deliver again after an error — and
+            // holding the dead handle is what made this unrecoverable.
+            //
+            // `fetchEvents` returns early while `_eventsSub` is not null for
+            // the same uid and query, so every later call was a no-op: the
+            // `idTokenChanges` event on each hourly token refresh, and the
+            // screen asking again on its next build. The Événements tab
+            // stayed on whatever it last held — usually nothing — until the
+            // app was restarted.
+            //
+            // This is the symptom that was previously blamed on GetX
+            // disposing route-scoped controllers. It was never that: these
+            // controllers are permanent. It was this.
+            _eventsSub = null;
+
+            AppLogger.error(
+              'events stream stopped; the tab will not refresh until it is '
+              'rebound',
+              source: 'events/watch',
+              error: error,
+            );
+
             if (_isPermissionDenied(error)) {
               _events.value = const <Event>[];
               final hasResolvedSession =

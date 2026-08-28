@@ -6,6 +6,7 @@ import 'package:adfoot/controller/push_notification.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/message_converstion.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/chat/chat_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -117,8 +118,17 @@ class ChatController extends GetxController {
         }
         _bindConversationsFor(user.uid);
       },
-      onError: (error) =>
-          AppLogger.debug("ChatController auth listen error: $error"),
+      // Nothing re-subscribes. From here on chat stops reacting to auth at
+      // all: conversations stay bound to whoever was signed in, a sign-out
+      // leaves them on screen, and a sign-in never binds. `debug` writes
+      // nowhere in a release build, so it looked like chat simply not
+      // working. Same stream and same failure as UserController's, hence the
+      // same stage — one incident, not two.
+      onError: (Object error) => AuthDiagnostics.failure(
+        'auth state stream failed; chat has stopped following the session',
+        stage: 'auth_stream',
+        error: error,
+      ),
     );
 
     final uid = _resolvedCurrentUid();
@@ -226,8 +236,29 @@ class ChatController extends GetxController {
               );
             }
           },
-          onError: (error) {
-            AppLogger.debug("Erreur ecoute conversations : $error");
+          onError: (Object error) {
+            // Cleared because the subscription is dead, and saying so is what
+            // lets the app recover on its own.
+            //
+            // `_bindConversationsFor` returns early while `_convSub` is not
+            // null, so a stale handle here blocked the one automatic path
+            // back: the `idTokenChanges` event that fires on every token
+            // refresh, roughly hourly, calls it and would otherwise rebind.
+            // Only a manual pull-to-refresh could clear it, because
+            // `refreshConversations` unbinds first.
+            _convSub = null;
+
+            // And it was invisible. The conversation list and the unread
+            // badge in the navigation bar simply froze on their last value:
+            // messages kept arriving, the badge never moved, and `debug` is
+            // dropped outright by AppLogger in a release build.
+            AppLogger.error(
+              'conversation watch stopped; the list and the unread badge '
+              'will not update until it is rebound',
+              source: 'chat/conversation_watch',
+              error: error,
+            );
+
             if (_isPermissionDenied(error)) {
               _resetLocalState();
               unawaited(_handleProtectedAccessDenied());

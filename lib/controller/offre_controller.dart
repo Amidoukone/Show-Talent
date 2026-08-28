@@ -9,8 +9,11 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/offers/offer_repository.dart';
+
+import 'package:adfoot/services/app_logger.dart';
 
 class OffreController extends GetxController {
   static OffreController instance = Get.find();
@@ -94,10 +97,14 @@ class OffreController extends GetxController {
 
         _fetchOffres();
       },
-      onError: (error) {
-        developer.log(
-          'Erreur écoute auth pour les offres: $error',
-          name: 'OffreController.onInit',
+      onError: (Object error) {
+        // `developer.log` writes to the attached debugger and nowhere else:
+        // it reaches neither `client_logs` nor Crashlytics, so on a real
+        // device this failure produced no record at all. Nothing
+        // re-subscribes either, so offers stop following the session.
+        AuthDiagnostics.failure(
+          'auth state stream failed; offers have stopped following the session',
+          stage: 'auth_stream',
           error: error,
         );
       },
@@ -160,13 +167,31 @@ class OffreController extends GetxController {
             update();
             _isLoading.value = false;
           },
-          onError: (error, stackTrace) {
-            developer.log(
-              'Erreur ecoute Firestore pour les offres: $error',
-              name: 'OffreController._fetchOffres',
+          onError: (Object error, StackTrace stackTrace) {
+            // Dropped because the stream is finished, and holding the dead
+            // handle is what made this unrecoverable.
+            //
+            // `_fetchOffres` returns early while `_offresSubscription` is not
+            // null for the same uid and query, and unlike events it has no
+            // `forceRefresh` escape at all — so every later call was a no-op,
+            // including the one on each hourly token refresh. The Offres tab
+            // stayed on whatever it last held until the app was restarted.
+            //
+            // This is the symptom previously blamed on GetX disposing
+            // route-scoped controllers. These controllers are permanent; it
+            // was never that.
+            _offresSubscription = null;
+
+            // And it was invisible: `developer.log` reaches the attached
+            // debugger only, never `client_logs` and never Crashlytics.
+            AppLogger.error(
+              'offers stream stopped; the tab will not refresh until it is '
+              'rebound',
+              source: 'offers/watch',
               error: error,
               stackTrace: stackTrace,
             );
+
             if (_isPermissionDenied(error)) {
               _offres.value = const <Offre>[];
               final hasResolvedSession =
