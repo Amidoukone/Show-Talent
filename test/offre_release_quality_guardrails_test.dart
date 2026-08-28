@@ -200,7 +200,16 @@ void main() {
       expect(controller, contains('.watchOffers(limit: _offerPageSize'));
       expect(repository, contains("collection('offres')"));
       expect(repository, contains('_parseSnapshotDocs(snapshot.docs)'));
-      expect(repository, contains('Offre ignoree car document invalide'));
+
+      // Tolerance is the point: one malformed document must cost its own
+      // offer, not the whole batch. Asserted on the shape rather than on the
+      // message, which used to be a French string logged through
+      // `developer.log` -- a sink that never leaves the device, so a
+      // disappearing offer left no record anywhere. It is now reported at
+      // `warning`, sampled, so a permanently bad document cannot flood.
+      expect(repository, contains('} catch (error, stackTrace) {'));
+      expect(repository, contains("source: 'offers/parse'"));
+      expect(repository, contains('AppLogger.warning('));
       expect(
         repository,
         contains(

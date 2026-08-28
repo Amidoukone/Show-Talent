@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
@@ -242,9 +241,9 @@ class OffreController extends GetxController {
       _offres.value = _sortOffers(mergedById.values);
       update();
     } on FirebaseException catch (error, stackTrace) {
-      developer.log(
+      AppLogger.warning(
         'Erreur pagination Firestore pour les offres: $error',
-        name: 'OffreController.loadMoreOffres',
+        source: 'OffreController.loadMoreOffres',
         error: error,
         stackTrace: stackTrace,
       );
@@ -252,9 +251,9 @@ class OffreController extends GetxController {
         unawaited(_handleProtectedAccessDenied());
       }
     } catch (error, stackTrace) {
-      developer.log(
+      AppLogger.warning(
         'Erreur pagination offres: $error',
-        name: 'OffreController.loadMoreOffres',
+        source: 'OffreController.loadMoreOffres',
         error: error,
         stackTrace: stackTrace,
       );
@@ -290,9 +289,9 @@ class OffreController extends GetxController {
     try {
       await _offerRepository.incrementViews(offer: offre, viewer: viewer);
     } catch (e, st) {
-      developer.log(
+      AppLogger.warning(
         'Erreur incrementation vues: $e',
-        name: 'OffreController.incrementVues',
+        source: 'OffreController.incrementVues',
         error: e,
         stackTrace: st,
       );
@@ -330,9 +329,9 @@ class OffreController extends GetxController {
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de la publication de l’offre: $error',
-        name: 'OffreController.publierOffre',
+        source: 'OffreController.publierOffre',
         error: error,
         stackTrace: st,
       );
@@ -345,9 +344,9 @@ class OffreController extends GetxController {
         message: 'Impossible de publier l’offre pour le moment.',
       );
     } catch (e, st) {
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de la publication de l’offre: $e',
-        name: 'OffreController.publierOffre',
+        source: 'OffreController.publierOffre',
         error: e,
         stackTrace: st,
       );
@@ -369,9 +368,9 @@ class OffreController extends GetxController {
     );
 
     if (!response.success) {
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de l’envoi des notifications offre: ${response.message}',
-        name: 'OffreController._notifierJoueurs',
+        source: 'OffreController._notifierJoueurs',
       );
     }
 
@@ -397,9 +396,9 @@ class OffreController extends GetxController {
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de la modification de l’offre: $error',
-        name: 'OffreController.modifierOffre',
+        source: 'OffreController.modifierOffre',
         error: error,
         stackTrace: st,
       );
@@ -414,9 +413,9 @@ class OffreController extends GetxController {
         message: 'Impossible de modifier l’offre pour le moment.',
       );
     } catch (e, st) {
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de la modification de l’offre: $e',
-        name: 'OffreController.modifierOffre',
+        source: 'OffreController.modifierOffre',
         error: e,
         stackTrace: st,
       );
@@ -467,9 +466,9 @@ class OffreController extends GetxController {
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
-      developer.log(
+      AppLogger.warning(
         'Erreur lors du changement de statut offre: $error',
-        name: 'OffreController.changerStatut',
+        source: 'OffreController.changerStatut',
         error: error,
         stackTrace: st,
       );
@@ -484,9 +483,9 @@ class OffreController extends GetxController {
         message: 'Impossible de modifier le statut pour le moment.',
       );
     } catch (e, st) {
-      developer.log(
+      AppLogger.warning(
         'Erreur lors du changement de statut offre: $e',
-        name: 'OffreController.changerStatut',
+        source: 'OffreController.changerStatut',
         error: e,
         stackTrace: st,
       );
@@ -521,9 +520,9 @@ class OffreController extends GetxController {
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de la suppression de l’offre: $error',
-        name: 'OffreController.supprimerOffre',
+        source: 'OffreController.supprimerOffre',
         error: error,
         stackTrace: st,
       );
@@ -538,9 +537,9 @@ class OffreController extends GetxController {
         message: 'Impossible de supprimer l’offre pour le moment.',
       );
     } catch (e, st) {
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de la suppression de l’offre: $e',
-        name: 'OffreController.supprimerOffre',
+        source: 'OffreController.supprimerOffre',
         error: e,
         stackTrace: st,
       );
@@ -583,9 +582,9 @@ class OffreController extends GetxController {
       return _offerRepositoryExceptionResponse(e);
     } on FirebaseException catch (error, st) {
       _restoreLocalOfferCandidates(offre, previousCandidates);
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de la postulation offre: $error',
-        name: 'OffreController.postulerOffre',
+        source: 'OffreController.postulerOffre',
         error: error,
         stackTrace: st,
       );
@@ -601,9 +600,9 @@ class OffreController extends GetxController {
       );
     } catch (e, st) {
       _restoreLocalOfferCandidates(offre, previousCandidates);
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de la postulation offre: $e',
-        name: 'OffreController.postulerOffre',
+        source: 'OffreController.postulerOffre',
         error: e,
         stackTrace: st,
       );
@@ -646,9 +645,9 @@ class OffreController extends GetxController {
       return _offerRepositoryExceptionResponse(e);
     } on FirebaseException catch (error, st) {
       _restoreLocalOfferCandidates(offre, previousCandidates);
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de la désinscription offre: $error',
-        name: 'OffreController.seDesinscrireOffre',
+        source: 'OffreController.seDesinscrireOffre',
         error: error,
         stackTrace: st,
       );
@@ -664,9 +663,9 @@ class OffreController extends GetxController {
       );
     } catch (e, st) {
       _restoreLocalOfferCandidates(offre, previousCandidates);
-      developer.log(
+      AppLogger.warning(
         'Erreur lors de la désinscription offre: $e',
-        name: 'OffreController.seDesinscrireOffre',
+        source: 'OffreController.seDesinscrireOffre',
         error: e,
         stackTrace: st,
       );

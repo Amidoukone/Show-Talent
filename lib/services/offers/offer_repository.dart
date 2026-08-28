@@ -1,7 +1,7 @@
-import 'dart:developer' as developer;
 
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/app_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OfferRepositoryException implements Exception {
@@ -297,11 +297,20 @@ class OfferRepository {
 
         fetched.add(offer);
       } catch (error, stackTrace) {
-        developer.log(
-          'Offre ignoree car document invalide: ${doc.id}',
-          name: 'OfferRepository._parseSnapshotDocs',
+        // This offer is now missing from the list, and nothing anywhere says
+        // so: the publisher sees their offer absent and the players never see
+        // it at all. `developer.log` reaches an attached debugger and nowhere
+        // else, so on a real device a document that stopped parsing simply
+        // erased an offer.
+        //
+        // `warning` rather than `error` because the snapshot re-delivers on
+        // every change: sampling at 15% gives the rate without the flood.
+        AppLogger.warning(
+          'offer dropped from the list; its document did not parse',
+          source: 'offers/parse',
           error: error,
           stackTrace: stackTrace,
+          metadata: <String, dynamic>{'offerId': doc.id},
         );
       }
     }
@@ -315,9 +324,12 @@ class OfferRepository {
       'statut': 'fermee',
       'lastUpdated': FieldValue.serverTimestamp(),
     }).catchError((Object error, StackTrace stackTrace) {
-      developer.log(
-        'Erreur lors de la mise a jour auto du statut offre: $error',
-        name: 'OfferRepository._closeExpiredOffer',
+      // The offer stays "ouverte" in Firestore past its end date, so players
+      // keep being invited to apply to something that has closed. Retried
+      // implicitly on the next snapshot, hence `warning` rather than `error`.
+      AppLogger.warning(
+        'expired offer could not be closed; it still reads as open',
+        source: 'offers/auto_close',
         error: error,
         stackTrace: stackTrace,
       );

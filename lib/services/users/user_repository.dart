@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/config/app_environment.dart';
@@ -78,9 +77,9 @@ class UserRepository {
       final doc = await _getWithRetry(_privateContactDoc(uid));
       return doc.data();
     } catch (error, stackTrace) {
-      developer.log(
+      AppLogger.warning(
         'private contact fetch warning',
-        name: 'UserRepository._fetchPrivateContact',
+        source: 'UserRepository._fetchPrivateContact',
         error: error,
         stackTrace: stackTrace,
       );
@@ -96,9 +95,9 @@ class UserRepository {
     try {
       return AppUser.fromMap(data, privateContact: privateContact);
     } catch (error, stackTrace) {
-      developer.log(
+      AppLogger.warning(
         'user document parse error',
-        name: source ?? 'UserRepository',
+        source: source ?? 'UserRepository',
         error: error,
         stackTrace: stackTrace,
       );

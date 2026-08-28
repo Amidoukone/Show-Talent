@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
+import '../app_logger.dart';
 import '../app_check_service.dart';
 
 class ProfileFieldDelete {
@@ -317,11 +318,16 @@ class ProfileRepository {
     try {
       return AppUser.fromMap(data, privateContact: privateContact);
     } catch (error, stackTrace) {
-      developer.log(
-        'user document parse error',
-        name: source,
+      // Returning null here is what puts "Profil indisponible" on screen, and
+      // `developer.log` never left the device — so the one place that knows
+      // *why* the profile is unavailable said nothing that could be read
+      // afterwards.
+      AppLogger.warning(
+        'profile unavailable; its document did not parse',
+        source: 'profile/parse',
         error: error,
         stackTrace: stackTrace,
+        metadata: <String, dynamic>{'origin': source},
       );
       return null;
     }
