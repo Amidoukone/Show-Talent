@@ -19,6 +19,7 @@ import 'package:adfoot/services/notifications.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/widgets/ad_avatar.dart';
+import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -42,7 +43,7 @@ class _MainScreenState extends State<MainScreen> {
   final ChatController chatController = Get.find<ChatController>();
   final AuthController _authController = Get.find<AuthController>();
 
-  /// Where the tapped notification wants the Opportunités screen to open.
+  /// Where the tapped notification wants the Carrière screen to open.
   ///
   /// The screen is built fresh on every tab change, so a plain `initialTab`
   /// would be read once and never again. The serial is what makes a second
@@ -183,7 +184,22 @@ class _MainScreenState extends State<MainScreen> {
     setState(() => _selectedIndex = index);
   }
 
-  /// Opens Opportunités on one of its two tabs.
+  /// Keeps a requested tab inside the destinations this bar actually has.
+  ///
+  /// The bar used to hold five: Accueil, Offres, Events, Chat, Outils. Callers
+  /// still exist that were written against those indices — `offres_form`
+  /// navigates to `/main` with `tab: 1`, which now means Carrière and happens
+  /// to be right — and a payload from an older or newer build can name a
+  /// destination that is not there. Falling back to Accueil is the honest
+  /// answer; landing on nothing is not.
+  int _safeDestination(int value) {
+    if (value < _homeTab || value > _profileTab) {
+      return _homeTab;
+    }
+    return value;
+  }
+
+  /// Opens Carrière on one of its two tabs.
   ///
   /// Offres and Événements were two destinations holding, on
   /// adfoot-production, one offer and two events between them — forty percent
@@ -225,11 +241,20 @@ class _MainScreenState extends State<MainScreen> {
       return;
     }
 
+    // Read defensively. These arguments come from notification payloads,
+    // share links and the login screen, so `tab` is not guaranteed to be an
+    // int — and `args['tab'] ?? 0` assigned whatever was there straight into
+    // an int field, which throws inside didChangeDependencies and takes the
+    // whole shell down to a red screen. A wrong tab is recoverable; this was
+    // not.
     final args = Get.arguments;
     if (args is int) {
-      _selectedIndex = args;
+      _selectedIndex = _safeDestination(args);
     } else if (args is Map) {
-      _selectedIndex = args['tab'] ?? 0;
+      final tab = args['tab'];
+      if (tab is int) {
+        _selectedIndex = _safeDestination(tab);
+      }
     }
 
     _hasHandledArguments = true;
@@ -306,7 +331,7 @@ class _MainScreenState extends State<MainScreen> {
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   _openOpportunities(tab: 0);
-                  unawaited(Get.to(() => const OffreFormScreen()));
+                  unawaited(_openFormAndAnnounce(const OffreFormScreen()));
                 },
               ),
               ListTile(
@@ -322,7 +347,7 @@ class _MainScreenState extends State<MainScreen> {
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   _openOpportunities(tab: 1);
-                  unawaited(Get.to(() => const EventFormScreen()));
+                  unawaited(_openFormAndAnnounce(const EventFormScreen()));
                 },
               ),
               const SizedBox(height: 8),
@@ -331,6 +356,40 @@ class _MainScreenState extends State<MainScreen> {
         );
       },
     );
+  }
+
+  /// Opens a publication form and says what came of it.
+  ///
+  /// Both forms answer with a result — `OffreFormResult`, `EventFormResult` —
+  /// and popping is what delivers it. `OffreScreen` and `EventListScreen`
+  /// have always turned that into a "Offre publiée" banner, but they only see
+  /// it when *they* opened the form; the sheet here dropped the future on the
+  /// floor, so publishing announced nothing at all.
+  ///
+  /// That is now the normal path, not an edge case: the create button was
+  /// removed from both embedded screens (they defer to the bar's Publier), so
+  /// without this a publisher got no confirmation whatsoever — the form just
+  /// closed, and nothing said the offer existed.
+  ///
+  /// [AdFeedback] rather than the screens' own banner because this is the
+  /// shell: it does not own either screen's notice slot, and the overlay
+  /// reads the same on whichever tab the user lands.
+  Future<void> _openFormAndAnnounce(Widget form) async {
+    final result = await Get.to<Object?>(() => form);
+    if (!mounted || result == null) return;
+
+    final (String title, String message, String kind) = switch (result) {
+      OffreFormResult r => (r.title, r.message, r.kind),
+      EventFormResult r => (r.title, r.message, r.kind),
+      _ => ('', '', ''),
+    };
+    if (message.isEmpty) return;
+
+    if (kind == 'info') {
+      AdFeedback.info(title, message);
+    } else {
+      AdFeedback.success(title, message);
+    }
   }
 
   /// Where the current destination sits in this account's bar.
@@ -346,10 +405,19 @@ class _MainScreenState extends State<MainScreen> {
           _publishBarItem()
         else
           switch (slot) {
+            // "Carrière", not "Opportunités".
+            //
+            // A fixed bar splits its width evenly, so on a 360 dp screen each
+            // slot gets 72 dp. "Opportunités" measures about 74 dp in the
+            // selected style (12 px, w800) — Material puts no ellipsis on a
+            // bar label and the word has no break point, so it was simply
+            // cut. One word of eight characters clears the slot with room to
+            // spare, and both tabs under it — an offer to answer, a detection
+            // to attend — are steps in a career.
             _opportunitiesDestination => const BottomNavigationBarItem(
               icon: Icon(Icons.local_offer_outlined),
               activeIcon: Icon(Icons.local_offer_rounded),
-              label: 'Opportunités',
+              label: 'Carrière',
             ),
             _chatTab => BottomNavigationBarItem(
               icon: _ChatIconWithBadge(unread: unread, active: false),
@@ -375,15 +443,31 @@ class _MainScreenState extends State<MainScreen> {
   /// Labelled rather than a bare glyph: "+" is unambiguous to a player and
   /// means nothing to a club. One word that is true for both.
   BottomNavigationBarItem _publishBarItem() {
-    final icon = Container(
-      width: 38,
-      height: 30,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: AdColors.brand,
-        borderRadius: BorderRadius.circular(AdRadius.md),
+    // Boxed to the same height as every other glyph.
+    //
+    // The tiles of a BottomNavigationBar are a Row of centred Columns, so a
+    // shorter icon does not sit lower — it drags its whole tile, label
+    // included, off the line its neighbours share. This pill is 30 px tall
+    // against the 34 px of [_NavIconShell], and those four pixels were
+    // visible: the "+" and the word under it floated above Accueil and Chat.
+    final icon = SizedBox(
+      height: _navIconBox,
+      child: Center(
+        child: Container(
+          width: 38,
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AdColors.brand,
+            borderRadius: BorderRadius.circular(AdRadius.md),
+          ),
+          child: const Icon(
+            Icons.add_rounded,
+            color: AdColors.brandOn,
+            size: 22,
+          ),
+        ),
       ),
-      child: const Icon(Icons.add_rounded, color: AdColors.brandOn, size: 22),
     );
 
     return BottomNavigationBarItem(
@@ -573,27 +657,29 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ],
                 ),
-                child: BottomNavigationBar(
-                  backgroundColor: Colors.transparent,
-                  selectedItemColor: AdColors.brand,
-                  unselectedItemColor: AdColors.onSurfaceMuted,
-                  currentIndex: _barIndexFor(_selectedIndex, appUser),
-                  onTap: (index) => _onBarItemTapped(index, appUser),
-                  type: BottomNavigationBarType.fixed,
-                  showUnselectedLabels: true,
-                  selectedFontSize: 12,
-                  unselectedFontSize: 11,
-                  selectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
+                child: _NavBarTextScale(
+                  child: BottomNavigationBar(
+                    backgroundColor: Colors.transparent,
+                    selectedItemColor: AdColors.brand,
+                    unselectedItemColor: AdColors.onSurfaceMuted,
+                    currentIndex: _barIndexFor(_selectedIndex, appUser),
+                    onTap: (index) => _onBarItemTapped(index, appUser),
+                    type: BottomNavigationBarType.fixed,
+                    showUnselectedLabels: true,
+                    selectedFontSize: 12,
+                    unselectedFontSize: 11,
+                    selectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.2,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.1,
+                    ),
+                    selectedIconTheme: const IconThemeData(size: 26),
+                    unselectedIconTheme: const IconThemeData(size: 24),
+                    items: _buildBarItems(appUser, unread),
                   ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.1,
-                  ),
-                  selectedIconTheme: const IconThemeData(size: 26),
-                  unselectedIconTheme: const IconThemeData(size: 24),
-                  items: _buildBarItems(appUser, unread),
                 ),
               ),
             ),
@@ -652,6 +738,46 @@ class _ChatIconWithBadge extends StatelessWidget {
   }
 }
 
+/// Keeps the bar's labels legible at any system text size.
+///
+/// `main.dart` deliberately honours the system setting up to 1.6x, which is
+/// right for a body of text and wrong for this: a fixed bar divides its width
+/// evenly, so five slots on a 360 dp screen get 72 dp each no matter how
+/// large the type. Material puts no ellipsis on a bar label, and none of
+/// these words has a break point, so past about 1.15x every one of them is
+/// cut mid-word — "Accueil" included.
+///
+/// Narrowing the range here rather than in the theme keeps the concession
+/// exactly where the constraint is. Every label is one short word paired with
+/// an icon, and none of them is the only way to know what a tab does; the
+/// screens they open scale fully.
+class _NavBarTextScale extends StatelessWidget {
+  const _NavBarTextScale({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final scale = media.textScaler.scale(1).clamp(0.85, 1.15);
+
+    return MediaQuery(
+      data: media.copyWith(textScaler: TextScaler.linear(scale)),
+      child: child,
+    );
+  }
+}
+
+/// The height every glyph in the bar occupies, selected or not.
+///
+/// Fixed on purpose. `selectedIconTheme` grows the glyph from 24 to 26, and
+/// the shell used to grow with it — so the icon row measured 36 px on four
+/// tiles and 38 on the fifth, and the tiles being centred Columns, the label
+/// of whichever tab was selected sat a pixel off its neighbours. Selection is
+/// now expressed entirely inside a box of constant height: the pill grows,
+/// the row does not move.
+const double _navIconBox = 36;
+
 class _NavIconShell extends StatelessWidget {
   final Widget child;
   final bool active;
@@ -660,31 +786,36 @@ class _NavIconShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: active
-            ? AdColors.brand.withValues(alpha: 0.18)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: active
-              ? AdColors.brand.withValues(alpha: 0.35)
-              : Colors.transparent,
-          width: 1,
+    return SizedBox(
+      height: _navIconBox,
+      child: Center(
+        child: AnimatedContainer(
+          duration: AdMotion.normal,
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: active
+                ? AdColors.brand.withValues(alpha: 0.18)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(AdRadius.md),
+            border: Border.all(
+              color: active
+                  ? AdColors.brand.withValues(alpha: 0.35)
+                  : Colors.transparent,
+              width: 1,
+            ),
+            boxShadow: active
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: AdColors.brand.withValues(alpha: 0.25),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : const <BoxShadow>[],
+          ),
+          child: child,
         ),
-        boxShadow: active
-            ? <BoxShadow>[
-                BoxShadow(
-                  color: AdColors.brand.withValues(alpha: 0.25),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : const <BoxShadow>[],
       ),
-      child: child,
     );
   }
 }

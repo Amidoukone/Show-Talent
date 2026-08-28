@@ -38,9 +38,21 @@ void main() {
     // twice: an opportunity published by a club, a recruiter or an agent for
     // a player to answer.
     test('Offres and Events became one destination with two tabs', () {
-      expect(main, contains("label: 'Opportunités',"));
+      // "Carrière", not "Opportunités": a fixed bar gives each of five slots
+      // 72 dp on a 360 dp screen, and "Opportunités" measures about 74 dp in
+      // the selected style. Material puts no ellipsis on a bar label and the
+      // word has no break point, so it was cut mid-word.
+      expect(main, contains("label: 'Carrière',"));
+      expect(main, isNot(contains("label: 'Opportunités',")));
       expect(main, isNot(contains("label: 'Offres',")));
       expect(main, isNot(contains("label: 'Events',")));
+
+      final screen0 = _read('lib/screens/opportunities_screen.dart');
+      expect(
+        screen0,
+        contains("title: 'Carrière',"),
+        reason: 'the bar and the header it opens must agree',
+      );
 
       final screen = _read('lib/screens/opportunities_screen.dart');
       expect(screen, contains("Tab(text: 'Offres')"));
@@ -167,6 +179,132 @@ void main() {
         contains('if (oldWidget.tabRequestSerial == widget.tabRequestSerial) return;'),
       );
       expect(main, contains('_opportunitiesTabSerial++'));
+    });
+  });
+
+  group('publishing says what happened', () {
+    // Both forms answer with a result -- OffreFormResult, EventFormResult --
+    // and popping is what delivers it. The sheet dropped the future on the
+    // floor, so publishing announced nothing.
+    //
+    // That is the normal path, not an edge case: the create button was
+    // removed from both embedded screens in favour of this one, so a
+    // publisher got no confirmation at all -- the form simply closed.
+    test('the sheet awaits the form result instead of dropping it', () {
+      expect(main, contains('Future<void> _openFormAndAnnounce('));
+      expect(
+        main,
+        isNot(contains('unawaited(Get.to(() => const OffreFormScreen()))')),
+        reason: 'the result carries the confirmation',
+      );
+      expect(
+        main,
+        isNot(contains('unawaited(Get.to(() => const EventFormScreen()))')),
+      );
+      expect(
+        main,
+        contains('unawaited(_openFormAndAnnounce(const OffreFormScreen()))'),
+      );
+      expect(
+        main,
+        contains('unawaited(_openFormAndAnnounce(const EventFormScreen()))'),
+      );
+    });
+
+    // The shell does not own either screen's notice slot, so it announces
+    // through the overlay -- which also reads the same whichever tab the
+    // user lands on.
+    test('it announces both result types', () {
+      expect(main, contains('OffreFormResult r =>'));
+      expect(main, contains('EventFormResult r =>'));
+      expect(main, contains('AdFeedback.success(title, message)'));
+      expect(main, contains('AdFeedback.info(title, message)'));
+    });
+  });
+
+  group('the bar holds its line', () {
+    // selectedIconTheme grows the glyph from 24 to 26. The shell grew with
+    // it, so the icon row measured 36 px on four tiles and 38 on the fifth --
+    // and the tiles being centred Columns, the selected label sat off its
+    // neighbours. The publish pill was worse: 30 px against 36.
+    test('every glyph occupies the same height, selected or not', () {
+      expect(main, contains('const double _navIconBox = 36;'));
+
+      final shell = main.indexOf('class _NavIconShell');
+      expect(shell, isNonNegative);
+      final body = main.substring(shell);
+      expect(body, contains('height: _navIconBox,'));
+
+      final publish = main.indexOf('BottomNavigationBarItem _publishBarItem()');
+      expect(publish, isNonNegative);
+      expect(
+        main.substring(publish, publish + 900),
+        contains('height: _navIconBox,'),
+        reason: 'the action sits on the same line as the destinations',
+      );
+    });
+
+    // main.dart honours the system text size up to 1.6x, which is right for
+    // a body of text and wrong for a fixed bar: the slots stay 72 dp however
+    // large the type, and Material puts no ellipsis on a bar label.
+    test('label scaling is bounded, and only here', () {
+      expect(main, contains('class _NavBarTextScale'));
+      expect(main, contains('.clamp(0.85, 1.15)'));
+      expect(main, contains('child: _NavBarTextScale('));
+
+      final app = _read('lib/main.dart');
+      expect(
+        app,
+        contains('.clamp(0.85, 1.6)'),
+        reason: 'the rest of the app must keep scaling for low vision',
+      );
+    });
+  });
+
+  group('a route intent is acted on once', () {
+    // The shell swaps its body between destinations rather than keeping them
+    // in an IndexedStack, so leaving a tab disposes its State and coming back
+    // builds a new one -- while Get.arguments stays set for the life of the
+    // route. A `bool _hasHandled` field cannot help: it is the State itself
+    // that is recreated.
+    test('the screens inside the shell consume, not just read', () {
+      final home = _read('lib/screens/home_screen.dart');
+      expect(home, contains("RouteIntent.readOnce('home_playback')"));
+      expect(
+        home,
+        isNot(contains('final args = Get.arguments;')),
+        reason: 'a shared video link jumped the feed back on every visit',
+      );
+
+      final offers = _read('lib/screens/offre_screen.dart');
+      expect(offers, contains("RouteIntent.readOnce('offer_notice')"));
+      expect(
+        offers,
+        isNot(contains('final args = Get.arguments;')),
+        reason: '"Offre publiee" was announced again on every visit',
+      );
+    });
+
+    // Keyed per consumer, so two screens reading different parts of the same
+    // arguments do not consume each other's; cleared when the arguments
+    // change identity, so a genuinely new intent is always delivered.
+    test('the ledger is per consumer and resets on the next navigation', () {
+      final intent = _read('lib/services/route_intent.dart');
+      expect(intent, contains('static Map<dynamic, dynamic>? readOnce('));
+      expect(intent, contains('if (!identical(arguments, _argumentsIdentity))'));
+      expect(intent, contains('_consumed.clear();'));
+      expect(intent, contains('if (!_consumed.add(key))'));
+    });
+
+    // The shell keeps reading Get.arguments directly -- its own State is not
+    // recreated on a tab change -- but the value is not to be trusted: it
+    // comes from notification payloads and share links, and assigning a
+    // non-int straight into an int field throws inside
+    // didChangeDependencies and takes the whole shell to a red screen.
+    test('the shell reads its tab defensively', () {
+      expect(main, contains('if (tab is int) {'));
+      expect(main, isNot(contains("_selectedIndex = args['tab'] ?? 0;")));
+      expect(main, contains('int _safeDestination(int value)'));
     });
   });
 

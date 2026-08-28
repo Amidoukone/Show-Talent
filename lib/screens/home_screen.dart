@@ -16,6 +16,7 @@ import 'package:adfoot/controller/connectivity_controller.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/services/home/home_feed_repository.dart';
+import 'package:adfoot/services/route_intent.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
@@ -105,8 +106,15 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_hasHandledRouteRefresh) return;
     _hasHandledRouteRefresh = true;
 
-    final args = Get.arguments;
-    if (args is! Map) return;
+    // Read once for the whole route, not once per `State`.
+    //
+    // The shell swaps its body between destinations, so leaving Accueil
+    // disposes this screen and coming back builds a new one — with the flag
+    // above reset and `Get.arguments` still holding the same request. A
+    // shared video link therefore dragged the feed back to that video, and
+    // refetched it, every single time the user returned to this tab.
+    final args = RouteIntent.readOnce('home_playback');
+    if (args == null) return;
 
     _routeRefreshRequested = args['refresh'] == true;
     final rawVideoId = args['videoId'] ?? args['focusVideoId'];

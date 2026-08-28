@@ -96,7 +96,7 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen>
     return Scaffold(
       backgroundColor: AdColors.surface,
       appBar: AdAppBar(
-        title: 'Opportunités',
+        title: 'Carrière',
         subtitle: 'Offres et événements',
         showBottomDivider: false,
         bottom: TabBar(

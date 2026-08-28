@@ -10,6 +10,7 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/offres_form.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/services/route_intent.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
@@ -102,7 +103,7 @@ class _OffreScreenState extends State<OffreScreen> {
       appBar: widget.showAppBar
           ? const AdAppBar(
               title: 'Offres',
-              subtitle: 'Opportunites, candidatures et suivi',
+              subtitle: 'Opportunités, candidatures et suivi',
               showBottomDivider: true,
             )
           : null,
@@ -311,8 +312,13 @@ class _OffreScreenState extends State<OffreScreen> {
     if (!mounted || _hasCapturedRouteNotice) return;
     _hasCapturedRouteNotice = true;
 
-    final args = Get.arguments;
-    if (args is! Map) return;
+    // Read once for the whole route, not once per `State`. Inside
+    // `OpportunitiesScreen` this screen is disposed and rebuilt every time
+    // the user leaves the tab and comes back, while `Get.arguments` keeps the
+    // notice for the life of `/main` — so "Offre publiée" was announced again
+    // on every visit, long after the offer had been published.
+    final args = RouteIntent.readOnce('offer_notice');
+    if (args == null) return;
 
     final message = args['offerSystemNoticeMessage']?.toString().trim();
     if (message == null || message.isEmpty) return;
