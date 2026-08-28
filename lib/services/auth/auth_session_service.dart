@@ -475,11 +475,25 @@ class AuthSessionService {
             }
           })
           .catchError((Object error) {
-            if (kDebugMode) {
-              AppLogger.debug(
-                'AuthSessionService background verification sync error: $error',
-              );
-            }
+            // Reported, not just printed in debug.
+            //
+            // This runs precisely when Auth says the address is verified and
+            // the profile still says it is not — the repair for an account
+            // that reads "Inactif / Accès limité" in the admin portal, and
+            // whose `estActif: false` is what gates access. Nobody awaits it
+            // and nothing retries it: if it fails, the profile simply stays
+            // wrong until the next sign-in happens to fix it.
+            //
+            // `debug` is dropped outright by AppLogger in a release build,
+            // and this whole branch was additionally behind `kDebugMode`, so
+            // on a tester's phone the repair could fail every time and leave
+            // no trace anywhere.
+            AuthDiagnostics.handled(
+              'background verified-state repair failed; '
+              'the profile may still read as inactive',
+              stage: 'verification_sync',
+              error: error,
+            );
           }),
     );
   }

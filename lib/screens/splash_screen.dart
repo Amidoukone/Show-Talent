@@ -193,6 +193,19 @@ class _SplashScreenState extends State<SplashScreen> {
     }
   }
 
+  /// Installs [routeName], or throws so the caller can fall back to a page.
+  ///
+  /// The same trap as `UserController._safeOffAllNamed`, and here it had no
+  /// timeout to end it: `Get.offAllNamed` hands back the pushed route's *pop*
+  /// future, and a root route is never popped. Awaiting it meant this method
+  /// never returned — `_navigating` stayed true for the life of the screen,
+  /// the `finally` never ran, and the `catch` in [_safeOffAllDestination],
+  /// whose whole job is to fall back to a direct page when named routing
+  /// fails, could never be reached. It was dead code from the day it was
+  /// written.
+  ///
+  /// Waiting one frame and then checking where the app actually landed is
+  /// what makes that fallback real.
   Future<void> _safeOffAllNamed(String routeName) async {
     if (_navigating) {
       return;
@@ -200,7 +213,22 @@ class _SplashScreenState extends State<SplashScreen> {
 
     _navigating = true;
     try {
-      await Get.offAllNamed(routeName);
+      final navigation = Get.offAllNamed(routeName);
+      if (navigation != null) {
+        unawaited(navigation.then((_) {}, onError: (Object _) {}));
+      }
+
+      await WidgetsBinding.instance.endOfFrame.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {},
+      );
+
+      if (Get.currentRoute != routeName) {
+        throw StateError(
+          'named navigation did not land on $routeName; '
+          'still on ${Get.currentRoute}',
+        );
+      }
     } finally {
       _navigating = false;
     }
@@ -213,7 +241,17 @@ class _SplashScreenState extends State<SplashScreen> {
 
     _navigating = true;
     try {
-      await Get.offAll(() => page);
+      // Not awaited, for the reason above. This is the last resort of the
+      // startup path, so it must not be the thing that stalls it.
+      final navigation = Get.offAll(() => page);
+      if (navigation != null) {
+        unawaited(navigation.then((_) {}, onError: (Object _) {}));
+      }
+
+      await WidgetsBinding.instance.endOfFrame.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {},
+      );
     } finally {
       _navigating = false;
     }

@@ -254,9 +254,20 @@ class UserController extends GetxController with WidgetsBindingObserver {
         _userList.value = list;
         update();
       },
-      onError: (error) {
-        AppLogger.debug('Erreur fetch users : $error');
+      onError: (Object error) {
         _usersSub = null;
+
+        // Nothing re-subscribes on its own. Until some other path happens to
+        // call _listenAllUsers again, `usersCache` stops updating and the
+        // people list is frozen — and with `debug` writing nowhere in a
+        // release build, that was indistinguishable from "this app knows no
+        // other users". The same shape as the access watcher, which was
+        // already given a report for the same reason.
+        AuthDiagnostics.handled(
+          'user directory watch stopped; the cache will go stale',
+          stage: 'directory_watch',
+          error: error,
+        );
 
         if (_isPermissionDenied(error)) {
           unawaited(_enforceCurrentSessionAccess());
@@ -606,12 +617,21 @@ class UserController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
-      AppLogger.debug(
-        'UserController enforceCurrentSessionAccess Firebase error: $error',
+      // Transient failures already returned above. What reaches here is a
+      // real refusal of the access check, and the session is kept anyway —
+      // so revocation is not being enforced right now and nothing says so.
+      // This method is the backstop for the watcher that already reports;
+      // the backstop failing in silence defeats the point of having one.
+      AuthDiagnostics.handled(
+        'access re-check failed; the session was kept unverified',
+        stage: 'access_check',
+        error: error,
       );
     } catch (error) {
-      AppLogger.debug(
-        'UserController enforceCurrentSessionAccess error: $error',
+      AuthDiagnostics.handled(
+        'access re-check failed unexpectedly; the session was kept unverified',
+        stage: 'access_check',
+        error: error,
       );
     }
   }
@@ -875,19 +895,51 @@ class UserController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
+      // `Get.offAllNamed` hands back the *pop* future of the route it pushes:
+      // it completes when the user leaves the screen they were just sent to,
+      // not when the navigation lands. Awaiting it was therefore awaiting the
+      // user, and the ten-second timeout was the only thing ending the wait.
+      //
+      // Everything downstream paid for that. `_navigating` stayed true for
+      // the full ten seconds of every successful navigation, so the token
+      // refresh that follows any sign-in found the flag set, queued its own
+      // route instead of being dropped as redundant, and the `finally` below
+      // replayed it — a second `offAllNamed(/main)` that tore down and
+      // rebuilt MainScreen about ten seconds after arriving on it. To the
+      // user: the profile that fails to load and comes back after a restart,
+      // and offers and events that vanish. The eight callers that await this
+      // method were blocked for those ten seconds too.
+      //
+      // And it reported the success as a failure: client_logs for
+      // adfoot-production is full of `navigation timed out for route=/main`
+      // written moments after a navigation that had worked perfectly.
+      //
+      // What the callers need is for the new route to be installed, which is
+      // one frame.
       final navFuture = Get.offAllNamed(route, arguments: arguments);
-      await (navFuture ?? Future<void>.value()).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          // Ten seconds for a navigation that normally takes one frame. The
-          // screen the user is on is not the one the app decided they should
-          // be on, and nothing will correct it.
-          AuthDiagnostics.failure(
-            'navigation timed out for route=$route',
-            stage: 'navigate',
-          );
-        },
+      if (navFuture != null) {
+        // Deliberately not awaited. Swallow the outcome so that a route
+        // popped much later cannot surface an unhandled error in the zone.
+        unawaited(navFuture.then((_) {}, onError: (Object _) {}));
+      }
+
+      // Bounded because this method must never again be what blocks session
+      // routing: if no frame is produced, carrying on is strictly better
+      // than waiting.
+      await WidgetsBinding.instance.endOfFrame.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {},
       );
+
+      if (Get.currentRoute != route) {
+        // Now the report means what it says: a frame has been rendered and
+        // the app is not where it was sent.
+        AuthDiagnostics.failure(
+          'navigation did not land on route=$route; '
+          'still on ${Get.currentRoute}',
+          stage: 'navigate',
+        );
+      }
     } finally {
       _navigating = false;
       final queuedRoute = _queuedRoute;

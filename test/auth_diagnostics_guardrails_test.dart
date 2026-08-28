@@ -108,6 +108,39 @@ void main() {
       // Handled, so sampled rather than certain.
       expect(auth, contains("AuthDiagnostics.handled("));
       expect(auth, contains("stage: 'sync_state'"));
+      // The user directory watch dying leaves usersCache frozen, which is
+      // indistinguishable from "this app knows no other users".
+      expect(controller, contains("stage: 'directory_watch'"));
+      // The backstop for the access watcher failing is itself a place the
+      // session is kept unverified.
+      expect(controller, contains("stage: 'access_check'"));
+    });
+
+    // Fires exactly when Firebase Auth says the address is verified and the
+    // profile still says it is not -- the repair for an account that reads
+    // "Inactif / Acces limite" in the admin portal, and whose estActif:false
+    // is what gates access. Nobody awaits it and nothing retries it, so a
+    // failure left the profile wrong until some later sign-in fixed it.
+    //
+    // It was logged at `debug`, which AppLogger drops in a release build,
+    // and additionally behind kDebugMode -- so on a tester's phone it could
+    // fail every single time and leave no trace anywhere at all.
+    test('the background verified-state repair reports when it fails', () {
+      final service = _read('lib/services/auth/auth_session_service.dart');
+
+      final background = service.indexOf(
+        'void _syncVerifiedAppUserStateInBackground(',
+      );
+      expect(background, isNonNegative);
+      final body = service.substring(background, background + 2400);
+
+      expect(body, contains('AuthDiagnostics.handled('));
+      expect(body, contains("stage: 'verification_sync'"));
+      expect(
+        body,
+        isNot(contains('background verification sync error')),
+        reason: 'release builds discard debug entirely',
+      );
     });
 
     // _routeFromAuth has three exits and all three do the same visible
