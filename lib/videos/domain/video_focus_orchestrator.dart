@@ -137,7 +137,15 @@ class VideoFocusOrchestrator {
       shouldPlay = actualCtrl != null &&
           actualCtrl.value.isInitialized &&
           !actualCtrl.value.hasError &&
-          !actualCtrl.value.isPlaying;
+          !actualCtrl.value.isPlaying &&
+          // The request token above answers "did the user scroll on?", and it
+          // is the wrong question for the case the user reported: leaving the
+          // *app* while a video is loading does not change the focused index,
+          // so nothing here was stale and this played to a screen nobody was
+          // looking at. The manager owns the answer to "may anything start
+          // right now", because it is also the one that starts playback
+          // itself inside `initializeController(autoPlay: true)`.
+          videoManager.canStartPlayback(contextKey, currentUrl);
     } catch (_) {
       shouldPlay = false;
     }

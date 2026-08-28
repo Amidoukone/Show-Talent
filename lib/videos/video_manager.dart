@@ -10,6 +10,7 @@ import 'package:adfoot/utils/video_source_selector.dart';
 import 'package:adfoot/videos/data/video_download_service.dart';
 import 'package:adfoot/videos/domain/network_profile.dart';
 import 'package:adfoot/videos/domain/playback_bandwidth_arbiter.dart';
+import 'package:adfoot/videos/domain/playback_gate.dart';
 import 'package:adfoot/videos/domain/active_init_registry.dart';
 import 'package:adfoot/videos/domain/player_lifetime_registry.dart';
 import 'package:adfoot/videos/domain/video_network_tuning.dart';
@@ -601,7 +602,7 @@ class VideoManager {
           lru[cacheKey] = existing;
           await _enforceLimit(contextKey, activeUrl: activeUrl);
           _setLoadState(contextKey, url, VideoLoadState.ready);
-          if (autoPlay && !v.isPlaying) {
+          if (autoPlay && !v.isPlaying && canStartPlayback(contextKey, url)) {
             await existing.controller.play().catchError((_) {});
           }
           return existing;
@@ -622,7 +623,7 @@ class VideoManager {
             lru[cacheKey] = player;
             await _enforceLimit(contextKey, activeUrl: activeUrl);
             _setLoadState(contextKey, url, VideoLoadState.ready);
-            if (autoPlay && !v.isPlaying) {
+            if (autoPlay && !v.isPlaying && canStartPlayback(contextKey, url)) {
               await player.controller.play().catchError((_) {});
             }
             return player;
@@ -835,7 +836,11 @@ class VideoManager {
             _flushDeferredPreload(contextKey);
           }
 
-          if (autoPlay && !player.controller.value.isPlaying) {
+          // The longest await of the three, and the one users reported: a
+          // cold load finishing after they scrolled on, or left the app.
+          if (autoPlay &&
+              !player.controller.value.isPlaying &&
+              canStartPlayback(contextKey, url)) {
             await player.controller.play().catchError((_) {});
           }
 
@@ -1270,7 +1275,36 @@ class VideoManager {
     return _ui.originalUrlsAmong(contextKey, lru.keys.toSet());
   }
 
+  /// Who may *start* a video, and when. See [PlaybackGate] for the reasoning.
+  final PlaybackGate _gate = PlaybackGate();
+
+  bool get isAppResumed => _gate.isAppResumed;
+
+  /// Backgrounding pauses everything held here, not only the video on screen:
+  /// a preloaded or recovering controller has no widget watching it. Nothing
+  /// is resumed on the way back -- the widget restarts what is visible.
+  Future<void> setAppResumed(bool resumed) async {
+    if (!_gate.setAppResumed(resumed)) return;
+    if (!resumed) await pauseEverything();
+  }
+
+  Future<void> pauseEverything() async {
+    final contexts = _lruByContext.keys.toList(growable: false);
+    if (contexts.isEmpty) return;
+    await Future.wait(contexts.map(pauseAll));
+  }
+
+  bool canStartPlayback(String contextKey, String url) =>
+      _gate.canStart(contextKey, url);
+
+  @visibleForTesting
+  void resetPlaybackGateForTests() => _gate.reset();
+
   Future<void> pauseAllExcept(String contextKey, String? keepUrl) async {
+    // The callers of this method are exactly the two places that decide which
+    // video owns the screen, so this is where focus is known.
+    _gate.setFocus(contextKey, keepUrl);
+
     final lru = _lruByContext[contextKey] ?? {};
     final resolvedKeep = keepUrl != null
         ? _resolveKey(contextKey, keepUrl)
