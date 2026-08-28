@@ -319,6 +319,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    // The `home` VideoController is deliberately *not* released here, and that
+    // is load-bearing rather than an oversight.
+    //
+    // This screen is disposed and rebuilt on every trip through the navigation
+    // bar, because `MainScreen` swaps its body rather than keeping the
+    // destinations in an `IndexedStack`. Releasing the controller here would
+    // mean refetching the whole feed on every return — and losing
+    // `currentIndex`, which is the only reason [_restoredFeedIndex] can put the
+    // user back where they were without keeping a single extra player alive.
+    //
+    // It is registered `permanent: true` under one fixed context key, so there
+    // is exactly one of them for the life of the process; this is not the
+    // per-uid case `FeatureControllerRegistry` ref-counts for. The native
+    // players are still freed with the pager, which is what returns the
+    // decoders.
     _searchDebounce?.cancel();
     _searchFocusNode.dispose();
     _searchController.dispose();
@@ -715,6 +730,38 @@ class _HomeScreenState extends State<HomeScreen> {
   static const int _minUnwatchedAhead = 3;
 
   /// Runs once the pager has attached [index]'s controller.
+  /// Where the feed should open, so leaving the tab does not send the user
+  /// back to the top of it.
+  ///
+  /// `MainScreen` swaps its body between destinations rather than keeping them
+  /// in an `IndexedStack`, so leaving Accueil disposes this screen and coming
+  /// back builds a new one. That is the right trade — an `IndexedStack` would
+  /// keep this feed's native players alive next to the profile tab's, and
+  /// `VideoManager._globalMaxActive` exists because production ran out of
+  /// MediaCodec instances doing exactly that.
+  ///
+  /// Nothing had to be kept alive to fix this. The index was never lost: the
+  /// controller is registered permanent under `home` and deliberately outlives
+  /// this screen (see [dispose]), and it maintains `currentIndex` across list
+  /// updates. Only the pager was starting from zero every time, because
+  /// `VideoFeedPager.initialIndex` defaults to 0 and nobody passed it.
+  ///
+  /// The players themselves are still disposed with the pager, which is what
+  /// gives the decoders back; they return from the disk cache, a local file
+  /// open rather than a download.
+  int _restoredFeedIndex(List<Video> feedVideos) {
+    // A search index belongs to the search results, not to the feed — and a
+    // search does not survive the rebuild anyway, so there is nothing to
+    // restore into.
+    if (_isSearchActive || feedVideos.isEmpty) return 0;
+
+    // -1 is the controller's "no video selected", not a position.
+    final current = videoController.currentIndex.value;
+    if (current <= 0) return 0;
+
+    return current.clamp(0, feedVideos.length - 1).toInt();
+  }
+
   Future<void> _onIndexFocused(int index) async {
     await Future.delayed(const Duration(milliseconds: 50));
     if (!mounted) return;
@@ -1070,6 +1117,7 @@ class _HomeScreenState extends State<HomeScreen> {
               return VideoFeedPager(
                 pagerController: _pager,
                 contextKey: 'home',
+                initialIndex: _restoredFeedIndex(feedVideos),
                 videos: videos,
                 endOfFeedBuilder: feedIsComplete
                     ? (context) => VideoFeedEndCard(
