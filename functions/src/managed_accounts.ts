@@ -113,6 +113,31 @@ export const provisionManagedAccount = onCall(
       });
     }
 
+    // The address is trusted the moment an admin provisions it, and saying so
+    // here is what makes the account usable immediately.
+    //
+    // There is no self-signup on this platform: an admin types the address
+    // and the invitation is delivered to it, so nobody arrives without an
+    // admin vouching for their mailbox. Leaving the flag false only moved the
+    // cost around. The profile below was written `estActif: false`, the
+    // portal showed the member "Inactif / Acces limite", and it stayed that
+    // way even after the password was set -- completing a reset updates
+    // Firebase Auth and nothing else. The profile was reconciled only on the
+    // member's first mobile sign-in, by the repair callable, so an operator
+    // looking at the portal in between saw an account that appeared broken
+    // and had no button that would fix it.
+    //
+    // It grants no new access. The account still holds the random temporary
+    // password from createUser, which nobody knows, so the only way in
+    // remains the link e-mailed to that same address. What changes is that
+    // the verification link is no longer minted at all: setting the password
+    // is the single action asked of the member.
+    if (!userRecord.emailVerified) {
+      userRecord = await auth.updateUser(userRecord.uid, {
+        emailVerified: true,
+      });
+    }
+
     const emailVerifiedAt = userRecord.emailVerified ?
       existingData.emailVerifiedAt ?? fieldValue.serverTimestamp() :
       null;

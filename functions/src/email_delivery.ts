@@ -49,18 +49,28 @@ const BREVO_SMTP_KEY = defineSecret("BREVO_SMTP_KEY");
 /**
  * Bind this into a callable's options to give it access to the SMTP key.
  *
- * Empty until `SMTP_USER` is set, and that is the important part rather than
- * an optimisation. A secret listed in a function's options must exist in
- * Secret Manager or the *whole deploy* is rejected — so an unconditional
- * binding would turn "we have not set up Brevo yet" into "nobody can deploy
- * any Cloud Function". The CLI loads `.env.<project>` before it discovers
- * function definitions, so this is decided at deploy time from the same
- * single switch that governs sending at runtime: fill `SMTP_USER` and the
- * secret becomes required, blank it and the deployment stops asking for it.
+ * This was conditional on `SMTP_USER`, on the assumption that the CLI loads
+ * `.env.<project>` before it discovers function definitions. Production
+ * disproved it twice. The deploy log for adfoot-production reads
+ * `Loaded environment variables from .env, .env.production` *after*
+ * `Loading and analyzing source code`, and the discovery pass that evaluates
+ * this line runs without `SMTP_USER` in its environment — so the array was
+ * empty, the secret was never bound, and every invitation reported
+ * `{"event":"account_invite_email_skipped","reason":"not_configured"}` next
+ * to a runtime warning saying the secret was not in the dependency array.
+ * Nothing about that was visible at deploy time: it deployed cleanly and
+ * sent nothing.
+ *
+ * So the binding is unconditional, and the switch stays where it can be read
+ * reliably — at runtime, in `resolveSmtpSettings`, which still returns null
+ * on a blank `SMTP_USER` and still degrades to "the portal shows the link".
+ *
+ * The cost is real and worth stating: a secret listed here must exist in
+ * **every** project this codebase is deployed to, or that deploy is rejected
+ * outright. `BREVO_SMTP_KEY` therefore has to exist in staging too — any
+ * value will do, since a blank `SMTP_USER` there means it is never read.
  */
-const EMAIL_SECRETS = (process.env.SMTP_USER ?? "").trim() ?
-  [BREVO_SMTP_KEY] :
-  [];
+const EMAIL_SECRETS = [BREVO_SMTP_KEY];
 
 const DEFAULT_SMTP_HOST = "smtp-relay.brevo.com";
 const DEFAULT_SMTP_PORT = 587;

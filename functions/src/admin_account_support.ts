@@ -261,19 +261,68 @@ function authErrorCode(error: unknown): string {
   return typeof candidate.code === "string" ? candidate.code : "";
 }
 
-function assertActionLinkDomainAllowed(error: unknown): never {
-  if (!UNAUTHORIZED_CONTINUE_URI_CODES.has(authErrorCode(error))) {
-    throw error;
+// Identity Toolkit rate-limits how often an action link may be minted for
+// the same address, and it does not say so in the error code: it surfaces as
+// a generic `auth/internal-error` whose raw server response carries
+// TOO_MANY_ATTEMPTS_TRY_LATER. Two clicks on "Renvoyer l'invitation" are
+// enough to reach it -- production logs for adfoot-production show it at
+// 2026-08-27 19:52, while the operator saw only "Internal error" and had no
+// way to know that waiting was the whole fix.
+function isActionLinkRateLimited(error: unknown): boolean {
+  if (authErrorCode(error) === "auth/too-many-requests") {
+    return true;
   }
 
-  const host = getEmailLinkHost() || "(EMAIL_LINK_CUSTOM_HOST non defini)";
-  throw new HttpsError(
-    "failed-precondition",
-    `Le domaine ${host} n'est pas autorise dans Firebase Authentication. ` +
-      "Ajoutez-le dans Authentication > Settings > Authorized domains du " +
-      "projet, puis relancez l'operation.",
-    {reason: "unauthorized_continue_uri", host},
-  );
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const candidate = error as {
+    message?: unknown;
+    errorInfo?: {message?: unknown};
+  };
+  const message = `${String(candidate.message ?? "")} ` +
+    `${String(candidate.errorInfo?.message ?? "")}`;
+
+  return message.includes("TOO_MANY_ATTEMPTS_TRY_LATER");
+}
+
+function assertActionLinkDomainAllowed(error: unknown): never {
+  if (UNAUTHORIZED_CONTINUE_URI_CODES.has(authErrorCode(error))) {
+    const host = getEmailLinkHost() || "(EMAIL_LINK_CUSTOM_HOST non defini)";
+    throw new HttpsError(
+      "failed-precondition",
+      `Le domaine ${host} n'est pas autorise dans Firebase Authentication. ` +
+        "Ajoutez-le dans Authentication > Settings > Authorized domains du " +
+        "projet, puis relancez l'operation.",
+      {reason: "unauthorized_continue_uri", host},
+    );
+  }
+
+  if (isActionLinkRateLimited(error)) {
+    throw new HttpsError(
+      "resource-exhausted",
+      "Trop de liens ont ete demandes pour cette adresse. Firebase " +
+        "Authentication bloque temporairement l'operation. Patientez " +
+        "quelques minutes avant de reessayer : le compte est intact et le " +
+        "dernier lien envoye reste valable.",
+      {reason: "too_many_attempts"},
+    );
+  }
+
+  // Anything else still fails, but it names the code instead of reaching the
+  // portal as a bare "Internal error" an operator can do nothing with.
+  const code = authErrorCode(error);
+  if (code) {
+    throw new HttpsError(
+      "internal",
+      `Firebase Authentication a refuse de generer le lien (${code}). ` +
+        "Le detail est dans les journaux de la Function.",
+      {reason: "action_link_failed", code},
+    );
+  }
+
+  throw error;
 }
 
 /**

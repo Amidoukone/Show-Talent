@@ -91,17 +91,68 @@ void main() {
       }
     });
 
-    // A secret named in a function's options must exist in Secret Manager or
-    // the entire deploy is rejected. Binding it unconditionally would mean
-    // "Brevo is not set up yet" stopped anyone deploying any Cloud Function.
-    test('the secret is only required once sending is switched on', () {
+    // This binding was conditional on SMTP_USER until production disproved
+    // the assumption behind it. The CLI's discovery pass is what evaluates
+    // this line, and it runs without the .env values in its environment: the
+    // array came out empty, the secret was never bound, and the deploy
+    // reported success while every invitation was skipped as
+    // "not_configured". The switch belongs at runtime, where the value can
+    // actually be read. Cost of the fix: BREVO_SMTP_KEY must now exist in
+    // every project this codebase is deployed to, staging included.
+    test('the SMTP secret is bound unconditionally', () {
       final delivery = _read('functions/src/email_delivery.ts');
 
+      expect(delivery, contains('const EMAIL_SECRETS = [BREVO_SMTP_KEY];'));
       expect(
         delivery,
-        contains('const EMAIL_SECRETS = (process.env.SMTP_USER ?? "").trim() ?'),
+        isNot(contains('const EMAIL_SECRETS = (process.env.SMTP_USER')),
+        reason: 'deploy-time discovery cannot see SMTP_USER',
       );
-      expect(delivery, contains('[BREVO_SMTP_KEY] :\n  [];'));
+      // The runtime switch is what still keeps an unconfigured project quiet.
+      expect(delivery, contains('if (!user || !pass || !fromAddress) {'));
+    });
+
+    // Identity Toolkit reports its per-address link rate limit as a generic
+    // auth/internal-error, so only the raw server message identifies it. Two
+    // clicks on "Renvoyer l'invitation" are enough to reach it, and it used
+    // to surface in the portal as a bare "Internal error" that told the
+    // operator nothing -- least of all that waiting was the entire fix.
+    test('a refused action link explains itself to the operator', () {
+      final support = _read('functions/src/admin_account_support.ts');
+
+      expect(support, contains('function isActionLinkRateLimited('));
+      expect(support, contains('TOO_MANY_ATTEMPTS_TRY_LATER'));
+      expect(support, contains('"resource-exhausted"'));
+      expect(support, contains('reason: "too_many_attempts"'));
+      // No auth failure reaches the portal as a bare INTERNAL any more.
+      expect(support, contains('reason: "action_link_failed", code'));
+    });
+
+    // An admin-provisioned address is trusted: there is no self-signup, and
+    // the invitation is delivered to the address the admin typed. Leaving
+    // emailVerified false wrote `estActif: false` into the profile, so the
+    // portal showed the new member "Inactif / Acces limite" -- and it stayed
+    // that way after the password was set, because completing a reset
+    // updates Firebase Auth and nothing else. The profile was reconciled
+    // only on the member's first mobile sign-in, by the repair callable.
+    test('provisioning marks the address verified and the profile active', () {
+      final provision = _read('functions/src/managed_accounts.ts');
+
+      expect(provision, contains('if (!userRecord.emailVerified) {'));
+      expect(provision, contains('emailVerified: true,'));
+      expect(
+        provision,
+        contains(
+          'estActif: userRecord.emailVerified && '
+          'userRecord.disabled !== true,',
+        ),
+      );
+      // Which is also why the second link is never minted: setting the
+      // password is the single action asked of the member.
+      expect(
+        provision,
+        contains('const emailVerificationLink = userRecord.emailVerified ?'),
+      );
     });
 
     // Operator input from the portal's form reaches an HTML document.
