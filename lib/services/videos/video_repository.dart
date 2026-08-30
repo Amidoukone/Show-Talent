@@ -70,15 +70,17 @@ class VideoRepository {
   /// it, and no ready video can be missing from the ordering.
   /// Ordering by it needs a composite index (`status` ASC, `approvedAt` DESC)
   /// that has to exist in the project before a build that uses it reaches a
-  /// phone. It does not exist yet in adfoot-production, and a Firestore index
-  /// is not instant even once deployed — it builds, and the query fails
-  /// `failed-precondition` until it is ready.
+  /// phone. It is declared in firestore.indexes.json and, as of 2026-08-29,
+  /// READY in adfoot-production — verified against the Firestore Admin API,
+  /// alongside the other fourteen.
   ///
-  /// So the release and the index are deliberately decoupled: the first
-  /// query that finds no index downgrades the whole app to [_legacyOrderField]
-  /// for the rest of the process, and the feed keeps working exactly as it
-  /// does today. Without this the two would have to ship in the right order,
-  /// and getting it wrong means an empty home screen for everyone.
+  /// The downgrade below stays regardless, and is not dead code: a Firestore
+  /// index is not instant when first deployed — it builds, and the query fails
+  /// `failed-precondition` until it is ready — and a new environment starts
+  /// with none at all. The first query that finds no index downgrades the
+  /// whole app to [_legacyOrderField] for the rest of the process, so a
+  /// release and its indexes never have to ship in a particular order. Getting
+  /// that order wrong would otherwise mean an empty home screen for everyone.
   static const String _feedOrderField = 'approvedAt';
   static const String _legacyOrderField = 'updatedAt';
 

@@ -937,7 +937,22 @@ class UploadVideoController extends GetxController {
   Future<void> _deletePartialUpload(String videoPath, String thumbPath) async {
     try {
       await _uploadRepository.deletePartialUpload(videoPath, thumbPath);
-    } catch (_) {}
+    } catch (error, stackTrace) {
+      // The objects stay in Storage and are billed forever. Production has no
+      // orphans today (measured 2026-08-29: 0 of 46 objects), so this is a
+      // latent leak, not an active one -- and a leak nobody can see is exactly
+      // the kind that is discovered on an invoice rather than in a dashboard.
+      AppLogger.warning(
+        'partial upload not cleaned up; storage objects may be orphaned',
+        source: 'upload/cleanup_partial',
+        error: error,
+        stackTrace: stackTrace,
+        metadata: <String, dynamic>{
+          'videoPath': videoPath,
+          'thumbnailPath': thumbPath,
+        },
+      );
+    }
   }
 
   Future<void> _cleanupOrphanedSession() async {

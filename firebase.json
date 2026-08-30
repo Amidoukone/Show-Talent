@@ -22,16 +22,13 @@
       }
     }
   },
-
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-
   "storage": {
     "rules": "storage.rules"
   },
-
   "functions": [
     {
       "source": "functions",
@@ -49,14 +46,14 @@
       ]
     }
   ],
-
   "hosting": {
     "target": "marketing",
     "public": "site_pub",
     "ignore": [
       "firebase.json",
       "**/.*",
-      "**/node_modules/**"
+      "**/node_modules/**",
+      "**/*.draft.html"
     ],
     "headers": [
       {
@@ -273,10 +270,6 @@
       {
         "source": "/account/reset/**",
         "destination": "/reset/index.html"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
       }
     ]
   }

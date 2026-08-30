@@ -395,10 +395,96 @@ async function sendAccountInviteEmail(
   }
 }
 
+/**
+ * Where operational notices addressed to the platform team are delivered.
+ *
+ * `OPS_NOTIFICATION_EMAIL` when set, otherwise the reply-to already configured
+ * for outgoing mail, otherwise the from-address. The fallbacks matter: they
+ * mean turning this on costs nothing beyond the SMTP configuration that
+ * already exists, and an operator never has to remember a second variable to
+ * start receiving alerts.
+ *
+ * @return {string | null} A plausible recipient, or null when none is set.
+ */
+function resolveOperationsRecipient(): string | null {
+  const candidate =
+    readEnv("OPS_NOTIFICATION_EMAIL") ||
+    readEnv("MAIL_REPLY_TO") ||
+    readEnv("MAIL_FROM_ADDRESS");
+
+  const normalized = candidate.trim().toLowerCase();
+  return normalized && isPlausibleEmail(normalized) ? normalized : null;
+}
+
+/**
+ * Sends a notice to the platform team, and never throws.
+ *
+ * Same posture as sendAccountInviteEmail: an unconfigured relay is the
+ * expected state, not a failure, and a delivery problem must never propagate
+ * into whatever produced the notice. Callers treat the outcome as advisory.
+ *
+ * @param {object} input Subject and both body parts.
+ * @param {string} input.subject Message subject.
+ * @param {string} input.text Plain-text part.
+ * @param {string} input.html HTML part.
+ * @param {string} input.event Log event name, for the structured log line.
+ * @return {Promise<EmailDeliveryOutcome>} Delivery outcome.
+ */
+async function sendOperationsEmail(input: {
+  subject: string;
+  text: string;
+  html: string;
+  event: string;
+}): Promise<EmailDeliveryOutcome> {
+  const to = resolveOperationsRecipient();
+  if (!to) {
+    logger.info(
+      JSON.stringify({event: `${input.event}_skipped`, reason: "no_recipient"}),
+    );
+    return {sent: false, reason: "invalid_recipient"};
+  }
+
+  const settings = resolveSmtpSettings();
+  if (!settings) {
+    logger.info(
+      JSON.stringify({
+        event: `${input.event}_skipped`,
+        reason: "not_configured",
+      }),
+    );
+    return {sent: false, reason: "not_configured"};
+  }
+
+  try {
+    await getTransporter(settings).sendMail({
+      from: {name: settings.fromName, address: settings.fromAddress},
+      to,
+      subject: input.subject,
+      text: input.text,
+      html: input.html,
+    });
+
+    logger.info(JSON.stringify({event: `${input.event}_sent`}));
+    return {sent: true};
+  } catch (error) {
+    logger.error("operations e-mail failed", {
+      event: `${input.event}_failed`,
+      message: error instanceof Error ? error.message : String(error),
+    });
+
+    cachedTransporter = null;
+    cachedTransporterKey = "";
+
+    return {sent: false, reason: "send_failed"};
+  }
+}
+
 export {
   EMAIL_SECRETS,
   buildInviteEmail,
   isEmailDeliveryConfigured,
+  resolveOperationsRecipient,
   sendAccountInviteEmail,
+  sendOperationsEmail,
 };
 export type {EmailDeliveryOutcome};

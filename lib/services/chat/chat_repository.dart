@@ -9,6 +9,36 @@ class ChatRepository {
 
   static const int _messageWriteBatchLimit = 450;
 
+  /// Messages fetched when a conversation opens.
+  ///
+  /// [watchMessages] used to open a live listener over the *entire* message
+  /// history, with no `limit()` at all: opening a thread downloaded every
+  /// message it had ever held, kept them all in memory, and paid the same
+  /// cost again on every reopen. A 5 000-message thread is 5 000 document
+  /// reads per open. Nothing in production has hit that yet — there are no
+  /// conversations at all — which is exactly why it was never noticed, and
+  /// exactly why it has to be fixed before the first recruiter starts using
+  /// the feature the whole product is built around.
+  ///
+  /// 50 fills more than a screen; [growMessageWindow] widens it when the
+  /// reader scrolls back through the history.
+  static const int defaultMessageWindow = 50;
+
+  /// Extra messages loaded each time the reader reaches the top of a thread.
+  static const int messageWindowIncrement = 50;
+
+  /// Conversations fetched for the inbox.
+  ///
+  /// Bounded for the same reason, with the same honesty as
+  /// `UserRepository.directoryWatchLimit`: this query has no `orderBy`, so
+  /// Firestore returns documents in id order and anything past the cap is
+  /// simply absent. 200 is far above any plausible per-user count today, and
+  /// the list is sorted client-side once loaded. Before a user can credibly
+  /// hold more than this, the ordering has to move server-side — a
+  /// `lastMessageDate` sort with the composite index it requires — rather
+  /// than the cap being raised.
+  static const int conversationWatchLimit = 200;
+
   final FirebaseFirestore _firestore;
 
   CollectionReference<Map<String, dynamic>> get _conversationsCollection =>
@@ -44,6 +74,7 @@ class ChatRepository {
   ) {
     return _conversationsCollection
         .where('utilisateurIds', arrayContains: userId)
+        .limit(conversationWatchLimit)
         .snapshots();
   }
 
@@ -63,11 +94,18 @@ class ChatRepository {
     });
   }
 
-  Stream<List<Message>> watchMessages(String conversationId) {
+  /// The [limit] most recent messages of a conversation, newest first.
+  ///
+  /// See [defaultMessageWindow] for why this is bounded at all.
+  Stream<List<Message>> watchMessages(
+    String conversationId, {
+    int limit = defaultMessageWindow,
+  }) {
     return _conversationsCollection
         .doc(conversationId)
         .collection('messages')
         .orderBy('dateEnvoi', descending: true)
+        .limit(limit)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs

@@ -104,8 +104,31 @@ android {
 
     buildTypes {
         release {
-            // For CI/local validation without key.properties, fallback remains debug-signed.
+            // Without key.properties this used to fall back to debug signing
+            // silently: `flutter build appbundle --release` succeeded and
+            // produced a debug-signed artifact, and the only place that ever
+            // said so was the Play Console, after the whole build had run. A
+            // new machine, a CI runner or a moved keystore path was enough.
+            //
+            // The fallback still exists, because building a release APK to
+            // check size or run a smoke test on a machine with no keystore is
+            // legitimate -- it just has to be asked for:
+            //     ./gradlew assembleProductionRelease -PallowDebugSigning=true
+            //
+            // Anything else fails at configuration time, before the build.
             signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : signingConfigs.debug
+
+            if (!keystorePropertiesFile.exists()) {
+                if (project.hasProperty("allowDebugSigning") && project.property("allowDebugSigning").toString().toBoolean()) {
+                    logger.warn("⚠️  android/key.properties absent : build release SIGNÉE EN DEBUG (allowDebugSigning=true). Ne pas publier cet artefact.")
+                } else {
+                    throw new GradleException(
+                        "android/key.properties introuvable : impossible de signer une build release.\n" +
+                        "  - Pour publier : créez android/key.properties (voir scripts/setup-android-signing.ps1).\n" +
+                        "  - Pour un test local sans clé : ajoutez -PallowDebugSigning=true (artefact non publiable)."
+                    )
+                }
+            }
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"

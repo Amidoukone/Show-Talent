@@ -77,7 +77,14 @@ void main() {
           File('lib/screens/main_screen.dart').readAsStringSync();
 
       expect(chatScreen, contains('watchConversationById('));
-      expect(chatScreen, contains('getMessages(widget.conversationId)'));
+      // The screen still binds the message stream to its own conversation,
+      // and now does so through a bounded window: watchMessages used to open a
+      // live listener over the entire history with no limit(), so opening a
+      // thread re-read every message it had ever held.
+      expect(chatScreen, contains('chatController.getMessages('));
+      expect(chatScreen, contains('widget.conversationId,'));
+      expect(chatScreen, contains('limit: _messageWindow,'));
+      expect(chatScreen, contains('limit: nextWindow,'));
       expect(chatScreen, contains('setActiveConversation('));
       expect(chatScreen, contains('touchActiveConversation(uid)'));
       expect(chatScreen, contains('deleteMessage(widget.conversationId,'));

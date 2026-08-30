@@ -1,0 +1,18 @@
+# Adfoot — https://adfoot.org
+#
+# /v/ heberge les pages de partage video. Elles nomment un joueur, souvent
+# mineur, et montrent sa video sans authentification : le lien doit rester
+# ouvrable par la personne a qui le joueur l'envoie, jamais indexable.
+# La Cloud Function videoSharePage renvoie en plus noindex/noarchive, en
+# en-tete et dans la page ; cette ligne est la premiere barriere.
+#
+# /verify/ et /reset/ portent des liens d'action a usage unique.
+
+User-agent: *
+Disallow: /v/
+Disallow: /verify/
+Disallow: /reset/
+Disallow: /account/
+Allow: /
+
+Sitemap: https://adfoot.org/sitemap.xml

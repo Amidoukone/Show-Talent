@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Page introuvable — Adfoot</title>
+  <meta name="robots" content="noindex" />
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" href="/favicon-96x96.png" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="theme-color" content="#2ED573" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      background: #0e1114;
+      color: #f4f7f5;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      line-height: 1.55;
+    }
+    main { max-width: 520px; text-align: center; }
+    .code {
+      margin: 0 0 12px;
+      color: #2ed573;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      font-size: 12px;
+    }
+    h1 {
+      margin: 0 0 14px;
+      font-size: clamp(28px, 6vw, 44px);
+      line-height: 1.1;
+    }
+    p { margin: 0 0 26px; color: #aab4b0; font-size: 17px; }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+    }
+    a.button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 0 22px;
+      border-radius: 8px;
+      background: #2ed573;
+      color: #061009;
+      font-weight: 800;
+      text-decoration: none;
+    }
+    a.button--secondary {
+      background: transparent;
+      color: #f4f7f5;
+      border: 1px solid rgba(244, 247, 245, .28);
+    }
+    a.button:focus-visible {
+      outline: 2px solid #f4f7f5;
+      outline-offset: 3px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="code">Erreur 404</p>
+    <h1>Cette page n’existe pas</h1>
+    <p>
+      Le lien est peut-être incomplet ou périmé. Si vous suiviez un lien de
+      vidéo partagée, demandez-en un nouveau à la personne qui vous l’a envoyé.
+    </p>
+    <div class="actions">
+      <a class="button" href="/">Retour à l’accueil</a>
+      <a class="button button--secondary" href="/download/android/">
+        Télécharger l’application
+      </a>
+    </div>
+  </main>
+</body>
+</html>

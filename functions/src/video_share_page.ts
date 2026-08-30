@@ -21,6 +21,8 @@ type VideoShareViewModel = {
   description: string;
   caption: string;
   videoUrl: string;
+  /** Playable URLs, lightest first. Empty when nothing is playable. */
+  playbackUrls: string[];
   thumbnailUrl: string;
   authorName: string;
   authorRole: string;
@@ -85,6 +87,57 @@ function resolveVideoUrl(data: Record<string, unknown>): string {
   }
 
   return firstSourceUrl(data["sources"]);
+}
+
+/**
+ * Every playable source, lightest first.
+ *
+ * The page used to hand the browser one URL, and always the full-quality
+ * master: a 1080p at 5-10 Mb/s, offered to whoever opened a shared link,
+ * typically a recruiter on mobile data. The app has arbitrated quality since
+ * the companion renditions shipped; this page never did, which made it the one
+ * surface of the product that ignored the viewer's connection.
+ *
+ * Ordering by height ascending and emitting them all as `<source>` lets the
+ * browser take the first it can play — the 480p when one exists — while
+ * leaving the master reachable. `og:video` deliberately keeps pointing at the
+ * master (see renderVideoPage): social previews want the best asset, and they
+ * do not stream it to a phone.
+ *
+ * @param {Record<string, unknown>} data Video document.
+ * @return {string[]} Distinct playable URLs, lightest first.
+ */
+function resolvePlaybackUrls(data: Record<string, unknown>): string[] {
+  const playback = asRecord(data["playback"]);
+  const rawSources = playback ? playback["sources"] : data["sources"];
+  if (!Array.isArray(rawSources)) return [];
+
+  const scored: {url: string; height: number}[] = [];
+  for (const source of rawSources) {
+    const record = asRecord(source);
+    if (!record) continue;
+    const url = getFirstString(record, ["url", "videoUrl"]);
+    if (!isHttpUrl(url)) continue;
+
+    const rawHeight = record["height"];
+    // No height means no way to rank it: send it to the back rather than
+    // letting an unlabelled source outrank a known-light one.
+    const height = typeof rawHeight === "number" && Number.isFinite(rawHeight) ?
+      rawHeight :
+      Number.MAX_SAFE_INTEGER;
+    scored.push({url, height});
+  }
+
+  scored.sort((left, right) => left.height - right.height);
+
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const entry of scored) {
+    if (seen.has(entry.url)) continue;
+    seen.add(entry.url);
+    ordered.push(entry.url);
+  }
+  return ordered;
 }
 
 function htmlEscape(value: string): string {
@@ -213,6 +266,7 @@ async function buildViewModel(
   }
 
   const videoUrl = resolveVideoUrl(data);
+  const playbackUrls = resolvePlaybackUrls(data);
   const caption = getFirstString(
     data,
     ["caption", "captionText", "legend", "legende"]
@@ -238,6 +292,11 @@ async function buildViewModel(
     description: shareDescription,
     caption: primaryText,
     videoUrl: isHttpUrl(videoUrl) ? videoUrl : "",
+    // The master stays in the list as the last resort, for a document whose
+    // `sources` array is missing or unusable but whose `videoUrl` is fine.
+    playbackUrls: playbackUrls.length ?
+      playbackUrls :
+      isHttpUrl(videoUrl) ? [videoUrl] : [],
     thumbnailUrl: isHttpUrl(thumbnailUrl) ? thumbnailUrl : "",
     authorName: author.name,
     authorRole: author.role,
@@ -285,8 +344,15 @@ function renderVideoPage(view: VideoShareViewModel): string {
   const posterAttr = view.thumbnailUrl ?
     ` poster="${htmlEscape(view.thumbnailUrl)}"` :
     "";
-  const videoMarkup = view.videoUrl ?
-    `<video class="player" controls playsinline preload="metadata"${posterAttr} src="${htmlEscape(view.videoUrl)}"></video>` :
+  // Lightest source first: the browser picks the first it can play, so a
+  // video with a 480p companion streams that instead of the 1080p master.
+  const sourceMarkup = view.playbackUrls
+    .map(
+      (url) => `<source src="${htmlEscape(url)}" type="video/mp4">`,
+    )
+    .join("");
+  const videoMarkup = view.playbackUrls.length ?
+    `<video class="player" controls playsinline preload="metadata"${posterAttr}>${sourceMarkup}</video>` :
     "<div class=\"player player--empty\">Lecture indisponible</div>";
   const author = view.authorName ? htmlEscape(view.authorName) : "Adfoot";
   const role = view.authorRole ? htmlEscape(view.authorRole) : "Talent";
@@ -304,6 +370,22 @@ function renderVideoPage(view: VideoShareViewModel): string {
   <title>${title}</title>
   <meta name="description" content="${description}">
   <link rel="canonical" href="${canonicalUrl}">
+  <!--
+    Shareable, not indexable.
+
+    This page carries a named young player, their role and their video, and it
+    is reachable without signing in. That is what makes a shared link work, and
+    it is exactly what must not end up in a search index: a minor's footage
+    sitting in Google results, permanently, is not something a federation, an
+    agent or a parent will accept from a platform that means to be the
+    professional route into the game.
+
+    "noindex" keeps the link fully functional — anyone the player sends it to
+    can open it, and og:* below still renders a rich preview in a chat app,
+    because social crawlers read the meta tags rather than the index.
+    "noarchive" stops cached copies outliving a deletion.
+  -->
+  <meta name="robots" content="noindex, noarchive">
   <meta property="og:type" content="video.other">
   <meta property="og:site_name" content="Adfoot">
   <meta property="og:title" content="${title}">
@@ -380,6 +462,10 @@ function sendHtml(
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": cacheControl,
     "X-Content-Type-Options": "nosniff",
+    // Belt and braces alongside the <meta name="robots"> in the page head: a
+    // crawler that never parses the body — or fetches with HEAD, which sends
+    // no body at all — still sees the directive.
+    "X-Robots-Tag": "noindex, noarchive",
   });
 
   if (headOnly) {

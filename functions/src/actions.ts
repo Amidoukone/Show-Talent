@@ -352,6 +352,34 @@ const videoManagerInfoLogSampleRate = clampSampleRate(
   0,
 );
 
+/**
+ * Retention for the two diagnostic collections, in days.
+ *
+ * Neither client_logs nor video_action_logs had any: no TTL policy, no purge
+ * job in cleanup.ts, and `fieldOverrides` empty in firestore.indexes.json.
+ * They grew for the life of the project. 648 documents for fifteen testers is
+ * nothing; the trajectory is the problem, and so is an admin console that gets
+ * slower every month for data nobody reads after a release has shipped.
+ *
+ * Errors are kept longer than telemetry because they are what a postmortem
+ * reads. Both fields are consumed by a Firestore TTL policy on `expireAt`,
+ * which has to be enabled once per collection in the console or via gcloud --
+ * see docs/cloud-cost-control-plan.md. Until it is, this field is inert and
+ * costs one timestamp per document.
+ */
+const CLIENT_LOG_RETENTION_DAYS = 90;
+const TELEMETRY_LOG_RETENTION_DAYS = 30;
+
+/**
+ * The instant a diagnostic document becomes eligible for TTL deletion.
+ *
+ * @param {number} retentionDays How long to keep the document.
+ * @return {Date} Expiry instant.
+ */
+function logExpiryDate(retentionDays: number): Date {
+  return new Date(Date.now() + retentionDays * 24 * 60 * 60 * 1000);
+}
+
 function shouldPersistClientLog(entry: {level: string; source: string}): boolean {
   if (entry.source !== "video_manager") return true;
   if (entry.level === "error") return true;
@@ -1009,6 +1037,11 @@ export const logClientEvents = onCall(
         userId: uid,
         receivedAt: fieldValue.serverTimestamp(),
         context: request.data?.context || {},
+        expireAt: logExpiryDate(
+          entry.level === "error" ?
+            CLIENT_LOG_RETENTION_DAYS :
+            TELEMETRY_LOG_RETENTION_DAYS,
+        ),
       });
     }
 
@@ -1048,6 +1081,7 @@ export const videoActionLog = onCall(
       platform: getString(request.data, "platform") || "client",
       userId: uid,
       createdAt: fieldValue.serverTimestamp(),
+      expireAt: logExpiryDate(CLIENT_LOG_RETENTION_DAYS),
     };
 
     try {

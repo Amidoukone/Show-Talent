@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../config/app_environment.dart';
+import '../../app_logger.dart';
 import '../../callable_auth_guard.dart';
 
 class UploadSessionState {
@@ -333,7 +334,18 @@ class UploadClient {
     try {
       final file = File(await _cachePath());
       await file.writeAsString(jsonEncode(session.toJson()));
-    } catch (_) {}
+    } catch (error, stackTrace) {
+      // This file is what makes an interrupted upload resumable. Swallowing
+      // the failure meant the app went on believing it could resume, and the
+      // user re-uploaded tens of megabytes from zero after a crash or a kill
+      // with nothing, anywhere, explaining why.
+      AppLogger.warning(
+        'upload session not persisted; a resume will not be possible',
+        source: 'upload/persist_session',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   Future<void> clearPersistedSession() async {
@@ -557,7 +569,19 @@ class UploadClient {
       if (_isTerminalSuccessStatus(response.statusCode)) {
         return totalBytes - 1;
       }
-    } catch (_) {}
+    } catch (error, stackTrace) {
+      // -1 means "start from the beginning", and it was returned both when
+      // the server said nothing had arrived and when the probe itself failed.
+      // The two are opposite situations -- one is correct, the other silently
+      // re-uploads a file that is already largely on the server -- and they
+      // were indistinguishable in every log.
+      AppLogger.warning(
+        'resume probe failed; restarting the upload from the first byte',
+        source: 'upload/resume_probe',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
     return -1;
   }
 

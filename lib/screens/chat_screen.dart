@@ -81,8 +81,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _listScroll = ScrollController();
 
-  late final Stream<List<Message>> _messagesStream;
+  late Stream<List<Message>> _messagesStream;
   late final Stream<Conversation?> _conversationStream;
+
+  /// How far back this screen is currently reading.
+  ///
+  /// The message listener is bounded (see
+  /// [ChatController.defaultMessageWindow]); this grows it when the reader
+  /// reaches the oldest message on screen, which in a `reverse: true` list is
+  /// the *maximum* scroll extent.
+  int _messageWindow = ChatController.defaultMessageWindow;
+  int _loadedMessageCount = 0;
+  bool _isGrowingMessageWindow = false;
   late AppUser _otherUser;
   StreamSubscription<AppUser?>? _otherUserSub;
 
@@ -102,12 +112,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    _messagesStream = chatController.getMessages(widget.conversationId);
+    _messagesStream = chatController.getMessages(
+      widget.conversationId,
+      limit: _messageWindow,
+    );
     _conversationStream = chatController.watchConversationById(
       widget.conversationId,
     );
     _otherUser = widget.otherUser;
     _startOtherUserListener();
+    _listScroll.addListener(_maybeGrowMessageWindow);
 
     _inputFocus.addListener(() {
       if (_inputFocus.hasFocus) {
@@ -129,6 +143,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _leaveActiveConversation();
     _otherUserSub?.cancel();
     _inputFocus.dispose();
+    _listScroll.removeListener(_maybeGrowMessageWindow);
     _listScroll.dispose();
     messageController.dispose();
     super.dispose();
@@ -316,11 +331,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
                       // ✅ Marque comme lu (logique existante conservée)
                       _markMessagesAsRead(messages, currentUser.uid);
+                      _loadedMessageCount = messages.length;
 
-                      // ✅ Scroll au bas après frame (comme avant)
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        _scrollToBottom();
-                      });
+                      // Scroll to the newest message only when the reader is
+                      // already there. This used to run on every snapshot,
+                      // which meant a message arriving while someone was
+                      // reading further up yanked them back down — and it
+                      // would now do the same each time a page of history
+                      // loaded, undoing the scroll that asked for it.
+                      if (_shouldStickToNewestMessage()) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          _scrollToBottom();
+                        });
+                      }
 
                       return ListView.builder(
                         controller: _listScroll,
@@ -437,6 +460,51 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   String? get _resolvedCurrentUid =>
       _resolvedCurrentUser?.uid ?? _authSessionService.currentUser?.uid;
+
+  // ------------------------------
+  // Message window
+  // ------------------------------
+
+  /// True while the newest message should stay pinned in view.
+  ///
+  /// The list is `reverse: true`, so offset 0 is the bottom — the newest
+  /// message. Before the first frame there is no scroll position yet, and the
+  /// right answer is yes: a conversation opens on its latest message.
+  bool _shouldStickToNewestMessage() {
+    if (!_listScroll.hasClients) return true;
+    return _listScroll.position.pixels <= 240;
+  }
+
+  /// Loads another page of history when the reader reaches the top.
+  ///
+  /// The list is `reverse: true`, so the oldest message on screen sits at the
+  /// *maximum* scroll extent, not at zero.
+  ///
+  /// Only grows while the last batch came back full: a short batch means the
+  /// whole conversation is already on screen, and widening the window further
+  /// would re-read it for nothing.
+  void _maybeGrowMessageWindow() {
+    if (_isGrowingMessageWindow || !_listScroll.hasClients) return;
+    if (_loadedMessageCount < _messageWindow) return;
+
+    final position = _listScroll.position;
+    if (position.pixels < position.maxScrollExtent - 240) return;
+
+    _isGrowingMessageWindow = true;
+    final nextWindow = _messageWindow + ChatController.messageWindowIncrement;
+    setState(() {
+      _messageWindow = nextWindow;
+      _messagesStream = chatController.getMessages(
+        widget.conversationId,
+        limit: nextWindow,
+      );
+    });
+
+    // Released a frame later so a single fling cannot queue several pages.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _isGrowingMessageWindow = false;
+    });
+  }
 
   // ------------------------------
   // Delete message

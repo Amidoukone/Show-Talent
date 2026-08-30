@@ -385,13 +385,31 @@ class ChatController extends GetxController {
     }
   }
 
-  Stream<List<Message>> getMessages(String conversationId) {
+  /// Messages loaded when a conversation opens.
+  ///
+  /// Re-exported from [ChatRepository] so the chat screen can size its window
+  /// without importing a repository — screens talk to controllers, and
+  /// test/architecture_guardrails_test.dart holds that line.
+  static const int defaultMessageWindow = ChatRepository.defaultMessageWindow;
+
+  /// Extra messages loaded each time the reader scrolls back through history.
+  static const int messageWindowIncrement =
+      ChatRepository.messageWindowIncrement;
+
+  /// The most recent [limit] messages of a conversation, newest first.
+  ///
+  /// [limit] is the reader's current window, widened by the chat screen as it
+  /// scrolls back. See [defaultMessageWindow].
+  Stream<List<Message>> getMessages(
+    String conversationId, {
+    int limit = defaultMessageWindow,
+  }) {
     if (conversationId.isEmpty) {
       AppLogger.debug("Erreur : conversationId vide");
       return const Stream<List<Message>>.empty();
     }
 
-    return _chatRepository.watchMessages(conversationId);
+    return _chatRepository.watchMessages(conversationId, limit: limit);
   }
 
   Future<void> sendMessage({

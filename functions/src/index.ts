@@ -385,13 +385,33 @@ function buildMp4PlaybackSource(
   };
 }
 
+/**
+ * The published playback contract for a video.
+ *
+ * `mode` used to be hard-coded to "mp4_only" even when a companion rendition
+ * had just been published beside the master, so every multi-source video in
+ * adfoot-production advertised a single-source contract. Nothing broke,
+ * because both clients derive the real mode from the `sources` array and only
+ * report this field as telemetry — which is precisely how the two ended up
+ * disagreeing in the same log line: `playbackMode: "multi_rendition_mp4"`
+ * beside `contractPlaybackMode: "mp4_only"`.
+ *
+ * A contract field that is wrong but unread is a trap for whoever reads it
+ * next: an analytics job, the admin portal, a second client. The two values
+ * here are the same ones both clients compute (Video.effectiveModeForSourceType
+ * in each repository), so the contract now states what the sources show.
+ *
+ * @param {Array} mp4Sources Published sources, best first.
+ * @param {PlaybackSource} fallbackSource The full-quality delivered asset.
+ * @return {PlaybackContract} The contract written to the video document.
+ */
 function buildPlaybackContract(
   mp4Sources: readonly PlaybackSource[],
   fallbackSource: PlaybackSource
 ): PlaybackContract {
   return {
     version: 2,
-    mode: "mp4_only",
+    mode: mp4Sources.length > 1 ? "multi_rendition_mp4" : "mp4_only",
     sources: [...mp4Sources],
     sourceAsset: fallbackSource,
     fallback: fallbackSource,
@@ -1222,6 +1242,7 @@ export {
 export {completeEmailVerification} from "./account_verification_actions";
 export {deleteOwnAccount} from "./account_deletion_actions";
 export {videoSharePage} from "./video_share_page";
+export {notifyContactIntakeCreated} from "./contact_intake_notifications";
 
 /* -------------------------------------------------------------------------- */
 /* UPLOAD SESSION                                                              */
