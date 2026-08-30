@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:adfoot/models/event.dart';
+import 'package:adfoot/models/membership.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
@@ -136,6 +137,35 @@ class AppUser {
   // =========================
   String? cvUrl;
 
+  // =========================
+  // Acceptation des CGU
+  // =========================
+
+  /// Version des conditions generales acceptee par ce compte, ou null.
+  ///
+  /// Deliberement absente de [toEmbeddedMap] : cette copie embarquee est
+  /// recopiee telle quelle dans les candidatures et les inscriptions aux
+  /// evenements, et les regles Firestore comparent ces lignes par valeur pour
+  /// empecher un joueur d'effacer celle d'un autre. Y ajouter un champ ferait
+  /// diverger la ligne re-serialisee de celle qui est stockee, et une
+  /// candidature parfaitement legitime serait refusee.
+  String? acceptedTermsVersion;
+
+  /// Instant de cette acceptation, tel que pose par le serveur.
+  DateTime? acceptedTermsAt;
+
+  // =========================
+  // Droits enregistres par l'administration
+  // =========================
+
+  /// Ce que l'administration a enregistre pour ce compte.
+  ///
+  /// Lecture seule cote client : `membership` est absent de la liste blanche
+  /// `canUpdateOwnProfile` dans firestore.rules, donc seul le callable admin
+  /// peut l'ecrire. Absent des maps embarquees pour la meme raison que
+  /// l'acceptation des CGU — voir [acceptedTermsVersion].
+  Membership membership;
+
   AppUser({
     required this.uid,
     required this.nom,
@@ -208,6 +238,13 @@ class AppUser {
     this.cvUrl,
     this.profilePublic = true,
     this.allowMessages = true,
+
+    // CGU
+    this.acceptedTermsVersion,
+    this.acceptedTermsAt,
+
+    // Droits
+    this.membership = Membership.none,
   });
 
   // =========================
@@ -396,6 +433,11 @@ class AppUser {
 
       // Docs
       cvUrl: map['cvUrl']?.toString(),
+      acceptedTermsVersion: _normalizeNullableString(
+        map['acceptedTermsVersion'],
+      ),
+      acceptedTermsAt: _parseNullableDate(map['acceptedTermsAt']),
+      membership: Membership.fromMap(map['membership']),
       profilePublic: _toBool(map['profilePublic'], true),
       allowMessages: _toBool(map['allowMessages'], true),
     );
@@ -501,6 +543,15 @@ class AppUser {
       // Storage rule already gates the actual PDF (unlike phone/birthDate,
       // which never had a legitimate third-party audience).
       'cvUrl': cvUrl,
+
+      // Droits — jamais ecrits par le client, la regle Firestore les refuse.
+      'membership': membership.isRecorded ? membership.toMap() : null,
+
+      // CGU
+      'acceptedTermsVersion': acceptedTermsVersion,
+      'acceptedTermsAt': acceptedTermsAt != null
+          ? Timestamp.fromDate(acceptedTermsAt!)
+          : null,
     };
   }
 

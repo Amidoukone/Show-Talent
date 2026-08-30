@@ -235,6 +235,76 @@ await check('un participant ajoute un tiers a la conversation', 'deny', () =>
 await check('un tiers lit la conversation', 'deny', () =>
   getDoc(doc(outsider, 'conversations', CONV)));
 
+/* ---------------- Terms acceptance ---------------- */
+
+await check('un utilisateur enregistre son acceptation des CGU', 'allow', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    acceptedTermsVersion: '1.0',
+    acceptedTermsAt: serverTimestamp(),
+  }));
+
+await check('une acceptation sans horodatage serveur', 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    acceptedTermsVersion: '1.0',
+    acceptedTermsAt: new Date('2020-01-01T00:00:00Z'),
+  }));
+
+await check('une acceptation avec une version vide', 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    acceptedTermsVersion: '',
+    acceptedTermsAt: serverTimestamp(),
+  }));
+
+await check("accepter pour le compte d'un autre", 'deny', () =>
+  updateDoc(doc(player, 'users', RIVAL), {
+    acceptedTermsVersion: '1.0',
+    acceptedTermsAt: serverTimestamp(),
+  }));
+
+// La porte ne doit pas devenir un cheval de Troie : elle n'autorise que ces
+// deux champs, jamais un champ sensible qui voyagerait avec.
+await check("glisser un role dans l'acceptation", 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    acceptedTermsVersion: '1.0',
+    acceptedTermsAt: serverTimestamp(),
+    role: 'admin',
+  }));
+
+await check("glisser une verification de profil dans l'acceptation", 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    acceptedTermsVersion: '1.0',
+    acceptedTermsAt: serverTimestamp(),
+    profileVerified: true,
+  }));
+
+/* ---------------- Droits d'acces (membership) ---------------- */
+
+// Le mecanisme de droits vaut ce que vaut cette garantie : si un joueur peut
+// s'attribuer lui-meme un droit, tout le modele economique s'effondre en
+// silence. `membership` est absent de la liste blanche canUpdateOwnProfile,
+// donc seul le callable admin (Admin SDK, qui contourne les regles) l'ecrit.
+
+await check("un joueur s'attribue un droit adfoot", 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    membership: { tier: 'adfoot', validUntil: null },
+  }));
+
+await check("un joueur prolonge son propre droit", 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    membership: { tier: 'external', validUntil: new Date('2030-01-01') },
+  }));
+
+await check("un joueur efface le droit d'un autre", 'deny', () =>
+  updateDoc(doc(player, 'users', RIVAL), { membership: null }));
+
+// Et le champ ne doit pas non plus pouvoir voyager avec une ecriture par
+// ailleurs legitime.
+await check("glisser un droit dans une mise a jour de profil", 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    bio: 'Milieu de terrain',
+    membership: { tier: 'adfoot' },
+  }));
+
 /* ---------------- Report ---------------- */
 
 let failed = 0;

@@ -84,6 +84,30 @@ Moderation de contenu (appelees depuis `AdminContentService` cote admin) :
 - `adminDeleteContactIntake`
 - `adminDeleteContactIntakeConversation`
 
+### Callable ajoute, cote admin a implementer
+
+- `setManagedAccountMembership`
+
+Enregistre ou retire les droits d acces d un compte : `tier` valant `adfoot`
+(joueur sous contrat avec l agence, ne paie rien), `external` (joueur libre qui
+paie les services), ou `none` (aucun dossier, etat par defaut de tout compte
+existant). Champs optionnels : `validUntil` (date ISO ou millisecondes, cinq
+ans maximum) et `reference` (reference interne du paiement ou du contrat).
+
+Ce callable ne connait aucun prix et ne deplace aucun argent. Le paiement a
+lieu hors plateforme et l administration enregistre le resultat ; l application
+mobile n affiche aucun prix, n offre aucun moyen de payer et ne renvoie vers
+aucun. C est ce qui maintient vraie la declaration Play Console « aucun achat
+integre ». Ne pas ajouter de montant a la charge utile.
+
+Il n est volontairement pas encore dans `$requiredCallables` de
+`scripts/check-admin-mobile-contract.ps1` : le portail admin ne l appelle pas
+encore, et le garde-fou echouerait. L y ajouter le jour ou l interface admin
+existe, avec l entree correspondante dans
+`lib/utils/admin_callable_action_catalog.dart` cote admin.
+
+### Liste verifiee par le garde-fou
+
 Ces 17 callables sont la liste complete et doivent rester en phase avec
 `functions/src/index.ts`, `lib/utils/admin_callable_action_catalog.dart` (admin)
 et `lib/services/admin_content_service.dart` (admin) -- verifie par

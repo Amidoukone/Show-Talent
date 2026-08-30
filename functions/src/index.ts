@@ -1223,6 +1223,7 @@ export {
   disableManagedAccountAuth,
   enableManagedAccountAuth,
   updateManagedAccountProfile,
+  setManagedAccountMembership,
 } from "./admin_account_actions";
 export {
   adminDeleteVideo,

@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/services/legal/terms_acceptance_service.dart';
 import 'package:adfoot/services/users/user_repository.dart';
 import 'package:adfoot/services/account_cleanup_service.dart';
 import 'package:adfoot/services/app_logger.dart';
@@ -16,6 +19,7 @@ import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,6 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final AuthSessionService _authSessionService = AuthSessionService();
   final UserRepository _userRepository = UserRepository();
   final AccountCleanupService _cleanupService = AccountCleanupService();
+  final TermsAcceptanceService _termsService = TermsAcceptanceService();
   static const String _profilePublicKey = 'profilePublic';
   static const String _allowMessagesKey = 'allowMessages';
 
@@ -47,6 +52,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadUserSettings();
+    // Best effort: the cached config is already usable, this only picks up a
+    // version published since the app started.
+    unawaited(_termsService.fetchConfig());
   }
 
   Future<void> _loadUserSettings() async {
@@ -374,6 +382,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildSectionCard(
+                      title: 'Documents',
+                      icon: Icons.gavel_rounded,
+                      children: [
+                        _buildActionTile(
+                          icon: Icons.description_outlined,
+                          title: 'Conditions générales d’utilisation',
+                          subtitle: _acceptedTermsSubtitle(),
+                          onTap: () => _openLegalDocument(
+                            _termsService.cached.termsUrl,
+                          ),
+                        ),
+                        _buildDivider(),
+                        _buildActionTile(
+                          icon: Icons.privacy_tip_outlined,
+                          title: 'Politique de confidentialité',
+                          subtitle: 'Quelles données sont traitées, et pourquoi',
+                          onTap: () => _openLegalDocument(
+                            _termsService.cached.privacyUrl,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSectionCard(
                       title: 'Zone sensible',
                       icon: Icons.warning_amber_rounded,
                       children: [
@@ -420,6 +452,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // la même agence pour faire relever un plafond, et deux copies d'un numéro
   // de téléphone finissent toujours par diverger.
   static const String _supportPhoneDisplay = AdfootSupport.phoneDisplay;
+
+  /// What this account accepted, so the record is visible to its subject.
+  ///
+  /// A consent the user cannot go back and read is a consent they have to take
+  /// on trust, which is the opposite of the point.
+  String _acceptedTermsSubtitle() {
+    final version = Get.isRegistered<UserController>()
+        ? (Get.find<UserController>().user?.acceptedTermsVersion?.trim() ?? '')
+        : '';
+    if (version.isEmpty) {
+      return 'Lire le document';
+    }
+    return 'Version , acceptée';
+  }
+
+  Future<void> _openLegalDocument(String url) async {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+
+    try {
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened) return;
+    } catch (error, stackTrace) {
+      AppLogger.warning(
+        'could not open a legal document',
+        source: 'legal/open_document',
+        error: error,
+        stackTrace: stackTrace,
+        metadata: <String, dynamic>{'url': url},
+      );
+    }
+
+    if (!mounted) return;
+    AdFeedback.error(
+      'Ouverture impossible',
+      'Impossible d’ouvrir le document. Adresse : $url',
+    );
+  }
 
   Future<void> _showSupportNotice() async {
     final opened = await AdfootSupport.openWhatsApp();

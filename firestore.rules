@@ -69,6 +69,25 @@ service cloud.firestore {
         request.resource.data.fcmToken.size() <= 4096;
     }
 
+    // Accepting the terms is its own write, deliberately kept out of
+    // canUpdateOwnProfile(): that path carries the verified-profile
+    // invalidation invariant, and a user must not lose their verified badge
+    // for having tapped "J'accepte".
+    //
+    // The timestamp must be the server's. A client-supplied one would make the
+    // record — which exists precisely to be produced later as proof of when
+    // consent was given — worth nothing.
+    //
+    // No un-acceptance: the version can be replaced by another (a new text is
+    // published, the user accepts again), never cleared.
+    function canAcceptOwnTerms() {
+      return changesOnly(["acceptedTermsVersion", "acceptedTermsAt"]) &&
+        request.resource.data.acceptedTermsVersion is string &&
+        request.resource.data.acceptedTermsVersion.size() > 0 &&
+        request.resource.data.acceptedTermsVersion.size() <= 32 &&
+        request.resource.data.acceptedTermsAt == request.time;
+    }
+
     function canUpdateOwnChatPresence() {
       return changesOnly(["activeConversationId", "activeAt"]) &&
         (
@@ -494,6 +513,7 @@ service cloud.firestore {
         (
           canUpdateOwnFcmToken() ||
           canUpdateOwnChatPresence() ||
+          canAcceptOwnTerms() ||
           canUpdateOwnProfile()
         );
       allow delete: if isOwner(userId);

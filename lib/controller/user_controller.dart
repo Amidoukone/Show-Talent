@@ -346,6 +346,26 @@ class UserController extends GetxController with WidgetsBindingObserver {
   /// `user == null` had no way to know the spinner would never end.
   bool get hasAttemptedHydration => _hasAttemptedHydration.value;
 
+  /// Records the signed-in user's acceptance of the terms, then re-hydrates.
+  ///
+  /// The re-hydration is what clears the gate: MainScreen decides from
+  /// `user.acceptedTermsVersion`, and that value only changes here once the
+  /// server has confirmed the write. Forcing it means the screen never shows
+  /// a consent it has not actually persisted.
+  ///
+  /// Throws on failure so the caller can keep the user on the screen and say
+  /// so — silently swallowing this would present the app as accepted while
+  /// nothing was recorded.
+  Future<void> acceptTerms(String version) async {
+    final uid = _authSessionService.currentUser?.uid;
+    if (uid == null || uid.isEmpty) {
+      throw StateError('no signed-in user to record a terms acceptance for');
+    }
+
+    await _userRepository.acceptTerms(uid: uid, version: version);
+    await ensureCurrentUserHydrated(force: true);
+  }
+
   Future<void> ensureCurrentUserHydrated({bool force = false}) async {
     final uid = _authSessionService.currentUser?.uid;
     if (uid == null || uid.isEmpty) {

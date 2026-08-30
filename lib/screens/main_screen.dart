@@ -12,7 +12,9 @@ import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:adfoot/screens/offres_form.dart';
 import 'package:adfoot/screens/opportunities_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
+import 'package:adfoot/screens/terms_acceptance_screen.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/legal/terms_acceptance_service.dart';
 import 'package:adfoot/services/notification_route.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/services/notifications.dart';
@@ -38,6 +40,17 @@ class _MainScreenState extends State<MainScreen> {
 
   StreamSubscription<bool>? _connectivitySub;
   StreamSubscription<NotificationRoute>? _notificationRouteSub;
+
+  final TermsAcceptanceService _termsService = TermsAcceptanceService();
+
+  /// Which terms this screen currently requires.
+  ///
+  /// Starts at the version compiled into the build, not at "unknown": gating
+  /// on a config that has not loaded yet would put every user behind a
+  /// spinner on every cold start, and a network failure would lock the app.
+  /// The remote value only ever tightens the requirement, and it arrives a
+  /// moment later.
+  TermsConfig _termsConfig = TermsConfig.bundled;
 
   final UserController userController = Get.find<UserController>();
   final ChatController chatController = Get.find<ChatController>();
@@ -117,6 +130,24 @@ class _MainScreenState extends State<MainScreen> {
     _listenConnectivity();
     _listenNotificationRoutes();
     unawaited(userController.ensureCurrentUserHydrated());
+    unawaited(_refreshTermsConfig());
+  }
+
+  /// Picks up a terms version raised server-side since this build shipped.
+  ///
+  /// Best effort by design: TermsAcceptanceService never throws and falls back
+  /// to the bundled version, so a failure here leaves the gate exactly as the
+  /// build defined it rather than closing it on everyone.
+  Future<void> _refreshTermsConfig() async {
+    final config = await _termsService.fetchConfig();
+    if (!mounted || config.requiredVersion == _termsConfig.requiredVersion) {
+      return;
+    }
+    setState(() => _termsConfig = config);
+  }
+
+  Future<void> _acceptTerms() async {
+    await userController.acceptTerms(_termsConfig.requiredVersion);
   }
 
   @override
@@ -621,6 +652,21 @@ class _MainScreenState extends State<MainScreen> {
                     ),
             ),
           ),
+        );
+      }
+
+      // Consent gate.
+      //
+      // Placed here rather than on a route of its own: every way into the
+      // signed-in app lands on this shell — cold start, a tapped notification,
+      // a shared video link — so gating the shell is what makes the gate
+      // impossible to route around. It also re-evaluates on its own when the
+      // user document changes, because this build already runs inside an Obx.
+      if (!_termsConfig.isSatisfiedBy(appUser.acceptedTermsVersion)) {
+        return TermsAcceptanceScreen(
+          config: _termsConfig,
+          onAccept: _acceptTerms,
+          onSignOut: userController.signOut,
         );
       }
 

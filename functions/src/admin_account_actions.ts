@@ -3,6 +3,7 @@
 /* eslint-disable require-jsdoc */
 
 import type {UserRecord} from "firebase-admin/auth";
+import {Timestamp} from "firebase-admin/firestore";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 
@@ -954,6 +955,164 @@ export const deleteManagedAccount = onCall(
         uid,
         role: target.role,
         deletedBy: adminUid,
+      },
+    };
+  },
+);
+
+
+/* -------------------------------------------------------------------------- */
+/* DROITS D'ACCÈS ENREGISTRÉS PAR L'ADMINISTRATION                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Les deux populations de joueurs, plus l'absence de dossier.
+ *
+ * Adfoot porte deux économies opposées : les joueurs sous contrat avec
+ * l'agence, qui ne paient jamais rien — ni inscription ni accompagnement —, et
+ * les joueurs extérieurs, libres de tout lien, qui paient les services qu'ils
+ * utilisent. Les clubs et recruteurs s'abonnent.
+ *
+ * "none" n'est pas une troisième population : c'est l'absence de dossier, ce
+ * que porte aujourd'hui chaque compte existant et ce qui doit continuer de se
+ * comporter exactement comme aujourd'hui.
+ */
+const MEMBERSHIP_TIERS = new Set(["none", "adfoot", "external"]);
+
+/** Durée maximale accordable en un appel : cinq ans. */
+const MAX_MEMBERSHIP_VALIDITY_MS = 5 * 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Lit la date d'échéance facultative.
+ *
+ * @param {unknown} raw Chaîne ISO, millisecondes epoch, ou rien.
+ * @return {Date | null} L'échéance, ou null pour un droit sans terme.
+ */
+function parseMembershipValidUntil(raw: unknown): Date | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+
+  let parsed: Date | null = null;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    parsed = new Date(raw);
+  } else if (typeof raw === "string") {
+    const candidate = new Date(raw.trim());
+    if (!Number.isNaN(candidate.getTime())) parsed = candidate;
+  }
+
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    throw new HttpsError(
+      "invalid-argument",
+      "validUntil doit être une date ISO ou un timestamp en millisecondes.",
+    );
+  }
+
+  const now = Date.now();
+  if (parsed.getTime() <= now) {
+    throw new HttpsError(
+      "invalid-argument",
+      "validUntil doit être dans le futur. Pour retirer un droit, " +
+        "utilisez tier: \"none\".",
+    );
+  }
+  if (parsed.getTime() - now > MAX_MEMBERSHIP_VALIDITY_MS) {
+    throw new HttpsError(
+      "invalid-argument",
+      "validUntil ne peut pas dépasser cinq ans.",
+    );
+  }
+
+  return parsed;
+}
+
+/**
+ * Enregistre — ou retire — les droits d'accès d'un compte.
+ *
+ * Callable dédié plutôt qu'un champ ajouté à updateManagedAccountProfile :
+ * ce dernier porte l'invariant d'invalidation du profil vérifié, et
+ * enregistrer un paiement ne doit pas coûter son badge à un joueur. Même
+ * raisonnement que pour l'acceptation des CGU.
+ *
+ * **Ce callable ne déplace aucun argent et ne connaît aucun prix.** Le
+ * paiement a lieu hors plateforme — mobile money, virement, espèces à
+ * l'agence — et ceci ne fait que refléter la décision de l'administration pour
+ * que l'application puisse en tenir compte. L'application mobile n'affiche
+ * aucun prix, n'offre aucun moyen de payer et ne renvoie vers aucun : c'est ce
+ * qui maintient vraie la déclaration Play Console « aucun achat intégré ».
+ * Ne pas ajouter de montant à cette charge utile : le jour où un prix vit dans
+ * la plateforme, cette déclaration cesse d'être vraie.
+ */
+export const setManagedAccountMembership = onCall(
+  LOW_CPU_CALLABLE_OPTIONS,
+  async (request) => {
+    const adminUid = await assertAdminCaller(request);
+    const uid = getTargetUid(request.data);
+
+    const tier = (getString(request.data, "tier") || "").trim().toLowerCase();
+    if (!MEMBERSHIP_TIERS.has(tier)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "tier doit valoir \"adfoot\", \"external\" ou \"none\".",
+      );
+    }
+
+    const reference = getString(request.data, "reference").slice(0, 120);
+    const validUntil = tier === "none" ?
+      null :
+      parseMembershipValidUntil(
+        (request.data as Record<string, unknown> | undefined)?.validUntil,
+      );
+
+    const target = await loadManagedTarget(uid);
+    assertSafeAdminMutation(target, adminUid);
+    assertManagedTarget(target);
+
+    if (tier === "none") {
+      // Effacé, et non ramené à une forme "expirée" : un compte sans dossier
+      // doit être indiscernable d'un compte qui n'en a jamais eu, sinon chaque
+      // garde-fou devrait apprendre un troisième état dont il n'a pas besoin.
+      await target.userRef.set(
+        {
+          membership: fieldValue.delete(),
+          membershipUpdatedAt: fieldValue.serverTimestamp(),
+          membershipUpdatedBy: adminUid,
+          updatedAt: fieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+
+      return {
+        success: true,
+        code: "managed_account_membership_cleared",
+        message: "Droits retirés.",
+        data: {...buildManagedAccountSummary(target), tier: "none"},
+      };
+    }
+
+    await target.userRef.set(
+      {
+        membership: {
+          tier,
+          startedAt: fieldValue.serverTimestamp(),
+          validUntil: validUntil ? Timestamp.fromDate(validUntil) : null,
+          ...(reference ? {reference} : {}),
+        },
+        membershipUpdatedAt: fieldValue.serverTimestamp(),
+        membershipUpdatedBy: adminUid,
+        updatedAt: fieldValue.serverTimestamp(),
+      },
+      {merge: true},
+    );
+
+    return {
+      success: true,
+      code: "managed_account_membership_set",
+      message: validUntil ?
+        `Droits enregistrés jusqu'au ${validUntil.toISOString().slice(0, 10)}.` :
+        "Droits enregistrés, sans terme.",
+      data: {
+        ...buildManagedAccountSummary(target),
+        tier,
+        validUntil: validUntil ? validUntil.toISOString() : null,
       },
     };
   },

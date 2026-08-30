@@ -341,6 +341,35 @@ class UserRepository {
         .timeout(firestoreWriteTimeout);
   }
 
+  /// Records that [uid] accepted the terms in version [version].
+  ///
+  /// Its own narrow write, alongside saveFcmToken and updatePrivacySettings,
+  /// and never folded into a profile patch: `canUpdateOwnProfile` in
+  /// firestore.rules carries the verified-profile invalidation invariant, so
+  /// routing consent through it would cost a user their verified badge for
+  /// having tapped "J'accepte".
+  ///
+  /// The timestamp is the server's. It is the only part of this record that
+  /// has to hold up if the acceptance is ever questioned, and the matching
+  /// rule (`canAcceptOwnTerms`) refuses any other value.
+  Future<void> acceptTerms({
+    required String uid,
+    required String version,
+  }) async {
+    final normalized = version.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError.value(version, 'version', 'must not be empty');
+    }
+
+    await _usersCollection
+        .doc(uid)
+        .update(<String, dynamic>{
+          'acceptedTermsVersion': normalized,
+          'acceptedTermsAt': FieldValue.serverTimestamp(),
+        })
+        .timeout(firestoreWriteTimeout);
+  }
+
   /// How many further goes the background retry gets after the first failure.
   static const int _fcmTokenRetryAttempts = 3;
 
