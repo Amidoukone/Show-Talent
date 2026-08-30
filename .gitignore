@@ -101,4 +101,8 @@ service-account*.json
 # blanket /docs/ ignore silently hid this (and every other doc) from Git.
 !/docs/shared-backend-contract.md
 !/docs/inter-repo-admin-mobile-runbook.md
+# Meme raison : les brouillons de CGU et de politique de confidentialite sont
+# du travail produit, relu et repris entre deux sessions. Les laisser hors de
+# Git reviendrait a les perdre au premier nettoyage du repertoire de travail.
+!/docs/legal-drafts/
 
