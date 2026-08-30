@@ -46,16 +46,18 @@ service firebase.storage {
         userProfileDoc(uid).data.role == "joueur";
     }
 
-    function signedInUserRole() {
-      return signedIn() && hasUserProfileDoc(request.auth.uid) ?
-        userProfileDoc(request.auth.uid).data.role :
-        null;
-    }
-
+    // The signed custom claim only, exactly as firestore.rules states the
+    // invariant: "the Firestore `role` field is operator-editable (console,
+    // script, bad merge) and must never be sufficient on its own to unlock
+    // admin-only reads/writes". This file used to accept `role == "admin"` as
+    // an equivalent, which is what opened every player's CV to anything that
+    // could get that field written. No client write can set `role` today, so
+    // nothing was exploitable -- but an invariant asserted in one rules file
+    // and contradicted in the other is the kind of gap that outlives the
+    // reason it was safe.
     function isAdminOperator() {
       return signedIn() &&
         (
-          signedInUserRole() == "admin" ||
           request.auth.token.admin == true ||
           request.auth.token.platformAdmin == true ||
           request.auth.token.superAdmin == true
@@ -126,9 +128,27 @@ service firebase.storage {
         );
     }
 
+    // An avatar is world-readable, so anything written here is served from
+    // this project's domain to anyone who asks. The rule used to check only
+    // *who* was writing, never *what*: no size ceiling and no content type, on
+    // a public path. The CV rule two blocks down has enforced both since it
+    // was written -- this one simply never caught up.
+    //
+    // 8 MB is deliberately generous (the largest avatar in production is
+    // 2.0 MB) because the point is not to police photo quality, it is to stop
+    // this path being usable as free public file hosting.
+    function isValidProfilePhotoUpload() {
+      return request.resource.size > 0 &&
+        request.resource.size <= 8 * 1024 * 1024 &&
+        request.resource.contentType != null &&
+        request.resource.contentType.matches('image/.*');
+    }
+
     match /profilePhotos/{uid} {
       allow read: if true;
-      allow write: if isActiveProfileOwner(uid);
+      allow create, update: if isActiveProfileOwner(uid) &&
+        isValidProfilePhotoUpload();
+      allow delete: if isActiveProfileOwner(uid);
     }
 
     match /cvs/{uid}/{fileName} {

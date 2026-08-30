@@ -202,8 +202,22 @@ class EventRepository {
         );
       }
 
-      final participants = [
-        ...event.participants.map((p) => p.toEmbeddedMap()),
+      // The stored maps are carried over verbatim, never re-serialised
+      // through AppUser. Two reasons, and the second is the one that bites:
+      //
+      // - a round trip through the model rewrites every *other* participant's
+      //   embedded copy on each registration, so one person joining can
+      //   silently change what is recorded about everybody already in;
+      // - the Firestore rule now requires the new list to contain the old one
+      //   unchanged (`hasAll`), which is what stops a participant from
+      //   removing rivals. A lossy round trip — a legacy entry missing a field
+      //   the model defaults, a null the model drops — produces maps that no
+      //   longer compare equal, and the rule would reject a perfectly
+      //   legitimate registration.
+      //
+      // This mirrors what OfferRepository already does with `candidats`.
+      final participants = <Map<String, dynamic>>[
+        ..._extractParticipantMaps(snap.data()?['participants']),
         participant.toEmbeddedMap(),
       ];
 
@@ -248,9 +262,11 @@ class EventRepository {
         );
       }
 
-      final participants = event.participants
-          .where((p) => p.uid != participant.uid)
-          .map((p) => p.toEmbeddedMap())
+      // Verbatim again, for the reasons on registerParticipant: the withdrawal
+      // rule requires the old list to contain the new one unchanged, so the
+      // entries that stay must be exactly the bytes that were stored.
+      final participants = _extractParticipantMaps(snap.data()?['participants'])
+          .where((entry) => entry['uid']?.toString() != participant.uid)
           .toList(growable: false);
 
       txn.update(docRef, {
@@ -258,6 +274,22 @@ class EventRepository {
         'lastUpdated': FieldValue.serverTimestamp(),
       });
     });
+  }
+
+  /// The stored participant maps, exactly as Firestore holds them.
+  ///
+  /// Mirrors `OfferRepository._extractCandidateMaps`. Reading them straight
+  /// off the snapshot instead of through [Event] is what keeps a write
+  /// byte-identical for every participant this call is not adding or removing.
+  static List<Map<String, dynamic>> _extractParticipantMaps(dynamic raw) {
+    if (raw is! List) {
+      return <Map<String, dynamic>>[];
+    }
+
+    return raw
+        .whereType<Map>()
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList();
   }
 
   Query<Map<String, dynamic>> _buildQuery(EventQueryFilter filter) {

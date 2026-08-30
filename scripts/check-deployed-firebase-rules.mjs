@@ -129,8 +129,19 @@ function normalizeRules(value) {
   return String(value ?? '').replace(/\r\n/g, '\n').trim();
 }
 
+/**
+ * The service a release belongs to, ignoring the resource it is bound to.
+ *
+ * Firestore's release is named `.../releases/cloud.firestore`, but Storage's
+ * carries the bucket: `.../releases/firebase.storage/<bucket>.firebasestorage.app`.
+ * Comparing the whole tail against "firebase.storage" therefore never matched,
+ * the loop's `continue` skipped it, and the script finished reporting a
+ * successful comparison having checked only half of what it claims to check.
+ * A gate that cannot see its own blind spot is worse than no gate.
+ */
 function releaseLabel(releaseName) {
-  return String(releaseName ?? '').split('/releases/').pop() || '<unknown>';
+  const tail = String(releaseName ?? '').split('/releases/').pop() || '';
+  return tail.split('/')[0] || '<unknown>';
 }
 
 async function main() {
@@ -166,9 +177,13 @@ async function main() {
   console.log('Firebase Rules deployed comparison');
   console.log(`Project: ${projectId}`);
 
+  const seen = new Set();
+  const mismatched = [];
+
   for (const release of releases) {
     const label = releaseLabel(release.name);
     if (!localByRelease.has(label)) continue;
+    seen.add(label);
 
     const ruleset = await fetchJson(`${baseUrl}/${release.rulesetName}`, accessToken);
     const files = ruleset.source?.files ?? [];
@@ -185,7 +200,36 @@ async function main() {
     console.log(`  deployedSha256: ${deployedHash}`);
     console.log(`  localSha256:    ${localHash}`);
     console.log(`  matchesLocal:   ${deployedHash === localHash}`);
+
+    if (deployedHash !== localHash) mismatched.push(label);
   }
+
+  // The gate now fails loudly instead of reporting a clean run it did not
+  // perform: once for a ruleset that was never compared, once for one that
+  // was compared and differs. Both used to be silent.
+  const missing = [...localByRelease.keys()].filter((label) => !seen.has(label));
+
+  console.log('');
+  if (missing.length) {
+    console.error(
+      `No deployed release found for: ${missing.join(', ')}. ` +
+        'These rules were never compared.',
+    );
+  }
+  if (mismatched.length) {
+    console.error(
+      `Deployed rules differ from this checkout for: ${mismatched.join(', ')}.`,
+    );
+  }
+
+  if (missing.length || mismatched.length) {
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log(
+    `All ${localByRelease.size} rulesets compared and identical to this checkout.`,
+  );
 }
 
 main().catch((error) => {
