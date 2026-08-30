@@ -63,7 +63,11 @@ void main() {
     // of refusing to run at all.
     test('an already published video is never downgraded', () {
       expect(uploadSession, contains('function isLiveVideoDoc('));
-      expect(uploadSession, contains('const alreadyLive = isLiveVideoDoc(doc);'));
+      expect(
+        uploadSession,
+        contains('const alreadyLive = isLiveVideoDoc(currentDoc);'),
+        reason: 'the liveness check must read the transaction snapshot',
+      );
       // Line-ending agnostic: this file is CRLF on the authoring machine.
       final gate = uploadSession.indexOf('...(alreadyLive ? {} : {');
       expect(gate, isNonNegative);
@@ -99,6 +103,50 @@ void main() {
         body,
         isNot(contains('return {status: "ready", optimized: true};')),
         reason: 'preserving only "ready" is what stranded the video',
+      );
+    });
+
+    // Preserving both terminal states was necessary but not sufficient: the
+    // resolver was reading the snapshot taken before validateVideoUpload and
+    // validateThumbnail, two Storage round-trips and a ranged download. On a
+    // light clip optimizeMp4Video commits inside that window, so the resolver
+    // saw an empty document and the merge wrote `processing`/`optimized:false`
+    // over a finished optimization. adminSetVideoStatus then refuses the
+    // approval outright ("La video doit etre optimisee avant approbation"),
+    // which is how a perfectly good upload becomes permanently un-approvable.
+    //
+    // adfoot-production, 2026-08-29: 9a9b1e2c and e40258a3 both hold the
+    // optimizer's playback contract and download token — proof it finished —
+    // with status `processing`.
+    test('the lifecycle is decided on a document read in the transaction', () {
+      expect(
+        uploadSession,
+        contains('await db.runTransaction(async (transaction) => {'),
+      );
+
+      final txn = uploadSession.indexOf(
+        'let alreadyFinalized = false;',
+      );
+      expect(txn, isNonNegative);
+
+      final body = uploadSession.substring(txn);
+      final read = body.indexOf('await transaction.get(videoRef);');
+      final resolve = body.indexOf(
+        'const lifecycle = resolveUploadLifecycleState(currentDoc);',
+      );
+      final write = body.indexOf('transaction.set(');
+
+      expect(read, isNonNegative, reason: 'the document must be re-read');
+      expect(resolve, isNonNegative,
+          reason: 'the resolver must be handed the transaction snapshot');
+      expect(read, lessThan(resolve));
+      expect(resolve, lessThan(write),
+          reason: 'read, decide and write must share one transaction');
+
+      expect(
+        uploadSession,
+        isNot(contains('const lifecycle = resolveUploadLifecycleState(doc);')),
+        reason: 'deciding on the pre-validation snapshot is the whole bug',
       );
     });
 

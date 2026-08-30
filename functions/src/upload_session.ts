@@ -816,8 +816,6 @@ export const finalizeUpload = onCall(
     // live video, and no client-supplied metadata can land. Ownership is
     // already enforced above, so the caller is the owner in every case that
     // reaches this point.
-    const alreadyLive = isLiveVideoDoc(doc);
-
     if (isFinalizedUploadSession(doc)) {
       return {ok: true, alreadyFinalized: true};
     }
@@ -831,7 +829,6 @@ export const finalizeUpload = onCall(
       doc?.thumbnailPath,
     );
     const persistedThumbnailGuard = doc?.thumbnailGuard;
-    const lifecycle = resolveUploadLifecycleState(doc);
 
     await validateVideoUpload(persistedStoragePath);
     await validateThumbnail(persistedThumbnailPath, persistedThumbnailGuard);
@@ -887,47 +884,90 @@ export const finalizeUpload = onCall(
       "height",
     ] as (keyof ParsedMetadata)[]).forEach(assignIfPresent);
 
-    await videoRef.set(
-      {
-        uid,
-        status: lifecycle.status,
-        // Submission state, but never a downgrade: a legacy document carries
-        // no `finalizedAt`, so an already-approved video can now reach this
-        // write, and sending it back to pending/private would unpublish it.
-        ...(alreadyLive ? {} : {
-          moderationStatus: "pending",
-          visibility: "private",
-          isPublic: false,
-        }),
-        optimized: lifecycle.optimized,
+    // The lifecycle state is decided inside a transaction, on a document read
+    // inside that same transaction.
+    //
+    // resolveUploadLifecycleState was already taught to preserve both of the
+    // optimizer's terminal states, but it was being handed the snapshot taken
+    // at the top of this call -- before two Storage round-trips and a ranged
+    // thumbnail download. optimizeMp4Video finishes inside that window on a
+    // light clip, so the snapshot still said "nothing has happened" while the
+    // server document already said `under_review`/`optimized: true`. The merge
+    // below then wrote `processing`/`optimized: false` over it, and
+    // adminSetVideoStatus refuses to approve anything whose `optimized` is not
+    // true -- so the video became permanently un-approvable, and no error was
+    // raised anywhere.
+    //
+    // Measured on adfoot-production, 2026-08-29: videos 9a9b1e2c and e40258a3
+    // both carry the optimizer's own playback contract and its download token,
+    // which only its final write produces, while their status still reads
+    // `processing`. The heavy clips uploaded the same day were approved
+    // normally, because there the client wins the race.
+    //
+    // A transaction closes the window instead of narrowing it: Firestore
+    // aborts and retries it when the optimizer writes between the read and the
+    // commit, so the retry observes the terminal state and preserves it.
+    let alreadyFinalized = false;
 
-        // What this call is the only writer of. Recorded so a retry is a
-        // no-op for the right reason -- see isFinalizedUploadSession.
-        finalizedAt: fieldValue.serverTimestamp(),
+    await db.runTransaction(async (transaction) => {
+      const currentSnap = await transaction.get(videoRef);
+      const currentDoc = currentSnap.data() as VideoDoc | undefined;
 
-        // ✅ CANONIQUE (nouveau standard)
-        ...(safe.description ? {description: safe.description} : {}),
-        ...(safe.caption ? {caption: safe.caption} : {}),
+      // Re-checked here for the same reason: a retry whose first attempt
+      // committed while this one was validating must still write nothing.
+      if (isFinalizedUploadSession(currentDoc)) {
+        alreadyFinalized = true;
+        return;
+      }
 
-        // ✅ LEGACY / COMPAT (pour anciens écrans/lectures)
-        ...(safe.description ? {songName: safe.description, title: safe.description} : {}),
-        ...(safe.caption ? {legend: safe.caption, legende: safe.caption, captionText: safe.caption} : {}),
+      const alreadyLive = isLiveVideoDoc(currentDoc);
+      const lifecycle = resolveUploadLifecycleState(currentDoc);
 
-        // ✅ le reste
-        storagePath: persistedStoragePath,
-        thumbnailPath: persistedThumbnailPath,
-        ...(persistedThumbnailGuard?.hash ? {thumbnailHash: persistedThumbnailGuard.hash} : {}),
-        ...(persistedThumbnailGuard?.size !== undefined ? {thumbnailSize: persistedThumbnailGuard.size} : {}),
-        ...(persistedThumbnailGuard?.contentType ? {thumbnailContentType: persistedThumbnailGuard.contentType} : {}),
+      transaction.set(
+        videoRef,
+        {
+          uid,
+          status: lifecycle.status,
+          // Submission state, but never a downgrade: a legacy document carries
+          // no `finalizedAt`, so an already-approved video can now reach this
+          // write, and sending it back to pending/private would unpublish it.
+          ...(alreadyLive ? {} : {
+            moderationStatus: "pending",
+            visibility: "private",
+            isPublic: false,
+          }),
+          optimized: lifecycle.optimized,
 
-        ...sanitizedMetadata,
+          // What this call is the only writer of. Recorded so a retry is a
+          // no-op for the right reason -- see isFinalizedUploadSession.
+          finalizedAt: fieldValue.serverTimestamp(),
 
-        updatedAt: fieldValue.serverTimestamp(),
-        submittedForReviewAt: fieldValue.serverTimestamp(),
-      },
-      {merge: true},
-    );
+          // ✅ CANONIQUE (nouveau standard)
+          ...(safe.description ? {description: safe.description} : {}),
+          ...(safe.caption ? {caption: safe.caption} : {}),
 
-    return {ok: true};
+          // ✅ LEGACY / COMPAT (pour anciens écrans/lectures)
+          ...(safe.description ? {songName: safe.description, title: safe.description} : {}),
+          ...(safe.caption ? {legend: safe.caption, legende: safe.caption, captionText: safe.caption} : {}),
+
+          // ✅ le reste
+          storagePath: persistedStoragePath,
+          thumbnailPath: persistedThumbnailPath,
+          ...(persistedThumbnailGuard?.hash ? {thumbnailHash: persistedThumbnailGuard.hash} : {}),
+          ...(persistedThumbnailGuard?.size !== undefined ? {thumbnailSize: persistedThumbnailGuard.size} : {}),
+          ...(persistedThumbnailGuard?.contentType ? {thumbnailContentType: persistedThumbnailGuard.contentType} : {}),
+
+          ...sanitizedMetadata,
+
+          updatedAt: fieldValue.serverTimestamp(),
+          submittedForReviewAt: fieldValue.serverTimestamp(),
+        },
+        {merge: true},
+      );
+    });
+
+    return alreadyFinalized ?
+      {ok: true, alreadyFinalized: true} :
+      {ok: true};
   },
 );
