@@ -115,3 +115,10 @@ service-account*.json
 !/docs/checklists/
 !/docs/play-store-submission-*.md
 
+# Et la specification du socle de recherche, pour une raison de plus : elle
+# enregistre des contraintes verifiees dans le code et des mesures faites sur
+# la production a une date donnee -- la liste blanche des regles, le fait que
+# birthDate soit prive, les deux postes en texte libre a remapper. Un
+# document qui n'existe que sur un poste de travail est un document que
+# personne ne relira avant de refaire les memes erreurs.
+!/docs/talent-search-spec.md
