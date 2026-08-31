@@ -1,6 +1,6 @@
 # Play Store Submission — Adfoot 1.0.7+29
 
-Reference date: 30 August 2026, re-verified 31 August 2026
+Reference date: 30 August 2026, re-anchored 31 August 2026 at `7dc3027`
 
 This is the operator runbook for the build that is intended to become the
 **first Production release** of `org.adfoot.app`. Play production access was
@@ -18,7 +18,7 @@ actually verified for *this* build, on which date, and by which command.
 bundle's own manifest: `versionCode 28`, `versionName 1.0.7`, `targetSdk 36`,
 `minSdk 24`). Everything up to `97c8c74` is in it.
 
-Eight commits landed after it, on 2026-08-30 and 2026-08-31:
+Eleven commits landed after it, on 2026-08-30 and 2026-08-31:
 
 | Commit | What changes for a user |
 | --- | --- |
@@ -30,6 +30,9 @@ Eight commits landed after it, on 2026-08-30 and 2026-08-31:
 | `98fd498` | A "Joueur agence" badge on the profile, the video search results and the contact directory — shown only while an `adfoot` record is live, never for a paying `external` one, and never with the term or the internal reference. **Invisible in production today**: no account carries a record. |
 | `3723c38` | Guardrail only. `setManagedAccountMembership` joins the 17 automatically-checked callables now that the admin portal actually calls it. No app code. |
 | `4ec743f` | Tooling and tests only. A backend parity gate (rules, indexes, TTL) wired into the coherence gate, and the first behavioural coverage of `storage.rules` against the real engine. No app code. |
+| `eba4c14` | Tooling only. `scripts/repair-playback-mode.mjs` restates `playback.mode` where the contract contradicts its own `sources`. No app code. |
+| `1090c48` | "Profil Élite" / "Dossier scout prêt" now also require a birth date and a country. **Changes nothing in production today**: of the 11 player accounts, 0 carry either field, so no account holds the label to lose. |
+| `7dc3027` | The profile now lists what a partial scouting file is still missing, to its owner only. See the scope note below — this is the one visible change in this batch. |
 
 Two of these change **backend behaviour that was already deployed on
 2026-08-29, before the commits existed** (rules at 16:50 and 18:35 UTC). That
@@ -59,14 +62,44 @@ until the legal work outside the repo is finished. Do not "fix" them:
   test fails the suite if `amount`/`price`/`currency`/`montant` appears in the
   membership callable.
 
-## Verified locally on 30 August 2026
+## The one change a user can see (`7dc3027`)
 
-All at commit `4ec743f` plus the version bump to `1.0.7+29`:
+Everything above is switched off by data. This one is not, so its blast radius
+is worth stating exactly.
+
+A player whose scouting file is incomplete now sees, **on their own profile
+only**, a panel listing what is still missing — birth date, country, position,
+physical data or key qualities, season statistics, a published video or a CV.
+Visitors never see it: for a recruiter it is noise, and for the player it is an
+inventory of their gaps shown to strangers.
+
+It renders inside the advanced section, which returns early for a player with
+no advanced profile at all. In `adfoot-production` on 2026-08-31 that means
+**exactly 2 of the 11 player accounts** will see the panel; the other nine keep
+the existing "Aucune information avancée n'a encore été renseignée." message
+they see today. Nobody loses a label either — 0 accounts carry a birth date and
+0 carry a country, so no account holds "Profil Élite" for `1090c48` to take
+away.
+
+The list comes from `AppUser.missingScoutRequirements`, and
+`hasScoutReadyProfile` is derived from that same list rather than re-deriving
+the conditions: the screen cannot ask for a field the rule stopped requiring,
+nor stay silent about one it requires.
+
+## Verified locally
+
+The two rows marked **(31/08)** were re-run at `7dc3027`. The rest were last
+run on 2026-08-30 at `4ec743f` and are **not** re-verified here — say so rather
+than imply otherwise. The three commits since touch Dart app code, one Node
+script and the docs; none of them can change rules, indexes, TTL policies,
+Functions or the Android build configuration, which is why re-anchoring the
+document does not require re-running them. The whole table is re-run at build
+time regardless — see *Before promoting to Production*.
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Static analysis | `flutter analyze` | No issues found (615 s) |
-| Test suite | `flutter test` | **724 tests, all passed** (711 at `6f5277f`; the badge adds 13) |
+| Static analysis **(31/08)** | `flutter analyze` | No issues found, at `7dc3027` |
+| Test suite **(31/08)** | `flutter test` | **748 tests, all passed**, at `7dc3027` (711 at `6f5277f`; +13 badge, +15 playback-mode and scout guardrails, +9 missing-requirements panel) |
 | Firestore rules, real engine | `npm run rules:test` | 31/31 conformes |
 | Storage rules, real engine | `npm run rules:test:storage` | 25/25 conformes (new — this file had no behavioural coverage before) |
 | Functions lint | `npm --prefix functions run lint` | exit 0 |
@@ -74,6 +107,18 @@ All at commit `4ec743f` plus the version bump to `1.0.7+29`:
 | Android readiness | `check-android-release-readiness.ps1 -Environment production -ReleaseGate` | no errors, no warnings, at `+29` |
 | Backend parity | `npm run backend:parity:check:production` | rules, 15/15 indexes READY, both TTL policies ACTIVE |
 | Scheduler | `check-production-backend-gate.ps1` | `cleanupUnverifiedUsers` last success 2026-08-29T14:26:07Z |
+
+One production write was made on 2026-08-31, outside any build: the four ready
+videos advertised `playback.mode: "mp4_only"` while two of them genuinely carry
+1080p + 480p. `npm run playback:mode:repair:production` restated the field on
+those two (`scripts/repair-playback-mode.mjs`, dry-run by default, writes the
+single field path `playback.mode` and nothing else). Verified after the fact:
+0 drift, and the ops report now says `readyMultiRenditionMp4: 2` instead of 0.
+No client reads this field — both derive the real mode from `sources` — so
+nothing about playback changed. Do **not** use
+`scripts/backfill-playback-contract.js` for this: it rebuilds the whole
+contract and collapses `sources` to one entry at 480p or below, which would
+delete the 1080p master from those two videos.
 
 Backend parity, in detail — this is the check that did not exist for earlier
 releases:
@@ -118,6 +163,11 @@ Carried over, still unverified since build 28:
 
 New in build 29:
 
+- [ ] **The missing-requirements panel.** Open your own player profile: if the
+      scouting file is incomplete, the advanced section lists what is missing,
+      each line on its own row and readable at maximum system font size. Then
+      open *another* player's profile — the panel must not be there. Only the
+      two accounts with an advanced profile show it at all.
 - [ ] **Terms gate stays invisible.** Cold start, tapped notification, shared
       video link: no consent screen anywhere. If one appears, `config/legal`
       was written by mistake — delete it and the fleet recovers with no build.
