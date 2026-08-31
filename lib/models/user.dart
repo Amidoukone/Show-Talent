@@ -714,9 +714,9 @@ class AppUser {
 
     final missing = <String>[];
 
-    // L'identite d'abord : ce sont les deux questions posees avant meme de
-    // regarder une video. Voir [hasScoutReadyProfile].
-    if (birthDate == null) missing.add('Date de naissance');
+    // Le pays d'abord : c'est, avec l'age, ce qu'un club demande avant meme
+    // de regarder une video. Voir [hasScoutReadyProfile] pour ce qui manque
+    // encore ici.
     if (country?.trim().isEmpty ?? true) missing.add('Pays');
 
     if (positions is! List || positions.isEmpty) {
@@ -739,16 +739,28 @@ class AppUser {
 
   /// Dossier exploitable : il ne manque plus rien.
   ///
-  /// Ni l'age ni le pays ne sont des champs de confort. La date de naissance
-  /// decide de l'article 19 de la FIFA (transferts de mineurs), et le pays
-  /// decide de la voie d'obtention d'un permis de travail : ce sont les deux
-  /// premieres questions d'un club europeen, avant meme de regarder une
-  /// video. Un dossier annonce « Elite » sans l'un des deux est un dossier
-  /// sur lequel personne ne peut decider quoi que ce soit -- et le presenter
-  /// comme exploitable est une promesse que nous ne pouvons pas tenir. Ils
-  /// vivent sur le compte, pas dans `playerProfile` : ce sont des champs
-  /// transverses, saisis dans le profil de base et non dans le formulaire
-  /// avance.
+  /// Le pays n'est pas un champ de confort : il decide de la voie d'obtention
+  /// d'un permis de travail, et c'est l'une des deux questions qu'un club
+  /// europeen pose avant meme de regarder une video. Il vit sur le compte et
+  /// non dans `playerProfile` -- champ transverse, saisi dans le profil de
+  /// base.
+  ///
+  /// L'autre question, l'age, n'est **volontairement pas** exigee ici, et
+  /// c'est une limite connue et non un oubli. `birthDate` vit dans
+  /// `users/{uid}/private/contact` et n'est charge que pour le titulaire du
+  /// profil (`includePrivateFields: uid == currentAuthUid`). L'exiger rendait
+  /// ce getter dependant de qui regarde : le joueur voyait « Elite » sur son
+  /// propre profil pendant qu'un recruteur, qui ne recoit jamais ce champ,
+  /// voyait « partiel » sur le meme dossier -- c'est-a-dire que le label
+  /// devenait invisible pour le seul public auquel il s'adresse. Un jugement
+  /// porte sur un dossier ne peut pas changer avec le lecteur.
+  ///
+  /// Le retablir demande un `birthYear` derive et public sur le document
+  /// utilisateur : annee seule, donc utilisable pour filtrer une tranche
+  /// d'age sans exposer une date de naissance complete. Cela suppose une
+  /// entree dans la liste blanche `canUpdateOwnProfile` de firestore.rules,
+  /// un chemin d'ecriture et un deploiement de regles -- voir
+  /// `docs/talent-search-spec.md`.
   ///
   /// Derive de [missingScoutRequirements] plutot que de reevaluer les memes
   /// conditions : c'est la seule facon que l'ecran qui explique et la regle

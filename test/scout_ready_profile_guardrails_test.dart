@@ -12,13 +12,19 @@ String _read(String path) => File(path).readAsStringSync();
 /// worth your time", and the two questions a European club asks before it
 /// looks at a single video are how old the player is and which country they
 /// come from: the first decides whether FIFA article 19 forbids the transfer
-/// outright, the second decides the work-permit route. A file that answers
-/// neither is one no decision can be taken on, however complete the rest is.
+/// outright, the second decides the work-permit route.
+///
+/// Only the country is enforced here. The age is not, and that is a known
+/// limit rather than an oversight: `birthDate` lives in
+/// `users/{uid}/private/contact` and reaches only the profile owner, so
+/// requiring it made the verdict depend on who was reading — the player saw
+/// "Élite" while a recruiter saw "partiel" on the same file. The age returns
+/// as a public, derived `birthYear`; see `docs/talent-search-spec.md`.
 ///
 /// Measured in adfoot-production on 2026-08-31: of the eleven player accounts,
-/// **zero** carry a birth date and **zero** carry a country. So this tightening
-/// removes the label from nobody today — it stops it being handed out on the
-/// first advanced profile somebody fills in.
+/// **zero** carry a country. So this requirement takes the label from nobody
+/// today — it stops it being handed out on the first advanced profile somebody
+/// fills in.
 AppUser _player({
   DateTime? birthDate,
   String? country,
@@ -51,7 +57,7 @@ void main() {
   final birthDate = DateTime(2007, 3, 14);
 
   group('an Élite file can be acted on by a club', () {
-    test('a complete file with an age and a country earns the label', () {
+    test('a complete file with a country earns the label', () {
       final user = _player(
         birthDate: birthDate,
         country: 'Côte d’Ivoire',
@@ -63,15 +69,47 @@ void main() {
       expect(user.profileLevelLabel, 'Profil Élite');
     });
 
-    test('no birth date, no label', () {
-      // Article 19 turns on the date, not on how good the video is.
+    test('a file with no birth date still earns it, and that is deliberate', () {
+      // `birthDate` lives in users/{uid}/private/contact and is loaded only
+      // for the profile owner. Requiring it made this getter depend on who is
+      // looking: the player saw "Élite" on their own profile while a
+      // recruiter — who never receives the field — saw "partiel" on the same
+      // file, which is to say the label went invisible for the only audience
+      // it exists for. A judgement on a file cannot change with its reader.
+      // The age comes back as a public `birthYear`; see docs/talent-search-spec.md.
       final user = _player(
         country: 'Côte d’Ivoire',
         playerProfile: _completeFootballFile(),
         cvUrl: 'https://example.org/cv.pdf',
       );
 
-      expect(user.hasScoutReadyProfile, isFalse);
+      expect(user.hasScoutReadyProfile, isTrue);
+    });
+
+    test('the verdict is the same whoever is looking', () {
+      // A visitor's AppUser is built from the public document alone. If the
+      // two disagree, the rule reads a private field again.
+      Map<String, dynamic> publicDoc() => <String, dynamic>{
+            'uid': 'p1',
+            'nom': 'Awa Traore',
+            'role': 'joueur',
+            'country': 'Côte d’Ivoire',
+            'playerProfile': _completeFootballFile(),
+            'cvUrl': 'https://example.org/cv.pdf',
+          };
+
+      final asVisitor = AppUser.fromMap(publicDoc());
+      final asOwner = AppUser.fromMap(
+        publicDoc(),
+        privateContact: <String, dynamic>{
+          'birthDate': DateTime(2007, 3, 14).toIso8601String(),
+          'phone': '+2250700000000',
+        },
+      );
+
+      expect(asVisitor.hasScoutReadyProfile, asOwner.hasScoutReadyProfile);
+      expect(asVisitor.missingScoutRequirements, asOwner.missingScoutRequirements);
+      expect(asVisitor.profileLevelLabel, asOwner.profileLevelLabel);
     });
 
     test('no country, no label', () {
@@ -97,7 +135,7 @@ void main() {
   });
 
   group('the football file is still required on its own', () {
-    test('an age and a country alone are not a scouting file', () {
+    test('an identity alone is not a scouting file', () {
       // The tightening adds a condition; it must not replace the others.
       final user = _player(birthDate: birthDate, country: 'Sénégal');
 
@@ -155,7 +193,6 @@ void main() {
       // The order is the order a recruiter asks in, and the screen renders
       // the list as it comes.
       expect(_player().missingScoutRequirements, <String>[
-        'Date de naissance',
         'Pays',
         'Poste',
         'Taille, poids ou pied fort, ou qualités clés',
@@ -177,12 +214,15 @@ void main() {
 
     test('it names exactly what is absent, and nothing else', () {
       final user = _player(
+        birthDate: birthDate,
         country: 'Sénégal',
-        playerProfile: _completeFootballFile(),
+        playerProfile: _completeFootballFile()..remove('stats'),
         cvUrl: 'https://example.org/cv.pdf',
       );
 
-      expect(user.missingScoutRequirements, <String>['Date de naissance']);
+      expect(user.missingScoutRequirements, <String>[
+        'Statistiques de la saison',
+      ]);
     });
 
     test('the decision and the explanation cannot disagree', () {
