@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
 
 class Offre {
@@ -15,8 +17,27 @@ class Offre {
   // Optional enriched fields
   String? localisation;
   String? remuneration;
-  String? niveau;
-  String? posteRecherche;
+  /// Les postes recherchés, dans le vocabulaire des joueurs.
+  ///
+  /// C'est le champ qui rend le rapprochement possible. Tant qu'il était du
+  /// texte libre (« Ex: Attaquant, milieu relayeur »), un club qui cherchait un
+  /// défenseur central ne tombait jamais sur les fiches marquées `CB` : les
+  /// deux côtés du marché ne parlaient pas la même langue, et coder le joueur
+  /// seul n'aurait servi à rien.
+  ///
+  /// Jusqu'à [FootballPosition.maxPerQuery], parce qu'un club cherche souvent
+  /// « un CB ou un LB » et que c'est la borne d'`array-contains-any`.
+  List<FootballPosition> positionCodes;
+
+  /// Les catégories visées.
+  ///
+  /// Remplace la moitié de l'ancien champ `niveau`, dont l'exemple disait tout
+  /// de la confusion : « Ex: U19, Sénior, Pro » mélangeait une catégorie d'âge
+  /// et un niveau de compétition dans une seule ligne de texte.
+  List<AgeCategory> ageCategories;
+
+  /// Le niveau de la structure, l'autre moitié de l'ancien `niveau`.
+  ClubLevel? clubLevel;
   String? pieceJointeUrl;
   int? vues;
   List<String>? viewedBy;
@@ -35,8 +56,9 @@ class Offre {
     required this.dateCreation,
     this.localisation,
     this.remuneration,
-    this.niveau,
-    this.posteRecherche,
+    this.positionCodes = const <FootballPosition>[],
+    this.ageCategories = const <AgeCategory>[],
+    this.clubLevel,
     this.pieceJointeUrl,
     this.vues,
     this.viewedBy,
@@ -57,8 +79,9 @@ class Offre {
       'dateCreation': dateCreation,
       'localisation': localisation,
       'remuneration': remuneration,
-      'niveau': niveau,
-      'posteRecherche': posteRecherche,
+      'positionCodes': positionCodes.map((p) => p.code).toList(),
+      'ageCategories': ageCategories.map((c) => c.code).toList(),
+      'clubLevel': clubLevel?.code,
       'pieceJointeUrl': pieceJointeUrl,
       'vues': vues,
       'viewedBy': viewedBy,
@@ -198,9 +221,12 @@ class Offre {
           _readFirst(map, ['localisation', 'location', 'lieu'])?.toString(),
       remuneration:
           _readFirst(map, ['remuneration', 'salary', 'salaire'])?.toString(),
-      niveau: _readFirst(map, ['niveau', 'level'])?.toString(),
-      posteRecherche:
-          _readFirst(map, ['posteRecherche', 'poste', 'position'])?.toString(),
+      positionCodes: FootballVocabulary.positions(
+        map['positionCodes'],
+        max: FootballPosition.maxPerQuery,
+      ),
+      ageCategories: FootballVocabulary.ageCategories(map['ageCategories']),
+      clubLevel: FootballVocabulary.clubLevel(map['clubLevel']),
       pieceJointeUrl: _readFirst(
         map,
         ['pieceJointeUrl', 'attachmentUrl', 'documentUrl'],

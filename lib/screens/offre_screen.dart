@@ -243,16 +243,24 @@ class _OffreScreenState extends State<OffreScreen> {
                                             minHeight: 2,
                                           ),
                                         ),
-                                      if (offre.posteRecherche?.isNotEmpty ??
-                                          false)
+                                      if (offre.positionCodes.isNotEmpty)
                                         _buildChip(
                                           Icons.sports_soccer,
-                                          offre.posteRecherche!,
+                                          offre.positionCodes
+                                              .map((p) => p.labelFr)
+                                              .join(' · '),
                                         ),
-                                      if (offre.niveau?.isNotEmpty ?? false)
+                                      if (offre.ageCategories.isNotEmpty)
+                                        _buildChip(
+                                          Icons.groups_outlined,
+                                          offre.ageCategories
+                                              .map((c) => c.labelFr)
+                                              .join(' · '),
+                                        ),
+                                      if (offre.clubLevel != null)
                                         _buildChip(
                                           Icons.star_border,
-                                          offre.niveau!,
+                                          offre.clubLevel!.labelFr,
                                         ),
                                       if (offre.localisation?.isNotEmpty ??
                                           false)
@@ -512,9 +520,17 @@ class _OffreScreenState extends State<OffreScreen> {
           query.isEmpty ||
           o.titre.toLowerCase().contains(query) ||
           o.description.toLowerCase().contains(query) ||
-          (o.posteRecherche ?? '').toLowerCase().contains(query) ||
+          // Les libelles, pas les codes : personne ne tape « CB » dans une
+          // barre de recherche, et un code affiche nulle part ne peut pas
+          // etre recherche.
+          o.positionCodes.any(
+            (p) => p.labelFr.toLowerCase().contains(query),
+          ) ||
+          o.ageCategories.any(
+            (c) => c.labelFr.toLowerCase().contains(query),
+          ) ||
+          (o.clubLevel?.labelFr ?? '').toLowerCase().contains(query) ||
           (o.localisation ?? '').toLowerCase().contains(query) ||
-          (o.niveau ?? '').toLowerCase().contains(query) ||
           (o.remuneration ?? '').toLowerCase().contains(query) ||
           o.recruteur.nom.toLowerCase().contains(query) ||
           o.recruteur.role.toLowerCase().contains(query);
@@ -1497,17 +1513,25 @@ class _OffreScreenState extends State<OffreScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    if (offre.posteRecherche?.isNotEmpty ?? false)
+                    if (offre.positionCodes.isNotEmpty)
                       _buildDetailTile(
                         Icons.sports_soccer,
-                        'Poste',
-                        offre.posteRecherche!,
+                        offre.positionCodes.length > 1 ? 'Postes' : 'Poste',
+                        offre.positionCodes
+                            .map((p) => p.labelFr)
+                            .join(' · '),
                       ),
-                    if (offre.niveau?.isNotEmpty ?? false)
+                    if (offre.ageCategories.isNotEmpty)
+                      _buildDetailTile(
+                        Icons.groups_outlined,
+                        'Catégories',
+                        offre.ageCategories.map((c) => c.labelFr).join(' · '),
+                      ),
+                    if (offre.clubLevel != null)
                       _buildDetailTile(
                         Icons.leaderboard_outlined,
                         'Niveau',
-                        offre.niveau!,
+                        offre.clubLevel!.labelFr,
                       ),
                     if (offre.localisation?.isNotEmpty ?? false)
                       _buildDetailTile(

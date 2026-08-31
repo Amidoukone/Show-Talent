@@ -5,6 +5,7 @@ import 'package:adfoot/controller/offre_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/models/action_response.dart';
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:intl/intl.dart';
 import 'package:adfoot/theme/ad_colors.dart';
@@ -56,8 +57,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _localisationController = TextEditingController();
   final TextEditingController _remunerationController = TextEditingController();
-  final TextEditingController _niveauController = TextEditingController();
-  final TextEditingController _posteController = TextEditingController();
+  List<FootballPosition> _positionCodes = <FootballPosition>[];
+  List<AgeCategory> _ageCategories = <AgeCategory>[];
+  ClubLevel? _clubLevel;
 
   DateTime? _dateDebut;
   DateTime? _dateFin;
@@ -87,8 +89,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     yield _descriptionController;
     yield _localisationController;
     yield _remunerationController;
-    yield _niveauController;
-    yield _posteController;
   }
 
   @override
@@ -105,8 +105,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       _dateFin = editingOffre!.dateFin;
       _localisationController.text = editingOffre!.localisation ?? '';
       _remunerationController.text = editingOffre!.remuneration ?? '';
-      _niveauController.text = editingOffre!.niveau ?? '';
-      _posteController.text = editingOffre!.posteRecherche ?? '';
+      _positionCodes = List<FootballPosition>.of(editingOffre!.positionCodes);
+      _ageCategories = List<AgeCategory>.of(editingOffre!.ageCategories);
+      _clubLevel = editingOffre!.clubLevel;
     }
 
     _initialTextValues = <TextEditingController, String>{
@@ -189,24 +190,86 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                     _buildFormSection(
                       title: 'Profil recherché',
                       children: [
-                        TextFormField(
-                          controller: _posteController,
-                          textInputAction: TextInputAction.next,
-                          decoration: _buildInputDecoration(
-                            'Poste recherché',
-                            'Ex: Attaquant, milieu relayeur',
-                            Icons.sports_soccer,
+                        // Le poste se choisit, il ne se tape plus : c'est
+                        // ce qui permet a cette offre de rencontrer les
+                        // joueurs qui declarent le meme code.
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Postes recherchés',
+                            style: TextStyle(fontWeight: FontWeight.w700),
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: FootballPosition.values.map((position) {
+                            final isSelected =
+                                _positionCodes.contains(position);
+                            return FilterChip(
+                              selected: isSelected,
+                              label: Text(position.labelFr),
+                              onSelected: (_) {
+                                setState(() {
+                                  if (isSelected) {
+                                    _positionCodes.remove(position);
+                                  } else {
+                                    _positionCodes.add(position);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
                         const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _niveauController,
-                          textInputAction: TextInputAction.next,
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Catégories visées',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: AgeCategory.values.map((category) {
+                            final isSelected =
+                                _ageCategories.contains(category);
+                            return FilterChip(
+                              selected: isSelected,
+                              label: Text(category.labelFr),
+                              onSelected: (_) {
+                                setState(() {
+                                  if (isSelected) {
+                                    _ageCategories.remove(category);
+                                  } else {
+                                    _ageCategories.add(category);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<ClubLevel>(
+                          initialValue: _clubLevel,
                           decoration: _buildInputDecoration(
-                            'Niveau / Section',
-                            'Ex: U19, Sénior, Pro',
+                            'Niveau de la structure',
+                            '',
                             Icons.leaderboard_outlined,
                           ),
+                          items: ClubLevel.values
+                              .map(
+                                (level) => DropdownMenuItem<ClubLevel>(
+                                  value: level,
+                                  child: Text(level.labelFr),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _clubLevel = value),
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
@@ -543,12 +606,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       remuneration: _remunerationController.text.trim().isEmpty
           ? null
           : _remunerationController.text.trim(),
-      niveau: _niveauController.text.trim().isEmpty
-          ? null
-          : _niveauController.text.trim(),
-      posteRecherche: _posteController.text.trim().isEmpty
-          ? null
-          : _posteController.text.trim(),
+      positionCodes: _positionCodes,
+      ageCategories: _ageCategories,
+      clubLevel: _clubLevel,
       pieceJointeUrl: null,
       vues: isEditing ? (editingOffre!.vues ?? 0) : 0,
       viewedBy: isEditing ? (editingOffre!.viewedBy ?? <String>[]) : <String>[],
@@ -616,8 +676,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     _descriptionController.dispose();
     _localisationController.dispose();
     _remunerationController.dispose();
-    _niveauController.dispose();
-    _posteController.dispose();
     super.dispose();
   }
 }

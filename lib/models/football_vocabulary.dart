@@ -215,10 +215,18 @@ abstract final class FootballVocabulary {
 
   /// Les postes d'un document, dans l'ordre déclaré, sans doublon ni inconnu.
   ///
-  /// Tronque à [FootballPosition.maxPerPlayer] : une fiche qui en porterait
-  /// plus vient forcément d'une écriture qui a contourné le formulaire, et
-  /// l'afficher entièrement laisserait croire que la limite n'existe pas.
-  static List<FootballPosition> positions(Object? raw) {
+  /// Tronque à [max], qui vaut [FootballPosition.maxPerPlayer] pour une fiche
+  /// de joueur : une fiche qui en porterait plus vient forcément d'une écriture
+  /// ayant contourné le formulaire, et l'afficher entièrement laisserait croire
+  /// que la limite n'existe pas.
+  ///
+  /// Une offre passe [FootballPosition.maxPerQuery] : un club cherche souvent
+  /// « un CB ou un LB », et cette borne-là est celle d'`array-contains-any`,
+  /// pas une règle de lisibilité.
+  static List<FootballPosition> positions(
+    Object? raw, {
+    int max = FootballPosition.maxPerPlayer,
+  }) {
     if (raw is! List) return const <FootballPosition>[];
 
     final resolved = <FootballPosition>[];
@@ -226,8 +234,21 @@ abstract final class FootballVocabulary {
       final parsed = position(entry);
       if (parsed == null || resolved.contains(parsed)) continue;
       resolved.add(parsed);
-      if (resolved.length == FootballPosition.maxPerPlayer) break;
+      if (resolved.length == max) break;
     }
     return List<FootballPosition>.unmodifiable(resolved);
+  }
+
+  /// Les catégories d'âge d'un document, sans doublon ni inconnue.
+  static List<AgeCategory> ageCategories(Object? raw) {
+    if (raw is! List) return const <AgeCategory>[];
+
+    final resolved = <AgeCategory>[];
+    for (final entry in raw) {
+      final parsed = ageCategory(entry);
+      if (parsed == null || resolved.contains(parsed)) continue;
+      resolved.add(parsed);
+    }
+    return List<AgeCategory>.unmodifiable(resolved);
   }
 }
