@@ -1243,6 +1243,10 @@ export {
 export {completeEmailVerification} from "./account_verification_actions";
 export {deleteOwnAccount} from "./account_deletion_actions";
 export {videoSharePage} from "./video_share_page";
+export {
+  deriveUserSearchFields,
+  deriveUserSearchFieldsFromContact,
+} from "./user_search_fields";
 export {notifyContactIntakeCreated} from "./contact_intake_notifications";
 
 /* -------------------------------------------------------------------------- */
