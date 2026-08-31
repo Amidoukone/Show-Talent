@@ -3,7 +3,8 @@ param(
     [switch]$SkipFlutterTest,
     [switch]$SkipAnalyze,
     [switch]$StrictContract,
-    [string]$AdminRepoPath
+    [string]$AdminRepoPath,
+    [string]$BackendEnvironment = "production"
 )
 
 Set-StrictMode -Version Latest
@@ -44,6 +45,15 @@ try {
     }
 
     if ($IncludeBackendGate) {
+        # Rules and indexes before the scheduler: this one answers "is the
+        # backend this checkout assumes the backend that is deployed", and a
+        # build made against an index that only exists in the file shows up as
+        # an empty screen, never as an error. Read-only, so it is safe to run
+        # from any machine that holds the ops credential.
+        Invoke-Step -Name "Backend parity gate (rules, indexes, TTL)" -Action {
+            & powershell -ExecutionPolicy Bypass -File ".\scripts\check-backend-parity.ps1" -Environment $BackendEnvironment
+        }
+
         Invoke-Step -Name "Backend scheduler gate (cleanupUnverifiedUsers)" -Action {
             & powershell -ExecutionPolicy Bypass -File ".\scripts\check-production-backend-gate.ps1"
         }
