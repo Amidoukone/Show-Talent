@@ -105,4 +105,13 @@ service-account*.json
 # du travail produit, relu et repris entre deux sessions. Les laisser hors de
 # Git reviendrait a les perdre au premier nettoyage du repertoire de travail.
 !/docs/legal-drafts/
+# Et meme raison encore pour les runbooks de release : ce sont les seuls
+# documents qui disent ce qui a ete verifie avant un build donne, par quelle
+# commande et a quelle date. Un dossier de release qui n'existe que sur un
+# poste de travail ne prouve rien -- c'est exactement ce qu'on demandera si
+# une version en production doit etre expliquee apres coup. Les rapports de
+# smoke (docs/smoke-*.json) restent ignores : ils portent des identifiants de
+# comptes de test.
+!/docs/checklists/
+!/docs/play-store-submission-*.md
 
