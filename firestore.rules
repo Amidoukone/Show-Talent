@@ -126,6 +126,28 @@ service cloud.firestore {
         "city",
         "region",
         "openToOpportunities",
+        // Les faits footballistiques : poste, nationalites, gabarit, statut
+        // contractuel, saison. Les omettre ici laisserait un joueur se faire
+        // verifier puis changer de nationalite ou de poste sans que le badge
+        // « Verifie par Adfoot » ne bronche -- c'est-a-dire un badge qui
+        // certifie un dossier qui n'existe plus.
+        "nationalities",
+        "positionCodes",
+        "strongFoot",
+        "heightCm",
+        "weightKg",
+        "contractStatus",
+        "contractEndDate",
+        "currentClubName",
+        "currentClubLevel",
+        "currentSeason",
+        "currentSeason.season",
+        "currentSeason.competition",
+        "currentSeason.ageCategory",
+        "currentSeason.appearances",
+        "currentSeason.minutes",
+        "currentSeason.goals",
+        "currentSeason.assists",
         "playerProfile",
         "clubProfile",
         "agentProfile",
@@ -249,6 +271,30 @@ service cloud.firestore {
         "city",
         "region",
         "openToOpportunities",
+        // Voir PlayerFootballProfile.writableFieldPaths : un test compare les
+        // deux listes. `birthYear` et `isSearchable` en sont volontairement
+        // absents -- ils sont derives cote serveur. `birthYear` vient de
+        // `birthDate`, qui vit dans le document prive et ne doit pas etre
+        // expose en entier ; `isSearchable` est un jugement porte sur la
+        // fiche, et une fiche ne decide pas seule qu'elle merite d'etre
+        // montree a un recruteur.
+        "nationalities",
+        "positionCodes",
+        "strongFoot",
+        "heightCm",
+        "weightKg",
+        "contractStatus",
+        "contractEndDate",
+        "currentClubName",
+        "currentClubLevel",
+        "currentSeason",
+        "currentSeason.season",
+        "currentSeason.competition",
+        "currentSeason.ageCategory",
+        "currentSeason.appearances",
+        "currentSeason.minutes",
+        "currentSeason.goals",
+        "currentSeason.assists",
         "profilePublic",
         "allowMessages",
         "playerProfile",

@@ -230,18 +230,35 @@ void main() {
       expect(result.appliedPatch['clubProfile'], isNotNull);
     });
 
-    test('hasAdvancedProfile ignores empty shells and false-only sections', () {
-      final emptyShell = _user(uid: 'player-empty', name: 'Empty')
-        ..playerProfile = {
-          'availability': {'open': false, 'regions': <String>[]},
-        };
-      final meaningfulStats = _user(uid: 'player-stats', name: 'Stats')
-        ..playerProfile = {
-          'stats': {'goals': 0},
-        };
+    test('hasAdvancedProfile ignores empty shells but keeps a real zero', () {
+      // Meme intention qu'avant la refonte, exprimee sur le modele type : une
+      // coquille vide n'est pas un profil avance, mais un zero reellement
+      // saisi en est un. « 0 but sur la saison » est une information ; un
+      // dossier sans aucun champ n'en est pas une.
+      AppUser player(Map<String, dynamic> football) =>
+          AppUser.fromMap(<String, dynamic>{
+            'uid': 'p1',
+            'nom': 'Awa Traore',
+            'role': 'joueur',
+            ...football,
+          });
+
+      final emptyShell = player(<String, dynamic>{
+        'positionCodes': <String>[],
+        'currentSeason': <String, dynamic>{},
+      });
+      final unreadable = player(<String, dynamic>{
+        'positionCodes': <String>['SWEEPER'],
+        'strongFoot': 'sideways',
+      });
+      final realZero = player(<String, dynamic>{
+        'currentSeason': <String, dynamic>{'goals': 0},
+      });
 
       expect(emptyShell.hasAdvancedProfile, isFalse);
-      expect(meaningfulStats.hasAdvancedProfile, isTrue);
+      // Un code illisible ne compte pas non plus : il ne remplit rien.
+      expect(unreadable.hasAdvancedProfile, isFalse);
+      expect(realZero.hasAdvancedProfile, isTrue);
     });
 
     test(

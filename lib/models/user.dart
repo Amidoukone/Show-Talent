@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/membership.dart';
 import 'package:adfoot/models/offre.dart';
+import 'package:adfoot/models/player_football_profile.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 
@@ -61,6 +62,19 @@ class AppUser {
   // =========================
   // Profil joueur (avance - structure)
   // =========================
+  /// Les faits footballistiques, tels qu'un recruteur les filtre.
+  ///
+  /// Stockes a plat sur le document (`positionCodes`, `strongFoot`,
+  /// `birthYear`…) parce qu'une requete Firestore n'indexe pas utilement un
+  /// champ enfoui dans une map. Parse a la source et conserve : le recalculer
+  /// depuis [toMap] le viderait, puisque [toMap] ne reserialise que les champs
+  /// que le titulaire a le droit d'ecrire. Voir [PlayerFootballProfile].
+  PlayerFootballProfile football;
+
+  /// Ancien profil joueur en texte libre, remplace par [football].
+  ///
+  /// Conserve pour ne pas perdre le document d'un compte qui en porte encore
+  /// un, mais plus alimente ni lu par aucune surface.
   Map<String, dynamic>? playerProfile;
   /*
     playerProfile: {
@@ -213,6 +227,7 @@ class AppUser {
     this.performances,
 
     // Avances par role
+    this.football = const PlayerFootballProfile(),
     this.playerProfile,
     this.clubProfile,
     this.agentProfile,
@@ -365,6 +380,7 @@ class AppUser {
           : null,
 
       // Avances
+      football: PlayerFootballProfile.fromUserMap(map),
       playerProfile: safeMap(map['playerProfile']),
       clubProfile: safeMap(map['clubProfile']),
       agentProfile: safeMap(map['agentProfile']),
@@ -521,6 +537,10 @@ class AppUser {
       'performances': performances,
 
       // Avances
+      // Uniquement ce que le titulaire a le droit d'ecrire :
+      // `saveUserProfile` pousse cette map telle quelle, et
+      // `birthYear`/`isSearchable` sont derives cote serveur.
+      ...football.toPatch(),
       'playerProfile': playerProfile,
       'clubProfile': clubProfile,
       'agentProfile': agentProfile,
@@ -666,7 +686,9 @@ class AppUser {
   bool get hasAdvancedProfile {
     switch (role) {
       case 'joueur':
-        return _hasMeaningfulProfileValue(playerProfile);
+        // Les faits footballistiques vivent a plat sur le document depuis la
+        // refonte (voir [football]) ; `playerProfile` n'est plus alimente.
+        return football.isNotEmpty;
 
       case 'club':
         return _hasMeaningfulProfileValue(clubProfile);
@@ -697,36 +719,25 @@ class AppUser {
   List<String> get missingScoutRequirements {
     if (!isPlayer) return const <String>[];
 
-    final p = playerProfile ?? const <String, dynamic>{};
-
-    final physical = (p['physical'] is Map)
-        ? Map<String, dynamic>.from(p['physical'] as Map)
-        : <String, dynamic>{};
-
-    final hasPhysical =
-        physical['heightCm'] != null ||
-        physical['weightKg'] != null ||
-        physical['strongFoot'] != null;
-
-    final positions = p['positions'];
-    final skills = p['skills'];
-    final stats = p['stats'];
-
+    final profile = football;
     final missing = <String>[];
 
     // Le pays d'abord : c'est, avec l'age, ce qu'un club demande avant meme
     // de regarder une video. Voir [hasScoutReadyProfile] pour ce qui manque
     // encore ici.
     if (country?.trim().isEmpty ?? true) missing.add('Pays');
-
-    if (positions is! List || positions.isEmpty) {
-      missing.add('Poste');
+    if (profile.nationalities.isEmpty) missing.add('Nationalité');
+    if (profile.positions.isEmpty) missing.add('Poste');
+    if (profile.strongFoot == null) missing.add('Pied fort');
+    if (profile.heightCm == null) missing.add('Taille');
+    if (profile.contractStatus == null) {
+      missing.add('Statut contractuel');
     }
-    if (!hasPhysical && (skills is! List || skills.isEmpty)) {
-      missing.add('Taille, poids ou pied fort, ou qualités clés');
+    if (profile.currentClubLevel == null) {
+      missing.add('Niveau du club actuel');
     }
-    if (stats is! Map || stats.isEmpty) {
-      missing.add('Statistiques de la saison');
+    if (profile.currentSeason == null) {
+      missing.add('Statistiques de la saison en cours');
     }
 
     final hasEvidence =
