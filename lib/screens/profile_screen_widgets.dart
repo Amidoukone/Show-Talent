@@ -466,3 +466,84 @@ class _SectionHeader extends StatelessWidget {
     );
   }
 }
+
+/// Ce qu'il reste a renseigner pour que le dossier scout soit exploitable.
+///
+/// Affiche uniquement au titulaire du profil (voir l'appel dans
+/// `_buildAdvancedFootballSectionClean`). La liste est celle de
+/// [AppUser.missingScoutRequirements] : cet ecran ne decide de rien, il
+/// recopie. Deux endroits qui decident, c'est un ecran qui reclame un champ
+/// dont la regle n'a plus besoin.
+///
+/// Le libelle porte la raison plutot que l'injonction : un joueur a qui l'on
+/// demande sa date de naissance sans dire pourquoi la saisit mal ou pas du
+/// tout.
+class _MissingScoutRequirements extends StatelessWidget {
+  const _MissingScoutRequirements({required this.missing});
+
+  final List<String> missing;
+
+  @override
+  Widget build(BuildContext context) {
+    if (missing.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AdColors.surfaceCard,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdColors.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Il reste à renseigner',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              color: AdColors.onSurface,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'Un club ne peut pas décider sur un dossier incomplet.',
+            style: TextStyle(fontSize: 12, color: AdColors.onSurfaceMuted),
+          ),
+          const SizedBox(height: 8),
+          // Une colonne, pas une ligne : ces libelles sont des phrases, et un
+          // Wrap horizontal les couperait sur un ecran etroit.
+          ...missing.map(
+            (requirement) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(
+                      Icons.radio_button_unchecked,
+                      size: 14,
+                      color: AdColors.warning,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      requirement,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AdColors.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

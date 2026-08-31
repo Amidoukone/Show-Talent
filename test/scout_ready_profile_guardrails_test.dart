@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:adfoot/models/user.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+String _read(String path) => File(path).readAsStringSync();
 
 /// A player is announced as "Profil Élite" only when a club could actually
 /// act on the file.
@@ -143,6 +147,110 @@ void main() {
 
       expect(user.hasScoutReadyProfile, isFalse);
       expect(user.profileLevelLabel, 'Profil avancé');
+    });
+  });
+
+  group('the file says what it is still missing', () {
+    test('an empty player file names every requirement, identity first', () {
+      // The order is the order a recruiter asks in, and the screen renders
+      // the list as it comes.
+      expect(_player().missingScoutRequirements, <String>[
+        'Date de naissance',
+        'Pays',
+        'Poste',
+        'Taille, poids ou pied fort, ou qualités clés',
+        'Statistiques de la saison',
+        'Une vidéo publiée ou un CV',
+      ]);
+    });
+
+    test('a complete file is missing nothing', () {
+      final user = _player(
+        birthDate: birthDate,
+        country: 'Côte d’Ivoire',
+        playerProfile: _completeFootballFile(),
+        cvUrl: 'https://example.org/cv.pdf',
+      );
+
+      expect(user.missingScoutRequirements, isEmpty);
+    });
+
+    test('it names exactly what is absent, and nothing else', () {
+      final user = _player(
+        country: 'Sénégal',
+        playerProfile: _completeFootballFile(),
+        cvUrl: 'https://example.org/cv.pdf',
+      );
+
+      expect(user.missingScoutRequirements, <String>['Date de naissance']);
+    });
+
+    test('the decision and the explanation cannot disagree', () {
+      // The whole reason `hasScoutReadyProfile` is derived from this list
+      // rather than re-deriving the same conditions.
+      for (final user in <AppUser>[
+        _player(),
+        _player(birthDate: birthDate),
+        _player(birthDate: birthDate, country: 'Mali'),
+        _player(
+          birthDate: birthDate,
+          country: 'Mali',
+          playerProfile: _completeFootballFile(),
+        ),
+        _player(
+          birthDate: birthDate,
+          country: 'Mali',
+          playerProfile: _completeFootballFile(),
+          cvUrl: 'https://example.org/cv.pdf',
+        ),
+      ]) {
+        expect(
+          user.hasScoutReadyProfile,
+          user.missingScoutRequirements.isEmpty,
+          reason: 'ready must mean nothing is missing, and the reverse',
+        );
+      }
+    });
+
+    test('a non-player is never asked for a scouting file', () {
+      final club = AppUser.fromMap(<String, dynamic>{
+        'uid': 'c2',
+        'nom': 'ASEC Mimosas',
+        'role': 'club',
+      });
+
+      expect(club.missingScoutRequirements, isEmpty);
+      expect(club.hasScoutReadyProfile, isFalse);
+    });
+  });
+
+  group('the profile screen shows the list, and only to its owner', () {
+    final screen = _read('lib/screens/profile_screen.dart');
+    final widgets = _read('lib/screens/profile_screen_widgets.dart');
+
+    test('the missing list is guarded by isOwnProfile', () {
+      // A visitor seeing "still missing: date of birth, country" is noise for
+      // a recruiter and a list of the player's gaps shown to strangers.
+      expect(
+        screen,
+        contains('if (isOwnProfile && !user.hasScoutReadyProfile)'),
+      );
+      expect(screen, contains('_MissingScoutRequirements('));
+    });
+
+    test('the screen copies the rule instead of restating it', () {
+      expect(screen, contains('missing: user.missingScoutRequirements'));
+
+      // No surface may test the underlying fields itself: that is how a
+      // screen ends up asking for something the rule stopped requiring.
+      for (final source in <String>[screen, widgets]) {
+        expect(source, isNot(contains("playerProfile!['stats']")));
+        expect(source, isNot(contains('Date de naissance\',')));
+      }
+    });
+
+    test('the panel renders nothing when nothing is missing', () {
+      expect(widgets, contains('if (missing.isEmpty) return const SizedBox.shrink();'));
     });
   });
 

@@ -425,7 +425,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: AdSectionCard(
                           title: _advancedSectionTitleClean(user),
                           icon: Icons.auto_awesome_rounded,
-                          child: _buildAdvancedFootballSectionClean(user),
+                          child: _buildAdvancedFootballSectionClean(
+                            user,
+                            isOwnProfile: isOwnProfile,
+                          ),
                         ),
                       ),
                     ),
@@ -1162,7 +1165,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return 'Aucune présentation renseignée.';
   }
 
-  Widget _buildAdvancedFootballSectionClean(AppUser user) {
+  Widget _buildAdvancedFootballSectionClean(
+    AppUser user, {
+    required bool isOwnProfile,
+  }) {
     if (!user.hasAdvancedProfile) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1267,6 +1273,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
+          // Ce qui manque, et seulement pour le titulaire du profil.
+          //
+          // « Partiel » sans dire de quoi laissait le joueur deviner : c'est
+          // la difference entre un constat et une action. La liste vient de
+          // `missingScoutRequirements`, donc elle ne peut pas reclamer autre
+          // chose que ce que la regle exige.
+          //
+          // Un visiteur ne la voit pas : pour un recruteur c'est du bruit, et
+          // pour le joueur c'est une liste de ce qui lui manque affichee a
+          // des inconnus.
+          if (isOwnProfile && !user.hasScoutReadyProfile)
+            _MissingScoutRequirements(
+              missing: user.missingScoutRequirements,
+            ),
         ],
       );
     }

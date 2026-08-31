@@ -684,12 +684,21 @@ class AppUser {
   /// Joueur - Dossier scout exploitable ?
   /// Utilise par les recruteurs et les parcours avances.
   /// -------------------------
-  bool get hasScoutReadyProfile {
-    if (!isPlayer || playerProfile == null) return false;
+  /// Ce qu'il manque au dossier scout, dans l'ordre ou un recruteur le demande.
+  ///
+  /// Une seule liste, et [hasScoutReadyProfile] en decoule. Deux declarations
+  /// -- l'une pour decider, l'autre pour expliquer -- c'est la garantie qu'un
+  /// jour l'ecran reclame un champ que la regle n'exige plus, ou se taise sur
+  /// un champ qu'elle exige. Ajouter une exigence, c'est ajouter une entree
+  /// ici, et l'ecran suit tout seul.
+  ///
+  /// Vide pour un compte qui n'est pas un joueur : la notion ne s'y applique
+  /// pas, et c'est [hasScoutReadyProfile] qui garde ce cas.
+  List<String> get missingScoutRequirements {
+    if (!isPlayer) return const <String>[];
 
-    final p = playerProfile!;
+    final p = playerProfile ?? const <String, dynamic>{};
 
-    // Physical (nested)
     final physical = (p['physical'] is Map)
         ? Map<String, dynamic>.from(p['physical'] as Map)
         : <String, dynamic>{};
@@ -699,46 +708,53 @@ class AppUser {
         physical['weightKg'] != null ||
         physical['strongFoot'] != null;
 
-    // Positions
     final positions = p['positions'];
-    final hasPosition = positions is List && positions.isNotEmpty;
-
-    // Skills
     final skills = p['skills'];
-    final hasSkills = skills is List && skills.isNotEmpty;
-
-    // Stats
     final stats = p['stats'];
-    final hasStats = stats is Map && stats.isNotEmpty;
 
-    // Evidence
+    final missing = <String>[];
+
+    // L'identite d'abord : ce sont les deux questions posees avant meme de
+    // regarder une video. Voir [hasScoutReadyProfile].
+    if (birthDate == null) missing.add('Date de naissance');
+    if (country?.trim().isEmpty ?? true) missing.add('Pays');
+
+    if (positions is! List || positions.isEmpty) {
+      missing.add('Poste');
+    }
+    if (!hasPhysical && (skills is! List || skills.isEmpty)) {
+      missing.add('Taille, poids ou pied fort, ou qualités clés');
+    }
+    if (stats is! Map || stats.isEmpty) {
+      missing.add('Statistiques de la saison');
+    }
+
     final hasEvidence =
         (videosPubliees?.isNotEmpty ?? false) ||
         (cvUrl?.trim().isNotEmpty ?? false);
+    if (!hasEvidence) missing.add('Une vidéo publiée ou un CV');
 
-    // Identite exploitable par un recruteur.
-    //
-    // Ni l'age ni le pays ne sont des champs de confort. La date de naissance
-    // decide de l'article 19 de la FIFA (transferts de mineurs), et le pays
-    // decide de la voie d'obtention d'un permis de travail : ce sont les deux
-    // premieres questions d'un club europeen, avant meme de regarder une
-    // video. Un dossier annonce « Elite » sans l'un des deux est un dossier
-    // sur lequel personne ne peut decider quoi que ce soit -- et le presenter
-    // comme exploitable est une promesse que nous ne pouvons pas tenir.
-    //
-    // Ils vivent sur le compte, pas dans `playerProfile` : ce sont des champs
-    // transverses (voir la section « Champs transverses » plus haut), saisis
-    // dans le profil de base et non dans le formulaire avance.
-    final hasActionableIdentity =
-        birthDate != null && (country?.trim().isNotEmpty ?? false);
-
-    // Scout-ready
-    return hasActionableIdentity &&
-        (hasPhysical || hasSkills) &&
-        hasPosition &&
-        hasStats &&
-        hasEvidence;
+    return List<String>.unmodifiable(missing);
   }
+
+  /// Dossier exploitable : il ne manque plus rien.
+  ///
+  /// Ni l'age ni le pays ne sont des champs de confort. La date de naissance
+  /// decide de l'article 19 de la FIFA (transferts de mineurs), et le pays
+  /// decide de la voie d'obtention d'un permis de travail : ce sont les deux
+  /// premieres questions d'un club europeen, avant meme de regarder une
+  /// video. Un dossier annonce « Elite » sans l'un des deux est un dossier
+  /// sur lequel personne ne peut decider quoi que ce soit -- et le presenter
+  /// comme exploitable est une promesse que nous ne pouvons pas tenir. Ils
+  /// vivent sur le compte, pas dans `playerProfile` : ce sont des champs
+  /// transverses, saisis dans le profil de base et non dans le formulaire
+  /// avance.
+  ///
+  /// Derive de [missingScoutRequirements] plutot que de reevaluer les memes
+  /// conditions : c'est la seule facon que l'ecran qui explique et la regle
+  /// qui decide ne se contredisent jamais.
+  bool get hasScoutReadyProfile =>
+      isPlayer && missingScoutRequirements.isEmpty;
 
   /// -------------------------
   /// UI - Afficher bloc "Profil avance" ?
