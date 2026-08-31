@@ -2,10 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
+import '../../models/football_vocabulary.dart';
+import '../../models/org_football_profile.dart';
 import '../../models/user.dart';
 import '../ad_button.dart';
 import '../ad_feedback.dart';
 
+/// Ce qu'un club déclare de lui-même, en listes fermées.
+///
+/// `structureType` était saisi en toutes lettres et `categories` en CSV : deux
+/// champs sur lesquels aucune recherche n'était possible, dans un produit dont
+/// c'est la raison d'être.
+///
+/// Les besoins de recrutement ont disparu de ce formulaire. Ils y étaient
+/// saisis en texte (`"CB:high, LB"`) pendant que les offres publiées par le
+/// même club portaient déjà la même information, désormais en codes. Deux
+/// sources pour un seul fait finissent par se contredire, et c'est l'offre qui
+/// est datée, modérée et candidatable — donc c'est elle qui fait foi.
 class ClubAdvancedForm extends StatefulWidget {
   final AppUser user;
   final ProfileController profileController;
@@ -31,104 +44,53 @@ class ClubAdvancedForm extends StatefulWidget {
 class ClubAdvancedFormState extends State<ClubAdvancedForm> {
   final _formKey = GlobalKey<FormState>();
 
-  late final TextEditingController _structureTypeController;
-  late final TextEditingController _categoriesController;
-  late final TextEditingController _needsController;
-  late final TextEditingController _licenseController;
+  late final TextEditingController _federationIdController;
+  late List<AgeCategory> _ageCategories;
+  ClubLevel? _level;
 
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    final clubProfile = widget.user.clubProfile ?? {};
 
-    _structureTypeController = TextEditingController(
-      text: clubProfile['structureType']?.toString() ?? '',
+    final profile = widget.user.club;
+    _federationIdController = TextEditingController(
+      text: profile.federationId ?? '',
     );
-    _categoriesController = TextEditingController(
-      text: (clubProfile['categories'] as List?)?.join(', ') ?? '',
-    );
-
-    final needs = clubProfile['needs'];
-    if (needs is List) {
-      _needsController = TextEditingController(
-        text: needs
-            .map((entry) {
-              if (entry is Map) {
-                final position = entry['position']?.toString() ?? '';
-                final priority = entry['priority']?.toString() ?? '';
-                return priority.isNotEmpty ? '$position:$priority' : position;
-              }
-              return entry.toString();
-            })
-            .join(', '),
-      );
-    } else {
-      _needsController = TextEditingController();
-    }
-
-    _licenseController = TextEditingController(
-      text: clubProfile['licenseNumber']?.toString() ?? '',
-    );
+    _ageCategories = List<AgeCategory>.of(profile.ageCategories);
+    _level = profile.level;
   }
 
   @override
   void dispose() {
-    _structureTypeController.dispose();
-    _categoriesController.dispose();
-    _needsController.dispose();
-    _licenseController.dispose();
+    _federationIdController.dispose();
     super.dispose();
   }
 
-  String? _trimOrNull(String value) {
-    final trimmed = value.trim();
-    return trimmed.isEmpty ? null : trimmed;
+  Map<String, dynamic> buildPatch() {
+    return ClubFootballProfile(
+      level: _level,
+      ageCategories: _ageCategories,
+      federationId: _federationIdController.text.trim().isEmpty
+          ? null
+          : _federationIdController.text.trim(),
+    ).toPatch();
   }
 
-  List<String> _csvToList(String raw) {
-    return raw
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
-  List<Map<String, String?>> _parseNeeds(String raw) {
-    final entries = raw
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    return entries.map((entry) {
-      final parts = entry.split(':');
-      return {
-        'position': parts[0].trim(),
-        'priority': parts.length > 1 ? parts[1].trim() : null,
-      };
-    }).toList();
-  }
+  bool validate() => _formKey.currentState?.validate() ?? false;
 
   Future<bool> save({bool showFeedback = true}) async {
     if (_saving) {
       return false;
     }
-    if (!(_formKey.currentState?.validate() ?? false)) {
+    if (!validate()) {
       return false;
     }
 
     setState(() => _saving = true);
     try {
-      final patch = {
-        'clubProfile': {
-          'structureType': _trimOrNull(_structureTypeController.text),
-          'categories': _csvToList(_categoriesController.text),
-          'needs': _parseNeeds(_needsController.text),
-          'licenseNumber': _trimOrNull(_licenseController.text),
-        },
-      };
+      final patch = buildPatch();
 
       try {
         await widget.profileController.updateProfilePatch(
@@ -147,7 +109,7 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
         if (showFeedback) {
           AdFeedback.error(
             'Sauvegarde impossible',
-            'Les informations avancées du club n’ont pas été enregistrées.',
+            'Les informations du club n’ont pas été enregistrées.',
           );
         }
         return false;
@@ -160,7 +122,7 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
       if (showFeedback) {
         AdFeedback.success(
           'Profil mis à jour',
-          'Les informations avancées du club ont été enregistrées.',
+          'Les informations du club ont été enregistrées.',
         );
       }
 
@@ -184,43 +146,74 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
           children: [
             if (widget.showSectionTitle) ...[
               const Text(
-                'Profil club avancé',
+                'Profil du club',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
             ],
-            TextFormField(
-              controller: _structureTypeController,
+
+            DropdownButtonFormField<ClubLevel>(
+              initialValue: _level,
               decoration: const InputDecoration(
-                labelText: 'Type de structure',
-                hintText:
-                    'Ex : Club professionnel, centre de formation, académie',
+                labelText: 'Niveau de la structure',
+              ),
+              items: ClubLevel.values
+                  .map(
+                    (level) => DropdownMenuItem<ClubLevel>(
+                      value: level,
+                      child: Text(level.labelFr),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() => _level = value);
+                widget.onDirty?.call();
+              },
+            ),
+            const SizedBox(height: 20),
+
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Catégories engagées',
+                style: TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: AgeCategory.values.map((category) {
+                final isSelected = _ageCategories.contains(category);
+                return FilterChip(
+                  selected: isSelected,
+                  label: Text(category.labelFr),
+                  onSelected: (_) {
+                    setState(() {
+                      if (isSelected) {
+                        _ageCategories.remove(category);
+                      } else {
+                        _ageCategories.add(category);
+                      }
+                    });
+                    widget.onDirty?.call();
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
+
             TextFormField(
-              controller: _categoriesController,
+              controller: _federationIdController,
               decoration: const InputDecoration(
-                labelText: 'Catégories encadrées',
-                hintText: 'Ex : U15, U17, U20, Seniors',
+                labelText: 'Numéro d’affiliation à la fédération',
+                helperText:
+                    'C’est ce qui permet de vérifier le club auprès de sa '
+                    'fédération.',
+                helperMaxLines: 2,
               ),
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _needsController,
-              decoration: const InputDecoration(
-                labelText: 'Besoins de recrutement prioritaires',
-                hintText: 'Ex : Défenseur central:haute, avant-centre:moyenne',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _licenseController,
-              decoration: const InputDecoration(
-                labelText: 'Numéro de licence du club (facultatif)',
-                hintText: 'Ex : LIC-CLUB-2026-014',
-              ),
-            ),
+
             if (widget.showSubmitButton) ...[
               const SizedBox(height: 20),
               AdButton(

@@ -1354,52 +1354,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     if (user.isClub) {
-      final c = user.clubProfile ?? {};
-      final structureType = c['structureType']?.toString();
-      final categories = (c['categories'] is List)
-          ? (c['categories'] as List).join(', ')
-          : null;
-
-      String? needsText;
-      final needs = c['needs'];
-      if (needs is List && needs.isNotEmpty) {
-        needsText = needs
-            .map((e) {
-              if (e is Map) {
-                final pos = e['position']?.toString() ?? '';
-                final prio = e['priority']?.toString() ?? '';
-                return prio.isNotEmpty
-                    ? '$pos (${_priorityLabelClean(prio)})'
-                    : pos;
-              }
-              return e.toString();
-            })
-            .where((s) => s.trim().isNotEmpty)
-            .join(', ');
-      }
-
-      final clubLicense = c['licenseNumber']?.toString();
+      final club = user.club;
 
       return Column(
         children: [
           _infoTile(
-            'Type de structure',
-            structureType,
+            'Niveau de la structure',
+            club.level?.labelFr,
             icon: Icons.account_tree_outlined,
           ),
           _infoTile(
-            'Catégories encadrées',
-            categories,
+            'Catégories engagées',
+            club.ageCategories.isEmpty
+                ? null
+                : club.ageCategories.map((c) => c.labelFr).join(' · '),
             icon: Icons.groups_2_outlined,
           ),
+          // Les besoins de recrutement ne sont plus ici : ils vivent dans les
+          // offres, qui sont datees, moderees et candidatables. Deux sources
+          // pour un seul fait finissent par se contredire.
           _infoTile(
-            'Besoins de recrutement prioritaires',
-            needsText,
-            icon: Icons.manage_search_outlined,
-          ),
-          _infoTile(
-            'Numéro de licence du club',
-            clubLicense,
+            'Numéro d’affiliation',
+            club.federationId,
             icon: Icons.badge_outlined,
           ),
         ],
@@ -1407,12 +1383,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     if (user.isRecruiter) {
-      final a = user.agentProfile ?? {};
-      final license = a['licenseNumber']?.toString();
-      final country = a['licenseCountry']?.toString();
-      final zones = (a['zones'] is List)
-          ? (a['zones'] as List).join(', ')
-          : null;
+      final agent = user.agent;
 
       return Column(
         children: [
@@ -1420,19 +1391,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
             user.isAgent
                 ? 'Numéro de licence'
                 : 'Référence de licence ou d’agrément',
-            license,
+            agent.licenceNumber,
             icon: Icons.badge_outlined,
           ),
           _infoTile(
-            user.isAgent
-                ? 'Pays de délivrance de la licence'
-                : 'Pays de délivrance',
-            country,
+            'Fédération émettrice',
+            agent.licenceCountry == null
+                ? null
+                : countryLabel(agent.licenceCountry),
             icon: Icons.flag_circle_outlined,
           ),
           _infoTile(
-            user.isAgent ? 'Zones de représentation' : 'Zones d’intervention',
-            zones,
+            user.isAgent ? 'Pays de représentation' : 'Pays d’intervention',
+            agent.countries.isEmpty
+                ? null
+                : agent.countries.map(countryLabel).join(' · '),
             icon: Icons.public_outlined,
           ),
         ],
@@ -1503,21 +1476,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return 'Informations avancées';
   }
 
-  String _priorityLabelClean(String value) {
-    switch (value.trim().toLowerCase()) {
-      case 'high':
-      case 'haute':
-        return 'haute priorité';
-      case 'medium':
-      case 'moyenne':
-        return 'priorité moyenne';
-      case 'low':
-      case 'basse':
-        return 'priorité basse';
-      default:
-        return value;
-    }
-  }
 
   Widget _buildFollowMessageRow(AppUser user, {required bool canMessage}) {
     final currentUserId = _authController.currentUid;

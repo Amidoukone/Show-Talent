@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/membership.dart';
 import 'package:adfoot/models/offre.dart';
+import 'package:adfoot/models/org_football_profile.dart';
 import 'package:adfoot/models/player_football_profile.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
@@ -70,6 +71,13 @@ class AppUser {
   /// depuis [toMap] le viderait, puisque [toMap] ne reserialise que les champs
   /// que le titulaire a le droit d'ecrire. Voir [PlayerFootballProfile].
   PlayerFootballProfile football;
+
+  /// Ce que le club declare, type. Voir [ClubFootballProfile].
+  ClubFootballProfile club;
+
+  /// Ce que l'agent ou le recruteur declare, type.
+  /// Voir [AgentFootballProfile].
+  AgentFootballProfile agent;
 
   /// Ancien profil joueur en texte libre, remplace par [football].
   ///
@@ -228,6 +236,8 @@ class AppUser {
 
     // Avances par role
     this.football = const PlayerFootballProfile(),
+    this.club = const ClubFootballProfile(),
+    this.agent = const AgentFootballProfile(),
     this.playerProfile,
     this.clubProfile,
     this.agentProfile,
@@ -381,6 +391,8 @@ class AppUser {
 
       // Avances
       football: PlayerFootballProfile.fromUserMap(map),
+      club: ClubFootballProfile.fromUserMap(map),
+      agent: AgentFootballProfile.fromUserMap(map),
       playerProfile: safeMap(map['playerProfile']),
       clubProfile: safeMap(map['clubProfile']),
       agentProfile: safeMap(map['agentProfile']),
@@ -541,6 +553,8 @@ class AppUser {
       // `saveUserProfile` pousse cette map telle quelle, et
       // `birthYear`/`isSearchable` sont derives cote serveur.
       ...football.toPatch(),
+      ...club.toPatch(),
+      ...agent.toPatch(),
       'playerProfile': playerProfile,
       'clubProfile': clubProfile,
       'agentProfile': agentProfile,
@@ -691,11 +705,11 @@ class AppUser {
         return football.isNotEmpty;
 
       case 'club':
-        return _hasMeaningfulProfileValue(clubProfile);
+        return club.isNotEmpty;
 
       case 'recruteur':
       case 'agent':
-        return _hasMeaningfulProfileValue(agentProfile);
+        return agent.isNotEmpty;
 
       default:
         return false;
@@ -796,27 +810,6 @@ class AppUser {
     return isMvpProfileComplete && !hasAdvancedProfile;
   }
 
-  static bool _hasMeaningfulProfileValue(dynamic value) {
-    if (value == null) {
-      return false;
-    }
-    if (value is String) {
-      return value.trim().isNotEmpty;
-    }
-    if (value is bool) {
-      return value;
-    }
-    if (value is num) {
-      return true;
-    }
-    if (value is List) {
-      return value.any(_hasMeaningfulProfileValue);
-    }
-    if (value is Map) {
-      return value.values.any(_hasMeaningfulProfileValue);
-    }
-    return true;
-  }
 
   /// -------------------------
   /// Indicateur simple (badge / chip)
