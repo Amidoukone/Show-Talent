@@ -22,6 +22,7 @@ import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/utils/video_search_matcher.dart';
 
+import 'package:adfoot/widgets/ad_agency_badge.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:adfoot/widgets/video_feed_end_card.dart';

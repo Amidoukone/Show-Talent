@@ -172,4 +172,124 @@ void main() {
       expect(offenders, isEmpty);
     });
   });
+
+  group('the agency badge says only what is true right now', () {
+    final now = DateTime(2026, 8, 30);
+
+    AppUser buildUser({
+      String role = 'joueur',
+      Map<String, dynamic>? membership,
+    }) {
+      return AppUser.fromMap(<String, dynamic>{
+        'uid': 'u1',
+        'nom': 'Adama',
+        'role': role,
+        'membership': ?membership,
+      });
+    }
+
+    test('an account with no record carries no badge', () {
+      // The accounts already in production have no `membership` field: the
+      // badge must be invisible for every one of them.
+      expect(buildUser().isAgencyPlayerAt(now), isFalse);
+    });
+
+    test('a player the agency carries wears it', () {
+      final user = buildUser(
+        membership: <String, dynamic>{'tier': 'adfoot'},
+      );
+
+      expect(user.isAgencyPlayerAt(now), isTrue);
+    });
+
+    test('a player who pays for the services does not', () {
+      // `external` is a customer, not someone the agency accompanies —
+      // showing the same badge would sell the wrong thing to a recruiter.
+      final user = buildUser(
+        membership: <String, dynamic>{'tier': 'external'},
+      );
+
+      expect(user.isAgencyPlayerAt(now), isFalse);
+    });
+
+    test('a lapsed record stops showing it', () {
+      final user = buildUser(
+        membership: <String, dynamic>{
+          'tier': 'adfoot',
+          'validUntil': DateTime(2026, 1, 1).toIso8601String(),
+        },
+      );
+
+      expect(user.membership.isAgencyPlayer, isTrue);
+      expect(user.isAgencyPlayerAt(now), isFalse);
+    });
+
+    test('a club or an agent never wears a player badge', () {
+      for (final role in <String>['club', 'agent', 'recruteur', 'fan']) {
+        final user = buildUser(
+          role: role,
+          membership: <String, dynamic>{'tier': 'adfoot'},
+        );
+
+        expect(
+          user.isAgencyPlayerAt(now),
+          isFalse,
+          reason: 'the badge speaks of a player, not of a $role',
+        );
+      }
+    });
+
+    test('the label and the rule are declared exactly once', () {
+      final badge = _read('lib/widgets/ad_agency_badge.dart');
+
+      expect(badge, contains("kAgencyPlayerBadgeLabel = 'Joueur agence'"));
+      expect(badge, contains('user.isAgencyPlayerAt(DateTime.now())'));
+
+      // Three surfaces show this badge. A second copy of the literal is how
+      // two of them end up saying slightly different things.
+      final offenders = Directory('lib')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.dart'))
+          .where((file) => !file.path.endsWith('ad_agency_badge.dart'))
+          .where((file) => file.readAsStringSync().contains("'Joueur agence'"))
+          .map((file) => file.path)
+          .toList();
+
+      expect(offenders, isEmpty);
+    });
+
+    test('every surface showing it goes through the shared rule', () {
+      // The profile, the video search results and the contact directory:
+      // a surface that tests `membership.tier` itself would keep showing the
+      // badge on a lapsed record.
+      for (final path in const <String>[
+        'lib/screens/profile_screen_widgets.dart',
+        'lib/screens/home_screen_search_sheet.dart',
+        'lib/screens/select_user_screen.dart',
+      ]) {
+        expect(
+          _read(path),
+          contains('showsAgencyBadge('),
+          reason: '$path must ask the shared rule',
+        );
+      }
+    });
+
+    test('no surface leaks the commercial details of the record', () {
+      // The term and the internal reference belong to the administration.
+      // Profiles and search results are read by visitors, so neither may
+      // reach any of them.
+      final surface = <String>[
+        'lib/widgets/ad_agency_badge.dart',
+        'lib/screens/profile_screen.dart',
+        'lib/screens/profile_screen_widgets.dart',
+        'lib/screens/home_screen_search_sheet.dart',
+        'lib/screens/select_user_screen.dart',
+      ].map(_read).join('\n');
+
+      expect(surface, isNot(contains('membership.reference')));
+      expect(surface, isNot(contains('membership.validUntil')));
+    });
+  });
 }

@@ -9,6 +9,7 @@ import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
+import 'package:adfoot/widgets/ad_agency_badge.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_surface_card.dart';
@@ -327,13 +328,26 @@ class _UserCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        user.nom,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              user.nom,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          // Le badge suit le nom plutot que de le remplacer :
+                          // Flexible sur le nom, badge a taille fixe, donc un
+                          // nom long s'ellipse et le badge reste lisible.
+                          if (showsAgencyBadge(user)) ...[
+                            const SizedBox(width: 6),
+                            const AdAgencyBadge(),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(

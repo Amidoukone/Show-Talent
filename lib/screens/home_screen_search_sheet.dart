@@ -187,6 +187,9 @@ class _VideoSearchSheet extends StatelessWidget {
         return _VideoSearchResultTile(
           video: video,
           authorName: (author?.nom ?? '').trim(),
+          // L'auteur est deja resolu ici pour son nom : le badge ne coute
+          // aucune lecture supplementaire.
+          isAgencyPlayer: showsAgencyBadge(author),
           onTap: () => onResultSelected(video),
         );
       },
@@ -243,11 +246,13 @@ class _VideoSearchResultTile extends StatelessWidget {
   const _VideoSearchResultTile({
     required this.video,
     required this.authorName,
+    required this.isAgencyPlayer,
     required this.onTap,
   });
 
   final Video video;
   final String authorName;
+  final bool isAgencyPlayer;
   final VoidCallback onTap;
 
   @override
@@ -312,15 +317,25 @@ class _VideoSearchResultTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AdColors.onSurface,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AdColors.onSurface,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        if (isAgencyPlayer) ...[
+                          const SizedBox(width: 6),
+                          const AdAgencyBadge(),
+                        ],
+                      ],
                     ),
                     if (subtitle.isNotEmpty) ...[
                       const SizedBox(height: 4),

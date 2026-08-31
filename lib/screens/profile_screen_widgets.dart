@@ -147,6 +147,15 @@ class _HeaderCard extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+                        // En tete de la rangee : pour un recruteur, savoir
+                        // qui accompagne le joueur passe avant le niveau de
+                        // completude du dossier.
+                        if (showsAgencyBadge(user))
+                          _InfoPill(
+                            icon: Icons.workspace_premium_rounded,
+                            label: kAgencyPlayerBadgeLabel,
+                            style: _profileLevelStyle(kAgencyPlayerBadgeLabel),
+                          ),
                         if (user.isProfileTrusted)
                           _InfoPill(
                             icon: Icons.verified_rounded,

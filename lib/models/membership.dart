@@ -71,6 +71,14 @@ class Membership {
   /// True for a player the agency carries at its own cost.
   bool get isAgencyPlayer => tier == MembershipTier.adfoot;
 
+  /// True while the agency actually carries this account.
+  ///
+  /// [isAgencyPlayer] says what was recorded, not whether it still holds: an
+  /// `adfoot` record given a term and left to lapse would go on claiming the
+  /// agency backs a player it no longer backs. Anything other people see —
+  /// the profile badge — must ask this one.
+  bool isAgencyPlayerAt(DateTime now) => isAgencyPlayer && isActiveAt(now);
+
   static MembershipTier parseTier(Object? raw) {
     switch (raw?.toString().trim().toLowerCase()) {
       case 'adfoot':

@@ -22,6 +22,7 @@ import 'package:adfoot/screens/edit_advanced_profile_screen.dart';
 import 'package:adfoot/screens/edit_profil_screen.dart';
 import 'package:adfoot/screens/setting_screen.dart';
 import 'package:adfoot/screens/follow_list_screen.dart';
+import 'package:adfoot/widgets/ad_agency_badge.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_profile_cards.dart';
@@ -85,6 +86,17 @@ class _ProfileLevelStyle {
 
 _ProfileLevelStyle _profileLevelStyle(String label) {
   switch (label) {
+    // Le badge des joueurs que l'agence porte a ses frais. Volontairement
+    // sans date ni reference : l'echeance et la reference du dossier sont des
+    // informations commerciales internes, et ce badge est vu par les
+    // visiteurs du profil autant que par son titulaire.
+    case kAgencyPlayerBadgeLabel:
+      return const _ProfileLevelStyle(
+        backgroundColor: AdColors.brand,
+        foregroundColor: AdColors.brandOn,
+        borderColor: AdColors.brand,
+        icon: Icons.workspace_premium_rounded,
+      );
     case 'Profil Elite':
     case 'Profil Élite':
       return const _ProfileLevelStyle(

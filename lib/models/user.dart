@@ -597,6 +597,15 @@ class AppUser {
   bool get profileVerificationNeedsReview =>
       !profileVerified && profileVerificationStatus == 'pending';
 
+  /// Vrai quand le compte doit porter le badge « joueur agence ».
+  ///
+  /// Le callable admin accepte un dossier `adfoot` sur n'importe quel compte
+  /// suivi par l'administration, club ou agent compris ; le badge, lui, parle
+  /// d'un joueur porte par l'agence et reste donc aux joueurs. Un dossier
+  /// echu ne l'affiche pas non plus — voir [Membership.isAgencyPlayerAt].
+  bool isAgencyPlayerAt(DateTime now) =>
+      isPlayer && membership.isAgencyPlayerAt(now);
+
   String get profileTrustLabel {
     if (isProfileTrusted) return 'Vérifié par Adfoot';
     if (profileVerified && !isEffectivelyActiveAccount) {
