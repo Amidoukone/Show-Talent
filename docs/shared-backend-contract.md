@@ -70,6 +70,7 @@ Gestion de comptes :
 - `disableManagedAccountAuth`
 - `enableManagedAccountAuth`
 - `updateManagedAccountProfile`
+- `setManagedAccountMembership`
 
 Moderation de contenu (appelees depuis `AdminContentService` cote admin) :
 
@@ -84,9 +85,7 @@ Moderation de contenu (appelees depuis `AdminContentService` cote admin) :
 - `adminDeleteContactIntake`
 - `adminDeleteContactIntakeConversation`
 
-### Callable ajoute, cote admin a implementer
-
-- `setManagedAccountMembership`
+### Droits d acces : `setManagedAccountMembership`
 
 Enregistre ou retire les droits d acces d un compte : `tier` valant `adfoot`
 (joueur sous contrat avec l agence, ne paie rien), `external` (joueur libre qui
@@ -100,15 +99,15 @@ mobile n affiche aucun prix, n offre aucun moyen de payer et ne renvoie vers
 aucun. C est ce qui maintient vraie la declaration Play Console « aucun achat
 integre ». Ne pas ajouter de montant a la charge utile.
 
-Il n est volontairement pas encore dans `$requiredCallables` de
-`scripts/check-admin-mobile-contract.ps1` : le portail admin ne l appelle pas
-encore, et le garde-fou echouerait. L y ajouter le jour ou l interface admin
-existe, avec l entree correspondante dans
+Le portail admin l appelle depuis « Gestion des utilisateurs » (action
+« Gerer les droits »), via `ManagedAccountService.setManagedAccountMembership`.
+Il est donc dans `$requiredCallables` de
+`scripts/check-admin-mobile-contract.ps1`, avec son entree dans
 `lib/utils/admin_callable_action_catalog.dart` cote admin.
 
 ### Liste verifiee par le garde-fou
 
-Ces 17 callables sont la liste complete et doivent rester en phase avec
+Ces 18 callables sont la liste complete et doivent rester en phase avec
 `functions/src/index.ts`, `lib/utils/admin_callable_action_catalog.dart` (admin)
 et `lib/services/admin_content_service.dart` (admin) -- verifie par
 `scripts/check-admin-mobile-contract.ps1`. `submitContactIntakeFeedback` est

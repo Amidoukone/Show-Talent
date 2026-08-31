@@ -79,6 +79,7 @@ Gestion de comptes :
 - `disableManagedAccountAuth`
 - `enableManagedAccountAuth`
 - `updateManagedAccountProfile`
+- `setManagedAccountMembership`
 
 Moderation de contenu :
 
@@ -93,7 +94,7 @@ Moderation de contenu :
 - `adminDeleteContactIntake`
 - `adminDeleteContactIntakeConversation`
 
-Ces 17 callables sont verifiees automatiquement par
+Ces 18 callables sont verifiees automatiquement par
 `scripts/check-admin-mobile-contract.ps1` (`npm run contract:mobile` /
 `npm run contract:admin-mobile:check`). `submitContactIntakeFeedback` est un
 callable participant, pas un callable admin, et reste hors de cette liste.

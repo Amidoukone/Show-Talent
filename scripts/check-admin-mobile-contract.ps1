@@ -139,7 +139,13 @@ $requiredCallables = @(
     "resendManagedAccountInvite",
     "disableManagedAccountAuth",
     "enableManagedAccountAuth",
-    "updateManagedAccountProfile"
+    "updateManagedAccountProfile",
+    # Entitlements recorded by the agency. It stayed out of this list for as
+    # long as the admin portal had no interface calling it -- adding it then
+    # would only have failed the guardrail. The interface exists now
+    # (ManagedAccountService + user_management_widget), so it is held to the
+    # same standard as the rest.
+    "setManagedAccountMembership"
 )
 
 # Content-moderation callables (video/offer/event/contact-intake). These are
