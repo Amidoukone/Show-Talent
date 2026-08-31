@@ -716,8 +716,28 @@ class AppUser {
         (videosPubliees?.isNotEmpty ?? false) ||
         (cvUrl?.trim().isNotEmpty ?? false);
 
+    // Identite exploitable par un recruteur.
+    //
+    // Ni l'age ni le pays ne sont des champs de confort. La date de naissance
+    // decide de l'article 19 de la FIFA (transferts de mineurs), et le pays
+    // decide de la voie d'obtention d'un permis de travail : ce sont les deux
+    // premieres questions d'un club europeen, avant meme de regarder une
+    // video. Un dossier annonce « Elite » sans l'un des deux est un dossier
+    // sur lequel personne ne peut decider quoi que ce soit -- et le presenter
+    // comme exploitable est une promesse que nous ne pouvons pas tenir.
+    //
+    // Ils vivent sur le compte, pas dans `playerProfile` : ce sont des champs
+    // transverses (voir la section « Champs transverses » plus haut), saisis
+    // dans le profil de base et non dans le formulaire avance.
+    final hasActionableIdentity =
+        birthDate != null && (country?.trim().isNotEmpty ?? false);
+
     // Scout-ready
-    return (hasPhysical || hasSkills) && hasPosition && hasStats && hasEvidence;
+    return hasActionableIdentity &&
+        (hasPhysical || hasSkills) &&
+        hasPosition &&
+        hasStats &&
+        hasEvidence;
   }
 
   /// -------------------------
