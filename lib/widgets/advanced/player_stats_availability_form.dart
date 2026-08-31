@@ -2,10 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
+import '../../models/football_vocabulary.dart';
+import '../../models/player_football_profile.dart';
 import '../../models/user.dart';
 import '../ad_button.dart';
 import '../ad_feedback.dart';
 
+/// La saison en cours, et la disponibilité.
+///
+/// Les statistiques vivaient sans contexte : « 900 minutes, 4 buts » ne dit
+/// rien tant qu'on ignore en quelle saison, dans quel championnat et dans
+/// quelle catégorie d'âge. Un recruteur ne peut rien faire d'un chiffre nu, et
+/// une fiche qui l'oblige à demander est une fiche qu'il repose.
+///
+/// Une seule saison, volontairement. Un historique complet est un autre
+/// chantier, et une fiche qui empile cinq saisons n'est plus lue en vingt
+/// secondes.
 class PlayerStatsAvailabilityForm extends StatefulWidget {
   final AppUser user;
   final ProfileController profileController;
@@ -33,11 +45,14 @@ class PlayerStatsAvailabilityFormState
     extends State<PlayerStatsAvailabilityForm> {
   final _formKey = GlobalKey<FormState>();
 
+  late final TextEditingController _seasonController;
+  late final TextEditingController _competitionController;
+  late final TextEditingController _appearancesController;
   late final TextEditingController _minutesController;
   late final TextEditingController _goalsController;
   late final TextEditingController _assistsController;
-  late final TextEditingController _regionsController;
 
+  AgeCategory? _ageCategory;
   bool _openToTrials = false;
   bool _saving = false;
 
@@ -45,78 +60,72 @@ class PlayerStatsAvailabilityFormState
   void initState() {
     super.initState();
 
-    final p = widget.user.playerProfile ?? {};
-    final stats = (p['stats'] is Map) ? (p['stats'] as Map) : {};
-    final availability = (p['availability'] is Map)
-        ? (p['availability'] as Map)
-        : {};
+    final profile = widget.user.football;
+    final season = profile.currentSeason;
 
+    _seasonController = TextEditingController(text: season?.season ?? '');
+    _competitionController = TextEditingController(
+      text: season?.competition ?? '',
+    );
+    _appearancesController = TextEditingController(
+      text: season?.appearances?.toString() ?? '',
+    );
     _minutesController = TextEditingController(
-      text: stats['minutes']?.toString() ?? '',
+      text: season?.minutes?.toString() ?? '',
     );
     _goalsController = TextEditingController(
-      text: stats['goals']?.toString() ?? '',
+      text: season?.goals?.toString() ?? '',
     );
     _assistsController = TextEditingController(
-      text: stats['assists']?.toString() ?? '',
-    );
-    _regionsController = TextEditingController(
-      text: (availability['regions'] as List?)?.join(', ') ?? '',
+      text: season?.assists?.toString() ?? '',
     );
 
-    _openToTrials = availability['open'] == true;
+    _ageCategory = season?.ageCategory;
+    _openToTrials = widget.user.openToOpportunities == true;
   }
 
   @override
   void dispose() {
+    _seasonController.dispose();
+    _competitionController.dispose();
+    _appearancesController.dispose();
     _minutesController.dispose();
     _goalsController.dispose();
     _assistsController.dispose();
-    _regionsController.dispose();
     super.dispose();
   }
 
-  List<String> _csvToList(String raw) {
-    return raw
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
+  int? _parsedCount(TextEditingController controller) {
+    final parsed = int.tryParse(controller.text.trim());
+    return (parsed == null || parsed < 0) ? null : parsed;
   }
 
-  String? _validateOptionalInt(String? v, {int min = 0, int max = 999999}) {
-    final t = (v ?? '').trim();
-    if (t.isEmpty) {
-      return null;
-    }
-    final n = int.tryParse(t);
-    if (n == null) {
-      return 'Nombre invalide';
-    }
-    if (n < min || n > max) {
-      return 'Valeur hors limite';
-    }
-    return null;
+  String? _trimOrNull(String value) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  Map<String, dynamic> buildPatch() {
+    final season = SeasonRecord(
+      season: _trimOrNull(_seasonController.text),
+      competition: _trimOrNull(_competitionController.text),
+      ageCategory: _ageCategory,
+      appearances: _parsedCount(_appearancesController),
+      minutes: _parsedCount(_minutesController),
+      goals: _parsedCount(_goalsController),
+      assists: _parsedCount(_assistsController),
+    );
+
+    return <String, dynamic>{
+      'openToOpportunities': _openToTrials,
+      // Une saison entierement vide est effacee plutot qu'ecrite comme une
+      // coquille de champs nuls, qui se lirait comme « renseigne, mais a
+      // zero ».
+      'currentSeason': season.isEmpty ? null : season.toMap(),
+    };
   }
 
   bool validate() => _formKey.currentState?.validate() ?? false;
-
-  Map<String, dynamic> buildPatch() {
-    return {
-      'openToOpportunities': _openToTrials,
-      'playerProfile': {
-        'stats': {
-          'minutes': int.tryParse(_minutesController.text.trim()),
-          'goals': int.tryParse(_goalsController.text.trim()),
-          'assists': int.tryParse(_assistsController.text.trim()),
-        },
-        'availability': {
-          'open': _openToTrials,
-          'regions': _csvToList(_regionsController.text),
-        },
-      },
-    };
-  }
 
   Future<bool> save({bool showFeedback = true}) async {
     if (_saving) {
@@ -147,7 +156,7 @@ class PlayerStatsAvailabilityFormState
         if (showFeedback) {
           AdFeedback.error(
             'Sauvegarde impossible',
-            'Les statistiques et disponibilités n’ont pas été enregistrées.',
+            'Le dossier scout n’a pas été enregistré.',
           );
         }
         return false;
@@ -159,8 +168,8 @@ class PlayerStatsAvailabilityFormState
 
       if (showFeedback) {
         AdFeedback.success(
-          'Dossier scout mis à jour',
-          'Les statistiques et disponibilités ont été enregistrées.',
+          'Dossier mis à jour',
+          'Le dossier scout a été enregistré.',
         );
       }
 
@@ -184,51 +193,76 @@ class PlayerStatsAvailabilityFormState
           children: [
             if (widget.showSectionTitle) ...[
               const Text(
-                'Dossier scout - Stats et disponibilité',
+                'Saison en cours',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Des chiffres sans saison ni compétition ne veulent rien dire '
+                'pour un recruteur.',
+                style: TextStyle(fontSize: 12),
               ),
               const SizedBox(height: 12),
             ],
+
             TextFormField(
-              controller: _minutesController,
-              decoration: const InputDecoration(labelText: 'Minutes jouées'),
-              keyboardType: TextInputType.number,
-              validator: (v) => _validateOptionalInt(v, min: 0, max: 500000),
+              controller: _seasonController,
+              decoration: const InputDecoration(
+                labelText: 'Saison',
+                hintText: '2025-26',
+              ),
             ),
             const SizedBox(height: 12),
+
             TextFormField(
-              controller: _goalsController,
-              decoration: const InputDecoration(labelText: 'Buts'),
-              keyboardType: TextInputType.number,
-              validator: (v) => _validateOptionalInt(v, min: 0, max: 9999),
+              controller: _competitionController,
+              decoration: const InputDecoration(
+                labelText: 'Compétition',
+                hintText: 'Ligue 1 CIV, Coupe nationale...',
+              ),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              controller: _assistsController,
-              decoration: const InputDecoration(labelText: 'Passes décisives'),
-              keyboardType: TextInputType.number,
-              validator: (v) => _validateOptionalInt(v, min: 0, max: 9999),
-            ),
-            const Divider(height: 32),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Ouvert aux essais / opportunités'),
-              value: _openToTrials,
-              onChanged: (v) {
-                // Not a FormField, so Form.onChanged never sees this flip on
-                // its own -- call onDirty directly or the unsaved-changes
-                // guard in the parent screen won't notice this toggle.
-                setState(() => _openToTrials = v);
+
+            DropdownButtonFormField<AgeCategory>(
+              initialValue: _ageCategory,
+              decoration: const InputDecoration(labelText: 'Catégorie'),
+              items: AgeCategory.values
+                  .map(
+                    (category) => DropdownMenuItem<AgeCategory>(
+                      value: category,
+                      child: Text(category.labelFr),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() => _ageCategory = value);
                 widget.onDirty?.call();
               },
             ),
-            TextFormField(
-              controller: _regionsController,
-              decoration: const InputDecoration(
-                labelText: 'Régions ciblées (séparées par des virgules)',
-                hintText: 'Ex : Mali, Sénégal, Côte d’Ivoire',
+            const SizedBox(height: 12),
+
+            _countField(_appearancesController, 'Matchs joués'),
+            const SizedBox(height: 12),
+            _countField(_minutesController, 'Minutes jouées'),
+            const SizedBox(height: 12),
+            _countField(_goalsController, 'Buts'),
+            const SizedBox(height: 12),
+            _countField(_assistsController, 'Passes décisives'),
+
+            const SizedBox(height: 20),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _openToTrials,
+              title: const Text('Ouvert aux opportunités'),
+              subtitle: const Text(
+                'Visible par les clubs et les recruteurs.',
               ),
+              onChanged: (value) {
+                setState(() => _openToTrials = value);
+                widget.onDirty?.call();
+              },
             ),
+
             if (widget.showSubmitButton) ...[
               const SizedBox(height: 20),
               AdButton(
@@ -241,6 +275,23 @@ class PlayerStatsAvailabilityFormState
           ],
         ),
       ),
+    );
+  }
+
+  Widget _countField(TextEditingController controller, String label) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(labelText: label),
+      keyboardType: TextInputType.number,
+      validator: (value) {
+        final text = (value ?? '').trim();
+        if (text.isEmpty) return null;
+
+        final parsed = int.tryParse(text);
+        if (parsed == null) return 'Nombre invalide';
+        if (parsed < 0) return 'Valeur négative';
+        return null;
+      },
     );
   }
 }

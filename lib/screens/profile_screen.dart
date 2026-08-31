@@ -30,6 +30,7 @@ import 'package:adfoot/videos/video_manager.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/utils/country_codes.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 
 part 'profile_screen_widgets.dart';
@@ -51,6 +52,16 @@ String _profileRoleLabel(AppUser user) {
     default:
       return user.role;
   }
+}
+
+/// Une date de fin de contrat, telle qu'on l'ecrit sur une fiche.
+///
+/// Locale, parce que ce fichier n'importe aucun paquet de date et qu'une seule
+/// date y est rendue : ajouter `intl` ici couterait plus que ces trois lignes.
+String _formatDate(DateTime date) {
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  return '$day/$month/${date.year}';
 }
 
 String _profileInitials(AppUser user) {
@@ -1195,69 +1206,120 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     if (user.isPlayer) {
-      final p = user.playerProfile ?? {};
-      final physical = p['physical'] as Map<String, dynamic>? ?? {};
-      final height = physical['heightCm']?.toString();
-      final weight = physical['weightKg']?.toString();
-      final foot = _strongFootLabel(physical['strongFoot']?.toString());
-      final positions = (p['positions'] is List)
-          ? (p['positions'] as List).join(', ')
-          : null;
-      final skills = (p['skills'] is List)
-          ? (p['skills'] as List).join(', ')
-          : null;
-      final stats = p['stats'] as Map<String, dynamic>? ?? {};
-      final minutes = stats['minutes']?.toString();
-      final goals = stats['goals']?.toString();
-      final assists = stats['assists']?.toString();
-      final availability = p['availability'] as Map<String, dynamic>? ?? {};
-      final open = availability.containsKey('open')
-          ? (availability['open'] == true ? 'Oui' : 'Non')
-          : null;
-      final regions = (availability['regions'] is List)
-          ? (availability['regions'] as List).join(', ')
-          : null;
-      final license = p['licenseNumber']?.toString();
+      final football = user.football;
+      final season = football.currentSeason;
+
+      String? countLabel(int? value, String unit) =>
+          value == null ? null : '$value $unit';
 
       return Column(
         children: [
+          // L'identite footballistique d'abord : c'est ce qu'un recruteur lit
+          // en premier, et le reste ne l'interesse que si celle-ci lui parle.
+          _infoTile(
+            'Postes',
+            football.positions.isEmpty
+                ? null
+                : football.positions
+                      .map((position) => position.labelFr)
+                      .join(' · '),
+            icon: Icons.grid_view_rounded,
+          ),
+          _infoTile(
+            'Pied fort',
+            football.strongFoot?.labelFr,
+            icon: Icons.sports_soccer_outlined,
+          ),
           _infoTile(
             'Taille',
-            height == null ? null : '$height cm',
+            countLabel(football.heightCm, 'cm'),
             icon: Icons.height_outlined,
           ),
           _infoTile(
             'Poids',
-            weight == null ? null : '$weight kg',
+            countLabel(football.weightKg, 'kg'),
             icon: Icons.monitor_weight_outlined,
           ),
-          _infoTile('Pied préféré', foot, icon: Icons.sports_soccer_outlined),
           _infoTile(
-            'Postes maîtrisés',
-            positions,
-            icon: Icons.grid_view_rounded,
+            'Nationalités',
+            football.nationalities.isEmpty
+                ? null
+                : football.nationalities.map(countryLabel).join(' · '),
+            icon: Icons.public_outlined,
           ),
-          _infoTile('Qualités clés', skills, icon: Icons.star_outline_rounded),
-          _infoTile('Numéro de licence', license, icon: Icons.badge_outlined),
+          _infoTile(
+            'Année de naissance',
+            football.birthYear?.toString(),
+            icon: Icons.cake_outlined,
+          ),
           const Divider(),
           _infoTile(
-            'Temps de jeu cumulé',
-            minutes == null ? null : '$minutes min',
+            'Club actuel',
+            football.currentClubName,
+            icon: Icons.shield_outlined,
+          ),
+          _infoTile(
+            'Niveau',
+            football.currentClubLevel?.labelFr,
+            icon: Icons.stairs_outlined,
+          ),
+          _infoTile(
+            'Statut',
+            football.contractStatus?.labelFr,
+            icon: Icons.assignment_outlined,
+          ),
+          _infoTile(
+            'Fin de contrat',
+            football.contractStatus?.expectsEndDate == true &&
+                    football.contractEndDate != null
+                ? _formatDate(football.contractEndDate!)
+                : null,
+            icon: Icons.event_outlined,
+          ),
+          const Divider(),
+          _infoTile(
+            'Saison',
+            [
+              season?.season,
+              season?.competition,
+              season?.ageCategory?.code,
+            ].whereType<String>().join(' · ').trim().isEmpty
+                ? null
+                : [
+                    season?.season,
+                    season?.competition,
+                    season?.ageCategory?.code,
+                  ].whereType<String>().join(' · '),
+            icon: Icons.calendar_month_outlined,
+          ),
+          _infoTile(
+            'Matchs joués',
+            season?.appearances?.toString(),
+            icon: Icons.numbers_outlined,
+          ),
+          _infoTile(
+            'Temps de jeu',
+            countLabel(season?.minutes, 'min'),
             icon: Icons.timer_outlined,
           ),
-          _infoTile('Buts inscrits', goals, icon: Icons.sports_score_outlined),
+          _infoTile(
+            'Buts inscrits',
+            season?.goals?.toString(),
+            icon: Icons.sports_score_outlined,
+          ),
           _infoTile(
             'Passes décisives',
-            assists,
+            season?.assists?.toString(),
             icon: Icons.assistant_direction_outlined,
           ),
           const Divider(),
           _infoTile(
             'Ouvert aux opportunités',
-            open,
-            icon: Icons.public_outlined,
+            user.openToOpportunities == null
+                ? null
+                : (user.openToOpportunities == true ? 'Oui' : 'Non'),
+            icon: Icons.travel_explore,
           ),
-          _infoTile('Zones ciblées', regions, icon: Icons.travel_explore),
           const SizedBox(height: 6),
           Align(
             alignment: Alignment.centerLeft,
@@ -1595,19 +1657,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
-  }
-
-  String _strongFootLabel(String? value) {
-    switch (value?.trim().toLowerCase()) {
-      case 'right':
-        return 'Droit';
-      case 'left':
-        return 'Gauche';
-      case 'both':
-        return 'Ambidextre';
-      default:
-        return value ?? '';
-    }
   }
 }
 

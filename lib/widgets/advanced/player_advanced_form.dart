@@ -2,10 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
+import '../../models/football_vocabulary.dart';
+import '../../models/player_football_profile.dart';
 import '../../models/user.dart';
+import '../../utils/country_codes.dart';
 import '../ad_button.dart';
 import '../ad_feedback.dart';
 
+/// L'identité footballistique du joueur, en listes fermées.
+///
+/// Remplace le formulaire en texte libre : postes en CSV, « qualités clés »
+/// auto-déclarées, taille et poids enfouis dans une map. Ce qu'un recruteur
+/// filtre doit être choisi, pas tapé — sinon « Défense », « défenseur central »
+/// et « CB » désignent le même joueur sans jamais se rencontrer dans une
+/// requête.
+///
+/// Les qualités clés ont disparu et ne reviendront pas : « rapide », « bon
+/// dribbleur » saisis par le joueur lui-même n'ont aucune valeur pour un scout
+/// et affaiblissent le reste de la fiche. Ce qui relève du jugement se regarde
+/// sur la vidéo.
+///
+/// L'API publique est inchangée — [PlayerAdvancedFormState.buildPatch],
+/// [PlayerAdvancedFormState.validate], [PlayerAdvancedFormState.save] — parce
+/// que `edit_advanced_profile_screen.dart` fusionne ce patch avec celui du
+/// formulaire de saison et n'a pas à connaître leur contenu.
 class PlayerAdvancedForm extends StatefulWidget {
   final AppUser user;
   final ProfileController profileController;
@@ -33,80 +53,98 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
 
   late final TextEditingController _heightController;
   late final TextEditingController _weightController;
-  late final TextEditingController _positionsController;
-  late final TextEditingController _skillsController;
-  late final TextEditingController _licenseController;
+  late final TextEditingController _clubNameController;
 
-  String? _strongFoot;
+  late List<FootballPosition> _positions;
+  late List<String> _nationalities;
+  StrongFoot? _strongFoot;
+  ContractStatus? _contractStatus;
+  DateTime? _contractEndDate;
+  ClubLevel? _clubLevel;
+
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
 
-    final p = widget.user.playerProfile ?? {};
-    final physical = (p['physical'] is Map) ? (p['physical'] as Map) : {};
+    final profile = widget.user.football;
 
     _heightController = TextEditingController(
-      text: physical['heightCm']?.toString() ?? '',
+      text: profile.heightCm?.toString() ?? '',
     );
     _weightController = TextEditingController(
-      text: physical['weightKg']?.toString() ?? '',
+      text: profile.weightKg?.toString() ?? '',
     );
-    _strongFoot = physical['strongFoot']?.toString();
-    _positionsController = TextEditingController(
-      text: (p['positions'] as List?)?.join(', ') ?? '',
+    _clubNameController = TextEditingController(
+      text: profile.currentClubName ?? widget.user.clubActuel ?? '',
     );
-    _skillsController = TextEditingController(
-      text: (p['skills'] as List?)?.join(', ') ?? '',
-    );
-    _licenseController = TextEditingController(
-      text: p['licenseNumber']?.toString() ?? '',
-    );
+
+    _positions = List<FootballPosition>.of(profile.positions);
+    _nationalities = List<String>.of(profile.nationalities);
+    _strongFoot = profile.strongFoot;
+    _contractStatus = profile.contractStatus;
+    _contractEndDate = profile.contractEndDate;
+    _clubLevel = profile.currentClubLevel;
   }
 
   @override
   void dispose() {
     _heightController.dispose();
     _weightController.dispose();
-    _positionsController.dispose();
-    _skillsController.dispose();
-    _licenseController.dispose();
+    _clubNameController.dispose();
     super.dispose();
   }
 
-  String? _trimOrNull(String value) {
-    final trimmed = value.trim();
-    return trimmed.isEmpty ? null : trimmed;
+  void _markDirty() {
+    widget.onDirty?.call();
   }
 
-  List<String> _csvToList(String raw) {
-    return raw
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
+  /// Ajoute ou retire un poste, en conservant l'ordre de sélection.
+  ///
+  /// L'ordre est l'information : le premier poste coché est le poste
+  /// principal, et c'est celui qu'un recruteur lit en premier.
+  void _togglePosition(FootballPosition position) {
+    setState(() {
+      if (_positions.contains(position)) {
+        _positions.remove(position);
+      } else if (_positions.length < FootballPosition.maxPerPlayer) {
+        _positions.add(position);
+      }
+    });
+    _markDirty();
+  }
+
+  int? _parsedInt(TextEditingController controller) =>
+      int.tryParse(controller.text.trim());
+
+  PlayerFootballProfile _currentProfile() {
+    return PlayerFootballProfile(
+      nationalities: _nationalities,
+      positions: _positions,
+      strongFoot: _strongFoot,
+      heightCm: _parsedInt(_heightController),
+      weightKg: _parsedInt(_weightController),
+      contractStatus: _contractStatus,
+      contractEndDate: _contractEndDate,
+      currentClubName: _clubNameController.text.trim().isEmpty
+          ? null
+          : _clubNameController.text.trim(),
+      currentClubLevel: _clubLevel,
+    );
+  }
+
+  Map<String, dynamic> buildPatch() {
+    final patch = _currentProfile().toPatch();
+    // `clubActuel` reste le champ affiché par le profil de base ; le garder en
+    // phase evite qu'un joueur voie deux clubs differents sur sa propre fiche.
+    patch['clubActuel'] = _clubNameController.text.trim().isEmpty
+        ? null
+        : _clubNameController.text.trim();
+    return patch;
   }
 
   bool validate() => _formKey.currentState?.validate() ?? false;
-
-  Map<String, dynamic> buildPatch() {
-    final positions = _csvToList(_positionsController.text);
-    final skills = _csvToList(_skillsController.text);
-    return <String, dynamic>{
-      if (positions.isNotEmpty) 'position': positions.first,
-      'playerProfile': {
-        'physical': {
-          'heightCm': int.tryParse(_heightController.text.trim()),
-          'weightKg': int.tryParse(_weightController.text.trim()),
-          'strongFoot': _strongFoot,
-        },
-        'positions': positions,
-        'skills': skills,
-        'licenseNumber': _trimOrNull(_licenseController.text),
-      },
-    };
-  }
 
   Future<bool> save({bool showFeedback = true}) async {
     if (_saving) {
@@ -162,8 +200,41 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
     }
   }
 
+  Future<void> _pickContractEndDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _contractEndDate ?? DateTime(now.year + 1, 6, 30),
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 10),
+      helpText: 'Fin de contrat',
+    );
+    if (picked == null) return;
+
+    setState(() => _contractEndDate = picked);
+    _markDirty();
+  }
+
+  Future<void> _addNationality() async {
+    final available = countriesByName()
+        .where((entry) => !_nationalities.contains(entry.key))
+        .toList();
+
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _CountryPickerSheet(countries: available),
+    );
+    if (picked == null) return;
+
+    setState(() => _nationalities = <String>[..._nationalities, picked]);
+    _markDirty();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final expectsEndDate = _contractStatus?.expectsEndDate == true;
+
     return Form(
       key: _formKey,
       onChanged: widget.onDirty,
@@ -174,87 +245,167 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
           children: [
             if (widget.showSectionTitle) ...[
               const Text(
-                'Profil joueur avancé',
+                'Profil joueur',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 12),
             ],
+
+            _label('Postes'),
+            const Text(
+              'Trois au maximum. Le premier choisi est votre poste principal.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            _PositionSelector(
+              selected: _positions,
+              onToggle: _togglePosition,
+            ),
+            const SizedBox(height: 16),
+
+            DropdownButtonFormField<StrongFoot>(
+              initialValue: _strongFoot,
+              decoration: const InputDecoration(labelText: 'Pied fort'),
+              items: StrongFoot.values
+                  .map(
+                    (foot) => DropdownMenuItem<StrongFoot>(
+                      value: foot,
+                      child: Text(foot.labelFr),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() => _strongFoot = value);
+                _markDirty();
+              },
+            ),
+            const SizedBox(height: 12),
+
             TextFormField(
               controller: _heightController,
               decoration: const InputDecoration(labelText: 'Taille (cm)'),
               keyboardType: TextInputType.number,
-              validator: (v) {
-                final t = (v ?? '').trim();
-                if (t.isEmpty) {
-                  return null;
-                }
-                final n = int.tryParse(t);
-                if (n == null) {
-                  return 'Nombre invalide';
-                }
-                if (n < 90 || n > 230) {
-                  return 'Taille non valide';
-                }
-                return null;
-              },
+              validator: (value) => _validateBounded(
+                value,
+                PlayerFootballProfile.minHeightCm,
+                PlayerFootballProfile.maxHeightCm,
+                'Taille',
+              ),
             ),
             const SizedBox(height: 12),
+
             TextFormField(
               controller: _weightController,
               decoration: const InputDecoration(labelText: 'Poids (kg)'),
               keyboardType: TextInputType.number,
-              validator: (v) {
-                final t = (v ?? '').trim();
-                if (t.isEmpty) {
-                  return null;
-                }
-                final n = int.tryParse(t);
-                if (n == null) {
-                  return 'Nombre invalide';
-                }
-                if (n < 30 || n > 150) {
-                  return 'Poids non valide';
-                }
-                return null;
+              validator: (value) => _validateBounded(
+                value,
+                PlayerFootballProfile.minWeightKg,
+                PlayerFootballProfile.maxWeightKg,
+                'Poids',
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            _label('Nationalités'),
+            const Text(
+              'Le passeport détermine les démarches d’un club étranger. '
+              'Trois au maximum.',
+              style: TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            _NationalityList(
+              codes: _nationalities,
+              canAdd:
+                  _nationalities.length < PlayerFootballProfile.maxNationalities,
+              onRemove: (code) {
+                setState(() {
+                  _nationalities = _nationalities
+                      .where((entry) => entry != code)
+                      .toList();
+                });
+                _markDirty();
+              },
+              onAdd: _addNationality,
+            ),
+            const SizedBox(height: 20),
+
+            _label('Situation'),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _clubNameController,
+              decoration: const InputDecoration(labelText: 'Club actuel'),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 12),
+
+            DropdownButtonFormField<ClubLevel>(
+              initialValue: _clubLevel,
+              decoration: const InputDecoration(labelText: 'Niveau du club'),
+              items: ClubLevel.values
+                  .map(
+                    (level) => DropdownMenuItem<ClubLevel>(
+                      value: level,
+                      child: Text(level.labelFr),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() => _clubLevel = value);
+                _markDirty();
               },
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: (_strongFoot == null || _strongFoot!.isEmpty)
-                  ? null
-                  : _strongFoot,
-              items: const [
-                DropdownMenuItem(value: 'right', child: Text('Droit')),
-                DropdownMenuItem(value: 'left', child: Text('Gauche')),
-                DropdownMenuItem(value: 'both', child: Text('Ambidextre')),
-              ],
-              onChanged: (v) => setState(() => _strongFoot = v),
-              decoration: const InputDecoration(labelText: 'Pied fort'),
+
+            DropdownButtonFormField<ContractStatus>(
+              initialValue: _contractStatus,
+              decoration: const InputDecoration(labelText: 'Statut contractuel'),
+              items: ContractStatus.values
+                  .map(
+                    (status) => DropdownMenuItem<ContractStatus>(
+                      value: status,
+                      child: Text(status.labelFr),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _contractStatus = value;
+                  // Une date de fin n'a plus de sens si le joueur devient
+                  // libre : la laisser afficherait un engagement qui n'existe
+                  // pas.
+                  if (value?.expectsEndDate != true) {
+                    _contractEndDate = null;
+                  }
+                });
+                _markDirty();
+              },
             ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _positionsController,
-              decoration: const InputDecoration(
-                labelText: 'Postes maîtrisés (séparés par des virgules)',
-                hintText: 'Ex : Ailier droit, Milieu défensif, Latéral',
+
+            if (expectsEndDate) ...[
+              const SizedBox(height: 12),
+              InputDecorator(
+                decoration: const InputDecoration(labelText: 'Fin de contrat'),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _contractEndDate == null
+                            ? 'Non renseignée'
+                            : '${_contractEndDate!.day.toString().padLeft(2, '0')}/'
+                                  '${_contractEndDate!.month.toString().padLeft(2, '0')}/'
+                                  '${_contractEndDate!.year}',
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _pickContractEndDate,
+                      child: const Text('Choisir'),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _skillsController,
-              decoration: const InputDecoration(
-                labelText: 'Qualités clés (séparées par des virgules)',
-                hintText: 'Ex : Vitesse, Dribble, Qualité de centre',
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _licenseController,
-              decoration: const InputDecoration(
-                labelText: 'Numéro de licence (facultatif)',
-                hintText: 'Ex : LIC-FAF-2026-014',
-              ),
-            ),
+            ],
+
             if (widget.showSubmitButton) ...[
               const SizedBox(height: 20),
               AdButton(
@@ -265,6 +416,170 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _label(String text) => Align(
+    alignment: Alignment.centerLeft,
+    child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700)),
+  );
+
+  String? _validateBounded(String? value, int min, int max, String label) {
+    final text = (value ?? '').trim();
+    if (text.isEmpty) return null;
+
+    final parsed = int.tryParse(text);
+    if (parsed == null) return 'Nombre invalide';
+    if (parsed < min || parsed > max) return '$label non valide';
+    return null;
+  }
+}
+
+/// Les dix postes, en cases à cocher.
+class _PositionSelector extends StatelessWidget {
+  const _PositionSelector({required this.selected, required this.onToggle});
+
+  final List<FootballPosition> selected;
+  final ValueChanged<FootballPosition> onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final atLimit = selected.length >= FootballPosition.maxPerPlayer;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: FootballPosition.values.map((position) {
+        final index = selected.indexOf(position);
+        final isSelected = index >= 0;
+
+        return FilterChip(
+          selected: isSelected,
+          // Un poste non coché devient indisponible une fois la limite
+          // atteinte, au lieu d'accepter le clic puis de l'ignorer en
+          // silence.
+          onSelected: (!isSelected && atLimit)
+              ? null
+              : (_) => onToggle(position),
+          label: Text(
+            isSelected
+                ? '${index + 1}. ${position.labelFr}'
+                : position.labelFr,
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+/// Les nationalités retenues, et le bouton pour en ajouter une.
+class _NationalityList extends StatelessWidget {
+  const _NationalityList({
+    required this.codes,
+    required this.canAdd,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  final List<String> codes;
+  final bool canAdd;
+  final VoidCallback onAdd;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ...codes.map(
+          (code) => InputChip(
+            label: Text(countryLabel(code)),
+            onDeleted: () => onRemove(code),
+          ),
+        ),
+        if (canAdd)
+          ActionChip(
+            avatar: const Icon(Icons.add, size: 18),
+            label: const Text('Ajouter'),
+            onPressed: onAdd,
+          ),
+      ],
+    );
+  }
+}
+
+/// Sélecteur de pays, avec recherche.
+///
+/// Une liste de cent pays sans champ de recherche est une liste qu'on fait
+/// défiler jusqu'à renoncer.
+class _CountryPickerSheet extends StatefulWidget {
+  const _CountryPickerSheet({required this.countries});
+
+  final List<MapEntry<String, String>> countries;
+
+  @override
+  State<_CountryPickerSheet> createState() => _CountryPickerSheetState();
+}
+
+class _CountryPickerSheetState extends State<_CountryPickerSheet> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim().toLowerCase();
+    final visible = query.isEmpty
+        ? widget.countries
+        : widget.countries
+              .where((entry) => entry.value.toLowerCase().contains(query))
+              .toList();
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Rechercher un pays',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: (value) => setState(() => _query = value),
+                ),
+              ),
+              Expanded(
+                child: visible.isEmpty
+                    ? const Center(child: Text('Aucun pays trouvé.'))
+                    : ListView.builder(
+                        itemCount: visible.length,
+                        itemBuilder: (context, index) {
+                          final entry = visible[index];
+                          return ListTile(
+                            title: Text(entry.value),
+                            onTap: () => Navigator.of(context).pop(entry.key),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );

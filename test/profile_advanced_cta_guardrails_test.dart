@@ -82,7 +82,12 @@ void main() {
     expect(playerAdvanced, contains('Map<String, dynamic> buildPatch()'));
     expect(playerStats, contains('Map<String, dynamic> buildPatch()'));
     expect(playerStats, contains('Sauvegarde refusée'));
-    expect(playerAdvanced, contains("if (positions.isNotEmpty) 'position'"));
+    // Le poste est ecrit en codes, jamais en libelles : c'est ce qui rend la
+    // fiche filtrable. Le libelle libre a disparu avec la refonte, et le
+    // laisser revenir ici rouvrirait la porte au CSV.
+    expect(playerAdvanced, contains("_currentProfile().toPatch()"));
+    expect(playerAdvanced, isNot(contains('_csvToList')));
+    expect(playerAdvanced, isNot(contains("'skills'")));
     expect(playerStats, contains("'openToOpportunities': _openToTrials"));
   });
 }

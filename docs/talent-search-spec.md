@@ -1,6 +1,13 @@
 # Socle de recherche de talents — spécification
 
-Date : 31 août 2026. Statut : **spécification, aucun code écrit.**
+Date : 31 août 2026. Statut : **refonte du profil. Le vocabulaire est écrit
+(`lib/models/football_vocabulary.dart`), le reste est spécifié.**
+
+Décision du 31 août : les 17 comptes de production sont des comptes de test,
+supprimables à tout moment. Cela supprime la contrainte qui pesait le plus sur
+ce chantier — il n'y a **aucune donnée à préserver**, donc aucune migration,
+aucune phase de compatibilité, aucun champ à garder en double le temps que le
+parc se mette à jour. On écrit le bon modèle directement.
 
 Ce document décrit le travail à faire *après* la mise en production de
 `1.0.7+29`. Rien ici ne doit être implémenté avant que l'AAB soit construit et
@@ -101,17 +108,17 @@ français doivent trouver le même joueur. Un libellé indexé enferme la base
 dans une langue, et le jour où l'on ajoute l'anglais il faut réécrire toutes
 les fiches.
 
-### Migration des deux valeurs existantes
+### Aucune migration
 
-| Valeur actuelle | Compte | Code proposé | Confiance |
-| --- | --- | --- | --- |
-| `"Défense"` | 1 | `CB` | Faible — « Défense » ne dit pas axial ou latéral |
-| `"Attaquant"` | 1 | `ST` | Moyenne — peut être un ailier |
+Les deux fiches existantes portent `"Défense"` et `"Attaquant"`, en texte
+libre. Elles ne sont **pas** migrées : les comptes sont jetables, et un
+remappage automatique inscrirait une donnée devinée — « Défense » ne dit pas
+si le joueur est axial ou latéral — dans une base qu'on présente comme
+qualifiée.
 
-Deux fiches, donc : **ne pas migrer automatiquement.** Demander aux deux
-joueurs, ou laisser l'administration trancher depuis le portail. Un remappage
-automatique inscrirait une donnée fausse dans la base qu'on prétend qualifiée,
-et personne ne saurait ensuite qu'elle a été devinée.
+Le parseur refuse d'ailleurs explicitement ce texte
+(`football_vocabulary_test.dart`, « free text from the old profiles does not
+resolve ») : mieux vaut un poste vide qu'un poste faux.
 
 ## Tous les points de contact du poste, vérifiés
 
@@ -198,31 +205,93 @@ agir. Vérifié : **aucun de ces champs n'existe aujourd'hui** dans
 `contractStatus` et `nationalities` sont les deux à faire en priorité : ce sont
 les seuls qui peuvent transformer un « intéressant » en « injoignable ».
 
-## Le motif d'intégration : additif, jamais destructif
+## Le motif d'intégration : coupe franche
 
-Trois phases. Aucune ne supprime un champ que la précédente lisait.
+Les comptes étant jetables, on ne garde rien. `playerProfile.positions`,
+`skills`, `clubProfile.structureType` en texte libre et `agentProfile.zones`
+en CSV sont **remplacés**, pas doublés. Les comptes de test sont supprimés et
+recréés au nouveau format par le portail admin.
 
-**Phase 1 — le socle serveur, sans nouveau build.** Liste blanche des règles,
-trigger `onDocumentWritten('users/{uid}')`, index déclarés et déployés. Le
-trigger dérive `positionCodes` de l'existant *quand il est certain*, et laisse
-vide sinon. Aucun client ne change, aucun écran ne bouge, rien ne casse : les
-nouveaux champs sont simplement ignorés par l'application installée.
+Ce qui reste vrai, et qui n'a rien à voir avec la migration :
 
-**Phase 2 — le client écrit les deux.** Le formulaire devient un choix multiple
-parmi les dix codes, pré-rempli par le mappage de l'existant. Il écrit
-`positionCodes` **et** continue d'écrire `playerProfile.positions` en libellés,
-pour qu'un client de la version précédente affiche toujours quelque chose.
-Idem côté offre. Tout lecteur doit accepter un document qui ne porte que
-l'ancien champ.
+1. **Les règles avant le client.** `canUpdateOwnProfile` est une liste blanche
+   stricte : tout nouveau champ doit y entrer, et les règles doivent être
+   déployées avant le build qui écrit ces champs. Sinon l'enregistrement du
+   profil échoue en `permission-denied`.
+2. **Les index avant le build.** Une requête sans index n'affiche pas une
+   erreur, elle affiche un écran vide.
+3. **Lire avec tolérance.** Un code inconnu se résout à `null`, jamais à une
+   exception : un document écrit par le portail admin ou par une version plus
+   récente ne doit pas transformer un profil en écran blanc. C'est déjà
+   verrouillé par un test.
+4. **Le dépôt admin suit dans la même livraison.** Il porte sa propre copie du
+   test `hasPosition` (`lib/models/user.dart:524`) et écrit `patch['position']`
+   depuis `user_management_widget.dart:1570`. Un modèle changé d'un seul côté
+   est un modèle cassé.
 
-**Phase 3 — on bascule, puis on nettoie.** Quand tous les profils actifs
-portent des codes, la recherche passe sur `positionCodes` et l'écriture du
-champ libre s'arrête. La suppression du champ vient une version plus tard,
-jamais dans la même.
+## Le profil, rôle par rôle
 
-Ce qui rend ce motif sûr tient en trois règles : **écrire en plus, jamais à la
-place** ; **lire avec tolérance** ; **déployer règles et index avant le client
-qui s'en sert**.
+Le principe : **moins de champs, contraints, et vérifiés.** Un recruteur lit
+une fiche en vingt secondes. Ce qui suit est ce qu'il lit ; tout le reste est
+du bruit qui décrédibilise la fiche.
+
+### Joueur
+
+**Identité et éligibilité** — ce qui décide si un club peut agir :
+date de naissance (privée) et `birthYear` (public, dérivé) ; `nationalities`
+(array ISO, plusieurs passeports possibles) ; pays et ville de résidence.
+
+**Identité footballistique :** `positionCodes` (1 à 3, ordonnés) ; `strongFoot` ;
+taille ; poids.
+
+**Situation :** club actuel ; `currentClubLevel` ; `contractStatus` ;
+`contractEndDate` si le statut l'attend ; `openToOpportunities`.
+
+**Performance, par saison et non cumulée :** saison, compétition,
+`ageCategory`, matchs joués, minutes, buts, passes décisives. Une statistique
+sans saison ni niveau ne veut rien dire.
+
+**Preuves :** vidéos (existant), CV.
+
+**Représentation :** agent ou représentant déclaré, ou « aucun ». Un recruteur
+doit savoir qui appeler — et c'est précisément là que l'agence se place.
+
+**Supprimé :** `skills` en texte libre. Des « qualités clés » auto-déclarées
+n'ont aucune valeur pour un scout et affaiblissent le reste de la fiche. Ce qui
+relève du jugement se voit sur la vidéo.
+
+### Club
+
+Nom officiel, pays, ville ; `ClubLevel` (au lieu de `structureType` libre) ;
+division ou championnat ; catégories engagées en `AgeCategory` (au lieu du CSV
+libre) ; numéro d'affiliation à la fédération — c'est ce qui rend le club
+vérifiable ; besoins de recrutement en `positionCodes` + `AgeCategory` +
+urgence (au lieu de `needs` parsé à la main).
+
+### Agent / recruteur
+
+Structure ou employeur ; numéro de licence d'agent FIFA et fédération
+émettrice ; `countries` couverts en codes ISO (au lieu de `zones` en CSV).
+
+Le numéro de licence est **vérifiable publiquement**. C'est le champ qui
+sépare un agent réel d'un compte qui s'en réclame, et donc la crédibilité de
+toute la plateforme auprès des joueurs.
+
+## Le levier que le formulaire ne donnera jamais
+
+`profileVerified` est à **0 sur 17 comptes**. Le mécanisme existe entièrement —
+statut, date, auteur, note, invalidation automatique à la modification du
+profil — et n'a jamais été utilisé.
+
+Dix champs vérifiés par Adfoot valent plus, pour une FIFA ou un club européen,
+que quarante champs auto-déclarés. Une base « qualifiée » ne se distingue pas
+d'un réseau social par la richesse de ses formulaires, mais par le fait que
+quelqu'un a contrôlé ce qu'ils contiennent. C'est aussi ce qui justifie qu'un
+club paie ou qu'un joueur passe par l'agence plutôt que par Instagram.
+
+**Recommandation :** faire de la vérification une étape du parcours
+d'ouverture de compte administrée, et afficher clairement sur la fiche ce qui
+est vérifié et ce qui est déclaratif.
 
 Ils **doublent** ce qui vit déjà dans `playerProfile`, volontairement :
 Firestore n'indexe pas efficacement un champ imbriqué dans une map pour ce
@@ -303,22 +372,35 @@ parce qu'ils dépendent tous de ce socle :
 - **Fil ordonné par pertinence.** Le fil est purement chronologique
   (`approvedAt DESC`).
 
-## Ordre, et pourquoi il n'est pas négociable
+## Ordre
 
-1. Construire l'AAB `1.0.7+29`, le téléverser en test interne.
-2. Cocher les onze cases de la liste d'appareil, sur un vrai téléphone, depuis
-   le build installé par Play.
-3. Promouvoir en production.
-4. **Ensuite seulement**, branche `talent-search` : règles, trigger, index,
-   puis client.
+Décision du 31 août : la refonte du profil passe **avant** la mise en
+production. Le raisonnement est celui du propriétaire du produit, et il se
+tient — une application qui fonctionne mais qui ne répond pas aux besoins des
+recruteurs n'a pas d'intérêt à être promue, et chaque semaine passée en
+production avec l'ancien modèle est une semaine où des comptes se remplissent
+au mauvais format.
 
-Les points 1 à 3 d'abord parce que ce socle touche exactement les surfaces qui
-n'ont jamais tourné sur un appareil — le formulaire de profil, la recherche, le
-chemin de sauvegarde. Les modifier avant le test terrain ne rend pas le test
-plus long : il le rend **ininterprétable**. Le jour où quelque chose casse sur
-le téléphone, plus personne ne saura si c'est la nouveauté ou le pipeline
-existant.
+`1.0.7+29` devient donc un **point de contrôle en test interne**, pas la
+release de production.
 
-Et une contrainte matérielle : une fois l'AAB de `29` construit, tout commit
-supplémentaire impose `versionCode 30` et un nouveau build — plus d'une heure
-à chaque fois.
+1. Construire l'AAB `29` et le téléverser en test interne.
+2. Cocher les onze cases de la liste d'appareil sur un vrai téléphone. **Ne pas
+   sauter cette étape** : c'est le seul moment où l'upload vidéo, la lecture en
+   arrière-plan et la messagerie auront été éprouvés sur du matériel avant que
+   la refonte ne vienne modifier le profil. Un test terrain fait maintenant
+   sépare proprement « le pipeline marche » de « la refonte marche » ; fait
+   après, il mélange les deux et ne tranche plus rien.
+3. Branche `talent-search` : vocabulaire (fait), modèle, règles, index, puis
+   formulaires — et le dépôt admin dans la même livraison.
+4. Supprimer et recréer les comptes de test au nouveau format.
+5. Construire `30`, le vérifier sur appareil, promouvoir en production.
+
+Ce qui n'est pas négociable, quel que soit l'ordre : les règles et les index se
+déploient avant le build qui s'en sert, et `npm run backend:parity:check:production`
+doit être vert avant chaque construction d'AAB.
+
+Contrainte matérielle : une fois un AAB construit, tout commit supplémentaire
+impose de passer au `versionCode` suivant et de reconstruire — plus d'une heure
+à chaque fois. D'où l'intérêt de grouper la refonte en une seule livraison
+plutôt que de la découper.

@@ -9,26 +9,19 @@ String _read(String path) => File(path).readAsStringSync();
 /// act on the file.
 ///
 /// The label is not decoration. It is the app telling a recruiter "this one is
-/// worth your time", and the two questions a European club asks before it
-/// looks at a single video are how old the player is and which country they
-/// come from: the first decides whether FIFA article 19 forbids the transfer
-/// outright, the second decides the work-permit route.
+/// worth your time", and a recruiter reads a file in twenty seconds: position,
+/// foot, build, nationality, club level, contract, minutes played. A file that
+/// answers none of those is one no decision can be taken on.
 ///
-/// Only the country is enforced here. The age is not, and that is a known
-/// limit rather than an oversight: `birthDate` lives in
+/// The age is deliberately **not** required. `birthDate` lives in
 /// `users/{uid}/private/contact` and reaches only the profile owner, so
 /// requiring it made the verdict depend on who was reading — the player saw
-/// "Élite" while a recruiter saw "partiel" on the same file. The age returns
-/// as a public, derived `birthYear`; see `docs/talent-search-spec.md`.
-///
-/// Measured in adfoot-production on 2026-08-31: of the eleven player accounts,
-/// **zero** carry a country. So this requirement takes the label from nobody
-/// today — it stops it being handed out on the first advanced profile somebody
-/// fills in.
+/// "Élite" while a recruiter saw "partiel" on the same file. It returns as a
+/// public, server-derived `birthYear`; see `docs/talent-search-spec.md`.
 AppUser _player({
   DateTime? birthDate,
   String? country,
-  Map<String, dynamic>? playerProfile,
+  Map<String, dynamic>? football,
   String? cvUrl,
 }) {
   return AppUser.fromMap(<String, dynamic>{
@@ -37,19 +30,29 @@ AppUser _player({
     'role': 'joueur',
     'birthDate': ?birthDate?.toIso8601String(),
     'country': ?country,
-    'playerProfile': ?playerProfile,
     'cvUrl': ?cvUrl,
+    ...?football,
   });
 }
 
-/// Everything `hasScoutReadyProfile` asks for *besides* identity: a position,
-/// stats, a physical trait and a piece of evidence.
+/// Every football fact the rule asks for, in the flat shape the redesign
+/// writes: codes at the top level of the user document, because a Firestore
+/// query cannot usefully index a field buried in a map.
 Map<String, dynamic> _completeFootballFile() {
   return <String, dynamic>{
-    'physical': <String, dynamic>{'heightCm': 178, 'strongFoot': 'gauche'},
-    'positions': <String>['Milieu'],
-    'skills': <String>['Passe longue'],
-    'stats': <String, dynamic>{'minutes': 900, 'goals': 4},
+    'nationalities': <String>['CI'],
+    'positionCodes': <String>['CM'],
+    'strongFoot': 'left',
+    'heightCm': 178,
+    'contractStatus': 'free',
+    'currentClubLevel': 'academy',
+    'currentSeason': <String, dynamic>{
+      'season': '2025-26',
+      'competition': 'Ligue 1 CIV',
+      'ageCategory': 'U19',
+      'minutes': 900,
+      'goals': 4,
+    },
   };
 }
 
@@ -59,9 +62,8 @@ void main() {
   group('an Élite file can be acted on by a club', () {
     test('a complete file with a country earns the label', () {
       final user = _player(
-        birthDate: birthDate,
         country: 'Côte d’Ivoire',
-        playerProfile: _completeFootballFile(),
+        football: _completeFootballFile(),
         cvUrl: 'https://example.org/cv.pdf',
       );
 
@@ -69,64 +71,49 @@ void main() {
       expect(user.profileLevelLabel, 'Profil Élite');
     });
 
-    test('a file with no birth date still earns it, and that is deliberate', () {
-      // `birthDate` lives in users/{uid}/private/contact and is loaded only
-      // for the profile owner. Requiring it made this getter depend on who is
-      // looking: the player saw "Élite" on their own profile while a
-      // recruiter — who never receives the field — saw "partiel" on the same
-      // file, which is to say the label went invisible for the only audience
-      // it exists for. A judgement on a file cannot change with its reader.
-      // The age comes back as a public `birthYear`; see docs/talent-search-spec.md.
-      final user = _player(
-        country: 'Côte d’Ivoire',
-        playerProfile: _completeFootballFile(),
-        cvUrl: 'https://example.org/cv.pdf',
-      );
-
-      expect(user.hasScoutReadyProfile, isTrue);
-    });
-
     test('the verdict is the same whoever is looking', () {
       // A visitor's AppUser is built from the public document alone. If the
-      // two disagree, the rule reads a private field again.
+      // two disagree, the rule has started reading a private field again.
       Map<String, dynamic> publicDoc() => <String, dynamic>{
-            'uid': 'p1',
-            'nom': 'Awa Traore',
-            'role': 'joueur',
-            'country': 'Côte d’Ivoire',
-            'playerProfile': _completeFootballFile(),
-            'cvUrl': 'https://example.org/cv.pdf',
-          };
+        'uid': 'p1',
+        'nom': 'Awa Traore',
+        'role': 'joueur',
+        'country': 'Côte d’Ivoire',
+        'cvUrl': 'https://example.org/cv.pdf',
+        ..._completeFootballFile(),
+      };
 
       final asVisitor = AppUser.fromMap(publicDoc());
       final asOwner = AppUser.fromMap(
         publicDoc(),
         privateContact: <String, dynamic>{
-          'birthDate': DateTime(2007, 3, 14).toIso8601String(),
+          'birthDate': birthDate.toIso8601String(),
           'phone': '+2250700000000',
         },
       );
 
       expect(asVisitor.hasScoutReadyProfile, asOwner.hasScoutReadyProfile);
-      expect(asVisitor.missingScoutRequirements, asOwner.missingScoutRequirements);
+      expect(
+        asVisitor.missingScoutRequirements,
+        asOwner.missingScoutRequirements,
+      );
       expect(asVisitor.profileLevelLabel, asOwner.profileLevelLabel);
     });
 
     test('no country, no label', () {
       final user = _player(
-        birthDate: birthDate,
-        playerProfile: _completeFootballFile(),
+        football: _completeFootballFile(),
         cvUrl: 'https://example.org/cv.pdf',
       );
 
       expect(user.hasScoutReadyProfile, isFalse);
+      expect(user.missingScoutRequirements, contains('Pays'));
     });
 
     test('a blank country does not pass for one', () {
       final user = _player(
-        birthDate: birthDate,
         country: '   ',
-        playerProfile: _completeFootballFile(),
+        football: _completeFootballFile(),
         cvUrl: 'https://example.org/cv.pdf',
       );
 
@@ -134,39 +121,56 @@ void main() {
     });
   });
 
-  group('the football file is still required on its own', () {
+  group('every football fact is required on its own', () {
     test('an identity alone is not a scouting file', () {
-      // The tightening adds a condition; it must not replace the others.
-      final user = _player(birthDate: birthDate, country: 'Sénégal');
+      final user = _player(country: 'Sénégal');
 
       expect(user.hasScoutReadyProfile, isFalse);
     });
 
     test('a file with no evidence is not scout-ready', () {
       final user = _player(
-        birthDate: birthDate,
         country: 'Sénégal',
-        playerProfile: _completeFootballFile(),
+        football: _completeFootballFile(),
       );
 
       expect(user.hasScoutReadyProfile, isFalse);
+      expect(
+        user.missingScoutRequirements,
+        contains('Une vidéo publiée ou un CV'),
+      );
     });
 
-    test('a file with no position is not scout-ready', () {
-      final profile = _completeFootballFile()..remove('positions');
+    test('each missing fact is named, one at a time', () {
+      const cases = <String, String>{
+        'positionCodes': 'Poste',
+        'strongFoot': 'Pied fort',
+        'heightCm': 'Taille',
+        'nationalities': 'Nationalité',
+        'contractStatus': 'Statut contractuel',
+        'currentClubLevel': 'Niveau du club actuel',
+        'currentSeason': 'Statistiques de la saison en cours',
+      };
 
-      final user = _player(
-        birthDate: birthDate,
-        country: 'Sénégal',
-        playerProfile: profile,
-        cvUrl: 'https://example.org/cv.pdf',
-      );
+      cases.forEach((field, expectedLabel) {
+        final football = _completeFootballFile()..remove(field);
+        final user = _player(
+          country: 'Sénégal',
+          football: football,
+          cvUrl: 'https://example.org/cv.pdf',
+        );
 
-      expect(user.hasScoutReadyProfile, isFalse);
+        expect(
+          user.missingScoutRequirements,
+          <String>[expectedLabel],
+          reason: 'removing $field must name exactly "$expectedLabel"',
+        );
+        expect(user.hasScoutReadyProfile, isFalse);
+      });
     });
   });
 
-  group('the accounts already in production are unaffected', () {
+  group('the old free-text files no longer count as advanced', () {
     test('a player with nothing filled in stays at the basic label', () {
       final user = _player();
 
@@ -174,55 +178,53 @@ void main() {
       expect(user.profileLevelLabel, 'Profil basique');
     });
 
-    test('the two advanced files in production do not become Élite', () {
-      // Both were filled with a position only — no birth date, no country,
-      // no stats, and that is the shape this guardrail has to hold.
-      final user = _player(
-        playerProfile: <String, dynamic>{
+    test('a legacy playerProfile document reads as empty', () {
+      // The two advanced files in production hold `playerProfile.positions` as
+      // free text ("Défense", "Attaquant"). The redesign does not read that
+      // shape and does not migrate it: the accounts are test accounts, and
+      // guessing whether "Défense" means centre-back or full-back would write
+      // an invented fact into a base we present as qualified.
+      final user = AppUser.fromMap(<String, dynamic>{
+        'uid': 'p1',
+        'nom': 'Awa Traore',
+        'role': 'joueur',
+        'playerProfile': <String, dynamic>{
           'positions': <String>['Attaquant'],
+          'skills': <String>['Rapide'],
         },
-      );
+      });
 
-      expect(user.hasScoutReadyProfile, isFalse);
-      expect(user.profileLevelLabel, 'Profil avancé');
+      expect(user.football.isEmpty, isTrue);
+      expect(user.hasAdvancedProfile, isFalse);
+      expect(user.profileLevelLabel, 'Profil basique');
     });
   });
 
   group('the file says what it is still missing', () {
     test('an empty player file names every requirement, identity first', () {
-      // The order is the order a recruiter asks in, and the screen renders
-      // the list as it comes.
+      // The order is the order a recruiter asks in, and the screen renders the
+      // list as it comes.
       expect(_player().missingScoutRequirements, <String>[
         'Pays',
+        'Nationalité',
         'Poste',
-        'Taille, poids ou pied fort, ou qualités clés',
-        'Statistiques de la saison',
+        'Pied fort',
+        'Taille',
+        'Statut contractuel',
+        'Niveau du club actuel',
+        'Statistiques de la saison en cours',
         'Une vidéo publiée ou un CV',
       ]);
     });
 
     test('a complete file is missing nothing', () {
       final user = _player(
-        birthDate: birthDate,
         country: 'Côte d’Ivoire',
-        playerProfile: _completeFootballFile(),
+        football: _completeFootballFile(),
         cvUrl: 'https://example.org/cv.pdf',
       );
 
       expect(user.missingScoutRequirements, isEmpty);
-    });
-
-    test('it names exactly what is absent, and nothing else', () {
-      final user = _player(
-        birthDate: birthDate,
-        country: 'Sénégal',
-        playerProfile: _completeFootballFile()..remove('stats'),
-        cvUrl: 'https://example.org/cv.pdf',
-      );
-
-      expect(user.missingScoutRequirements, <String>[
-        'Statistiques de la saison',
-      ]);
     });
 
     test('the decision and the explanation cannot disagree', () {
@@ -230,17 +232,11 @@ void main() {
       // rather than re-deriving the same conditions.
       for (final user in <AppUser>[
         _player(),
-        _player(birthDate: birthDate),
-        _player(birthDate: birthDate, country: 'Mali'),
+        _player(country: 'Mali'),
+        _player(country: 'Mali', football: _completeFootballFile()),
         _player(
-          birthDate: birthDate,
           country: 'Mali',
-          playerProfile: _completeFootballFile(),
-        ),
-        _player(
-          birthDate: birthDate,
-          country: 'Mali',
-          playerProfile: _completeFootballFile(),
+          football: _completeFootballFile(),
           cvUrl: 'https://example.org/cv.pdf',
         ),
       ]) {
@@ -269,8 +265,6 @@ void main() {
     final widgets = _read('lib/screens/profile_screen_widgets.dart');
 
     test('the missing list is guarded by isOwnProfile', () {
-      // A visitor seeing "still missing: date of birth, country" is noise for
-      // a recruiter and a list of the player's gaps shown to strangers.
       expect(
         screen,
         contains('if (isOwnProfile && !user.hasScoutReadyProfile)'),
@@ -281,16 +275,23 @@ void main() {
     test('the screen copies the rule instead of restating it', () {
       expect(screen, contains('missing: user.missingScoutRequirements'));
 
-      // No surface may test the underlying fields itself: that is how a
-      // screen ends up asking for something the rule stopped requiring.
+      // No surface may test the underlying fields itself: that is how a screen
+      // ends up asking for something the rule stopped requiring.
       for (final source in <String>[screen, widgets]) {
-        expect(source, isNot(contains("playerProfile!['stats']")));
         expect(source, isNot(contains('Date de naissance\',')));
       }
     });
 
     test('the panel renders nothing when nothing is missing', () {
-      expect(widgets, contains('if (missing.isEmpty) return const SizedBox.shrink();'));
+      expect(
+        widgets,
+        contains('if (missing.isEmpty) return const SizedBox.shrink();'),
+      );
+    });
+
+    test('the screen reads the typed profile, not the old map', () {
+      expect(screen, contains('final football = user.football;'));
+      expect(screen, isNot(contains('user.playerProfile ?? {}')));
     });
   });
 
@@ -300,9 +301,8 @@ void main() {
         'uid': 'c1',
         'nom': 'ASEC Mimosas',
         'role': 'club',
-        'birthDate': birthDate.toIso8601String(),
         'country': 'Côte d’Ivoire',
-        'playerProfile': _completeFootballFile(),
+        ..._completeFootballFile(),
       });
 
       expect(club.hasScoutReadyProfile, isFalse);
