@@ -12,6 +12,11 @@ Reference date: 4 April 2026
 - [ ] if `firestore.rules` or `storage.rules` changed since the last release:
       `npm.cmd run rules:test:all` passes (real rules engine, both services;
       needs Java on PATH)
+- [ ] `npm.cmd run playback:mode:check:production` reports no drift — every
+      video contract states what its own sources show. Read-only; repair with
+      `npm.cmd run playback:mode:repair:production`. **Not a release blocker**:
+      no client reads this field, both derive the real mode from `sources`.
+      It is here so a wrong number never reaches a report or a dashboard
 - [ ] `android/key.properties` exists on build machine
 - [ ] `android/upload-keystore.jks` exists and matches `key.properties`
 - [ ] `.well-known/assetlinks.json` has real SHA-256 fingerprints
