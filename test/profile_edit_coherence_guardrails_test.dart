@@ -24,9 +24,22 @@ void main() {
     expect(profile, contains('_bioSectionTitle(user)'));
     expect(profile, contains('Présentation du joueur'));
     expect(profile, contains('_emptyBioMessage(user)'));
-    expect(profileHeader, contains('user.city'));
-    expect(profileHeader, contains('user.region'));
-    expect(profileHeader, contains('user.country'));
+    // La localisation est affichee une fois, dans la section du profil, et
+    // plus dans l'en-tete. Elle y vivait en pastille, sur la meme carte que
+    // le nom et le club deja portes ailleurs -- et c'est ce libelle-la, le
+    // plus long des trois, qui debordait du cadre par la droite.
+    //
+    // Assertions inversees plutot que supprimees : le doublon est revenu une
+    // fois, il peut revenir deux.
+    expect(profileHeader, isNot(contains('user.city')));
+    expect(profileHeader, isNot(contains('user.region')));
+    expect(profileHeader, isNot(contains('user.country')));
+
+    // Le nom et le role appartiennent a la barre du haut, pas a la carte.
+    expect(profileHeader, isNot(contains('user.nom')));
+    expect(profileHeader, isNot(contains('_profileRoleLabel(user)')));
+    expect(profile, contains('title: user.nom.isNotEmpty ? user.nom'));
+    expect(profile, contains('subtitle: _profileRoleLabel(user)'));
 
     expect(editProfile, contains('_cityController'));
     expect(editProfile, contains('_regionController'));

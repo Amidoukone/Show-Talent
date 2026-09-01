@@ -1106,9 +1106,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? user.team
           : user.clubActuel;
       tiles.addAll([
+        // L'annee derivee, pas l'age calcule depuis `birthDate`.
+        //
+        // `birthDate` vit dans `private/contact` et n'atteint que le
+        // titulaire : cette tuile affichait donc « 18 ans » au joueur et rien
+        // du tout au recruteur, sur la meme fiche. `birthYear` est pose par le
+        // serveur sur le document public, donc les deux lecteurs voient la
+        // meme chose.
+        //
+        // L'annee est aussi la bonne unite : les categories du football se
+        // comptent par annee de naissance, pas par age au jour pres.
         _infoTile(
-          'Âge',
-          user.age == null ? null : '${user.age} ans',
+          'Année de naissance',
+          user.football.birthYear?.toString(),
           icon: Icons.cake_outlined,
         ),
         _infoTile(
@@ -1247,11 +1257,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 : football.nationalities.map(countryLabel).join(' · '),
             icon: Icons.public_outlined,
           ),
-          _infoTile(
-            'Année de naissance',
-            football.birthYear?.toString(),
-            icon: Icons.cake_outlined,
-          ),
+          // L'annee de naissance n'est plus reprise ici : elle est affichee
+          // une fois, avec le reste de l'identite, dans la section du dessus.
           const Divider(),
           _infoTile(
             'Club actuel',

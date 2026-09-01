@@ -19,15 +19,6 @@ class _HeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final location = [
-      user.city,
-      user.region,
-      user.country,
-    ].where((value) => value?.trim().isNotEmpty == true).join(', ');
-    final teamLabel = user.team?.isNotEmpty == true
-        ? user.team
-        : user.clubActuel;
-
     return Stack(
       children: [
         Container(
@@ -87,24 +78,17 @@ class _HeaderCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      user.nom,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _profileRoleLabel(user).toUpperCase(),
-                      style: const TextStyle(
-                        color: AdColors.onSurfaceMuted,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0,
-                      ),
-                    ),
+                    // Ni le nom ni le role ne sont repris ici : la barre du
+                    // haut les porte deja, a trois centimetres au-dessus, en
+                    // titre et en sous-titre. Les afficher deux fois ne disait
+                    // rien de plus et volait la seule place ou un recruteur
+                    // cherche des faits.
+                    //
+                    // Meme raison pour l'age, le club et la localisation, qui
+                    // vivaient ici en pastilles et vivent toujours dans les
+                    // sections en dessous : une fiche qui repete se lit deux
+                    // fois plus lentement.
+
                     // The account's e-mail, for its owner only.
                     //
                     // It used to live in the Outils header, which was the one
@@ -167,21 +151,6 @@ class _HeaderCard extends StatelessWidget {
                           label: user.profileLevelLabel,
                           style: _profileLevelStyle(user.profileLevelLabel),
                         ),
-                        if (user.age != null)
-                          _InfoPill(
-                            icon: Icons.cake_outlined,
-                            label: '${user.age} ans',
-                          ),
-                        if (teamLabel?.isNotEmpty == true)
-                          _InfoPill(
-                            icon: Icons.flag_outlined,
-                            label: teamLabel!,
-                          ),
-                        if (location.isNotEmpty)
-                          _InfoPill(
-                            icon: Icons.place_outlined,
-                            label: location,
-                          ),
                       ],
                     ),
                   ],
@@ -405,10 +374,6 @@ class _InfoPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedStyle = style;
-    final maxLabelWidth = (MediaQuery.of(context).size.width - 120).clamp(
-      80.0,
-      320.0,
-    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -428,8 +393,20 @@ class _InfoPill extends StatelessWidget {
             color: resolvedStyle?.foregroundColor ?? AdColors.brand,
           ),
           const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxLabelWidth),
+          // `Flexible`, et non une largeur calculee sur l'ecran.
+          //
+          // La pastille vit dans un `Wrap`, lui-meme dans la colonne qui suit
+          // l'avatar : la place reelle, c'est la largeur de l'ecran moins
+          // l'avatar (96), l'ecart (14) et les paddings (2x16), soit environ
+          // 142 px. La contrainte precedente n'en retirait que 120 et
+          // debordait donc d'une bonne cinquantaine de pixels : l'ellipse ne
+          // se declenchait jamais et un libelle long -- « Ville, Region,
+          // Pays » -- sortait du cadre par la droite.
+          //
+          // Le parent connait sa largeur ; le lui demander plutot que la
+          // deviner rend le correctif insensible a tout ce qu'on ajoutera
+          // autour.
+          Flexible(
             child: Text(
               label,
               maxLines: 1,
