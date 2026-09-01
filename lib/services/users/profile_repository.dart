@@ -119,6 +119,37 @@ class ProfileRepository {
     'city',
     'region',
     'openToOpportunities',
+
+    // Les faits footballistiques types.
+    //
+    // Leur absence ici n'etait pas un detail cosmetique : la regle
+    // `verifiedOwnerProfileChangeIsInvalidated()` refuse l'ecriture d'un
+    // profil verifie qui touche a l'un de ces champs sans porter la remise a
+    // zero de la verification. Comme cette liste decide si le client joint
+    // cette remise a zero, un joueur verifie qui corrigeait son poste, son
+    // club ou ses statistiques voyait sa sauvegarde refusee -- et le
+    // formulaire lui repondait de se reconnecter, ce qui n'y changeait rien.
+    //
+    // La liste doit rester le miroir exact de `ownerProfileTrustFieldsChanged()`
+    // dans firestore.rules ; un test compare les deux et casse si l'une avance
+    // sans l'autre.
+    'nationalities',
+    'positionCodes',
+    'strongFoot',
+    'heightCm',
+    'weightKg',
+    'contractStatus',
+    'contractEndDate',
+    'currentClubName',
+    'currentClubLevel',
+    'currentSeason',
+    'clubLevel',
+    'clubAgeCategories',
+    'clubFederationId',
+    'agentLicenceNumber',
+    'agentLicenceCountry',
+    'agentCountries',
+
     'playerProfile',
     'clubProfile',
     'agentProfile',
