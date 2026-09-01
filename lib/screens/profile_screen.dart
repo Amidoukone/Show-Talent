@@ -1102,9 +1102,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     if (user.isPlayer || user.isCoach) {
-      final teamLabel = user.team?.isNotEmpty == true
-          ? user.team
-          : user.clubActuel;
+      // Le club type d'abord. Les deux anciens champs restent en secours pour
+      // les comptes crees avant la bascule : ils ne sont plus ecrits par
+      // aucune surface, et le premier enregistrement du profil les convertit.
+      final teamLabel =
+          user.football.currentClubName ?? user.team ?? user.clubActuel;
+
+      // Le poste tel qu'un recruteur le filtre, et non tel qu'il a ete tape.
+      // Le coach garde son texte libre : sa fonction n'a pas d'equivalent
+      // dans la liste fermee des postes de terrain.
+      final positionLabel = user.isCoach
+          ? user.position
+          : (user.football.positions.isEmpty
+                ? null
+                : user.football.positions
+                      .map((position) => position.labelFr)
+                      .join(' · '));
       tiles.addAll([
         // L'annee derivee, pas l'age calcule depuis `birthDate`.
         //
@@ -1122,8 +1135,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           icon: Icons.cake_outlined,
         ),
         _infoTile(
-          user.isCoach ? 'Fonction sportive' : 'Poste principal',
-          user.position,
+          user.isCoach ? 'Fonction sportive' : 'Postes',
+          positionLabel,
           icon: Icons.sports_outlined,
         ),
         _infoTile(
@@ -1226,15 +1239,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           // L'identite footballistique d'abord : c'est ce qu'un recruteur lit
           // en premier, et le reste ne l'interesse que si celle-ci lui parle.
-          _infoTile(
-            'Postes',
-            football.positions.isEmpty
-                ? null
-                : football.positions
-                      .map((position) => position.labelFr)
-                      .join(' · '),
-            icon: Icons.grid_view_rounded,
-          ),
+          // Les postes et le club actuel ne sont plus repris ici : ils sont
+          // affiches une fois, avec le reste de l'identite, dans la section du
+          // dessus. Ce qui reste ici est ce qu'elle ne porte pas.
           _infoTile(
             'Pied fort',
             football.strongFoot?.labelFr,
@@ -1260,11 +1267,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // L'annee de naissance n'est plus reprise ici : elle est affichee
           // une fois, avec le reste de l'identite, dans la section du dessus.
           const Divider(),
-          _infoTile(
-            'Club actuel',
-            football.currentClubName,
-            icon: Icons.shield_outlined,
-          ),
           _infoTile(
             'Niveau',
             football.currentClubLevel?.labelFr,

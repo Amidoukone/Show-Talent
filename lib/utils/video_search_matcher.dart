@@ -158,9 +158,20 @@ bool matchesUserVideoSearch(AppUser user, String query) {
 Iterable<String> _userSearchValues(AppUser user) sync* {
   yield user.nom;
   yield user.role;
-  if (user.position != null) yield user.position!;
-  if (user.team != null) yield user.team!;
-  if (user.clubActuel != null) yield user.clubActuel!;
+  // Les postes types, en toutes lettres : c'est « Milieu axial » que
+  // l'utilisateur tape dans la recherche, pas « CM ». Le code seul ne
+  // repondrait a personne.
+  for (final position in user.football.positions) {
+    yield position.labelFr;
+  }
+  // Le poste en texte libre ne subsiste que pour le coach ; pour un joueur il
+  // n'est plus ecrit, et le laisser ici ferait remonter un ancien poste
+  // longtemps apres qu'il a change.
+  if (user.isCoach && user.position != null) yield user.position!;
+
+  final club = user.football.currentClubName ?? user.team ?? user.clubActuel;
+  if (club != null) yield club;
+
   if (user.bio != null) yield user.bio!;
   if (user.city != null) yield user.city!;
   if (user.region != null) yield user.region!;

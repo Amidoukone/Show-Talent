@@ -64,6 +64,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   ProfileController get profileController => widget.profileController;
 
   bool get _isPlayer => user.isPlayer || user.isCoach;
+
+  /// Le coach, distingue du joueur : il garde un poste en texte libre la ou le
+  /// joueur passe par la liste fermee. Voir la construction de la patch.
+  bool get _isCoach => user.isCoach;
   bool get _isClub => user.role == 'club';
   bool get _isRecruiter => user.isRecruiter;
 
@@ -80,8 +84,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _regionController = TextEditingController(text: user.region ?? '');
     _countryController = TextEditingController(text: user.country ?? '');
     _positionController = TextEditingController(text: user.position ?? '');
+    // Le club type, avec les deux anciens champs en secours tant que des
+    // comptes crees avant la bascule n'ont que ceux-la. Le premier
+    // enregistrement les convertit, puisque la patch n'ecrit plus que
+    // `currentClubName`.
     _teamController = TextEditingController(
-      text: user.team ?? user.clubActuel ?? '',
+      text: user.football.currentClubName ?? user.team ?? user.clubActuel ?? '',
     );
     _ligueController = TextEditingController(text: user.ligue ?? '');
     _entrepriseController = TextEditingController(text: user.entreprise ?? '');
@@ -375,21 +383,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           patch['birthDate'] = ProfileController.deleteField;
         }
 
-        final position = _trimOrNull(_positionController.text);
-        if (position != null) {
-          patch['position'] = position;
-        } else if ((user.position?.isNotEmpty ?? false)) {
-          patch['position'] = ProfileController.deleteField;
+        // Le poste en texte libre ne survit que pour le coach.
+        //
+        // « Ailier droit » tape a la main ne se filtre pas : la recherche
+        // interroge `positionCodes`, la liste fermee que le joueur coche dans
+        // le formulaire avance. Garder les deux, c'etait afficher le texte
+        // libre sur la fiche pendant qu'un recruteur filtrait sur l'autre --
+        // un joueur pouvait lire « Milieu axial » sur son profil et
+        // n'apparaitre dans aucune recherche de milieu.
+        //
+        // Le coach, lui, n'a pas de poste de terrain : « Fonction sportive »
+        // (coach principal, preparateur physique) n'a aucun equivalent dans
+        // la liste fermee, et lui retirer le champ le laisserait sans rien.
+        if (_isCoach) {
+          final position = _trimOrNull(_positionController.text);
+          if (position != null) {
+            patch['position'] = position;
+          } else if ((user.position?.isNotEmpty ?? false)) {
+            patch['position'] = ProfileController.deleteField;
+          }
         }
 
-        final team = _trimOrNull(_teamController.text);
-        if (team != null) {
-          patch['team'] = team;
-          patch['clubActuel'] = team;
-        } else if ((user.team?.isNotEmpty ?? false) ||
-            (user.clubActuel?.isNotEmpty ?? false)) {
-          patch['team'] = ProfileController.deleteField;
-          patch['clubActuel'] = ProfileController.deleteField;
+        // Un seul club, celui que la fiche affiche et que le portail admin
+        // corrige. `team` et `clubActuel` portaient le meme fait sans jamais
+        // etre ecrits ensemble par les trois surfaces qui y touchaient.
+        final club = _trimOrNull(_teamController.text);
+        if (club != null) {
+          patch['currentClubName'] = club;
+        } else if ((user.football.currentClubName?.isNotEmpty ?? false)) {
+          patch['currentClubName'] = ProfileController.deleteField;
         }
       }
 
@@ -643,21 +665,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   : 'Identité sportive du joueur',
                               subtitle: user.role == 'coach'
                                   ? 'Renseignez la structure dans laquelle vous intervenez publiquement.'
-                                  : 'Renseignez le poste principal et le club ou l’académie actuellement affichés sur votre profil.',
+                                  : 'Renseignez le club ou l’académie actuellement affichés sur votre profil. Vos postes se cochent dans le profil avancé.',
                               icon: Icons.sports_soccer_outlined,
                               child: Column(
                                 children: [
-                                  _buildTextField(
-                                    controller: _positionController,
-                                    label: user.role == 'coach'
-                                        ? 'Fonction sportive'
-                                        : 'Poste principal',
-                                    icon: Icons.sports_outlined,
-                                    hint: user.role == 'coach'
-                                        ? 'Ex : Coach principal, préparateur physique'
-                                        : 'Ex : Ailier droit, gardien, milieu axial',
-                                  ),
-                                  const SizedBox(height: 12),
+                                  // Le champ libre n'est propose qu'au coach :
+                                  // le joueur coche ses postes dans la liste
+                                  // fermee du profil avance, la seule que la
+                                  // recherche sache filtrer.
+                                  if (_isCoach) ...[
+                                    _buildTextField(
+                                      controller: _positionController,
+                                      label: 'Fonction sportive',
+                                      icon: Icons.sports_outlined,
+                                      hint:
+                                          'Ex : Coach principal, préparateur physique',
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
                                   _buildTextField(
                                     controller: _teamController,
                                     label: user.role == 'coach'

@@ -615,6 +615,10 @@ class ChatRepository {
     for (final value in <String?>[
       user.nomClub,
       user.entreprise,
+      // Le club type d'abord ; les deux anciens champs ne servent plus qu'aux
+      // comptes anterieurs a la bascule, que le premier enregistrement du
+      // profil convertit.
+      user.football.currentClubName,
       user.clubActuel,
       user.team,
     ]) {

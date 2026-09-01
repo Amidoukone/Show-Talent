@@ -136,13 +136,11 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
   }
 
   Map<String, dynamic> buildPatch() {
-    final patch = _currentProfile().toPatch();
-    // `clubActuel` reste le champ affiché par le profil de base ; le garder en
-    // phase evite qu'un joueur voie deux clubs differents sur sa propre fiche.
-    patch['clubActuel'] = _clubNameController.text.trim().isEmpty
-        ? null
-        : _clubNameController.text.trim();
-    return patch;
+    // Le miroir vers `clubActuel` a disparu avec la raison qui le justifiait :
+    // toutes les surfaces lisent maintenant `currentClubName` en premier. Il
+    // ne recopiait le club que pour une seule des deux sources concurrentes,
+    // et l'en-tete, qui preferait `team`, continuait d'afficher l'ancien club.
+    return _currentProfile().toPatch();
   }
 
   bool validate() => _formKey.currentState?.validate() ?? false;

@@ -58,7 +58,14 @@ void main() {
       editProfile.indexOf('Identité sportive du joueur'),
       lessThan(editProfile.indexOf('Localisation')),
     );
-    expect(editProfile, contains('Renseignez le poste principal et le club'));
+    // Le poste libre a quitte l'editeur de base pour le joueur : il se coche
+    // dans le profil avance, contre la liste fermee que la recherche filtre.
+    // Le coach le garde -- sa fonction n'a pas d'equivalent dans cette liste.
+    expect(editProfile, contains('Vos postes se cochent dans le profil avancé'));
+    expect(editProfile, contains('if (_isCoach) ...['));
+    expect(editProfile, contains("patch['currentClubName']"));
+    expect(editProfile, isNot(contains("patch['team']")));
+    expect(editProfile, isNot(contains("patch['clubActuel']")));
     expect(editProfile, contains('_bioController'));
     expect(editProfile, isNot(contains('if (!user.isFan) ...[')));
 

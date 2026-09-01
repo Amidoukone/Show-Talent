@@ -4,19 +4,25 @@ import 'package:adfoot/utils/video_search_matcher.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  /// Un joueur decrit par la liste fermee, comme la refonte l'ecrit.
+  ///
+  /// Le poste en texte libre n'est plus alimente pour un joueur : la recherche
+  /// lit `positionCodes` et rend le libelle francais du code
+  /// (`ST` -> « Attaquant »), qui est ce qu'un utilisateur tape.
   AppUser buildPlayer({
     String uid = 'player-1',
-    String position = 'Avant-centre',
-    Map<String, dynamic>? playerProfile,
+    List<String> positionCodes = const <String>['ST'],
+    String role = 'joueur',
+    String? position,
   }) {
     return AppUser.fromMap({
       'uid': uid,
       'nom': 'Joueur Test',
       'email': '$uid@example.com',
-      'role': 'joueur',
+      'role': role,
       'photoProfil': '',
-      'position': position,
-      'playerProfile': playerProfile,
+      'positionCodes': positionCodes,
+      'position': ?position,
       'followers': 0,
       'followings': 0,
       'emailVerified': true,
@@ -46,23 +52,45 @@ void main() {
   });
 
   test('matches attacker searches against common forward labels', () {
-    final player = buildPlayer(position: 'Avant-centre');
+    final player = buildPlayer(positionCodes: const <String>['ST']);
 
     expect(matchesUserVideoSearch(player, 'attaquant'), isTrue);
+    expect(matchesUserVideoSearch(player, 'buteur'), isTrue);
     expect(matchesVideoSearch(buildVideo(), player, 'attaquant'), isTrue);
   });
 
-  test('matches defensive and goalkeeper synonyms from advanced profiles', () {
-    final defender = buildPlayer(
-      position: '',
-      playerProfile: {
-        'positions': ['Défenseur central'],
-      },
-    );
-    final keeper = buildPlayer(position: 'Gardien de but');
+  test('matches defensive and goalkeeper synonyms from typed positions', () {
+    final defender = buildPlayer(positionCodes: const <String>['CB']);
+    final keeper = buildPlayer(positionCodes: const <String>['GK']);
 
     expect(matchesUserVideoSearch(defender, 'defenseur'), isTrue);
     expect(matchesUserVideoSearch(keeper, 'goalkeeper'), isTrue);
+  });
+
+  test('a coach stays searchable by the function they typed', () {
+    // Le texte libre n'a pas disparu pour tout le monde : « preparateur
+    // physique » n'a pas de code dans la liste fermee des postes de terrain.
+    final coach = buildPlayer(
+      uid: 'coach-1',
+      role: 'coach',
+      positionCodes: const <String>[],
+      position: 'Préparateur physique',
+    );
+
+    expect(matchesUserVideoSearch(coach, 'preparateur'), isTrue);
+  });
+
+  test('a stale free-text position no longer answers for a player', () {
+    // Un compte anterieur a la bascule peut porter les deux : le poste libre
+    // qu'il avait tape, et les codes qu'il a coches depuis. Repondre sur
+    // l'ancien ferait remonter un joueur sur un poste qu'il ne joue plus.
+    final player = buildPlayer(
+      positionCodes: const <String>['GK'],
+      position: 'Avant-centre',
+    );
+
+    expect(matchesUserVideoSearch(player, 'gardien'), isTrue);
+    expect(matchesUserVideoSearch(player, 'attaquant'), isFalse);
   });
 
   test('keeps video caption search available when author is unknown', () {

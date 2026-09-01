@@ -1176,11 +1176,20 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       // already says it is a player, and a recruiter needs the position.
       publisherRole: PublisherHeadline.badge(
         role: publisher?.role,
-        position: publisher?.position,
+        // Le poste principal, celui que le joueur a coche en premier : sous
+        // une video, la place tient un mot, pas une liste.
+        position: publisher == null
+            ? null
+            : (publisher.football.positions.isEmpty
+                  ? (publisher.isCoach ? publisher.position : null)
+                  : publisher.football.positions.first.labelFr),
       ),
       publisherDetails: PublisherHeadline.details(
-        club: publisher?.clubActuel,
-        team: publisher?.team,
+        club:
+            publisher?.football.currentClubName ??
+            publisher?.team ??
+            publisher?.clubActuel,
+        team: null,
         city: publisher?.city,
       ),
       showProgressBar: widget.showProgressBar,
