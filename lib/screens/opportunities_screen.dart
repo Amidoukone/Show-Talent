@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:adfoot/screens/event_list_screen.dart';
 import 'package:adfoot/screens/offre_screen.dart';
+import 'package:adfoot/screens/talent_search_screen.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 
@@ -22,7 +23,17 @@ class OpportunitiesScreen extends StatefulWidget {
     super.key,
     this.initialTab = 0,
     this.tabRequestSerial = 0,
+    this.showTalentSearch = false,
   });
+
+  /// Ajoute l'onglet « Joueurs », reserve a ceux qui recrutent.
+  ///
+  /// Un joueur n'a rien a faire d'une recherche de joueurs, et l'onglet lui
+  /// couterait un tiers de la largeur de la barre pour rien. Le role est passe
+  /// par l'appelant plutot que relu ici : cet ecran n'a jamais eu besoin de
+  /// connaitre l'utilisateur, et lui donner un controleur pour un booleen
+  /// serait payer cher une information que `MainScreen` tient deja.
+  final bool showTalentSearch;
 
   /// Which tab a caller wants open.
   final int initialTab;
@@ -58,7 +69,7 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen>
   void initState() {
     super.initState();
     _tabController = TabController(
-      length: 2,
+      length: _tabCount,
       vsync: this,
       initialIndex: _safeTab(widget.initialTab),
     );
@@ -76,7 +87,14 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen>
     _tabController.animateTo(target);
   }
 
-  int _safeTab(int value) => value.clamp(0, 1).toInt();
+  /// Deux onglets, trois pour qui recrute.
+  ///
+  /// « Joueurs » est ajoute **en dernier** : les notifications ouvrent cet
+  /// ecran par index (0 = Offres, 1 = Evenements), et inserer un onglet avant
+  /// eux ferait atterrir une notification d'evenement sur une autre page.
+  int get _tabCount => widget.showTalentSearch ? 3 : 2;
+
+  int _safeTab(int value) => value.clamp(0, _tabCount - 1).toInt();
 
   @override
   void dispose() {
@@ -97,7 +115,9 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen>
       backgroundColor: AdColors.surface,
       appBar: AdAppBar(
         title: 'Carrière',
-        subtitle: 'Offres et événements',
+        subtitle: widget.showTalentSearch
+            ? 'Offres, événements et joueurs'
+            : 'Offres et événements',
         showBottomDivider: false,
         bottom: TabBar(
           controller: _tabController,
@@ -113,9 +133,10 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen>
             fontWeight: FontWeight.w700,
             fontSize: 14,
           ),
-          tabs: const [
-            Tab(text: 'Offres'),
-            Tab(text: 'Événements'),
+          tabs: [
+            const Tab(text: 'Offres'),
+            const Tab(text: 'Événements'),
+            if (widget.showTalentSearch) const Tab(text: 'Joueurs'),
           ],
         ),
       ),
@@ -124,6 +145,8 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen>
         children: [
           _tabAt(0, const OffreScreen(showAppBar: false)),
           _tabAt(1, const EventListScreen(showAppBar: false)),
+          if (widget.showTalentSearch)
+            _tabAt(2, const TalentSearchScreen()),
         ],
       ),
     );

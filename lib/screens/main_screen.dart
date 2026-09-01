@@ -85,6 +85,7 @@ class _MainScreenState extends State<MainScreen> {
         return OpportunitiesScreen(
           initialTab: _opportunitiesTab,
           tabRequestSerial: _opportunitiesTabSerial,
+          showTalentSearch: isOpportunityPublisherRole(user.role),
         );
       case _chatTab:
         return const ConversationsScreen();
