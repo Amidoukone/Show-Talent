@@ -742,9 +742,20 @@ class AppUser {
     final missing = <String>[];
 
     // Le pays d'abord : c'est, avec l'age, ce qu'un club demande avant meme
-    // de regarder une video. Voir [hasScoutReadyProfile] pour ce qui manque
-    // encore ici.
+    // de regarder une video.
     if (country?.trim().isEmpty ?? true) missing.add('Pays');
+
+    // L'age ensuite, parce que sans lui le serveur ne rend pas ce dossier
+    // trouvable : `computeIsSearchable` refuse un `birthYear` nul
+    // (functions/src/user_search_fields.ts). L'omettre ici annoncait un
+    // « Dossier scout pret » a un joueur qu'aucune recherche de recruteur ne
+    // remontait -- le pire des cas, puisque rien ne le lui disait.
+    //
+    // Reclame par le nom du champ que le joueur remplit (« Date de
+    // naissance », profil de base) et non par celui de l'annee derivee, qui
+    // n'est editable sur aucun ecran.
+    if (profile.birthYear == null) missing.add('Date de naissance');
+
     if (profile.nationalities.isEmpty) missing.add('Nationalité');
     if (profile.positions.isEmpty) missing.add('Poste');
     if (profile.strongFoot == null) missing.add('Pied fort');
@@ -775,22 +786,21 @@ class AppUser {
   /// non dans `playerProfile` -- champ transverse, saisi dans le profil de
   /// base.
   ///
-  /// L'autre question, l'age, n'est **volontairement pas** exigee ici, et
-  /// c'est une limite connue et non un oubli. `birthDate` vit dans
-  /// `users/{uid}/private/contact` et n'est charge que pour le titulaire du
-  /// profil (`includePrivateFields: uid == currentAuthUid`). L'exiger rendait
-  /// ce getter dependant de qui regarde : le joueur voyait « Elite » sur son
-  /// propre profil pendant qu'un recruteur, qui ne recoit jamais ce champ,
-  /// voyait « partiel » sur le meme dossier -- c'est-a-dire que le label
-  /// devenait invisible pour le seul public auquel il s'adresse. Un jugement
-  /// porte sur un dossier ne peut pas changer avec le lecteur.
+  /// L'autre question, l'age, est exigee elle aussi, mais via `birthYear` et
+  /// non via `birthDate`. La distinction est ce qui rend le jugement lisible
+  /// par tout le monde : `birthDate` vit dans `users/{uid}/private/contact` et
+  /// n'atteint que le titulaire (`includePrivateFields: uid ==
+  /// currentAuthUid`), donc l'exiger rendait ce getter dependant de qui
+  /// regarde -- le joueur voyait « Elite » pendant qu'un recruteur voyait
+  /// « partiel » sur le meme dossier. `birthYear` est derive cote serveur et
+  /// pose en clair sur le document public : annee seule, de quoi filtrer une
+  /// tranche d'age sans exposer une date de naissance complete. Les deux
+  /// lecteurs le recoivent, donc le verdict ne bouge plus avec le lecteur.
   ///
-  /// Le retablir demande un `birthYear` derive et public sur le document
-  /// utilisateur : annee seule, donc utilisable pour filtrer une tranche
-  /// d'age sans exposer une date de naissance complete. Cela suppose une
-  /// entree dans la liste blanche `canUpdateOwnProfile` de firestore.rules,
-  /// un chemin d'ecriture et un deploiement de regles -- voir
-  /// `docs/talent-search-spec.md`.
+  /// Il n'est dans aucune liste blanche d'ecriture client
+  /// (`canUpdateOwnProfile`, firestore.rules) : seul le trigger
+  /// `deriveUserSearchFields` l'ecrit. Un joueur ne peut donc pas s'attribuer
+  /// une visibilite qu'il n'a pas.
   ///
   /// Derive de [missingScoutRequirements] plutot que de reevaluer les memes
   /// conditions : c'est la seule facon que l'ecran qui explique et la regle

@@ -13,11 +13,17 @@ String _read(String path) => File(path).readAsStringSync();
 /// foot, build, nationality, club level, contract, minutes played. A file that
 /// answers none of those is one no decision can be taken on.
 ///
-/// The age is deliberately **not** required. `birthDate` lives in
-/// `users/{uid}/private/contact` and reaches only the profile owner, so
-/// requiring it made the verdict depend on who was reading — the player saw
-/// "Élite" while a recruiter saw "partiel" on the same file. It returns as a
-/// public, server-derived `birthYear`; see `docs/talent-search-spec.md`.
+/// The age is required, and it is read from `birthYear`, never from
+/// `birthDate`. `birthDate` lives in `users/{uid}/private/contact` and reaches
+/// only the profile owner, so requiring *that* made the verdict depend on who
+/// was reading — the player saw "Élite" while a recruiter saw "partiel" on the
+/// same file. `birthYear` is derived server-side onto the public document, so
+/// both readers get it and the verdict holds still.
+///
+/// Requiring it is not a matter of taste: `computeIsSearchable`
+/// (functions/src/user_search_fields.ts) refuses a null `birthYear`, so a file
+/// without one is invisible to every recruiter search. Announcing it as ready
+/// told the player the opposite of what the server was doing.
 AppUser _player({
   DateTime? birthDate,
   String? country,
@@ -40,6 +46,9 @@ AppUser _player({
 /// query cannot usefully index a field buried in a map.
 Map<String, dynamic> _completeFootballFile() {
   return <String, dynamic>{
+    // Pose par le trigger `deriveUserSearchFields`, pas par le client : un
+    // dossier complet en production en porte toujours un.
+    'birthYear': 2007,
     'nationalities': <String>['CI'],
     'positionCodes': <String>['CM'],
     'strongFoot': 'left',
@@ -69,6 +78,40 @@ void main() {
 
       expect(user.hasScoutReadyProfile, isTrue);
       expect(user.profileLevelLabel, 'Profil Élite');
+    });
+
+    test('a file the search would not return is never announced as ready', () {
+      // La regression que ce test tient : tout etait rempli sauf l'annee de
+      // naissance, l'app affichait « Dossier scout pret » en vert, et
+      // `computeIsSearchable` mettait `isSearchable` a false. Le joueur se
+      // croyait visible et n'apparaissait dans aucune recherche.
+      final football = _completeFootballFile()..remove('birthYear');
+      final user = _player(
+        country: 'Côte d’Ivoire',
+        football: football,
+        cvUrl: 'https://example.org/cv.pdf',
+      );
+
+      expect(user.hasScoutReadyProfile, isFalse);
+      expect(user.missingScoutRequirements, <String>['Date de naissance']);
+    });
+
+    test('a birth date the server has not derived yet does not count', () {
+      // `birthYear` est pose par un trigger, pas par l'ecran d'edition. Entre
+      // la saisie et la derivation, le dossier n'est pas encore trouvable :
+      // le dire est la seule reponse honnete, et c'est aussi ce qui garde le
+      // verdict independant du lecteur -- `birthDate` n'atteint que le
+      // titulaire, donc s'en servir ici ferait diverger les deux vues.
+      final football = _completeFootballFile()..remove('birthYear');
+      final owner = _player(
+        birthDate: DateTime(2007, 3, 14),
+        country: 'Côte d’Ivoire',
+        football: football,
+        cvUrl: 'https://example.org/cv.pdf',
+      );
+
+      expect(owner.hasScoutReadyProfile, isFalse);
+      expect(owner.missingScoutRequirements, <String>['Date de naissance']);
     });
 
     test('the verdict is the same whoever is looking', () {
@@ -143,6 +186,7 @@ void main() {
 
     test('each missing fact is named, one at a time', () {
       const cases = <String, String>{
+        'birthYear': 'Date de naissance',
         'positionCodes': 'Poste',
         'strongFoot': 'Pied fort',
         'heightCm': 'Taille',
@@ -206,6 +250,7 @@ void main() {
       // list as it comes.
       expect(_player().missingScoutRequirements, <String>[
         'Pays',
+        'Date de naissance',
         'Nationalité',
         'Poste',
         'Pied fort',
