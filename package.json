@@ -66,6 +66,8 @@
     "backend:parity:check:production": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-backend-parity.ps1 -Environment production",
     "playback:mode:check:production": "node .\\scripts\\repair-playback-mode.mjs --environment production",
     "playback:mode:repair:production": "node .\\scripts\\repair-playback-mode.mjs --environment production --apply",
+    "users:search-fields:check:production": "node .\\scripts\\refresh-user-search-fields.mjs --environment production",
+    "users:search-fields:refresh:production": "node .\\scripts\\refresh-user-search-fields.mjs --environment production --apply",
     "hosting:marketing:deploy:staging": "firebase.cmd deploy --only hosting:marketing --project staging",
     "hosting:marketing:deploy:production": "firebase.cmd deploy --only hosting:marketing --project production",
     "rules:test": "firebase emulators:exec --only firestore --project demo-adfoot \"node test/rules/firestore-rules.test.mjs\"",
