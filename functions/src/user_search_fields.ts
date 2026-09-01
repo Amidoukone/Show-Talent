@@ -3,6 +3,7 @@
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
 import {db} from "./firebase";
+import {MAX_POSITION_CODES, POSITION_CODES} from "./football_vocabulary";
 
 /**
  * Derives the two search fields no client is allowed to write.
@@ -19,13 +20,6 @@ import {db} from "./firebase";
  * deserves to be shown to a recruiter.
  */
 
-/** Le nombre maximum de postes retenus, aligne sur le client. */
-const MAX_POSITION_CODES = 3;
-
-const POSITION_CODES = new Set([
-  "GK", "CB", "LB", "RB", "DM", "CM", "AM", "LW", "RW", "ST",
-]);
-
 /**
  * True when the document carries at least one usable position code.
  *
@@ -37,7 +31,8 @@ function hasPositionCode(value: unknown): boolean {
   return value
     .slice(0, MAX_POSITION_CODES)
     .some((entry) =>
-      POSITION_CODES.has(String(entry ?? "").trim().toUpperCase()));
+      (POSITION_CODES as readonly string[])
+        .includes(String(entry ?? "").trim().toUpperCase()));
 }
 
 /**

@@ -26,6 +26,20 @@ import {
   privateContactRef,
 } from "./admin_account_support";
 import {EMAIL_SECRETS, sendAccountInviteEmail} from "./email_delivery";
+import {
+  AGE_CATEGORY_CODES,
+  CLUB_LEVEL_CODES,
+  CONTRACT_STATUS_CODES,
+  MAX_AGENT_COUNTRIES,
+  MAX_NATIONALITIES,
+  MAX_POSITION_CODES,
+  POSITION_CODES,
+  STRONG_FOOT_CODES,
+  toCode,
+  toCodeList,
+  toCountryCode,
+  toCountryCodeList,
+} from "./football_vocabulary";
 
 type ManagedTargetContext = {
   uid: string;
@@ -482,7 +496,9 @@ function sanitizeManagedProfilePatch(
     "entreprise",
     "team",
     "clubActuel",
-    "position",
+    // `position` en texte libre a disparu avec la refonte : il est remplace
+    // par `positionCodes`, valide plus bas contre la liste fermee.
+    "currentClubName",
   ];
 
   const booleanFields = [
@@ -499,7 +515,10 @@ function sanitizeManagedProfilePatch(
     "nombreDeRecrutements",
   ];
 
-  const mapFields = ["clubProfile", "agentProfile", "playerProfile"];
+  // `clubProfile`, `agentProfile` et `playerProfile` portaient du texte libre
+  // et ne sont plus lus par personne. Les garder ecrivables laisserait
+  // l'administration remplir des champs morts en croyant corriger une fiche.
+  const mapFields: string[] = [];
 
   const updates: Record<string, unknown> = {};
 
@@ -574,7 +593,102 @@ function sanitizeManagedProfilePatch(
     }
   }
 
+  applyFootballFields(patch, updates);
+
   return updates;
+}
+
+/**
+ * Les faits footballistiques corrigeables par l'administration.
+ *
+ * Chacun est valide contre la liste fermee correspondante, et c'est le seul
+ * endroit ou cette validation existe pour le portail : le SDK Admin contourne
+ * firestore.rules, donc rien d'autre n'empeche d'ecrire « Defense » dans un
+ * champ que le mobile lit comme nul.
+ *
+ * `birthYear` et `isSearchable` n'y sont pas : ils sont derives par
+ * `user_search_fields.ts` et une valeur ecrite a la main serait ecrasee a la
+ * premiere ecriture suivante -- ce qui se lirait comme un bug plutot que comme
+ * la regle.
+ *
+ * @param {Record<string, unknown>} patch The raw patch from the admin portal.
+ * @param {Record<string, unknown>} updates The sanitised patch being built.
+ */
+function applyFootballFields(
+  patch: Record<string, unknown>,
+  updates: Record<string, unknown>,
+): void {
+  const codeLists: Array<[string, readonly string[], number]> = [
+    ["positionCodes", POSITION_CODES, MAX_POSITION_CODES],
+    ["clubAgeCategories", AGE_CATEGORY_CODES, AGE_CATEGORY_CODES.length],
+  ];
+
+  for (const [field, codes, max] of codeLists) {
+    if (field in patch) {
+      updates[field] = toCodeList(codes, patch[field], max);
+    }
+  }
+
+  const singleCodes: Array<[string, readonly string[]]> = [
+    ["strongFoot", STRONG_FOOT_CODES],
+    ["contractStatus", CONTRACT_STATUS_CODES],
+    ["currentClubLevel", CLUB_LEVEL_CODES],
+    ["clubLevel", CLUB_LEVEL_CODES],
+  ];
+
+  for (const [field, codes] of singleCodes) {
+    if (field in patch) {
+      updates[field] = toCode(codes, patch[field]);
+    }
+  }
+
+  if ("nationalities" in patch) {
+    updates["nationalities"] = toCountryCodeList(
+      patch["nationalities"],
+      MAX_NATIONALITIES,
+    );
+  }
+
+  if ("agentCountries" in patch) {
+    updates["agentCountries"] = toCountryCodeList(
+      patch["agentCountries"],
+      MAX_AGENT_COUNTRIES,
+    );
+  }
+
+  if ("agentLicenceCountry" in patch) {
+    updates["agentLicenceCountry"] = toCountryCode(patch["agentLicenceCountry"]);
+  }
+
+  for (const field of ["agentLicenceNumber", "clubFederationId"]) {
+    const value = patch[field];
+    if (value === null) {
+      updates[field] = null;
+    } else if (typeof value === "string") {
+      updates[field] = value.trim() || null;
+    }
+  }
+
+  // Bornes humaines : une taille hors de cet intervalle ne decrit aucun
+  // joueur, et l'accepter fausserait un filtre par gabarit.
+  const bounded: Array<[string, number, number]> = [
+    ["heightCm", 120, 230],
+    ["weightKg", 30, 150],
+  ];
+
+  for (const [field, min, max] of bounded) {
+    const value = patch[field];
+    if (value === null) {
+      updates[field] = null;
+      continue;
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const rounded = Math.trunc(value);
+      if (rounded >= min && rounded <= max) {
+        updates[field] = rounded;
+      }
+    }
+  }
 }
 
 export const disableManagedAccountAuth = onCall(
