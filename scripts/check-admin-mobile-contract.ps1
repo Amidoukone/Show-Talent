@@ -22,6 +22,38 @@ function Assert-ContainsRegex {
     return $null
 }
 
+function Get-MirrorBody {
+    <#
+        Normalise une copie miroir pour la comparaison.
+
+        Retire l'en-tete de commentaires qui explique la copie, ramene le
+        prefixe de paquet du depot admin sur celui du mobile, et neutralise
+        les fins de ligne et espaces de fin. Ce qui reste doit etre identique
+        des deux cotes.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Raw
+    )
+
+    $normalized = $Raw -replace "`r`n", "`n"
+    $normalized = $normalized -replace "package:show_talent/", "package:adfoot/"
+
+    $lines = $normalized -split "`n"
+    $start = 0
+    while ($start -lt $lines.Count) {
+        $line = $lines[$start].Trim()
+        if ($line -eq "" -or $line.StartsWith("//")) {
+            $start++
+            continue
+        }
+        break
+    }
+
+    $body = ($lines[$start..($lines.Count - 1)] | ForEach-Object { $_.TrimEnd() }) -join "`n"
+    return $body.Trim()
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $errors = New-Object System.Collections.Generic.List[string]
 $warnings = New-Object System.Collections.Generic.List[string]
@@ -103,6 +135,59 @@ if ($null -ne $resolvedAdminRepoPath) {
         } else {
             $checkedFiles.Add($entry.Label)
         }
+    }
+}
+
+# --- Vocabulaire du football : trois copies, zero divergence toleree --------
+#
+# Le meme vocabulaire existe en Dart cote mobile, en Dart cote admin et en
+# TypeScript cote Functions. Ce n'est pas un accident : les deux depots se
+# deploient separement, et un paquet partage ferait dependre une mise en
+# production mobile d'une publication de paquet.
+#
+# La copie mobile <-> TypeScript est verrouillee par
+# test/football_vocabulary_parity_test.dart. Celle-ci verrouille l'autre
+# moitie, et elle est la plus dangereuse : le SDK Admin contourne
+# firestore.rules, donc un code que le portail ecrirait sans que le mobile le
+# connaisse produirait un champ lu comme nul -- une fiche qui perd son poste
+# sans erreur nulle part, dans l'outil meme qui sert a moderer les fiches.
+#
+# La comparaison porte sur le fichier entier, pas seulement sur les codes :
+# une borne, un parseur ou une regle de troncature qui divergerait ferait
+# exactement le meme genre de degat.
+if ($null -ne $resolvedAdminRepoPath) {
+    $mirroredModelFiles = @(
+        "lib/models/football_vocabulary.dart",
+        "lib/models/player_football_profile.dart",
+        "lib/models/org_football_profile.dart",
+        "lib/utils/country_codes.dart"
+    )
+
+    foreach ($relativePath in $mirroredModelFiles) {
+        $mobilePath = Join-Path $repoRoot $relativePath
+        $adminPath = Join-Path $resolvedAdminRepoPath $relativePath
+
+        if (-not (Test-Path -LiteralPath $mobilePath)) {
+            $errors.Add("Missing mirrored model in the mobile repo: $relativePath")
+            continue
+        }
+        if (-not (Test-Path -LiteralPath $adminPath)) {
+            $errors.Add(
+                "Missing mirrored model in the admin repo: $relativePath. The admin portal cannot read a profile it does not share the vocabulary of."
+            )
+            continue
+        }
+
+        $mobileBody = Get-MirrorBody -Raw (Get-Content -LiteralPath $mobilePath -Raw)
+        $adminBody = Get-MirrorBody -Raw (Get-Content -LiteralPath $adminPath -Raw)
+
+        if ($mobileBody -ne $adminBody) {
+            $errors.Add(
+                "Mirrored model drifted between repos: $relativePath. Copy the mobile file over the admin one, keeping only the admin mirror header and the package prefix."
+            )
+        }
+
+        $checkedFiles.Add("mirrored: $relativePath")
     }
 }
 

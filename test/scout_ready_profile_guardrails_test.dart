@@ -295,6 +295,43 @@ void main() {
     });
   });
 
+  group('the four profile levels are all reachable', () {
+    // Le trou attrape ici : `isMvpProfileComplete` lisait encore `position`,
+    // le champ libre que plus rien n'ecrit depuis la refonte. « Profil
+    // complet » etait donc devenu inatteignable pour tout joueur, et avec lui
+    // l'invitation a completer le dossier, qui ne s'affiche que sur un profil
+    // complet sans dossier avance.
+    test('basique, complet, avance, elite', () {
+      expect(_player().profileLevelLabel, 'Profil basique');
+
+      final complete = AppUser.fromMap(<String, dynamic>{
+        'uid': 'p1',
+        'nom': 'Awa Traore',
+        'role': 'joueur',
+        'team': 'ASEC Mimosas',
+      });
+      expect(complete.profileLevelLabel, 'Profil complet');
+      expect(complete.shouldPromptAdvancedCompletion, isTrue);
+
+      final advanced = AppUser.fromMap(<String, dynamic>{
+        'uid': 'p1',
+        'nom': 'Awa Traore',
+        'role': 'joueur',
+        'team': 'ASEC Mimosas',
+        'positionCodes': <String>['CM'],
+      });
+      expect(advanced.profileLevelLabel, 'Profil avancé');
+      expect(advanced.shouldPromptAdvancedCompletion, isFalse);
+
+      final elite = _player(
+        country: 'Côte d’Ivoire',
+        football: _completeFootballFile(),
+        cvUrl: 'https://example.org/cv.pdf',
+      );
+      expect(elite.profileLevelLabel, 'Profil Élite');
+    });
+  });
+
   group('the label speaks of players only', () {
     test('a club with a full file is never Élite', () {
       final club = AppUser.fromMap(<String, dynamic>{

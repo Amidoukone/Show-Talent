@@ -676,10 +676,15 @@ class AppUser {
   /// -------------------------
   bool get isMvpProfileComplete {
     switch (role) {
+      // Le profil de base, et rien de footballistique : le poste est devenu
+      // un fait avance (voir [football]). L'exiger ici rendrait « Profil
+      // complet » inatteignable -- tout joueur qui a un poste est deja
+      // « avance » -- et eteindrait du meme coup l'invitation a completer le
+      // dossier, qui ne s'affiche que sur un profil complet sans dossier.
       case 'joueur':
         return nom.isNotEmpty &&
-            (position?.isNotEmpty ?? false) &&
-            (team?.isNotEmpty ?? false);
+            ((team?.trim().isNotEmpty ?? false) ||
+                (clubActuel?.trim().isNotEmpty ?? false));
 
       case 'club':
         return nom.isNotEmpty && (ligue?.isNotEmpty ?? false);
