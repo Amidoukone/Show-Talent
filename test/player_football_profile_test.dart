@@ -235,4 +235,111 @@ void main() {
       }
     });
   });
+
+  group('un parcours se lit comme une trajectoire', () {
+    Map<String, dynamic> season(String label, {String? club, int? goals}) {
+      return <String, dynamic>{
+        'season': label,
+        'competition': 'Ligue 1 CIV',
+        'clubName': club,
+        'clubLevel': 'academy',
+        'appearances': 24,
+        'goals': goals,
+      };
+    }
+
+    test('les saisons passees portent leur club et son niveau', () {
+      // Sans le club, une ligne d'historique ne dit rien : « 24 matchs, 11
+      // buts » n'a pas le meme poids en academie et en premiere division.
+      final profile = PlayerFootballProfile.fromUserMap(<String, dynamic>{
+        'seasonHistory': <dynamic>[
+          season('2024-25', club: 'ASEC Mimosas', goals: 11),
+        ],
+      });
+
+      expect(profile.seasonHistory, hasLength(1));
+      expect(profile.seasonHistory.first.clubName, 'ASEC Mimosas');
+      expect(profile.seasonHistory.first.clubLevel, ClubLevel.academy);
+      expect(profile.seasonHistory.first.goals, 11);
+      expect(profile.isEmpty, isFalse);
+    });
+
+    test('une entree illisible disparait sans casser la fiche', () {
+      final profile = PlayerFootballProfile.fromUserMap(<String, dynamic>{
+        'seasonHistory': <dynamic>[
+          'saison passee',
+          season('2024-25', club: 'ASEC Mimosas'),
+          42,
+          <String, dynamic>{},
+        ],
+      });
+
+      expect(profile.seasonHistory, hasLength(1));
+      expect(profile.seasonHistory.first.season, '2024-25');
+    });
+
+    test('un historique qui n en est pas un se lit comme vide', () {
+      for (final raw in <Object?>[null, 'rien', 7, <String, dynamic>{}]) {
+        final profile = PlayerFootballProfile.fromUserMap(<String, dynamic>{
+          'seasonHistory': raw,
+        });
+        expect(profile.seasonHistory, isEmpty, reason: '$raw');
+      }
+    });
+
+    test('la borne tient a la lecture comme a l ecriture', () {
+      // Un document ecrit par une autre surface ne doit pas pouvoir faire
+      // afficher deux cents lignes sur une fiche.
+      final profile = PlayerFootballProfile.fromUserMap(<String, dynamic>{
+        'seasonHistory': <dynamic>[
+          for (var year = 0; year < 40; year++) season('20$year'),
+        ],
+      });
+
+      expect(
+        profile.seasonHistory,
+        hasLength(PlayerFootballProfile.maxSeasonHistory),
+      );
+
+      final patched = PlayerFootballProfile(
+        seasonHistory: <SeasonRecord>[
+          for (var year = 0; year < 40; year++)
+            SeasonRecord(season: '20$year'),
+        ],
+      ).toPatch()['seasonHistory'] as List<dynamic>;
+
+      expect(patched, hasLength(PlayerFootballProfile.maxSeasonHistory));
+    });
+
+    test('la saison en cours ne recopie pas le club du profil', () {
+      // Le profil porte deja `currentClubName` : le redire dans la saison en
+      // cours ferait deux sources pour un meme fait.
+      final profile = PlayerFootballProfile.fromUserMap(<String, dynamic>{
+        'currentClubName': 'ASEC Mimosas',
+        'currentSeason': <String, dynamic>{'season': '2025-26'},
+      });
+
+      expect(profile.currentSeason?.clubName, isNull);
+      expect(profile.currentClubName, 'ASEC Mimosas');
+    });
+
+    test('archiver conserve les chiffres et ajoute le club', () {
+      const played = SeasonRecord(
+        season: '2024-25',
+        appearances: 24,
+        goals: 11,
+      );
+
+      final archived = played.copyWith(
+        clubName: 'ASEC Mimosas',
+        clubLevel: ClubLevel.academy,
+      );
+
+      expect(archived.season, '2024-25');
+      expect(archived.appearances, 24);
+      expect(archived.goals, 11);
+      expect(archived.clubName, 'ASEC Mimosas');
+      expect(archived.clubLevel, ClubLevel.academy);
+    });
+  });
 }

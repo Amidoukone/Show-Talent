@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:adfoot/config/feature_controller_registry.dart';
 import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:adfoot/models/contact_intake.dart';
+import 'package:adfoot/models/player_football_profile.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/screens/profil_video_scrollview.dart';
 import 'package:adfoot/widgets/contact_intake_sheet.dart';
@@ -1321,6 +1322,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
             season?.assists?.toString(),
             icon: Icons.assistant_direction_outlined,
           ),
+
+          // Le parcours, sous la saison en cours : c'est la lecture d'un
+          // recruteur, du present vers ce qui y a mene. Une seule saison ne
+          // dit pas si un joueur progresse.
+          if (football.seasonHistory.isNotEmpty) ...[
+            const Divider(),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Parcours',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            const SizedBox(height: 6),
+            for (final archived in football.seasonHistory)
+              _infoTile(
+                [
+                  ?archived.season,
+                  ?archived.clubName,
+                ].join(' · '),
+                _pastSeasonSummary(archived),
+                icon: Icons.history_rounded,
+              ),
+          ],
+
           const Divider(),
           _infoTile(
             'Ouvert aux opportunités',
@@ -1580,6 +1606,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // sur le profil public. Les comptes club / recruteur / agent restent plus
     // lisibles sans un bloc vide ou redondant.
     return user.isPlayer;
+  }
+
+  /// Ce qu'une saison passee a produit, en une ligne.
+  ///
+  /// Le niveau du club y figure parce qu'il change tout : « 28 matchs, 11
+  /// buts » ne pese pas la meme chose en academie et en premiere division.
+  String? _pastSeasonSummary(SeasonRecord season) {
+    final parts = <String>[
+      ?season.competition,
+      ?season.clubLevel?.labelFr,
+      ?season.ageCategory?.code,
+      if (season.appearances != null) '${season.appearances} matchs',
+      if (season.minutes != null) '${season.minutes} min',
+      if (season.goals != null) '${season.goals} buts',
+      if (season.assists != null) '${season.assists} passes',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
   }
 
   Widget _infoTile(String label, String? value, {IconData? icon}) {

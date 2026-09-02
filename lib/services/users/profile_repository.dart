@@ -143,6 +143,7 @@ class ProfileRepository {
     'currentClubName',
     'currentClubLevel',
     'currentSeason',
+    'seasonHistory',
     'clubLevel',
     'clubAgeCategories',
     'clubFederationId',

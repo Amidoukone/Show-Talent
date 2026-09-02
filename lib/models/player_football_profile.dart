@@ -34,8 +34,18 @@ class PlayerFootballProfile {
     this.currentClubName,
     this.currentClubLevel,
     this.currentSeason,
+    this.seasonHistory = const <SeasonRecord>[],
     this.isSearchable = false,
   });
+
+  /// Nombre de saisons passées conservées sur la fiche.
+  ///
+  /// Borné parce que la liste vit sur le document utilisateur, lu à chaque
+  /// affichage de profil et recopié dans le flux : une carrière qui grossit
+  /// sans fin finirait par ralentir tout le monde pour des saisons que plus
+  /// personne ne regarde. Dix couvre largement le parcours de la population
+  /// visée, et garde les saisons qui décident.
+  static const int maxSeasonHistory = 10;
 
   /// Année de naissance seule, dérivée côté serveur.
   ///
@@ -74,9 +84,25 @@ class PlayerFootballProfile {
   /// et douze buts en première division ne se lisent pas de la même façon.
   final ClubLevel? currentClubLevel;
 
-  /// La saison en cours. Une seule : un historique complet est un autre
-  /// chantier, et une fiche qui en affiche cinq n'est plus lue.
+  /// La saison en cours, détachée de l'historique.
+  ///
+  /// Elle vit à part parce qu'elle ne se lit pas comme les autres : c'est la
+  /// seule sur laquelle un club peut agir aujourd'hui, et c'est elle que la
+  /// fiche met en avant.
   final SeasonRecord? currentSeason;
+
+  /// Les saisons précédentes, de la plus récente à la plus ancienne.
+  ///
+  /// C'est ce qui sépare une fiche d'un dossier. Un recruteur ne juge pas une
+  /// saison, il juge une trajectoire : trois saisons à 400 minutes puis une à
+  /// 2 400 racontent une progression ; l'inverse raconte autre chose. La
+  /// saison en cours seule ne permettait ni l'un ni l'autre.
+  ///
+  /// L'ordre est porté par la liste elle-même et non recalculé : les libellés
+  /// de saison sont du texte libre (`2025-26`, `2025/2026`, `2025`), et les
+  /// trier serait deviner. Le formulaire, lui, sait dans quel ordre le joueur
+  /// les a saisies.
+  final List<SeasonRecord> seasonHistory;
 
   /// Posé par le serveur : cette fiche mérite-t-elle d'apparaître dans une
   /// recherche de recruteur.
@@ -103,7 +129,8 @@ class PlayerFootballProfile {
       contractStatus == null &&
       currentClubName == null &&
       currentClubLevel == null &&
-      currentSeason == null;
+      currentSeason == null &&
+      seasonHistory.isEmpty;
 
   bool get isNotEmpty => !isEmpty;
 
@@ -129,8 +156,28 @@ class PlayerFootballProfile {
       currentClubName: _asText(map['currentClubName']),
       currentClubLevel: FootballVocabulary.clubLevel(map['currentClubLevel']),
       currentSeason: SeasonRecord.fromMap(map['currentSeason']),
+      seasonHistory: _asSeasonHistory(map['seasonHistory']),
       isSearchable: map['isSearchable'] == true,
     );
+  }
+
+  /// Lit l'historique en écartant ce qui n'en est pas.
+  ///
+  /// Tolérant comme le reste du parsing : une entrée illisible disparaît, elle
+  /// ne fait pas échouer la fiche entière. La borne est appliquée à la lecture
+  /// aussi, et pas seulement à l'écriture — un document écrit par une autre
+  /// surface, ou par une version plus ancienne des règles, ne doit pas pouvoir
+  /// faire afficher deux cents lignes.
+  static List<SeasonRecord> _asSeasonHistory(Object? raw) {
+    if (raw is! List) return const <SeasonRecord>[];
+
+    final seasons = <SeasonRecord>[];
+    for (final entry in raw) {
+      final record = SeasonRecord.fromMap(entry);
+      if (record != null) seasons.add(record);
+      if (seasons.length == maxSeasonHistory) break;
+    }
+    return List<SeasonRecord>.unmodifiable(seasons);
   }
 
   /// Les champs que le titulaire du profil peut écrire.
@@ -161,6 +208,13 @@ class PlayerFootballProfile {
       'currentClubName': currentClubName,
       'currentClubLevel': currentClubLevel?.code,
       'currentSeason': currentSeason?.toMap(),
+      // La borne est ré-appliquée ici : le formulaire l'impose déjà, mais
+      // c'est cette méthode qui décide de ce qui part vers Firestore, et les
+      // règles ne comptent pas les éléments d'une liste.
+      'seasonHistory': seasonHistory
+          .take(maxSeasonHistory)
+          .map((season) => season.toMap())
+          .toList(),
     };
   }
 
@@ -178,6 +232,9 @@ class PlayerFootballProfile {
     'currentClubLevel',
     'currentSeason',
     ...SeasonRecord.writableFieldPaths,
+    // Une liste ne produit pas de chemins pointes : `changesOnly` voit
+    // `seasonHistory` et rien d'autre, quel que soit le contenu des entrees.
+    'seasonHistory',
   ];
 
   /// Les champs que seul le serveur écrit.
@@ -198,6 +255,7 @@ class PlayerFootballProfile {
     String? currentClubName,
     ClubLevel? currentClubLevel,
     SeasonRecord? currentSeason,
+    List<SeasonRecord>? seasonHistory,
     bool? isSearchable,
   }) {
     return PlayerFootballProfile(
@@ -212,6 +270,7 @@ class PlayerFootballProfile {
       currentClubName: currentClubName ?? this.currentClubName,
       currentClubLevel: currentClubLevel ?? this.currentClubLevel,
       currentSeason: currentSeason ?? this.currentSeason,
+      seasonHistory: seasonHistory ?? this.seasonHistory,
       isSearchable: isSearchable ?? this.isSearchable,
     );
   }
@@ -232,6 +291,8 @@ class SeasonRecord {
     this.minutes,
     this.goals,
     this.assists,
+    this.clubName,
+    this.clubLevel,
   });
 
   /// Libellé de saison, tel que le football l'écrit : `2025-26`.
@@ -246,6 +307,18 @@ class SeasonRecord {
   final int? goals;
   final int? assists;
 
+  /// Le club de cette saison-là, et son niveau.
+  ///
+  /// Renseignés pour une saison passée, laissés nuls pour la saison en cours :
+  /// le profil porte déjà `currentClubName` et `currentClubLevel`, et les
+  /// recopier ici ferait deux sources pour un même fait — l'erreur que la
+  /// refonte vient justement de défaire.
+  ///
+  /// Sans eux, une ligne d'historique ne dit rien : « 28 matchs, 11 buts »
+  /// n'a pas le même poids en académie U19 et en première division.
+  final String? clubName;
+  final ClubLevel? clubLevel;
+
   bool get isEmpty =>
       season == null &&
       competition == null &&
@@ -253,7 +326,9 @@ class SeasonRecord {
       appearances == null &&
       minutes == null &&
       goals == null &&
-      assists == null;
+      assists == null &&
+      clubName == null &&
+      clubLevel == null;
 
   static SeasonRecord? fromMap(Object? raw) {
     if (raw is! Map) return null;
@@ -267,6 +342,8 @@ class SeasonRecord {
       minutes: _asCount(map['minutes']),
       goals: _asCount(map['goals']),
       assists: _asCount(map['assists']),
+      clubName: _asText(map['clubName']),
+      clubLevel: FootballVocabulary.clubLevel(map['clubLevel']),
     );
 
     return record.isEmpty ? null : record;
@@ -281,7 +358,28 @@ class SeasonRecord {
       'minutes': minutes,
       'goals': goals,
       'assists': assists,
+      'clubName': clubName,
+      'clubLevel': clubLevel?.code,
     };
+  }
+
+  /// Recopie la saison en lui ajoutant le club où elle a été jouée.
+  ///
+  /// Sert à l'archivage : les champs de club sont les seuls que l'appelant
+  /// complète, et il ne les efface jamais — d'où l'absence de sentinelle pour
+  /// remettre une valeur à null.
+  SeasonRecord copyWith({String? clubName, ClubLevel? clubLevel}) {
+    return SeasonRecord(
+      season: season,
+      competition: competition,
+      ageCategory: ageCategory,
+      appearances: appearances,
+      minutes: minutes,
+      goals: goals,
+      assists: assists,
+      clubName: clubName ?? this.clubName,
+      clubLevel: clubLevel ?? this.clubLevel,
+    );
   }
 
   static List<String> get writableFieldPaths => <String>[
@@ -292,6 +390,11 @@ class SeasonRecord {
     'currentSeason.minutes',
     'currentSeason.goals',
     'currentSeason.assists',
+    // Nuls pour la saison en cours, mais la map est ecrite en entier : sans
+    // ces deux entrees, `changesOnly` verrait deux cles hors liste blanche et
+    // refuserait tout l'enregistrement.
+    'currentSeason.clubName',
+    'currentSeason.clubLevel',
   ];
 }
 

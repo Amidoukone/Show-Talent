@@ -56,12 +56,16 @@ class PlayerStatsAvailabilityFormState
   bool _openToTrials = false;
   bool _saving = false;
 
+  /// Les saisons deja archivees, de la plus recente a la plus ancienne.
+  late List<SeasonRecord> _history;
+
   @override
   void initState() {
     super.initState();
 
     final profile = widget.user.football;
     final season = profile.currentSeason;
+    _history = List<SeasonRecord>.of(profile.seasonHistory);
 
     _seasonController = TextEditingController(text: season?.season ?? '');
     _competitionController = TextEditingController(
@@ -105,8 +109,8 @@ class PlayerStatsAvailabilityFormState
     return trimmed.isEmpty ? null : trimmed;
   }
 
-  Map<String, dynamic> buildPatch() {
-    final season = SeasonRecord(
+  SeasonRecord _currentSeasonFromFields() {
+    return SeasonRecord(
       season: _trimOrNull(_seasonController.text),
       competition: _trimOrNull(_competitionController.text),
       ageCategory: _ageCategory,
@@ -115,6 +119,48 @@ class PlayerStatsAvailabilityFormState
       goals: _parsedCount(_goalsController),
       assists: _parsedCount(_assistsController),
     );
+  }
+
+  bool get _canArchiveCurrentSeason =>
+      !_currentSeasonFromFields().isEmpty &&
+      _history.length < PlayerFootballProfile.maxSeasonHistory;
+
+  /// Range la saison en cours dans le parcours, et libere les champs.
+  ///
+  /// Le club et son niveau sont pris sur le profil au moment de l'archivage,
+  /// pas demandes au joueur : c'est le seul instant ou l'on sait de source
+  /// sure ou il jouait cette saison-la. Le lui faire retaper l'an prochain,
+  /// c'est se garantir des clubs mal orthographies dans un dossier qu'on
+  /// presente comme qualifie.
+  void _archiveCurrentSeason() {
+    final profile = widget.user.football;
+    final archived = _currentSeasonFromFields().copyWith(
+      clubName: profile.currentClubName,
+      clubLevel: profile.currentClubLevel,
+    );
+
+    setState(() {
+      _history = <SeasonRecord>[archived, ..._history]
+          .take(PlayerFootballProfile.maxSeasonHistory)
+          .toList();
+      _seasonController.clear();
+      _competitionController.clear();
+      _appearancesController.clear();
+      _minutesController.clear();
+      _goalsController.clear();
+      _assistsController.clear();
+      _ageCategory = null;
+    });
+    widget.onDirty?.call();
+  }
+
+  void _removeArchivedSeason(int index) {
+    setState(() => _history = <SeasonRecord>[..._history]..removeAt(index));
+    widget.onDirty?.call();
+  }
+
+  Map<String, dynamic> buildPatch() {
+    final season = _currentSeasonFromFields();
 
     return <String, dynamic>{
       'openToOpportunities': _openToTrials,
@@ -122,6 +168,9 @@ class PlayerStatsAvailabilityFormState
       // coquille de champs nuls, qui se lirait comme « renseigne, mais a
       // zero ».
       'currentSeason': season.isEmpty ? null : season.toMap(),
+      'seasonHistory': _history
+          .map((archived) => archived.toMap())
+          .toList(growable: false),
     };
   }
 
@@ -250,6 +299,9 @@ class PlayerStatsAvailabilityFormState
             _countField(_assistsController, 'Passes décisives'),
 
             const SizedBox(height: 20),
+            _buildSeasonHistory(),
+
+            const SizedBox(height: 20),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _openToTrials,
@@ -276,6 +328,82 @@ class PlayerStatsAvailabilityFormState
         ),
       ),
     );
+  }
+
+  /// Le parcours : les saisons deja jouees, et le geste qui y range celle-ci.
+  ///
+  /// Un recruteur ne juge pas une saison, il juge une trajectoire. Le bouton
+  /// porte l'evenement reel -- une saison se termine -- plutot qu'un
+  /// formulaire de plus a remplir ligne par ligne.
+  Widget _buildSeasonHistory() {
+    final isFull = _history.length >= PlayerFootballProfile.maxSeasonHistory;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Parcours',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _history.isEmpty
+              ? 'Aucune saison archivée. Une seule saison ne montre pas une progression.'
+              : '${_history.length} saison${_history.length > 1 ? 's' : ''} archivée${_history.length > 1 ? 's' : ''} sur ${PlayerFootballProfile.maxSeasonHistory}.',
+          style: const TextStyle(fontSize: 12),
+        ),
+        const SizedBox(height: 12),
+
+        for (final (index, archived) in _history.indexed)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(child: Text(_archivedSeasonLabel(archived))),
+                IconButton(
+                  tooltip: 'Retirer cette saison',
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: () => _removeArchivedSeason(index),
+                ),
+              ],
+            ),
+          ),
+
+        AdButton(
+          leading: Icons.archive_outlined,
+          label: 'Archiver cette saison',
+          // Desactive plutot que masque : le joueur doit comprendre que le
+          // geste existe et pourquoi il ne s'offre pas encore a lui.
+          onPressed: _canArchiveCurrentSeason ? _archiveCurrentSeason : null,
+        ),
+        if (isFull)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'Parcours complet : retirez une saison pour en archiver une autre.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// « 2024-25 · Ligue 1 CIV · ASEC Mimosas · 28 matchs, 11 buts »
+  String _archivedSeasonLabel(SeasonRecord season) {
+    final head = <String>[
+      ?season.season,
+      ?season.competition,
+      ?season.clubName,
+    ].join(' · ');
+
+    final figures = <String>[
+      if (season.appearances != null) '${season.appearances} matchs',
+      if (season.goals != null) '${season.goals} buts',
+      if (season.assists != null) '${season.assists} passes',
+    ].join(', ');
+
+    if (head.isEmpty) return figures.isEmpty ? 'Saison archivée' : figures;
+    return figures.isEmpty ? head : '$head · $figures';
   }
 
   Widget _countField(TextEditingController controller, String label) {
