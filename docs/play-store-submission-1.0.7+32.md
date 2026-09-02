@@ -154,6 +154,32 @@ in `firestore.rules`; nothing compared those two lists before, which is exactly
 why they had drifted. It did its job the next day by demanding `seasonHistory`
 on both sides at once.
 
+## Device pass — 2026-09-02
+
+`32` was installed from Internal testing and the profile changes are visible on
+the phone: the name appears once, the season archive is there, the figures
+carry their provenance.
+
+It took two attempts, and the first one is worth recording. The phone was still
+holding `31` — the Play update had not been applied — so the screen was
+unchanged and the build looked broken. Nothing distinguishes the two on screen:
+`29`, `30`, `31` and `32` all show `1.0.7`. That is why the checkout now carries
+the build number in Settings (see below); until that ships, the only certain
+answer is `adb shell dumpsys package org.adfoot.app | findstr versionCode`.
+
+The other checks below are **not** therefore done. Record each one here as it is
+actually exercised — especially 1 (a verified account saving its advanced
+profile) and 4 (archive a season), which are the two that need the rules
+deployed on 2 September.
+
+## What the checkout carries beyond `32`
+
+`pubspec.yaml` is `1.0.7+33`. One change: the Settings screen now ends with the
+installed version and build number, read from the package manifest by
+`lib/widgets/app_version_label.dart` — not from a compiled constant, because
+the question it answers is which artifact Play actually served. `32` remains
+the artifact under test; `33` only exists in the checkout.
+
 ## Not verified — and the reason this build must not be promoted blind
 
 **Nothing in this build has run on a phone.** 845 tests render no pixels, and

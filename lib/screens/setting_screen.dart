@@ -12,6 +12,7 @@ import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/utils/adfoot_support.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
+import 'package:adfoot/widgets/app_version_label.dart';
 import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
@@ -426,6 +427,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 24),
+                    // Le dernier mot de l'ecran : quelle version tourne ici.
+                    // Selectionnable, pour qu'un testeur puisse la coller dans
+                    // son rapport plutot que la recopier.
+                    const AppVersionLabel(),
                   ],
                 ),
               ),
