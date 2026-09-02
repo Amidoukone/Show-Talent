@@ -1347,6 +1347,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
           ],
 
+          // La provenance, collee aux chiffres et non reléguée dans un badge
+          // en haut de page : c'est ici qu'on les lit, donc ici qu'il faut
+          // savoir qui les dit.
+          _buildStatsProvenance(user),
+
           const Divider(),
           _infoTile(
             'Ouvert aux opportunités',
@@ -1606,6 +1611,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // sur le profil public. Les comptes club / recruteur / agent restent plus
     // lisibles sans un bloc vide ou redondant.
     return user.isPlayer;
+  }
+
+  /// Qui repond des chiffres affiches au-dessus.
+  ///
+  /// L'ecran ne rejuge rien : il recopie [AppUser.statsProvenance], qui derive
+  /// de la verification du compte. Refaire ici le test sur `profileVerified`,
+  /// c'est se donner deux endroits qui peuvent finir par se contredire -- et
+  /// se contredire sur ce point precis reviendrait a afficher une garantie que
+  /// personne n'a donnee.
+  Widget _buildStatsProvenance(AppUser user) {
+    final provenance = user.statsProvenance;
+    final (IconData icon, Color color, String label) = switch (provenance) {
+      StatsProvenance.attested => (
+        Icons.verified_rounded,
+        AdColors.success,
+        user.profileVerifiedAt == null
+            ? 'Chiffres attestés par Adfoot'
+            : 'Chiffres attestés par Adfoot le '
+                  '${_formatDate(user.profileVerifiedAt!)}',
+      ),
+      StatsProvenance.suspended => (
+        Icons.shield_moon_outlined,
+        AdColors.warning,
+        'Attestation suspendue : le compte n’est plus actif.',
+      ),
+      // Dit, et non tu. Le taire laisserait un recruteur croire a une
+      // garantie que personne n'a donnee -- et c'est cette confusion-la qui
+      // decredibilise une base entiere, pas le fait d'etre declaratif.
+      StatsProvenance.declared => (
+        Icons.info_outline_rounded,
+        AdColors.onSurfaceMuted,
+        'Chiffres déclarés par le joueur, non attestés.',
+      ),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Ce qu'une saison passee a produit, en une ligne.

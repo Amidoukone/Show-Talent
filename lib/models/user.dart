@@ -7,6 +7,31 @@ import 'package:adfoot/models/player_football_profile.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 
+/// D'ou viennent les chiffres affiches sur un dossier.
+///
+/// Un recruteur qui lit « 28 matchs, 11 buts » a besoin de savoir qui le dit.
+/// Sans cette distinction, une base declarative et une base attestee se
+/// ressemblent -- et c'est la ressemblance qui decredibilise les deux.
+enum StatsProvenance {
+  /// Le joueur a saisi ses chiffres, personne ne les a verifies.
+  ///
+  /// C'est l'etat par defaut, et il n'a rien d'infamant : il doit seulement
+  /// etre dit. Le taire reviendrait a laisser croire a une garantie.
+  declared,
+
+  /// L'administration a verifie le dossier, et les chiffres n'ont pas bouge
+  /// depuis : les regles refusent qu'ils changent sans invalider la
+  /// verification.
+  attested,
+
+  /// Le dossier a ete verifie, mais le compte n'est plus actif.
+  ///
+  /// L'attestation ne vaut plus, sans que les chiffres soient faux pour
+  /// autant : le dire ainsi evite de transformer une suspension de compte en
+  /// accusation.
+  suspended,
+}
+
 class AppUser {
   // =========================
   // Identite et systeme
@@ -639,6 +664,28 @@ class AppUser {
   /// echu ne l'affiche pas non plus — voir [Membership.isAgencyPlayerAt].
   bool isAgencyPlayerAt(DateTime now) =>
       isPlayer && membership.isAgencyPlayerAt(now);
+
+  /// D'où viennent les chiffres qu'un recruteur lit sur ce dossier.
+  ///
+  /// Rien de nouveau n'est stocké pour l'obtenir : la provenance **est** l'état
+  /// de vérification du compte. Un dossier vérifié l'a été par
+  /// l'administration, et `verifiedOwnerProfileChangeIsInvalidated()` dans
+  /// firestore.rules refuse au titulaire de toucher à une statistique sans
+  /// remettre cette vérification à zéro. Autrement dit, des chiffres attestés
+  /// ne peuvent pas changer en gardant leur attestation.
+  ///
+  /// Dérivé plutôt que déclaré, pour la même raison que
+  /// [hasScoutReadyProfile] : deux sources pour un même jugement finissent par
+  /// se contredire, et celle-ci se contredirait au pire endroit.
+  ///
+  /// Un champ que le titulaire pourrait écrire serait pire que rien — une
+  /// attestation qu'on s'accorde à soi-même n'atteste rien. `profileVerified`
+  /// est absent de `canUpdateOwnProfile` : seul le callable admin l'écrit.
+  StatsProvenance get statsProvenance {
+    if (isProfileTrusted) return StatsProvenance.attested;
+    if (profileVerified) return StatsProvenance.suspended;
+    return StatsProvenance.declared;
+  }
 
   String get profileTrustLabel {
     if (isProfileTrusted) return 'Vérifié par Adfoot';
