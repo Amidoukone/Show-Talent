@@ -120,6 +120,27 @@ powershell -ExecutionPolicy Bypass -File .\scripts\deploy-functions-safe.ps1 `
   -Environment production -Only functions -DiscoveryTimeoutSeconds 120
 ```
 
+### Second Functions deploy, same day, from `master` at `cae551c`
+
+43 functions updated again, `updateManagedAccountProfile` among them. What it
+adds: the administration can now correct a **date of birth**. It was the one
+fact a file could lose with no recourse — `birthYear` derives from it, an empty
+year means no recruiter search returns the file, and only the player could
+repair it, from their own phone.
+
+The date is validated against `toBirthYear`, the function the trigger derives
+the year with, and lands in `users/{uid}/private/contact`, never on the public
+document. An unusable date is refused loudly, unlike every other invalid field
+in that sanitiser: a silent failure would leave the administration believing an
+invisible file had been repaired.
+
+This deploy was made **from `master`**, which now carries the branch. The
+parity artefact described above no longer applies.
+
+The portal side is written (`profil-football-sources`, `1fbde90`) and **not
+deployed** — it waits for `32` to be installed on every tester's phone, for the
+reason given in the next section.
+
 ## Deliberately dormant — do not "fix"
 
 - **`position`, `team` and `clubActuel` are still read**, as a fallback behind
