@@ -204,16 +204,28 @@ bundle:
 npm.cmd run release:android:contents:check
 ```
 
-After the build, record here: AAB path, byte size, SHA-256, and confirm **from
-the bundle's own manifest** that `versionCode` is `32` — read the AAB, not the
-source.
+### Built 2026-09-02 13:41 UTC — read from the bundle, not the source
 
-- AAB: _fill after build_
-- Size: _fill after build_
-- SHA-256: _fill after build_
-- Contents (`npm.cmd run release:android:contents:check`): _fill after build_
-- 16 KB alignment: `powershell -File .\scripts\check-aab-native-alignment.ps1`
-  — _fill after build_
+- AAB: `artifacts/android/adfoot-production-20260902T134118Z.aab`
+  (source `build/app/outputs/bundle/productionRelease/app-production-release.aab`)
+- Size: 72 296 838 bytes (68.95 MB)
+- SHA-256: `d75d41c3f52a9fc43c01e20a23e282ce4fb76e5c574b92f1167c4e11984b8e29`
+- Manifest: `versionCode 32`, `versionName 1.0.7`, `minSdkVersion 24`,
+  `targetSdkVersion 36`, `extractNativeLibs=false`
+- Contents (`scripts/check-aab-contents.ps1`): **green on all four**. Snapshot
+  `base/lib/arm64-v8a/libapp.so` SHA-256 `65d2e283…`, against `2f949d5a…` for
+  the `31` bundle. The four witness strings are present (all four stored as
+  OneByteString), `Poste principal` is gone.
+- 16 KB alignment (`scripts/check-aab-native-alignment.ps1`): **green**. 16
+  sixty-four-bit libraries, `p_align` 16384 or 65536 on every one; ABIs
+  `arm64-v8a`, `armeabi-v7a`, `x86_64`.
+
+One thing to know before comparing two of these bundles by hand: `libapp.so`
+has **exactly the same uncompressed size** in `30`, `31` and `32`
+(9 700 240 bytes for arm64-v8a), because the AOT ELF is padded to 16 KB
+boundaries. Size proves nothing here. Content does: between `31` and `32`,
+148 of the 149 64 KB blocks differ, from offset 0 to the end. Compare hashes,
+never sizes — that is what the check does.
 
 ## Release notes (Internal testing / Production "What's new")
 
