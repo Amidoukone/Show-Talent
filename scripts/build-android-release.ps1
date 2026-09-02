@@ -10,6 +10,7 @@ param(
     [switch]$RequireSigning,
     [switch]$RequirePlayIntegrityAppCheck,
     [switch]$SkipPreflight,
+    [switch]$SkipContentCheck,
     [switch]$Clean,
     [switch]$PrintOnly,
 
@@ -752,6 +753,27 @@ try {
     Write-Host "Source AAB : $aabPath"
     Write-Host "Artifact   : $artifactPath"
     Write-Host "Size (MB)  : $artifactSizeMb"
+
+    # A build that succeeds is not a build that contains your code: on
+    # 2 September 2026 this script produced a signed, correctly versioned
+    # 1.0.7+31 whose Dart snapshot was the previous release's. Every check
+    # upstream of here reads the source, so none of them could see it. This one
+    # reads the artifact, takes about ten seconds, and is the last moment
+    # before a versionCode is spent.
+    if (-not $SkipContentCheck) {
+        $contentCheckScript = Join-Path $PSScriptRoot "check-aab-contents.ps1"
+        if (Test-Path -LiteralPath $contentCheckScript) {
+            Write-Host ""
+            Write-Host "Verifying bundle contents (scripts/check-aab-contents.ps1)..."
+            & $contentCheckScript -Path $aabPath
+            if ($LASTEXITCODE -ne 0) {
+                throw "The bundle does not contain the code of this checkout. Do not upload it. See the report above; -SkipContentCheck bypasses this gate."
+            }
+        } else {
+            Write-Host ""
+            Write-Host "Bundle content check skipped: $contentCheckScript not found." -ForegroundColor Yellow
+        }
+    }
 } finally {
     Set-BuildKeepAwake -Release
     if ($null -ne $releaseBuildLock) {

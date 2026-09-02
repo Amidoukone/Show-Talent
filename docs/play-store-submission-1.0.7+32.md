@@ -1,4 +1,4 @@
-# Play Store Submission — Adfoot 1.0.7+31
+# Play Store Submission — Adfoot 1.0.7+32
 
 Reference date: 2 September 2026
 
@@ -9,7 +9,36 @@ checks below are done.
 
 `docs/play-store-submission-1.0.7+30.md` is **kept**, not replaced. Unlike
 `29`, `30` was really built and really ran on a phone in Internal testing —
-that record stands on its own. This dossier only covers what `31` adds.
+that record stands on its own. This dossier covers what the profile rework
+adds, and it is numbered `32` because `31` was spent without shipping it.
+
+## Why 32, and what `31` actually is
+
+`1.0.7+31` was built, signed, and uploaded to Internal testing on 2 September.
+It contains **none of the work below**. The build served a cache: its Dart
+snapshot, `base/lib/arm64-v8a/libapp.so`, is byte-for-byte the snapshot of the
+`30` bundle built on 1 September — SHA-256 `2f949d5a…` on both. The AAB grew by
+93 bytes for a thousand added lines of Dart.
+
+Nothing upstream could catch it. `flutter analyze`, the 845 tests and every
+gate in `scripts/` read the *source*; the manifest, read from the bundle,
+correctly said `versionCode 31`. The only thing that differed was the one thing
+nobody was reading: the compiled snapshot.
+
+Two consequences, both operational:
+
+- **A versionCode is spent forever.** Play refuses an upload whose versionCode
+  already exists, so the profile rework has to ship as `32`.
+- **Whoever installed `31` from Internal testing is running `30`'s code.**
+  Any device check done against `31` says nothing about this work and must be
+  redone on `32`. That includes anything that "looked unchanged" — it was.
+
+What now stands between a cached build and Play:
+`scripts/check-aab-contents.ps1`, run automatically at the end of
+`build-android-release.ps1`. It reads the artifact and never the source, and
+fails the build when the bundle does not contain this checkout. Run against the
+`31` bundle it reports the version, the four witness strings and the identical
+snapshot, each on its own. Ten seconds, against a round trip through Play.
 
 Nothing here replaces the generic list in
 `docs/checklists/android-release-checklist.md`. This records what was verified
@@ -17,7 +46,8 @@ for *this* build, on which date, by which command.
 
 ## What this build contains that `30` does not
 
-`versionCode 30` was built at `5e71413`. Seven commits landed after it, all on
+`versionCode 30` was built at `5e71413`, and `31` shipped that same code by
+accident. Seven commits landed after `5e71413`, all on
 `profil-football-refonte`. Three of them fix defects that were live in
 production and that neither `flutter analyze` nor the 826 tests of the day
 could see — they were not type errors, they were the app and the server
@@ -107,6 +137,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\deploy-functions-safe.ps1 `
 
 ## Verified locally on 2026-09-02, at `0e00b60`
 
+Nothing under `lib/` has changed since. `32` differs from the code verified
+here by the version bump in `pubspec.yaml` and by build-time scripts, neither
+of which the tests read.
+
 | Check | Result |
 | --- | --- |
 | `flutter analyze` | No issues found (424.9 s) |
@@ -145,18 +179,39 @@ the device, in this order:
 
 ## Build
 
+The previous build served a cache, so start from a cold tree. In this order,
+in a shell opened after the reboot:
+
 ```powershell
+cd "C:\Users\Ing.Amidou.KONE\Desktop\ODC_PROJECT\MOBILE\Show-Talent"
+git branch --show-current      # profil-football-refonte
+cd android; .\gradlew --stop; cd ..
+flutter clean
+flutter pub get
 npm.cmd run release:android:bundle:playstore
 ```
 
-If it fails with a file-lock error under `build\`, run `gradlew --stop` from
-`android\` and rebuild. After the build, record here: AAB path, byte size,
-SHA-256, and confirm **from the bundle's own manifest** that `versionCode` is
-`31` — read the AAB, not the source.
+`flutter clean` is the step that matters, and the one that fails when something
+holds a file under `build\` — an IDE, a running emulator, an antivirus scan.
+If it reports a lock, close what holds it and run it again *before* building:
+a build over a half-cleaned tree is exactly how `31` happened.
+
+The build now ends with `scripts/check-aab-contents.ps1` and will not report
+success if the bundle does not contain this checkout. To run it alone, on any
+bundle:
+
+```powershell
+npm.cmd run release:android:contents:check
+```
+
+After the build, record here: AAB path, byte size, SHA-256, and confirm **from
+the bundle's own manifest** that `versionCode` is `32` — read the AAB, not the
+source.
 
 - AAB: _fill after build_
 - Size: _fill after build_
 - SHA-256: _fill after build_
+- Contents (`npm.cmd run release:android:contents:check`): _fill after build_
 - 16 KB alignment: `powershell -File .\scripts\check-aab-native-alignment.ps1`
   — _fill after build_
 
@@ -192,3 +247,4 @@ Version 1.0.7 - profils plus lisibles et parcours du joueur.
   simply ignores them.
 - **Build:** halt the Internal testing rollout; `30` remains installable and
   is unaffected by the deployed rules, which only added whitelist entries.
+  `31` is installable too and behaves exactly like `30` — it is `30`.

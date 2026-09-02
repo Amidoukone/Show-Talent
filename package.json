@@ -39,6 +39,7 @@
     "release:config:validate:strict:production-next": "powershell -ExecutionPolicy Bypass -File .\\scripts\\validate-release-config.ps1 -Strict -SkipLocal -SkipStaging -SkipProduction -IncludeProductionNext",
     "release:android:check": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-android-release-readiness.ps1 -Environment production -ReleaseGate",
     "release:android:check:playstore": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-android-release-readiness.ps1 -Environment production -ReleaseGate -RequirePlayIntegrityAppCheck",
+    "release:android:contents:check": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-aab-contents.ps1",
     "release:android:bundle": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-android-release.ps1 -Environment production -ReleaseGate -Clean",
     "release:android:bundle:playstore": "powershell -ExecutionPolicy Bypass -File .\\scripts\\build-android-release.ps1 -Environment production -ReleaseGate -RequirePlayIntegrityAppCheck -Clean",
     "release:android:check:production-next": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-android-release-readiness.ps1 -Environment production-next -ReleaseGate",

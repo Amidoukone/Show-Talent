@@ -26,6 +26,11 @@ Reference date: 4 April 2026
 
 - [ ] `npm.cmd run release:android:gate:build` passes
 - [ ] `.aab` exists under `artifacts/android/`
+- [ ] the bundle contains **this checkout's** code, read from the bundle:
+      `npm.cmd run release:android:contents:check`. Run automatically at the
+      end of every build since `1.0.7+32`; `-SkipContentCheck` bypasses it.
+      A build can succeed, sign, and carry the right versionCode while
+      shipping the previous release's Dart -- that is how `31` was burned
 - [ ] release build uses `minifyEnabled true`
 - [ ] release build uses `shrinkResources true`
 - [ ] native libraries are 16 KB page-size ready (`ndkVersion` r28+ and packaging guardrail passes)

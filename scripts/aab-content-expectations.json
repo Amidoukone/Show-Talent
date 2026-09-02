@@ -1,0 +1,28 @@
+{
+  "_": "Chaines temoins lues dans base/lib/<abi>/libapp.so par scripts/check-aab-contents.ps1. Une chaine n'est un temoin que si elle discrimine : chacune de celles-ci a ete verifiee absente du bundle cache du 2 septembre (versionCode 31) et presente dans ce checkout. 'Date de naissance', 'Parcours', 'Dossier scout partiel' et 'Annee de naissance' ont ete essayees et ecartees : elles existaient deja dans le 30. Preferer un nom de champ a un libelle quand les deux conviennent -- un libelle se reformule, un champ non.",
+  "forVersionCode": 32,
+  "mustContain": [
+    {
+      "text": "Archiver cette saison",
+      "why": "9d193fc, le geste d'archivage du parcours"
+    },
+    {
+      "text": "Saison archivée",
+      "why": "9d193fc, la confirmation apres archivage (temoin accentue)"
+    },
+    {
+      "text": "seasonHistory",
+      "why": "9d193fc, le champ ecrit par le formulaire et liste par le repository"
+    },
+    {
+      "text": "Chiffres déclarés par le joueur, non attestés.",
+      "why": "0e00b60, la provenance affichee a cote des statistiques"
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "Poste principal",
+      "why": "348cd3d, libelle supprime du profil ; c'est lui qui a trahi le 31 cache"
+    }
+  ]
+}
