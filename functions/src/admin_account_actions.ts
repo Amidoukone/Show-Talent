@@ -26,6 +26,7 @@ import {
   privateContactRef,
 } from "./admin_account_support";
 import {EMAIL_SECRETS, sendAccountInviteEmail} from "./email_delivery";
+import {MIN_BIRTH_YEAR, toBirthYear} from "./user_search_fields";
 import {
   AGE_CATEGORY_CODES,
   CLUB_LEVEL_CODES,
@@ -483,6 +484,40 @@ function isMvpProfileComplete(
   }
 }
 
+/**
+ * Reads a birth date sent by the administration portal.
+ *
+ * Accepts an ISO-8601 string, epoch milliseconds, a `Date` or a `Timestamp`,
+ * and returns the `Timestamp` to store -- the shape the mobile client already
+ * writes, so `users/{uid}/private/contact.birthDate` keeps a single type.
+ *
+ * Whether a date is usable at all is delegated to `toBirthYear`, the function
+ * the trigger uses to derive `birthYear`. That delegation is the whole point:
+ * a date accepted here but refused there would leave the profile with no year,
+ * hence out of every recruiter search, with nothing saying why.
+ *
+ * @param {unknown} value Raw `birthDate` from the portal.
+ * @return {Timestamp | null} The value to store, or null when unusable.
+ */
+function toManagedBirthDate(value: unknown): Timestamp | null {
+  let date: Date | null = null;
+
+  if (value instanceof Timestamp) {
+    date = value.toDate();
+  } else if (value instanceof Date) {
+    date = value;
+  } else if (typeof value === "number" && Number.isFinite(value)) {
+    date = new Date(value);
+  } else if (typeof value === "string" && value.trim()) {
+    const parsed = new Date(value.trim());
+    if (!Number.isNaN(parsed.getTime())) date = parsed;
+  }
+
+  if (!date || Number.isNaN(date.getTime())) return null;
+  if (toBirthYear(date) === null) return null;
+  return Timestamp.fromDate(date);
+}
+
 function sanitizeManagedProfilePatch(
   patch: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -592,6 +627,32 @@ function sanitizeManagedProfilePatch(
     const record = asRecord(value);
     if (record) {
       updates[field] = cloneCallableRecord(record);
+    }
+  }
+
+  // `birthDate` ne vit pas sur la fiche publique mais dans
+  // users/{uid}/private/contact ; la transaction plus bas l'y route, comme
+  // `phone`. Le portail ne pouvait pas le corriger, et c'est le champ dont
+  // l'absence rend un dossier introuvable : `birthYear` en est derive, et
+  // `computeIsSearchable` refuse une annee nulle.
+  //
+  // Une date refusee leve, la ou les autres champs invalides sont ignores en
+  // silence. La difference est voulue : un echec silencieux laisserait
+  // l'administration croire la fiche reparee alors qu'elle reste invisible,
+  // ce qui est exactement le defaut que cette correction existe pour fermer.
+  if ("birthDate" in patch) {
+    const rawBirthDate = patch["birthDate"];
+    if (rawBirthDate === null) {
+      updates["birthDate"] = null;
+    } else {
+      const birthDate = toManagedBirthDate(rawBirthDate);
+      if (!birthDate) {
+        throw new HttpsError(
+          "invalid-argument",
+          `Date de naissance illisible ou hors bornes : l’année doit être comprise entre ${MIN_BIRTH_YEAR} et l’année en cours.`,
+        );
+      }
+      updates["birthDate"] = birthDate;
     }
   }
 
@@ -1018,6 +1079,13 @@ export const updateManagedAccountProfile = onCall(
       if ("phone" in mainDocUpdates) {
         contactUpdates["phone"] = mainDocUpdates["phone"];
         delete mainDocUpdates["phone"];
+      }
+      // Meme trajet que `phone`, et pour la meme raison : la date complete est
+      // une donnee de contact. Seule l'annee, derivee par le trigger, atteint
+      // la fiche publique. La laisser dans mainDocUpdates la publierait.
+      if ("birthDate" in mainDocUpdates) {
+        contactUpdates["birthDate"] = mainDocUpdates["birthDate"];
+        delete mainDocUpdates["birthDate"];
       }
       if ("profileVerificationNote" in mainDocUpdates) {
         adminNotesUpdates["profileVerificationNote"] =

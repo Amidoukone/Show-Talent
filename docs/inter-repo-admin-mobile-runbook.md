@@ -271,6 +271,34 @@ Le depot admin est un consommateur. Il porte :
   `isSearchable`) : ils seraient ecrases a la passe suivante du trigger, ce qui
   se lit comme un bug plutot que comme la regle.
 
+### La date de naissance, corrigeable depuis le 2 septembre 2026
+
+C etait le seul fait qu une fiche pouvait perdre sans recours : `birthYear` en
+est derive, `computeIsSearchable` refuse une annee nulle, et le dossier
+n apparaissait alors dans aucune recherche de recruteur. Le portail ne pouvait
+pas le reparer -- seul le joueur le pouvait, depuis son telephone.
+
+`updateManagedAccountProfile` accepte desormais `birthDate` dans le patch. Ce
+que le portail doit savoir :
+
+- **Envoyer une chaine ISO-8601** (`2004-05-17`), des millisecondes depuis
+  l epoque, ou `null` pour effacer. Le callable stocke un `Timestamp`, la meme
+  forme que celle ecrite par le mobile : le champ garde un seul type.
+- **La date ne va pas sur la fiche publique.** Elle atterrit dans
+  `users/{uid}/private/contact`, comme `phone`. Seule l annee, derivee par le
+  trigger `deriveUserSearchFieldsFromContact`, atteint `users/{uid}`.
+- **Une date inutilisable leve `invalid-argument`**, la ou tout autre champ
+  invalide est ignore en silence. Voulu : la correction existe pour rendre un
+  dossier trouvable, et un echec muet laisserait l administration croire la
+  fiche reparee. La borne est `MIN_BIRTH_YEAR` (`user_search_fields.ts`),
+  importee par le message d erreur pour qu il ne puisse pas annoncer une autre
+  regle que celle appliquee.
+- **Corriger la date invalide une certification.** `birthDate` figure dans
+  `TRUST_SENSITIVE_PROFILE_FIELDS` : une fiche verifiee repasse en `pending`,
+  sauf si le meme appel porte `profileVerified` explicitement. L age est un
+  fait que le recruteur croit sur parole ; le badge ne doit pas survivre a son
+  deplacement sans un nouveau regard.
+
 ### Ajouter un fait footballistique : les cinq endroits
 
 Un champ oublie a l un de ces endroits echoue en silence ou casse tout l

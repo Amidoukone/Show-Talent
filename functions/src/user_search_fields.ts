@@ -48,16 +48,31 @@ function hasNationality(value: unknown): boolean {
 }
 
 /**
+ * Oldest year of birth this project treats as describing a living player.
+ *
+ * Exported so the message the administration portal shows cannot state a bound
+ * different from the one actually applied -- a number written twice is a
+ * number that will eventually disagree with itself.
+ */
+export const MIN_BIRTH_YEAR = 1930;
+
+/**
  * Converts a stored birth date to its year.
  *
  * Tolerant on purpose: the field has been written as a Firestore Timestamp
  * and as an ISO string over the life of this project, and a profile must not
  * lose its year because of which one it happens to hold.
  *
+ * Exported because it is also the judge of what the administration portal may
+ * write into `birthDate` (`admin_account_actions.ts`). One function decides
+ * both questions on purpose: a date the callable accepted but this one refused
+ * would derive no year, and the profile would sit in no recruiter search at
+ * all -- invisible, with nothing anywhere saying why.
+ *
  * @param {unknown} value Raw `birthDate` field from the private document.
  * @return {number | null} Four-digit year, or null when unreadable.
  */
-function toBirthYear(value: unknown): number | null {
+export function toBirthYear(value: unknown): number | null {
   let date: Date | null = null;
 
   if (value && typeof (value as {toDate?: unknown}).toDate === "function") {
@@ -74,7 +89,7 @@ function toBirthYear(value: unknown): number | null {
   const year = date.getUTCFullYear();
   // Une annee hors de ces bornes ne decrit aucun joueur vivant : mieux vaut
   // aucune valeur qu'une valeur qui fausserait un filtre par tranche d'age.
-  if (year < 1930 || year > new Date().getUTCFullYear()) return null;
+  if (year < MIN_BIRTH_YEAR || year > new Date().getUTCFullYear()) return null;
   return year;
 }
 
