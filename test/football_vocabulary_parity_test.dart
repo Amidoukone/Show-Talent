@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:adfoot/models/football_vocabulary.dart';
+import 'package:adfoot/models/player_football_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 String _read(String path) => File(path).readAsStringSync();
@@ -76,6 +77,17 @@ void main() {
     );
   });
 
+  test('the career bound is identical on both sides', () {
+    // Deux bornes qui divergent, c'est un parcours tronque differemment selon
+    // qu'il a ete enregistre par le joueur ou corrige par l'administration.
+    expect(
+      server,
+      contains(
+        'MAX_SEASON_HISTORY = ${PlayerFootballProfile.maxSeasonHistory}',
+      ),
+    );
+  });
+
   group('the admin callable validates instead of trusting', () {
     final admin = _read('functions/src/admin_account_actions.ts');
 
@@ -94,6 +106,25 @@ void main() {
       final end = admin.indexOf('];', start);
       final stringFields = admin.substring(start, end);
       expect(stringFields, isNot(contains('"position"')));
+    });
+
+    test('a season corrected by the portal goes through the same lists', () {
+      // Le portail ne pouvait corriger ni la saison en cours ni le parcours :
+      // un dossier aux statistiques fausses n'avait aucun recours, alors que
+      // c'est exactement ce qu'un recruteur signale.
+      expect(admin, contains('toSeasonRecord(patch["currentSeason"])'));
+      expect(admin, contains('toSeasonHistory(patch["seasonHistory"])'));
+
+      // Le SDK Admin ne voit pas firestore.rules : la categorie d'age et le
+      // niveau de club doivent etre resolus contre les listes fermees ici, ou
+      // nulle part.
+      final vocabulary = _read('functions/src/football_vocabulary.ts');
+      final start = vocabulary.indexOf('export function toSeasonRecord(');
+      final end = vocabulary.indexOf('\n}', start);
+      final body = vocabulary.substring(start, end);
+
+      expect(body, contains('toCode(AGE_CATEGORY_CODES'));
+      expect(body, contains('toCode(CLUB_LEVEL_CODES'));
     });
 
     test('the server-derived fields are not admin-writable either', () {

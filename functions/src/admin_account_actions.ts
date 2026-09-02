@@ -39,6 +39,8 @@ import {
   toCodeList,
   toCountryCode,
   toCountryCodeList,
+  toSeasonHistory,
+  toSeasonRecord,
 } from "./football_vocabulary";
 
 type ManagedTargetContext = {
@@ -640,6 +642,20 @@ function applyFootballFields(
     if (field in patch) {
       updates[field] = toCode(codes, patch[field]);
     }
+  }
+
+  // La saison en cours et le parcours.
+  //
+  // Ni l'une ni l'autre n'etait corrigeable par l'administration : un dossier
+  // dont les statistiques etaient fausses n'avait aucun recours, alors que
+  // c'est precisement ce qu'un recruteur signale. Chaque champ passe par la
+  // meme validation que le reste -- le SDK Admin ne voit pas firestore.rules.
+  if ("currentSeason" in patch) {
+    updates["currentSeason"] = toSeasonRecord(patch["currentSeason"]);
+  }
+
+  if ("seasonHistory" in patch) {
+    updates["seasonHistory"] = toSeasonHistory(patch["seasonHistory"]);
   }
 
   if ("nationalities" in patch) {

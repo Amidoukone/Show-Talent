@@ -124,3 +124,92 @@ export function toCountryCode(raw: unknown): string | null {
   const code = String(raw ?? "").trim().toUpperCase();
   return /^[A-Z]{2}$/.test(code) ? code : null;
 }
+
+/** Au plus dix saisons archivées, comme `PlayerFootballProfile`. */
+export const MAX_SEASON_HISTORY = 10;
+
+/** Longueur retenue d'un libellé libre de saison, de compétition ou de club. */
+const MAX_SEASON_TEXT = 120;
+
+/**
+ * Trims a free-text season field and bounds its length.
+ *
+ * @param {unknown} raw The candidate value.
+ * @return {string | null} The trimmed text, or null when empty or not a string.
+ */
+function toSeasonText(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+
+  const trimmed = raw.trim();
+  return trimmed ? trimmed.slice(0, MAX_SEASON_TEXT) : null;
+}
+
+/**
+ * Reads a non-negative count.
+ *
+ * @param {unknown} raw The candidate value.
+ * @return {number | null} The whole count, or null when unusable.
+ */
+function toSeasonCount(raw: unknown): number | null {
+  if (typeof raw !== "number") return null;
+  if (!Number.isFinite(raw) || raw < 0) return null;
+
+  return Math.trunc(raw);
+}
+
+/**
+ * Sanitises one season, field by field, against the closed lists.
+ *
+ * The Admin SDK bypasses firestore.rules, so this is the only thing standing
+ * between the portal and a season that says « Défense » where the mobile app
+ * reads a code — which it would render as nothing at all.
+ *
+ * A season with nothing left in it comes back as null rather than as a shell
+ * of null fields, which a profile would read as "filled in, but at zero".
+ *
+ * @param {unknown} raw The candidate season.
+ * @return {Record<string, unknown> | null} The sanitised season, or null.
+ */
+export function toSeasonRecord(
+  raw: unknown,
+): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+
+  const map = raw as Record<string, unknown>;
+  const record: Record<string, unknown> = {
+    season: toSeasonText(map["season"]),
+    competition: toSeasonText(map["competition"]),
+    ageCategory: toCode(AGE_CATEGORY_CODES, map["ageCategory"]),
+    appearances: toSeasonCount(map["appearances"]),
+    minutes: toSeasonCount(map["minutes"]),
+    goals: toSeasonCount(map["goals"]),
+    assists: toSeasonCount(map["assists"]),
+    clubName: toSeasonText(map["clubName"]),
+    clubLevel: toCode(CLUB_LEVEL_CODES, map["clubLevel"]),
+  };
+
+  const isEmpty = Object.values(record).every((value) => value === null);
+  return isEmpty ? null : record;
+}
+
+/**
+ * Sanitises a career, dropping what cannot be read and bounding the length.
+ *
+ * @param {unknown} raw The candidate list.
+ * @return {Array} The sanitised seasons, in the order given.
+ */
+export function toSeasonHistory(
+  raw: unknown,
+): Array<Record<string, unknown>> {
+  if (!Array.isArray(raw)) return [];
+
+  const seasons: Array<Record<string, unknown>> = [];
+  for (const entry of raw) {
+    const record = toSeasonRecord(entry);
+    if (!record) continue;
+
+    seasons.push(record);
+    if (seasons.length === MAX_SEASON_HISTORY) break;
+  }
+  return seasons;
+}
