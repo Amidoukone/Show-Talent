@@ -215,13 +215,23 @@ class EventController extends GetxController {
       }
       _events.value = _sortEvents(mergedById.values);
       update();
-    } on FirebaseException catch (error) {
-      AppLogger.debug('Firestore events pagination failed: $error');
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
+        'Firestore events pagination failed: $error',
+        source: 'EventController.loadMoreEvents',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
-    } catch (error) {
-      AppLogger.debug('Event pagination failed: $error');
+    } catch (error, st) {
+      AppLogger.warning(
+        'Event pagination failed: $error',
+        source: 'EventController.loadMoreEvents',
+        error: error,
+        stackTrace: st,
+      );
     } finally {
       _isLoadingMore.value = false;
     }
@@ -299,8 +309,13 @@ class EventController extends GetxController {
         message: 'Votre événement a été créé avec succès.',
         toast: ToastLevel.success,
       );
-    } on FirebaseException catch (error) {
-      AppLogger.debug('Event creation failed: $error');
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
+        'Event creation failed: $error',
+        source: 'EventController.createEvent',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -309,8 +324,13 @@ class EventController extends GetxController {
         code: 'create_failed',
         message: 'Échec de la création de l’événement.',
       );
-    } catch (e) {
-      AppLogger.debug('Event creation failed: $e');
+    } catch (e, st) {
+      AppLogger.warning(
+        'Event creation failed: $e',
+        source: 'EventController.createEvent',
+        error: e,
+        stackTrace: st,
+      );
       return ActionResponse.failure(
         code: 'create_failed',
         message: 'Échec de la création de l’événement.',
@@ -339,8 +359,13 @@ class EventController extends GetxController {
         message: 'Les modifications ont été enregistrées.',
         toast: ToastLevel.success,
       );
-    } on FirebaseException catch (error) {
-      AppLogger.debug('Event update failed: $error');
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
+        'Event update failed: $error',
+        source: 'EventController.updateEvent',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -349,8 +374,13 @@ class EventController extends GetxController {
         code: 'update_failed',
         message: 'Échec de la mise à jour de l’événement.',
       );
-    } catch (e) {
-      AppLogger.debug('Event update failed: $e');
+    } catch (e, st) {
+      AppLogger.warning(
+        'Event update failed: $e',
+        source: 'EventController.updateEvent',
+        error: e,
+        stackTrace: st,
+      );
       return ActionResponse.failure(
         code: 'update_failed',
         message: 'Échec de la mise à jour de l’événement.',
@@ -391,8 +421,13 @@ class EventController extends GetxController {
         message: 'L’événement a été supprimé.',
         toast: ToastLevel.success,
       );
-    } on FirebaseException catch (error) {
-      AppLogger.debug('Event deletion failed: $error');
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
+        'Event deletion failed: $error',
+        source: 'EventController.deleteEvent',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -401,8 +436,13 @@ class EventController extends GetxController {
         code: 'delete_failed',
         message: 'Échec de la suppression de l’événement.',
       );
-    } catch (e) {
-      AppLogger.debug('Event deletion failed: $e');
+    } catch (e, st) {
+      AppLogger.warning(
+        'Event deletion failed: $e',
+        source: 'EventController.deleteEvent',
+        error: e,
+        stackTrace: st,
+      );
       return ActionResponse.failure(
         code: 'delete_failed',
         message: 'Échec de la suppression de l’événement.',
@@ -466,11 +506,16 @@ class EventController extends GetxController {
         message: e.message,
         toast: ToastLevel.info,
       );
-    } on FirebaseException catch (error) {
+    } on FirebaseException catch (error, st) {
       if (localEvent != null && previousParticipants != null) {
         _restoreLocalEventParticipants(localEvent, previousParticipants);
       }
-      AppLogger.debug('Event registration failed: $error');
+      AppLogger.warning(
+        'Event registration failed: $error',
+        source: 'EventController.registerToEvent',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -479,11 +524,16 @@ class EventController extends GetxController {
         code: 'registration_failed',
         message: 'Échec de l’inscription.',
       );
-    } catch (e) {
+    } catch (e, st) {
       if (localEvent != null && previousParticipants != null) {
         _restoreLocalEventParticipants(localEvent, previousParticipants);
       }
-      AppLogger.debug('Event registration failed: $e');
+      AppLogger.warning(
+        'Event registration failed: $e',
+        source: 'EventController.registerToEvent',
+        error: e,
+        stackTrace: st,
+      );
       return ActionResponse.failure(
         code: 'registration_failed',
         message: 'Échec de l’inscription.',
@@ -551,11 +601,16 @@ class EventController extends GetxController {
         message: e.message,
         toast: ToastLevel.info,
       );
-    } on FirebaseException catch (error) {
+    } on FirebaseException catch (error, st) {
       if (localEvent != null && previousParticipants != null) {
         _restoreLocalEventParticipants(localEvent, previousParticipants);
       }
-      AppLogger.debug('Event unregistration failed: $error');
+      AppLogger.warning(
+        'Event unregistration failed: $error',
+        source: 'EventController.unregisterFromEvent',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         return _sessionRevokedResponse();
@@ -564,11 +619,16 @@ class EventController extends GetxController {
         code: 'unregistration_failed',
         message: 'Échec de la désinscription.',
       );
-    } catch (e) {
+    } catch (e, st) {
       if (localEvent != null && previousParticipants != null) {
         _restoreLocalEventParticipants(localEvent, previousParticipants);
       }
-      AppLogger.debug('Event unregistration failed: $e');
+      AppLogger.warning(
+        'Event unregistration failed: $e',
+        source: 'EventController.unregisterFromEvent',
+        error: e,
+        stackTrace: st,
+      );
       return ActionResponse.failure(
         code: 'unregistration_failed',
         message: 'Échec de la désinscription.',
@@ -603,8 +663,11 @@ class EventController extends GetxController {
           _eventRepository
               .updateEventStatus(eventId: event.id, status: 'ferme')
               .catchError((error, stack) {
-                AppLogger.debug(
+                AppLogger.warning(
                   'Auto close event status update failed: $error',
+                  source: 'EventController._prepareEvents',
+                  error: error,
+                  stackTrace: stack,
                 );
               }),
         );

@@ -230,9 +230,12 @@ class ChatController extends GetxController {
               _recalculateTotalUnread();
               _conversations.refresh();
               update();
-            } catch (error) {
-              AppLogger.debug(
+            } catch (error, st) {
+              AppLogger.warning(
                 "Erreur lors du chargement des conversations : $error",
+                source: 'ChatController._bindConversationsFor',
+                error: error,
+                stackTrace: st,
               );
             }
           },
@@ -311,8 +314,13 @@ class ChatController extends GetxController {
         currentUserId: currentUserId,
         otherUserId: otherUserId,
       );
-    } on FirebaseException catch (error) {
-      AppLogger.debug("Erreur création conversation firebase : $error");
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
+        "Erreur création conversation firebase : $error",
+        source: 'ChatController.createOrGetConversation',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ChatFlowException(
@@ -322,8 +330,13 @@ class ChatController extends GetxController {
       throw const ChatFlowException(
         'Impossible de démarrer la conversation pour le moment.',
       );
-    } catch (error) {
-      AppLogger.debug("Erreur création conversation : $error");
+    } catch (error, st) {
+      AppLogger.warning(
+        "Erreur création conversation : $error",
+        source: 'ChatController.createOrGetConversation',
+        error: error,
+        stackTrace: st,
+      );
       throw const ChatFlowException(
         'Impossible de démarrer la conversation pour le moment.',
       );
@@ -339,14 +352,24 @@ class ChatController extends GetxController {
         currentUserId: currentUserId,
         otherUserId: otherUserId,
       );
-    } on FirebaseException catch (error) {
-      AppLogger.debug("Erreur recherche conversation firebase : $error");
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
+        "Erreur recherche conversation firebase : $error",
+        source: 'ChatController.findExistingConversationId',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
       return null;
-    } catch (error) {
-      AppLogger.debug("Erreur recherche conversation : $error");
+    } catch (error, st) {
+      AppLogger.warning(
+        "Erreur recherche conversation : $error",
+        source: 'ChatController.findExistingConversationId',
+        error: error,
+        stackTrace: st,
+      );
       return null;
     }
   }
@@ -366,8 +389,13 @@ class ChatController extends GetxController {
         contactReason: contactReason,
         introMessage: introMessage,
       );
-    } on FirebaseException catch (error) {
-      AppLogger.debug("Erreur création contact guide firebase : $error");
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
+        "Erreur création contact guide firebase : $error",
+        source: 'ChatController.startGuidedConversation',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ChatFlowException(
@@ -377,8 +405,13 @@ class ChatController extends GetxController {
       throw const ChatFlowException(
         'Impossible de lancer ce premier contact pour le moment.',
       );
-    } catch (error) {
-      AppLogger.debug("Erreur création contact guide : $error");
+    } catch (error, st) {
+      AppLogger.warning(
+        "Erreur création contact guide : $error",
+        source: 'ChatController.startGuidedConversation',
+        error: error,
+        stackTrace: st,
+      );
       throw const ChatFlowException(
         'Impossible de lancer ce premier contact pour le moment.',
       );
@@ -505,16 +538,22 @@ class ChatController extends GetxController {
           contextData: normalizedConversationId,
         );
       } catch (notificationError, notificationStackTrace) {
-        AppLogger.debug(
+        AppLogger.warning(
           'Notification message non bloquante: '
           '$notificationError\n$notificationStackTrace',
+          source: 'ChatController.sendMessage',
+          error: notificationError,
+          stackTrace: notificationStackTrace,
         );
       }
     } on ChatFlowException {
       rethrow;
-    } on FirebaseException catch (error) {
-      AppLogger.debug(
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
         "Erreur envoi message firebase : ${error.code} ${error.message}",
+        source: 'ChatController.sendMessage',
+        error: error,
+        stackTrace: st,
       );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
@@ -525,8 +564,13 @@ class ChatController extends GetxController {
       throw const ChatFlowException(
         'Envoi impossible pour le moment. Vérifiez votre connexion.',
       );
-    } catch (error) {
-      AppLogger.debug("Erreur envoi message : $error");
+    } catch (error, st) {
+      AppLogger.warning(
+        "Erreur envoi message : $error",
+        source: 'ChatController.sendMessage',
+        error: error,
+        stackTrace: st,
+      );
       throw const ChatFlowException(
         'Envoi impossible pour le moment. Merci de réessayer.',
       );
@@ -542,8 +586,13 @@ class ChatController extends GetxController {
         senderId: senderId,
         recipientId: recipientId,
       );
-    } on FirebaseException catch (error) {
-      AppLogger.debug("Erreur vérification messagerie firebase : $error");
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
+        "Erreur vérification messagerie firebase : $error",
+        source: 'ChatController.canSendMessage',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -570,8 +619,13 @@ class ChatController extends GetxController {
           userId: userId,
         );
       }
-    } catch (error) {
-      AppLogger.debug("Erreur mise à jour message lu : $error");
+    } catch (error, st) {
+      AppLogger.warning(
+        "Erreur mise à jour message lu : $error",
+        source: 'ChatController.markMessageAsRead',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -595,8 +649,13 @@ class ChatController extends GetxController {
         _conversations.refresh();
         update();
       }
-    } catch (error) {
-      AppLogger.debug("Erreur mise à jour messages lus : $error");
+    } catch (error, st) {
+      AppLogger.warning(
+        "Erreur mise à jour messages lus : $error",
+        source: 'ChatController.markMessagesAsRead',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -632,9 +691,12 @@ class ChatController extends GetxController {
           conversationId: conv.id,
           userId: userId,
         );
-      } catch (error) {
-        AppLogger.debug(
+      } catch (error, st) {
+        AppLogger.warning(
           "Erreur markAllAsReadOnServer conv ${conv.id} : $error",
+          source: 'ChatController.markAllAsReadOnServer',
+          error: error,
+          stackTrace: st,
         );
         if (_isPermissionDenied(error)) {
           unawaited(_handleProtectedAccessDenied());
@@ -677,9 +739,12 @@ class ChatController extends GetxController {
       if (currentUid != null) {
         await _syncUnreadFromConversation(conversationId, currentUid);
       }
-    } on FirebaseException catch (error) {
-      AppLogger.debug(
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
         "Erreur suppression message firebase : ${error.code} ${error.message}",
+        source: 'ChatController.deleteMessage',
+        error: error,
+        stackTrace: st,
       );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
@@ -690,8 +755,13 @@ class ChatController extends GetxController {
       throw const ChatFlowException(
         'Suppression impossible pour le moment. Vérifiez votre connexion.',
       );
-    } catch (error) {
-      AppLogger.debug("Erreur suppression message : $error");
+    } catch (error, st) {
+      AppLogger.warning(
+        "Erreur suppression message : $error",
+        source: 'ChatController.deleteMessage',
+        error: error,
+        stackTrace: st,
+      );
       throw const ChatFlowException(
         'Suppression impossible pour le moment. Merci de réessayer.',
       );
@@ -705,10 +775,13 @@ class ChatController extends GetxController {
       _recalculateTotalUnread();
       _conversations.refresh();
       update();
-    } on FirebaseException catch (error) {
-      AppLogger.debug(
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
         "Erreur suppression conversation firebase : "
         "${error.code} ${error.message}",
+        source: 'ChatController.deleteConversation',
+        error: error,
+        stackTrace: st,
       );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
@@ -719,8 +792,13 @@ class ChatController extends GetxController {
       throw const ChatFlowException(
         'Suppression impossible pour le moment. Vérifiez votre connexion.',
       );
-    } catch (error) {
-      AppLogger.debug("Erreur suppression conversation : $error");
+    } catch (error, st) {
+      AppLogger.warning(
+        "Erreur suppression conversation : $error",
+        source: 'ChatController.deleteConversation',
+        error: error,
+        stackTrace: st,
+      );
       throw const ChatFlowException(
         'Suppression impossible pour le moment. Merci de réessayer.',
       );
