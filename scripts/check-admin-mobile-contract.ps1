@@ -160,6 +160,13 @@ if ($null -ne $resolvedAdminRepoPath) {
         "lib/models/football_vocabulary.dart",
         "lib/models/player_football_profile.dart",
         "lib/models/org_football_profile.dart",
+        # L'offre porte le meme vocabulaire que la fiche joueur, et c'est ce
+        # qui rend le rapprochement possible. Elle a pourtant derive sans que
+        # rien ne le dise : le mobile a remplace `posteRecherche` et `niveau`
+        # par `positionCodes[]`, `ageCategories[]` et `clubLevel`, ce portail a
+        # continue de lire les anciens champs, et une cle absente se lit comme
+        # nulle -- la recherche par poste ne remontait plus rien, en silence.
+        "lib/models/offre.dart",
         "lib/utils/country_codes.dart"
     )
 

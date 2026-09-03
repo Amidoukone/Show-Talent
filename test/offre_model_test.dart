@@ -142,5 +142,74 @@ void main() {
       expect(candidat['uid'], 'player-embedded');
       expect(candidat.containsKey('eventPublies'), isFalse);
     });
+
+    // Le vocabulaire code n'etait couvert nulle part, et c'est ce qui a permis
+    // a la migration de passer inapercue : 06b4e43 a remplace
+    // `posteRecherche` et `niveau` par ces trois champs, les documents ecrits
+    // avant n'ont pas ete repris, et une offre d'avant s'est mise a s'afficher
+    // sans poste ni niveau -- sans erreur nulle part, une cle absente se
+    // lisant comme nulle.
+    test('reads the coded vocabulary, and only it', () {
+      final offre = Offre.fromMap(
+        {
+          'id': 'offre-vocabulaire',
+          'titre': 'Recherche lateral gauche U19',
+          'dateDebut': Timestamp.fromDate(DateTime.utc(2026, 9, 1)),
+          'dateFin': Timestamp.fromDate(DateTime.utc(2026, 12, 31)),
+          'positionCodes': <String>['LB', 'RB'],
+          'ageCategories': <String>['U19'],
+          'clubLevel': 'academy',
+          // Le texte libre d'avant la migration. Il ne doit plus rien
+          // alimenter : le mobile ne le lit plus nulle part.
+          'posteRecherche': 'Attaquant',
+          'niveau': 'Senior',
+        },
+      );
+
+      expect(
+        offre.positionCodes.map((position) => position.code),
+        ['LB', 'RB'],
+      );
+      expect(offre.ageCategories.map((category) => category.code), ['U19']);
+      expect(offre.clubLevel?.code, 'academy');
+    });
+
+    test('drops codes it does not know instead of inventing them', () {
+      final offre = Offre.fromMap(
+        {
+          'id': 'offre-inconnue',
+          'titre': 'Poste exotique',
+          'dateDebut': Timestamp.fromDate(DateTime.utc(2026, 9, 1)),
+          'dateFin': Timestamp.fromDate(DateTime.utc(2026, 12, 31)),
+          'positionCodes': <String>['LB', 'LIBERO', 'LB'],
+          'ageCategories': <String>['U19', 'U23'],
+          'clubLevel': 'galactique',
+        },
+      );
+
+      expect(offre.positionCodes.map((position) => position.code), ['LB']);
+      expect(offre.ageCategories.map((category) => category.code), ['U19']);
+      expect(offre.clubLevel, isNull);
+    });
+
+    test('toMap writes the codes back, not the labels', () {
+      final offre = Offre.fromMap(
+        {
+          'id': 'offre-aller-retour',
+          'titre': 'Aller-retour',
+          'dateDebut': Timestamp.fromDate(DateTime.utc(2026, 9, 1)),
+          'dateFin': Timestamp.fromDate(DateTime.utc(2026, 12, 31)),
+          'positionCodes': <String>['GK'],
+          'ageCategories': <String>['Senior'],
+          'clubLevel': 'pro',
+        },
+      );
+
+      final map = offre.toMap();
+
+      expect(map['positionCodes'], ['GK']);
+      expect(map['ageCategories'], ['Senior']);
+      expect(map['clubLevel'], 'pro');
+    });
   });
 }
