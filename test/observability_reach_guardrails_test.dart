@@ -80,6 +80,15 @@ void main() {
       expect(users, contains('AppLogger.warning('));
     });
 
+    // Events are the newest of the three and were the last still dropping in
+    // silence: an organiser whose detection vanished from the tab had nothing
+    // to report but its absence.
+    test('an event that does not parse is reported', () {
+      final events = _read('lib/services/events/event_repository.dart');
+      expect(events, contains("source: 'events/parse'"));
+      expect(events, contains('AppLogger.warning('));
+    });
+
     // Sampled at 15%, because the snapshot re-delivers on every change and a
     // permanently malformed document would otherwise log on every update.
     test('they are warnings, not errors, so a bad document cannot flood', () {

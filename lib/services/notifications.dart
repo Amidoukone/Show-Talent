@@ -95,8 +95,16 @@ class NotificationService {
     await _openedAppSub?.cancel();
     _openedAppSub = FirebaseMessaging.onMessageOpenedApp.listen(
       (msg) => _dispatch(resolveNotificationRoute(msg.data)),
-      onError: (Object error) {
-        AppLogger.debug('NotificationService onMessageOpenedApp error: $error');
+      // Une notification touchee qui n'ouvre rien est le pire des deux mondes :
+      // l'utilisateur a agi, l'application a paru l'ignorer, et il n'a rien
+      // d'autre a raconter que « ca n'a rien fait ».
+      onError: (Object error, StackTrace stackTrace) {
+        AppLogger.warning(
+          'NotificationService onMessageOpenedApp error: $error',
+          source: 'NotificationService.listenNotificationTaps',
+          error: error,
+          stackTrace: stackTrace,
+        );
       },
     );
 
@@ -105,8 +113,13 @@ class NotificationService {
       if (initial != null) {
         _dispatch(resolveNotificationRoute(initial.data));
       }
-    } catch (error) {
-      AppLogger.debug('NotificationService getInitialMessage error: $error');
+    } catch (error, stackTrace) {
+      AppLogger.warning(
+        'NotificationService getInitialMessage error: $error',
+        source: 'NotificationService.listenNotificationTaps',
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 
@@ -132,12 +145,27 @@ class NotificationService {
         }
         try {
           await UserRepository().saveFcmToken(user.uid, token);
-        } catch (error) {
-          AppLogger.debug('NotificationService token refresh save: $error');
+        } catch (error, stackTrace) {
+          // Le commentaire ci-dessus dit pourquoi ce listener existe : c'est
+          // le seul signal que le jeton a change. S'il echoue ici, le backend
+          // garde un jeton mort et l'utilisateur cesse de recevoir la moindre
+          // notification -- sans erreur nulle part, et sans rien a signaler
+          // sinon un silence.
+          AppLogger.warning(
+            'NotificationService token refresh save: $error',
+            source: 'NotificationService.listenTokenRefresh',
+            error: error,
+            stackTrace: stackTrace,
+          );
         }
       },
-      onError: (Object error) {
-        AppLogger.debug('NotificationService onTokenRefresh error: $error');
+      onError: (Object error, StackTrace stackTrace) {
+        AppLogger.warning(
+          'NotificationService onTokenRefresh error: $error',
+          source: 'NotificationService.listenTokenRefresh',
+          error: error,
+          stackTrace: stackTrace,
+        );
       },
     );
   }
@@ -166,7 +194,13 @@ class NotificationService {
     final token = await WebMessagingHelper.getTokenWithRetry(retries: 3);
 
     if (token == null) {
-      AppLogger.debug('NotificationService: aucun token FCM obtenu.');
+      // Trois tentatives ont echoue : ce compte n'aura aucune notification
+      // jusqu'a la prochaine demande, et l'ecran vient pourtant d'annoncer le
+      // contraire a l'utilisateur.
+      AppLogger.warning(
+        'NotificationService: aucun token FCM obtenu.',
+        source: 'NotificationService.askPermissionAndUpdateToken',
+      );
       return;
     }
 

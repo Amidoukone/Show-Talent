@@ -436,9 +436,21 @@ class EventRepository {
       try {
         fetched.add(Event.fromDoc(doc));
       } catch (error, stackTrace) {
-        AppLogger.debug(
-          'Event ignored because document is invalid: ${doc.id}\n'
-          '$error\n$stackTrace',
+        // Meme defaut que pour une offre, et meme correction : l'evenement
+        // disparait de l'onglet sans que rien ne le dise. L'organisateur voit
+        // sa detection absente, les joueurs ne la voient jamais, et
+        // `AppLogger.debug` s'arrete a `developer.log` -- donc a un debogueur
+        // que personne n'a attache sur un vrai telephone.
+        //
+        // `warning` plutot que `error` parce que l'instantane se redelivre a
+        // chaque changement : l'echantillonnage a 15 % donne le taux sans
+        // noyer la collection si un document reste durablement casse.
+        AppLogger.warning(
+          'event dropped from the list; its document did not parse',
+          source: 'events/parse',
+          error: error,
+          stackTrace: stackTrace,
+          metadata: <String, dynamic>{'eventId': doc.id},
         );
       }
     }

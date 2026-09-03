@@ -369,8 +369,26 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           activeUrl: widget.videoUrl,
           recoveryReason: recoveryReason,
         );
-      } catch (e) {
+      } catch (e, st) {
+        // Meme signalement que `play_error` plus bas, et pour une raison plus
+        // forte : quand `play()` echoue, un controleur existe deja et la
+        // reprise peut s'appuyer dessus. Ici `p` reste nul, `_bindPlayer(null)`
+        // suit, et la vignette ne demarre jamais. C'est l'echec de lecture le
+        // plus visible pour l'utilisateur, et c'etait le seul du fichier a ne
+        // rien laisser derriere lui : `AppLogger.debug` s'arrete a
+        // `developer.log` en release.
         AppLogger.debug('[SmartVideoPlayer] init error: $e');
+        unawaited(
+          _observability.logPlaybackError(
+            videoId: widget.video.id,
+            videoUrl: widget.videoUrl,
+            contextKey: widget.contextKey,
+            reason: 'init_error',
+            error: e,
+            stackTrace: st,
+            metadata: _playbackDiagnostics(),
+          ),
+        );
       }
     }
 
