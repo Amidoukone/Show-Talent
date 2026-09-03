@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
+import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/theme/ad_colors.dart';
@@ -12,6 +15,7 @@ import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 class EventFormResult {
@@ -63,6 +67,26 @@ class _EventFormScreenState extends State<EventFormScreen> {
   bool _isSubmitting = false;
   bool _hasCompletedSubmit = false;
 
+  final ImagePicker _imagePicker = ImagePicker();
+
+  /// L'affiche deja publiee, si l'evenement en a une.
+  String? _flyerUrl;
+
+  /// Le fichier choisi mais pas encore televerse.
+  ///
+  /// Il ne peut pas partir avant que l'evenement existe : la regle de stockage
+  /// lit le document pour savoir qui televerse. Il attend donc ici jusqu'a ce
+  /// que la creation ou la mise a jour ait abouti.
+  String? _pickedFlyerPath;
+
+  /// L'organisateur a demande le retrait de l'affiche existante.
+  bool _flyerRemoved = false;
+
+  bool get _hasFlyerChange => _pickedFlyerPath != null || _flyerRemoved;
+
+  /// Ce que l'ecran doit montrer maintenant, quel que soit l'etat du reste.
+  String? get _visibleFlyerUrl => _flyerRemoved ? null : _flyerUrl;
+
   bool get _submitLocked => _isSubmitting || _hasCompletedSubmit;
 
   Iterable<TextEditingController> get _textControllers sync* {
@@ -79,6 +103,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
       (entry) => entry.key.text.trim() != entry.value,
     );
     return textChanged ||
+        _hasFlyerChange ||
         startDate != _initialStartDate ||
         endDate != _initialEndDate ||
         estPublic != _initialEstPublic ||
@@ -89,6 +114,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   void initState() {
     super.initState();
     _draftEventId = eventController.newEventId();
+    _flyerUrl = widget.event?.flyerUrl;
 
     if (widget.event != null) {
       titleController.text = widget.event!.titre;
@@ -283,6 +309,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
                           ),
                         ],
                       ),
+                      const SizedBox(height: 16),
+                      _buildFormSection(
+                        title: 'Affiche',
+                        children: [_buildFlyerPicker()],
+                      ),
                       const SizedBox(height: 24),
                       AdButton(
                         onPressed: _submitLocked ? null : _handleSubmit,
@@ -303,6 +334,131 @@ class _EventFormScreenState extends State<EventFormScreen> {
         ),
       ),
     );
+  }
+
+  /// Choisit une affiche, sans la televerser.
+  ///
+  /// Compresse a la prise : la regle de stockage plafonne a 8 Mo, et une photo
+  /// de telephone recente depasse ce plafond assez souvent pour que refuser
+  /// apres coup soit une mauvaise reponse. 1600 px de cote suffisent
+  /// largement pour une affiche affichee en pleine largeur.
+  Future<void> _pickFlyer() async {
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+      if (picked == null || !mounted) return;
+      setState(() {
+        _pickedFlyerPath = picked.path;
+        _flyerRemoved = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      AdFeedback.error(
+        'Affiche',
+        'Impossible d\u2019ouvrir la galerie.',
+      );
+      AppLogger.warning(
+        'Selection affiche evenement echouee: $error',
+        source: 'EventFormScreen._pickFlyer',
+        error: error,
+      );
+    }
+  }
+
+  void _clearFlyer() {
+    setState(() {
+      _pickedFlyerPath = null;
+      // Ne marquer un retrait que s'il y a quelque chose a retirer en base :
+      // annuler un choix local ne doit pas declencher une suppression.
+      _flyerRemoved = _flyerUrl != null;
+    });
+  }
+
+  Widget _buildFlyerPicker() {
+    final localPath = _pickedFlyerPath;
+    final remoteUrl = _visibleFlyerUrl;
+    final hasSomething = localPath != null || remoteUrl != null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Une affiche donne a votre evenement le format que le football '
+          'amateur partage deja. Facultative.',
+          style: TextStyle(color: AdColors.onSurfaceMuted, fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        if (hasSomething)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AdRadius.md),
+            child: AspectRatio(
+              aspectRatio: 4 / 3,
+              child: localPath != null
+                  ? Image.file(File(localPath), fit: BoxFit.cover)
+                  : Image.network(
+                      remoteUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stack) => ColoredBox(
+                        color: AdColors.surfaceCard,
+                        child: const Center(
+                          child: Icon(Icons.broken_image_outlined),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+        if (hasSomething) const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _submitLocked ? null : _pickFlyer,
+                icon: const Icon(Icons.image_outlined),
+                label: Text(
+                  hasSomething ? 'Remplacer' : 'Ajouter une affiche',
+                ),
+              ),
+            ),
+            if (hasSomething) ...[
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: _submitLocked ? null : _clearFlyer,
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Retirer'),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Applique le changement d'affiche, une fois l'evenement ecrit.
+  ///
+  /// Renvoie le message a ajouter au retour, ou une chaine vide. Un echec ne
+  /// remet pas la publication en cause : l'evenement existe, il lui manque une
+  /// image, et le dire vaut mieux que faire croire a un echec complet.
+  Future<String> _applyFlyerChange(String eventId) async {
+    final localPath = _pickedFlyerPath;
+
+    if (localPath != null) {
+      final response = await eventController.attachFlyer(
+        eventId: eventId,
+        filePath: localPath,
+      );
+      return response.success ? '' : ' L\u2019affiche n\u2019a pas pu etre ajoutee.';
+    }
+
+    if (_flyerRemoved && _flyerUrl != null) {
+      final response = await eventController.removeFlyer(eventId);
+      return response.success ? '' : ' L\u2019affiche n\u2019a pas pu etre retiree.';
+    }
+
+    return '';
   }
 
   Future<void> _handleSubmit() async {
@@ -371,7 +527,12 @@ class _EventFormScreenState extends State<EventFormScreen> {
           capaciteMax: capacite,
           tags: tags.isEmpty ? null : tags,
           streamingUrl: null,
-          flyerUrl: null,
+          // Sans cette ligne, editer un evenement effacait son affiche :
+          // `updateEvent` supprime le champ quand il vaut null, et le
+          // formulaire envoyait null a chaque fois.
+          flyerUrl: _visibleFlyerUrl,
+          views: widget.event!.views,
+          viewedBy: widget.event!.viewedBy,
         );
 
         final response =
@@ -386,7 +547,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
           return;
         }
 
-        _completeSubmit(response.message);
+        final flyerNote = await _applyFlyerChange(widget.event!.id);
+        if (!mounted) return;
+
+        _completeSubmit('${response.message}$flyerNote');
       } else {
         final newEvent = Event(
           id: _draftEventId,
@@ -419,7 +583,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
           return;
         }
 
-        _completeSubmit(response.message);
+        final flyerNote = await _applyFlyerChange(_draftEventId);
+        if (!mounted) return;
+
+        _completeSubmit('${response.message}$flyerNote');
       }
     } finally {
       if (mounted && !_hasCompletedSubmit) {

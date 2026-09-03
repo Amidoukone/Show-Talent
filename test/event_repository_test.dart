@@ -156,5 +156,65 @@ void main() {
         expect(batch.cursor, isNotNull);
       },
     );
+
+    // La regle `canMutateEventViews` epingle exactement trois champs et un
+    // delta de un. Ces trois cas sont ce qu'elle accepte, du cote client.
+    group('incrementViews', () {
+      test('counts a reader once, and touches only what the rule allows',
+          () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+        final player = _user('player-1', 'joueur');
+
+        await repository.createEvent(_event());
+        await repository.incrementViews(event: _event(), viewer: player);
+        await repository.incrementViews(event: _event(), viewer: player);
+
+        final data = (await firestore.collection('events').doc('event-1').get())
+            .data()!;
+
+        expect(data['views'], 1, reason: 'le second passage ne recompte pas');
+        expect(data['viewedBy'], ['player-1']);
+        expect(data['lastUpdated'], isA<Timestamp>());
+        expect(data['statut'], 'ouvert');
+        expect(data['titre'], 'Camp detection');
+      });
+
+      test('never counts the organiser in their own event', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+        final organizer = _user('club-1', 'club');
+
+        await repository.createEvent(_event(organizer: organizer));
+        await repository.incrementViews(event: _event(), viewer: organizer);
+
+        final data = (await firestore.collection('events').doc('event-1').get())
+            .data()!;
+
+        expect(data['views'], isNull);
+        expect(data['viewedBy'], isNull);
+      });
+
+      test('two readers count twice', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+
+        await repository.createEvent(_event());
+        await repository.incrementViews(
+          event: _event(),
+          viewer: _user('player-1', 'joueur'),
+        );
+        await repository.incrementViews(
+          event: _event(),
+          viewer: _user('player-2', 'joueur'),
+        );
+
+        final data = (await firestore.collection('events').doc('event-1').get())
+            .data()!;
+
+        expect(data['views'], 2);
+        expect(data['viewedBy'], ['player-1', 'player-2']);
+      });
+    });
   });
 }

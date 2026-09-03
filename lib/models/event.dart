@@ -23,6 +23,15 @@ class Event {
   String? streamingUrl;
   String? flyerUrl;
   int? views;
+
+  /// Qui a deja compte dans [views].
+  ///
+  /// L'offre porte la meme paire depuis toujours, et c'est elle qui rend le
+  /// compteur honnete : sans la liste, une regle ne peut pas verifier qu'un
+  /// increment correspond a un lecteur nouveau, et un client boucle sur
+  /// `FieldValue.increment(1)` autant qu'il veut.
+  List<String>? viewedBy;
+
   DateTime? archivedAt;
   DateTime? lastUpdated;
 
@@ -43,6 +52,7 @@ class Event {
     this.streamingUrl,
     this.flyerUrl,
     this.views,
+    this.viewedBy,
     this.archivedAt,
     this.lastUpdated,
   });
@@ -139,6 +149,7 @@ class Event {
       if (streamingUrl != null) 'streamingUrl': streamingUrl,
       if (flyerUrl != null) 'flyerUrl': flyerUrl,
       if (views != null) 'views': views,
+      if (viewedBy != null) 'viewedBy': viewedBy,
       if (archivedAt != null) 'archivedAt': Timestamp.fromDate(archivedAt!),
       if (lastUpdated != null) 'lastUpdated': Timestamp.fromDate(lastUpdated!),
     };
@@ -239,6 +250,9 @@ class Event {
       streamingUrl: map['streamingUrl']?.toString(),
       flyerUrl: map['flyerUrl']?.toString(),
       views: _toNullableInt(map['views']),
+      viewedBy: map['viewedBy'] is List
+          ? (map['viewedBy'] as List).map((id) => id.toString()).toList()
+          : null,
       archivedAt: _parseNullableDate(map['archivedAt']),
       lastUpdated: _parseNullableDate(map['lastUpdated']),
     );

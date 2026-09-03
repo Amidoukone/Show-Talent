@@ -264,6 +264,108 @@ class EventController extends GetxController {
 
   String newEventId() => _eventRepository.newEventId();
 
+  /// Attache une affiche a un evenement deja cree.
+  ///
+  /// Deux temps, imposes par la regle de stockage : `isOwnedEventDoc` lit le
+  /// document pour savoir qui televerse, donc l'evenement doit exister avant
+  /// son image. L'appelant cree d'abord, attache ensuite.
+  ///
+  /// Un echec ici ne remet pas l'evenement en cause -- il est publie, il est
+  /// visible, il lui manque une image. La reponse le dit sans faire croire que
+  /// la publication a echoue.
+  Future<ActionResponse> attachFlyer({
+    required String eventId,
+    required String filePath,
+  }) async {
+    try {
+      final url = await _eventRepository.uploadFlyer(
+        eventId: eventId,
+        filePath: filePath,
+      );
+      await _eventRepository.setFlyerUrl(eventId: eventId, flyerUrl: url);
+      return const ActionResponse(
+        success: true,
+        code: 'flyer_attached',
+        message: 'Affiche ajoutee.',
+        toast: ToastLevel.none,
+      );
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
+        'Televersement affiche evenement echoue: $error',
+        source: 'EventController.attachFlyer',
+        error: error,
+        stackTrace: st,
+      );
+      if (_isPermissionDenied(error)) {
+        unawaited(_handleProtectedAccessDenied());
+        return _sessionRevokedResponse();
+      }
+      return ActionResponse.failure(
+        code: 'flyer_failed',
+        message: 'L’affiche n’a pas pu etre ajoutee.',
+      );
+    } catch (e, st) {
+      AppLogger.warning(
+        'Televersement affiche evenement echoue: $e',
+        source: 'EventController.attachFlyer',
+        error: e,
+        stackTrace: st,
+      );
+      return ActionResponse.failure(
+        code: 'flyer_failed',
+        message: 'L’affiche n’a pas pu etre ajoutee.',
+      );
+    }
+  }
+
+  /// Retire l'affiche : le fichier, puis le champ.
+  Future<ActionResponse> removeFlyer(String eventId) async {
+    try {
+      await _eventRepository.deleteFlyer(eventId);
+      await _eventRepository.setFlyerUrl(eventId: eventId, flyerUrl: null);
+      return const ActionResponse(
+        success: true,
+        code: 'flyer_removed',
+        message: 'Affiche retiree.',
+        toast: ToastLevel.none,
+      );
+    } catch (e, st) {
+      AppLogger.warning(
+        'Suppression affiche evenement echouee: $e',
+        source: 'EventController.removeFlyer',
+        error: e,
+        stackTrace: st,
+      );
+      return ActionResponse.failure(
+        code: 'flyer_remove_failed',
+        message: 'L’affiche n’a pas pu etre retiree.',
+      );
+    }
+  }
+
+  /// Compte un lecteur, sans jamais faire echouer l'affichage pour autant.
+  ///
+  /// Le pendant exact de `OffreController.incrementVues`. Un compteur qui
+  /// remonterait son echec a l'utilisateur couterait plus qu'il ne rapporte :
+  /// l'evenement s'affiche, le compte se perd, et le journal le dit.
+  Future<void> incrementVues({
+    required Event event,
+    required AppUser viewer,
+  }) async {
+    if (viewer.uid == event.organisateur.uid) return;
+
+    try {
+      await _eventRepository.incrementViews(event: event, viewer: viewer);
+    } catch (e, st) {
+      AppLogger.warning(
+        'Erreur incrementation vues evenement: $e',
+        source: 'EventController.incrementVues',
+        error: e,
+        stackTrace: st,
+      );
+    }
+  }
+
   Future<ActionResponse> createEvent(Event event, AppUser utilisateur) async {
     final auth = _assertPublisherAuthorized(utilisateur);
     if (auth != null) return auth;
