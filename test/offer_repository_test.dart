@@ -1,3 +1,4 @@
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/offers/offer_repository.dart';
@@ -30,6 +31,8 @@ Offre _offer({
   List<AppUser> candidates = const [],
   DateTime? endDate,
   String? attachmentUrl,
+  List<FootballPosition> positions = const <FootballPosition>[],
+  DateTime? createdAt,
 }) {
   return Offre(
     id: id,
@@ -40,8 +43,9 @@ Offre _offer({
     recruteur: recruiter ?? _user('club-1', 'club'),
     candidats: candidates,
     statut: status,
-    dateCreation: DateTime(2026, 1, 1),
+    dateCreation: createdAt ?? DateTime(2026, 1, 1),
     pieceJointeUrl: attachmentUrl,
+    positionCodes: positions,
   );
 }
 
@@ -57,6 +61,111 @@ void main() {
           (await firestore.collection('offres').doc('offer-1').get()).data()!;
       expect(data['statut'], 'fermee');
       expect(data.containsKey('pieceJointeUrl'), isFalse);
+    });
+
+    // Le filtre par poste est le seul servi par la requete. Ce qui suit le
+    // verifie contre un Firestore, pas contre la source : un `where` ecrit
+    // sur le mauvais champ, ou un filtre applique quand la liste est vide,
+    // ne se voit pas dans une assertion de chaine.
+    group('le filtre par poste', () {
+      Future<OfferRepository> seed(FakeFirebaseFirestore firestore) async {
+        final repository = OfferRepository(firestore: firestore);
+        await repository.publishOffer(
+          _offer(
+            id: 'lb',
+            positions: const [FootballPosition.leftBack],
+            createdAt: DateTime(2026, 3, 1),
+          ),
+        );
+        await repository.publishOffer(
+          _offer(
+            id: 'cb',
+            positions: const [FootballPosition.centreBack],
+            createdAt: DateTime(2026, 2, 1),
+          ),
+        );
+        await repository.publishOffer(
+          _offer(id: 'sans-poste', createdAt: DateTime(2026, 1, 15)),
+        );
+        return repository;
+      }
+
+      test('ne rapporte que les offres portant un des postes demandes',
+          () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = await seed(firestore);
+
+        final page = await repository.fetchOffersPage(
+          filter: const OfferQueryFilter(
+            positions: [FootballPosition.leftBack],
+          ),
+        );
+
+        expect(page.offers.map((offer) => offer.id), ['lb']);
+      });
+
+      test('accepte plusieurs postes, comme « un CB ou un LB »', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = await seed(firestore);
+
+        final page = await repository.fetchOffersPage(
+          filter: const OfferQueryFilter(
+            positions: [FootballPosition.centreBack, FootballPosition.leftBack],
+          ),
+        );
+
+        // Toujours du plus recent au plus ancien : le filtre change ce qui
+        // remonte, pas l'ordre.
+        expect(page.offers.map((offer) => offer.id), ['lb', 'cb']);
+      });
+
+      // Une offre d'avant la migration du vocabulaire n'a pas de
+      // `positionCodes`. Elle doit rester visible sans filtre -- sans quoi
+      // ajouter le filtre ferait disparaitre du fil les offres existantes.
+      test('sans poste demande, rien n’est ecarte', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = await seed(firestore);
+
+        final page = await repository.fetchOffersPage();
+
+        expect(page.offers.map((offer) => offer.id), [
+          'lb',
+          'cb',
+          'sans-poste',
+        ]);
+      });
+
+      test('la cle de cache distingue les postes, sans dependre de l’ordre',
+          () {
+        const lbCb = OfferQueryFilter(
+          positions: [FootballPosition.leftBack, FootballPosition.centreBack],
+        );
+        const cbLb = OfferQueryFilter(
+          positions: [FootballPosition.centreBack, FootballPosition.leftBack],
+        );
+        const none = OfferQueryFilter();
+
+        // Sinon le controleur relancerait le flux pour une selection
+        // identique, et rien ne le dirait.
+        expect(lbCb.cacheKey, cbLb.cacheKey);
+        expect(lbCb.cacheKey, isNot(none.cacheKey));
+      });
+
+      // `array-contains-any` refuse plus de dix valeurs : au-dela, la requete
+      // echoue et l'ecran parait simplement vide.
+      test('la requete ne demande jamais plus de dix postes', () {
+        final filter = OfferQueryFilter(
+          positions: List<FootballPosition>.filled(
+            12,
+            FootballPosition.leftBack,
+          ),
+        );
+
+        expect(
+          filter.positionCodesForQuery.length,
+          FootballPosition.maxPerQuery,
+        );
+      });
     });
 
     test('updateOffer removes attachment when cleared', () async {

@@ -1,8 +1,76 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  // Le vocabulaire footballistique etait ecrit par le formulaire, affiche par
+  // la fiche, et le fil ne savait le trier que par une recherche plein texte
+  // sur les libelles. Le poste passe cote serveur ; l'index qui le sert doit
+  // exister, et rester declare : une forme de requete sans index ne leve pas,
+  // Firestore repond `failed-precondition` et l'ecran parait simplement vide.
+  group('le fil des offres trie par vocabulaire footballistique', () {
+    test('l’index qui sert le filtre par poste est declare', () {
+      final raw = File('firestore.indexes.json').readAsStringSync();
+      final parsed = jsonDecode(raw) as Map<String, dynamic>;
+      final indexes = (parsed['indexes'] as List).cast<Map<String, dynamic>>();
+
+      final matching = indexes.where((index) {
+        if (index['collectionGroup'] != 'offres') return false;
+        final fields = (index['fields'] as List).cast<Map<String, dynamic>>();
+        if (fields.length != 2) return false;
+        return fields.first['fieldPath'] == 'positionCodes' &&
+            fields.first['arrayConfig'] == 'CONTAINS' &&
+            fields.last['fieldPath'] == 'dateCreation' &&
+            fields.last['order'] == 'DESCENDING';
+      });
+
+      expect(
+        matching,
+        hasLength(1),
+        reason: 'sans lui, filtrer par poste rend un fil vide sans erreur',
+      );
+    });
+
+    test('le depot ne filtre au serveur que sur un seul champ tableau', () {
+      final repository = File(
+        'lib/services/offers/offer_repository.dart',
+      ).readAsStringSync();
+
+      expect(repository, contains("arrayContainsAny: filter.positionCodesForQuery"));
+      // `ageCategories` est un second champ tableau : Firestore n'en accepte
+      // qu'un par index composite, et le mettre ici ferait echouer la requete.
+      expect(repository, isNot(contains("'ageCategories'")));
+    });
+
+    test('l’ecran cable le poste au serveur et le reste sur la page', () {
+      final screen = File('lib/screens/offre_screen.dart').readAsStringSync();
+      final controller = File(
+        'lib/controller/offre_controller.dart',
+      ).readAsStringSync();
+
+      expect(controller, contains('void setPositionFilter('));
+      expect(screen, contains('offreController.setPositionFilter('));
+
+      // Les deux autres criteres se posent la ou les filtres de cet ecran
+      // vivent deja.
+      expect(screen, contains('o.ageCategories.contains(_selectedCategory)'));
+      expect(screen, contains('o.clubLevel == _selectedLevel'));
+
+      // Reinitialiser doit repartir jusqu'au serveur : sinon le fil reste
+      // filtre par un poste que plus aucun menu n'affiche.
+      expect(
+        screen,
+        contains('offreController.setPositionFilter(const <FootballPosition>[])'),
+      );
+
+      // Un fil vide sous filtre serveur reste un fil filtre : la barre doit
+      // rester a l'ecran, sinon l'utilisateur n'a aucun moyen de revenir.
+      expect(screen, contains('final hasServerFilter = _selectedPosition != null;'));
+      expect(screen, contains('if (allOffres.isEmpty && !hasServerFilter)'));
+    });
+  });
+
   group('Offre release quality guardrails', () {
     test('offre form awaits controller result before system feedback', () {
       final form = File('lib/screens/offres_form.dart').readAsStringSync();

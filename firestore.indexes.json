@@ -181,6 +181,20 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "positionCodes",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "dateCreation",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "offres",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "statut",
           "order": "ASCENDING"
         },

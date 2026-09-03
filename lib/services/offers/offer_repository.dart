@@ -1,4 +1,5 @@
 
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/app_logger.dart';
@@ -48,16 +49,43 @@ class OfferQueryFilter {
   const OfferQueryFilter({
     this.status,
     this.endingAfter,
+    this.positions = const <FootballPosition>[],
   });
 
   final String? status;
   final DateTime? endingAfter;
 
+  /// Postes recherches. Vide signifie « tous ».
+  ///
+  /// Le seul critere footballistique servi par le serveur, et c'est une
+  /// contrainte de Firestore, pas un choix de produit : un index composite
+  /// n'accepte **qu'un seul champ tableau**, et `ageCategories` en est un
+  /// second. `TalentSearchRepository` tranche deja de la meme facon, dans
+  /// l'autre sens du rapprochement -- le poste au serveur, le reste sur la
+  /// page deja bornee.
+  ///
+  /// Le poste est aussi le bon choix des deux : c'est le critere le plus
+  /// selectif, et celui qu'un joueur pose en premier.
+  final List<FootballPosition> positions;
+
+  /// Les codes envoyes a Firestore, plafonnes par `array-contains-any`.
+  List<String> get positionCodesForQuery => positions
+      .take(FootballPosition.maxPerQuery)
+      .map((position) => position.code)
+      .toList();
+
   String get cacheKey {
     final normalizedStatus =
         status == null ? 'all' : Offre.normalizeStatus(status!).trim();
     final dateKey = endingAfter?.millisecondsSinceEpoch.toString() ?? 'all';
-    return '$normalizedStatus:$dateKey';
+    // Trie, sinon deux selections identiques faites dans un ordre different
+    // relanceraient le flux pour rien.
+    final positionKey = positions.isEmpty
+        ? 'all'
+        : (positions.map((position) => position.code).toList()..sort()).join(
+            ',',
+          );
+    return '$normalizedStatus:$dateKey:$positionKey';
   }
 }
 
@@ -336,8 +364,25 @@ class OfferRepository {
     });
   }
 
+  /// Construit la requete du fil.
+  ///
+  /// Un seul index composite couvre le filtre par poste :
+  /// `positionCodes CONTAINS` + `dateCreation DESC`. Le combiner avec `status`
+  /// ou `endingAfter` produirait d'autres formes, chacune demandant son propre
+  /// index -- et une forme sans index ne leve pas : Firestore repond
+  /// `failed-precondition`, le depot l'attrape comme n'importe quel echec, et
+  /// l'ecran parait simplement vide. C'est pourquoi l'appelant ne combine pas
+  /// : le statut se filtre sur la page, comme le role et l'echeance le font
+  /// deja.
   Query<Map<String, dynamic>> _buildQuery(OfferQueryFilter filter) {
     Query<Map<String, dynamic>> query = _offersCollection;
+
+    if (filter.positions.isNotEmpty) {
+      query = query.where(
+        'positionCodes',
+        arrayContainsAny: filter.positionCodesForQuery,
+      );
+    }
 
     final rawStatus = filter.status?.trim();
     if (rawStatus != null && rawStatus.isNotEmpty) {
