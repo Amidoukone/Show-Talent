@@ -122,3 +122,11 @@ service-account*.json
 # document qui n'existe que sur un poste de travail est un document que
 # personne ne relira avant de refaire les memes erreurs.
 !/docs/talent-search-spec.md
+
+# Et les documents de reprise, pour la raison qui a motive toutes les
+# exceptions ci-dessus : ils disent ou une session s'est arretee, ce qui a ete
+# verifie contre la production plutot que suppose, et ce qui reste. Un `git
+# log` donne les commits, jamais le fait qu'un deploiement a reussi a moitie ni
+# qu'un chemin n'a jamais tourne sur un appareil. Laisser cela hors de Git,
+# c'est le reperdre a chaque fois.
+!/docs/reprise-*.md
