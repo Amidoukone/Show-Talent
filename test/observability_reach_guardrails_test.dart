@@ -101,18 +101,18 @@ void main() {
   //
   // Events and chat were converted first because they own the failures a
   // person actually meets: an inscription that does not take, a message that
-  // does not leave. The controllers still listed below are the remaining debt,
-  // and the list is the point: it only ever shrinks, and a new file may not
-  // join it.
+  // does not leave. Session, profile, video, upload, follow and push followed:
+  // a sign-in that drops, a profile that will not save, a feed that stops
+  // paginating and an upload that never finishes are all failures the user
+  // lives through, and none of them left a trace before.
+  //
+  // The list is the point: it only ever shrinks, and a new file may not join
+  // it. What is left is one deliberate exception — ConnectivityService funnels
+  // every trace through a single `_debugLog` helper that returns early unless
+  // `kDebugMode`, so its debt is one decision to take, not scattered sites to
+  // find.
   group('a failure the user lives through is not logged at debug', () {
     const notYetConverted = <String>{
-      'lib/controller/user_controller.dart',
-      'lib/controller/profile_controller.dart',
-      'lib/controller/push_notification.dart',
-      'lib/controller/video_controller.dart',
-      'lib/controller/auth_controller.dart',
-      'lib/controller/follow_controller.dart',
-      'lib/controller/upload_video_controller.dart',
       'lib/controller/connectivity_controller.dart',
     };
 

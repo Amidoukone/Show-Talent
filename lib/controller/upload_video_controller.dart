@@ -143,9 +143,12 @@ class UploadVideoController extends GetxController {
           metadata: {'error': error.toString()},
         ),
       );
-      AppLogger.debug(
+      AppLogger.warning(
         '[UploadVideoController] publication quota check failed, '
         'letting the server decide: $error\n$stackTrace',
+        source: 'UploadVideoController.checkPublicationQuota',
+        error: error,
+        stackTrace: stackTrace,
       );
       return VideoPublicationQuotaState.unknown;
     }
@@ -374,9 +377,12 @@ class UploadVideoController extends GetxController {
           },
         ),
       );
-      AppLogger.debug(
+      AppLogger.warning(
         '[UploadVideoController] profile hydration failed, continuing '
         'without it: $error\n$stackTrace',
+        source: 'UploadVideoController._resolveCurrentUploadUser',
+        error: error,
+        stackTrace: stackTrace,
       );
       return null;
     }
@@ -813,9 +819,12 @@ class UploadVideoController extends GetxController {
       try {
         final state = await _uploadRepository.fetchProcessingState(videoId);
         await inspectVideoState(state);
-      } catch (error) {
-        AppLogger.debug(
+      } catch (error, st) {
+        AppLogger.warning(
           '[UploadVideoController] fallback optimization poll error: $error',
+          source: 'UploadVideoController._waitForVideoStatusReady',
+          error: error,
+          stackTrace: st,
         );
       }
     });

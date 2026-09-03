@@ -91,8 +91,13 @@ class VideoController extends GetxController {
 
       _adaptivePlaybackEnabled = service.isAdaptiveEnabledForUser(uid);
       _videoManager.updateAdaptiveFlag(_adaptivePlaybackEnabled);
-    } catch (e) {
-      AppLogger.debug('❌ Feature flag load error: $e');
+    } catch (e, st) {
+      AppLogger.warning(
+        '❌ Feature flag load error: $e',
+        source: 'VideoController._initFeatureFlags',
+        error: e,
+        stackTrace: st,
+      );
       _adaptivePlaybackEnabled = false;
       _videoManager.updateAdaptiveFlag(false);
     }
@@ -319,8 +324,13 @@ class VideoController extends GetxController {
                     .clamp(0, merged.length - 1)
                     .toInt();
                 _prefetchThumbnailsAround(safeIndex);
-              } catch (e) {
-                AppLogger.debug('❌ listenToVideos merge error: $e');
+              } catch (e, st) {
+                AppLogger.warning(
+                  '❌ listenToVideos merge error: $e',
+                  source: 'VideoController.listenToVideos',
+                  error: e,
+                  stackTrace: st,
+                );
               }
             });
           },
@@ -412,8 +422,13 @@ class VideoController extends GetxController {
       if (fetched.length < _limit) hasMoreVideos.value = false;
 
       return true;
-    } catch (e) {
-      AppLogger.debug('fetchPaginatedVideos error: $e');
+    } catch (e, st) {
+      AppLogger.warning(
+        'fetchPaginatedVideos error: $e',
+        source: 'VideoController.fetchPaginatedVideos',
+        error: e,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -445,8 +460,13 @@ class VideoController extends GetxController {
       currentIndex.value = -1;
       videoList.clear();
       return await fetchPaginatedVideos(isRefresh: true);
-    } catch (e) {
-      AppLogger.debug('❌ refreshVideos error: $e');
+    } catch (e, st) {
+      AppLogger.warning(
+        '❌ refreshVideos error: $e',
+        source: 'VideoController.refreshVideos',
+        error: e,
+        stackTrace: st,
+      );
       return false;
     }
   }
@@ -485,8 +505,13 @@ class VideoController extends GetxController {
       currentIndex.value = 0;
       _prefetchThumbnailsAround(0);
       return true;
-    } catch (e) {
-      AppLogger.debug('refreshVideosKeepingFeed error: $e');
+    } catch (e, st) {
+      AppLogger.warning(
+        'refreshVideosKeepingFeed error: $e',
+        source: 'VideoController.refreshVideosKeepingFeed',
+        error: e,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
       }

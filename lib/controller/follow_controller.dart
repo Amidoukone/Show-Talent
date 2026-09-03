@@ -103,8 +103,13 @@ class FollowController extends GetxController {
         );
       }
       return result.success;
-    } catch (error) {
-      AppLogger.debug('followUser error: $error');
+    } catch (error, st) {
+      AppLogger.warning(
+        'followUser error: $error',
+        source: 'FollowController.followUser',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -148,8 +153,13 @@ class FollowController extends GetxController {
         );
       }
       return result.success;
-    } catch (error) {
-      AppLogger.debug('unfollowUser error: $error');
+    } catch (error, st) {
+      AppLogger.warning(
+        'unfollowUser error: $error',
+        source: 'FollowController.unfollowUser',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
@@ -180,8 +190,13 @@ class FollowController extends GetxController {
         listType: listType,
         currentFollowings: currentFollowings,
       );
-    } catch (error) {
-      AppLogger.debug('fetchFollowList error: $error');
+    } catch (error, st) {
+      AppLogger.warning(
+        'fetchFollowList error: $error',
+        source: 'FollowController.fetchFollowList',
+        error: error,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }

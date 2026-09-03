@@ -225,9 +225,12 @@ class ProfileController extends GetxController {
         _userRefreshTimeout,
       );
     } catch (refreshError, refreshStackTrace) {
-      AppLogger.debug(
+      AppLogger.warning(
         'ProfileController refreshUser warning: '
         '$refreshError\n$refreshStackTrace',
+        source: 'ProfileController._safeRefreshCurrentUser',
+        error: refreshError,
+        stackTrace: refreshStackTrace,
       );
     }
   }
@@ -277,7 +280,12 @@ class ProfileController extends GetxController {
       if (requestSerial != _profileLoadSerial) {
         return;
       }
-      AppLogger.debug('updateUserId error: $e\n$st');
+      AppLogger.warning(
+        'updateUserId error: $e\n$st',
+        source: 'ProfileController.updateUserId',
+        error: e,
+        stackTrace: st,
+      );
       isLoadingUser = false;
       hasAttemptedProfileLoad = true;
       profileLoadErrorTitle = 'Profil indisponible';
@@ -347,15 +355,23 @@ class ProfileController extends GetxController {
         user = updatedUser;
         update();
       } catch (localSyncError, localSyncStackTrace) {
-        AppLogger.debug(
+        AppLogger.warning(
           'updateUserProfile local sync warning: '
           '$localSyncError\n$localSyncStackTrace',
+          source: 'ProfileController.updateUserProfile',
+          error: localSyncError,
+          stackTrace: localSyncStackTrace,
         );
       }
 
       await _safeRefreshCurrentUser();
     } catch (e, st) {
-      AppLogger.debug('updateUserProfile error: $e\n$st');
+      AppLogger.warning(
+        'updateUserProfile error: $e\n$st',
+        source: 'ProfileController.updateUserProfile',
+        error: e,
+        stackTrace: st,
+      );
       if (_isAccessDenied(e)) {
         AdFeedback.error(
           'Autorisation refusée',
@@ -406,10 +422,13 @@ class ProfileController extends GetxController {
           _applyPatchToLocalUser(finalPatch);
           update();
         } catch (localSyncError, localSyncStackTrace) {
-          AppLogger.debug(
+          AppLogger.warning(
             'updateProfilePatch local sync warning: '
             '$localSyncError\n$localSyncStackTrace\n'
             'patch=$finalPatch',
+            source: 'ProfileController.updateProfilePatch',
+            error: localSyncError,
+            stackTrace: localSyncStackTrace,
           );
         }
       }
@@ -418,7 +437,12 @@ class ProfileController extends GetxController {
         await _safeRefreshCurrentUser();
       }
     } catch (e, st) {
-      AppLogger.debug('updateProfilePatch error: $e\n$st');
+      AppLogger.warning(
+        'updateProfilePatch error: $e\n$st',
+        source: 'ProfileController.updateProfilePatch',
+        error: e,
+        stackTrace: st,
+      );
       if (_isAccessDenied(e)) {
         final message = _profileWriteAccessDeniedMessage(e, uid);
         _setProfileWriteError('Accès refusé', message);
@@ -642,7 +666,12 @@ class ProfileController extends GetxController {
         'Votre photo de profil a été enregistrée.',
       );
     } catch (e, st) {
-      AppLogger.debug('updateProfilePhoto error: $e\n$st');
+      AppLogger.warning(
+        'updateProfilePhoto error: $e\n$st',
+        source: 'ProfileController.updateProfilePhoto',
+        error: e,
+        stackTrace: st,
+      );
       if (_isAccessDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
@@ -727,7 +756,12 @@ class ProfileController extends GetxController {
         }
       }
     } catch (e, st) {
-      AppLogger.debug('fetchUserVideos error: $e\n$st');
+      AppLogger.warning(
+        'fetchUserVideos error: $e\n$st',
+        source: 'ProfileController.fetchUserVideos',
+        error: e,
+        stackTrace: st,
+      );
       if (_isPermissionDenied(e)) {
         unawaited(_handleProtectedAccessDenied());
         return;
@@ -858,8 +892,13 @@ class ProfileController extends GetxController {
       await _safeRefreshCurrentUser();
 
       AdFeedback.success('CV supprimé', 'Le CV a été retiré du profil.');
-    } catch (e) {
-      AppLogger.debug('deleteCv error: $e');
+    } catch (e, st) {
+      AppLogger.warning(
+        'deleteCv error: $e',
+        source: 'ProfileController.deleteCv',
+        error: e,
+        stackTrace: st,
+      );
       if (_isAccessDenied(e)) {
         AdFeedback.error(
           'Autorisation refusée',

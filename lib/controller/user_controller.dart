@@ -153,11 +153,14 @@ class UserController extends GetxController with WidgetsBindingObserver {
           );
 
       await _applySessionSnapshot(snapshot, requestVersion: requestVersion);
-    } on FirebaseAuthException catch (error) {
+    } on FirebaseAuthException catch (error, st) {
       if (AuthSessionService.isTransientAuthFailure(error)) {
-        AppLogger.debug(
+        AppLogger.warning(
           'UserController route auth check kept current session '
           'after transient auth error (${error.code}): ${error.message}',
+          source: 'UserController._routeFromAuth',
+          error: error,
+          stackTrace: st,
         );
         return;
       }
@@ -181,11 +184,14 @@ class UserController extends GetxController with WidgetsBindingObserver {
       await _stopAllUsersWatch();
       _user.value = null;
       await _safeOffAllNamed(AppRoutes.login);
-    } on FirebaseException catch (error) {
+    } on FirebaseException catch (error, st) {
       if (AuthSessionService.isTransientFirebaseFailure(error)) {
-        AppLogger.debug(
+        AppLogger.warning(
           'UserController route auth check kept current session '
           'after transient Firebase error (${error.code}): ${error.message}',
+          source: 'UserController._routeFromAuth',
+          error: error,
+          stackTrace: st,
         );
         return;
       }
@@ -315,8 +321,13 @@ class UserController extends GetxController with WidgetsBindingObserver {
         usersCache[fetched.uid] = fetched;
         update();
       }
-    } catch (error) {
-      AppLogger.debug('UserController getUserById hydration failed: $error');
+    } catch (error, st) {
+      AppLogger.warning(
+        'UserController getUserById hydration failed: $error',
+        source: 'UserController._hydrateCachedUser',
+        error: error,
+        stackTrace: st,
+      );
     } finally {
       _pendingCacheHydrations.remove(uid);
     }
@@ -411,9 +422,12 @@ class UserController extends GetxController with WidgetsBindingObserver {
       _sessionLoadMessage.value = '';
       _listenAllUsers();
       update();
-    } on FirebaseException catch (error) {
-      AppLogger.debug(
+    } on FirebaseException catch (error, st) {
+      AppLogger.warning(
         'UserController ensureCurrentUserHydrated Firebase error: $error',
+        source: 'UserController.ensureCurrentUserHydrated',
+        error: error,
+        stackTrace: st,
       );
       if (AuthSessionService.isTransientFirebaseFailure(error)) {
         _sessionLoadMessage.value =
@@ -426,9 +440,12 @@ class UserController extends GetxController with WidgetsBindingObserver {
         _sessionLoadMessage.value =
             'Impossible de charger le profil. Réessayez dans quelques instants.';
       }
-    } on TimeoutException catch (error) {
-      AppLogger.debug(
+    } on TimeoutException catch (error, st) {
+      AppLogger.warning(
         'UserController ensureCurrentUserHydrated timeout: $error',
+        source: 'UserController.ensureCurrentUserHydrated',
+        error: error,
+        stackTrace: st,
       );
       _sessionLoadMessage.value =
           'Connexion trop lente. Vérifiez votre réseau puis réessayez.';
@@ -467,8 +484,13 @@ class UserController extends GetxController with WidgetsBindingObserver {
       await _stopAllUsersWatch();
       await _authSessionService.signOut();
       _user.value = null;
-    } catch (error) {
-      AppLogger.debug('signOut error: $error');
+    } catch (error, st) {
+      AppLogger.warning(
+        'signOut error: $error',
+        source: 'UserController.signOut',
+        error: error,
+        stackTrace: st,
+      );
       AdFeedback.error(
         'Déconnexion impossible',
         'La session n’a pas pu être fermée. Réessayez dans quelques instants.',
@@ -611,11 +633,14 @@ class UserController extends GetxController with WidgetsBindingObserver {
               'Votre session n’est plus autorisée.',
         ),
       );
-    } on FirebaseAuthException catch (error) {
+    } on FirebaseAuthException catch (error, st) {
       if (!AuthSessionService.isDisabledAuthFailure(error)) {
-        AppLogger.debug(
+        AppLogger.warning(
           'UserController enforceCurrentSessionAccess ignored auth error '
           '(${error.code}): ${error.message}',
+          source: 'UserController._enforceCurrentSessionAccess',
+          error: error,
+          stackTrace: st,
         );
         return;
       }
@@ -628,11 +653,14 @@ class UserController extends GetxController with WidgetsBindingObserver {
           message: AuthErrorMapper.toMessage(error),
         ),
       );
-    } on FirebaseException catch (error) {
+    } on FirebaseException catch (error, st) {
       if (AuthSessionService.isTransientFirebaseFailure(error)) {
-        AppLogger.debug(
+        AppLogger.warning(
           'UserController enforceCurrentSessionAccess ignored transient '
           'Firebase error (${error.code}): ${error.message}',
+          source: 'UserController._enforceCurrentSessionAccess',
+          error: error,
+          stackTrace: st,
         );
         return;
       }
@@ -703,9 +731,12 @@ class UserController extends GetxController with WidgetsBindingObserver {
               fallbackMessage,
         ),
       );
-    } catch (error) {
-      AppLogger.debug(
+    } catch (error, st) {
+      AppLogger.warning(
         'UserController handleProtectedAccessDenied error: $error',
+        source: 'UserController.handleProtectedAccessDenied',
+        error: error,
+        stackTrace: st,
       );
       await _handleCurrentUserAccessRevoked(
         UserAccessDecision(
