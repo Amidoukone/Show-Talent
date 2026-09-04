@@ -113,7 +113,13 @@ void main() {
           contains('..sort((a, b) => b.createdAt.compareTo(a.createdAt))'),
         );
         expect(screen, contains('streamingUrl: null'));
-        expect(screen, contains('flyerUrl: null'));
+        // Le menu de statut reconduit une affiche existante. Il reconstruit un
+        // Event complet pour `updateEvent`, qui supprime le champ quand il
+        // vaut null : un `flyerUrl: null` ici effacerait l'affiche a chaque
+        // changement de statut, comme le formulaire le faisait avant 61e2e54.
+        expect(screen, contains('flyerUrl: event.flyerUrl'));
+        expect(screen, contains('viewedBy: event.viewedBy'));
+        expect(screen, isNot(contains('flyerUrl: null')));
       },
     );
 
