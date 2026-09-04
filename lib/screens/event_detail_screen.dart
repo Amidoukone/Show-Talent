@@ -223,6 +223,41 @@ class EventDetailsScreen extends StatelessWidget {
           label: 'Lieu',
           value: currentEvent.lieu,
         ),
+        // Le vocabulaire footballistique, affiche en libelles et jamais en
+        // codes : c'est ce que le joueur lit pour decider s'il se deplace.
+        // Absent des anciens evenements, donc chaque ligne est conditionnelle
+        // plutot que rendue vide.
+        if (currentEvent.positionCodes.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildDetailRow(
+            context: context,
+            icon: Icons.sports_soccer_outlined,
+            label: 'Postes concernés',
+            value: currentEvent.positionCodes
+                .map((position) => position.labelFr)
+                .join(' · '),
+          ),
+        ],
+        if (currentEvent.ageCategories.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildDetailRow(
+            context: context,
+            icon: Icons.cake_outlined,
+            label: 'Catégories',
+            value: currentEvent.ageCategories
+                .map((category) => category.labelFr)
+                .join(' · '),
+          ),
+        ],
+        if (currentEvent.clubLevel != null) ...[
+          const SizedBox(height: 12),
+          _buildDetailRow(
+            context: context,
+            icon: Icons.leaderboard_outlined,
+            label: 'Niveau',
+            value: currentEvent.clubLevel!.labelFr,
+          ),
+        ],
         const SizedBox(height: 12),
         // « Visibilité : Privé » etait la formulation la plus trompeuse des
         // trois : elle nommait une garantie. Le champ ne decrit que le mode de

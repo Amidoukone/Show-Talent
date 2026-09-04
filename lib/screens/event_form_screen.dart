@@ -5,6 +5,7 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/models/event.dart';
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
@@ -51,7 +52,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
   final TextEditingController capacityController = TextEditingController();
-  final TextEditingController tagsController = TextEditingController();
 
   DateTime? startDate;
   DateTime? endDate;
@@ -61,6 +61,21 @@ class _EventFormScreenState extends State<EventFormScreen> {
   DateTime? _initialEndDate;
   late bool _initialEstPublic;
   late String _initialStatut;
+
+  /// Le vocabulaire footballistique de l'evenement.
+  ///
+  /// Il remplace le champ « Tags / Categories », qui etait du texte libre :
+  /// « U19 », « u19 », « moins de 19 ans » et « U-19 » y designaient la meme
+  /// chose sans jamais se rencontrer dans une recherche. Les anciens tags
+  /// restent lisibles -- le modele garde le champ, et l'edition le reconduit --
+  /// mais aucun nouveau ne se cree ici.
+  List<FootballPosition> _positionCodes = <FootballPosition>[];
+  List<AgeCategory> _ageCategories = <AgeCategory>[];
+  ClubLevel? _clubLevel;
+
+  late List<FootballPosition> _initialPositionCodes;
+  late List<AgeCategory> _initialAgeCategories;
+  late ClubLevel? _initialClubLevel;
 
   bool estPublic = true;
   String statut = 'ouvert';
@@ -94,7 +109,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
     yield descriptionController;
     yield locationController;
     yield capacityController;
-    yield tagsController;
   }
 
   bool get _hasUnsavedChanges {
@@ -107,7 +121,17 @@ class _EventFormScreenState extends State<EventFormScreen> {
         startDate != _initialStartDate ||
         endDate != _initialEndDate ||
         estPublic != _initialEstPublic ||
-        statut != _initialStatut;
+        statut != _initialStatut ||
+        _clubLevel != _initialClubLevel ||
+        !_sameSelection(_positionCodes, _initialPositionCodes) ||
+        !_sameSelection(_ageCategories, _initialAgeCategories);
+  }
+
+  /// Une puce ne peut pas etre cochee deux fois, donc comparer la taille puis
+  /// l'appartenance suffit -- pas besoin de compter les doublons.
+  static bool _sameSelection<T>(List<T> current, List<T> initial) {
+    if (current.length != initial.length) return false;
+    return current.every(initial.contains);
   }
 
   @override
@@ -123,11 +147,13 @@ class _EventFormScreenState extends State<EventFormScreen> {
       capacityController.text = widget.event!.capaciteMax != null
           ? widget.event!.capaciteMax.toString()
           : '';
-      tagsController.text = widget.event!.tags?.join(', ') ?? '';
       startDate = widget.event!.dateDebut;
       endDate = widget.event!.dateFin;
       estPublic = widget.event!.estPublic;
       statut = Event.normalizeStatus(widget.event!.statut);
+      _positionCodes = List<FootballPosition>.of(widget.event!.positionCodes);
+      _ageCategories = List<AgeCategory>.of(widget.event!.ageCategories);
+      _clubLevel = widget.event!.clubLevel;
     }
 
     _initialTextValues = <TextEditingController, String>{
@@ -137,6 +163,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
     _initialEndDate = endDate;
     _initialEstPublic = estPublic;
     _initialStatut = statut;
+    _initialPositionCodes = List<FootballPosition>.of(_positionCodes);
+    _initialAgeCategories = List<AgeCategory>.of(_ageCategories);
+    _initialClubLevel = _clubLevel;
     for (final controller in _textControllers) {
       controller.addListener(_onTextChanged);
     }
@@ -230,12 +259,136 @@ class _EventFormScreenState extends State<EventFormScreen> {
                             keyboardType: TextInputType.number,
                             validator: _validateOptionalCapacity,
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildFormSection(
+                        title: 'Profil recherché',
+                        children: [
+                          // Le poste se choisit, il ne se tape plus : c'est ce
+                          // qui permet a cet evenement de rencontrer les
+                          // joueurs qui declarent le meme code.
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Postes concernés *',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          // Un `FormField` plutot qu'un controle dans
+                          // `_handleSubmit` : le poste devient obligatoire au
+                          // meme titre que le titre, il est valide par le meme
+                          // `validate()`, et l'erreur se pose sous les puces au
+                          // lieu d'un message general qui ne dit pas ou
+                          // regarder. Exactement le choix fait pour l'offre
+                          // dans c80719c.
+                          FormField<List<FootballPosition>>(
+                            initialValue: _positionCodes,
+                            validator: _validatePositions,
+                            builder: (state) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: FootballPosition.values.map((
+                                      position,
+                                    ) {
+                                      final isSelected = _positionCodes
+                                          .contains(position);
+                                      return FilterChip(
+                                        selected: isSelected,
+                                        label: Text(position.labelFr),
+                                        onSelected: (_) {
+                                          setState(() {
+                                            if (isSelected) {
+                                              _positionCodes.remove(position);
+                                            } else {
+                                              _positionCodes.add(position);
+                                            }
+                                          });
+                                          state.didChange(_positionCodes);
+                                        },
+                                      );
+                                    }).toList(),
+                                  ),
+                                  if (state.hasError) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      state.errorText!,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              );
+                            },
+                          ),
                           const SizedBox(height: 16),
-                          _buildTextField(
-                            controller: tagsController,
-                            labelText: 'Tags / Catégories',
-                            hintText: 'Ex: U19, Détection, Futsal',
-                            icon: Icons.sell_outlined,
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Catégories visées',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: AgeCategory.values.map((category) {
+                              final isSelected = _ageCategories.contains(
+                                category,
+                              );
+                              return FilterChip(
+                                selected: isSelected,
+                                label: Text(category.labelFr),
+                                onSelected: (_) {
+                                  setState(() {
+                                    if (isSelected) {
+                                      _ageCategories.remove(category);
+                                    } else {
+                                      _ageCategories.add(category);
+                                    }
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<ClubLevel>(
+                            initialValue: _clubLevel,
+                            decoration: InputDecoration(
+                              labelText: 'Niveau de la structure',
+                              prefixIcon: const Icon(
+                                Icons.leaderboard_outlined,
+                                color: AdColors.brand,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AdRadius.lg,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: AdColors.surfaceCard,
+                              contentPadding: const EdgeInsets.all(20),
+                            ),
+                            items: ClubLevel.values
+                                .map(
+                                  (level) => DropdownMenuItem<ClubLevel>(
+                                    value: level,
+                                    child: Text(level.labelFr),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) =>
+                                setState(() => _clubLevel = value),
                           ),
                         ],
                       ),
@@ -506,12 +659,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
       }
     }
 
-    final tags = tagsController.text
-        .split(',')
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList(growable: false);
-
     final AppUser? currentUser = Get.find<UserController>().user;
     if (currentUser == null) {
       AdFeedback.error(
@@ -536,11 +683,14 @@ class _EventFormScreenState extends State<EventFormScreen> {
           lieu: locationController.text.trim(),
           estPublic: estPublic,
           createdAt: widget.event!.createdAt,
-          positionCodes: widget.event!.positionCodes,
-          ageCategories: widget.event!.ageCategories,
-          clubLevel: widget.event!.clubLevel,
+          positionCodes: _positionCodes,
+          ageCategories: _ageCategories,
+          clubLevel: _clubLevel,
           capaciteMax: capacite,
-          tags: tags.isEmpty ? null : tags,
+          // Les anciens tags sont reconduits tels quels : le champ de saisie a
+          // disparu, mais effacer ce qu'un organisateur avait ecrit serait une
+          // perte de donnee, et la recherche plein texte les lit encore.
+          tags: widget.event!.tags,
           streamingUrl: null,
           // Sans cette ligne, editer un evenement effacait son affiche :
           // `updateEvent` supprime le champ quand il vaut null, et le
@@ -579,8 +729,14 @@ class _EventFormScreenState extends State<EventFormScreen> {
           lieu: locationController.text.trim(),
           estPublic: estPublic,
           createdAt: DateTime.now(),
+          positionCodes: _positionCodes,
+          ageCategories: _ageCategories,
+          clubLevel: _clubLevel,
           capaciteMax: capacite,
-          tags: tags.isEmpty ? null : tags,
+          // Plus de tags libres a la creation : le vocabulaire code les
+          // remplace, et en creer de nouveaux reviendrait a alimenter le champ
+          // qu'on vient de cesser de saisir.
+          tags: null,
           streamingUrl: null,
           flyerUrl: null,
           views: 0,
@@ -689,6 +845,20 @@ class _EventFormScreenState extends State<EventFormScreen> {
         contentPadding: const EdgeInsets.all(20),
       ),
     );
+  }
+
+  /// Un evenement sans poste est introuvable, pas « moins visible ».
+  ///
+  /// Le fil interroge `positionCodes` en `arrayContainsAny` : un evenement qui
+  /// n'en porte aucun n'apparait dans aucune recherche par poste, et son
+  /// organisateur n'a aucun moyen de s'en apercevoir -- l'evenement s'affiche
+  /// normalement dans la liste non filtree. Meme raisonnement que pour l'offre.
+  String? _validatePositions(List<FootballPosition>? positions) {
+    if (positions == null || positions.isEmpty) {
+      return 'Choisissez au moins un poste : sans lui, l’événement '
+          'n’apparaît dans aucune recherche par poste.';
+    }
+    return null;
   }
 
   String? _validateTitle(String? value) {
@@ -884,7 +1054,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
     descriptionController.dispose();
     locationController.dispose();
     capacityController.dispose();
-    tagsController.dispose();
     super.dispose();
   }
 }

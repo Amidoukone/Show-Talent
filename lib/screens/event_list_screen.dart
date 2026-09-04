@@ -4,6 +4,7 @@ import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/event.dart';
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/event_detail_screen.dart';
 import 'package:adfoot/screens/event_form_screen.dart';
@@ -42,6 +43,20 @@ class _EventListScreenState extends State<EventListScreen> {
   String _selectedVisibility = 'tous';
   bool _onlyUpcoming = false;
   bool _onlyMine = false;
+
+  /// Le poste demande, ou null pour « tous ».
+  ///
+  /// Le seul des trois criteres footballistiques qui parte au serveur, via
+  /// `EventController.setPositionFilter`. Les deux autres se posent sur la
+  /// page deja chargee : Firestore n'accepte qu'un seul champ tableau par
+  /// index composite, et `ageCategories` en est un second.
+  FootballPosition? _selectedPosition;
+
+  /// La categorie d'age demandee, filtree sur la page.
+  AgeCategory? _selectedCategory;
+
+  /// Le niveau de structure demande, filtre sur la page.
+  ClubLevel? _selectedLevel;
 
   /// Les evenements deja comptes pendant cette session d'ecran.
   ///
@@ -100,7 +115,13 @@ class _EventListScreenState extends State<EventListScreen> {
         final events = _filterEvents(allEvents, currentUser);
         final canLoadMoreEvents = eventController.hasMoreEvents;
 
-        if (allEvents.isEmpty) {
+        // Un fil vide sous filtre serveur reste un fil filtre : la barre doit
+        // rester a l'ecran, sinon l'utilisateur n'a aucun moyen de revenir --
+        // et « aucun evenement » se lirait comme « il n'y en a pas », alors
+        // qu'il n'y en a pas *a ce poste*.
+        final hasServerFilter = _selectedPosition != null;
+
+        if (allEvents.isEmpty && !hasServerFilter) {
           return Column(
             children: [
               _buildSystemNoticeSlot(),
@@ -253,6 +274,23 @@ class _EventListScreenState extends State<EventListScreen> {
                                             ? 'Ouvert à tous'
                                             : 'Sur sélection',
                                       ),
+                                      // Le poste avant le nombre d'inscrits :
+                                      // c'est ce qu'un joueur cherche en
+                                      // premier sur une detection.
+                                      if (event.positionCodes.isNotEmpty)
+                                        _buildChip(
+                                          Icons.sports_soccer_outlined,
+                                          event.positionCodes
+                                              .map((p) => p.labelFr)
+                                              .join(' · '),
+                                        ),
+                                      if (event.ageCategories.isNotEmpty)
+                                        _buildChip(
+                                          Icons.cake_outlined,
+                                          event.ageCategories
+                                              .map((c) => c.labelFr)
+                                              .join(' · '),
+                                        ),
                                       _buildChip(
                                         Icons.group_outlined,
                                         '${event.participants.length} participants',
@@ -300,7 +338,23 @@ class _EventListScreenState extends State<EventListScreen> {
       _selectedVisibility = 'tous';
       _onlyUpcoming = false;
       _onlyMine = false;
+      _selectedPosition = null;
+      _selectedCategory = null;
+      _selectedLevel = null;
     });
+    // Doit repartir jusqu'au serveur, sinon le fil reste filtre par un poste
+    // que plus aucun menu n'affiche.
+    eventController.setPositionFilter(const <FootballPosition>[]);
+  }
+
+  /// Applique le poste, le seul filtre servi par le serveur.
+  void _setPositionFilter(FootballPosition? position) {
+    setState(() => _selectedPosition = position);
+    eventController.setPositionFilter(
+      position == null
+          ? const <FootballPosition>[]
+          : <FootballPosition>[position],
+    );
   }
 
   bool get _hasActiveFilters {
@@ -308,7 +362,10 @@ class _EventListScreenState extends State<EventListScreen> {
         _selectedStatus != 'tous' ||
         _selectedVisibility != 'tous' ||
         _onlyUpcoming ||
-        _onlyMine;
+        _onlyMine ||
+        _selectedPosition != null ||
+        _selectedCategory != null ||
+        _selectedLevel != null;
   }
 
   Future<void> _openCreateEventForm() async {
@@ -468,11 +525,21 @@ class _EventListScreenState extends State<EventListScreen> {
       final matchesMine =
           !_onlyMine || event.organisateur.uid == currentUser.uid;
 
+      // Categorie et niveau se posent ici, sur la page deja bornee, et non au
+      // serveur : un index composite Firestore n'accepte qu'un seul champ
+      // tableau, et le poste occupe cette place.
+      final matchesCategory = _selectedCategory == null ||
+          event.ageCategories.contains(_selectedCategory);
+      final matchesLevel =
+          _selectedLevel == null || event.clubLevel == _selectedLevel;
+
       return matchesSearch &&
           matchesStatus &&
           matchesVisibility &&
           matchesUpcoming &&
-          matchesMine;
+          matchesMine &&
+          matchesCategory &&
+          matchesLevel;
     }).toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   }
 
@@ -731,6 +798,35 @@ class _EventListScreenState extends State<EventListScreen> {
                         onTap: () => setState(() => _onlyMine = !_onlyMine),
                       ),
                     ],
+                    const SizedBox(width: 12),
+                    // Poste, categorie et niveau : le vocabulaire que
+                    // l'evenement porte desormais, et sans lequel l'onglet ne
+                    // savait trier que par une recherche plein texte.
+                    _buildFilterDropdown<FootballPosition>(
+                      value: _selectedPosition,
+                      allLabel: 'Tous les postes',
+                      values: FootballPosition.values,
+                      labelOf: (position) => position.labelFr,
+                      onChanged: _setPositionFilter,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildFilterDropdown<AgeCategory>(
+                      value: _selectedCategory,
+                      allLabel: 'Toutes catégories',
+                      values: AgeCategory.values,
+                      labelOf: (category) => category.labelFr,
+                      onChanged: (value) =>
+                          setState(() => _selectedCategory = value),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildFilterDropdown<ClubLevel>(
+                      value: _selectedLevel,
+                      allLabel: 'Tous niveaux',
+                      values: ClubLevel.values,
+                      labelOf: (level) => level.labelFr,
+                      onChanged: (value) =>
+                          setState(() => _selectedLevel = value),
+                    ),
                     if (_hasActiveFilters)
                       TextButton.icon(
                         onPressed: _resetFilters,
@@ -743,6 +839,48 @@ class _EventListScreenState extends State<EventListScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownShell({required Widget child}) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: AdColors.surfaceCard,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdColors.divider),
+      ),
+      child: DropdownButtonHideUnderline(child: child),
+    );
+  }
+
+  /// Un menu « tous, ou une valeur » sur un vocabulaire footballistique.
+  ///
+  /// Les libelles, jamais les codes : personne ne choisit « LB » dans une
+  /// liste. Le pendant exact de celui de `OffreScreen`.
+  Widget _buildFilterDropdown<T extends Object>({
+    required T? value,
+    required String allLabel,
+    required List<T> values,
+    required String Function(T value) labelOf,
+    required ValueChanged<T?> onChanged,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return _buildDropdownShell(
+      child: DropdownButton<T?>(
+        value: value,
+        underline: const SizedBox.shrink(),
+        dropdownColor: AdColors.surfaceCard,
+        style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
+        items: <DropdownMenuItem<T?>>[
+          DropdownMenuItem<T?>(value: null, child: Text(allLabel)),
+          for (final entry in values)
+            DropdownMenuItem<T?>(value: entry, child: Text(labelOf(entry))),
+        ],
+        onChanged: onChanged,
       ),
     );
   }
