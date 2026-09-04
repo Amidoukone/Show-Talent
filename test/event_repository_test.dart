@@ -219,6 +219,42 @@ void main() {
       });
     });
 
+    // Le pendant exact du test des offres. Deux chemins mènent ici : le
+    // formulaire d'edition, qui tient son `Event` depuis l'ouverture, et le
+    // menu de statut de la liste, qui en reconstruit un complet a chaque appui.
+    test(
+      'updateEvent keeps registrations written while the form was open',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+        final player = _user('player-1', 'joueur');
+        final viewer = _user('player-2', 'joueur');
+
+        await repository.createEvent(_event(capacity: 30));
+
+        // L'ecran d'edition s'ouvre ici, sur un evenement sans inscrit.
+        final staleEvent = _event(capacity: 30);
+
+        await repository.registerParticipant(
+          eventId: 'event-1',
+          participant: player,
+        );
+        await repository.incrementViews(event: _event(), viewer: viewer);
+
+        await repository.updateEvent(staleEvent);
+
+        final data = (await firestore.collection('events').doc('event-1').get())
+            .data()!;
+        final participants = (data['participants'] as List)
+            .map((entry) => Map<String, dynamic>.from(entry as Map)['uid'])
+            .toList();
+
+        expect(participants, ['player-1']);
+        expect(data['views'], 1);
+        expect(data['viewedBy'], ['player-2']);
+      },
+    );
+
     group('updateEvent clears what the form emptied', () {
       // `toMap` n'ecrit ses champs optionnels que s'ils sont non nuls, donc un
       // champ vide sortait de la charge utile et `update()` gardait l'ancienne

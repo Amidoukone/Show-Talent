@@ -182,6 +182,42 @@ void main() {
       expect(data.containsKey('pieceJointeUrl'), isFalse);
     });
 
+    // Le formulaire lit son offre une seule fois, dans `initState`, et la garde
+    // figee jusqu'a l'enregistrement. Tout ce qui arrive pendant qu'il est
+    // ouvert doit survivre a la sauvegarde : la candidature est deja promise a
+    // son auteur, et le compteur de vues est garde honnete par `viewedBy`, que
+    // vider suffirait a faire recompter les memes lecteurs.
+    test(
+      'updateOffer keeps candidates and views written while the form was open',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = OfferRepository(firestore: firestore);
+        final player = _user('player-1', 'joueur');
+        final viewer = _user('player-2', 'joueur');
+
+        await repository.publishOffer(_offer());
+
+        // L'ecran d'edition s'ouvre ici : il tient une offre sans candidat et
+        // sans vue.
+        final staleOffer = _offer();
+
+        await repository.applyToOffer(player: player, offer: _offer());
+        await repository.incrementViews(offer: _offer(), viewer: viewer);
+
+        await repository.updateOffer(staleOffer);
+
+        final data =
+            (await firestore.collection('offres').doc('offer-1').get()).data()!;
+        final candidates = (data['candidats'] as List)
+            .map((entry) => Map<String, dynamic>.from(entry as Map)['uid'])
+            .toList();
+
+        expect(candidates, ['player-1']);
+        expect(data['vues'], 1);
+        expect(data['viewedBy'], ['player-2']);
+      },
+    );
+
     test('applyToOffer adds one candidate and rejects duplicates', () async {
       final firestore = FakeFirebaseFirestore();
       final repository = OfferRepository(firestore: firestore);

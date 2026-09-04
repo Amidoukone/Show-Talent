@@ -170,6 +170,24 @@ class EventRepository {
     });
   }
 
+  /// Les champs qu'une mise a jour ne doit jamais reecrire.
+  ///
+  /// Le pendant exact de `_serverOwnedOfferFields`, meme raison et meme forme.
+  /// `participants` bouge par `registerParticipant` et `unregisterParticipant`,
+  /// `views` et `viewedBy` par `incrementViews`, tous en transaction et sous
+  /// une regle qui verifie le mouvement exact ; aucun formulaire ne les edite.
+  ///
+  /// Les renvoyer depuis un `Event` reconstruit faisait perdre l'inscription
+  /// arrivee pendant que le formulaire etait ouvert -- ou, depuis le menu de
+  /// statut de la liste, pendant le temps d'un appui. Le joueur voyait son
+  /// inscription confirmee et disparaissait de la liste de l'organisateur,
+  /// sans erreur nulle part, l'ecriture etant parfaitement legale.
+  static const List<String> _serverOwnedEventFields = <String>[
+    'participants',
+    'views',
+    'viewedBy',
+  ];
+
   Future<void> updateEvent(Event event) {
     final payload = event.toMap();
     final status = Event.normalizeStatus(event.statut);
@@ -198,6 +216,9 @@ class EventRepository {
     }
     if (event.capaciteMax == null) {
       payload['capaciteMax'] = FieldValue.delete();
+    }
+    for (final field in _serverOwnedEventFields) {
+      payload.remove(field);
     }
     return _eventsCollection.doc(event.id).update(payload);
   }

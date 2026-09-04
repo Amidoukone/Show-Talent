@@ -181,11 +181,26 @@ void main() {
           repository,
           contains("payload['capaciteMax'] = FieldValue.delete()"),
         );
+        // Le pendant de `_serverOwnedOfferFields`. Meme raison d'etre epingle :
+        // le comportement est teste ailleurs, la liste est gardee ici pour
+        // qu'elle ne reparte pas dans la charge utile par recopie de `toMap`.
+        expect(repository, contains('_serverOwnedEventFields'));
+        expect(repository, contains("'participants',"));
+        expect(repository, contains("'views',"));
+        expect(repository, contains("'viewedBy',"));
         expect(controller, contains('StreamSubscription<EventLiveBatch>'));
         expect(controller, contains('Future<void> loadMoreEvents()'));
         expect(controller, contains('_lastCursor'));
         expect(controller, contains('_eventPageSize'));
         expect(controller, contains('_replaceLocalEvent(event)'));
+        // Le pendant du remplacement local des offres : `participants`
+        // etant `final`, la fusion passe par une reconstruction.
+        expect(
+          controller,
+          contains('participants: previous.participants'),
+        );
+        expect(controller, contains('views: previous.views'));
+        expect(controller, contains('viewedBy: previous.viewedBy'));
         expect(controller, contains('_removeLocalEvent(eventId)'));
         expect(controller, contains('fetchEventsPage('));
       },

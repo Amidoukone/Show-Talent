@@ -818,6 +818,14 @@ class EventController extends GetxController {
     _replaceLocalEvent(event);
   }
 
+  /// Remplace l'entree locale par l'evenement qui vient d'etre enregistre,
+  /// sans reprendre les champs que le serveur possede.
+  ///
+  /// Le pendant exact de `OffreController._replaceLocalOffer`, meme raison :
+  /// `updateEvent` n'envoie plus `participants`, `views` ni `viewedBy` -- voir
+  /// `_serverOwnedEventFields` -- donc l'objet soumis porte l'etat d'avant
+  /// l'ouverture du formulaire. `participants` etant `final`, il faut
+  /// reconstruire plutot qu'assigner.
   void _replaceLocalEvent(Event event) {
     final existing = _events.value;
     final index = existing.indexWhere((candidate) => candidate.id == event.id);
@@ -826,8 +834,31 @@ class EventController extends GetxController {
       return;
     }
 
+    final previous = existing[index];
+    final merged = Event(
+      id: event.id,
+      titre: event.titre,
+      description: event.description,
+      dateDebut: event.dateDebut,
+      dateFin: event.dateFin,
+      organisateur: event.organisateur,
+      participants: previous.participants,
+      statut: event.statut,
+      lieu: event.lieu,
+      estPublic: event.estPublic,
+      createdAt: event.createdAt,
+      capaciteMax: event.capaciteMax,
+      tags: event.tags,
+      streamingUrl: event.streamingUrl,
+      flyerUrl: event.flyerUrl,
+      views: previous.views,
+      viewedBy: previous.viewedBy,
+      archivedAt: event.archivedAt,
+      lastUpdated: event.lastUpdated,
+    );
+
     final next = List<Event>.from(existing);
-    next[index] = event;
+    next[index] = merged;
     _events.value = _sortEvents(next);
     update();
   }
