@@ -44,30 +44,45 @@ plus fiable sur le « pourquoi ».
 
 ## Ce qui reste — et pourquoi je ne peux pas le faire
 
-### 1. L'unique offre en production (ligne 3 bis)
+### 1. L'unique offre en production (ligne 3 bis) — RÉGLÉ le 4 septembre
 
-Elle est antérieure à la migration du vocabulaire et s'affiche **sans poste,
-sans catégorie, sans niveau**. La fiche masque les lignes vides, donc rien ne
-signale la perte.
+Le script tourne bien depuis l'assistant, contrairement à ce qui était écrit
+ici. Mais il n'avait plus rien à faire : la marche à blanc du 4 septembre
+répond `ignore — porte deja le vocabulaire code`, et `--apply` écrit `Rien a
+ecrire`.
 
-```
-node scripts/repair-legacy-offer-vocabulary.mjs          # marche à blanc
-node scripts/repair-legacy-offer-vocabulary.mjs --apply  # écriture
-```
+`report-career-content.mjs` confirme la reprise : `positionCodes` vaut `LB`,
+`ageCategories` est renseigné, les anciens champs sont toujours là. La seule
+case vide est `clubLevel`, et c'est correct — le `niveau` libre disait `U19`,
+qui est une catégorie d'âge et ne correspond à aucun niveau de club. Il n'y a
+rien à deviner de plus.
 
-La marche à blanc résout `["LB"]` et `["U19"]` sans rien deviner. **Le
-classifieur de Claude Code refuse d'exécuter ce script** — c'est à vous de le
-lancer, pas à l'assistant.
+La reprise vient très probablement du portail admin : `2251b74` y a fait de
+`offre.dart` un miroir exact du fichier mobile, `toMap` y écrit donc les
+champs codés, et il suffit d'avoir ré-enregistré l'offre depuis la console
+pour qu'elle reparte codée. Conséquence utile : **les deux côtés écrivent
+maintenant le vocabulaire codé**, donc le problème ne se reproduira pas sur
+les offres à venir.
 
 ### 2. Du contenu réel
 
-Production tient **une offre et un événement**. Le filtre par poste est
-déployé et indexé, mais il n'a rien à trier. Avant toute proposition qui dépend
-du volume, rejouer la mesure :
+Production tient **une offre et un événement** — inchangé au 4 septembre. Le
+filtre par poste est déployé et indexé, mais il n'a rien à trier. Avant toute
+proposition qui dépend du volume, rejouer la mesure :
 
 ```
 node scripts/report-career-content.mjs
 ```
+
+Une décision produit est en attente ici, et elle conditionne l'utilité du
+filtre : `offres_form.dart` **n'impose aucun poste** à la publication. Il n'y
+a pas de validateur sur `_positionCodes`. Or le fil interroge
+`positionCodes arrayContainsAny`, donc une offre publiée sans poste est
+invisible dès qu'un poste est coché — définitivement, pas par erreur. Tant
+qu'il n'y a qu'une offre la question ne se voit pas ; au premier recruteur qui
+passe le pas, elle décide si le filtre trie le catalogue ou seulement la part
+qui a bien voulu se déclarer. À trancher avant d'ouvrir la publication, pas
+après.
 
 ### 3. La vérification sur appareil
 
@@ -81,6 +96,23 @@ Deux points à surveiller, parce qu'ils sont conçus pour être silencieux :
   corrigé dans `61e2e54`, invisible tant qu'aucun événement n'en portait.
 - **Un refus remonte désormais dans `client_logs`** en `warning`, avec sa pile,
   au lieu de disparaître.
+
+Le 4 septembre, `44ed0eb` a corrigé **un second chemin** du même défaut, que
+`61e2e54` avait laissé : le menu de statut de la liste reconstruit un `Event`
+complet pour `updateEvent` et y codait `flyerUrl: null` en dur. Passer un
+événement de « Ouvert » à « Fermé » supprimait son affiche. Le test épinglait
+la ligne fautive, recopiée depuis le formulaire où elle est juste.
+
+Donc, sur appareil, **changer le statut après avoir attaché une affiche** fait
+partie du test, et pas seulement rouvrir le formulaire d'édition.
+
+Deux comportements normaux à ne pas prendre pour des pannes :
+
+- Le compteur de vues **n'augmente jamais pour l'organisateur** : la règle
+  `canMutateEventViews` exige `organisateur.uid != request.auth.uid`. Il faut
+  un second compte pour le voir bouger.
+- Une vue est comptée **à l'apparition dans la liste**, pas à l'ouverture de la
+  fiche — même sémantique que les offres, délibérément.
 
 La liste complète des contrôles par build est dans
 `docs/play-store-submission-1.0.7+32.md` (dossier courant, 2 septembre) et la
