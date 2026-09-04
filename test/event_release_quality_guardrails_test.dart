@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -214,6 +215,49 @@ void main() {
       expect(indexes, contains('"fieldPath": "dateFin"'));
       expect(indexes, contains('"fieldPath": "createdAt"'));
       expect(indexes, contains('"order": "DESCENDING"'));
+    });
+
+    // Le miroir exact de la garde des offres, et pour la meme raison : une
+    // forme de requete sans index ne leve pas. Firestore repond
+    // `failed-precondition`, le depot l'attrape comme n'importe quel echec, et
+    // l'onglet parait simplement vide -- sans que le joueur qui filtre par
+    // poste puisse distinguer « aucune detection » de « index absent ».
+    test('l index qui sert le filtre par poste des evenements est declare', () {
+      final raw = File('firestore.indexes.json').readAsStringSync();
+      final parsed = jsonDecode(raw) as Map<String, dynamic>;
+      final indexes = (parsed['indexes'] as List).cast<Map<String, dynamic>>();
+
+      final matching = indexes.where((index) {
+        if (index['collectionGroup'] != 'events') return false;
+        final fields = (index['fields'] as List).cast<Map<String, dynamic>>();
+        if (fields.length != 2) return false;
+        return fields.first['fieldPath'] == 'positionCodes' &&
+            fields.first['arrayConfig'] == 'CONTAINS' &&
+            fields.last['fieldPath'] == 'createdAt' &&
+            fields.last['order'] == 'DESCENDING';
+      });
+
+      expect(
+        matching,
+        hasLength(1),
+        reason: 'sans lui, filtrer par poste rend un onglet vide sans erreur',
+      );
+    });
+
+    test('le depot des evenements ne filtre au serveur qu un champ tableau',
+        () {
+      final repository = File(
+        'lib/services/events/event_repository.dart',
+      ).readAsStringSync();
+
+      expect(
+        repository,
+        contains('arrayContainsAny: filter.positionCodesForQuery'),
+      );
+      // `ageCategories` est un second champ tableau : Firestore n'en accepte
+      // qu'un par index composite, et le mettre ici ferait echouer la requete.
+      expect(repository, isNot(contains("arrayContainsAny: filter.categories")));
+      expect(repository, isNot(contains("'ageCategories',")));
     });
 
     test(

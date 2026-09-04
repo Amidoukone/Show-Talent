@@ -839,6 +839,12 @@ class _EventListScreenState extends State<EventListScreen> {
                       estPublic: event.estPublic,
                       createdAt: event.createdAt,
                       capaciteMax: event.capaciteMax,
+                      // Meme motif que l'affiche : cette reconstruction
+                      // enumere les champs, donc un oubli ici effacerait le
+                      // vocabulaire a chaque changement de statut.
+                      positionCodes: event.positionCodes,
+                      ageCategories: event.ageCategories,
+                      clubLevel: event.clubLevel,
                       tags: event.tags,
                       streamingUrl: null,
                       // Meme defaut que le formulaire d'edition avant 61e2e54 : `updateEvent`

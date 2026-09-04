@@ -1,4 +1,5 @@
 import 'package:adfoot/models/event.dart';
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/events/event_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -30,6 +31,8 @@ Event _event({
   List<AppUser> participants = const [],
   int? capacity,
   List<String>? tags,
+  List<FootballPosition> positions = const <FootballPosition>[],
+  DateTime? createdAt,
 }) {
   return Event(
     id: id,
@@ -42,7 +45,8 @@ Event _event({
     statut: status,
     lieu: 'Abidjan',
     estPublic: true,
-    createdAt: DateTime(2026, 6, 1),
+    createdAt: createdAt ?? DateTime(2026, 6, 1),
+    positionCodes: positions,
     capaciteMax: capacity,
     tags: tags,
   );
@@ -290,6 +294,87 @@ void main() {
 
         expect(data['tags'], ['u17']);
         expect(data['capaciteMax'], 24);
+      });
+    });
+
+    // Le poste part au serveur, seul. C'est la contrainte de Firestore -- un
+    // seul champ tableau par index composite -- et non un choix de produit.
+    group('le fil filtre par poste au serveur', () {
+      test('ne rend que les evenements qui visent un poste demande', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+
+        await repository.createEvent(_event(
+          id: 'lateraux',
+          positions: const [FootballPosition.leftBack],
+          createdAt: DateTime(2026, 6, 3),
+        ));
+        await repository.createEvent(_event(
+          id: 'attaquants',
+          positions: const [FootballPosition.striker],
+          createdAt: DateTime(2026, 6, 2),
+        ));
+        await repository.createEvent(_event(
+          id: 'sans-poste',
+          createdAt: DateTime(2026, 6, 1),
+        ));
+
+        final batch = await repository
+            .watchEvents(
+              filter: const EventQueryFilter(
+                positions: [FootballPosition.leftBack],
+              ),
+            )
+            .first;
+
+        expect(batch.events.map((event) => event.id), ['lateraux']);
+      });
+
+      test('un fil sans filtre rend tout, y compris les anciens', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+
+        await repository.createEvent(_event(
+          id: 'code',
+          positions: const [FootballPosition.leftBack],
+          createdAt: DateTime(2026, 6, 2),
+        ));
+        await repository.createEvent(_event(
+          id: 'ancien',
+          createdAt: DateTime(2026, 6, 1),
+        ));
+
+        final batch = await repository.watchEvents().first;
+
+        expect(batch.events.map((event) => event.id).toSet(), {
+          'code',
+          'ancien',
+        });
+      });
+
+      test('la cle de cache ignore l ordre de selection', () {
+        const lbCb = EventQueryFilter(
+          positions: [FootballPosition.leftBack, FootballPosition.centreBack],
+        );
+        const cbLb = EventQueryFilter(
+          positions: [FootballPosition.centreBack, FootballPosition.leftBack],
+        );
+        const none = EventQueryFilter();
+
+        expect(lbCb.cacheKey, cbLb.cacheKey);
+        expect(lbCb.cacheKey, isNot(none.cacheKey));
+      });
+
+      test('les codes envoyes sont plafonnes par array-contains-any', () {
+        final filter = EventQueryFilter(
+          positions: List<FootballPosition>.from(FootballPosition.values)
+            ..addAll(FootballPosition.values),
+        );
+
+        expect(
+          filter.positionCodesForQuery,
+          hasLength(FootballPosition.maxPerQuery),
+        );
       });
     });
   });
