@@ -66,6 +66,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   late Map<TextEditingController, String> _initialTextValues;
   DateTime? _initialDateDebut;
   DateTime? _initialDateFin;
+  late List<FootballPosition> _initialPositionCodes;
+  late List<AgeCategory> _initialAgeCategories;
+  ClubLevel? _initialClubLevel;
 
   late bool isEditing;
   late final String _draftOfferId;
@@ -81,7 +84,24 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     );
     return textChanged ||
         _dateDebut != _initialDateDebut ||
-        _dateFin != _initialDateFin;
+        _dateFin != _initialDateFin ||
+        _clubLevel != _initialClubLevel ||
+        !_sameSelection(_positionCodes, _initialPositionCodes) ||
+        !_sameSelection(_ageCategories, _initialAgeCategories);
+  }
+
+  /// Compare deux sélections sans tenir compte de l'ordre.
+  ///
+  /// Les puces s'ajoutent dans l'ordre où on les touche, donc `[LB, ST]` et
+  /// `[ST, LB]` sont la même sélection. Les comparer telles quelles ferait
+  /// passer un décochage suivi d'un recochage pour une modification, et le
+  /// garde de sortie demanderait confirmation pour rien.
+  ///
+  /// Une puce ne peut pas être cochée deux fois, donc comparer la taille puis
+  /// l'appartenance suffit — pas besoin de compter les doublons.
+  static bool _sameSelection<T>(List<T> current, List<T> initial) {
+    if (current.length != initial.length) return false;
+    return current.every(initial.contains);
   }
 
   Iterable<TextEditingController> get _textControllers sync* {
@@ -115,6 +135,12 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     };
     _initialDateDebut = _dateDebut;
     _initialDateFin = _dateFin;
+    // Des copies, pas les listes elles-memes : les puces les modifient en
+    // place, et une reference partagee ferait que l'etat initial suive
+    // chaque clic -- le garde ne verrait plus jamais de changement.
+    _initialPositionCodes = List<FootballPosition>.of(_positionCodes);
+    _initialAgeCategories = List<AgeCategory>.of(_ageCategories);
+    _initialClubLevel = _clubLevel;
     for (final controller in _textControllers) {
       controller.addListener(_onTextChanged);
     }

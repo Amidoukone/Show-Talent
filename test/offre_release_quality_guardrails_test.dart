@@ -111,6 +111,25 @@ void main() {
       expect(form, contains('maxLength: _maxTitleLength'));
       expect(form, contains('maxLength: _maxDescriptionLength'));
       expect(form, contains('bool get _hasUnsavedChanges'));
+      // Le garde de sortie couvre aussi le vocabulaire. Il ne regardait que
+      // le texte et les dates : cocher un poste puis revenir en arriere
+      // fermait le formulaire sans un mot, et le poste est desormais ce qui
+      // decide qu'une offre soit trouvable. La comparaison ignore l'ordre,
+      // sans quoi un decochage suivi d'un recochage passerait pour une
+      // modification.
+      expect(form, contains('_initialPositionCodes'));
+      expect(form, contains('_initialAgeCategories'));
+      expect(form, contains('_initialClubLevel'));
+      expect(form, contains('_clubLevel != _initialClubLevel'));
+      expect(
+        form,
+        contains('!_sameSelection(_positionCodes, _initialPositionCodes)'),
+      );
+      expect(
+        form,
+        contains('!_sameSelection(_ageCategories, _initialAgeCategories)'),
+      );
+      expect(form, contains('static bool _sameSelection<T>('));
       expect(form, contains('bool _isSubmitting = false;'));
       expect(form, contains('bool _hasCompletedSubmit = false;'));
       expect(form, contains('bool get _submitLocked'));
