@@ -29,6 +29,7 @@ Event _event({
   AppUser? organizer,
   List<AppUser> participants = const [],
   int? capacity,
+  List<String>? tags,
 }) {
   return Event(
     id: id,
@@ -43,6 +44,7 @@ Event _event({
     estPublic: true,
     createdAt: DateTime(2026, 6, 1),
     capaciteMax: capacity,
+    tags: tags,
   );
 }
 
@@ -214,6 +216,44 @@ void main() {
 
         expect(data['views'], 2);
         expect(data['viewedBy'], ['player-1', 'player-2']);
+      });
+    });
+
+    group('updateEvent clears what the form emptied', () {
+      // `toMap` n'ecrit ses champs optionnels que s'ils sont non nuls, donc un
+      // champ vide sortait de la charge utile et `update()` gardait l'ancienne
+      // valeur. L'organisateur voyait les tags disparaitre de l'ecran -- l'etat
+      // local est remplace apres succes -- et les retrouvait au rechargement.
+      test('emptied tags and capacity reach Firestore', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+
+        await repository.createEvent(
+          _event(capacity: 30, tags: const ['u19', 'detection']),
+        );
+        await repository.updateEvent(_event());
+
+        final data = (await firestore.collection('events').doc('event-1').get())
+            .data()!;
+
+        expect(data.containsKey('tags'), isFalse);
+        expect(data.containsKey('capaciteMax'), isFalse);
+      });
+
+      test('tags and capacity still round-trip when they are set', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+
+        await repository.createEvent(_event());
+        await repository.updateEvent(
+          _event(capacity: 24, tags: const ['u17']),
+        );
+
+        final data = (await firestore.collection('events').doc('event-1').get())
+            .data()!;
+
+        expect(data['tags'], ['u17']);
+        expect(data['capaciteMax'], 24);
       });
     });
   });

@@ -186,6 +186,19 @@ class EventRepository {
     if (event.flyerUrl == null) {
       payload['flyerUrl'] = FieldValue.delete();
     }
+    // Meme raison que les deux champs ci-dessus, et le meme oubli : `toMap`
+    // ecrit ses champs optionnels sous condition (`if (tags != null)`), donc
+    // une valeur effacee devient une cle *absente* de la charge utile et
+    // `update()` laisse l'ancienne en place. Vider les tags ou la capacite
+    // depuis le formulaire ne partait jamais : l'ecran les effacait -- l'etat
+    // local est remplace apres succes -- et ils revenaient au rechargement
+    // suivant, sans qu'aucune erreur ne soit levee nulle part.
+    if (event.tags == null) {
+      payload['tags'] = FieldValue.delete();
+    }
+    if (event.capaciteMax == null) {
+      payload['capaciteMax'] = FieldValue.delete();
+    }
     return _eventsCollection.doc(event.id).update(payload);
   }
 

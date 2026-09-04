@@ -173,6 +173,14 @@ void main() {
           repository,
           contains("payload['flyerUrl'] = FieldValue.delete()"),
         );
+        expect(
+          repository,
+          contains("payload['tags'] = FieldValue.delete()"),
+        );
+        expect(
+          repository,
+          contains("payload['capaciteMax'] = FieldValue.delete()"),
+        );
         expect(controller, contains('StreamSubscription<EventLiveBatch>'));
         expect(controller, contains('Future<void> loadMoreEvents()'));
         expect(controller, contains('_lastCursor'));
