@@ -66,6 +66,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   late Map<TextEditingController, String> _initialTextValues;
   DateTime? _initialDateDebut;
   DateTime? _initialDateFin;
+  late List<FootballPosition> _initialPositionCodes;
+  late List<AgeCategory> _initialAgeCategories;
+  ClubLevel? _initialClubLevel;
 
   late bool isEditing;
   late final String _draftOfferId;
@@ -81,7 +84,24 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     );
     return textChanged ||
         _dateDebut != _initialDateDebut ||
-        _dateFin != _initialDateFin;
+        _dateFin != _initialDateFin ||
+        _clubLevel != _initialClubLevel ||
+        !_sameSelection(_positionCodes, _initialPositionCodes) ||
+        !_sameSelection(_ageCategories, _initialAgeCategories);
+  }
+
+  /// Compare deux sélections sans tenir compte de l'ordre.
+  ///
+  /// Les puces s'ajoutent dans l'ordre où on les touche, donc `[LB, ST]` et
+  /// `[ST, LB]` sont la même sélection. Les comparer telles quelles ferait
+  /// passer un décochage suivi d'un recochage pour une modification, et le
+  /// garde de sortie demanderait confirmation pour rien.
+  ///
+  /// Une puce ne peut pas être cochée deux fois, donc comparer la taille puis
+  /// l'appartenance suffit — pas besoin de compter les doublons.
+  static bool _sameSelection<T>(List<T> current, List<T> initial) {
+    if (current.length != initial.length) return false;
+    return current.every(initial.contains);
   }
 
   Iterable<TextEditingController> get _textControllers sync* {
@@ -115,6 +135,12 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     };
     _initialDateDebut = _dateDebut;
     _initialDateFin = _dateFin;
+    // Des copies, pas les listes elles-memes : les puces les modifient en
+    // place, et une reference partagee ferait que l'etat initial suive
+    // chaque clic -- le garde ne verrait plus jamais de changement.
+    _initialPositionCodes = List<FootballPosition>.of(_positionCodes);
+    _initialAgeCategories = List<AgeCategory>.of(_ageCategories);
+    _initialClubLevel = _clubLevel;
     for (final controller in _textControllers) {
       controller.addListener(_onTextChanged);
     }
@@ -196,31 +222,64 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                         const Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'Postes recherchés',
+                            'Postes recherchés *',
                             style: TextStyle(fontWeight: FontWeight.w700),
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: FootballPosition.values.map((position) {
-                            final isSelected =
-                                _positionCodes.contains(position);
-                            return FilterChip(
-                              selected: isSelected,
-                              label: Text(position.labelFr),
-                              onSelected: (_) {
-                                setState(() {
-                                  if (isSelected) {
-                                    _positionCodes.remove(position);
-                                  } else {
-                                    _positionCodes.add(position);
-                                  }
-                                });
-                              },
+                        // Un `FormField` plutot qu'un controle dans
+                        // `_submitForm` : le poste devient obligatoire au
+                        // meme titre que le titre et la description, il est
+                        // valide par le meme `validate()`, et l'erreur
+                        // s'affiche sous les puces au lieu d'un message
+                        // general qui ne dit pas ou regarder.
+                        FormField<List<FootballPosition>>(
+                          initialValue: _positionCodes,
+                          validator: _validatePositions,
+                          builder: (state) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: FootballPosition.values.map((
+                                    position,
+                                  ) {
+                                    final isSelected = _positionCodes.contains(
+                                      position,
+                                    );
+                                    return FilterChip(
+                                      selected: isSelected,
+                                      label: Text(position.labelFr),
+                                      onSelected: (_) {
+                                        setState(() {
+                                          if (isSelected) {
+                                            _positionCodes.remove(position);
+                                          } else {
+                                            _positionCodes.add(position);
+                                          }
+                                        });
+                                        state.didChange(_positionCodes);
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                                if (state.hasError) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    state.errorText!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             );
-                          }).toList(),
+                          },
                         ),
                         const SizedBox(height: 16),
                         const Align(
@@ -407,6 +466,21 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     }
     if (normalized.length > _maxDescriptionLength) {
       return 'Limitez la description à $_maxDescriptionLength caractères.';
+    }
+    return null;
+  }
+
+  /// Le poste est obligatoire, et ce n'est pas une exigence de formulaire.
+  ///
+  /// Le fil des offres filtre `positionCodes` avec `arrayContainsAny`, cote
+  /// serveur. Une offre publiee sans poste ne remonte donc dans aucun filtre
+  /// par poste -- pas « moins souvent » : jamais. Elle n'est visible que dans
+  /// la liste non filtree, c'est-a-dire de moins en moins a mesure que le
+  /// catalogue grossit, et son auteur n'a aucun moyen de s'en apercevoir.
+  String? _validatePositions(List<FootballPosition>? positions) {
+    if (positions == null || positions.isEmpty) {
+      return 'Choisissez au moins un poste : sans lui, l’offre '
+          'n’apparaît dans aucune recherche par poste.';
     }
     return null;
   }

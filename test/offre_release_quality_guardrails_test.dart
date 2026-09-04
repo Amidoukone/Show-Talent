@@ -97,9 +97,39 @@ void main() {
       expect(form, contains('width: double.infinity'));
       expect(form, contains('_validateTitle'));
       expect(form, contains('_validateDescription'));
+      // Le poste est obligatoire a la publication. Le fil filtre
+      // `positionCodes` en `arrayContainsAny` cote serveur : une offre
+      // publiee sans poste n'apparait dans aucune recherche par poste, et son
+      // auteur n'a aucun moyen de le constater. Le controle passe par un
+      // `FormField`, donc par le meme `validate()` que le titre, et l'erreur
+      // se pose sous les puces plutot que dans un message general.
+      expect(form, contains('FormField<List<FootballPosition>>('));
+      expect(form, contains('validator: _validatePositions'));
+      expect(form, contains('state.didChange(_positionCodes)'));
+      expect(form, contains('String? _validatePositions('));
+      expect(form, contains('Postes recherchés *'));
       expect(form, contains('maxLength: _maxTitleLength'));
       expect(form, contains('maxLength: _maxDescriptionLength'));
       expect(form, contains('bool get _hasUnsavedChanges'));
+      // Le garde de sortie couvre aussi le vocabulaire. Il ne regardait que
+      // le texte et les dates : cocher un poste puis revenir en arriere
+      // fermait le formulaire sans un mot, et le poste est desormais ce qui
+      // decide qu'une offre soit trouvable. La comparaison ignore l'ordre,
+      // sans quoi un decochage suivi d'un recochage passerait pour une
+      // modification.
+      expect(form, contains('_initialPositionCodes'));
+      expect(form, contains('_initialAgeCategories'));
+      expect(form, contains('_initialClubLevel'));
+      expect(form, contains('_clubLevel != _initialClubLevel'));
+      expect(
+        form,
+        contains('!_sameSelection(_positionCodes, _initialPositionCodes)'),
+      );
+      expect(
+        form,
+        contains('!_sameSelection(_ageCategories, _initialAgeCategories)'),
+      );
+      expect(form, contains('static bool _sameSelection<T>('));
       expect(form, contains('bool _isSubmitting = false;'));
       expect(form, contains('bool _hasCompletedSubmit = false;'));
       expect(form, contains('bool get _submitLocked'));

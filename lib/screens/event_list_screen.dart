@@ -828,8 +828,12 @@ class _EventListScreenState extends State<EventListScreen> {
                       capaciteMax: event.capaciteMax,
                       tags: event.tags,
                       streamingUrl: null,
-                      flyerUrl: null,
+                      // Meme defaut que le formulaire d'edition avant 61e2e54 : `updateEvent`
+                      // traduit un null par `FieldValue.delete()`, donc changer le statut
+                      // depuis la liste effacait l'affiche de l'evenement.
+                      flyerUrl: event.flyerUrl,
                       views: event.views,
+                      viewedBy: event.viewedBy,
                       archivedAt: value == 'archive'
                           ? DateTime.now()
                           : event.archivedAt,
