@@ -241,9 +241,17 @@ class _EventListScreenState extends State<EventListScreen> {
                                         Icons.place_outlined,
                                         event.lieu,
                                       ),
+                                      // « Privé » promettait que l'evenement
+                                      // etait cache : il ne l'a jamais ete.
+                                      // La puce dit maintenant ce que le
+                                      // reglage decrit vraiment -- comment
+                                      // l'organisateur recrute -- et l'icone
+                                      // suit : inscription, pas confidentialite.
                                       _buildChip(
-                                        Icons.privacy_tip_outlined,
-                                        event.estPublic ? 'Public' : 'Privé',
+                                        Icons.how_to_reg_outlined,
+                                        event.estPublic
+                                            ? 'Ouvert à tous'
+                                            : 'Sur sélection',
                                       ),
                                       _buildChip(
                                         Icons.group_outlined,
@@ -692,14 +700,19 @@ class _EventListScreenState extends State<EventListScreen> {
                       onTap: () => setState(() => _selectedStatus = 'archive'),
                     ),
                     const SizedBox(width: 8),
+                    // Les valeurs restent `public` / `prive` : elles sont
+                    // stockees et lues par le portail admin. Seuls les
+                    // libelles changent, pour ne plus laisser croire que le
+                    // second filtre revele des evenements caches -- il n'y en
+                    // a pas, ils sont tous lisibles par tout compte actif.
                     _FilterChip(
-                      label: 'Public',
+                      label: 'Ouverts à tous',
                       selected: _selectedVisibility == 'public',
                       onTap: () =>
                           setState(() => _selectedVisibility = 'public'),
                     ),
                     _FilterChip(
-                      label: 'Privé',
+                      label: 'Sur sélection',
                       selected: _selectedVisibility == 'prive',
                       onTap: () =>
                           setState(() => _selectedVisibility = 'prive'),

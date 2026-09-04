@@ -14,7 +14,28 @@ class Event {
   String statut;
 
   final String lieu;
+
+  /// Comment l'organisateur recrute ses participants — **pas** qui voit
+  /// l'evenement.
+  ///
+  /// Le nom dit le contraire, et c'est ce qui a rendu le defaut invisible :
+  /// l'ecran affichait « Visibilité : Privé » sur un document que
+  /// `allow read: if signedInAndActive()` rend lisible par tout compte actif,
+  /// sans jamais consulter ce champ. Le filtre « Privé » de la liste ne
+  /// masquait l'evenement qu'a celui qui cochait le filtre inverse.
+  ///
+  /// Ce n'est pas reparable par une regle seule, pour la raison deja ecrite
+  /// dans `firestore.rules` a propos de `profilePublic` : un `list` echoue en
+  /// entier des qu'un seul document du resultat est refuse, donc filtrer la
+  /// lecture viderait la liste au lieu de la restreindre. Le vrai
+  /// cloisonnement demande de decouper le document.
+  ///
+  /// En attendant, les libelles disent ce que le champ fait reellement —
+  /// « Inscription ouverte à tous » / « Sur sélection » — plutot qu'une
+  /// confidentialite qui n'existe pas. Le nom du champ, lui, ne bouge pas :
+  /// il est ecrit en base et lu par le portail admin.
   final bool estPublic;
+
   final DateTime createdAt;
 
   // Optional fields.

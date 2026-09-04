@@ -224,11 +224,15 @@ class EventDetailsScreen extends StatelessWidget {
           value: currentEvent.lieu,
         ),
         const SizedBox(height: 12),
+        // « Visibilité : Privé » etait la formulation la plus trompeuse des
+        // trois : elle nommait une garantie. Le champ ne decrit que le mode de
+        // recrutement des participants ; la fiche est lisible par tout compte
+        // actif, quel que soit son etat.
         _buildDetailRow(
           context: context,
-          icon: Icons.privacy_tip_outlined,
-          label: 'Visibilité',
-          value: currentEvent.estPublic ? 'Public' : 'Privé',
+          icon: Icons.how_to_reg_outlined,
+          label: 'Inscription',
+          value: currentEvent.estPublic ? 'Ouverte à tous' : 'Sur sélection',
         ),
         if (currentEvent.capaciteMax != null) ...[
           const SizedBox(height: 12),

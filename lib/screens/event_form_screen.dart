@@ -243,11 +243,23 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       _buildFormSection(
                         title: 'Accès',
                         children: [
+                          // Ce reglage decrit votre facon de recruter les
+                          // participants, pas la visibilite de l'evenement :
+                          // il ne masque rien. Il disait « public / privé »,
+                          // ce qui promettait une confidentialite qu'aucune
+                          // regle ne tient -- `allow read` sur `events` ne
+                          // consulte pas `estPublic`, tout compte actif voit
+                          // tous les evenements. Le sous-titre le dit
+                          // desormais, faute de pouvoir le corriger sans
+                          // decouper le document (meme limite que
+                          // `profilePublic`, documentee dans firestore.rules).
                           SwitchListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: const Text('Événement public'),
+                            title: const Text('Inscription ouverte à tous'),
                             subtitle: const Text(
-                              'Désactivez pour rendre l’événement privé',
+                              'Désactivez si vous sélectionnez vous-même les '
+                              'participants. Dans les deux cas, l’événement '
+                              'reste visible par tous les membres.',
                             ),
                             value: estPublic,
                             onChanged: (v) => setState(() => estPublic = v),
