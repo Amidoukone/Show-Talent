@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class EventRepositoryException implements Exception {
   const EventRepositoryException({required this.code, required this.message});
@@ -60,10 +63,18 @@ class EventQueryFilter {
 class EventRepository {
   static const int defaultPageSize = 40;
 
-  EventRepository({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  EventRepository({FirebaseFirestore? firestore, FirebaseStorage? storage})
+    : _firestore = firestore ?? FirebaseFirestore.instance,
+      _injectedStorage = storage;
 
   final FirebaseFirestore _firestore;
+
+  // Resolu a l'usage : `FirebaseStorage.instance` lance quand aucune app
+  // Firebase n'est demarree, et les tests construisent ce depot avec un
+  // Firestore factice sans jamais toucher au stockage.
+  final FirebaseStorage? _injectedStorage;
+
+  FirebaseStorage get _storage => _injectedStorage ?? FirebaseStorage.instance;
 
   CollectionReference<Map<String, dynamic>> get _eventsCollection =>
       _firestore.collection('events');
@@ -113,6 +124,52 @@ class EventRepository {
     return _eventsCollection.doc(event.id).set(payload);
   }
 
+  /// Compte un lecteur, une fois.
+  ///
+  /// Transpose mot pour mot ce que fait `OfferRepository.incrementViews`, y
+  /// compris sa semantique : l'appelant compte une impression dans la liste,
+  /// pas une ouverture de fiche. Les deux nombres doivent vouloir dire la
+  /// meme chose, sans quoi comparer une offre et un evenement ne veut rien
+  /// dire.
+  ///
+  /// L'organisateur ne compte pas dans son propre evenement, et la liste
+  /// `viewedBy` fait office de dedoublonnage -- relue dans la transaction
+  /// plutot que depuis l'objet recu, qui peut dater.
+  Future<void> incrementViews({
+    required Event event,
+    required AppUser viewer,
+  }) async {
+    if (viewer.uid == event.organisateur.uid) return;
+
+    final docRef = _eventsCollection.doc(event.id);
+
+    await _firestore.runTransaction((txn) async {
+      final snap = await txn.get(docRef);
+      final data = snap.data();
+      if (data == null) return;
+
+      final rawOrganiser = data['organisateur'];
+      final organiserMap =
+          rawOrganiser is Map ? Map<String, dynamic>.from(rawOrganiser) : null;
+      final organiserId = organiserMap?['uid']?.toString();
+
+      final viewedByRaw = data['viewedBy'];
+      final viewedBy = viewedByRaw is List
+          ? viewedByRaw.map((entry) => entry.toString()).toList()
+          : <String>[];
+
+      if (viewer.uid == organiserId || viewedBy.contains(viewer.uid)) {
+        return;
+      }
+
+      txn.update(docRef, {
+        'views': FieldValue.increment(1),
+        'viewedBy': FieldValue.arrayUnion([viewer.uid]),
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   Future<void> updateEvent(Event event) {
     final payload = event.toMap();
     final status = Event.normalizeStatus(event.statut);
@@ -132,8 +189,62 @@ class EventRepository {
     return _eventsCollection.doc(event.id).update(payload);
   }
 
-  Future<void> deleteEvent(String eventId) {
-    return _eventsCollection.doc(eventId).delete();
+  /// Televerse l'affiche d'un evenement et renvoie son URL.
+  ///
+  /// Appelable seulement une fois le document cree : `isOwnedEventDoc` le lit
+  /// pour verifier qui televerse, et un document absent fait echouer la regle.
+  /// C'est aussi ce qui donne au fichier un nom stable -- l'identifiant de
+  /// l'evenement -- donc remplacer une affiche ecrase l'ancienne au lieu
+  /// d'accumuler des orphelines.
+  Future<String> uploadFlyer({
+    required String eventId,
+    required String filePath,
+  }) async {
+    final ref = _storage.ref('eventFlyers/$eventId');
+    await ref.putFile(
+      File(filePath),
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
+    return ref.getDownloadURL();
+  }
+
+  /// Ecrit l'URL de l'affiche, et rien d'autre.
+  Future<void> setFlyerUrl({
+    required String eventId,
+    required String? flyerUrl,
+  }) {
+    return _eventsCollection.doc(eventId).update({
+      'flyerUrl': flyerUrl ?? FieldValue.delete(),
+      'lastUpdated': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Supprime l'affiche du stockage, sans faire echouer l'appelant.
+  ///
+  /// Un fichier absent est le cas courant -- la plupart des evenements n'ont
+  /// pas d'affiche -- et ce n'est pas une erreur.
+  Future<void> deleteFlyer(String eventId) async {
+    try {
+      await _storage.ref('eventFlyers/$eventId').delete();
+    } on FirebaseException catch (error) {
+      if (error.code == 'object-not-found') return;
+      AppLogger.warning(
+        'Suppression affiche evenement echouee: $error',
+        source: 'EventRepository.deleteFlyer',
+        error: error,
+      );
+    }
+  }
+
+  /// Supprime l'evenement, puis son affiche.
+  ///
+  /// Dans cet ordre : la regle de stockage lit le document pour autoriser la
+  /// suppression du fichier, donc l'inverse marcherait par accident tant que
+  /// le document existe encore, et pas apres. L'affiche est donc retiree
+  /// avant, et le document ensuite.
+  Future<void> deleteEvent(String eventId) async {
+    await deleteFlyer(eventId);
+    await _eventsCollection.doc(eventId).delete();
   }
 
   Future<Event?> fetchEventById(String eventId) async {
@@ -325,9 +436,21 @@ class EventRepository {
       try {
         fetched.add(Event.fromDoc(doc));
       } catch (error, stackTrace) {
-        AppLogger.debug(
-          'Event ignored because document is invalid: ${doc.id}\n'
-          '$error\n$stackTrace',
+        // Meme defaut que pour une offre, et meme correction : l'evenement
+        // disparait de l'onglet sans que rien ne le dise. L'organisateur voit
+        // sa detection absente, les joueurs ne la voient jamais, et
+        // `AppLogger.debug` s'arrete a `developer.log` -- donc a un debogueur
+        // que personne n'a attache sur un vrai telephone.
+        //
+        // `warning` plutot que `error` parce que l'instantane se redelivre a
+        // chaque changement : l'echantillonnage a 15 % donne le taux sans
+        // noyer la collection si un document reste durablement casse.
+        AppLogger.warning(
+          'event dropped from the list; its document did not parse',
+          source: 'events/parse',
+          error: error,
+          stackTrace: stackTrace,
+          metadata: <String, dynamic>{'eventId': doc.id},
         );
       }
     }

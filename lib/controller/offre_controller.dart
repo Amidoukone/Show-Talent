@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:adfoot/controller/push_notification.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_diagnostics.dart';
@@ -121,6 +122,39 @@ class OffreController extends GetxController {
     _authSub?.cancel();
     _offresSubscription?.cancel();
     super.onClose();
+  }
+
+  /// Les postes actuellement demandes au serveur. Vide signifie « tous ».
+  List<FootballPosition> get positionFilter => _activeFilter.positions;
+
+  /// Change le filtre par poste et relance le fil.
+  ///
+  /// C'est le seul filtre de l'ecran des offres qui parte au serveur. Les
+  /// autres -- statut, role, mes offres, expire bientot, et desormais
+  /// categorie et niveau -- s'appliquent sur la page deja chargee, ou ils ne
+  /// coutent rien. Celui-ci change la requete, donc l'index utilise, donc ce
+  /// que « charger plus » rapporte : sans lui, un joueur qui cherche un
+  /// lateral gauche paginerait toutes les offres pour en ecarter la plupart
+  /// sur le telephone.
+  ///
+  /// Le fil est vide avant la relance : garder les offres precedentes le temps
+  /// de la nouvelle page afficherait, sous un filtre par poste, des offres qui
+  /// n'y repondent pas.
+  void setPositionFilter(List<FootballPosition> positions) {
+    final next = OfferQueryFilter(
+      status: _activeFilter.status,
+      endingAfter: _activeFilter.endingAfter,
+      positions: List<FootballPosition>.unmodifiable(positions),
+    );
+    if (next.cacheKey == _activeFilter.cacheKey) {
+      return;
+    }
+
+    _activeFilter = next;
+    _offres.value = const <Offre>[];
+    _isLoading.value = true;
+    update();
+    _fetchOffres();
   }
 
   void _fetchOffres() {

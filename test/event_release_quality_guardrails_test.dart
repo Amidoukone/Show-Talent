@@ -22,7 +22,9 @@ void main() {
       expect(form, contains('bool get _submitLocked'));
       expect(form, contains('bool get _hasUnsavedChanges'));
       expect(form, contains('id: _draftEventId'));
-      expect(form, contains('_completeSubmit(response.message)'));
+      // Le message rendu vient toujours du controleur ; il porte en plus la
+      // suite du sort de l'affiche, qui peut echouer seule.
+      expect(form, contains(r"_completeSubmit('" r"$" r"{response.message}" r"$" r"flyerNote')"));
       expect(form, contains('_buildFormSection('));
       expect(
         form,
@@ -43,7 +45,19 @@ void main() {
       expect(form, isNot(contains('Lien streaming')));
       expect(form, isNot(contains('Lien visuel')));
       expect(form, contains('streamingUrl: null'));
+      // La creation n'ecrit pas d'affiche : la regle de stockage lit le
+      // document pour savoir qui televerse, donc le document doit exister
+      // avant son image. L'affiche est attachee juste apres, par
+      // `_applyFlyerChange`.
       expect(form, contains('flyerUrl: null'));
+      expect(form, contains('_applyFlyerChange(_draftEventId)'));
+
+      // L'edition, elle, doit reconduire l'affiche existante. Sans cette
+      // ligne le formulaire envoyait null a chaque fois et `updateEvent`
+      // supprimait le champ : editer un evenement effacait son affiche, sans
+      // que rien ne le dise.
+      expect(form, contains('flyerUrl: _visibleFlyerUrl'));
+      expect(form, contains('_applyFlyerChange(widget.event!.id)'));
     });
 
     test(
@@ -193,5 +207,27 @@ void main() {
         expect(details, isNot(contains('Get.offAllNamed(AppRoutes.main')));
       },
     );
+
+    // 61e2e54 a livre l'affiche et le compteur de vues, et ne les a cables que
+    // sur la carte de la liste. La fiche est pourtant l'ecran ou l'on decide de
+    // participer, et celui que l'organisateur ouvre pour suivre son audience :
+    // les deux y manquaient sans que rien ne le signale.
+    test('the event sheet shows the flyer and the view count', () {
+      final details = File(
+        'lib/screens/event_detail_screen.dart',
+      ).readAsStringSync();
+
+      expect(details, contains("(currentEvent.flyerUrl ?? '').trim()"));
+      expect(details, contains('Widget _buildFlyer(String url)'));
+      expect(details, contains('aspectRatio: 16 / 9'));
+
+      // `Image.network` est admis la ou `NetworkImage` ne l'est pas, mais
+      // seulement parce qu'il porte un `errorBuilder` : sans lui, une affiche
+      // supprimee remonte en FlutterError et serait comptée comme un incident.
+      expect(details, contains('errorBuilder:'));
+
+      expect(details, contains("label: 'Vues'"));
+      expect(details, contains(r"value: '${currentEvent.views ?? 0}'"));
+    });
   });
 }

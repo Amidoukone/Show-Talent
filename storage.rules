@@ -22,6 +22,15 @@ service firebase.storage {
         firestore.get(/databases/(default)/documents/videos/$(videoId)).data.uid == request.auth.uid;
     }
 
+    // Meme forme que isOwnedVideoDoc, et pour la meme raison : le document
+    // doit exister avant son fichier. C'est ce qui impose au formulaire de
+    // creer l'evenement d'abord et de televerser l'affiche ensuite -- sans
+    // quoi il n'y aurait rien contre quoi verifier qui televerse.
+    function isOwnedEventDoc(eventId) {
+      return firestore.exists(/databases/(default)/documents/events/$(eventId)) &&
+        firestore.get(/databases/(default)/documents/events/$(eventId)).data.organisateur.uid == request.auth.uid;
+    }
+
     function hasUserProfileDoc(uid) {
       return firestore.exists(/databases/(default)/documents/users/$(uid));
     }
@@ -144,6 +153,16 @@ service firebase.storage {
         request.resource.contentType.matches('image/.*');
     }
 
+    // Meme plafond que l'avatar, et pour la meme raison : le point n'est pas
+    // de juger la qualite d'une affiche, il est d'empecher ce chemin de servir
+    // d'hebergement de fichiers gratuit.
+    function isValidEventFlyerUpload() {
+      return request.resource.size > 0 &&
+        request.resource.size <= 8 * 1024 * 1024 &&
+        request.resource.contentType != null &&
+        request.resource.contentType.matches('image/.*');
+    }
+
     match /profilePhotos/{uid} {
       allow read: if true;
       allow create, update: if isActiveProfileOwner(uid) &&
@@ -156,6 +175,18 @@ service firebase.storage {
       allow create, update: if isPlayerProfileOwner(uid) &&
         isValidCvPdfUpload(fileName);
       allow delete: if isActiveProfileOwner(uid);
+    }
+
+    // Lecture reservee aux comptes connectes, contrairement aux avatars et aux
+    // vignettes. Un evenement n'est lisible que par `signedInAndActive()` dans
+    // firestore.rules ; servir son affiche au monde entier serait plus large
+    // que la donnee qu'elle illustre, et un evenement peut etre prive.
+    match /eventFlyers/{eventId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() &&
+        isOwnedEventDoc(eventId) &&
+        isValidEventFlyerUpload();
+      allow delete: if signedIn() && isOwnedEventDoc(eventId);
     }
 
     match /videos/{videoFileName} {

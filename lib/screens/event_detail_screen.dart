@@ -15,6 +15,7 @@ import 'package:adfoot/screens/event_form_screen.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/theme/ad_colors.dart';
+import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_owner_tag.dart';
@@ -44,6 +45,7 @@ class EventDetailsScreen extends StatelessWidget {
             currentUser != null &&
             currentEvent.organisateur.uid == currentUser.uid;
         final cs = Theme.of(context).colorScheme;
+        final flyerUrl = (currentEvent.flyerUrl ?? '').trim();
 
         return Scaffold(
           backgroundColor: cs.surface,
@@ -74,6 +76,14 @@ class EventDetailsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // La carte de la liste montre l'affiche, la fiche ne la
+                // montrait pas -- alors que c'est ici qu'on decide de
+                // participer. Meme traitement que dans la liste : 16/9, et un
+                // lien casse s'efface au lieu de laisser un cadre vide.
+                if (flyerUrl.isNotEmpty) ...[
+                  _buildFlyer(flyerUrl),
+                  const SizedBox(height: 18),
+                ],
                 _buildHeader(context, currentEvent, isOrganisateur),
                 const SizedBox(height: 18),
                 _buildEventDetails(context, currentEvent),
@@ -94,6 +104,23 @@ class EventDetailsScreen extends StatelessWidget {
   // =========================================================
   // 🧑 HEADER ORGANISATEUR
   // =========================================================
+
+  Widget _buildFlyer(String url) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AdRadius.lg),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Image.network(
+          url,
+          fit: BoxFit.cover,
+          // `errorBuilder` est l'ecouteur d'erreur que `NetworkImage` n'a pas :
+          // sans lui, une affiche supprimee remonte en FlutterError et
+          // AppBootstrap la compterait comme un incident.
+          errorBuilder: (context, error, stack) => const SizedBox.shrink(),
+        ),
+      ),
+    );
+  }
 
   Widget _buildHeader(
     BuildContext context,
@@ -213,6 +240,17 @@ class EventDetailsScreen extends StatelessWidget {
                 '${currentEvent.participants.length} / ${currentEvent.capaciteMax} participants',
           ),
         ],
+        // Le pendant de la tuile « Vues » de la fiche d'offre. Le compteur est
+        // ecrit depuis `61e2e54` et ne s'affichait que sur la carte de la
+        // liste : l'organisateur qui ouvrait son propre evenement pour en
+        // suivre l'audience n'y trouvait rien.
+        const SizedBox(height: 12),
+        _buildDetailRow(
+          context: context,
+          icon: Icons.remove_red_eye_outlined,
+          label: 'Vues',
+          value: '${currentEvent.views ?? 0}',
+        ),
         if (currentEvent.tags != null && currentEvent.tags!.isNotEmpty) ...[
           const SizedBox(height: 16),
           Wrap(

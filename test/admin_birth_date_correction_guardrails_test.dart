@@ -16,7 +16,7 @@ void main() {
   final admin = _read('functions/src/admin_account_actions.ts');
   final derivation = _read('functions/src/user_search_fields.ts');
 
-  String _birthDateBranch() {
+  String birthDateBranch() {
     final start = admin.indexOf('if ("birthDate" in patch) {');
     expect(start, greaterThan(0), reason: 'the birthDate branch vanished');
     return admin.substring(start, admin.indexOf('\n  }', start));
@@ -56,7 +56,7 @@ void main() {
     // one must not be: the correction exists to make an invisible file
     // findable, and a silent failure would leave the administration believing
     // it succeeded.
-    final branch = _birthDateBranch();
+    final branch = birthDateBranch();
 
     expect(branch, contains('new HttpsError('));
     expect(branch, contains('"invalid-argument"'));

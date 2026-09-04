@@ -5,6 +5,7 @@ import 'package:adfoot/controller/offre_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/contact_intake.dart';
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/chat_screen.dart';
@@ -57,6 +58,20 @@ class _OffreScreenState extends State<OffreScreen> {
   String _sort = 'recentes';
   bool _onlyMine = false;
   bool _onlyExpiringSoon = false;
+
+  /// Le poste demande, ou null pour « tous ».
+  ///
+  /// Le seul des trois criteres footballistiques qui parte au serveur, via
+  /// `OffreController.setPositionFilter`. Les deux autres se posent sur la
+  /// page deja chargee : Firestore n'accepte qu'un seul champ tableau par
+  /// index composite, et `ageCategories` en est un second.
+  FootballPosition? _selectedPosition;
+
+  /// La categorie d'age demandee, filtree sur la page.
+  AgeCategory? _selectedCategory;
+
+  /// Le niveau de structure demande, filtre sur la page.
+  ClubLevel? _selectedLevel;
 
   /// Anti-spam: only one view counted per offer per session.
   final Set<String> _viewedOffres = <String>{};
@@ -113,11 +128,28 @@ class _OffreScreenState extends State<OffreScreen> {
         final offres = _filteredOffres(allOffres, currentUser);
         final canLoadMoreOffres = offreController.hasMoreOffres;
 
+        // Le poste est le seul filtre servi par la requete : il vide donc
+        // `allOffres` lui-meme, et un fil vide cesse de vouloir dire « il n'y
+        // a pas d'offre ». Sans cette distinction l'ecran annoncait « aucune
+        // offre disponible » -- et, plus grave, retirait la barre de filtres,
+        // laissant l'utilisateur devant un fil vide sans aucun moyen de
+        // revenir sur le poste qu'il venait de choisir.
+        final hasServerFilter = _selectedPosition != null;
+
         if (offreController.isLoading && allOffres.isEmpty) {
-          return _buildSkeletons();
+          if (!hasServerFilter) {
+            return _buildSkeletons();
+          }
+          return Column(
+            children: [
+              _buildSystemNoticeSlot(),
+              _buildFilters(currentUser),
+              Expanded(child: _buildSkeletons()),
+            ],
+          );
         }
 
-        if (allOffres.isEmpty) {
+        if (allOffres.isEmpty && !hasServerFilter) {
           return Column(
             children: [
               _buildSystemNoticeSlot(),
@@ -313,7 +345,23 @@ class _OffreScreenState extends State<OffreScreen> {
       _sort = 'recentes';
       _onlyMine = false;
       _onlyExpiringSoon = false;
+      _selectedPosition = null;
+      _selectedCategory = null;
+      _selectedLevel = null;
     });
+    // Le poste vit dans la requete, pas dans cet ecran : l'oublier ici
+    // laisserait le fil filtre par un poste que plus aucune puce n'affiche.
+    offreController.setPositionFilter(const <FootballPosition>[]);
+  }
+
+  /// Applique le poste, qui est le seul filtre servi par le serveur.
+  void _setPositionFilter(FootballPosition? position) {
+    setState(() => _selectedPosition = position);
+    offreController.setPositionFilter(
+      position == null ? const <FootballPosition>[] : <FootballPosition>[
+        position,
+      ],
+    );
   }
 
   void _captureRouteSystemNotice() {
@@ -441,7 +489,10 @@ class _OffreScreenState extends State<OffreScreen> {
         _selectedStatus != 'tous' ||
         _sort != 'recentes' ||
         _onlyMine ||
-        _onlyExpiringSoon;
+        _onlyExpiringSoon ||
+        _selectedPosition != null ||
+        _selectedCategory != null ||
+        _selectedLevel != null;
   }
 
   String _offerActionKey(Offre offre, String action) => '${offre.id}:$action';
@@ -549,11 +600,24 @@ class _OffreScreenState extends State<OffreScreen> {
 
       final matchesExpiring = !_onlyExpiringSoon || _isExpiringSoon(o);
 
+      // La categorie et le niveau se posent ici, pas dans la requete : un
+      // index composite n'accepte qu'un seul champ tableau, et le poste
+      // occupe deja cette place. Sur une page bornee a quarante documents,
+      // le cout est nul.
+      final matchesCategory =
+          _selectedCategory == null ||
+          o.ageCategories.contains(_selectedCategory);
+
+      final matchesLevel =
+          _selectedLevel == null || o.clubLevel == _selectedLevel;
+
       return matchesSearch &&
           matchesStatus &&
           matchesRole &&
           matchesMine &&
-          matchesExpiring;
+          matchesExpiring &&
+          matchesCategory &&
+          matchesLevel;
     }).toList();
 
     if (_sort == 'fin') {
@@ -708,6 +772,49 @@ class _OffreScreenState extends State<OffreScreen> {
     );
   }
 
+  /// L'enveloppe commune des menus de la barre de filtres.
+  Widget _buildDropdownShell({required Widget child}) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: AdColors.surfaceCard,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AdColors.divider),
+      ),
+      child: DropdownButtonHideUnderline(child: child),
+    );
+  }
+
+  /// Un menu « tous, ou une valeur » sur un vocabulaire footballistique.
+  ///
+  /// Les libelles, jamais les codes : personne ne choisit « LB » dans une
+  /// liste, et c'est deja la regle que suit la recherche plein texte.
+  Widget _buildFilterDropdown<T extends Object>({
+    required T? value,
+    required String allLabel,
+    required List<T> values,
+    required String Function(T value) labelOf,
+    required ValueChanged<T?> onChanged,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return _buildDropdownShell(
+      child: DropdownButton<T?>(
+        value: value,
+        underline: const SizedBox.shrink(),
+        dropdownColor: AdColors.surfaceCard,
+        style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600),
+        items: <DropdownMenuItem<T?>>[
+          DropdownMenuItem<T?>(value: null, child: Text(allLabel)),
+          for (final entry in values)
+            DropdownMenuItem<T?>(value: entry, child: Text(labelOf(entry))),
+        ],
+        onChanged: onChanged,
+      ),
+    );
+  }
+
   Widget _buildFilters(AppUser? currentUser) {
     final cs = Theme.of(context).colorScheme;
 
@@ -792,37 +899,57 @@ class _OffreScreenState extends State<OffreScreen> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      decoration: BoxDecoration(
-                        color: AdColors.surfaceCard,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AdColors.divider),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: _sort,
-                          underline: const SizedBox.shrink(),
-                          dropdownColor: AdColors.surfaceCard,
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'recentes',
-                              child: Text('Plus récentes'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'fin',
-                              child: Text('Se terminant bientôt'),
-                            ),
-                          ],
-                          onChanged: (v) {
-                            if (v != null) setState(() => _sort = v);
-                          },
+                    // Poste, categorie et niveau : le vocabulaire que l'offre
+                    // porte deja, et que le fil ne savait trier que par une
+                    // recherche plein texte sur les libelles affiches.
+                    _buildFilterDropdown<FootballPosition>(
+                      value: _selectedPosition,
+                      allLabel: 'Tous les postes',
+                      values: FootballPosition.values,
+                      labelOf: (position) => position.labelFr,
+                      onChanged: _setPositionFilter,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildFilterDropdown<AgeCategory>(
+                      value: _selectedCategory,
+                      allLabel: 'Toutes catégories',
+                      values: AgeCategory.values,
+                      labelOf: (category) => category.labelFr,
+                      onChanged: (value) =>
+                          setState(() => _selectedCategory = value),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildFilterDropdown<ClubLevel>(
+                      value: _selectedLevel,
+                      allLabel: 'Tous niveaux',
+                      values: ClubLevel.values,
+                      labelOf: (level) => level.labelFr,
+                      onChanged: (value) =>
+                          setState(() => _selectedLevel = value),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildDropdownShell(
+                      child: DropdownButton<String>(
+                        value: _sort,
+                        underline: const SizedBox.shrink(),
+                        dropdownColor: AdColors.surfaceCard,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.w600,
                         ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'recentes',
+                            child: Text('Plus récentes'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'fin',
+                            child: Text('Se terminant bientôt'),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) setState(() => _sort = v);
+                        },
                       ),
                     ),
                     if (_hasActiveFilters)

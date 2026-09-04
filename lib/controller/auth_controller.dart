@@ -157,9 +157,12 @@ class AuthController extends GetxController {
           _appUser.value = fetched;
           return;
         }
-      } catch (error) {
-        AppLogger.debug(
+      } catch (error, st) {
+        AppLogger.warning(
           'AuthController rehydrate attempt $attempt failed: $error',
+          source: 'AuthController._rehydrateAppUser',
+          error: error,
+          stackTrace: st,
         );
       }
     }
@@ -175,8 +178,13 @@ class AuthController extends GetxController {
     // reached a deaf app. See EmailLinkHandler.resetForNewSession.
     try {
       EmailLinkHandler.resetForNewSession();
-    } catch (error) {
-      AppLogger.debug('AuthController link handler reset error: $error');
+    } catch (error, st) {
+      AppLogger.warning(
+        'AuthController link handler reset error: $error',
+        source: 'AuthController.signOut',
+        error: error,
+        stackTrace: st,
+      );
     }
 
     await _authSessionService.signOut();
@@ -193,8 +201,13 @@ class AuthController extends GetxController {
       if (token != null) {
         await _userRepository.saveFcmToken(user.uid, token);
       }
-    } catch (error) {
-      AppLogger.debug('AuthController _updateFcmToken error: $error');
+    } catch (error, st) {
+      AppLogger.warning(
+        'AuthController _updateFcmToken error: $error',
+        source: 'AuthController._updateFcmToken',
+        error: error,
+        stackTrace: st,
+      );
     }
   }
 
@@ -206,8 +219,13 @@ class AuthController extends GetxController {
     _askedNotifThisSession = true;
     try {
       await NotificationService.askPermissionAndUpdateToken(currentUser: user);
-    } catch (error) {
-      AppLogger.debug('AuthController notifications permission error: $error');
+    } catch (error, st) {
+      AppLogger.warning(
+        'AuthController notifications permission error: $error',
+        source: 'AuthController._ensureSystemNotificationPromptOnce',
+        error: error,
+        stackTrace: st,
+      );
     }
   }
 

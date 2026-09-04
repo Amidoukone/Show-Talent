@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
@@ -41,6 +42,14 @@ class _EventListScreenState extends State<EventListScreen> {
   String _selectedVisibility = 'tous';
   bool _onlyUpcoming = false;
   bool _onlyMine = false;
+
+  /// Les evenements deja comptes pendant cette session d'ecran.
+  ///
+  /// `itemBuilder` rejoue a chaque rebuild -- defilement, filtre, snapshot --
+  /// et sans ce garde le meme evenement partirait en transaction a chaque
+  /// passage. La transaction le rattraperait via `viewedBy`, mais au prix
+  /// d'une lecture Firestore par rebuild.
+  final Set<String> _viewedEvents = <String>{};
 
   final Set<String> _pendingEventActions = <String>{};
   AdSystemNoticeData? _systemNotice;
@@ -129,6 +138,19 @@ class _EventListScreenState extends State<EventListScreen> {
                         );
                         final isOrganisateur = organiser.uid == currentUser.uid;
 
+                        // Compte une impression dans la liste, comme le fait
+                        // l'offre : les deux nombres doivent se comparer.
+                        if (!isOrganisateur &&
+                            !_viewedEvents.contains(event.id)) {
+                          _viewedEvents.add(event.id);
+                          unawaited(
+                            eventController.incrementVues(
+                              event: event,
+                              viewer: currentUser,
+                            ),
+                          );
+                        }
+
                         return Card(
                           color: AdColors.surfaceCard,
                           clipBehavior: Clip.antiAlias,
@@ -143,7 +165,25 @@ class _EventListScreenState extends State<EventListScreen> {
                           ),
                           child: InkWell(
                             onTap: () => _openEventDetails(event),
-                            child: Padding(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // L'affiche occupe toute la largeur, au-dessus
+                                // du padding : c'est elle qu'on regarde en
+                                // premier, et une marge autour la ferait lire
+                                // comme une illustration secondaire.
+                                if ((event.flyerUrl ?? '').trim().isNotEmpty)
+                                  AspectRatio(
+                                    aspectRatio: 16 / 9,
+                                    child: Image.network(
+                                      event.flyerUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stack) =>
+                                              const SizedBox.shrink(),
+                                    ),
+                                  ),
+                                Padding(
                               padding: const EdgeInsets.all(16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -209,6 +249,10 @@ class _EventListScreenState extends State<EventListScreen> {
                                         Icons.group_outlined,
                                         '${event.participants.length} participants',
                                       ),
+                                      _buildChip(
+                                        Icons.visibility_outlined,
+                                        '${event.views ?? 0} vues',
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 10),
@@ -223,6 +267,8 @@ class _EventListScreenState extends State<EventListScreen> {
                                   ),
                                 ],
                               ),
+                                ),
+                              ],
                             ),
                           ),
                         );

@@ -1,5 +1,4 @@
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/foundation.dart';
 
 import '../config/app_environment.dart';
 import '../models/action_response.dart';
@@ -44,16 +43,20 @@ class PushNotificationService {
         'contextType': contextType,
         'contextData': contextData,
       });
-    } on FirebaseFunctionsException catch (e) {
-      if (kDebugMode) {
-        AppLogger.debug(
-          'PushNotificationService error ${e.code}: ${e.message}',
-        );
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        AppLogger.debug('PushNotificationService unexpected error: $e');
-      }
+    } on FirebaseFunctionsException catch (e, st) {
+      AppLogger.warning(
+        'PushNotificationService error ${e.code}: ${e.message}',
+        source: 'PushNotificationService.sendUserPush',
+        error: e,
+        stackTrace: st,
+      );
+    } catch (e, st) {
+      AppLogger.warning(
+        'PushNotificationService unexpected error: $e',
+        source: 'PushNotificationService.sendUserPush',
+        error: e,
+        stackTrace: st,
+      );
     }
   }
 
@@ -69,20 +72,26 @@ class PushNotificationService {
         'body': body,
       });
       return ActionResponse.fromMap(response, toastOverride: ToastLevel.none);
-    } on FirebaseFunctionsException catch (e) {
-      if (kDebugMode) {
-        AppLogger.debug('sendOfferFanout error ${e.code}: ${e.message}');
-      }
+    } on FirebaseFunctionsException catch (e, st) {
+      AppLogger.warning(
+        'sendOfferFanout error ${e.code}: ${e.message}',
+        source: 'PushNotificationService.sendOfferFanout',
+        error: e,
+        stackTrace: st,
+      );
       return ActionResponse.failure(
         message: e.message ?? 'Envoi des notifications indisponible.',
         code: e.code,
         toast: ToastLevel.none,
         retriable: e.code == 'unavailable',
       );
-    } catch (e) {
-      if (kDebugMode) {
-        AppLogger.debug('sendOfferFanout unexpected error: $e');
-      }
+    } catch (e, st) {
+      AppLogger.warning(
+        'sendOfferFanout unexpected error: $e',
+        source: 'PushNotificationService.sendOfferFanout',
+        error: e,
+        stackTrace: st,
+      );
       return ActionResponse.failure(
         message: 'Envoi des notifications indisponible.',
         code: 'fanout_unavailable',
@@ -104,20 +113,26 @@ class PushNotificationService {
         'body': body,
       });
       return ActionResponse.fromMap(response, toastOverride: ToastLevel.none);
-    } on FirebaseFunctionsException catch (e) {
-      if (kDebugMode) {
-        AppLogger.debug('sendEventFanout error ${e.code}: ${e.message}');
-      }
+    } on FirebaseFunctionsException catch (e, st) {
+      AppLogger.warning(
+        'sendEventFanout error ${e.code}: ${e.message}',
+        source: 'PushNotificationService.sendEventFanout',
+        error: e,
+        stackTrace: st,
+      );
       return ActionResponse.failure(
         message: e.message ?? 'Envoi des notifications indisponible.',
         code: e.code,
         toast: ToastLevel.none,
         retriable: e.code == 'unavailable',
       );
-    } catch (e) {
-      if (kDebugMode) {
-        AppLogger.debug('sendEventFanout unexpected error: $e');
-      }
+    } catch (e, st) {
+      AppLogger.warning(
+        'sendEventFanout unexpected error: $e',
+        source: 'PushNotificationService.sendEventFanout',
+        error: e,
+        stackTrace: st,
+      );
       return ActionResponse.failure(
         message: 'Envoi des notifications indisponible.',
         code: 'fanout_unavailable',

@@ -752,6 +752,44 @@ void main() {
       },
     );
 
+    // Une lecture qui ne demarre pas est l'echec de lecture le plus visible :
+    // la vignette reste inerte, et l'utilisateur n'a rien a signaler d'autre
+    // que « la video ne marche pas ». `initializeController` etait le seul
+    // echec du lecteur a ne rien laisser derriere lui -- `AppLogger.debug`
+    // s'arrete a `developer.log` en release --, alors que `play()` juste en
+    // dessous etait deja signale.
+    test('an initialisation that fails is reported like a play error', () {
+      final smartPlayer = File(
+        'lib/widgets/smart_video_player.dart',
+      ).readAsStringSync();
+
+      final init = smartPlayer.indexOf('_videoManager.initializeController(');
+      expect(init, isNonNegative, reason: 'the initialisation site moved');
+
+      // Le signalement doit se trouver dans le `catch` de cette initialisation,
+      // pas ailleurs dans le fichier : c'est ce que le site `play_error`
+      // demontrait deja possible, et ce qui manquait ici.
+      final nextReport = smartPlayer.indexOf(
+        '_observability.logPlaybackError(',
+        init,
+      );
+      expect(nextReport, isNonNegative);
+      expect(
+        smartPlayer.substring(init, nextReport),
+        contains('catch ('),
+        reason: 'the report must sit in the initialisation catch',
+      );
+      expect(
+        smartPlayer.substring(init, nextReport + 400),
+        contains("reason: 'init_error'"),
+      );
+      expect(
+        smartPlayer.substring(init, nextReport + 400),
+        contains('stackTrace:'),
+        reason: 'without the stack trace the report cannot be acted on',
+      );
+    });
+
     test('video playback failures keep a clear retry state', () {
       final smartPlayer = File(
         'lib/widgets/smart_video_player.dart',
