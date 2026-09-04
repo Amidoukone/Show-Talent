@@ -196,31 +196,64 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                         const Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'Postes recherchés',
+                            'Postes recherchés *',
                             style: TextStyle(fontWeight: FontWeight.w700),
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: FootballPosition.values.map((position) {
-                            final isSelected =
-                                _positionCodes.contains(position);
-                            return FilterChip(
-                              selected: isSelected,
-                              label: Text(position.labelFr),
-                              onSelected: (_) {
-                                setState(() {
-                                  if (isSelected) {
-                                    _positionCodes.remove(position);
-                                  } else {
-                                    _positionCodes.add(position);
-                                  }
-                                });
-                              },
+                        // Un `FormField` plutot qu'un controle dans
+                        // `_submitForm` : le poste devient obligatoire au
+                        // meme titre que le titre et la description, il est
+                        // valide par le meme `validate()`, et l'erreur
+                        // s'affiche sous les puces au lieu d'un message
+                        // general qui ne dit pas ou regarder.
+                        FormField<List<FootballPosition>>(
+                          initialValue: _positionCodes,
+                          validator: _validatePositions,
+                          builder: (state) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: FootballPosition.values.map((
+                                    position,
+                                  ) {
+                                    final isSelected = _positionCodes.contains(
+                                      position,
+                                    );
+                                    return FilterChip(
+                                      selected: isSelected,
+                                      label: Text(position.labelFr),
+                                      onSelected: (_) {
+                                        setState(() {
+                                          if (isSelected) {
+                                            _positionCodes.remove(position);
+                                          } else {
+                                            _positionCodes.add(position);
+                                          }
+                                        });
+                                        state.didChange(_positionCodes);
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                                if (state.hasError) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    state.errorText!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             );
-                          }).toList(),
+                          },
                         ),
                         const SizedBox(height: 16),
                         const Align(
@@ -407,6 +440,21 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     }
     if (normalized.length > _maxDescriptionLength) {
       return 'Limitez la description à $_maxDescriptionLength caractères.';
+    }
+    return null;
+  }
+
+  /// Le poste est obligatoire, et ce n'est pas une exigence de formulaire.
+  ///
+  /// Le fil des offres filtre `positionCodes` avec `arrayContainsAny`, cote
+  /// serveur. Une offre publiee sans poste ne remonte donc dans aucun filtre
+  /// par poste -- pas « moins souvent » : jamais. Elle n'est visible que dans
+  /// la liste non filtree, c'est-a-dire de moins en moins a mesure que le
+  /// catalogue grossit, et son auteur n'a aucun moyen de s'en apercevoir.
+  String? _validatePositions(List<FootballPosition>? positions) {
+    if (positions == null || positions.isEmpty) {
+      return 'Choisissez au moins un poste : sans lui, l’offre '
+          'n’apparaît dans aucune recherche par poste.';
     }
     return null;
   }

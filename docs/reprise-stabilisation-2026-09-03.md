@@ -74,15 +74,21 @@ proposition qui dépend du volume, rejouer la mesure :
 node scripts/report-career-content.mjs
 ```
 
-Une décision produit est en attente ici, et elle conditionne l'utilité du
-filtre : `offres_form.dart` **n'impose aucun poste** à la publication. Il n'y
-a pas de validateur sur `_positionCodes`. Or le fil interroge
-`positionCodes arrayContainsAny`, donc une offre publiée sans poste est
-invisible dès qu'un poste est coché — définitivement, pas par erreur. Tant
-qu'il n'y a qu'une offre la question ne se voit pas ; au premier recruteur qui
-passe le pas, elle décide si le filtre trie le catalogue ou seulement la part
-qui a bien voulu se déclarer. À trancher avant d'ouvrir la publication, pas
-après.
+**Tranché le 4 septembre : le poste est obligatoire à la publication.** Le fil
+interroge `positionCodes arrayContainsAny`, donc une offre publiée sans poste
+n'était pas « moins visible » mais introuvable dans toute recherche par poste,
+sans que son auteur puisse le constater. Le contrôle passe par un `FormField`
+et non par un test dans `_submitForm` : le poste est validé par le même
+`validate()` que le titre, et l'erreur se pose sous les puces au lieu du
+message général qui ne dit pas où regarder.
+
+Le portail admin ne fait que **lire** `offres` — `snapshots()` et une `Query`,
+aucune écriture. Le mobile est donc la seule porte, et l'exigence vaut
+partout ; il n'y a pas de parité à rattraper côté admin.
+
+Un effet de bord assumé : une offre ancienne dépourvue de poste ne peut plus
+être ré-enregistrée sans qu'on lui en coche un. Aucune n'est dans ce cas en
+production — l'unique offre porte `LB`.
 
 ### 3. La vérification sur appareil
 
