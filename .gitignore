@@ -46,6 +46,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/android/build/
+/android/*/build/
 
 # Symbolication related
 app.*.symbols
@@ -114,6 +116,11 @@ service-account*.json
 # comptes de test.
 !/docs/checklists/
 !/docs/play-store-submission-*.md
+# Meme raison : scripts/check-android-release-readiness.ps1 lit ce fichier
+# depuis un checkout frais pour verifier que les URLs legales (politique de
+# confidentialite, suppression de compte) exigees par la Play Console sont
+# bien documentees. Aucun secret dedans -- seulement des URLs publiques.
+!/docs/store-compliance.md
 
 # Et la specification du socle de recherche, pour une raison de plus : elle
 # enregistre des contraintes verifiees dans le code et des mesures faites sur
