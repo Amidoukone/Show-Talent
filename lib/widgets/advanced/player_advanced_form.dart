@@ -116,6 +116,30 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
     _markDirty();
   }
 
+  /// Sans poste, la fiche n'est pas « moins complete » : elle est absente.
+  ///
+  /// `TalentSearchRepository` filtre `positionCodes` en `arrayContainsAny`, et
+  /// `computeIsSearchable` refuse `isSearchable` sans lui -- donc la fiche ne
+  /// passe meme pas le premier `where` de la requete. Le message dit la
+  /// consequence, pas l'injonction : « renseignez ce champ » ne dit pas
+  /// pourquoi, et un joueur qui ne sait pas pourquoi remplit mal ou pas.
+  String? _validatePositions(List<FootballPosition>? positions) {
+    if (positions == null || positions.isEmpty) {
+      return 'Choisissez au moins un poste : sans lui, votre fiche '
+          'n’apparaît dans aucune recherche de recruteur.';
+    }
+    return null;
+  }
+
+  /// Meme enjeu, meme formulation.
+  String? _validateNationalities(List<String>? nationalities) {
+    if (nationalities == null || nationalities.isEmpty) {
+      return 'Ajoutez au moins une nationalité : sans elle, votre fiche '
+          'n’apparaît dans aucune recherche de recruteur.';
+    }
+    return null;
+  }
+
   int? _parsedInt(TextEditingController controller) =>
       int.tryParse(controller.text.trim());
 
@@ -242,15 +266,48 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
               const SizedBox(height: 12),
             ],
 
-            _label('Postes'),
+            _label('Postes *'),
             const Text(
               'Trois au maximum. Le premier choisi est votre poste principal.',
               style: TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 8),
-            _PositionSelector(
-              selected: _positions,
-              onToggle: _togglePosition,
+            // Un `FormField` plutot qu'un simple selecteur : le poste decide
+            // que cette fiche existe ou non pour un recruteur, et il etait
+            // jusqu'ici hors du `Form`, donc jamais valide. Un joueur pouvait
+            // remplir sa taille, son pied fort, ses statistiques, enregistrer,
+            // lire « Profil avance » -- et n'apparaitre dans aucune recherche.
+            //
+            // Meme correction que pour l'offre (c80719c) et l'evenement : le
+            // champ dont depend la trouvabilite est valide par le meme
+            // `validate()` que le reste, et l'erreur se pose sous les puces.
+            FormField<List<FootballPosition>>(
+              initialValue: _positions,
+              validator: _validatePositions,
+              builder: (state) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _PositionSelector(
+                      selected: _positions,
+                      onToggle: (position) {
+                        _togglePosition(position);
+                        state.didChange(_positions);
+                      },
+                    ),
+                    if (state.hasError) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        state.errorText!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 16),
 
@@ -298,26 +355,54 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             ),
             const SizedBox(height: 20),
 
-            _label('Nationalités'),
+            _label('Nationalités *'),
             const Text(
               'Le passeport détermine les démarches d’un club étranger. '
               'Trois au maximum.',
               style: TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 8),
-            _NationalityList(
-              codes: _nationalities,
-              canAdd:
-                  _nationalities.length < PlayerFootballProfile.maxNationalities,
-              onRemove: (code) {
-                setState(() {
-                  _nationalities = _nationalities
-                      .where((entry) => entry != code)
-                      .toList();
-                });
-                _markDirty();
+            // Meme raison que les postes : `computeIsSearchable` exige au
+            // moins une nationalite, donc son absence rend la fiche
+            // introuvable et non simplement incomplete.
+            FormField<List<String>>(
+              initialValue: _nationalities,
+              validator: _validateNationalities,
+              builder: (state) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _NationalityList(
+                      codes: _nationalities,
+                      canAdd: _nationalities.length <
+                          PlayerFootballProfile.maxNationalities,
+                      onRemove: (code) {
+                        setState(() {
+                          _nationalities = _nationalities
+                              .where((entry) => entry != code)
+                              .toList();
+                        });
+                        _markDirty();
+                        state.didChange(_nationalities);
+                      },
+                      onAdd: () async {
+                        await _addNationality();
+                        state.didChange(_nationalities);
+                      },
+                    ),
+                    if (state.hasError) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        state.errorText!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                );
               },
-              onAdd: _addNationality,
             ),
             const SizedBox(height: 20),
 

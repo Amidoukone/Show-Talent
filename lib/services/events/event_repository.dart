@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:adfoot/models/event.dart';
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -44,19 +45,45 @@ class EventLiveBatch {
 }
 
 class EventQueryFilter {
-  const EventQueryFilter({this.status, this.endingAfter});
+  const EventQueryFilter({
+    this.status,
+    this.endingAfter,
+    this.positions = const <FootballPosition>[],
+  });
 
   final String? status;
   final DateTime? endingAfter;
 
+  /// Postes vises. Vide signifie « tous ».
+  ///
+  /// Le seul critere footballistique servi par le serveur, et c'est la meme
+  /// contrainte que pour l'offre, pas un choix de produit : un index composite
+  /// Firestore n'accepte qu'un seul champ tableau, et `ageCategories` en est un
+  /// second. Le poste est aussi le bon des deux -- le plus selectif, et celui
+  /// qu'un joueur pose en premier.
+  final List<FootballPosition> positions;
+
   bool get hasDateFilter => endingAfter != null;
+
+  /// Les codes envoyes a Firestore, plafonnes par `array-contains-any`.
+  List<String> get positionCodesForQuery => positions
+      .take(FootballPosition.maxPerQuery)
+      .map((position) => position.code)
+      .toList();
 
   String get cacheKey {
     final normalizedStatus = status == null
         ? 'all'
         : Event.normalizeStatus(status!).trim();
     final dateKey = endingAfter?.millisecondsSinceEpoch.toString() ?? 'all';
-    return '$normalizedStatus:$dateKey';
+    // Trie, sinon deux selections identiques faites dans un ordre different
+    // relanceraient le flux pour rien.
+    final positionKey = positions.isEmpty
+        ? 'all'
+        : (positions.map((position) => position.code).toList()..sort()).join(
+            ',',
+          );
+    return '$normalizedStatus:$dateKey:$positionKey';
   }
 }
 
@@ -170,6 +197,24 @@ class EventRepository {
     });
   }
 
+  /// Les champs qu'une mise a jour ne doit jamais reecrire.
+  ///
+  /// Le pendant exact de `_serverOwnedOfferFields`, meme raison et meme forme.
+  /// `participants` bouge par `registerParticipant` et `unregisterParticipant`,
+  /// `views` et `viewedBy` par `incrementViews`, tous en transaction et sous
+  /// une regle qui verifie le mouvement exact ; aucun formulaire ne les edite.
+  ///
+  /// Les renvoyer depuis un `Event` reconstruit faisait perdre l'inscription
+  /// arrivee pendant que le formulaire etait ouvert -- ou, depuis le menu de
+  /// statut de la liste, pendant le temps d'un appui. Le joueur voyait son
+  /// inscription confirmee et disparaissait de la liste de l'organisateur,
+  /// sans erreur nulle part, l'ecriture etant parfaitement legale.
+  static const List<String> _serverOwnedEventFields = <String>[
+    'participants',
+    'views',
+    'viewedBy',
+  ];
+
   Future<void> updateEvent(Event event) {
     final payload = event.toMap();
     final status = Event.normalizeStatus(event.statut);
@@ -185,6 +230,22 @@ class EventRepository {
     }
     if (event.flyerUrl == null) {
       payload['flyerUrl'] = FieldValue.delete();
+    }
+    // Meme raison que les deux champs ci-dessus, et le meme oubli : `toMap`
+    // ecrit ses champs optionnels sous condition (`if (tags != null)`), donc
+    // une valeur effacee devient une cle *absente* de la charge utile et
+    // `update()` laisse l'ancienne en place. Vider les tags ou la capacite
+    // depuis le formulaire ne partait jamais : l'ecran les effacait -- l'etat
+    // local est remplace apres succes -- et ils revenaient au rechargement
+    // suivant, sans qu'aucune erreur ne soit levee nulle part.
+    if (event.tags == null) {
+      payload['tags'] = FieldValue.delete();
+    }
+    if (event.capaciteMax == null) {
+      payload['capaciteMax'] = FieldValue.delete();
+    }
+    for (final field in _serverOwnedEventFields) {
+      payload.remove(field);
     }
     return _eventsCollection.doc(event.id).update(payload);
   }
@@ -403,8 +464,25 @@ class EventRepository {
         .toList();
   }
 
+  /// Construit la requete du fil.
+  ///
+  /// Un seul index composite couvre le filtre par poste :
+  /// `positionCodes CONTAINS` + `createdAt DESC`, le miroir exact de celui des
+  /// offres. Le combiner avec `status` ou `endingAfter` produirait d'autres
+  /// formes, chacune demandant son propre index -- et une forme sans index ne
+  /// leve pas : Firestore repond `failed-precondition`, le depot l'attrape
+  /// comme n'importe quel echec, et l'ecran parait simplement vide. C'est
+  /// pourquoi l'appelant ne combine pas : le statut, la visibilite et
+  /// l'echeance se filtrent sur la page deja chargee.
   Query<Map<String, dynamic>> _buildQuery(EventQueryFilter filter) {
     Query<Map<String, dynamic>> query = _eventsCollection;
+
+    if (filter.positions.isNotEmpty) {
+      query = query.where(
+        'positionCodes',
+        arrayContainsAny: filter.positionCodesForQuery,
+      );
+    }
 
     final rawStatus = filter.status?.trim();
     if (rawStatus != null && rawStatus.isNotEmpty) {

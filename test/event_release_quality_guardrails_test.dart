@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -58,6 +59,78 @@ void main() {
       // que rien ne le dise.
       expect(form, contains('flyerUrl: _visibleFlyerUrl'));
       expect(form, contains('_applyFlyerChange(widget.event!.id)'));
+    });
+
+    // Le vocabulaire footballistique remplace le champ « Tags / Categories ».
+    // Ces gardes tiennent les deux moities : le texte libre ne revient pas, et
+    // le poste reste obligatoire.
+    test('le formulaire code le profil recherche au lieu de le taper', () {
+      final form = File(
+        'lib/screens/event_form_screen.dart',
+      ).readAsStringSync();
+
+      // Le poste est obligatoire, par un `FormField` et non par un test dans
+      // `_handleSubmit` : il est valide par le meme `validate()` que le titre,
+      // et l'erreur se pose sous les puces au lieu d'un message general.
+      expect(form, contains('FormField<List<FootballPosition>>('));
+      expect(form, contains('validator: _validatePositions'));
+      expect(form, contains('state.didChange(_positionCodes)'));
+      expect(form, contains('String? _validatePositions('));
+      expect(form, contains('Postes concernés *'));
+
+      // Ce que le formulaire envoie vient de son propre etat, pas de
+      // l'evenement d'origine : sinon editer ne changerait jamais le
+      // vocabulaire.
+      expect(form, contains('positionCodes: _positionCodes'));
+      expect(form, contains('ageCategories: _ageCategories'));
+      expect(form, contains('clubLevel: _clubLevel'));
+
+      // Le garde de sortie couvre le vocabulaire, sans quoi cocher un poste
+      // puis revenir en arriere fermerait le formulaire sans un mot.
+      expect(form, contains('_initialPositionCodes'));
+      expect(form, contains('_initialAgeCategories'));
+      expect(form, contains('_clubLevel != _initialClubLevel'));
+      expect(form, contains('static bool _sameSelection<T>('));
+
+      // Le champ de texte libre ne revient pas : deux facons d'ecrire « U19 »
+      // dont une seule est cherchable, c'est la confusion que le vocabulaire
+      // code existe pour clore.
+      expect(form, isNot(contains('tagsController')));
+      expect(form, isNot(contains('Tags / Catégories')));
+    });
+
+    test('la liste sert le poste au serveur et le reste sur la page', () {
+      final screen = File(
+        'lib/screens/event_list_screen.dart',
+      ).readAsStringSync();
+
+      expect(screen, contains('eventController.setPositionFilter('));
+      expect(screen, contains('void _setPositionFilter(FootballPosition?'));
+
+      // Les deux autres criteres se posent la ou vivent deja les filtres de
+      // cet ecran : un index composite n'accepte qu'un champ tableau.
+      expect(
+        screen,
+        contains('event.ageCategories.contains(_selectedCategory)'),
+      );
+      expect(screen, contains('event.clubLevel == _selectedLevel'));
+
+      // Reinitialiser doit repartir jusqu'au serveur, sinon le fil reste
+      // filtre par un poste que plus aucun menu n'affiche.
+      expect(
+        screen,
+        contains(
+          'eventController.setPositionFilter(const <FootballPosition>[])',
+        ),
+      );
+
+      // Un fil vide sous filtre serveur reste un fil filtre : la barre doit
+      // rester a l'ecran, sinon on ne peut plus revenir en arriere.
+      expect(
+        screen,
+        contains('final hasServerFilter = _selectedPosition != null;'),
+      );
+      expect(screen, contains('if (allEvents.isEmpty && !hasServerFilter)'));
     });
 
     test(
@@ -173,11 +246,34 @@ void main() {
           repository,
           contains("payload['flyerUrl'] = FieldValue.delete()"),
         );
+        expect(
+          repository,
+          contains("payload['tags'] = FieldValue.delete()"),
+        );
+        expect(
+          repository,
+          contains("payload['capaciteMax'] = FieldValue.delete()"),
+        );
+        // Le pendant de `_serverOwnedOfferFields`. Meme raison d'etre epingle :
+        // le comportement est teste ailleurs, la liste est gardee ici pour
+        // qu'elle ne reparte pas dans la charge utile par recopie de `toMap`.
+        expect(repository, contains('_serverOwnedEventFields'));
+        expect(repository, contains("'participants',"));
+        expect(repository, contains("'views',"));
+        expect(repository, contains("'viewedBy',"));
         expect(controller, contains('StreamSubscription<EventLiveBatch>'));
         expect(controller, contains('Future<void> loadMoreEvents()'));
         expect(controller, contains('_lastCursor'));
         expect(controller, contains('_eventPageSize'));
         expect(controller, contains('_replaceLocalEvent(event)'));
+        // Le pendant du remplacement local des offres : `participants`
+        // etant `final`, la fusion passe par une reconstruction.
+        expect(
+          controller,
+          contains('participants: previous.participants'),
+        );
+        expect(controller, contains('views: previous.views'));
+        expect(controller, contains('viewedBy: previous.viewedBy'));
         expect(controller, contains('_removeLocalEvent(eventId)'));
         expect(controller, contains('fetchEventsPage('));
       },
@@ -191,6 +287,49 @@ void main() {
       expect(indexes, contains('"fieldPath": "dateFin"'));
       expect(indexes, contains('"fieldPath": "createdAt"'));
       expect(indexes, contains('"order": "DESCENDING"'));
+    });
+
+    // Le miroir exact de la garde des offres, et pour la meme raison : une
+    // forme de requete sans index ne leve pas. Firestore repond
+    // `failed-precondition`, le depot l'attrape comme n'importe quel echec, et
+    // l'onglet parait simplement vide -- sans que le joueur qui filtre par
+    // poste puisse distinguer « aucune detection » de « index absent ».
+    test('l index qui sert le filtre par poste des evenements est declare', () {
+      final raw = File('firestore.indexes.json').readAsStringSync();
+      final parsed = jsonDecode(raw) as Map<String, dynamic>;
+      final indexes = (parsed['indexes'] as List).cast<Map<String, dynamic>>();
+
+      final matching = indexes.where((index) {
+        if (index['collectionGroup'] != 'events') return false;
+        final fields = (index['fields'] as List).cast<Map<String, dynamic>>();
+        if (fields.length != 2) return false;
+        return fields.first['fieldPath'] == 'positionCodes' &&
+            fields.first['arrayConfig'] == 'CONTAINS' &&
+            fields.last['fieldPath'] == 'createdAt' &&
+            fields.last['order'] == 'DESCENDING';
+      });
+
+      expect(
+        matching,
+        hasLength(1),
+        reason: 'sans lui, filtrer par poste rend un onglet vide sans erreur',
+      );
+    });
+
+    test('le depot des evenements ne filtre au serveur qu un champ tableau',
+        () {
+      final repository = File(
+        'lib/services/events/event_repository.dart',
+      ).readAsStringSync();
+
+      expect(
+        repository,
+        contains('arrayContainsAny: filter.positionCodesForQuery'),
+      );
+      // `ageCategories` est un second champ tableau : Firestore n'en accepte
+      // qu'un par index composite, et le mettre ici ferait echouer la requete.
+      expect(repository, isNot(contains("arrayContainsAny: filter.categories")));
+      expect(repository, isNot(contains("'ageCategories',")));
     });
 
     test(

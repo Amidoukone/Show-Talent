@@ -1,4 +1,6 @@
 import 'package:adfoot/models/event.dart';
+import 'package:adfoot/models/football_vocabulary.dart';
+import 'package:adfoot/models/user.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -181,6 +183,126 @@ void main() {
       expect(organisateur.containsKey('eventPublies'), isFalse);
       expect(participant['uid'], 'player-embedded');
       expect(participant.containsKey('offrePubliees'), isFalse);
+    });
+  });
+
+  // Le vocabulaire footballistique arrive sur l'evenement, avec les memes
+  // regles que sur l'offre : le code est stocke, le libelle est affiche, et un
+  // code inconnu est ignore plutot que de faire echouer la fiche entiere.
+  group('Event vocabulaire footballistique', () {
+    AppUser organiser() => AppUser.fromEmbeddedMap(const {
+          'uid': 'club-1',
+          'nom': 'Club A',
+          'email': 'club@example.com',
+          'role': 'club',
+        });
+
+    Map<String, dynamic> rawEvent(Map<String, dynamic> extra) => {
+          'titre': 'Detection',
+          'description': 'desc',
+          'organisateur': const {
+            'uid': 'club-1',
+            'nom': 'Club A',
+            'email': 'club@example.com',
+            'role': 'club',
+          },
+          'participants': const <Map<String, dynamic>>[],
+          'statut': 'ouvert',
+          'lieu': 'Abidjan',
+          'estPublic': true,
+          ...extra,
+        };
+
+    Event build({
+      List<FootballPosition> positions = const <FootballPosition>[],
+      List<AgeCategory> categories = const <AgeCategory>[],
+      ClubLevel? level,
+    }) {
+      return Event(
+        id: 'event-1',
+        titre: 'Detection U19',
+        description: 'Tests techniques.',
+        dateDebut: DateTime.utc(2026, 7, 1),
+        dateFin: DateTime.utc(2026, 7, 2),
+        organisateur: organiser(),
+        participants: const [],
+        statut: 'ouvert',
+        lieu: 'Abidjan',
+        estPublic: true,
+        createdAt: DateTime.utc(2026, 6, 1),
+        positionCodes: positions,
+        ageCategories: categories,
+        clubLevel: level,
+      );
+    }
+
+    test('les codes font l aller-retour', () {
+      final map = build(
+        positions: const [
+          FootballPosition.leftBack,
+          FootballPosition.centreBack,
+        ],
+        categories: const [AgeCategory.u19],
+        level: ClubLevel.academy,
+      ).toMap();
+
+      expect(map['positionCodes'], ['LB', 'CB']);
+      expect(map['ageCategories'], ['U19']);
+      expect(map['clubLevel'], 'academy');
+
+      final parsed = Event.fromMap(Map<String, dynamic>.from(map));
+      expect(parsed.positionCodes, [
+        FootballPosition.leftBack,
+        FootballPosition.centreBack,
+      ]);
+      expect(parsed.ageCategories, [AgeCategory.u19]);
+      expect(parsed.clubLevel, ClubLevel.academy);
+    });
+
+    test('un decochage part au lieu d etre omis', () {
+      // Ecrits sans condition, contrairement aux autres champs optionnels : une
+      // charge utile qui omettrait la cle laisserait `update()` garder
+      // l'ancienne valeur, et l'evenement resterait affiche dans une recherche
+      // par poste qu'il ne vise plus. Meme defaut que celui corrige sur `tags`.
+      final map = build().toMap();
+
+      expect(map.containsKey('positionCodes'), isTrue);
+      expect(map['positionCodes'], isEmpty);
+      expect(map.containsKey('ageCategories'), isTrue);
+      expect(map['ageCategories'], isEmpty);
+      expect(map.containsKey('clubLevel'), isTrue);
+      expect(map['clubLevel'], isNull);
+    });
+
+    test('un code inconnu est ignore, pas fatal', () {
+      final parsed = Event.fromMap(rawEvent({
+        'positionCodes': const ['LB', 'LIBERO', 'LB'],
+        'ageCategories': const ['U19', 'U99'],
+        'clubLevel': 'interplanetaire',
+      }));
+
+      expect(parsed.positionCodes, [FootballPosition.leftBack]);
+      expect(parsed.ageCategories, [AgeCategory.u19]);
+      expect(parsed.clubLevel, isNull);
+    });
+
+    test('un document ancien, sans vocabulaire, reste lisible', () {
+      final parsed = Event.fromMap(rawEvent(const {}));
+
+      expect(parsed.positionCodes, isEmpty);
+      expect(parsed.ageCategories, isEmpty);
+      expect(parsed.clubLevel, isNull);
+    });
+
+    test('la borne est celle de la requete, pas celle du joueur', () {
+      // Une detection cherche souvent plusieurs postes a la fois ; la borne
+      // utile est celle d'`array-contains-any`, pas les trois postes que
+      // declare une fiche de joueur.
+      final codes = FootballPosition.values.map((p) => p.code).toList();
+      expect(codes.length, FootballPosition.maxPerQuery);
+
+      final parsed = Event.fromMap(rawEvent({'positionCodes': codes}));
+      expect(parsed.positionCodes, hasLength(FootballPosition.maxPerQuery));
     });
   });
 }

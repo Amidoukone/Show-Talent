@@ -1385,9 +1385,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Un visiteur ne la voit pas : pour un recruteur c'est du bruit, et
           // pour le joueur c'est une liste de ce qui lui manque affichee a
           // des inconnus.
-          if (isOwnProfile && !user.hasScoutReadyProfile)
+          // Deux blocs, pas un. « Poste » et « Pied fort » etaient presentes
+          // au meme rang dans une liste de neuf : le joueur remplissait sa
+          // taille, voyait la liste raccourcir, et restait introuvable. Le
+          // premier bloc dit ce qui empeche d'exister, le second ce qui
+          // peaufine. La separation vient du modele, cet ecran ne soustrait
+          // rien lui-meme.
+          if (isOwnProfile &&
+              (!user.hasScoutReadyProfile || user.isHiddenFromSearchByChoice))
             _MissingScoutRequirements(
-              missing: user.missingScoutRequirements,
+              blocking: user.missingSearchRequirements,
+              missing: user.missingScoutOnlyRequirements,
+              hiddenByChoice: user.isHiddenFromSearchByChoice,
             ),
         ],
       );

@@ -257,6 +257,12 @@ void main() {
       expect(controller, contains('_lastCursor'));
       expect(controller, contains('_offerPageSize'));
       expect(controller, contains('_replaceLocalOffer(offre)'));
+      // Le remplacement local ne reprend pas les champs que le serveur
+      // possede : l'objet soumis ne les porte plus, et `snapshots()` ne
+      // redelivre pas apres la compensation de latence.
+      expect(controller, contains('offer.candidats = previous.candidats'));
+      expect(controller, contains('offer.vues = previous.vues'));
+      expect(controller, contains('offer.viewedBy = previous.viewedBy'));
       expect(controller, contains('_removeLocalOffer(offreId)'));
       expect(controller, contains('_setLocalOfferCandidateState'));
       expect(controller, contains('_restoreLocalOfferCandidates'));
@@ -284,6 +290,14 @@ void main() {
         repository,
         contains("payload['pieceJointeUrl'] = FieldValue.delete()"),
       );
+      // Les champs que le serveur possede sortent de la charge utile de mise a
+      // jour. Le comportement est couvert par offer_repository_test.dart ; la
+      // liste est epinglee ici pour qu'un ajout de champ au modele ne la
+      // reintroduise pas par recopie de `toMap`.
+      expect(repository, contains('_serverOwnedOfferFields'));
+      expect(repository, contains("'candidats',"));
+      expect(repository, contains("'vues',"));
+      expect(repository, contains("'viewedBy',"));
     });
 
     test('offre controller keeps the mobile stream bounded and tolerant', () {

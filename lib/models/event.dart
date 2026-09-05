@@ -1,3 +1,4 @@
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -14,8 +15,59 @@ class Event {
   String statut;
 
   final String lieu;
+
+  /// Comment l'organisateur recrute ses participants — **pas** qui voit
+  /// l'evenement.
+  ///
+  /// Le nom dit le contraire, et c'est ce qui a rendu le defaut invisible :
+  /// l'ecran affichait « Visibilité : Privé » sur un document que
+  /// `allow read: if signedInAndActive()` rend lisible par tout compte actif,
+  /// sans jamais consulter ce champ. Le filtre « Privé » de la liste ne
+  /// masquait l'evenement qu'a celui qui cochait le filtre inverse.
+  ///
+  /// Ce n'est pas reparable par une regle seule, pour la raison deja ecrite
+  /// dans `firestore.rules` a propos de `profilePublic` : un `list` echoue en
+  /// entier des qu'un seul document du resultat est refuse, donc filtrer la
+  /// lecture viderait la liste au lieu de la restreindre. Le vrai
+  /// cloisonnement demande de decouper le document.
+  ///
+  /// En attendant, les libelles disent ce que le champ fait reellement —
+  /// « Inscription ouverte à tous » / « Sur sélection » — plutot qu'une
+  /// confidentialite qui n'existe pas. Le nom du champ, lui, ne bouge pas :
+  /// il est ecrit en base et lu par le portail admin.
   final bool estPublic;
+
   final DateTime createdAt;
+
+  /// Les postes que cet evenement vient chercher, dans le vocabulaire des
+  /// joueurs.
+  ///
+  /// L'offre porte le meme champ depuis 72f1b03, et c'est ce qui la rend
+  /// trouvable. L'evenement, lui, n'avait que [tags] : du texte libre, c'est-a-
+  /// dire exactement ce que `football_vocabulary.dart` existe pour supprimer.
+  /// Un lateral gauche U19 trouvait donc l'offre qui le cherchait, mais pas la
+  /// detection ou il aurait du se presenter -- alors que les deux onglets
+  /// vivent sous « Opportunites » en promettant la meme chose.
+  ///
+  /// Jusqu'a [FootballPosition.maxPerQuery], comme pour l'offre : c'est la
+  /// borne d'`array-contains-any`, et une detection cherche souvent plusieurs
+  /// postes a la fois.
+  List<FootballPosition> positionCodes;
+
+  /// Les categories d'age concernees.
+  ///
+  /// Un club n'organise pas une detection « pour les jeunes », il en organise
+  /// une en U17. Filtre sur la page deja chargee, pas au serveur : un index
+  /// composite Firestore n'accepte qu'un seul champ tableau, et [positionCodes]
+  /// occupe cette place -- la meme contrainte, tranchee de la meme facon, que
+  /// pour l'offre et pour la recherche de talents.
+  List<AgeCategory> ageCategories;
+
+  /// Le niveau de la structure qui organise.
+  ///
+  /// Une detection de centre de formation et un tournoi amateur ne s'adressent
+  /// pas aux memes joueurs, et une fiche qui ne le dit pas oblige a demander.
+  ClubLevel? clubLevel;
 
   // Optional fields.
   int? capaciteMax;
@@ -47,6 +99,9 @@ class Event {
     required this.lieu,
     required this.estPublic,
     required this.createdAt,
+    this.positionCodes = const <FootballPosition>[],
+    this.ageCategories = const <AgeCategory>[],
+    this.clubLevel,
     this.capaciteMax,
     this.tags,
     this.streamingUrl,
@@ -144,6 +199,15 @@ class Event {
       'lieu': lieu,
       'estPublic': estPublic,
       'createdAt': Timestamp.fromDate(createdAt),
+      // Ecrits sans condition, contrairement aux champs optionnels qui suivent.
+      // Un `if (... != null)` les ferait disparaitre de la charge utile quand
+      // ils sont vides, et `update()` garderait alors l'ancienne valeur : c'est
+      // exactement le defaut corrige sur `tags` et `capaciteMax` dans 1b27d07.
+      // Ici un decochage doit partir, sans quoi un evenement resterait affiche
+      // dans une recherche par poste qu'il ne vise plus.
+      'positionCodes': positionCodes.map((p) => p.code).toList(),
+      'ageCategories': ageCategories.map((c) => c.code).toList(),
+      'clubLevel': clubLevel?.code,
       if (capaciteMax != null) 'capaciteMax': capaciteMax,
       if (tags != null) 'tags': tags,
       if (streamingUrl != null) 'streamingUrl': streamingUrl,
@@ -238,6 +302,12 @@ class Event {
       createdAt: _parseDate(
         _readFirst(map, ['createdAt', 'dateCreation', 'publishedAt']),
       ),
+      positionCodes: FootballVocabulary.positions(
+        map['positionCodes'],
+        max: FootballPosition.maxPerQuery,
+      ),
+      ageCategories: FootballVocabulary.ageCategories(map['ageCategories']),
+      clubLevel: FootballVocabulary.clubLevel(map['clubLevel']),
       capaciteMax: _toNullableInt(
         _readFirst(map, ['capaciteMax', 'capacity', 'maxParticipants']),
       ),
