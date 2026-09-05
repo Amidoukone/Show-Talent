@@ -736,6 +736,18 @@ class OffreController extends GetxController {
     _replaceLocalOffer(offer);
   }
 
+  /// Remplace l'entree locale par l'offre qui vient d'etre enregistree, sans
+  /// reprendre les champs que le serveur possede.
+  ///
+  /// `updateOffer` ne les envoie plus -- voir `_serverOwnedOfferFields` --
+  /// donc l'objet soumis par le formulaire porte l'etat d'il y a dix minutes.
+  /// Le recopier ici annulerait la moitie du benefice : Firestore serait juste
+  /// et l'ecran faux, et il resterait faux. `snapshots()` ne redelivre pas :
+  /// la compensation de latence a deja pousse le bon document avant que
+  /// `await` ne rende la main, et l'acquittement serveur qui suit n'est qu'un
+  /// changement de metadonnees, que le flux ne rediffuse pas par defaut. Le
+  /// recruteur verrait ses candidatures tomber a zero juste apres avoir
+  /// enregistre -- l'apparence exacte de la panne qu'on vient de supprimer.
   void _replaceLocalOffer(Offre offer) {
     final existing = _offres.value;
     final index = existing.indexWhere((candidate) => candidate.id == offer.id);
@@ -743,6 +755,11 @@ class OffreController extends GetxController {
       update();
       return;
     }
+
+    final previous = existing[index];
+    offer.candidats = previous.candidats;
+    offer.vues = previous.vues;
+    offer.viewedBy = previous.viewedBy;
 
     final next = List<Offre>.from(existing);
     next[index] = offer;

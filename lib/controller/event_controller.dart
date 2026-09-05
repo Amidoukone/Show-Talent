@@ -4,6 +4,7 @@ import 'package:adfoot/controller/push_notification.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/event.dart';
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
@@ -93,12 +94,53 @@ class EventController extends GetxController {
     }
   }
 
+  /// Les postes actuellement demandes au serveur. Vide signifie « tous ».
+  List<FootballPosition> get positionFilter => _activeFilter.positions;
+
+  /// Change le filtre par poste et relance le fil.
+  ///
+  /// Le pendant exact de `OffreController.setPositionFilter`, et le seul filtre
+  /// de l'ecran des evenements qui parte au serveur. Les autres -- statut,
+  /// inscription, a venir, mes evenements, et desormais categorie d'age et
+  /// niveau -- s'appliquent sur la page deja chargee, ou ils ne coutent rien.
+  /// Celui-ci change la requete, donc l'index utilise, donc ce que « charger
+  /// plus » rapporte : sans lui, un joueur qui cherche une detection de
+  /// lateraux gauches paginerait tous les evenements pour en ecarter la
+  /// plupart sur le telephone.
+  ///
+  /// Le fil est vide avant la relance : garder les evenements precedents le
+  /// temps de la nouvelle page afficherait, sous un filtre par poste, des
+  /// evenements qui n'y repondent pas.
+  Future<void> setPositionFilter(List<FootballPosition> positions) {
+    final next = EventQueryFilter(
+      status: _activeFilter.status,
+      endingAfter: _activeFilter.endingAfter,
+      positions: List<FootballPosition>.unmodifiable(positions),
+    );
+    if (next.cacheKey == _activeFilter.cacheKey) {
+      return Future<void>.value();
+    }
+
+    _events.value = const <Event>[];
+    _isLoading.value = true;
+    update();
+    return fetchEvents(filter: next);
+  }
+
+  /// Ouvre ou reprend le fil.
+  ///
+  /// [filter] omis veut dire « celui qui est deja actif », et non « aucun » :
+  /// `EventDetailScreen` rafraichit par `fetchEvents()` sans argument, et un
+  /// defaut a `const EventQueryFilter()` aurait alors efface le filtre par
+  /// poste en cours -- le fil serait revenu a tous les evenements sans que la
+  /// barre de filtres ne bouge, donc sans que rien n'explique pourquoi.
   Future<void> fetchEvents({
-    EventQueryFilter filter = const EventQueryFilter(),
+    EventQueryFilter? filter,
     bool forceRefresh = false,
   }) async {
+    final effectiveFilter = filter ?? _activeFilter;
     final currentUid = _authSessionService.currentUser?.uid;
-    final queryKey = filter.cacheKey;
+    final queryKey = effectiveFilter.cacheKey;
     final hasActiveStream =
         _eventsSub != null &&
         _activeAuthUid == currentUid &&
@@ -110,7 +152,7 @@ class EventController extends GetxController {
 
     _activeAuthUid = currentUid;
     _activeEventsQueryKey = queryKey;
-    _activeFilter = filter;
+    _activeFilter = effectiveFilter;
     _lastCursor = null;
     _hasLoadedAdditionalPages = false;
     _hasMoreEvents.value = false;
@@ -121,7 +163,7 @@ class EventController extends GetxController {
     await _eventsSub?.cancel();
 
     _eventsSub = _eventRepository
-        .watchEvents(limit: _eventPageSize, filter: filter)
+        .watchEvents(limit: _eventPageSize, filter: effectiveFilter)
         .listen(
           (batch) {
             final updatedEvents = _prepareEvents(batch.events);
@@ -383,6 +425,12 @@ class EventController extends GetxController {
         lieu: event.lieu,
         estPublic: event.estPublic,
         createdAt: event.createdAt,
+        // Sans ces trois lignes, publier un evenement perdrait son vocabulaire
+        // en silence : cette reconstruction enumere les champs un a un, donc
+        // tout champ oublie ici est un champ qui n'atteint jamais Firestore.
+        positionCodes: event.positionCodes,
+        ageCategories: event.ageCategories,
+        clubLevel: event.clubLevel,
         capaciteMax: event.capaciteMax,
         tags: event.tags,
         streamingUrl: event.streamingUrl,
@@ -818,6 +866,14 @@ class EventController extends GetxController {
     _replaceLocalEvent(event);
   }
 
+  /// Remplace l'entree locale par l'evenement qui vient d'etre enregistre,
+  /// sans reprendre les champs que le serveur possede.
+  ///
+  /// Le pendant exact de `OffreController._replaceLocalOffer`, meme raison :
+  /// `updateEvent` n'envoie plus `participants`, `views` ni `viewedBy` -- voir
+  /// `_serverOwnedEventFields` -- donc l'objet soumis porte l'etat d'avant
+  /// l'ouverture du formulaire. `participants` etant `final`, il faut
+  /// reconstruire plutot qu'assigner.
   void _replaceLocalEvent(Event event) {
     final existing = _events.value;
     final index = existing.indexWhere((candidate) => candidate.id == event.id);
@@ -826,8 +882,34 @@ class EventController extends GetxController {
       return;
     }
 
+    final previous = existing[index];
+    final merged = Event(
+      id: event.id,
+      titre: event.titre,
+      description: event.description,
+      dateDebut: event.dateDebut,
+      dateFin: event.dateFin,
+      organisateur: event.organisateur,
+      participants: previous.participants,
+      statut: event.statut,
+      lieu: event.lieu,
+      estPublic: event.estPublic,
+      createdAt: event.createdAt,
+      positionCodes: event.positionCodes,
+      ageCategories: event.ageCategories,
+      clubLevel: event.clubLevel,
+      capaciteMax: event.capaciteMax,
+      tags: event.tags,
+      streamingUrl: event.streamingUrl,
+      flyerUrl: event.flyerUrl,
+      views: previous.views,
+      viewedBy: previous.viewedBy,
+      archivedAt: event.archivedAt,
+      lastUpdated: event.lastUpdated,
+    );
+
     final next = List<Event>.from(existing);
-    next[index] = event;
+    next[index] = merged;
     _events.value = _sortEvents(next);
     update();
   }

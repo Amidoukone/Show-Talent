@@ -310,15 +310,23 @@ void main() {
     final widgets = _read('lib/screens/profile_screen_widgets.dart');
 
     test('the missing list is guarded by isOwnProfile', () {
+      expect(screen, contains('if (isOwnProfile &&'));
       expect(
         screen,
-        contains('if (isOwnProfile && !user.hasScoutReadyProfile)'),
+        contains(
+          '(!user.hasScoutReadyProfile || user.isHiddenFromSearchByChoice)',
+        ),
       );
       expect(screen, contains('_MissingScoutRequirements('));
     });
 
     test('the screen copies the rule instead of restating it', () {
-      expect(screen, contains('missing: user.missingScoutRequirements'));
+      // Les deux listes viennent du modele, et la soustraction aussi : si
+      // l'ecran calculait lui-meme la difference, il pourrait un jour ranger
+      // dans « pour completer » une exigence devenue bloquante.
+      expect(screen, contains('blocking: user.missingSearchRequirements'));
+      expect(screen, contains('missing: user.missingScoutOnlyRequirements'));
+      expect(screen, isNot(contains('.where((r) =>')));
 
       // No surface may test the underlying fields itself: that is how a screen
       // ends up asking for something the rule stopped requiring.
@@ -328,10 +336,29 @@ void main() {
     });
 
     test('the panel renders nothing when nothing is missing', () {
+      // Trois cas desormais, et le panneau doit rester muet quand aucun ne
+      // s'applique -- sinon un dossier complet et public afficherait un cadre
+      // vide.
       expect(
         widgets,
-        contains('if (missing.isEmpty) return const SizedBox.shrink();'),
+        contains(
+          'if (blocking.isEmpty && missing.isEmpty && !hiddenByChoice) {',
+        ),
       );
+      expect(widgets, contains('return const SizedBox.shrink();'));
+    });
+
+    test('le rang bloquant se distingue du rang qui peaufine', () {
+      // La regression que ce test tient : les neuf exigences etaient alignees
+      // a l'identique, donc rien ne disait au joueur laquelle decidait qu'il
+      // existe dans une recherche.
+      expect(
+        widgets,
+        contains('Votre fiche n’apparaît dans aucune recherche'),
+      );
+      expect(widgets, contains('Puis, pour un dossier complet'));
+      expect(widgets, contains('final List<String> blocking;'));
+      expect(widgets, contains('final bool hiddenByChoice;'));
     });
 
     test('the screen reads the typed profile, not the old map', () {
@@ -388,6 +415,176 @@ void main() {
       });
 
       expect(club.hasScoutReadyProfile, isFalse);
+    });
+  });
+
+  // Trois exigences decident si la fiche existe pour un recruteur ; les six
+  // autres decident si elle est complete. Les melanger dans une seule liste
+  // etait le defaut : un joueur remplissait sa taille, voyait la liste
+  // raccourcir, et restait introuvable.
+  group('ce qui rend une fiche trouvable, et ce qui la complete', () {
+    test('les trois exigences bloquantes sont exactement celles du serveur',
+        () {
+      final user = _player(country: 'Côte d’Ivoire');
+
+      expect(user.missingSearchRequirements, <String>[
+        'Date de naissance',
+        'Poste',
+        'Nationalité',
+      ]);
+      expect(user.isFindableByRecruiters, isFalse);
+    });
+
+    test('une fiche trouvable peut rester incomplete', () {
+      // Le cas qui justifie la separation : le serveur rendrait cette fiche
+      // dans une recherche, et il lui manque pourtant de quoi decider.
+      final user = _player(
+        country: 'Côte d’Ivoire',
+        football: <String, dynamic>{
+          'birthYear': 2007,
+          'nationalities': <String>['CI'],
+          'positionCodes': <String>['CM'],
+        },
+      );
+
+      expect(user.missingSearchRequirements, isEmpty);
+      expect(user.isFindableByRecruiters, isTrue);
+      expect(user.hasScoutReadyProfile, isFalse);
+      expect(user.missingScoutOnlyRequirements, isNotEmpty);
+    });
+
+    test('les deux listes ne se recouvrent jamais', () {
+      final user = _player(country: 'Côte d’Ivoire');
+
+      for (final blocking in user.missingSearchRequirements) {
+        expect(
+          user.missingScoutOnlyRequirements,
+          isNot(contains(blocking)),
+          reason: 'une exigence affichee deux fois se lit comme deux exigences',
+        );
+      }
+      expect(
+        <String>{
+          ...user.missingSearchRequirements,
+          ...user.missingScoutOnlyRequirements,
+        },
+        user.missingScoutRequirements.toSet(),
+        reason: 'la separation ne doit rien perdre en route',
+      );
+    });
+
+    test('un compte desactive n est pas trouvable, meme complet', () {
+      final user = AppUser.fromMap(<String, dynamic>{
+        'uid': 'p1',
+        'nom': 'Awa Traore',
+        'role': 'joueur',
+        'authDisabled': true,
+        ..._completeFootballFile(),
+      });
+
+      expect(user.missingSearchRequirements, isEmpty);
+      expect(user.isFindableByRecruiters, isFalse);
+    });
+
+    test('un profil masque volontairement est nomme comme tel', () {
+      // Ce n'est pas un oubli : reclamer un champ deja rempli serait faux, et
+      // se taire laisserait le joueur chercher ce qui ne va pas.
+      final user = AppUser.fromMap(<String, dynamic>{
+        'uid': 'p1',
+        'nom': 'Awa Traore',
+        'role': 'joueur',
+        'profilePublic': false,
+        ..._completeFootballFile(),
+      });
+
+      expect(user.missingSearchRequirements, isEmpty);
+      expect(user.isFindableByRecruiters, isFalse);
+      expect(user.isHiddenFromSearchByChoice, isTrue);
+    });
+
+    test('la notion ne s applique pas a un compte qui n est pas joueur', () {
+      final club = AppUser.fromMap(<String, dynamic>{
+        'uid': 'c1',
+        'nom': 'ASEC',
+        'role': 'club',
+      });
+
+      expect(club.missingSearchRequirements, isEmpty);
+      expect(club.isFindableByRecruiters, isFalse);
+      expect(club.isHiddenFromSearchByChoice, isFalse);
+    });
+  });
+
+  // Le pendant de football_vocabulary_parity_test.dart : la meme regle vit en
+  // Dart pour l'ecran et en TypeScript pour le trigger. Deux copies derivent,
+  // et celle-ci deriverait en silence -- l'ecran annoncerait « trouvable » sur
+  // une fiche que `deriveUserSearchFields` refuse, ou reclamerait un champ que
+  // le serveur n'exige plus.
+  group('la regle de trouvabilite est la meme des deux cotes', () {
+    final server = _read('functions/src/user_search_fields.ts');
+
+    test('le serveur exige toujours ces trois champs, et pas un de plus', () {
+      expect(server, contains('if (birthYear === null) return false;'));
+      expect(
+        server,
+        contains('if (!hasPositionCode(data.positionCodes)) return false;'),
+      );
+      expect(
+        server,
+        contains('if (!hasNationality(data.nationalities)) return false;'),
+      );
+    });
+
+    test('le serveur ecarte toujours les memes etats de compte', () {
+      expect(server, contains('if (role !== "joueur") return false;'));
+      expect(server, contains('if (data.estActif === false) return false;'));
+      expect(server, contains('if (data.authDisabled === true) return false;'));
+      expect(
+        server,
+        contains('if (data.profilePublic === false) return false;'),
+      );
+    });
+
+    test('le client verifie les memes conditions, dans le meme ordre', () {
+      final model = _read('lib/models/user.dart');
+
+      expect(model, contains('bool get isFindableByRecruiters {'));
+      expect(model, contains('if (!isPlayer) return false;'));
+      expect(model, contains('if (!estActif || authDisabled) return false;'));
+      expect(model, contains('if (!profilePublic) return false;'));
+      expect(model, contains('return missingSearchRequirements.isEmpty;'));
+
+      expect(model, contains('if (profile.birthYear == null)'));
+      expect(model, contains('if (profile.positions.isEmpty)'));
+      expect(model, contains('if (profile.nationalities.isEmpty)'));
+    });
+  });
+
+  // Le champ dont depend la trouvabilite doit etre exige la ou le joueur le
+  // remplit, pas seulement signale apres coup sur sa fiche.
+  group('les formulaires refusent une fiche introuvable', () {
+    test('le formulaire avance valide postes et nationalites', () {
+      final form = _read('lib/widgets/advanced/player_advanced_form.dart');
+
+      expect(form, contains('FormField<List<FootballPosition>>('));
+      expect(form, contains('validator: _validatePositions'));
+      expect(form, contains('FormField<List<String>>('));
+      expect(form, contains('validator: _validateNationalities'));
+      expect(form, contains('String? _validatePositions('));
+      expect(form, contains('String? _validateNationalities('));
+
+      // Sans `didChange`, le `FormField` garde sa valeur initiale et l'erreur
+      // reste affichee alors que le joueur vient de cocher un poste.
+      expect(form, contains('state.didChange(_positions)'));
+      expect(form, contains('state.didChange(_nationalities)'));
+    });
+
+    test('le profil de base exige la date de naissance du joueur', () {
+      final screen = _read('lib/screens/edit_profil_screen.dart');
+
+      expect(screen, contains('FormField<DateTime>('));
+      expect(screen, contains('if (!user.isPlayer) return null;'));
+      expect(screen, contains('state.didChange(_selectedBirthDate)'));
     });
   });
 }

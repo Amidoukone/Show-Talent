@@ -293,12 +293,40 @@ class OfferRepository {
     return payload;
   }
 
+  /// Les champs qu'une mise a jour ne doit jamais reecrire.
+  ///
+  /// Ils appartiennent au serveur : `candidats` bouge par `applyToOffer` et
+  /// `withdrawFromOffer`, `vues` et `viewedBy` par `incrementViews`, tous trois
+  /// en transaction et sous une regle qui verifie le mouvement exact.
+  /// Aucun formulaire ne les edite.
+  ///
+  /// Les envoyer quand meme etait une perte de donnees silencieuse. Le
+  /// formulaire capture son offre une seule fois -- `editingOffre` est lu dans
+  /// `initState` et fige jusqu'a l'enregistrement -- donc tout ce qui arrive
+  /// pendant que l'ecran est ouvert etait ecrase par un etat perime : une
+  /// candidature confirmee au joueur que le recruteur ne verrait jamais, un
+  /// compteur de vues remis a sa valeur d'il y a dix minutes. Rien ne levait,
+  /// parce que rien n'est illegal : la regle laisse le proprietaire ecrire ce
+  /// qu'il veut sur sa propre offre.
+  ///
+  /// `update()` ne touche pas a ce qu'on ne lui envoie pas, donc les retirer
+  /// suffit -- et c'est le depot qui les retire, pas l'ecran, pour que la
+  /// garantie tienne quel que soit l'appelant.
+  static const List<String> _serverOwnedOfferFields = <String>[
+    'candidats',
+    'vues',
+    'viewedBy',
+  ];
+
   Map<String, dynamic> _payloadForUpdate(Offre offer) {
     final payload = offer.toMap();
     payload['statut'] = Offre.normalizeStatus(offer.statut);
     payload['lastUpdated'] = FieldValue.serverTimestamp();
     if (offer.pieceJointeUrl == null) {
       payload['pieceJointeUrl'] = FieldValue.delete();
+    }
+    for (final field in _serverOwnedOfferFields) {
+      payload.remove(field);
     }
     return payload;
   }

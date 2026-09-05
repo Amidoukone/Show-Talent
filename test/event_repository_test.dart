@@ -1,4 +1,5 @@
 import 'package:adfoot/models/event.dart';
+import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/events/event_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -29,6 +30,9 @@ Event _event({
   AppUser? organizer,
   List<AppUser> participants = const [],
   int? capacity,
+  List<String>? tags,
+  List<FootballPosition> positions = const <FootballPosition>[],
+  DateTime? createdAt,
 }) {
   return Event(
     id: id,
@@ -41,8 +45,10 @@ Event _event({
     statut: status,
     lieu: 'Abidjan',
     estPublic: true,
-    createdAt: DateTime(2026, 6, 1),
+    createdAt: createdAt ?? DateTime(2026, 6, 1),
+    positionCodes: positions,
     capaciteMax: capacity,
+    tags: tags,
   );
 }
 
@@ -214,6 +220,161 @@ void main() {
 
         expect(data['views'], 2);
         expect(data['viewedBy'], ['player-1', 'player-2']);
+      });
+    });
+
+    // Le pendant exact du test des offres. Deux chemins mènent ici : le
+    // formulaire d'edition, qui tient son `Event` depuis l'ouverture, et le
+    // menu de statut de la liste, qui en reconstruit un complet a chaque appui.
+    test(
+      'updateEvent keeps registrations written while the form was open',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+        final player = _user('player-1', 'joueur');
+        final viewer = _user('player-2', 'joueur');
+
+        await repository.createEvent(_event(capacity: 30));
+
+        // L'ecran d'edition s'ouvre ici, sur un evenement sans inscrit.
+        final staleEvent = _event(capacity: 30);
+
+        await repository.registerParticipant(
+          eventId: 'event-1',
+          participant: player,
+        );
+        await repository.incrementViews(event: _event(), viewer: viewer);
+
+        await repository.updateEvent(staleEvent);
+
+        final data = (await firestore.collection('events').doc('event-1').get())
+            .data()!;
+        final participants = (data['participants'] as List)
+            .map((entry) => Map<String, dynamic>.from(entry as Map)['uid'])
+            .toList();
+
+        expect(participants, ['player-1']);
+        expect(data['views'], 1);
+        expect(data['viewedBy'], ['player-2']);
+      },
+    );
+
+    group('updateEvent clears what the form emptied', () {
+      // `toMap` n'ecrit ses champs optionnels que s'ils sont non nuls, donc un
+      // champ vide sortait de la charge utile et `update()` gardait l'ancienne
+      // valeur. L'organisateur voyait les tags disparaitre de l'ecran -- l'etat
+      // local est remplace apres succes -- et les retrouvait au rechargement.
+      test('emptied tags and capacity reach Firestore', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+
+        await repository.createEvent(
+          _event(capacity: 30, tags: const ['u19', 'detection']),
+        );
+        await repository.updateEvent(_event());
+
+        final data = (await firestore.collection('events').doc('event-1').get())
+            .data()!;
+
+        expect(data.containsKey('tags'), isFalse);
+        expect(data.containsKey('capaciteMax'), isFalse);
+      });
+
+      test('tags and capacity still round-trip when they are set', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+
+        await repository.createEvent(_event());
+        await repository.updateEvent(
+          _event(capacity: 24, tags: const ['u17']),
+        );
+
+        final data = (await firestore.collection('events').doc('event-1').get())
+            .data()!;
+
+        expect(data['tags'], ['u17']);
+        expect(data['capaciteMax'], 24);
+      });
+    });
+
+    // Le poste part au serveur, seul. C'est la contrainte de Firestore -- un
+    // seul champ tableau par index composite -- et non un choix de produit.
+    group('le fil filtre par poste au serveur', () {
+      test('ne rend que les evenements qui visent un poste demande', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+
+        await repository.createEvent(_event(
+          id: 'lateraux',
+          positions: const [FootballPosition.leftBack],
+          createdAt: DateTime(2026, 6, 3),
+        ));
+        await repository.createEvent(_event(
+          id: 'attaquants',
+          positions: const [FootballPosition.striker],
+          createdAt: DateTime(2026, 6, 2),
+        ));
+        await repository.createEvent(_event(
+          id: 'sans-poste',
+          createdAt: DateTime(2026, 6, 1),
+        ));
+
+        final batch = await repository
+            .watchEvents(
+              filter: const EventQueryFilter(
+                positions: [FootballPosition.leftBack],
+              ),
+            )
+            .first;
+
+        expect(batch.events.map((event) => event.id), ['lateraux']);
+      });
+
+      test('un fil sans filtre rend tout, y compris les anciens', () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = EventRepository(firestore: firestore);
+
+        await repository.createEvent(_event(
+          id: 'code',
+          positions: const [FootballPosition.leftBack],
+          createdAt: DateTime(2026, 6, 2),
+        ));
+        await repository.createEvent(_event(
+          id: 'ancien',
+          createdAt: DateTime(2026, 6, 1),
+        ));
+
+        final batch = await repository.watchEvents().first;
+
+        expect(batch.events.map((event) => event.id).toSet(), {
+          'code',
+          'ancien',
+        });
+      });
+
+      test('la cle de cache ignore l ordre de selection', () {
+        const lbCb = EventQueryFilter(
+          positions: [FootballPosition.leftBack, FootballPosition.centreBack],
+        );
+        const cbLb = EventQueryFilter(
+          positions: [FootballPosition.centreBack, FootballPosition.leftBack],
+        );
+        const none = EventQueryFilter();
+
+        expect(lbCb.cacheKey, cbLb.cacheKey);
+        expect(lbCb.cacheKey, isNot(none.cacheKey));
+      });
+
+      test('les codes envoyes sont plafonnes par array-contains-any', () {
+        final filter = EventQueryFilter(
+          positions: List<FootballPosition>.from(FootballPosition.values)
+            ..addAll(FootballPosition.values),
+        );
+
+        expect(
+          filter.positionCodesForQuery,
+          hasLength(FootballPosition.maxPerQuery),
+        );
       });
     });
   });

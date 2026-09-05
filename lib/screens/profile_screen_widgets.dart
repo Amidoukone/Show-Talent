@@ -444,25 +444,47 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// Ce qu'il reste a renseigner pour que le dossier scout soit exploitable.
+/// Ce qu'il reste a renseigner, en deux rangs qui ne pesent pas pareil.
 ///
 /// Affiche uniquement au titulaire du profil (voir l'appel dans
-/// `_buildAdvancedFootballSectionClean`). La liste est celle de
-/// [AppUser.missingScoutRequirements] : cet ecran ne decide de rien, il
-/// recopie. Deux endroits qui decident, c'est un ecran qui reclame un champ
-/// dont la regle n'a plus besoin.
+/// `_buildAdvancedFootballSectionClean`). Les listes viennent de
+/// [AppUser.missingSearchRequirements] et
+/// [AppUser.missingScoutOnlyRequirements] : cet ecran ne decide de rien et ne
+/// soustrait rien, il recopie. Deux endroits qui decident, c'est un ecran qui
+/// reclame un champ dont la regle n'a plus besoin.
+///
+/// Le premier rang existe parce que l'ancienne version n'en avait qu'un. Neuf
+/// exigences y etaient alignees a l'identique, alors que trois d'entre elles
+/// -- date de naissance, poste, nationalite -- decident si la fiche existe
+/// dans une recherche, et les six autres seulement si elle est complete. Un
+/// joueur remplissait sa taille et son pied fort, voyait la liste raccourcir,
+/// et restait introuvable de tout recruteur sans qu'aucun ecran ne fasse la
+/// difference.
 ///
 /// Le libelle porte la raison plutot que l'injonction : un joueur a qui l'on
 /// demande sa date de naissance sans dire pourquoi la saisit mal ou pas du
 /// tout.
 class _MissingScoutRequirements extends StatelessWidget {
-  const _MissingScoutRequirements({required this.missing});
+  const _MissingScoutRequirements({
+    required this.blocking,
+    required this.missing,
+    this.hiddenByChoice = false,
+  });
 
+  /// Ce qui empeche la fiche d'apparaitre dans une recherche.
+  final List<String> blocking;
+
+  /// Ce qui manque au dossier une fois la trouvabilite acquise.
   final List<String> missing;
+
+  /// La fiche est complete, mais son titulaire l'a mise hors des recherches.
+  final bool hiddenByChoice;
 
   @override
   Widget build(BuildContext context) {
-    if (missing.isEmpty) return const SizedBox.shrink();
+    if (blocking.isEmpty && missing.isEmpty && !hiddenByChoice) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       width: double.infinity,
@@ -471,56 +493,111 @@ class _MissingScoutRequirements extends StatelessWidget {
       decoration: BoxDecoration(
         color: AdColors.surfaceCard,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AdColors.divider),
+        border: Border.all(
+          color: blocking.isEmpty ? AdColors.divider : AdColors.warning,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Il reste à renseigner',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              color: AdColors.onSurface,
+          if (blocking.isNotEmpty) ...[
+            _block(
+              title: 'Votre fiche n’apparaît dans aucune recherche',
+              subtitle:
+                  'Un recruteur qui filtre par poste, par âge ou par '
+                  'nationalité ne peut pas vous trouver tant qu’il manque :',
+              entries: blocking,
+              icon: Icons.error_outline_rounded,
+              color: AdColors.warning,
+              emphasised: true,
             ),
-          ),
-          const SizedBox(height: 2),
-          const Text(
-            'Un club ne peut pas décider sur un dossier incomplet.',
-            style: TextStyle(fontSize: 12, color: AdColors.onSurfaceMuted),
-          ),
-          const SizedBox(height: 8),
-          // Une colonne, pas une ligne : ces libelles sont des phrases, et un
-          // Wrap horizontal les couperait sur un ecran etroit.
-          ...missing.map(
-            (requirement) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2),
-                    child: Icon(
-                      Icons.radio_button_unchecked,
-                      size: 14,
-                      color: AdColors.warning,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      requirement,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AdColors.onSurface,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            if (missing.isNotEmpty) const SizedBox(height: 14),
+          ],
+          // Dit seulement une fois la trouvabilite acquise : annoncer « vous
+          // etes trouvable » au-dessus d'un bloc qui dit le contraire serait
+          // la contradiction que ce widget existe pour supprimer.
+          if (hiddenByChoice) ...[
+            _block(
+              title: 'Votre fiche est complète, mais masquée',
+              subtitle:
+                  'Vous avez choisi de ne pas apparaître dans les recherches. '
+                  'Rendez votre profil public pour être trouvé.',
+              entries: const <String>[],
+              icon: Icons.visibility_off_outlined,
+              color: AdColors.onSurfaceMuted,
             ),
-          ),
+            if (missing.isNotEmpty) const SizedBox(height: 14),
+          ],
+          if (missing.isNotEmpty)
+            _block(
+              title: blocking.isEmpty
+                  ? 'Il reste à renseigner'
+                  : 'Puis, pour un dossier complet',
+              subtitle: 'Un club ne peut pas décider sur un dossier incomplet.',
+              entries: missing,
+              icon: Icons.radio_button_unchecked,
+              color: AdColors.onSurfaceMuted,
+            ),
         ],
       ),
+    );
+  }
+
+  Widget _block({
+    required String title,
+    required String subtitle,
+    required List<String> entries,
+    required IconData icon,
+    required Color color,
+    bool emphasised = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: emphasised ? AdColors.warning : AdColors.onSurface,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AdColors.onSurfaceMuted,
+          ),
+        ),
+        if (entries.isNotEmpty) const SizedBox(height: 8),
+        // Une colonne, pas une ligne : ces libelles sont des phrases, et un
+        // Wrap horizontal les couperait sur un ecran etroit.
+        ...entries.map(
+          (requirement) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Icon(icon, size: 14, color: color),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    requirement,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AdColors.onSurface,
+                      fontWeight: emphasised ? FontWeight.w700 : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

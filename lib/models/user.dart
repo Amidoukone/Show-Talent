@@ -782,6 +782,73 @@ class AppUser {
   ///
   /// Vide pour un compte qui n'est pas un joueur : la notion ne s'y applique
   /// pas, et c'est [hasScoutReadyProfile] qui garde ce cas.
+  /// Les trois libelles partages entre les deux listes ci-dessous.
+  ///
+  /// Ecrits une fois : `missingSearchRequirements` et
+  /// `missingScoutRequirements` reclament litteralement le meme champ, et deux
+  /// chaines recopiees finissent par diverger d'un accent ou d'un pluriel --
+  /// donc par afficher deux fois la meme exigence sous deux noms au meme
+  /// joueur.
+  static const String requirementBirthDate = 'Date de naissance';
+  static const String requirementNationality = 'Nationalité';
+  static const String requirementPosition = 'Poste';
+
+  /// Ce qui empeche cette fiche d'apparaitre dans **toute** recherche.
+  ///
+  /// A distinguer de [missingScoutRequirements], et c'est tout l'objet de ce
+  /// getter. Les deux listes se ressemblent et ne pesent pas du tout la meme
+  /// chose : il manque « Pied fort » et le dossier est moins complet ; il
+  /// manque « Poste » et le joueur **n'existe dans aucun resultat**, parce que
+  /// `computeIsSearchable` (functions/src/user_search_fields.ts) refuse alors
+  /// `isSearchable`, et que `TalentSearchRepository` interroge
+  /// `where('isSearchable', isEqualTo: true)` avant tout autre critere.
+  ///
+  /// Les presenter dans une seule liste de neuf entrees, toutes au meme rang,
+  /// revenait a cacher la difference : le joueur remplissait sa taille et son
+  /// pied fort, voyait la liste raccourcir, et restait invisible.
+  ///
+  /// Miroir exact des trois conditions *renseignables* du serveur. Les autres
+  /// -- compte desactive, profil prive -- ne sont pas des oublis mais des
+  /// etats, et [isFindableByRecruiters] les porte.
+  List<String> get missingSearchRequirements {
+    if (!isPlayer) return const <String>[];
+
+    final profile = football;
+    final missing = <String>[];
+
+    // `birthYear` et non `birthDate` : c'est l'annee derivee cote serveur qui
+    // decide, et elle est lisible par tout le monde, alors que la date
+    // complete ne quitte pas `users/{uid}/private/contact`. Reclame malgre
+    // tout par le nom du champ que le joueur remplit.
+    if (profile.birthYear == null) missing.add(requirementBirthDate);
+    if (profile.positions.isEmpty) missing.add(requirementPosition);
+    if (profile.nationalities.isEmpty) missing.add(requirementNationality);
+
+    return List<String>.unmodifiable(missing);
+  }
+
+  /// Vrai quand un recruteur peut tomber sur cette fiche.
+  ///
+  /// Reprend les conditions de `computeIsSearchable` dans le meme ordre :
+  /// le role, l'etat du compte, le choix de confidentialite, puis les trois
+  /// champs. `isSearchable` lui-meme n'est pas lu ici -- il est derive par un
+  /// trigger, donc en retard d'un aller-retour juste apres un enregistrement,
+  /// et c'est precisement l'instant ou le joueur regarde son ecran.
+  bool get isFindableByRecruiters {
+    if (!isPlayer) return false;
+    if (!estActif || authDisabled) return false;
+    if (!profilePublic) return false;
+    return missingSearchRequirements.isEmpty;
+  }
+
+  /// Vrai quand la fiche est complete mais volontairement hors des recherches.
+  ///
+  /// Nomme a part parce que ce n'est pas un oubli : reclamer un champ deja
+  /// rempli a un joueur qui a choisi de ne pas etre visible serait faux, et
+  /// se taire le laisserait chercher ce qui ne va pas.
+  bool get isHiddenFromSearchByChoice =>
+      isPlayer && !profilePublic && missingSearchRequirements.isEmpty;
+
   List<String> get missingScoutRequirements {
     if (!isPlayer) return const <String>[];
 
@@ -801,10 +868,10 @@ class AppUser {
     // Reclame par le nom du champ que le joueur remplit (« Date de
     // naissance », profil de base) et non par celui de l'annee derivee, qui
     // n'est editable sur aucun ecran.
-    if (profile.birthYear == null) missing.add('Date de naissance');
+    if (profile.birthYear == null) missing.add(requirementBirthDate);
 
-    if (profile.nationalities.isEmpty) missing.add('Nationalité');
-    if (profile.positions.isEmpty) missing.add('Poste');
+    if (profile.nationalities.isEmpty) missing.add(requirementNationality);
+    if (profile.positions.isEmpty) missing.add(requirementPosition);
     if (profile.strongFoot == null) missing.add('Pied fort');
     if (profile.heightCm == null) missing.add('Taille');
     if (profile.contractStatus == null) {
@@ -823,6 +890,22 @@ class AppUser {
     if (!hasEvidence) missing.add('Une vidéo publiée ou un CV');
 
     return List<String>.unmodifiable(missing);
+  }
+
+  /// Ce qui manque au dossier **une fois la trouvabilite acquise**.
+  ///
+  /// [missingScoutRequirements] moins [missingSearchRequirements]. Calcule ici
+  /// et non dans l'ecran : c'est la meme regle que partout dans ce fichier --
+  /// l'ecran recopie, il ne soustrait pas. Sans ce getter, la difference
+  /// serait faite a l'affichage, donc a un endroit qui peut diverger de la
+  /// liste qu'il pretend completer.
+  List<String> get missingScoutOnlyRequirements {
+    final blocking = missingSearchRequirements.toSet();
+    return List<String>.unmodifiable(
+      missingScoutRequirements.where(
+        (requirement) => !blocking.contains(requirement),
+      ),
+    );
   }
 
   /// Dossier exploitable : il ne manque plus rien.

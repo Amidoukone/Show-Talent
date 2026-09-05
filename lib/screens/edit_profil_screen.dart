@@ -222,18 +222,70 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  /// La date de naissance, exigee des joueurs et d'eux seuls.
+  ///
+  /// `computeIsSearchable` refuse `isSearchable` sans `birthYear`, qui en est
+  /// derive : un joueur sans date de naissance n'apparait dans aucune
+  /// recherche de recruteur, et rien ne le lui disait -- le champ etait
+  /// facultatif et le restait sans consequence visible.
+  ///
+  /// Le role strict, et non `_isPlayer` qui englobe le coach : un coach n'est
+  /// jamais cherchable (la regle exige `role == "joueur"`), donc lui reclamer
+  /// sa date de naissance serait une exigence sans contrepartie.
   Widget _buildBirthDateField(BuildContext context) {
+    return FormField<DateTime>(
+      initialValue: _selectedBirthDate,
+      validator: (_) {
+        if (!user.isPlayer) return null;
+        if (_selectedBirthDate != null) return null;
+        return 'Renseignez votre date de naissance : sans elle, votre fiche '
+            'n’apparaît dans aucune recherche de recruteur.';
+      },
+      builder: (state) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildBirthDateInput(context, state),
+          if (state.hasError) ...[
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: Text(
+                state.errorText!,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBirthDateInput(
+    BuildContext context,
+    FormFieldState<DateTime> state,
+  ) {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: _pickBirthDate,
+      onTap: () async {
+        await _pickBirthDate();
+        state.didChange(_selectedBirthDate);
+      },
       child: InputDecorator(
         decoration: InputDecoration(
-          labelText: 'Date de naissance',
+          labelText: user.isPlayer
+              ? 'Date de naissance *'
+              : 'Date de naissance',
           prefixIcon: const Icon(Icons.cake_outlined, color: kPrimary),
           suffixIcon: _selectedBirthDate != null
               ? IconButton(
                   icon: const Icon(Icons.close_rounded),
-                  onPressed: () => setState(() => _selectedBirthDate = null),
+                  onPressed: () {
+                    setState(() => _selectedBirthDate = null);
+                    state.didChange(null);
+                  },
                   tooltip: 'Effacer',
                 )
               : null,
