@@ -45,12 +45,15 @@ Full gate including backend scheduler signal:
 npm.cmd run quality:coherence:check:full
 ```
 
-Cross-repo gate including external admin repository checks:
+Cross-repo gate including external admin repository checks. The admin repo
+path is auto-detected from `ADFOOT_ADMIN_REPO`, or from the default sibling
+layout (`%USERPROFILE%\Desktop\ODC_PROJECT\WEB\Show_talent_web`) -- pass
+`-AdminRepoPath` only if neither applies on your machine:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\run-product-coherence-gate.ps1 `
   -IncludeBackendGate `
-  -AdminRepoPath "C:\Users\Ing.Amidou.KONE\Desktop\MyApp\show_talent - web"
+  -AdminRepoPath "C:\Users\konea\Desktop\ODC_PROJECT\WEB\Show_talent_web"
 ```
 
 ## Video release quality gate

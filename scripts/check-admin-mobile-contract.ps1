@@ -64,7 +64,7 @@ if ([string]::IsNullOrWhiteSpace($AdminRepoPath)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($AdminRepoPath)) {
-    $defaultAdminRepoPath = Join-Path $env:USERPROFILE "Desktop\MyApp\show_talent - web"
+    $defaultAdminRepoPath = Join-Path $env:USERPROFILE "Desktop\ODC_PROJECT\WEB\Show_talent_web"
     if (Test-Path -LiteralPath $defaultAdminRepoPath) {
         $AdminRepoPath = $defaultAdminRepoPath
     }
