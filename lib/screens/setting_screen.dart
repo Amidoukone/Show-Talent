@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/legal/terms_acceptance_service.dart';
 import 'package:adfoot/services/users/user_repository.dart';
@@ -132,7 +133,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return true;
     } catch (e, st) {
       AppLogger.debug('SettingsScreen update privacy setting error: $e\n$st');
-      AdFeedback.error('Erreur', 'Impossible de sauvegarder les paramètres.');
+      if (!mounted) return false;
+      final l10n = AppLocalizations.of(context)!;
+      AdFeedback.error(
+        l10n.settingsGenericErrorTitle,
+        l10n.settingsSaveFailureMessage,
+      );
       return false;
     }
   }
@@ -165,11 +171,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     if (ok) {
+      final l10n = AppLocalizations.of(context)!;
       AdFeedback.info(
-        'Confidentialité',
+        l10n.settingsPrivacySectionTitle,
         value
-            ? 'Votre profil est maintenant visible.'
-            : 'Votre profil est désormais restreint.',
+            ? l10n.settingsProfileVisibleMessage
+            : l10n.settingsProfileRestrictedMessage,
       );
     }
   }
@@ -198,22 +205,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     if (ok) {
+      final l10n = AppLocalizations.of(context)!;
       AdFeedback.info(
-        'Messages',
+        l10n.settingsMessagesToggleTitle,
         value
-            ? 'Les messages sont autorisés.'
-            : 'Les messages sont désactivés.',
+            ? l10n.settingsMessagesAllowedMessage
+            : l10n.settingsMessagesDisabledMessage,
       );
     }
   }
 
   Future<void> _handleSignOut() async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await AdDialogs.confirm(
       context: context,
-      title: 'Se déconnecter',
-      message: 'Voulez-vous fermer votre session Adfoot sur cet appareil ?',
-      confirmLabel: 'Se déconnecter',
-      cancelLabel: 'Annuler',
+      title: l10n.settingsSignOutAction,
+      message: l10n.settingsSignOutConfirmMessage,
+      confirmLabel: l10n.settingsSignOutAction,
+      cancelLabel: l10n.commonCancel,
     );
     if (!confirmed) {
       return;
@@ -225,19 +234,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     if (_loadingRole) {
       return Scaffold(
-        appBar: const AdAppBar(
-          title: 'Outils',
-          subtitle: 'Chargement du compte',
+        appBar: AdAppBar(
+          title: l10n.settingsAppBarTitle,
+          subtitle: l10n.settingsLoadingSubtitle,
           showBottomDivider: true,
         ),
-        body: const Center(
+        body: Center(
           child: Padding(
-            padding: EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
             child: AdStatePanel.loading(
-              title: 'Chargement des outils',
-              message: 'Synchronisation des paramètres du compte.',
+              title: l10n.settingsLoadingTitle,
+              message: l10n.settingsLoadingMessage,
             ),
           ),
         ),
@@ -246,21 +256,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (_sessionUnavailable) {
       return Scaffold(
-        appBar: const AdAppBar(
-          title: 'Outils',
-          subtitle: 'Session du compte',
+        appBar: AdAppBar(
+          title: l10n.settingsAppBarTitle,
+          subtitle: l10n.settingsSessionSubtitle,
           showBottomDivider: true,
         ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: AdStatePanel.error(
-              title: 'Session invalide',
-              message: 'Impossible de charger les paramètres du compte.',
+              title: l10n.settingsSessionInvalidTitle,
+              message: l10n.settingsSessionInvalidMessage,
               action: FilledButton.icon(
                 onPressed: _retryLoadUserSettings,
                 icon: const Icon(Icons.refresh_rounded),
-                label: const Text('Réessayer'),
+                label: Text(l10n.commonRetry),
               ),
             ),
           ),
@@ -270,12 +280,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       appBar: AdAppBar(
-        title: 'Outils',
-        subtitle: 'Compte et sécurité',
+        title: l10n.settingsAppBarTitle,
+        subtitle: l10n.settingsMainSubtitle,
         showBottomDivider: true,
         actions: [
           IconButton(
-            tooltip: 'Actualiser',
+            tooltip: l10n.settingsRefreshTooltip,
             onPressed: _isDeleting ? null : _retryLoadUserSettings,
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -294,13 +304,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _buildToolsHeader(),
                     const SizedBox(height: 16),
                     _buildSectionCard(
-                      title: 'Compte',
+                      title: l10n.settingsAccountSectionTitle,
                       icon: Icons.manage_accounts_outlined,
                       children: [
                         _buildActionTile(
                           icon: Icons.logout_rounded,
-                          title: 'Se déconnecter',
-                          subtitle: 'Fermer la session sur cet appareil.',
+                          title: l10n.settingsSignOutAction,
+                          subtitle: l10n.settingsSignOutSubtitle,
                           enabled: !_isDeleting,
                           onTap: _handleSignOut,
                         ),
@@ -308,14 +318,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildSectionCard(
-                      title: 'Confidentialité',
+                      title: l10n.settingsPrivacySectionTitle,
                       icon: Icons.privacy_tip_outlined,
                       children: [
                         if (_role != 'fan')
                           _buildSwitchTile(
                             icon: Icons.visibility_outlined,
-                            title: 'Visibilité du profil',
-                            subtitle: _profileVisibilityLabel(),
+                            title: l10n.settingsProfileVisibilityTitle,
+                            subtitle: _profileVisibilityLabel(l10n),
                             value: _profilePublic,
                             loading: _isSavingPrivacySetting(_profilePublicKey),
                             enabled: !_isDeleting,
@@ -324,17 +334,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         else
                           _buildInfoBlock(
                             icon: Icons.visibility_off_outlined,
-                            title: 'Profil fan',
-                            message:
-                                'La visibilité du profil fan reste limitée aux usages nécessaires de la plateforme.',
+                            title: l10n.settingsFanProfileTitle,
+                            message: l10n.settingsFanProfileMessage,
                           ),
                         if (_role == 'joueur' ||
                             isOpportunityPublisherRole(_role)) ...[
                           _buildDivider(),
                           _buildSwitchTile(
                             icon: Icons.message_outlined,
-                            title: 'Autoriser les messages',
-                            subtitle: _messagePermissionLabel(),
+                            title: l10n.settingsAllowMessagesTitle,
+                            subtitle: _messagePermissionLabel(l10n),
                             value: _allowMessages,
                             loading: _isSavingPrivacySetting(_allowMessagesKey),
                             enabled: !_isDeleting,
@@ -344,52 +353,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildDivider(),
                         _buildActionTile(
                           icon: Icons.info_outline_rounded,
-                          title: 'Utilisation des données',
-                          subtitle:
-                              'Scouting, opportunités sportives et mise en relation encadrée.',
+                          title: l10n.settingsDataUsageTitle,
+                          subtitle: l10n.settingsDataUsageSubtitle,
                           onTap: _showDataUsageNotice,
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
                     _buildSectionCard(
-                      title: 'Sécurité et opportunités',
+                      title: l10n.settingsSecuritySectionTitle,
                       icon: Icons.shield_outlined,
                       children: [
                         _buildInfoBlock(
                           icon: Icons.verified_user_outlined,
-                          title: 'Règle officielle Adfoot',
-                          message:
-                              'Avant tout essai, contrat, voyage ou paiement, faites vérifier l’opportunité par l’équipe Adfoot.',
+                          title: l10n.settingsOfficialRuleTitle,
+                          message: l10n.settingsOfficialRuleMessage,
                         ),
                         _buildDivider(),
-                        _buildChecklistItem(
-                          'Ne payez jamais un agent ou intermédiaire sans validation officielle.',
-                        ),
-                        _buildChecklistItem(
-                          'Conservez les échanges importants dans les canaux Adfoot.',
-                        ),
-                        _buildChecklistItem(
-                          'Signalez toute promesse floue, pression ou demande suspecte.',
-                        ),
+                        _buildChecklistItem(l10n.settingsChecklistPayment),
+                        _buildChecklistItem(l10n.settingsChecklistKeepRecords),
+                        _buildChecklistItem(l10n.settingsChecklistReport),
                         _buildDivider(),
                         _buildActionTile(
                           icon: Icons.support_agent_outlined,
-                          title: 'Contacter l’équipe Adfoot',
-                          subtitle: 'Ouvrir WhatsApp : $_supportPhoneDisplay',
+                          title: l10n.settingsContactTeamTile,
+                          subtitle: l10n.settingsContactTeamSubtitle(
+                            _supportPhoneDisplay,
+                          ),
                           onTap: _showSupportNotice,
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
                     _buildSectionCard(
-                      title: 'Documents',
+                      title: l10n.settingsDocumentsSectionTitle,
                       icon: Icons.gavel_rounded,
                       children: [
                         _buildActionTile(
                           icon: Icons.description_outlined,
-                          title: 'Conditions générales d’utilisation',
-                          subtitle: _acceptedTermsSubtitle(),
+                          title: l10n.settingsTermsTile,
+                          subtitle: _acceptedTermsSubtitle(l10n),
                           onTap: () => _openLegalDocument(
                             _termsService.cached.termsUrl,
                           ),
@@ -397,8 +400,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildDivider(),
                         _buildActionTile(
                           icon: Icons.privacy_tip_outlined,
-                          title: 'Politique de confidentialité',
-                          subtitle: 'Quelles données sont traitées, et pourquoi',
+                          title: l10n.settingsPrivacyTile,
+                          subtitle: l10n.settingsPrivacyTileSubtitle,
                           onTap: () => _openLegalDocument(
                             _termsService.cached.privacyUrl,
                           ),
@@ -407,19 +410,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildSectionCard(
-                      title: 'Zone sensible',
+                      title: l10n.settingsSensitiveSectionTitle,
                       icon: Icons.warning_amber_rounded,
                       children: [
                         _buildInfoBlock(
                           icon: Icons.delete_forever_outlined,
-                          title: 'Suppression du compte',
-                          message:
-                              'Cette action supprime définitivement votre compte et les données associées.',
+                          title: l10n.settingsDeleteAccountInfoTitle,
+                          message: l10n.settingsDeleteAccountInfoMessage,
                           tone: _InfoTone.danger,
                         ),
                         const SizedBox(height: 12),
                         AdButton(
-                          label: 'Supprimer mon compte',
+                          label: l10n.settingsDeleteAccountAction,
                           leading: Icons.delete_forever_outlined,
                           kind: AdButtonKind.danger,
                           loading: _isDeleting,
@@ -447,9 +449,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // =========================================================
 
   void _showDataUsageNotice() {
+    final l10n = AppLocalizations.of(context)!;
     AdFeedback.info(
-      'Utilisation des données',
-      'Les données servent à sécuriser le profil, les opportunités et les mises en relation Adfoot.',
+      l10n.settingsDataUsageTitle,
+      l10n.settingsDataUsageMessage,
       duration: const Duration(seconds: 5),
     );
   }
@@ -463,14 +466,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ///
   /// A consent the user cannot go back and read is a consent they have to take
   /// on trust, which is the opposite of the point.
-  String _acceptedTermsSubtitle() {
+  String _acceptedTermsSubtitle(AppLocalizations l10n) {
     final version = Get.isRegistered<UserController>()
         ? (Get.find<UserController>().user?.acceptedTermsVersion?.trim() ?? '')
         : '';
     if (version.isEmpty) {
-      return 'Lire le document';
+      return l10n.settingsReadDocument;
     }
-    return 'Version , acceptée';
+    return l10n.settingsAcceptedVersionLabel(version);
   }
 
   Future<void> _openLegalDocument(String url) async {
@@ -494,9 +497,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     if (!mounted) return;
+    // Meme message que TermsAcceptanceScreen pour le meme cas (document
+    // legal qui ne s'ouvre pas) : reutilise ses cles plutot que d'en dupliquer
+    // le texte.
+    final l10n = AppLocalizations.of(context)!;
     AdFeedback.error(
-      'Ouverture impossible',
-      'Impossible d’ouvrir le document. Adresse : $url',
+      l10n.termsOpenFailureTitle,
+      l10n.termsOpenFailureMessage(url),
     );
   }
 
@@ -509,9 +516,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) {
       return;
     }
+    final l10n = AppLocalizations.of(context)!;
     AdFeedback.info(
-      'Équipe Adfoot',
-      'Faites vérifier toute opportunité via ${AdfootSupport.website} ou WhatsApp : $_supportPhoneDisplay.',
+      l10n.settingsSupportNoticeTitle,
+      l10n.settingsSupportNoticeMessage(
+        AdfootSupport.website,
+        _supportPhoneDisplay,
+      ),
       duration: const Duration(seconds: 5),
     );
   }
@@ -525,6 +536,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// belongs to the Profil destination. Outils keeps the session and the
   /// account controls, and only says where the rest went.
   Widget _buildToolsHeader() {
+    final l10n = AppLocalizations.of(context)!;
     return AdSurfaceCard(
       padding: const EdgeInsets.all(AdSpacing.lg),
       child: Column(
@@ -550,22 +562,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(width: AdSpacing.md),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Paramètres du compte',
-                      style: TextStyle(
+                      l10n.settingsHeaderTitle,
+                      style: const TextStyle(
                         color: AdColors.onSurface,
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      'Confidentialité, sécurité et session de cet appareil.',
-                      style: TextStyle(
+                      l10n.settingsHeaderSubtitle,
+                      style: const TextStyle(
                         color: AdColors.onSurfaceMuted,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -579,10 +591,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: AdSpacing.md),
           _buildInfoBlock(
             icon: Icons.person_outline,
-            title: 'Vos informations sont dans Profil',
-            message:
-                'Nom, photo, bio et profil complet se consultent et se '
-                'modifient depuis l’onglet Profil.',
+            title: l10n.settingsProfileInProfileTabTitle,
+            message: l10n.settingsProfileInProfileTabMessage,
           ),
         ],
       ),
@@ -888,14 +898,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final uid = _authSessionService.currentUser?.uid;
     if (uid == null) return;
 
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await AdDialogs.confirm(
       context: context,
-      title: 'Supprimer mon compte',
-      message:
-          'Cette action supprimera définitivement votre compte et '
-          'toutes vos données. Voulez-vous continuer ?',
-      confirmLabel: 'Supprimer',
-      cancelLabel: 'Annuler',
+      title: l10n.settingsDeleteAccountAction,
+      message: l10n.settingsDeleteAccountConfirmMessage,
+      confirmLabel: l10n.settingsDeleteAction,
+      cancelLabel: l10n.commonCancel,
       danger: true,
     );
     if (!confirmed) return;
@@ -905,8 +914,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final blockingDialog = AdDialogs.showLoading(
       context: context,
-      title: 'Suppression du compte',
-      message: 'Suppression en cours, veuillez patienter.',
+      title: l10n.settingsDeleteAccountInfoTitle,
+      message: l10n.settingsDeletingMessage,
     );
     var dialogOpen = true;
     void closeBlockingDialog() {
@@ -926,8 +935,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       Get.offAllNamed(AppRoutes.login);
       AdFeedback.success(
-        'Compte supprimé',
-        'Votre compte a été supprimé avec succès.',
+        l10n.settingsAccountDeletedTitle,
+        l10n.settingsAccountDeletedMessage,
       );
     } on AccountCleanupException catch (error) {
       closeBlockingDialog();
@@ -937,13 +946,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return;
       }
 
-      AdFeedback.error('Suppression impossible', error.message);
+      AdFeedback.error(l10n.settingsDeleteFailureTitle, error.message);
     } catch (e, st) {
       closeBlockingDialog();
       AppLogger.debug('SettingsScreen account deletion error: $e\n$st');
       AdFeedback.error(
-        'Suppression impossible',
-        'Une erreur est survenue pendant la suppression. Merci de réessayer.',
+        l10n.settingsDeleteFailureTitle,
+        l10n.settingsDeleteGenericFailureMessage,
       );
     } finally {
       if (mounted) setState(() => _isDeleting = false);
@@ -953,12 +962,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _promptReauthenticationForDeletion(String message) async {
     if (!mounted) return;
 
+    final l10n = AppLocalizations.of(context)!;
     final reconnectNow = await AdDialogs.confirm(
       context: context,
-      title: 'Vérification de sécurité requise',
-      message: '$message\n\nReconnectez-vous puis relancez la suppression.',
-      confirmLabel: 'Me reconnecter',
-      cancelLabel: 'Plus tard',
+      title: l10n.settingsReauthRequiredTitle,
+      message: l10n.settingsReauthRequiredMessage(message),
+      confirmLabel: l10n.settingsReauthConfirm,
+      cancelLabel: l10n.settingsReauthLater,
       danger: false,
     );
 
@@ -971,8 +981,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     Get.offAllNamed(AppRoutes.login);
     AdFeedback.info(
-      'Reconnexion',
-      'Connectez-vous de nouveau puis relancez la suppression du compte.',
+      l10n.settingsReauthNoticeTitle,
+      l10n.settingsReauthNoticeMessage,
       duration: const Duration(seconds: 5),
     );
   }
@@ -981,33 +991,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // 🧩 HELPERS
   // =========================================================
 
-  String _profileVisibilityLabel() {
+  String _profileVisibilityLabel(AppLocalizations l10n) {
     switch (_role) {
       case 'joueur':
-        return 'Visible par les clubs, recruteurs et agents.';
+        return l10n.settingsVisibilityPlayer;
       case 'coach':
-        return 'Visible par les clubs, joueurs et recruteurs.';
+        return l10n.settingsVisibilityCoach;
       case 'recruteur':
       case 'agent':
       case 'club':
-        return 'Visible par les joueurs.';
+        return l10n.settingsVisibilityRecruiterAgentClub;
       default:
-        return 'Visibilité limitée.';
+        return l10n.settingsVisibilityDefault;
     }
   }
 
-  String _messagePermissionLabel() {
+  String _messagePermissionLabel(AppLocalizations l10n) {
     switch (_role) {
       case 'joueur':
-        return 'Autoriser clubs et recruteurs à vous contacter.';
+        return l10n.settingsMessagesPlayer;
       case 'club':
-        return 'Autoriser les joueurs à vous contacter.';
+        return l10n.settingsMessagesClub;
       case 'recruteur':
-        return 'Autoriser les joueurs et clubs à vous contacter.';
+        return l10n.settingsMessagesRecruiter;
       case 'agent':
-        return 'Autoriser les talents et partenaires à vous contacter.';
+        return l10n.settingsMessagesAgent;
       default:
-        return 'Contrôler les demandes de contact depuis Adfoot.';
+        return l10n.settingsMessagesDefault;
     }
   }
 }

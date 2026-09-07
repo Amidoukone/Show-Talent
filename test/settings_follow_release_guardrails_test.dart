@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  final arb = File('lib/l10n/app_fr.arb').readAsStringSync();
+
   group('Settings and follow release guardrails', () {
     test('settings screen exposes an explicit invalid session state', () {
       final settings = File(
@@ -13,11 +15,17 @@ void main() {
       expect(settings, contains('_authSessionService.currentUser?.uid'));
       expect(settings, contains('settings == null'));
       expect(settings, contains('_retryLoadUserSettings'));
-      expect(settings, contains("title: 'Session invalide'"));
-      expect(settings, contains("label: const Text('Réessayer')"));
+      // The literal wording moved into the ARB template as part of the
+      // English-localization pass; the screen now only references the
+      // AppLocalizations key.
+      expect(settings, contains('title: l10n.settingsSessionInvalidTitle'));
+      expect(settings, contains('label: Text(l10n.commonRetry)'));
       expect(
-        settings,
-        contains('Impossible de charger les paramètres du compte.'),
+        arb,
+        contains(
+          '"settingsSessionInvalidMessage": "Impossible de charger les '
+          'paramètres du compte."',
+        ),
       );
     });
 
@@ -34,9 +42,13 @@ void main() {
       expect(settings, contains('Get.find<UserController>().refreshUser()'));
       expect(settings, contains("case 'recruteur':"));
       expect(settings, contains("case 'agent':"));
+      expect(settings, contains('l10n.settingsMessagesAgent'));
       expect(
-        settings,
-        contains('Autoriser les talents et partenaires à vous contacter.'),
+        arb,
+        contains(
+          '"settingsMessagesAgent": "Autoriser les talents et partenaires '
+          'à vous contacter."',
+        ),
       );
     });
 
@@ -49,9 +61,11 @@ void main() {
         settings,
         contains("import 'package:adfoot/widgets/ad_app_bar.dart';"),
       );
-      expect(settings, contains('appBar: const AdAppBar('));
-      expect(settings, contains("title: 'Outils'"));
-      expect(settings, contains("subtitle: 'Compte et sécurité'"));
+      expect(settings, contains('appBar: AdAppBar('));
+      expect(settings, contains('title: l10n.settingsAppBarTitle'));
+      expect(settings, contains('subtitle: l10n.settingsMainSubtitle'));
+      expect(arb, contains('"settingsAppBarTitle": "Outils"'));
+      expect(arb, contains('"settingsMainSubtitle": "Compte et sécurité"'));
       expect(settings, contains('AdSurfaceCard'));
       expect(settings, contains('_buildToolsHeader'));
       expect(settings, contains('_buildSectionCard'));
@@ -61,7 +75,11 @@ void main() {
       expect(settings, contains('_showDataUsageNotice'));
       expect(settings, contains('_showSupportNotice'));
       expect(settings, contains('AdButtonKind.danger'));
-      expect(settings, contains('Supprimer mon compte'));
+      expect(settings, contains('l10n.settingsDeleteAccountAction'));
+      expect(
+        arb,
+        contains('"settingsDeleteAccountAction": "Supprimer mon compte"'),
+      );
     });
 
     test('tools screen holds no profile identity and no profile route', () {
@@ -94,10 +112,19 @@ void main() {
       );
 
       // What it keeps: the session and the account controls.
-      expect(settings, contains("title: 'Se déconnecter'"));
-      expect(settings, contains("title: 'Confidentialité'"));
-      expect(settings, contains('Supprimer mon compte'));
-      expect(settings, contains('Vos informations sont dans Profil'));
+      expect(settings, contains('title: l10n.settingsSignOutAction'));
+      expect(settings, contains('title: l10n.settingsPrivacySectionTitle'));
+      expect(settings, contains('l10n.settingsDeleteAccountAction'));
+      expect(settings, contains('l10n.settingsProfileInProfileTabTitle'));
+      expect(arb, contains('"settingsSignOutAction": "Se déconnecter"'));
+      expect(arb, contains('"settingsPrivacySectionTitle": "Confidentialité"'));
+      expect(
+        arb,
+        contains(
+          '"settingsProfileInProfileTabTitle": "Vos informations sont '
+          'dans Profil"',
+        ),
+      );
     });
 
     test('the profile surface owns the account identity', () {

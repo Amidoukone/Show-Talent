@@ -4,9 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Verifies the ARB -> AppLocalizations pipeline end to end for each screen
 /// migrated so far (login, signup, verify email, reset password, terms
-/// acceptance, main navigation shell): both locales resolve, the French
-/// template is not silently used as an English fallback, and parameterized
-/// strings substitute their placeholder correctly in each language.
+/// acceptance, main navigation shell, settings): both locales resolve, the
+/// French template is not silently used as an English fallback, and
+/// parameterized strings substitute their placeholder correctly in each
+/// language.
 void main() {
   Future<AppLocalizations> resolve(
     WidgetTester tester,
@@ -65,6 +66,19 @@ void main() {
     );
     expect(l10n.mainNavCareerLabel, 'Carrière');
     expect(l10n.commonRetry, 'Réessayer');
+    expect(
+      l10n.settingsAcceptedVersionLabel('2.1'),
+      'Version 2.1, acceptée',
+    );
+    expect(
+      l10n.settingsContactTeamSubtitle('+225 00 00 00 00'),
+      'Ouvrir WhatsApp : +225 00 00 00 00',
+    );
+    expect(
+      l10n.settingsSupportNoticeMessage('adfoot.org', '+225 00 00 00 00'),
+      'Faites vérifier toute opportunité via adfoot.org ou WhatsApp : '
+      '+225 00 00 00 00.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -105,5 +119,18 @@ void main() {
     );
     expect(l10n.mainNavCareerLabel, isNot('Carrière'));
     expect(l10n.commonRetry, 'Retry');
+    expect(
+      l10n.settingsAcceptedVersionLabel('2.1'),
+      'Version 2.1, accepted',
+    );
+    expect(
+      l10n.settingsContactTeamSubtitle('+225 00 00 00 00'),
+      'Open WhatsApp: +225 00 00 00 00',
+    );
+    expect(
+      l10n.settingsSupportNoticeMessage('adfoot.org', '+225 00 00 00 00'),
+      'Have any opportunity checked via adfoot.org or WhatsApp: '
+      '+225 00 00 00 00.',
+    );
   });
 }

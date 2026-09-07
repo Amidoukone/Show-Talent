@@ -160,5 +160,111 @@
   "mainPublishEventTitle": "Créer un événement",
   "mainPublishEventSubtitle": "Une détection, un tournoi, une date.",
   "mainProfileUnavailableTitle": "Profil indisponible",
-  "mainProfileLoadFailureMessage": "Impossible de charger le profil. Réessayez dans quelques instants."
+  "mainProfileLoadFailureMessage": "Impossible de charger le profil. Réessayez dans quelques instants.",
+
+  "settingsGenericErrorTitle": "Erreur",
+  "settingsSaveFailureMessage": "Impossible de sauvegarder les paramètres.",
+  "settingsAppBarTitle": "Outils",
+  "settingsLoadingSubtitle": "Chargement du compte",
+  "settingsLoadingTitle": "Chargement des outils",
+  "settingsLoadingMessage": "Synchronisation des paramètres du compte.",
+  "settingsSessionSubtitle": "Session du compte",
+  "settingsSessionInvalidTitle": "Session invalide",
+  "settingsSessionInvalidMessage": "Impossible de charger les paramètres du compte.",
+  "settingsMainSubtitle": "Compte et sécurité",
+  "settingsRefreshTooltip": "Actualiser",
+  "settingsAccountSectionTitle": "Compte",
+  "settingsSignOutAction": "Se déconnecter",
+  "settingsSignOutSubtitle": "Fermer la session sur cet appareil.",
+  "settingsSignOutConfirmMessage": "Voulez-vous fermer votre session Adfoot sur cet appareil ?",
+  "settingsPrivacySectionTitle": "Confidentialité",
+  "settingsProfileVisibilityTitle": "Visibilité du profil",
+  "settingsFanProfileTitle": "Profil fan",
+  "settingsFanProfileMessage": "La visibilité du profil fan reste limitée aux usages nécessaires de la plateforme.",
+  "settingsAllowMessagesTitle": "Autoriser les messages",
+  "settingsDataUsageTitle": "Utilisation des données",
+  "settingsDataUsageSubtitle": "Scouting, opportunités sportives et mise en relation encadrée.",
+  "settingsDataUsageMessage": "Les données servent à sécuriser le profil, les opportunités et les mises en relation Adfoot.",
+  "settingsProfileVisibleMessage": "Votre profil est visible.",
+  "settingsProfileRestrictedMessage": "Votre profil est restreint.",
+  "settingsMessagesToggleTitle": "Messages",
+  "settingsMessagesAllowedMessage": "Les messages sont autorisés.",
+  "settingsMessagesDisabledMessage": "Les messages sont désactivés.",
+  "settingsSecuritySectionTitle": "Sécurité et opportunités",
+  "settingsOfficialRuleTitle": "Règle officielle Adfoot",
+  "settingsOfficialRuleMessage": "Avant tout essai, contrat, voyage ou paiement, faites vérifier l’opportunité par l’équipe Adfoot.",
+  "settingsChecklistPayment": "Ne payez jamais un agent ou intermédiaire sans validation officielle.",
+  "settingsChecklistKeepRecords": "Conservez les échanges importants dans les canaux Adfoot.",
+  "settingsChecklistReport": "Signalez toute promesse floue, pression ou demande suspecte.",
+  "settingsContactTeamTile": "Contacter l’équipe Adfoot",
+  "settingsContactTeamSubtitle": "Ouvrir WhatsApp : {phone}",
+  "@settingsContactTeamSubtitle": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsSupportNoticeTitle": "Équipe Adfoot",
+  "settingsSupportNoticeMessage": "Faites vérifier toute opportunité via {website} ou WhatsApp : {phone}.",
+  "@settingsSupportNoticeMessage": {
+    "placeholders": {
+      "website": {
+        "type": "String"
+      },
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsDocumentsSectionTitle": "Documents",
+  "settingsTermsTile": "Conditions générales d’utilisation",
+  "settingsPrivacyTile": "Politique de confidentialité",
+  "settingsPrivacyTileSubtitle": "Quelles données sont traitées, et pourquoi",
+  "settingsReadDocument": "Lire le document",
+  "settingsAcceptedVersionLabel": "Version {version}, acceptée",
+  "@settingsAcceptedVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsSensitiveSectionTitle": "Zone sensible",
+  "settingsDeleteAccountInfoTitle": "Suppression du compte",
+  "settingsDeleteAccountInfoMessage": "Cette action supprime définitivement votre compte et les données associées.",
+  "settingsDeleteAccountAction": "Supprimer mon compte",
+  "settingsDeleteAccountConfirmMessage": "Cette action supprimera définitivement votre compte et toutes vos données. Voulez-vous continuer ?",
+  "settingsDeleteAction": "Supprimer",
+  "settingsDeletingMessage": "Suppression en cours, veuillez patienter.",
+  "settingsAccountDeletedTitle": "Compte supprimé",
+  "settingsAccountDeletedMessage": "Votre compte a été supprimé avec succès.",
+  "settingsDeleteFailureTitle": "Suppression impossible",
+  "settingsDeleteGenericFailureMessage": "Une erreur est survenue pendant la suppression. Merci de réessayer.",
+  "settingsReauthRequiredTitle": "Vérification de sécurité requise",
+  "settingsReauthRequiredMessage": "{message}\n\nReconnectez-vous puis relancez la suppression.",
+  "@settingsReauthRequiredMessage": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsReauthConfirm": "Me reconnecter",
+  "settingsReauthLater": "Plus tard",
+  "settingsReauthNoticeTitle": "Reconnexion",
+  "settingsReauthNoticeMessage": "Connectez-vous de nouveau puis relancez la suppression du compte.",
+  "settingsHeaderTitle": "Paramètres du compte",
+  "settingsHeaderSubtitle": "Confidentialité, sécurité et session de cet appareil.",
+  "settingsProfileInProfileTabTitle": "Vos informations sont dans Profil",
+  "settingsProfileInProfileTabMessage": "Nom, photo, bio et profil complet se consultent et se modifient depuis l’onglet Profil.",
+  "settingsVisibilityPlayer": "Visible par les clubs, recruteurs et agents.",
+  "settingsVisibilityCoach": "Visible par les clubs, joueurs et recruteurs.",
+  "settingsVisibilityRecruiterAgentClub": "Visible par les joueurs.",
+  "settingsVisibilityDefault": "Visibilité limitée.",
+  "settingsMessagesPlayer": "Autoriser clubs et recruteurs à vous contacter.",
+  "settingsMessagesClub": "Autoriser les joueurs à vous contacter.",
+  "settingsMessagesRecruiter": "Autoriser les joueurs et clubs à vous contacter.",
+  "settingsMessagesAgent": "Autoriser les talents et partenaires à vous contacter.",
+  "settingsMessagesDefault": "Contrôler les demandes de contact depuis Adfoot."
 }
