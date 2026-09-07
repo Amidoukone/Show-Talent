@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../controller/auth_controller.dart';
 import '../controller/chat_controller.dart';
 import '../controller/user_controller.dart';
+import '../l10n/generated/app_localizations.dart';
 import '../models/user.dart';
 import '../services/auth/auth_session_service.dart';
 import '../widgets/ad_app_bar.dart';
@@ -51,19 +52,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
     return Scaffold(
       appBar: AdAppBar(
-        title: 'Conversations',
-        subtitle: 'Messages et mises en relation',
+        title: l10n.conversationsTitle,
+        subtitle: l10n.conversationsSubtitle,
         centerTitle: false,
         showBottomDivider: true,
         actions: [
           // ✅ Refresh manuel (optionnel, non destructif)
           IconButton(
-            tooltip: "Rafraîchir",
+            tooltip: l10n.conversationsRefreshTooltip,
             onPressed: () => chatController.refreshConversations(),
             icon: const Icon(Icons.refresh),
           ),
@@ -74,9 +76,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
         icon: const Icon(Icons.chat_bubble_outline),
-        label: const Text(
-          'Nouveau',
-          style: TextStyle(fontWeight: FontWeight.w700),
+        label: Text(
+          l10n.conversationsNewButton,
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         elevation: 0,
       ),
@@ -88,12 +90,12 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             final currentUserId =
                 currentUser?.uid ?? _authSessionService.currentUser?.uid;
             if (currentUserId == null) {
-              return const Center(
+              return Center(
                 child: Padding(
-                  padding: EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
                   child: AdStatePanel.error(
-                    title: 'Session invalide',
-                    message: 'Utilisateur non connecté.',
+                    title: l10n.profileInvalidSessionTitle,
+                    message: l10n.profileNotSignedInMessage,
                   ),
                 ),
               );
@@ -165,9 +167,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
 
                       if (otherUserId.isEmpty) {
                         return _InfoCard(
-                          title: "Utilisateur inconnu",
-                          subtitle:
-                              "Impossible d’identifier l’autre participant.",
+                          title: l10n.conversationsUnknownUserTitle,
+                          subtitle: l10n.conversationsUnknownUserMessage,
                           icon: Icons.help_outline,
                         );
                       }
@@ -182,8 +183,8 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                       // ✅ On conserve la logique de filtrage
                       if (!otherUser.canAppearInMessagingDirectory) {
                         return _InfoCard(
-                          title: "Utilisateur inactif ou non vérifié",
-                          subtitle: "Cette conversation n’est pas disponible.",
+                          title: l10n.conversationsInactiveUserTitle,
+                          subtitle: l10n.conversationsInactiveUserMessage,
                           icon: Icons.lock_outline,
                         );
                       }
@@ -198,7 +199,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                             (conversation.lastMessage != null &&
                                 conversation.lastMessage!.trim().isNotEmpty)
                             ? conversation.lastMessage!
-                            : "Aucun message",
+                            : l10n.conversationsNoMessage,
                         dateLabel: _formatDateOrTime(
                           conversation.lastMessageDate,
                         ),
@@ -250,12 +251,13 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await AdDialogs.confirm(
       context: context,
-      title: 'Supprimer la conversation',
-      message: 'Voulez-vous vraiment supprimer cette conversation ?',
-      confirmLabel: 'Supprimer',
-      cancelLabel: 'Annuler',
+      title: l10n.conversationsDeleteTitle,
+      message: l10n.conversationsDeleteConfirmMessage,
+      confirmLabel: l10n.settingsDeleteAction,
+      cancelLabel: l10n.commonCancel,
       danger: true,
     );
     if (!confirmed) return;
@@ -264,13 +266,13 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     try {
       await chatController.deleteConversation(conversationId);
       AdFeedback.success(
-        'Conversation supprimée',
-        'La conversation a été supprimée avec succès.',
+        l10n.conversationsDeletedTitle,
+        l10n.conversationsDeletedMessage,
       );
     } catch (e) {
       AdFeedback.error(
-        'Erreur',
-        'Impossible de supprimer la conversation : $e',
+        l10n.profileActionErrorTitle,
+        l10n.conversationsDeleteFailedMessage(e.toString()),
       );
     } finally {
       if (mounted) {
@@ -280,7 +282,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   }
 
   String _formatDateOrTime(DateTime? dateTime) {
-    if (dateTime == null) return "Inconnue";
+    if (dateTime == null) return AppLocalizations.of(context)!.conversationsUnknownDate;
 
     final now = DateTime.now();
     final isToday =
@@ -386,7 +388,11 @@ class _ConversationCard extends StatelessWidget {
                         children: [
                           Expanded(
                             child: Text(
-                              user.nom.isNotEmpty ? user.nom : "Utilisateur",
+                              user.nom.isNotEmpty
+                                  ? user.nom
+                                  : AppLocalizations.of(
+                                      context,
+                                    )!.conversationsDefaultUserName,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: titleStyle,
@@ -528,17 +534,17 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: AdStatePanel.empty(
-          title: 'Aucune conversation',
-          message:
-              'Démarrez une discussion avec un utilisateur pour retrouver vos échanges ici.',
+          title: l10n.conversationsEmptyTitle,
+          message: l10n.conversationsEmptyMessage,
           action: FilledButton.icon(
             onPressed: onNewChat,
             icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('Nouvelle discussion'),
+            label: Text(l10n.conversationsNewChatButton),
           ),
         ),
       ),

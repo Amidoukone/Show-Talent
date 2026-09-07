@@ -505,5 +505,32 @@
   "selectUserContactContextTitle": "Sélection utilisateur",
   "selectUserConversationUnavailableMessage": "Conversation indisponible pour le moment.",
   "selectUserStartConversationFailedMessage": "Impossible de démarrer la conversation.",
-  "selectUserNoRoleLabel": "Rôle non renseigné"
+  "selectUserNoRoleLabel": "Rôle non renseigné",
+
+  "conversationsTitle": "Conversations",
+  "conversationsSubtitle": "Messages et mises en relation",
+  "conversationsRefreshTooltip": "Rafraîchir",
+  "conversationsNewButton": "Nouveau",
+  "conversationsUnknownUserTitle": "Utilisateur inconnu",
+  "conversationsUnknownUserMessage": "Impossible d’identifier l’autre participant.",
+  "conversationsInactiveUserTitle": "Utilisateur inactif ou non vérifié",
+  "conversationsInactiveUserMessage": "Cette conversation n’est pas disponible.",
+  "conversationsNoMessage": "Aucun message",
+  "conversationsUnknownDate": "Inconnue",
+  "conversationsDeleteTitle": "Supprimer la conversation",
+  "conversationsDeleteConfirmMessage": "Voulez-vous vraiment supprimer cette conversation ?",
+  "conversationsDeletedTitle": "Conversation supprimée",
+  "conversationsDeletedMessage": "La conversation a été supprimée avec succès.",
+  "conversationsDeleteFailedMessage": "Impossible de supprimer la conversation : {error}",
+  "@conversationsDeleteFailedMessage": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "conversationsEmptyTitle": "Aucune conversation",
+  "conversationsEmptyMessage": "Démarrez une discussion avec un utilisateur pour retrouver vos échanges ici.",
+  "conversationsNewChatButton": "Nouvelle discussion",
+  "conversationsDefaultUserName": "Utilisateur"
 }

@@ -371,5 +371,25 @@
   "selectUserContactContextTitle": "User selection",
   "selectUserConversationUnavailableMessage": "Conversation unavailable right now.",
   "selectUserStartConversationFailedMessage": "Couldn't start the conversation.",
-  "selectUserNoRoleLabel": "Role not specified"
+  "selectUserNoRoleLabel": "Role not specified",
+
+  "conversationsTitle": "Conversations",
+  "conversationsSubtitle": "Messages and introductions",
+  "conversationsRefreshTooltip": "Refresh",
+  "conversationsNewButton": "New",
+  "conversationsUnknownUserTitle": "Unknown user",
+  "conversationsUnknownUserMessage": "Couldn't identify the other participant.",
+  "conversationsInactiveUserTitle": "Inactive or unverified user",
+  "conversationsInactiveUserMessage": "This conversation is unavailable.",
+  "conversationsNoMessage": "No message",
+  "conversationsUnknownDate": "Unknown",
+  "conversationsDeleteTitle": "Delete conversation",
+  "conversationsDeleteConfirmMessage": "Are you sure you want to delete this conversation?",
+  "conversationsDeletedTitle": "Conversation deleted",
+  "conversationsDeletedMessage": "The conversation was successfully deleted.",
+  "conversationsDeleteFailedMessage": "Couldn't delete the conversation: {error}",
+  "conversationsEmptyTitle": "No conversations",
+  "conversationsEmptyMessage": "Start a conversation with someone to see your exchanges here.",
+  "conversationsNewChatButton": "New conversation",
+  "conversationsDefaultUserName": "User"
 }
