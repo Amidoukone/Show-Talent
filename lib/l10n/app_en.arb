@@ -6,6 +6,9 @@
   "commonRetry": "Retry",
   "commonClear": "Clear",
   "commonReset": "Reset",
+  "commonActionConfirmedTitle": "Action confirmed",
+  "commonInfoTitle": "Information",
+  "commonUserNotFoundMessage": "User not found. Please sign in again.",
 
   "loginScreenTitle": "Sign in",
   "loginScreenSubtitle": "Welcome back!",
@@ -467,5 +470,106 @@
   "chatFeedbackNoteLabel": "Useful detail for Adfoot",
   "chatFeedbackNoteHint": "E.g.: trial scheduled Saturday, serious recruiter, no response, suspicious behavior...",
   "chatFeedbackSubmitButton": "Send feedback",
-  "chatMessageInputHint": "Type a message…"
+  "chatMessageInputHint": "Type a message…",
+
+  "offreSubtitle": "Offers, applications, and follow-up",
+  "offreOwnerTag": "Your offer",
+  "offreSavedTitle": "Offer saved",
+  "offreListUpdatedMessage": "The offers list has been updated.",
+  "offreExpiredLabel": "Expired",
+  "offreLastDayLabel": "Last day",
+  "offreExpiresTomorrowLabel": "Expires tomorrow",
+  "offreExpiresInDaysLabel": "Expires in {days} days",
+  "@offreExpiresInDaysLabel": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "offreDaysRemainingLabel": "{days} days left",
+  "@offreDaysRemainingLabel": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "offreLoadingEllipsis": "Loading...",
+  "offreLoadMoreButton": "Load more offers",
+  "offreResetFiltersAction": "Reset filters",
+  "offreCreateAction": "Create an offer",
+  "offreExploreVideosAction": "Explore videos",
+  "offreNoResultsTitle": "No results",
+  "offreNoneAvailableTitle": "No offers available",
+  "offreNoResultsMessage": "No offer matches the current filters.",
+  "offreNoneAvailablePublisherMessage": "Publish your first offer to get started.",
+  "offreNoneAvailableViewerMessage": "Check back later or explore talent videos.",
+  "offreSearchHint": "Search for an offer...",
+  "offreClearSearchTooltip": "Clear search",
+  "offreFilterAllLabel": "All",
+  "offreFilterOpenLabel": "Open",
+  "offreFilterClosedLabel": "Closed",
+  "offreFilterArchivedLabel": "Archived",
+  "offreFilterMineLabel": "My offers",
+  "offreFilterExpiringSoonLabel": "Expiring soon",
+  "offreAllPositionsLabel": "All positions",
+  "offreAllCategoriesLabel": "All categories",
+  "offreAllLevelsLabel": "All levels",
+  "offreSortRecentLabel": "Most recent",
+  "offreSortEndingSoonLabel": "Ending soon",
+  "offreDateSummaryLabel": "{date} · {summary}",
+  "@offreDateSummaryLabel": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "offreValidUntilLabel": "Valid until: {dateAndSummary}",
+  "@offreValidUntilLabel": {
+    "placeholders": {
+      "dateAndSummary": {
+        "type": "String"
+      }
+    }
+  },
+  "offrePositionsLabelSingular": "Position",
+  "offrePositionsLabelPlural": "Positions",
+  "offreCategoriesLabel": "Categories",
+  "offreLevelLabel": "Level",
+  "offreLocationLabel": "Location",
+  "offreCompensationLabel": "Compensation",
+  "offreStartDateLabel": "Start date",
+  "offreApplicationsLabel": "Applications",
+  "offreViewsLabel": "Views",
+  "offreDescriptionLabel": "Description",
+  "offreActionsLabel": "Actions",
+  "offreStatusDraftLabel": "Draft",
+  "offreStatusOpenLabel": "Open",
+  "offreStatusClosedLabel": "Closed",
+  "offreStatusArchivedLabel": "Archived",
+  "offreMoreActionsTooltip": "More actions",
+  "offreEditAction": "Edit",
+  "offreViewCandidatesButton": "View applicants",
+  "offreUnsubscribeButton": "Withdraw",
+  "offreExpiredButtonLabel": "Offer expired",
+  "offreApplyButton": "Apply",
+  "offreContactButton": "Contact",
+  "offreApplicationWithdrawnTitle": "Application withdrawn",
+  "offreApplicationSentTitle": "Application sent",
+  "offreStatusUpdatedTitle": "Status updated",
+  "offreConfirmDeleteTitle": "Delete this offer",
+  "offreConfirmDeleteMessage": "Are you sure you want to delete this offer?",
+  "offreDeletedTitle": "Offer deleted",
+  "offreDeletedMessage": "The offer was deleted successfully.",
+  "offreContactRecordedTitle": "Contact recorded",
+  "offreContactRecordedMessage": "The first contact was framed and sent through Adfoot.",
+  "offreCandidatesListTitle": "List of applicants",
+  "offreSortByNameLabel": "By name",
+  "offreSortByRoleLabel": "By role",
+  "offreNoCandidatesMessage": "No applicants yet"
 }

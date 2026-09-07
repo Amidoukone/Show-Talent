@@ -163,6 +163,8 @@ void main() {
         final widgets = File(
           'lib/screens/offre_screen_widgets.dart',
         ).readAsStringSync();
+        // The literal wording moved into the ARB template (l10n.offre*).
+        final arbFr = File('lib/l10n/app_fr.arb').readAsStringSync();
 
         expect(screen, contains('await _runOfferAction('));
         expect(screen, contains('offreController.changerStatut('));
@@ -195,8 +197,13 @@ void main() {
         expect(screen, contains('_isExpiringSoon(Offre offre)'));
         expect(screen, contains('_isOfferOpenForApplications(Offre offre)'));
         expect(screen, contains('o.recruteur.nom.toLowerCase()'));
-        expect(screen, contains('Créer une offre'));
-        expect(screen, contains("hintText: 'Rechercher une offre...'"));
+        expect(screen, contains('l10n.offreCreateAction'));
+        expect(arbFr, contains('"offreCreateAction": "Créer une offre"'));
+        expect(screen, contains('hintText: l10n.offreSearchHint'));
+        expect(
+          arbFr,
+          contains('"offreSearchHint": "Rechercher une offre..."'),
+        );
         expect(
           screen,
           contains('constraints: const BoxConstraints(maxWidth: 760)'),

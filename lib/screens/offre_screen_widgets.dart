@@ -4,18 +4,18 @@ class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
   final String status;
 
-  String _labelFor(String normalized) {
+  String _labelFor(AppLocalizations l10n, String normalized) {
     switch (normalized) {
       case 'ouverte':
-        return 'Ouverte';
+        return l10n.offreStatusOpenLabel;
       case 'fermee':
       case 'fermée':
-        return 'Fermée';
+        return l10n.offreStatusClosedLabel;
       case 'archivee':
       case 'archivée':
-        return 'Archivée';
+        return l10n.offreStatusArchivedLabel;
       case 'brouillon':
-        return 'Brouillon';
+        return l10n.offreStatusDraftLabel;
       default:
         return normalized;
     }
@@ -23,6 +23,7 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
 
     Color bg;
@@ -58,7 +59,7 @@ class _StatusBadge extends StatelessWidget {
         border: const BorderSide(color: AdColors.divider).toBorder(),
       ),
       child: Text(
-        _labelFor(normalized),
+        _labelFor(l10n, normalized),
         style: TextStyle(fontWeight: FontWeight.bold, color: fg),
       ),
     );

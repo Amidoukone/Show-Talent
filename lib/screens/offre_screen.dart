@@ -1,3 +1,4 @@
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:adfoot/config/app_routes.dart';
@@ -114,11 +115,12 @@ class _OffreScreenState extends State<OffreScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: widget.showAppBar
-          ? const AdAppBar(
-              title: 'Offres',
-              subtitle: 'Opportunités, candidatures et suivi',
+          ? AdAppBar(
+              title: l10n.opportunitiesOffersTab,
+              subtitle: l10n.offreSubtitle,
               showBottomDivider: true,
             )
           : null,
@@ -231,8 +233,8 @@ class _OffreScreenState extends State<OffreScreen> {
                                     children: [
                                       Expanded(
                                         child: isOwner
-                                            ? const AdOwnerTag(
-                                                label: 'Votre offre',
+                                            ? AdOwnerTag(
+                                                label: l10n.offreOwnerTag,
                                               )
                                             : AdCompactIdentityRow(
                                                 user: offre.recruteur,
@@ -379,10 +381,13 @@ class _OffreScreenState extends State<OffreScreen> {
     final message = args['offerSystemNoticeMessage']?.toString().trim();
     if (message == null || message.isEmpty) return;
 
+    final l10n = AppLocalizations.of(context)!;
     final title = args['offerSystemNoticeTitle']?.toString().trim();
     final kind = args['offerSystemNoticeKind']?.toString().trim();
     _showSystemNotice(
-      title: title == null || title.isEmpty ? 'Action confirmée' : title,
+      title: title == null || title.isEmpty
+          ? l10n.commonActionConfirmedTitle
+          : title,
       message: message,
       tone: kind == 'info'
           ? AdSystemNoticeTone.info
@@ -405,6 +410,7 @@ class _OffreScreenState extends State<OffreScreen> {
 
   void _handleOfferFormResult(Object? result) {
     if (result == null || !mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     if (result is OffreFormResult) {
       _showSystemNotice(
@@ -423,7 +429,9 @@ class _OffreScreenState extends State<OffreScreen> {
       final title = result['offerSystemNoticeTitle']?.toString().trim();
       final kind = result['offerSystemNoticeKind']?.toString().trim();
       _showSystemNotice(
-        title: title == null || title.isEmpty ? 'Action confirmée' : title,
+        title: title == null || title.isEmpty
+            ? l10n.commonActionConfirmedTitle
+            : title,
         message: message,
         tone: kind == 'info'
             ? AdSystemNoticeTone.info
@@ -434,8 +442,8 @@ class _OffreScreenState extends State<OffreScreen> {
 
     if (result == true) {
       _showSystemNotice(
-        title: 'Offre enregistrée',
-        message: 'La liste des offres a été mise à jour.',
+        title: l10n.offreSavedTitle,
+        message: l10n.offreListUpdatedMessage,
       );
     }
   }
@@ -448,10 +456,13 @@ class _OffreScreenState extends State<OffreScreen> {
     final resolvedTitle = title.trim();
     final resolvedMessage = message.trim();
     if (!mounted || resolvedMessage.isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
 
     setState(() {
       _systemNotice = AdSystemNoticeData(
-        title: resolvedTitle.isEmpty ? 'Action confirmée' : resolvedTitle,
+        title: resolvedTitle.isEmpty
+            ? l10n.commonActionConfirmedTitle
+            : resolvedTitle,
         message: resolvedMessage,
         tone: tone,
       );
@@ -476,12 +487,13 @@ class _OffreScreenState extends State<OffreScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     if (response.toast == ToastLevel.info) {
-      AdFeedback.info('Information', response.message);
+      AdFeedback.info(l10n.commonInfoTitle, response.message);
       return;
     }
 
-    AdFeedback.error('Erreur', response.message);
+    AdFeedback.error(l10n.profileActionErrorTitle, response.message);
   }
 
   bool get _hasActiveFilters {
@@ -552,12 +564,13 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   String _expirySummary(Offre offre) {
+    final l10n = AppLocalizations.of(context)!;
     final days = _daysUntilEnd(offre);
-    if (days < 0) return 'Expirée';
-    if (days == 0) return 'Dernier jour';
-    if (days == 1) return 'Expire demain';
-    if (days <= _expiringSoonDays) return 'Expire dans $days jours';
-    return 'Encore $days jours';
+    if (days < 0) return l10n.offreExpiredLabel;
+    if (days == 0) return l10n.offreLastDayLabel;
+    if (days == 1) return l10n.offreExpiresTomorrowLabel;
+    if (days <= _expiringSoonDays) return l10n.offreExpiresInDaysLabel(days);
+    return l10n.offreDaysRemainingLabel(days);
   }
 
   // =========================================================
@@ -695,29 +708,32 @@ class _OffreScreenState extends State<OffreScreen> {
     bool canLoadMore = false,
     bool isLoadingMore = false,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     final isPublisher = isOpportunityPublisherRole(currentUser?.role);
     final shouldLoadMore = filteredOut && canLoadMore;
     final actionLabel = shouldLoadMore
         ? isLoadingMore
-              ? 'Chargement...'
-              : 'Charger plus d’offres'
+              ? l10n.offreLoadingEllipsis
+              : l10n.offreLoadMoreButton
         : filteredOut
-        ? 'Réinitialiser les filtres'
+        ? l10n.offreResetFiltersAction
         : isPublisher
-        ? 'Créer une offre'
-        : 'Explorer les vidéos';
+        ? l10n.offreCreateAction
+        : l10n.offreExploreVideosAction;
 
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: AdStatePanel(
           icon: Icons.search_off,
-          title: filteredOut ? 'Aucun résultat' : 'Aucune offre disponible',
+          title: filteredOut
+              ? l10n.offreNoResultsTitle
+              : l10n.offreNoneAvailableTitle,
           message: filteredOut
-              ? 'Aucune offre ne correspond aux filtres actuels.'
+              ? l10n.offreNoResultsMessage
               : isPublisher
-              ? 'Publiez votre première offre pour démarrer.'
-              : 'Revenez plus tard ou explorez les vidéos de talents.',
+              ? l10n.offreNoneAvailablePublisherMessage
+              : l10n.offreNoneAvailableViewerMessage,
           action: AdButton(
             expanded: false,
             label: actionLabel,
@@ -750,6 +766,7 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   Widget _buildLoadMoreFooter() {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 18),
       child: Center(
@@ -760,8 +777,8 @@ class _OffreScreenState extends State<OffreScreen> {
           leading: Icons.expand_more_rounded,
           loading: offreController.isLoadingMore,
           label: offreController.isLoadingMore
-              ? 'Chargement...'
-              : 'Charger plus d’offres',
+              ? l10n.offreLoadingEllipsis
+              : l10n.offreLoadMoreButton,
           onPressed: offreController.isLoadingMore
               ? null
               : () {
@@ -816,6 +833,7 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   Widget _buildFilters(AppUser? currentUser) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
 
     return Container(
@@ -834,7 +852,7 @@ class _OffreScreenState extends State<OffreScreen> {
                 onChanged: (_) => setState(() {}),
                 style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
-                  hintText: 'Rechercher une offre...',
+                  hintText: l10n.offreSearchHint,
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -848,7 +866,7 @@ class _OffreScreenState extends State<OffreScreen> {
                   suffixIcon: _searchController.text.trim().isEmpty
                       ? null
                       : IconButton(
-                          tooltip: 'Effacer la recherche',
+                          tooltip: l10n.offreClearSearchTooltip,
                           icon: const Icon(Icons.close_rounded),
                           onPressed: () {
                             _searchController.clear();
@@ -864,35 +882,35 @@ class _OffreScreenState extends State<OffreScreen> {
                 child: Row(
                   children: [
                     _FilterChip(
-                      label: 'Toutes',
+                      label: l10n.offreFilterAllLabel,
                       selected: _selectedStatus == 'tous',
                       onTap: () => setState(() => _selectedStatus = 'tous'),
                     ),
                     _FilterChip(
-                      label: 'Ouvertes',
+                      label: l10n.offreFilterOpenLabel,
                       selected: _selectedStatus == 'ouverte',
                       onTap: () => setState(() => _selectedStatus = 'ouverte'),
                     ),
                     _FilterChip(
-                      label: 'Fermées',
+                      label: l10n.offreFilterClosedLabel,
                       selected: _selectedStatus == 'fermee',
                       onTap: () => setState(() => _selectedStatus = 'fermee'),
                     ),
                     _FilterChip(
-                      label: 'Archivées',
+                      label: l10n.offreFilterArchivedLabel,
                       selected: _selectedStatus == 'archivee',
                       onTap: () => setState(() => _selectedStatus = 'archivee'),
                     ),
                     if (currentUser != null) ...[
                       const SizedBox(width: 8),
                       _FilterChip(
-                        label: 'Mes offres',
+                        label: l10n.offreFilterMineLabel,
                         selected: _onlyMine,
                         onTap: () => setState(() => _onlyMine = !_onlyMine),
                       ),
                     ],
                     _FilterChip(
-                      label: 'Expire bientôt',
+                      label: l10n.offreFilterExpiringSoonLabel,
                       selected: _onlyExpiringSoon,
                       onTap: () => setState(
                         () => _onlyExpiringSoon = !_onlyExpiringSoon,
@@ -904,7 +922,7 @@ class _OffreScreenState extends State<OffreScreen> {
                     // recherche plein texte sur les libelles affiches.
                     _buildFilterDropdown<FootballPosition>(
                       value: _selectedPosition,
-                      allLabel: 'Tous les postes',
+                      allLabel: l10n.offreAllPositionsLabel,
                       values: FootballPosition.values,
                       labelOf: (position) => position.labelFr,
                       onChanged: _setPositionFilter,
@@ -912,7 +930,7 @@ class _OffreScreenState extends State<OffreScreen> {
                     const SizedBox(width: 8),
                     _buildFilterDropdown<AgeCategory>(
                       value: _selectedCategory,
-                      allLabel: 'Toutes catégories',
+                      allLabel: l10n.offreAllCategoriesLabel,
                       values: AgeCategory.values,
                       labelOf: (category) => category.labelFr,
                       onChanged: (value) =>
@@ -921,7 +939,7 @@ class _OffreScreenState extends State<OffreScreen> {
                     const SizedBox(width: 8),
                     _buildFilterDropdown<ClubLevel>(
                       value: _selectedLevel,
-                      allLabel: 'Tous niveaux',
+                      allLabel: l10n.offreAllLevelsLabel,
                       values: ClubLevel.values,
                       labelOf: (level) => level.labelFr,
                       onChanged: (value) =>
@@ -937,14 +955,14 @@ class _OffreScreenState extends State<OffreScreen> {
                           color: cs.onSurface,
                           fontWeight: FontWeight.w600,
                         ),
-                        items: const [
+                        items: [
                           DropdownMenuItem(
                             value: 'recentes',
-                            child: Text('Plus récentes'),
+                            child: Text(l10n.offreSortRecentLabel),
                           ),
                           DropdownMenuItem(
                             value: 'fin',
-                            child: Text('Se terminant bientôt'),
+                            child: Text(l10n.offreSortEndingSoonLabel),
                           ),
                         ],
                         onChanged: (v) {
@@ -956,7 +974,7 @@ class _OffreScreenState extends State<OffreScreen> {
                       TextButton.icon(
                         onPressed: _resetFilters,
                         icon: const Icon(Icons.close_rounded, size: 18),
-                        label: const Text('Réinitialiser'),
+                        label: Text(l10n.commonReset),
                       ),
                   ],
                 ),
@@ -979,6 +997,7 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   Widget _buildValidityRow(Offre offre) {
+    final l10n = AppLocalizations.of(context)!;
     final expired = _isExpired(offre);
     final expiringSoon = _isExpiringSoon(offre);
     final color = expired
@@ -1005,7 +1024,12 @@ class _OffreScreenState extends State<OffreScreen> {
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              "Valide jusqu’au : ${DateFormat('dd MMM yyyy').format(offre.dateFin)} · ${_expirySummary(offre)}",
+              l10n.offreValidUntilLabel(
+                l10n.offreDateSummaryLabel(
+                  DateFormat('dd MMM yyyy').format(offre.dateFin),
+                  _expirySummary(offre),
+                ),
+              ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -1092,6 +1116,7 @@ class _OffreScreenState extends State<OffreScreen> {
   /// stats) that used to stack under the offer chips -- one lean row
   /// instead of two, without dropping any of the information.
   Widget _buildOfferMetaFooterRow(Offre offre) {
+    final l10n = AppLocalizations.of(context)!;
     final expired = _isExpired(offre);
     final expiringSoon = _isExpiringSoon(offre);
     final color = expired
@@ -1110,7 +1135,10 @@ class _OffreScreenState extends State<OffreScreen> {
         const SizedBox(width: 5),
         Expanded(
           child: Text(
-            '${DateFormat('dd MMM yyyy').format(offre.dateFin)} · ${_expirySummary(offre)}',
+            l10n.offreDateSummaryLabel(
+              DateFormat('dd MMM yyyy').format(offre.dateFin),
+              _expirySummary(offre),
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -1163,6 +1191,7 @@ class _OffreScreenState extends State<OffreScreen> {
     bool isPostulable,
     AppUser? currentUser,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     if (isOwner) {
       final normalizedStatus = _normalizeStatus(offre.statut);
       final statusPending = _isOfferActionPending(offre, 'status');
@@ -1175,11 +1204,23 @@ class _OffreScreenState extends State<OffreScreen> {
           DropdownButton<String>(
             value: normalizedStatus,
             dropdownColor: AdColors.surfaceCard,
-            items: const [
-              DropdownMenuItem(value: 'brouillon', child: Text('Brouillon')),
-              DropdownMenuItem(value: 'ouverte', child: Text('Ouverte')),
-              DropdownMenuItem(value: 'fermee', child: Text('Fermée')),
-              DropdownMenuItem(value: 'archivee', child: Text('Archivée')),
+            items: [
+              DropdownMenuItem(
+                value: 'brouillon',
+                child: Text(l10n.offreStatusDraftLabel),
+              ),
+              DropdownMenuItem(
+                value: 'ouverte',
+                child: Text(l10n.offreStatusOpenLabel),
+              ),
+              DropdownMenuItem(
+                value: 'fermee',
+                child: Text(l10n.offreStatusClosedLabel),
+              ),
+              DropdownMenuItem(
+                value: 'archivee',
+                child: Text(l10n.offreStatusArchivedLabel),
+              ),
             ],
             onChanged: statusPending
                 ? null
@@ -1188,8 +1229,8 @@ class _OffreScreenState extends State<OffreScreen> {
                       if (v == normalizedStatus) return;
                       if (currentUser == null) {
                         AdFeedback.error(
-                          'Erreur',
-                          'Utilisateur introuvable. Merci de vous reconnecter.',
+                          l10n.profileActionErrorTitle,
+                          l10n.commonUserNotFoundMessage,
                         );
                         return;
                       }
@@ -1205,7 +1246,7 @@ class _OffreScreenState extends State<OffreScreen> {
                       if (response != null) {
                         _handleActionResponse(
                           response,
-                          successTitle: 'Statut mis à jour',
+                          successTitle: l10n.offreStatusUpdatedTitle,
                         );
                       }
                     }
@@ -1220,7 +1261,7 @@ class _OffreScreenState extends State<OffreScreen> {
           AdButton(
             onPressed: () => _showCandidats(context, offre),
             leading: Icons.group,
-            label: 'Voir candidats',
+            label: l10n.offreViewCandidatesButton,
             size: AdButtonSize.compact,
             expanded: false,
           ),
@@ -1232,7 +1273,7 @@ class _OffreScreenState extends State<OffreScreen> {
             )
           else
             PopupMenuButton<String>(
-              tooltip: 'Plus d’actions',
+              tooltip: l10n.offreMoreActionsTooltip,
               icon: const Icon(
                 Icons.more_vert_rounded,
                 color: AdColors.onSurfaceMuted,
@@ -1245,14 +1286,14 @@ class _OffreScreenState extends State<OffreScreen> {
                   _confirmDelete(context, offre);
                 }
               },
-              itemBuilder: (context) => const [
+              itemBuilder: (context) => [
                 PopupMenuItem(
                   value: 'edit',
                   child: Row(
                     children: [
-                      Icon(Icons.edit_outlined, size: 18),
-                      SizedBox(width: 10),
-                      Text('Modifier'),
+                      const Icon(Icons.edit_outlined, size: 18),
+                      const SizedBox(width: 10),
+                      Text(l10n.offreEditAction),
                     ],
                   ),
                 ),
@@ -1260,15 +1301,15 @@ class _OffreScreenState extends State<OffreScreen> {
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.delete_outline_rounded,
                         size: 18,
                         color: AdColors.error,
                       ),
-                      SizedBox(width: 10),
+                      const SizedBox(width: 10),
                       Text(
-                        'Supprimer',
-                        style: TextStyle(color: AdColors.error),
+                        l10n.settingsDeleteAction,
+                        style: const TextStyle(color: AdColors.error),
                       ),
                     ],
                   ),
@@ -1297,8 +1338,8 @@ class _OffreScreenState extends State<OffreScreen> {
                 ? () async {
                     if (currentUser == null) {
                       AdFeedback.error(
-                        'Erreur',
-                        'Utilisateur introuvable. Merci de vous reconnecter.',
+                        l10n.profileActionErrorTitle,
+                        l10n.commonUserNotFoundMessage,
                       );
                       return;
                     }
@@ -1318,8 +1359,8 @@ class _OffreScreenState extends State<OffreScreen> {
                       _handleActionResponse(
                         response,
                         successTitle: inscrit
-                            ? 'Candidature retirée'
-                            : 'Candidature envoyée',
+                            ? l10n.offreApplicationWithdrawnTitle
+                            : l10n.offreApplicationSentTitle,
                       );
                     }
                   }
@@ -1329,10 +1370,10 @@ class _OffreScreenState extends State<OffreScreen> {
                 ? Icons.person_remove_outlined
                 : Icons.send_outlined,
             label: inscrit
-                ? 'Se désinscrire'
+                ? l10n.offreUnsubscribeButton
                 : expired
-                ? 'Offre expirée'
-                : 'Postuler',
+                ? l10n.offreExpiredButtonLabel
+                : l10n.offreApplyButton,
             kind: inscrit ? AdButtonKind.outline : AdButtonKind.primary,
             size: AdButtonSize.compact,
             expanded: false,
@@ -1340,7 +1381,7 @@ class _OffreScreenState extends State<OffreScreen> {
           AdButton(
             onPressed: () => _openOfferChat(offre.recruteur, offre),
             leading: Icons.chat_bubble_outline,
-            label: 'Contacter',
+            label: l10n.offreContactButton,
             kind: AdButtonKind.tonal,
             size: AdButtonSize.compact,
             expanded: false,
@@ -1353,7 +1394,7 @@ class _OffreScreenState extends State<OffreScreen> {
       return AdButton(
         onPressed: () => _openOfferChat(offre.recruteur, offre),
         leading: Icons.chat_bubble_outline,
-        label: 'Contacter',
+        label: l10n.offreContactButton,
         kind: AdButtonKind.tonal,
         size: AdButtonSize.compact,
         expanded: false,
@@ -1380,13 +1421,14 @@ class _OffreScreenState extends State<OffreScreen> {
 
   Future<void> _confirmDelete(BuildContext context, Offre offre) async {
     if (_isOfferActionPending(offre, 'delete')) return;
+    final l10n = AppLocalizations.of(context)!;
 
     final confirmed = await AdDialogs.confirm(
       context: context,
-      title: 'Supprimer cette offre',
-      message: 'Voulez-vous vraiment supprimer cette offre ?',
-      confirmLabel: 'Supprimer',
-      cancelLabel: 'Annuler',
+      title: l10n.offreConfirmDeleteTitle,
+      message: l10n.offreConfirmDeleteMessage,
+      confirmLabel: l10n.settingsDeleteAction,
+      cancelLabel: l10n.commonCancel,
       danger: true,
     );
     if (!confirmed) return;
@@ -1394,8 +1436,8 @@ class _OffreScreenState extends State<OffreScreen> {
     final currentUser = userController.user;
     if (currentUser == null) {
       AdFeedback.error(
-        'Erreur',
-        'Utilisateur introuvable. Merci de vous reconnecter.',
+        l10n.profileActionErrorTitle,
+        l10n.commonUserNotFoundMessage,
       );
       return;
     }
@@ -1412,15 +1454,15 @@ class _OffreScreenState extends State<OffreScreen> {
         Get.back();
       }
       _showSystemNotice(
-        title: 'Offre supprimée',
+        title: l10n.offreDeletedTitle,
         message: response.message.trim().isEmpty
-            ? 'L’offre a été supprimée avec succès.'
+            ? l10n.offreDeletedMessage
             : response.message,
       );
     } else if (response.toast == ToastLevel.none) {
       return;
     } else {
-      AdFeedback.error('Erreur', response.message);
+      AdFeedback.error(l10n.profileActionErrorTitle, response.message);
     }
   }
 
@@ -1429,11 +1471,12 @@ class _OffreScreenState extends State<OffreScreen> {
     Offre offre, {
     String sourceLabel = 'Offre',
   }) async {
+    final l10n = AppLocalizations.of(context)!;
     final current = userController.user;
     if (current == null) {
       AdFeedback.error(
-        'Erreur',
-        'Utilisateur introuvable. Merci de vous reconnecter.',
+        l10n.profileActionErrorTitle,
+        l10n.commonUserNotFoundMessage,
       );
       return;
     }
@@ -1445,10 +1488,10 @@ class _OffreScreenState extends State<OffreScreen> {
 
     if (!current.allowMessages || !otherUser.allowMessages) {
       AdFeedback.warning(
-        'Messages indisponibles',
+        l10n.profileMessagingDisabledTitle,
         !current.allowMessages
-            ? 'Vous avez désactivé les messages.'
-            : 'Cet utilisateur a désactivé les messages.',
+            ? l10n.profileMessagingDisabledSenderMessage
+            : l10n.profileMessagingDisabledRecipientMessage,
       );
       return;
     }
@@ -1498,14 +1541,17 @@ class _OffreScreenState extends State<OffreScreen> {
 
       if (result.createdIntake) {
         AdFeedback.info(
-          'Contact enregistré',
-          'Le premier contact a été cadré et transmis via Adfoot.',
+          l10n.offreContactRecordedTitle,
+          l10n.offreContactRecordedMessage,
         );
       }
 
       final conversationId = result.conversationId.trim();
       if (conversationId.isEmpty) {
-        AdFeedback.error('Erreur', 'Conversation indisponible pour le moment.');
+        AdFeedback.error(
+          l10n.profileActionErrorTitle,
+          l10n.selectUserConversationUnavailableMessage,
+        );
         return;
       }
 
@@ -1513,11 +1559,11 @@ class _OffreScreenState extends State<OffreScreen> {
         () => ChatScreen(conversationId: conversationId, otherUser: otherUser),
       );
     } on ChatFlowException catch (error) {
-      AdFeedback.error('Erreur', error.message);
+      AdFeedback.error(l10n.profileActionErrorTitle, error.message);
     } catch (_) {
       AdFeedback.error(
-        'Erreur',
-        'Impossible de démarrer la conversation pour le moment.',
+        l10n.profileActionErrorTitle,
+        l10n.selectUserStartConversationFailedMessage,
       );
     }
   }
@@ -1529,6 +1575,7 @@ class _OffreScreenState extends State<OffreScreen> {
     bool isPostulable,
     AppUser? currentUser,
   ) {
+    final l10n = AppLocalizations.of(context)!;
     final validPhoto = _isValidPhotoUrl(offre.recruteur.photoProfil);
     final maxHeight = MediaQuery.of(context).size.height * 0.88;
 
@@ -1560,7 +1607,7 @@ class _OffreScreenState extends State<OffreScreen> {
                 if (isOwner)
                   Row(
                     children: [
-                      const AdOwnerTag(label: 'Votre offre'),
+                      AdOwnerTag(label: l10n.offreOwnerTag),
                       const Spacer(),
                       _StatusBadge(status: offre.statut),
                     ],
@@ -1643,7 +1690,9 @@ class _OffreScreenState extends State<OffreScreen> {
                     if (offre.positionCodes.isNotEmpty)
                       _buildDetailTile(
                         Icons.sports_soccer,
-                        offre.positionCodes.length > 1 ? 'Postes' : 'Poste',
+                        offre.positionCodes.length > 1
+                            ? l10n.offrePositionsLabelPlural
+                            : l10n.offrePositionsLabelSingular,
                         offre.positionCodes
                             .map((p) => p.labelFr)
                             .join(' · '),
@@ -1651,46 +1700,46 @@ class _OffreScreenState extends State<OffreScreen> {
                     if (offre.ageCategories.isNotEmpty)
                       _buildDetailTile(
                         Icons.groups_outlined,
-                        'Catégories',
+                        l10n.offreCategoriesLabel,
                         offre.ageCategories.map((c) => c.labelFr).join(' · '),
                       ),
                     if (offre.clubLevel != null)
                       _buildDetailTile(
                         Icons.leaderboard_outlined,
-                        'Niveau',
+                        l10n.offreLevelLabel,
                         offre.clubLevel!.labelFr,
                       ),
                     if (offre.localisation?.isNotEmpty ?? false)
                       _buildDetailTile(
                         Icons.place_outlined,
-                        'Lieu',
+                        l10n.offreLocationLabel,
                         offre.localisation!,
                       ),
                     if (offre.remuneration?.isNotEmpty ?? false)
                       _buildDetailTile(
                         Icons.payments_outlined,
-                        'Rémunération',
+                        l10n.offreCompensationLabel,
                         offre.remuneration!,
                       ),
                     _buildDetailTile(
                       Icons.event_available_outlined,
-                      'Début',
+                      l10n.offreStartDateLabel,
                       DateFormat('dd MMM yyyy').format(offre.dateDebut),
                     ),
                     _buildDetailTile(
                       Icons.group_outlined,
-                      'Candidatures',
+                      l10n.offreApplicationsLabel,
                       '${offre.candidats.length}',
                     ),
                     _buildDetailTile(
                       Icons.remove_red_eye_outlined,
-                      'Vues',
+                      l10n.offreViewsLabel,
                       '${offre.vues ?? 0}',
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
-                _buildDetailSectionTitle('Description'),
+                _buildDetailSectionTitle(l10n.offreDescriptionLabel),
                 const SizedBox(height: 8),
                 Text(
                   offre.description,
@@ -1704,7 +1753,7 @@ class _OffreScreenState extends State<OffreScreen> {
                 const SizedBox(height: 20),
                 const Divider(color: AdColors.divider, height: 1),
                 const SizedBox(height: 16),
-                _buildDetailSectionTitle('Actions'),
+                _buildDetailSectionTitle(l10n.offreActionsLabel),
                 const SizedBox(height: 10),
                 _buildActionButtons(
                   context,
@@ -1724,6 +1773,7 @@ class _OffreScreenState extends State<OffreScreen> {
   }
 
   void _showCandidats(BuildContext context, Offre offre) {
+    final l10n = AppLocalizations.of(context)!;
     String sort = 'nom';
 
     Get.bottomSheet(
@@ -1748,9 +1798,9 @@ class _OffreScreenState extends State<OffreScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'Liste des candidats',
-                      style: TextStyle(
+                    Text(
+                      l10n.offreCandidatesListTitle,
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1758,11 +1808,14 @@ class _OffreScreenState extends State<OffreScreen> {
                     DropdownButton<String>(
                       value: sort,
                       dropdownColor: AdColors.surfaceCard,
-                      items: const [
-                        DropdownMenuItem(value: 'nom', child: Text('Par nom')),
+                      items: [
+                        DropdownMenuItem(
+                          value: 'nom',
+                          child: Text(l10n.offreSortByNameLabel),
+                        ),
                         DropdownMenuItem(
                           value: 'role',
-                          child: Text('Par rôle'),
+                          child: Text(l10n.offreSortByRoleLabel),
                         ),
                       ],
                       onChanged: (v) => setState(() => sort = v ?? 'nom'),
@@ -1771,7 +1824,7 @@ class _OffreScreenState extends State<OffreScreen> {
                 ),
                 const SizedBox(height: 12),
                 if (sorted.isEmpty)
-                  const Text('Aucun candidat pour l’instant')
+                  Text(l10n.offreNoCandidatesMessage)
                 else
                   ListView.separated(
                     shrinkWrap: true,

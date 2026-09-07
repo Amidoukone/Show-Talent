@@ -117,6 +117,18 @@ void main() {
     );
     expect(l10n.chatTodayLabel, 'Aujourd’hui');
     expect(l10n.chatYesterdayLabel, 'Hier');
+    expect(l10n.offreExpiresInDaysLabel(3), 'Expire dans 3 jours');
+    expect(l10n.offreDaysRemainingLabel(20), 'Encore 20 jours');
+    expect(
+      l10n.offreDateSummaryLabel('05 sept. 2026', 'Expire demain'),
+      '05 sept. 2026 · Expire demain',
+    );
+    expect(
+      l10n.offreValidUntilLabel('05 sept. 2026 · Expire demain'),
+      'Valide jusqu’au : 05 sept. 2026 · Expire demain',
+    );
+    expect(l10n.offreStatusOpenLabel, 'Ouverte');
+    expect(l10n.offreContactButton, 'Contacter');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -208,5 +220,17 @@ void main() {
     );
     expect(l10n.chatTodayLabel, 'Today');
     expect(l10n.chatYesterdayLabel, 'Yesterday');
+    expect(l10n.offreExpiresInDaysLabel(3), 'Expires in 3 days');
+    expect(l10n.offreDaysRemainingLabel(20), '20 days left');
+    expect(
+      l10n.offreDateSummaryLabel('Sep 5, 2026', 'Expires tomorrow'),
+      'Sep 5, 2026 · Expires tomorrow',
+    );
+    expect(
+      l10n.offreValidUntilLabel('Sep 5, 2026 · Expires tomorrow'),
+      'Valid until: Sep 5, 2026 · Expires tomorrow',
+    );
+    expect(l10n.offreStatusOpenLabel, isNot('Ouverte'));
+    expect(l10n.offreContactButton, 'Contact');
   });
 }

@@ -6,6 +6,9 @@
   "commonRetry": "Réessayer",
   "commonClear": "Effacer",
   "commonReset": "Réinitialiser",
+  "commonActionConfirmedTitle": "Action confirmée",
+  "commonInfoTitle": "Information",
+  "commonUserNotFoundMessage": "Utilisateur introuvable. Merci de vous reconnecter.",
 
   "loginScreenTitle": "Connectez-vous",
   "loginScreenSubtitle": "Ravi de vous revoir !",
@@ -608,5 +611,106 @@
   "chatFeedbackNoteLabel": "Précision utile pour Adfoot",
   "chatFeedbackNoteHint": "Ex. : essai prévu samedi, recruteur sérieux, pas de réponse, comportement suspect…",
   "chatFeedbackSubmitButton": "Envoyer le retour",
-  "chatMessageInputHint": "Tapez un message…"
+  "chatMessageInputHint": "Tapez un message…",
+
+  "offreSubtitle": "Opportunités, candidatures et suivi",
+  "offreOwnerTag": "Votre offre",
+  "offreSavedTitle": "Offre enregistrée",
+  "offreListUpdatedMessage": "La liste des offres a été mise à jour.",
+  "offreExpiredLabel": "Expirée",
+  "offreLastDayLabel": "Dernier jour",
+  "offreExpiresTomorrowLabel": "Expire demain",
+  "offreExpiresInDaysLabel": "Expire dans {days} jours",
+  "@offreExpiresInDaysLabel": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "offreDaysRemainingLabel": "Encore {days} jours",
+  "@offreDaysRemainingLabel": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "offreLoadingEllipsis": "Chargement...",
+  "offreLoadMoreButton": "Charger plus d’offres",
+  "offreResetFiltersAction": "Réinitialiser les filtres",
+  "offreCreateAction": "Créer une offre",
+  "offreExploreVideosAction": "Explorer les vidéos",
+  "offreNoResultsTitle": "Aucun résultat",
+  "offreNoneAvailableTitle": "Aucune offre disponible",
+  "offreNoResultsMessage": "Aucune offre ne correspond aux filtres actuels.",
+  "offreNoneAvailablePublisherMessage": "Publiez votre première offre pour démarrer.",
+  "offreNoneAvailableViewerMessage": "Revenez plus tard ou explorez les vidéos de talents.",
+  "offreSearchHint": "Rechercher une offre...",
+  "offreClearSearchTooltip": "Effacer la recherche",
+  "offreFilterAllLabel": "Toutes",
+  "offreFilterOpenLabel": "Ouvertes",
+  "offreFilterClosedLabel": "Fermées",
+  "offreFilterArchivedLabel": "Archivées",
+  "offreFilterMineLabel": "Mes offres",
+  "offreFilterExpiringSoonLabel": "Expire bientôt",
+  "offreAllPositionsLabel": "Tous les postes",
+  "offreAllCategoriesLabel": "Toutes catégories",
+  "offreAllLevelsLabel": "Tous niveaux",
+  "offreSortRecentLabel": "Plus récentes",
+  "offreSortEndingSoonLabel": "Se terminant bientôt",
+  "offreDateSummaryLabel": "{date} · {summary}",
+  "@offreDateSummaryLabel": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "offreValidUntilLabel": "Valide jusqu’au : {dateAndSummary}",
+  "@offreValidUntilLabel": {
+    "placeholders": {
+      "dateAndSummary": {
+        "type": "String"
+      }
+    }
+  },
+  "offrePositionsLabelSingular": "Poste",
+  "offrePositionsLabelPlural": "Postes",
+  "offreCategoriesLabel": "Catégories",
+  "offreLevelLabel": "Niveau",
+  "offreLocationLabel": "Lieu",
+  "offreCompensationLabel": "Rémunération",
+  "offreStartDateLabel": "Début",
+  "offreApplicationsLabel": "Candidatures",
+  "offreViewsLabel": "Vues",
+  "offreDescriptionLabel": "Description",
+  "offreActionsLabel": "Actions",
+  "offreStatusDraftLabel": "Brouillon",
+  "offreStatusOpenLabel": "Ouverte",
+  "offreStatusClosedLabel": "Fermée",
+  "offreStatusArchivedLabel": "Archivée",
+  "offreMoreActionsTooltip": "Plus d’actions",
+  "offreEditAction": "Modifier",
+  "offreViewCandidatesButton": "Voir candidats",
+  "offreUnsubscribeButton": "Se désinscrire",
+  "offreExpiredButtonLabel": "Offre expirée",
+  "offreApplyButton": "Postuler",
+  "offreContactButton": "Contacter",
+  "offreApplicationWithdrawnTitle": "Candidature retirée",
+  "offreApplicationSentTitle": "Candidature envoyée",
+  "offreStatusUpdatedTitle": "Statut mis à jour",
+  "offreConfirmDeleteTitle": "Supprimer cette offre",
+  "offreConfirmDeleteMessage": "Voulez-vous vraiment supprimer cette offre ?",
+  "offreDeletedTitle": "Offre supprimée",
+  "offreDeletedMessage": "L’offre a été supprimée avec succès.",
+  "offreContactRecordedTitle": "Contact enregistré",
+  "offreContactRecordedMessage": "Le premier contact a été cadré et transmis via Adfoot.",
+  "offreCandidatesListTitle": "Liste des candidats",
+  "offreSortByNameLabel": "Par nom",
+  "offreSortByRoleLabel": "Par rôle",
+  "offreNoCandidatesMessage": "Aucun candidat pour l’instant"
 }
