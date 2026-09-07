@@ -72,5 +72,26 @@
   "newPasswordSuccessMessage": "Password reset successfully.",
   "newPasswordSubmit": "Confirm",
   "newPasswordInvalidLinkTitle": "Invalid link",
-  "newPasswordInvalidLinkMessage": "The reset link is invalid or incomplete. Request a new link from the sign-in page."
+  "newPasswordInvalidLinkMessage": "The reset link is invalid or incomplete. Request a new link from the sign-in page.",
+
+  "termsScreenTitle": "Our terms of service",
+  "termsVersionLabel": "Version {version}",
+  "termsVersionWithDateLabel": "Version {version} — effective {date}",
+  "termsIntro": "Before continuing, please review the terms governing your use of Adfoot and how your data is processed.",
+  "termsLinkTerms": "Terms of service",
+  "termsLinkPrivacy": "Privacy policy",
+  "termsAdultDeclaration": "I declare that I am 18 or older, and I accept the terms of service and the privacy policy.",
+  "termsAcceptButton": "I accept and continue",
+  "termsSignOutButton": "Sign out",
+  "termsFooterNotice": "Without acceptance, your account remains created but the app cannot be used.",
+  "termsOpenFailureTitle": "Couldn't open the document",
+  "termsOpenFailureMessage": "Couldn't open the document. Address: {url}",
+  "termsAcceptFailureTitle": "Couldn't save your acceptance",
+  "termsAcceptFailureMessage": "Your acceptance couldn't be saved. Check your connection and try again.",
+  "termsHighlightFreeTitle": "Free for players",
+  "termsHighlightFreeBody": "Adfoot will never ask you for money to be seen, selected, or trialed. Report any request for payment.",
+  "termsHighlightNotAgentTitle": "We are not your agent",
+  "termsHighlightNotAgentBody": "Adfoot makes you visible to clubs and recruiters, without guaranteeing a trial or a contract, and without commission.",
+  "termsHighlightOwnershipTitle": "Your videos belong to you",
+  "termsHighlightOwnershipBody": "You remain the owner. You can remove them, and delete your account, at any time."
 }

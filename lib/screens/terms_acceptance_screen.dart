@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/services/legal/terms_acceptance_service.dart';
 import 'package:adfoot/theme/ad_colors.dart';
@@ -72,9 +73,10 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
     // Never a dead end: if no browser opens, the address is still readable and
     // can be typed elsewhere. Refusing to accept a text you were unable to
     // read is the reasonable response, and it must remain possible.
+    final l10n = AppLocalizations.of(context)!;
     AdFeedback.error(
-      'Ouverture impossible',
-      'Impossible d’ouvrir le document. Adresse : $url',
+      l10n.termsOpenFailureTitle,
+      l10n.termsOpenFailureMessage(url),
     );
   }
 
@@ -92,10 +94,10 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
         stackTrace: stackTrace,
       );
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       AdFeedback.error(
-        'Enregistrement impossible',
-        'Votre acceptation n’a pas pu être enregistrée. '
-            'Vérifiez votre réseau puis réessayez.',
+        l10n.termsAcceptFailureTitle,
+        l10n.termsAcceptFailureMessage,
       );
     } finally {
       if (mounted) setState(() => _isAccepting = false);
@@ -114,6 +116,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final config = widget.config;
     final busy = _isAccepting || _isSigningOut;
 
@@ -135,9 +138,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                     color: AdColors.brand,
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'Nos conditions d’utilisation',
-                    style: TextStyle(
+                  Text(
+                    l10n.termsScreenTitle,
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
                       color: AdColors.onSurface,
@@ -146,20 +149,20 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                   const SizedBox(height: 12),
                   Text(
                     config.effectiveOn.isEmpty
-                        ? 'Version ${config.requiredVersion}'
-                        : 'Version ${config.requiredVersion} — '
-                              'en vigueur au ${config.effectiveOn}',
+                        ? l10n.termsVersionLabel(config.requiredVersion)
+                        : l10n.termsVersionWithDateLabel(
+                            config.requiredVersion,
+                            config.effectiveOn,
+                          ),
                     style: const TextStyle(
                       fontSize: 13,
                       color: AdColors.onSurfaceMuted,
                     ),
                   ),
                   const SizedBox(height: 24),
-                  const Text(
-                    'Avant de continuer, prenez connaissance des conditions '
-                    'qui encadrent votre utilisation d’Adfoot et du traitement '
-                    'de vos données.',
-                    style: TextStyle(
+                  Text(
+                    l10n.termsIntro,
+                    style: const TextStyle(
                       fontSize: 15.5,
                       height: 1.5,
                       color: AdColors.onSurface,
@@ -169,13 +172,13 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                   const _Highlights(),
                   const SizedBox(height: 24),
                   _DocumentLink(
-                    label: 'Conditions générales d’utilisation',
+                    label: l10n.termsLinkTerms,
                     icon: Icons.description_outlined,
                     onTap: busy ? null : () => _open(config.termsUrl),
                   ),
                   const SizedBox(height: 10),
                   _DocumentLink(
-                    label: 'Politique de confidentialité',
+                    label: l10n.termsLinkPrivacy,
                     icon: Icons.privacy_tip_outlined,
                     onTap: busy ? null : () => _open(config.privacyUrl),
                   ),
@@ -188,23 +191,22 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                   ),
                   const SizedBox(height: 24),
                   AdButton(
-                    label: 'J’accepte et je continue',
+                    label: l10n.termsAcceptButton,
                     loading: _isAccepting,
                     onPressed: (_confirmsAdult && !busy) ? _accept : null,
                   ),
                   const SizedBox(height: 10),
                   AdButton(
-                    label: 'Se déconnecter',
+                    label: l10n.termsSignOutButton,
                     kind: AdButtonKind.outline,
                     loading: _isSigningOut,
                     onPressed: busy ? null : _signOut,
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Sans acceptation, votre compte reste créé mais '
-                    'l’application ne peut pas être utilisée.',
+                  Text(
+                    l10n.termsFooterNotice,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 12.5,
                       color: AdColors.onSurfaceMuted,
                     ),
@@ -229,24 +231,22 @@ class _Highlights extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const items = <(IconData, String, String)>[
+    final l10n = AppLocalizations.of(context)!;
+    final items = <(IconData, String, String)>[
       (
         Icons.money_off_rounded,
-        'Gratuit pour les joueurs',
-        'Adfoot ne vous demandera jamais d’argent pour être vu, sélectionné '
-            'ou testé. Signalez toute demande de paiement.',
+        l10n.termsHighlightFreeTitle,
+        l10n.termsHighlightFreeBody,
       ),
       (
         Icons.handshake_outlined,
-        'Nous ne sommes pas votre agent',
-        'Adfoot vous rend visible auprès des clubs et recruteurs, sans '
-            'garantir un essai ni un contrat, et sans commission.',
+        l10n.termsHighlightNotAgentTitle,
+        l10n.termsHighlightNotAgentBody,
       ),
       (
         Icons.verified_user_outlined,
-        'Vos vidéos vous appartiennent',
-        'Vous en restez propriétaire. Vous pouvez les retirer, et supprimer '
-            'votre compte, à tout moment.',
+        l10n.termsHighlightOwnershipTitle,
+        l10n.termsHighlightOwnershipBody,
       ),
     ];
 
@@ -367,14 +367,12 @@ class _AdultCheckbox extends StatelessWidget {
               activeColor: AdColors.brand,
               checkColor: AdColors.brandOn,
             ),
-            const Expanded(
+            Expanded(
               child: Padding(
-                padding: EdgeInsets.only(top: 12),
+                padding: const EdgeInsets.only(top: 12),
                 child: Text(
-                  'Je déclare avoir 18 ans ou plus et j’accepte les '
-                  'conditions générales d’utilisation ainsi que la politique '
-                  'de confidentialité.',
-                  style: TextStyle(
+                  AppLocalizations.of(context)!.termsAdultDeclaration,
+                  style: const TextStyle(
                     fontSize: 13.5,
                     height: 1.42,
                     color: AdColors.onSurface,

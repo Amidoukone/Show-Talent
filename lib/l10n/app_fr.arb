@@ -102,5 +102,50 @@
   "newPasswordSuccessMessage": "Mot de passe réinitialisé avec succès.",
   "newPasswordSubmit": "Valider",
   "newPasswordInvalidLinkTitle": "Lien invalide",
-  "newPasswordInvalidLinkMessage": "Le lien de réinitialisation est invalide ou incomplet. Demandez un nouveau lien depuis la page de connexion."
+  "newPasswordInvalidLinkMessage": "Le lien de réinitialisation est invalide ou incomplet. Demandez un nouveau lien depuis la page de connexion.",
+
+  "termsScreenTitle": "Nos conditions d’utilisation",
+  "termsVersionLabel": "Version {version}",
+  "@termsVersionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "termsVersionWithDateLabel": "Version {version} — en vigueur au {date}",
+  "@termsVersionWithDateLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "termsIntro": "Avant de continuer, prenez connaissance des conditions qui encadrent votre utilisation d’Adfoot et du traitement de vos données.",
+  "termsLinkTerms": "Conditions générales d’utilisation",
+  "termsLinkPrivacy": "Politique de confidentialité",
+  "termsAdultDeclaration": "Je déclare avoir 18 ans ou plus et j’accepte les conditions générales d’utilisation ainsi que la politique de confidentialité.",
+  "termsAcceptButton": "J’accepte et je continue",
+  "termsSignOutButton": "Se déconnecter",
+  "termsFooterNotice": "Sans acceptation, votre compte reste créé mais l’application ne peut pas être utilisée.",
+  "termsOpenFailureTitle": "Ouverture impossible",
+  "termsOpenFailureMessage": "Impossible d’ouvrir le document. Adresse : {url}",
+  "@termsOpenFailureMessage": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "termsAcceptFailureTitle": "Enregistrement impossible",
+  "termsAcceptFailureMessage": "Votre acceptation n’a pas pu être enregistrée. Vérifiez votre réseau puis réessayez.",
+  "termsHighlightFreeTitle": "Gratuit pour les joueurs",
+  "termsHighlightFreeBody": "Adfoot ne vous demandera jamais d’argent pour être vu, sélectionné ou testé. Signalez toute demande de paiement.",
+  "termsHighlightNotAgentTitle": "Nous ne sommes pas votre agent",
+  "termsHighlightNotAgentBody": "Adfoot vous rend visible auprès des clubs et recruteurs, sans garantir un essai ni un contrat, et sans commission.",
+  "termsHighlightOwnershipTitle": "Vos vidéos vous appartiennent",
+  "termsHighlightOwnershipBody": "Vous en restez propriétaire. Vous pouvez les retirer, et supprimer votre compte, à tout moment."
 }

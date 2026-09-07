@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Verifies the ARB -> AppLocalizations pipeline end to end for each screen
-/// migrated so far (login, signup, verify email, reset password): both
-/// locales resolve, the French template is not silently used as an English
-/// fallback, and parameterized strings substitute their placeholder
-/// correctly in each language.
+/// migrated so far (login, signup, verify email, reset password, terms
+/// acceptance): both locales resolve, the French template is not silently
+/// used as an English fallback, and parameterized strings substitute their
+/// placeholder correctly in each language.
 void main() {
   Future<AppLocalizations> resolve(
     WidgetTester tester,
@@ -54,6 +54,15 @@ void main() {
       l10n.newPasswordAccountLabel('joueur@example.com'),
       'Compte : joueur@example.com',
     );
+    expect(
+      l10n.termsVersionWithDateLabel('1.0', '1 septembre 2026'),
+      'Version 1.0 — en vigueur au 1 septembre 2026',
+    );
+    expect(
+      l10n.termsOpenFailureMessage('https://adfoot.org/legal/terms.html'),
+      'Impossible d’ouvrir le document. '
+      'Adresse : https://adfoot.org/legal/terms.html',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -82,6 +91,15 @@ void main() {
     expect(
       l10n.newPasswordAccountLabel('player@example.com'),
       'Account: player@example.com',
+    );
+    expect(
+      l10n.termsVersionWithDateLabel('1.0', 'September 1, 2026'),
+      'Version 1.0 — effective September 1, 2026',
+    );
+    expect(
+      l10n.termsOpenFailureMessage('https://adfoot.org/legal/terms.html'),
+      "Couldn't open the document. "
+      'Address: https://adfoot.org/legal/terms.html',
     );
   });
 }
