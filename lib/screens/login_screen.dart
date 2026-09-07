@@ -1,6 +1,7 @@
 import 'package:adfoot/controller/user_controller.dart';
 import 'dart:async';
 
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/screens/signup_screen.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/theme/ad_colors.dart';
@@ -65,6 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _isLoading = true);
 
     try {
@@ -80,18 +82,15 @@ class _LoginScreenState extends State<LoginScreen> {
           )
           .timeout(
             _signInTimeout,
-            onTimeout: () => throw const AuthFlowException(
-              'La connexion prend trop de temps. Vérifiez votre réseau puis '
-              'réessayez.',
-            ),
+            onTimeout: () => throw AuthFlowException(l10n.loginTimeoutMessage),
           );
 
       if (snapshot.destination == AuthSessionDestination.login) {
         _showErrorSnackbar(
           snapshot.failureMessage ??
               snapshot.failure?.loginMessage ??
-              'Connexion impossible pour le moment.',
-          title: snapshot.failureTitle ?? 'Connexion impossible',
+              l10n.loginFailureDefaultMessage,
+          title: snapshot.failureTitle ?? l10n.loginFailureTitle,
         );
         return;
       }
@@ -111,9 +110,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } on AuthFlowException catch (error) {
       _showErrorSnackbar(error.message);
     } catch (_) {
-      _showErrorSnackbar(
-        'Une erreur inattendue s’est produite. Veuillez réessayer.',
-      );
+      _showErrorSnackbar(l10n.loginUnexpectedError);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -126,10 +123,11 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final email = _emailController.text.trim();
     final emailError = _validateEmailValue(email);
     if (emailError != null) {
-      _showErrorSnackbar(emailError, title: 'Réinitialisation impossible');
+      _showErrorSnackbar(emailError, title: l10n.resetPasswordFailureTitle);
       return;
     }
 
@@ -147,22 +145,21 @@ class _LoginScreenState extends State<LoginScreen> {
       // adfoot.org address, telling the user where to look is the difference
       // between a reset that works and one they believe never arrived.
       AdFeedback.success(
-        'E-mail envoyé',
-        'Lien de réinitialisation envoyé à $email. '
-        'Pensez à vérifier vos spams si vous ne le voyez pas.',
+        l10n.resetPasswordEmailSentTitle,
+        l10n.resetPasswordEmailSentMessage(email),
         duration: const Duration(seconds: 6),
       );
     } on FirebaseAuthException catch (error) {
       _showErrorSnackbar(
         AuthErrorMapper.toMessage(error),
-        title: 'Réinitialisation impossible',
+        title: l10n.resetPasswordFailureTitle,
       );
     } on AuthFlowException catch (error) {
-      _showErrorSnackbar(error.message, title: 'Réinitialisation impossible');
+      _showErrorSnackbar(error.message, title: l10n.resetPasswordFailureTitle);
     } catch (_) {
       _showErrorSnackbar(
-        'Impossible d’envoyer le lien de réinitialisation pour le moment.',
-        title: 'Réinitialisation impossible',
+        l10n.resetPasswordGenericFailureMessage,
+        title: l10n.resetPasswordFailureTitle,
       );
     } finally {
       if (mounted) {
@@ -172,20 +169,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String? _validateEmailValue(String value) {
+    final l10n = AppLocalizations.of(context)!;
     final normalized = value.trim();
     if (normalized.isEmpty) {
-      return 'Veuillez saisir votre e-mail.';
+      return l10n.loginEmailRequired;
     }
     final ok = RegExp(
       r'^[\w\.\-+]+@([\w\-]+\.)+[\w\-]{2,}$',
     ).hasMatch(normalized);
     if (!ok) {
-      return 'Veuillez saisir une adresse e-mail valide.';
+      return l10n.loginEmailInvalid;
     }
     return null;
   }
 
   void _captureSessionNotice() {
+    final l10n = AppLocalizations.of(context)!;
     Map<String, String>? notice;
 
     final args = Get.arguments;
@@ -203,7 +202,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (message != null && message.isNotEmpty) {
         notice = <String, String>{
           'sessionNoticeTitle': (title == null || title.isEmpty)
-              ? 'Information importante'
+              ? l10n.loginDefaultSessionNoticeTitle
               : title,
           'sessionNoticeMessage': message,
           'sessionNoticeKind': (kind == null || kind.isEmpty) ? 'error' : kind,
@@ -223,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     _sessionNoticeTitle = (title == null || title.isEmpty)
-        ? 'Information importante'
+        ? l10n.loginDefaultSessionNoticeTitle
         : title;
     _sessionNoticeMessage = message;
     _sessionNoticeKind =
@@ -254,15 +253,16 @@ class _LoginScreenState extends State<LoginScreen> {
     };
   }
 
-  void _showErrorSnackbar(
-    String message, {
-    String title = 'Connexion échouée',
-  }) {
-    AdFeedback.error(title, message);
+  void _showErrorSnackbar(String message, {String? title}) {
+    AdFeedback.error(
+      title ?? AppLocalizations.of(context)!.loginSnackbarDefaultTitle,
+      message,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
     final isSuccessNotice = _sessionNoticeKind == 'success';
     final noticeBackground = isSuccessNotice
@@ -314,7 +314,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 children: [
                                   Text(
                                     _sessionNoticeTitle ??
-                                        'Information importante',
+                                        l10n.loginDefaultSessionNoticeTitle,
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleSmall
@@ -357,7 +357,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: AdSpacing.md),
                     Text(
-                      'Connectez-vous',
+                      l10n.loginScreenTitle,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: cs.onSurface,
@@ -366,7 +366,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: AdSpacing.xs),
                     Text(
-                      'Ravi de vous revoir !',
+                      l10n.loginScreenSubtitle,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: cs.onSurface.withValues(alpha: .7),
                         fontWeight: FontWeight.w600,
@@ -376,7 +376,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: AdSpacing.xl),
                     AdTextField(
                       controller: _emailController,
-                      label: 'Adresse e-mail',
+                      label: l10n.loginEmailLabel,
                       keyboardType: TextInputType.emailAddress,
                       prefixIcon: const Icon(Icons.email_outlined),
                       validator: (v) => _validateEmailValue(v ?? ''),
@@ -384,11 +384,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: AdSpacing.md),
                     AdTextField(
                       controller: _passwordController,
-                      label: 'Mot de passe',
+                      label: l10n.loginPasswordLabel,
                       isPassword: true,
                       prefixIcon: const Icon(Icons.lock_outline),
                       validator: (v) => (v == null || v.isEmpty)
-                          ? 'Mot de passe requis'
+                          ? l10n.loginPasswordRequired
                           : null,
                       onSubmitted: _login,
                     ),
@@ -396,12 +396,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       alignment: Alignment.centerRight,
                       child: TextButton(
                         onPressed: _isBusy ? null : _resetPassword,
-                        child: const Text('Mot de passe oublié ?'),
+                        child: Text(l10n.loginForgotPassword),
                       ),
                     ),
                     const SizedBox(height: AdSpacing.xs),
                     AdButton(
-                      label: 'Se connecter',
+                      label: l10n.loginSubmit,
                       onPressed: _isBusy ? null : _login,
                       loading: _isLoading,
                       leading: Icons.login_rounded,
@@ -409,7 +409,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: AdSpacing.sm),
                     Text(
-                      'Tous les comptes sont maintenant créés par l’administration Adfoot.',
+                      l10n.loginAdminManagedNotice,
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: cs.onSurface.withValues(alpha: .7),
@@ -421,7 +421,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          'Nouveau ici ?',
+                          l10n.loginNewHere,
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: cs.onSurface.withValues(alpha: .8),
@@ -432,7 +432,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: _isBusy
                               ? null
                               : () => Get.to(() => const SignUpScreen()),
-                          child: const Text('Obtenir un accès'),
+                          child: Text(l10n.loginGetAccess),
                         ),
                       ],
                     ),

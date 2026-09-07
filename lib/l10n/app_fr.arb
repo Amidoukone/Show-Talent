@@ -1,0 +1,35 @@
+{
+  "@@locale": "fr",
+
+  "loginScreenTitle": "Connectez-vous",
+  "loginScreenSubtitle": "Ravi de vous revoir !",
+  "loginEmailLabel": "Adresse e-mail",
+  "loginPasswordLabel": "Mot de passe",
+  "loginPasswordRequired": "Mot de passe requis",
+  "loginForgotPassword": "Mot de passe oublié ?",
+  "loginSubmit": "Se connecter",
+  "loginAdminManagedNotice": "Tous les comptes sont maintenant créés par l’administration Adfoot.",
+  "loginNewHere": "Nouveau ici ?",
+  "loginGetAccess": "Obtenir un accès",
+  "loginEmailRequired": "Veuillez saisir votre e-mail.",
+  "loginEmailInvalid": "Veuillez saisir une adresse e-mail valide.",
+  "loginDefaultSessionNoticeTitle": "Information importante",
+  "loginFailureTitle": "Connexion impossible",
+  "loginFailureDefaultMessage": "Connexion impossible pour le moment.",
+  "loginSnackbarDefaultTitle": "Connexion échouée",
+  "loginUnexpectedError": "Une erreur inattendue s’est produite. Veuillez réessayer.",
+  "loginTimeoutMessage": "La connexion prend trop de temps. Vérifiez votre réseau puis réessayez.",
+
+  "resetPasswordFailureTitle": "Réinitialisation impossible",
+  "resetPasswordEmailSentTitle": "E-mail envoyé",
+  "resetPasswordEmailSentMessage": "Lien de réinitialisation envoyé à {email}. Pensez à vérifier vos spams si vous ne le voyez pas.",
+  "@resetPasswordEmailSentMessage": {
+    "description": "Confirmation shown after a password reset email is sent.",
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "resetPasswordGenericFailureMessage": "Impossible d’envoyer le lien de réinitialisation pour le moment."
+}

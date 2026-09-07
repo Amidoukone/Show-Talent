@@ -1,0 +1,27 @@
+{
+  "@@locale": "en",
+
+  "loginScreenTitle": "Sign in",
+  "loginScreenSubtitle": "Welcome back!",
+  "loginEmailLabel": "Email address",
+  "loginPasswordLabel": "Password",
+  "loginPasswordRequired": "Password required",
+  "loginForgotPassword": "Forgot password?",
+  "loginSubmit": "Sign in",
+  "loginAdminManagedNotice": "All accounts are now created by the Adfoot administration.",
+  "loginNewHere": "New here?",
+  "loginGetAccess": "Get access",
+  "loginEmailRequired": "Please enter your email.",
+  "loginEmailInvalid": "Please enter a valid email address.",
+  "loginDefaultSessionNoticeTitle": "Important information",
+  "loginFailureTitle": "Sign-in unavailable",
+  "loginFailureDefaultMessage": "Sign-in is unavailable right now.",
+  "loginSnackbarDefaultTitle": "Sign-in failed",
+  "loginUnexpectedError": "An unexpected error occurred. Please try again.",
+  "loginTimeoutMessage": "Sign-in is taking too long. Check your connection and try again.",
+
+  "resetPasswordFailureTitle": "Password reset unavailable",
+  "resetPasswordEmailSentTitle": "Email sent",
+  "resetPasswordEmailSentMessage": "Reset link sent to {email}. Check your spam folder if you don't see it.",
+  "resetPasswordGenericFailureMessage": "Couldn't send the reset link right now."
+}

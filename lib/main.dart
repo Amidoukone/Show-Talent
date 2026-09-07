@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import 'config/app_bootstrap.dart';
 import 'config/app_routes.dart';
+import 'l10n/generated/app_localizations.dart';
 import 'theme/ad_colors.dart';
 import 'theme/app_theme.dart';
 
@@ -94,17 +94,16 @@ class AdfootApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: Get.key,
       theme: AppTheme.light(),
-      locale: const Locale('fr', 'FR'),
-      fallbackLocale: const Locale('fr', 'FR'),
-      supportedLocales: const <Locale>[
-        Locale('fr', 'FR'),
-        Locale('en', 'US'),
-      ],
-      localizationsDelegates: const <LocalizationsDelegate<dynamic>>[
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
+      // Toujours francais pour l'instant : seul l'ecran de connexion est
+      // migre vers AppLocalizations (pilote). Passer cette valeur a `null`
+      // pour laisser Flutter resoudre la langue de l'appareil n'aura de sens
+      // qu'une fois le reste des ecrans traduits -- sinon un telephone en
+      // anglais verrait un ecran de connexion traduit suivi d'une application
+      // qui repasse en francais partout ailleurs.
+      locale: const Locale('fr'),
+      fallbackLocale: const Locale('fr'),
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       defaultTransition: Transition.fadeIn,
       color: AdColors.brand,
       builder: (context, child) {
