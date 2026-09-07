@@ -139,6 +139,8 @@ void main() {
         final screen = File(
           'lib/screens/event_list_screen.dart',
         ).readAsStringSync();
+        // The literal wording moved into the ARB template (l10n.event*).
+        final arbFr = File('lib/l10n/app_fr.arb').readAsStringSync();
 
         expect(screen, contains('await _runEventAction('));
         expect(screen, contains('eventController.registerToEvent('));
@@ -163,8 +165,13 @@ void main() {
         expect(screen, contains('_buildLoadMoreFooter()'));
         expect(screen, contains('eventController.loadMoreEvents()'));
         expect(screen, contains('event.organisateur.nom.toLowerCase()'));
-        expect(screen, contains('Créer un événement'));
-        expect(screen, contains("hintText: 'Rechercher un événement...'"));
+        expect(screen, contains('l10n.eventCreateAction'));
+        expect(arbFr, contains('"eventCreateAction": "Créer un événement"'));
+        expect(screen, contains('hintText: l10n.eventSearchHint'));
+        expect(
+          arbFr,
+          contains('"eventSearchHint": "Rechercher un événement..."'),
+        );
         expect(
           screen,
           contains('constraints: const BoxConstraints(maxWidth: 760)'),
@@ -178,7 +185,8 @@ void main() {
         expect(screen, contains('_resetFilters()'));
         expect(screen, contains('_openEditEventForm(event)'));
         expect(screen, contains('final isFull = _isFull(event);'));
-        expect(screen, contains('S’inscrire'));
+        expect(screen, contains('l10n.eventRegisterButton'));
+        expect(arbFr, contains('"eventRegisterButton": "S’inscrire"'));
         expect(screen, isNot(contains('AdFeedback.success(')));
         expect(screen, isNot(contains("const Text('Details')")));
         expect(

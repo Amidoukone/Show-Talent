@@ -129,6 +129,13 @@ void main() {
     );
     expect(l10n.offreStatusOpenLabel, 'Ouverte');
     expect(l10n.offreContactButton, 'Contacter');
+    expect(l10n.eventInDaysLabel(4), 'Dans 4 jours');
+    expect(
+      l10n.eventDateRangeLabel('05 sept. 2026', '07 sept. 2026'),
+      '05 sept. 2026 → 07 sept. 2026',
+    );
+    expect(l10n.eventParticipantsCountLabel(12), '12 participants');
+    expect(l10n.eventStatusOpenLabel, 'Ouvert');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -232,5 +239,12 @@ void main() {
     );
     expect(l10n.offreStatusOpenLabel, isNot('Ouverte'));
     expect(l10n.offreContactButton, 'Contact');
+    expect(l10n.eventInDaysLabel(4), 'In 4 days');
+    expect(
+      l10n.eventDateRangeLabel('Sep 5, 2026', 'Sep 7, 2026'),
+      'Sep 5, 2026 → Sep 7, 2026',
+    );
+    expect(l10n.eventParticipantsCountLabel(12), '12 participants');
+    expect(l10n.eventStatusOpenLabel, isNot('Ouvert'));
   });
 }

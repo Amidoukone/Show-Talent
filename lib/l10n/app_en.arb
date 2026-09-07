@@ -571,5 +571,82 @@
   "offreCandidatesListTitle": "List of applicants",
   "offreSortByNameLabel": "By name",
   "offreSortByRoleLabel": "By role",
-  "offreNoCandidatesMessage": "No applicants yet"
+  "offreNoCandidatesMessage": "No applicants yet",
+
+  "eventSubtitle": "Opportunities and meetups",
+  "eventOwnerTag": "Your event",
+  "eventOpenToAllLabel": "Open to all",
+  "eventFilterOpenToAllLabel": "Open to all",
+  "eventBySelectionLabel": "By selection",
+  "eventParticipantsCountLabel": "{count} participants",
+  "@eventParticipantsCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "eventViewsCountLabel": "{count} views",
+  "@eventViewsCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "eventFinishedLabel": "Finished",
+  "eventOngoingLabel": "In progress",
+  "eventTodayLabel": "Today",
+  "eventTomorrowLabel": "Tomorrow",
+  "eventInDaysLabel": "In {days} days",
+  "@eventInDaysLabel": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "eventUpcomingLabel": "Upcoming",
+  "eventLoadMoreButton": "Load more events",
+  "eventCreateAction": "Create an event",
+  "eventNoneAvailableTitle": "No events available",
+  "eventNoResultsMessage": "No event matches your filters.",
+  "eventNoneAvailablePublisherMessage": "You can publish your first event.",
+  "eventSessionUnavailableTitle": "Session unavailable",
+  "eventProfileLoadFailedMessage": "Unable to load the user profile.",
+  "eventBackToHomeAction": "Back to home",
+  "eventSearchHint": "Search for an event...",
+  "eventFilterAllLabel": "All",
+  "eventFilterOpenLabel": "Open",
+  "eventFilterClosedLabel": "Closed",
+  "eventFilterArchivedLabel": "Archived",
+  "eventFilterMineLabel": "My events",
+  "eventStatusDraftLabel": "Draft",
+  "eventStatusOpenLabel": "Open",
+  "eventStatusClosedLabel": "Closed",
+  "eventStatusArchivedLabel": "Archived",
+  "eventRegisteringEllipsis": "Registering...",
+  "eventFullLabel": "Full",
+  "eventRegisterButton": "Register",
+  "eventUnregisterButton": "Withdraw",
+  "eventRegistrationConfirmedTitle": "Registration confirmed",
+  "eventRegistrationWithdrawnTitle": "Registration withdrawn",
+  "eventConfirmDeleteTitle": "Delete",
+  "eventConfirmDeleteMessage": "Are you sure you want to delete this event?",
+  "eventDeletedTitle": "Event deleted",
+  "eventConfirmUnregisterMessage": "Are you sure you want to withdraw from this event?",
+  "eventConfirmAction": "Confirm",
+  "eventSavedTitle": "Event saved",
+  "eventListUpdatedMessage": "The events list has been updated.",
+  "eventDateRangeLabel": "{startDate} → {endDate}",
+  "@eventDateRangeLabel": {
+    "placeholders": {
+      "startDate": {
+        "type": "String"
+      },
+      "endDate": {
+        "type": "String"
+      }
+    }
+  }
 }

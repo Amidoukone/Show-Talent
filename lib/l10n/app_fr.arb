@@ -712,5 +712,82 @@
   "offreCandidatesListTitle": "Liste des candidats",
   "offreSortByNameLabel": "Par nom",
   "offreSortByRoleLabel": "Par rôle",
-  "offreNoCandidatesMessage": "Aucun candidat pour l’instant"
+  "offreNoCandidatesMessage": "Aucun candidat pour l’instant",
+
+  "eventSubtitle": "Opportunités et rencontres",
+  "eventOwnerTag": "Votre événement",
+  "eventOpenToAllLabel": "Ouvert à tous",
+  "eventFilterOpenToAllLabel": "Ouverts à tous",
+  "eventBySelectionLabel": "Sur sélection",
+  "eventParticipantsCountLabel": "{count} participants",
+  "@eventParticipantsCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "eventViewsCountLabel": "{count} vues",
+  "@eventViewsCountLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "eventFinishedLabel": "Terminé",
+  "eventOngoingLabel": "En cours",
+  "eventTodayLabel": "Aujourd’hui",
+  "eventTomorrowLabel": "Demain",
+  "eventInDaysLabel": "Dans {days} jours",
+  "@eventInDaysLabel": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "eventUpcomingLabel": "À venir",
+  "eventLoadMoreButton": "Charger plus d’événements",
+  "eventCreateAction": "Créer un événement",
+  "eventNoneAvailableTitle": "Aucun événement disponible",
+  "eventNoResultsMessage": "Aucun événement ne correspond à vos filtres.",
+  "eventNoneAvailablePublisherMessage": "Vous pouvez publier votre premier événement.",
+  "eventSessionUnavailableTitle": "Session indisponible",
+  "eventProfileLoadFailedMessage": "Impossible de charger le profil utilisateur.",
+  "eventBackToHomeAction": "Revenir à l’accueil",
+  "eventSearchHint": "Rechercher un événement...",
+  "eventFilterAllLabel": "Tous",
+  "eventFilterOpenLabel": "Ouverts",
+  "eventFilterClosedLabel": "Fermés",
+  "eventFilterArchivedLabel": "Archivés",
+  "eventFilterMineLabel": "Mes événements",
+  "eventStatusDraftLabel": "Brouillon",
+  "eventStatusOpenLabel": "Ouvert",
+  "eventStatusClosedLabel": "Fermé",
+  "eventStatusArchivedLabel": "Archivé",
+  "eventRegisteringEllipsis": "Inscription...",
+  "eventFullLabel": "Complet",
+  "eventRegisterButton": "S’inscrire",
+  "eventUnregisterButton": "Se désinscrire",
+  "eventRegistrationConfirmedTitle": "Inscription confirmée",
+  "eventRegistrationWithdrawnTitle": "Inscription retirée",
+  "eventConfirmDeleteTitle": "Supprimer",
+  "eventConfirmDeleteMessage": "Voulez-vous vraiment supprimer cet événement ?",
+  "eventDeletedTitle": "Événement supprimé",
+  "eventConfirmUnregisterMessage": "Voulez-vous vraiment vous désinscrire de cet événement ?",
+  "eventConfirmAction": "Confirmer",
+  "eventSavedTitle": "Événement enregistré",
+  "eventListUpdatedMessage": "La liste des événements a été mise à jour.",
+  "eventDateRangeLabel": "{startDate} → {endDate}",
+  "@eventDateRangeLabel": {
+    "placeholders": {
+      "startDate": {
+        "type": "String"
+      },
+      "endDate": {
+        "type": "String"
+      }
+    }
+  }
 }

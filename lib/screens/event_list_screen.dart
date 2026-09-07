@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
@@ -91,13 +92,14 @@ class _EventListScreenState extends State<EventListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: widget.showAppBar
-          ? const AdAppBar(
-              title: 'Événements',
-              subtitle: 'Opportunités et rencontres',
+          ? AdAppBar(
+              title: l10n.opportunitiesEventsTab,
+              subtitle: l10n.eventSubtitle,
               showBottomDivider: true,
             )
           : null,
@@ -215,8 +217,8 @@ class _EventListScreenState extends State<EventListScreen> {
                                     children: [
                                       Expanded(
                                         child: isOrganisateur
-                                            ? const AdOwnerTag(
-                                                label: 'Votre événement',
+                                            ? AdOwnerTag(
+                                                label: l10n.eventOwnerTag,
                                               )
                                             : AdCompactIdentityRow(
                                                 user: organiser,
@@ -271,8 +273,8 @@ class _EventListScreenState extends State<EventListScreen> {
                                       _buildChip(
                                         Icons.how_to_reg_outlined,
                                         event.estPublic
-                                            ? 'Ouvert à tous'
-                                            : 'Sur sélection',
+                                            ? l10n.eventOpenToAllLabel
+                                            : l10n.eventBySelectionLabel,
                                       ),
                                       // Le poste avant le nombre d'inscrits :
                                       // c'est ce qu'un joueur cherche en
@@ -293,11 +295,15 @@ class _EventListScreenState extends State<EventListScreen> {
                                         ),
                                       _buildChip(
                                         Icons.group_outlined,
-                                        '${event.participants.length} participants',
+                                        l10n.eventParticipantsCountLabel(
+                                          event.participants.length,
+                                        ),
                                       ),
                                       _buildChip(
                                         Icons.visibility_outlined,
-                                        '${event.views ?? 0} vues',
+                                        l10n.eventViewsCountLabel(
+                                          event.views ?? 0,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -385,6 +391,7 @@ class _EventListScreenState extends State<EventListScreen> {
 
   void _handleEventFormResult(Object? result) {
     if (result == null || !mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     if (result is EventFormResult) {
       _showSystemNotice(
@@ -399,8 +406,8 @@ class _EventListScreenState extends State<EventListScreen> {
 
     if (result == true) {
       _showSystemNotice(
-        title: 'Événement enregistré',
-        message: 'La liste des événements a été mise à jour.',
+        title: l10n.eventSavedTitle,
+        message: l10n.eventListUpdatedMessage,
       );
     }
   }
@@ -413,10 +420,13 @@ class _EventListScreenState extends State<EventListScreen> {
     final resolvedTitle = title.trim();
     final resolvedMessage = message.trim();
     if (!mounted || resolvedMessage.isEmpty) return;
+    final l10n = AppLocalizations.of(context)!;
 
     setState(() {
       _systemNotice = AdSystemNoticeData(
-        title: resolvedTitle.isEmpty ? 'Action confirmée' : resolvedTitle,
+        title: resolvedTitle.isEmpty
+            ? l10n.commonActionConfirmedTitle
+            : resolvedTitle,
         message: resolvedMessage,
         tone: tone,
       );
@@ -486,13 +496,14 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   String _eventTimingSummary(Event event) {
-    if (_isExpired(event)) return 'Terminé';
+    final l10n = AppLocalizations.of(context)!;
+    if (_isExpired(event)) return l10n.eventFinishedLabel;
     final daysUntilStart = _daysUntilStart(event);
-    if (daysUntilStart < 0) return 'En cours';
-    if (daysUntilStart == 0) return 'Aujourd’hui';
-    if (daysUntilStart == 1) return 'Demain';
-    if (daysUntilStart <= 7) return 'Dans $daysUntilStart jours';
-    return 'À venir';
+    if (daysUntilStart < 0) return l10n.eventOngoingLabel;
+    if (daysUntilStart == 0) return l10n.eventTodayLabel;
+    if (daysUntilStart == 1) return l10n.eventTomorrowLabel;
+    if (daysUntilStart <= 7) return l10n.eventInDaysLabel(daysUntilStart);
+    return l10n.eventUpcomingLabel;
   }
 
   List<Event> _filterEvents(List<Event> source, AppUser currentUser) {
@@ -544,16 +555,17 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Widget _buildMissingUserState() {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: AdStatePanel(
           icon: Icons.person_off,
-          title: 'Session indisponible',
-          message: 'Impossible de charger le profil utilisateur.',
+          title: l10n.eventSessionUnavailableTitle,
+          message: l10n.eventProfileLoadFailedMessage,
           action: AdButton(
             expanded: false,
-            label: 'Revenir à l’accueil',
+            label: l10n.eventBackToHomeAction,
             onPressed: () {
               Get.offAllNamed(AppRoutes.main, arguments: {'tab': 0});
             },
@@ -622,29 +634,32 @@ class _EventListScreenState extends State<EventListScreen> {
     bool canLoadMore = false,
     bool isLoadingMore = false,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     final isOrganizer = isOpportunityPublisherRole(currentUser.role);
     final shouldLoadMore = filteredOut && canLoadMore;
     final actionLabel = shouldLoadMore
         ? isLoadingMore
-              ? 'Chargement...'
-              : 'Charger plus d’événements'
+              ? l10n.offreLoadingEllipsis
+              : l10n.eventLoadMoreButton
         : filteredOut
-        ? 'Réinitialiser les filtres'
+        ? l10n.offreResetFiltersAction
         : isOrganizer
-        ? 'Créer un événement'
-        : 'Explorer les vidéos';
+        ? l10n.eventCreateAction
+        : l10n.offreExploreVideosAction;
 
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: AdStatePanel(
           icon: Icons.event_busy,
-          title: filteredOut ? 'Aucun résultat' : 'Aucun événement disponible',
+          title: filteredOut
+              ? l10n.offreNoResultsTitle
+              : l10n.eventNoneAvailableTitle,
           message: filteredOut
-              ? 'Aucun événement ne correspond à vos filtres.'
+              ? l10n.eventNoResultsMessage
               : isOrganizer
-              ? 'Vous pouvez publier votre premier événement.'
-              : 'Revenez plus tard ou explorez les vidéos de talents.',
+              ? l10n.eventNoneAvailablePublisherMessage
+              : l10n.offreNoneAvailableViewerMessage,
           action: AdButton(
             expanded: false,
             label: actionLabel,
@@ -677,6 +692,7 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Widget _buildLoadMoreFooter() {
+    final l10n = AppLocalizations.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       child: Center(
@@ -687,8 +703,8 @@ class _EventListScreenState extends State<EventListScreen> {
           leading: Icons.expand_more_rounded,
           loading: eventController.isLoadingMore,
           label: eventController.isLoadingMore
-              ? 'Chargement...'
-              : 'Charger plus d’événements',
+              ? l10n.offreLoadingEllipsis
+              : l10n.eventLoadMoreButton,
           onPressed: eventController.isLoadingMore
               ? null
               : () {
@@ -700,6 +716,7 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Widget _buildFilters(AppUser currentUser) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
 
     return Container(
@@ -718,7 +735,7 @@ class _EventListScreenState extends State<EventListScreen> {
                 onChanged: (_) => setState(() {}),
                 style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
-                  hintText: 'Rechercher un événement...',
+                  hintText: l10n.eventSearchHint,
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -732,7 +749,7 @@ class _EventListScreenState extends State<EventListScreen> {
                   suffixIcon: _searchController.text.trim().isEmpty
                       ? null
                       : IconButton(
-                          tooltip: 'Effacer la recherche',
+                          tooltip: l10n.offreClearSearchTooltip,
                           icon: const Icon(Icons.close_rounded),
                           onPressed: () {
                             _searchController.clear();
@@ -747,22 +764,22 @@ class _EventListScreenState extends State<EventListScreen> {
                 child: Row(
                   children: [
                     _FilterChip(
-                      label: 'Tous',
+                      label: l10n.eventFilterAllLabel,
                       selected: _selectedStatus == 'tous',
                       onTap: () => setState(() => _selectedStatus = 'tous'),
                     ),
                     _FilterChip(
-                      label: 'Ouverts',
+                      label: l10n.eventFilterOpenLabel,
                       selected: _selectedStatus == 'ouvert',
                       onTap: () => setState(() => _selectedStatus = 'ouvert'),
                     ),
                     _FilterChip(
-                      label: 'Fermés',
+                      label: l10n.eventFilterClosedLabel,
                       selected: _selectedStatus == 'ferme',
                       onTap: () => setState(() => _selectedStatus = 'ferme'),
                     ),
                     _FilterChip(
-                      label: 'Archivés',
+                      label: l10n.eventFilterArchivedLabel,
                       selected: _selectedStatus == 'archive',
                       onTap: () => setState(() => _selectedStatus = 'archive'),
                     ),
@@ -773,19 +790,19 @@ class _EventListScreenState extends State<EventListScreen> {
                     // second filtre revele des evenements caches -- il n'y en
                     // a pas, ils sont tous lisibles par tout compte actif.
                     _FilterChip(
-                      label: 'Ouverts à tous',
+                      label: l10n.eventFilterOpenToAllLabel,
                       selected: _selectedVisibility == 'public',
                       onTap: () =>
                           setState(() => _selectedVisibility = 'public'),
                     ),
                     _FilterChip(
-                      label: 'Sur sélection',
+                      label: l10n.eventBySelectionLabel,
                       selected: _selectedVisibility == 'prive',
                       onTap: () =>
                           setState(() => _selectedVisibility = 'prive'),
                     ),
                     _FilterChip(
-                      label: 'À venir',
+                      label: l10n.eventUpcomingLabel,
                       selected: _onlyUpcoming,
                       onTap: () =>
                           setState(() => _onlyUpcoming = !_onlyUpcoming),
@@ -793,7 +810,7 @@ class _EventListScreenState extends State<EventListScreen> {
                     if (isOpportunityPublisherRole(currentUser.role)) ...[
                       const SizedBox(width: 8),
                       _FilterChip(
-                        label: 'Mes événements',
+                        label: l10n.eventFilterMineLabel,
                         selected: _onlyMine,
                         onTap: () => setState(() => _onlyMine = !_onlyMine),
                       ),
@@ -804,7 +821,7 @@ class _EventListScreenState extends State<EventListScreen> {
                     // savait trier que par une recherche plein texte.
                     _buildFilterDropdown<FootballPosition>(
                       value: _selectedPosition,
-                      allLabel: 'Tous les postes',
+                      allLabel: l10n.offreAllPositionsLabel,
                       values: FootballPosition.values,
                       labelOf: (position) => position.labelFr,
                       onChanged: _setPositionFilter,
@@ -812,7 +829,7 @@ class _EventListScreenState extends State<EventListScreen> {
                     const SizedBox(width: 8),
                     _buildFilterDropdown<AgeCategory>(
                       value: _selectedCategory,
-                      allLabel: 'Toutes catégories',
+                      allLabel: l10n.offreAllCategoriesLabel,
                       values: AgeCategory.values,
                       labelOf: (category) => category.labelFr,
                       onChanged: (value) =>
@@ -821,7 +838,7 @@ class _EventListScreenState extends State<EventListScreen> {
                     const SizedBox(width: 8),
                     _buildFilterDropdown<ClubLevel>(
                       value: _selectedLevel,
-                      allLabel: 'Tous niveaux',
+                      allLabel: l10n.offreAllLevelsLabel,
                       values: ClubLevel.values,
                       labelOf: (level) => level.labelFr,
                       onChanged: (value) =>
@@ -831,7 +848,7 @@ class _EventListScreenState extends State<EventListScreen> {
                       TextButton.icon(
                         onPressed: _resetFilters,
                         icon: const Icon(Icons.close_rounded, size: 18),
-                        label: const Text('Réinitialiser'),
+                        label: Text(l10n.commonReset),
                       ),
                   ],
                 ),
@@ -897,6 +914,7 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Widget _buildTimingRow(Event event) {
+    final l10n = AppLocalizations.of(context)!;
     final expired = _isExpired(event);
     final soon = _isUpcomingSoon(event);
     final color = expired
@@ -915,7 +933,13 @@ class _EventListScreenState extends State<EventListScreen> {
         const SizedBox(width: 4),
         Expanded(
           child: Text(
-            '${DateFormat('dd MMM yyyy').format(event.dateDebut)} -> ${DateFormat('dd MMM yyyy').format(event.dateFin)} · ${_eventTimingSummary(event)}',
+            l10n.offreDateSummaryLabel(
+              l10n.eventDateRangeLabel(
+                DateFormat('dd MMM yyyy').format(event.dateDebut),
+                DateFormat('dd MMM yyyy').format(event.dateFin),
+              ),
+              _eventTimingSummary(event),
+            ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -936,6 +960,7 @@ class _EventListScreenState extends State<EventListScreen> {
     required bool isParticipant,
     required bool isOrganisateur,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     final isClosed = !_isOpenForRegistration(event);
     final isFull = _isFull(event);
     final registerPending = _isEventActionPending(event, 'registration');
@@ -953,11 +978,23 @@ class _EventListScreenState extends State<EventListScreen> {
           DropdownButton<String>(
             value: statusValue,
             underline: const SizedBox.shrink(),
-            items: const [
-              DropdownMenuItem(value: 'brouillon', child: Text('Brouillon')),
-              DropdownMenuItem(value: 'ouvert', child: Text('Ouvert')),
-              DropdownMenuItem(value: 'ferme', child: Text('Fermé')),
-              DropdownMenuItem(value: 'archive', child: Text('Archivé')),
+            items: [
+              DropdownMenuItem(
+                value: 'brouillon',
+                child: Text(l10n.eventStatusDraftLabel),
+              ),
+              DropdownMenuItem(
+                value: 'ouvert',
+                child: Text(l10n.eventStatusOpenLabel),
+              ),
+              DropdownMenuItem(
+                value: 'ferme',
+                child: Text(l10n.eventStatusClosedLabel),
+              ),
+              DropdownMenuItem(
+                value: 'archive',
+                child: Text(l10n.eventStatusArchivedLabel),
+              ),
             ],
             onChanged: statusPending
                 ? null
@@ -1006,7 +1043,7 @@ class _EventListScreenState extends State<EventListScreen> {
                     if (response != null) {
                       _showResponse(
                         response,
-                        successTitle: 'Statut mis à jour',
+                        successTitle: l10n.offreStatusUpdatedTitle,
                       );
                     }
                   },
@@ -1025,7 +1062,7 @@ class _EventListScreenState extends State<EventListScreen> {
             )
           else
             PopupMenuButton<String>(
-              tooltip: 'Plus d’actions',
+              tooltip: l10n.offreMoreActionsTooltip,
               icon: const Icon(
                 Icons.more_vert_rounded,
                 color: AdColors.onSurfaceMuted,
@@ -1038,14 +1075,14 @@ class _EventListScreenState extends State<EventListScreen> {
                   _confirmDeleteEvent(context, event);
                 }
               },
-              itemBuilder: (context) => const [
+              itemBuilder: (context) => [
                 PopupMenuItem(
                   value: 'edit',
                   child: Row(
                     children: [
-                      Icon(Icons.edit_outlined, size: 18),
-                      SizedBox(width: 10),
-                      Text('Modifier'),
+                      const Icon(Icons.edit_outlined, size: 18),
+                      const SizedBox(width: 10),
+                      Text(l10n.offreEditAction),
                     ],
                   ),
                 ),
@@ -1053,15 +1090,15 @@ class _EventListScreenState extends State<EventListScreen> {
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.delete_outline_rounded,
                         size: 18,
                         color: AdColors.error,
                       ),
-                      SizedBox(width: 10),
+                      const SizedBox(width: 10),
                       Text(
-                        'Supprimer',
-                        style: TextStyle(color: AdColors.error),
+                        l10n.settingsDeleteAction,
+                        style: const TextStyle(color: AdColors.error),
                       ),
                     ],
                   ),
@@ -1094,7 +1131,7 @@ class _EventListScreenState extends State<EventListScreen> {
                   if (response != null) {
                     _showResponse(
                       response,
-                      successTitle: 'Inscription confirmée',
+                      successTitle: l10n.eventRegistrationConfirmedTitle,
                     );
                   }
                 }
@@ -1102,10 +1139,10 @@ class _EventListScreenState extends State<EventListScreen> {
           loading: registerPending,
           leading: Icons.event_available,
           label: registerPending
-              ? 'Inscription...'
+              ? l10n.eventRegisteringEllipsis
               : isFull
-              ? 'Complet'
-              : 'S’inscrire',
+              ? l10n.eventFullLabel
+              : l10n.eventRegisterButton,
           size: AdButtonSize.compact,
           expanded: false,
         ),
@@ -1115,7 +1152,7 @@ class _EventListScreenState extends State<EventListScreen> {
                 ? null
                 : () => _confirmUnregisterEvent(context, event, currentUser),
             leading: Icons.person_remove_outlined,
-            label: 'Se désinscrire',
+            label: l10n.eventUnregisterButton,
             kind: AdButtonKind.outline,
             size: AdButtonSize.compact,
             expanded: false,
@@ -1140,20 +1177,24 @@ class _EventListScreenState extends State<EventListScreen> {
 
   Future<void> _confirmDeleteEvent(BuildContext context, Event event) async {
     if (_isEventActionPending(event, 'delete')) return;
+    final l10n = AppLocalizations.of(context)!;
 
     final confirmed = await AdDialogs.confirm(
       context: context,
-      title: 'Supprimer',
-      message: 'Voulez-vous vraiment supprimer cet événement ?',
-      confirmLabel: 'Supprimer',
-      cancelLabel: 'Annuler',
+      title: l10n.eventConfirmDeleteTitle,
+      message: l10n.eventConfirmDeleteMessage,
+      confirmLabel: l10n.settingsDeleteAction,
+      cancelLabel: l10n.commonCancel,
       danger: true,
     );
     if (!confirmed) return;
 
     final currentUser = userController.user;
     if (currentUser == null) {
-      AdFeedback.error('Erreur', 'Utilisateur introuvable.');
+      AdFeedback.error(
+        l10n.profileActionErrorTitle,
+        l10n.commonUserNotFoundMessage,
+      );
       return;
     }
 
@@ -1163,7 +1204,7 @@ class _EventListScreenState extends State<EventListScreen> {
       task: () => eventController.deleteEvent(event.id, currentUser),
     );
     if (response != null) {
-      _showResponse(response, successTitle: 'Événement supprimé');
+      _showResponse(response, successTitle: l10n.eventDeletedTitle);
     }
   }
 
@@ -1172,12 +1213,13 @@ class _EventListScreenState extends State<EventListScreen> {
     Event event,
     AppUser currentUser,
   ) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await AdDialogs.confirm(
       context: context,
-      title: 'Se désinscrire',
-      message: 'Voulez-vous vraiment vous désinscrire de cet événement ?',
-      confirmLabel: 'Confirmer',
-      cancelLabel: 'Annuler',
+      title: l10n.eventUnregisterButton,
+      message: l10n.eventConfirmUnregisterMessage,
+      confirmLabel: l10n.eventConfirmAction,
+      cancelLabel: l10n.commonCancel,
       danger: true,
     );
     if (!confirmed) return;
@@ -1188,7 +1230,7 @@ class _EventListScreenState extends State<EventListScreen> {
       task: () => eventController.unregisterFromEvent(event.id, currentUser),
     );
     if (response != null) {
-      _showResponse(response, successTitle: 'Inscription retirée');
+      _showResponse(response, successTitle: l10n.eventRegistrationWithdrawnTitle);
     }
   }
 
@@ -1202,12 +1244,13 @@ class _EventListScreenState extends State<EventListScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     if (response.toast == ToastLevel.info) {
-      AdFeedback.info('Information', response.message);
+      AdFeedback.info(l10n.commonInfoTitle, response.message);
       return;
     }
 
-    AdFeedback.error('Erreur', response.message);
+    AdFeedback.error(l10n.profileActionErrorTitle, response.message);
   }
 }
 
@@ -1215,16 +1258,16 @@ class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
   final String status;
 
-  String _labelFor(String normalized) {
+  String _labelFor(AppLocalizations l10n, String normalized) {
     switch (normalized) {
       case 'ouvert':
-        return 'Ouvert';
+        return l10n.eventStatusOpenLabel;
       case 'ferme':
-        return 'Fermé';
+        return l10n.eventStatusClosedLabel;
       case 'archive':
-        return 'Archivé';
+        return l10n.eventStatusArchivedLabel;
       case 'brouillon':
-        return 'Brouillon';
+        return l10n.eventStatusDraftLabel;
       default:
         return normalized;
     }
@@ -1232,6 +1275,7 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
 
     Color bg;
@@ -1269,7 +1313,7 @@ class _StatusBadge extends StatelessWidget {
         border: const BorderSide(color: AdColors.divider).toBorder(),
       ),
       child: Text(
-        _labelFor(normalized),
+        _labelFor(l10n, normalized),
         style: TextStyle(fontWeight: FontWeight.bold, color: fg),
       ),
     );
