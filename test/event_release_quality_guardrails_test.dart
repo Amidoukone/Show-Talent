@@ -346,6 +346,8 @@ void main() {
         final details = File(
           'lib/screens/event_detail_screen.dart',
         ).readAsStringSync();
+        // The literal wording moved into the ARB template (l10n.event*).
+        final arbFr = File('lib/l10n/app_fr.arb').readAsStringSync();
 
         expect(details, contains('final AppUser? currentUser'));
         expect(details, contains('currentUser != null &&'));
@@ -355,7 +357,13 @@ void main() {
         );
         expect(details, contains('Get.back(result: updated);'));
         expect(details, contains('current.uid == other.uid'));
-        expect(details, contains('Aucun participant pour le moment.'));
+        expect(details, contains('l10n.eventNoParticipantsMessage'));
+        expect(
+          arbFr,
+          contains(
+            '"eventNoParticipantsMessage": "Aucun participant pour le moment."',
+          ),
+        );
         expect(details, isNot(contains('Get.find<UserController>().user!')));
         expect(details, isNot(contains('Get.offAllNamed(AppRoutes.main')));
       },
@@ -379,7 +387,7 @@ void main() {
       // supprimee remonte en FlutterError et serait comptée comme un incident.
       expect(details, contains('errorBuilder:'));
 
-      expect(details, contains("label: 'Vues'"));
+      expect(details, contains('label: l10n.offreViewsLabel'));
       expect(details, contains(r"value: '${currentEvent.views ?? 0}'"));
     });
   });

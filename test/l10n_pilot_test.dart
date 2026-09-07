@@ -136,6 +136,12 @@ void main() {
     );
     expect(l10n.eventParticipantsCountLabel(12), '12 participants');
     expect(l10n.eventStatusOpenLabel, 'Ouvert');
+    expect(
+      l10n.eventDateRangeFromToLabel('05 sept. 2026', '07 sept. 2026'),
+      'Du 05 sept. 2026 au 07 sept. 2026',
+    );
+    expect(l10n.eventCapacityValueLabel(8, 20), '8 / 20 participants');
+    expect(l10n.eventRegistrationOpenToAllLabel, 'Ouverte à tous');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -246,5 +252,11 @@ void main() {
     );
     expect(l10n.eventParticipantsCountLabel(12), '12 participants');
     expect(l10n.eventStatusOpenLabel, isNot('Ouvert'));
+    expect(
+      l10n.eventDateRangeFromToLabel('Sep 5, 2026', 'Sep 7, 2026'),
+      'From Sep 5, 2026 to Sep 7, 2026',
+    );
+    expect(l10n.eventCapacityValueLabel(8, 20), '8 / 20 participants');
+    expect(l10n.eventRegistrationOpenToAllLabel, isNot('Ouverte à tous'));
   });
 }

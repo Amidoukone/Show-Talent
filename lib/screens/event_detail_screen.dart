@@ -1,3 +1,4 @@
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -46,18 +47,19 @@ class EventDetailsScreen extends StatelessWidget {
             currentEvent.organisateur.uid == currentUser.uid;
         final cs = Theme.of(context).colorScheme;
         final flyerUrl = (currentEvent.flyerUrl ?? '').trim();
+        final l10n = AppLocalizations.of(context)!;
 
         return Scaffold(
           backgroundColor: cs.surface,
           appBar: AdAppBar(
-            title: 'Détails de l’événement',
-            subtitle: 'Informations et participants',
+            title: l10n.eventDetailsTitle,
+            subtitle: l10n.eventDetailsSubtitle,
             showBottomDivider: true,
             actions: isOrganisateur
                 ? [
                     IconButton(
                       icon: const Icon(Icons.edit),
-                      tooltip: 'Modifier',
+                      tooltip: l10n.offreEditAction,
                       onPressed: () async {
                         final updated = await Get.to(
                           () => EventFormScreen(event: currentEvent),
@@ -84,12 +86,13 @@ class EventDetailsScreen extends StatelessWidget {
                   _buildFlyer(flyerUrl),
                   const SizedBox(height: 18),
                 ],
-                _buildHeader(context, currentEvent, isOrganisateur),
+                _buildHeader(context, l10n, currentEvent, isOrganisateur),
                 const SizedBox(height: 18),
-                _buildEventDetails(context, currentEvent),
+                _buildEventDetails(context, l10n, currentEvent),
                 const SizedBox(height: 22),
                 _buildParticipantsSection(
                   context,
+                  l10n,
                   currentEvent,
                   isOrganisateur,
                 ),
@@ -124,13 +127,14 @@ class EventDetailsScreen extends StatelessWidget {
 
   Widget _buildHeader(
     BuildContext context,
+    AppLocalizations l10n,
     Event currentEvent,
     bool isOrganisateur,
   ) {
     if (isOrganisateur) {
       return Row(
         children: [
-          const AdOwnerTag(label: 'Votre événement'),
+          AdOwnerTag(label: l10n.eventOwnerTag),
           const Spacer(),
           _StatusBadge(status: currentEvent.statut),
         ],
@@ -166,7 +170,7 @@ class EventDetailsScreen extends StatelessWidget {
               Text(
                 currentEvent.organisateur.nom.isNotEmpty
                     ? currentEvent.organisateur.nom
-                    : 'Organisateur',
+                    : l10n.eventOrganizerFallbackLabel,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
@@ -193,7 +197,11 @@ class EventDetailsScreen extends StatelessWidget {
   // 📄 DÉTAILS ÉVÉNEMENT
   // =========================================================
 
-  Widget _buildEventDetails(BuildContext context, Event currentEvent) {
+  Widget _buildEventDetails(
+    BuildContext context,
+    AppLocalizations l10n,
+    Event currentEvent,
+  ) {
     final cs = Theme.of(context).colorScheme;
 
     return Column(
@@ -212,15 +220,17 @@ class EventDetailsScreen extends StatelessWidget {
         _buildDetailRow(
           context: context,
           icon: Icons.calendar_today,
-          label: 'Dates',
-          value:
-              'Du ${DateFormat('dd MMM yyyy').format(currentEvent.dateDebut)} au ${DateFormat('dd MMM yyyy').format(currentEvent.dateFin)}',
+          label: l10n.eventDatesLabel,
+          value: l10n.eventDateRangeFromToLabel(
+            DateFormat('dd MMM yyyy').format(currentEvent.dateDebut),
+            DateFormat('dd MMM yyyy').format(currentEvent.dateFin),
+          ),
         ),
         const SizedBox(height: 12),
         _buildDetailRow(
           context: context,
           icon: Icons.place_outlined,
-          label: 'Lieu',
+          label: l10n.offreLocationLabel,
           value: currentEvent.lieu,
         ),
         // Le vocabulaire footballistique, affiche en libelles et jamais en
@@ -232,7 +242,7 @@ class EventDetailsScreen extends StatelessWidget {
           _buildDetailRow(
             context: context,
             icon: Icons.sports_soccer_outlined,
-            label: 'Postes concernés',
+            label: l10n.eventPositionsLabel,
             value: currentEvent.positionCodes
                 .map((position) => position.labelFr)
                 .join(' · '),
@@ -243,7 +253,7 @@ class EventDetailsScreen extends StatelessWidget {
           _buildDetailRow(
             context: context,
             icon: Icons.cake_outlined,
-            label: 'Catégories',
+            label: l10n.offreCategoriesLabel,
             value: currentEvent.ageCategories
                 .map((category) => category.labelFr)
                 .join(' · '),
@@ -254,7 +264,7 @@ class EventDetailsScreen extends StatelessWidget {
           _buildDetailRow(
             context: context,
             icon: Icons.leaderboard_outlined,
-            label: 'Niveau',
+            label: l10n.offreLevelLabel,
             value: currentEvent.clubLevel!.labelFr,
           ),
         ],
@@ -266,17 +276,21 @@ class EventDetailsScreen extends StatelessWidget {
         _buildDetailRow(
           context: context,
           icon: Icons.how_to_reg_outlined,
-          label: 'Inscription',
-          value: currentEvent.estPublic ? 'Ouverte à tous' : 'Sur sélection',
+          label: l10n.eventRegistrationLabel,
+          value: currentEvent.estPublic
+              ? l10n.eventRegistrationOpenToAllLabel
+              : l10n.eventBySelectionLabel,
         ),
         if (currentEvent.capaciteMax != null) ...[
           const SizedBox(height: 12),
           _buildDetailRow(
             context: context,
             icon: Icons.groups,
-            label: 'Capacité',
-            value:
-                '${currentEvent.participants.length} / ${currentEvent.capaciteMax} participants',
+            label: l10n.eventCapacityLabel,
+            value: l10n.eventCapacityValueLabel(
+              currentEvent.participants.length,
+              currentEvent.capaciteMax!,
+            ),
           ),
         ],
         // Le pendant de la tuile « Vues » de la fiche d'offre. Le compteur est
@@ -287,7 +301,7 @@ class EventDetailsScreen extends StatelessWidget {
         _buildDetailRow(
           context: context,
           icon: Icons.remove_red_eye_outlined,
-          label: 'Vues',
+          label: l10n.offreViewsLabel,
           value: '${currentEvent.views ?? 0}',
         ),
         if (currentEvent.tags != null && currentEvent.tags!.isNotEmpty) ...[
@@ -314,7 +328,7 @@ class EventDetailsScreen extends StatelessWidget {
         ],
         const SizedBox(height: 20),
         Text(
-          'Description',
+          l10n.offreDescriptionLabel,
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -336,6 +350,7 @@ class EventDetailsScreen extends StatelessWidget {
 
   Widget _buildParticipantsSection(
     BuildContext context,
+    AppLocalizations l10n,
     Event currentEvent,
     bool isOrganisateur,
   ) {
@@ -345,7 +360,7 @@ class EventDetailsScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Participants',
+          l10n.eventParticipantsTitle,
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -354,9 +369,9 @@ class EventDetailsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         if (currentEvent.participants.isEmpty)
-          const Text(
-            'Aucun participant pour le moment.',
-            style: TextStyle(color: AdColors.onSurfaceMuted),
+          Text(
+            l10n.eventNoParticipantsMessage,
+            style: const TextStyle(color: AdColors.onSurfaceMuted),
           )
         else
           Column(
@@ -403,7 +418,7 @@ class EventDetailsScreen extends StatelessWidget {
                 sourceLabel: 'Participants',
               ),
             ),
-            child: const Text('Voir tous les participants'),
+            child: Text(l10n.eventViewAllParticipantsButton),
           )
         else if (isOrganisateur && currentEvent.participants.isEmpty)
           TextButton(
@@ -415,7 +430,7 @@ class EventDetailsScreen extends StatelessWidget {
                 sourceLabel: 'Participants',
               ),
             ),
-            child: const Text('Gérer les participants'),
+            child: Text(l10n.eventManageParticipantsButton),
           ),
       ],
     );
@@ -488,6 +503,7 @@ class EventDetailsScreen extends StatelessWidget {
   }
 
   void _openChatWith(AppUser other, {required ContactContext context}) async {
+    final l10n = AppLocalizations.of(Get.context!)!;
     final chat = Get.find<ChatController>();
 
     final current = Get.find<UserController>().user;
@@ -499,10 +515,10 @@ class EventDetailsScreen extends StatelessWidget {
 
     if (!current.allowMessages || !other.allowMessages) {
       AdFeedback.warning(
-        'Messages indisponibles',
+        l10n.profileMessagingDisabledTitle,
         !current.allowMessages
-            ? 'Vous avez désactivé les messages.'
-            : 'Cet utilisateur a désactivé les messages.',
+            ? l10n.profileMessagingDisabledSenderMessage
+            : l10n.profileMessagingDisabledRecipientMessage,
       );
       return;
     }
@@ -547,8 +563,8 @@ class EventDetailsScreen extends StatelessWidget {
 
       if (result.createdIntake) {
         AdFeedback.info(
-          'Contact enregistré',
-          'Le premier contact a été cadré et transmis via Adfoot.',
+          l10n.offreContactRecordedTitle,
+          l10n.offreContactRecordedMessage,
         );
       }
 
@@ -557,11 +573,11 @@ class EventDetailsScreen extends StatelessWidget {
             ChatScreen(conversationId: result.conversationId, otherUser: other),
       );
     } on ChatFlowException catch (error) {
-      AdFeedback.error('Erreur', error.message);
+      AdFeedback.error(l10n.profileActionErrorTitle, error.message);
     } catch (_) {
       AdFeedback.error(
-        'Erreur',
-        'Impossible de démarrer la conversation pour le moment.',
+        l10n.profileActionErrorTitle,
+        l10n.selectUserStartConversationFailedMessage,
       );
     }
   }
@@ -574,16 +590,16 @@ class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
   final String status;
 
-  String _labelFor(String normalized) {
+  String _labelFor(AppLocalizations l10n, String normalized) {
     switch (normalized) {
       case 'ouvert':
-        return 'Ouvert';
+        return l10n.eventStatusOpenLabel;
       case 'ferme':
-        return 'Fermé';
+        return l10n.eventStatusClosedLabel;
       case 'archive':
-        return 'Archivé';
+        return l10n.eventStatusArchivedLabel;
       case 'brouillon':
-        return 'Brouillon';
+        return l10n.eventStatusDraftLabel;
       default:
         return normalized;
     }
@@ -591,6 +607,7 @@ class _StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
     final normalized = Event.normalizeStatus(status);
 
@@ -627,7 +644,7 @@ class _StatusBadge extends StatelessWidget {
         border: Border.all(color: AdColors.divider),
       ),
       child: Text(
-        _labelFor(normalized),
+        _labelFor(l10n, normalized),
         style: TextStyle(fontWeight: FontWeight.w800, color: fg),
       ),
     );
@@ -656,6 +673,7 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
 
     final sorted = [...widget.participants];
@@ -676,7 +694,7 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Participants',
+                    l10n.eventParticipantsTitle,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w900,
@@ -687,9 +705,15 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                     value: sort,
                     underline: const SizedBox.shrink(),
                     dropdownColor: AdColors.surfaceCard,
-                    items: const [
-                      DropdownMenuItem(value: 'nom', child: Text('Par nom')),
-                      DropdownMenuItem(value: 'role', child: Text('Par rôle')),
+                    items: [
+                      DropdownMenuItem(
+                        value: 'nom',
+                        child: Text(l10n.offreSortByNameLabel),
+                      ),
+                      DropdownMenuItem(
+                        value: 'role',
+                        child: Text(l10n.offreSortByRoleLabel),
+                      ),
                     ],
                     onChanged: (v) => setState(() => sort = v ?? 'nom'),
                   ),
@@ -698,12 +722,12 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
               const SizedBox(height: 8),
               const Divider(color: AdColors.divider),
               if (sorted.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Center(
                     child: Text(
-                      'Aucun participant pour le moment.',
-                      style: TextStyle(color: AdColors.onSurfaceMuted),
+                      l10n.eventNoParticipantsMessage,
+                      style: const TextStyle(color: AdColors.onSurfaceMuted),
                     ),
                   ),
                 )
@@ -751,10 +775,10 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
 
                         if (!current.allowMessages || !p.allowMessages) {
                           AdFeedback.warning(
-                            'Messages indisponibles',
+                            l10n.profileMessagingDisabledTitle,
                             !current.allowMessages
-                                ? 'Vous avez désactivé les messages.'
-                                : 'Cet utilisateur a désactivé les messages.',
+                                ? l10n.profileMessagingDisabledSenderMessage
+                                : l10n.profileMessagingDisabledRecipientMessage,
                           );
                           return;
                         }
@@ -802,8 +826,8 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
 
                           if (result.createdIntake) {
                             AdFeedback.info(
-                              'Contact enregistré',
-                              'Le premier contact a été cadré et transmis via Adfoot.',
+                              l10n.offreContactRecordedTitle,
+                              l10n.offreContactRecordedMessage,
                             );
                           }
 
@@ -814,11 +838,14 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                             ),
                           );
                         } on ChatFlowException catch (error) {
-                          AdFeedback.error('Erreur', error.message);
+                          AdFeedback.error(
+                            l10n.profileActionErrorTitle,
+                            error.message,
+                          );
                         } catch (_) {
                           AdFeedback.error(
-                            'Erreur',
-                            'Impossible de démarrer la conversation pour le moment.',
+                            l10n.profileActionErrorTitle,
+                            l10n.selectUserStartConversationFailedMessage,
                           );
                         }
                       },

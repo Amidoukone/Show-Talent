@@ -648,5 +648,40 @@
         "type": "String"
       }
     }
-  }
+  },
+
+  "eventDetailsTitle": "Event details",
+  "eventDetailsSubtitle": "Information and participants",
+  "eventOrganizerFallbackLabel": "Organizer",
+  "eventDatesLabel": "Dates",
+  "eventDateRangeFromToLabel": "From {start} to {end}",
+  "@eventDateRangeFromToLabel": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "eventPositionsLabel": "Positions concerned",
+  "eventRegistrationLabel": "Registration",
+  "eventRegistrationOpenToAllLabel": "Open to all",
+  "eventCapacityLabel": "Capacity",
+  "eventCapacityValueLabel": "{count} / {max} participants",
+  "@eventCapacityValueLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "eventParticipantsTitle": "Participants",
+  "eventNoParticipantsMessage": "No participants yet.",
+  "eventViewAllParticipantsButton": "View all participants",
+  "eventManageParticipantsButton": "Manage participants"
 }

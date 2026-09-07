@@ -789,5 +789,40 @@
         "type": "String"
       }
     }
-  }
+  },
+
+  "eventDetailsTitle": "Détails de l’événement",
+  "eventDetailsSubtitle": "Informations et participants",
+  "eventOrganizerFallbackLabel": "Organisateur",
+  "eventDatesLabel": "Dates",
+  "eventDateRangeFromToLabel": "Du {start} au {end}",
+  "@eventDateRangeFromToLabel": {
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      }
+    }
+  },
+  "eventPositionsLabel": "Postes concernés",
+  "eventRegistrationLabel": "Inscription",
+  "eventRegistrationOpenToAllLabel": "Ouverte à tous",
+  "eventCapacityLabel": "Capacité",
+  "eventCapacityValueLabel": "{count} / {max} participants",
+  "@eventCapacityValueLabel": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "eventParticipantsTitle": "Participants",
+  "eventNoParticipantsMessage": "Aucun participant pour le moment.",
+  "eventViewAllParticipantsButton": "Voir tous les participants",
+  "eventManageParticipantsButton": "Gérer les participants"
 }
