@@ -740,6 +740,12 @@ class _EventFormScreenState extends State<EventFormScreen> {
           streamingUrl: null,
           flyerUrl: null,
           views: 0,
+          // Sans elle, `Event.toMap()` omet le champ (`if (viewedBy != null)`)
+          // et le premier increment de vues plante sur `resource.data.viewedBy`
+          // absent -- une erreur d'evaluation des regles, pas un `null`, qui
+          // refuse la toute premiere ecriture qui aurait pu creer le champ.
+          // Le pendant exact de offres_form.dart : `viewedBy: <String>[]`.
+          viewedBy: const <String>[],
         );
 
         final response =

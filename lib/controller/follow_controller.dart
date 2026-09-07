@@ -185,7 +185,7 @@ class FollowController extends GetxController {
               .toSet() ??
           <String>{};
 
-      return _followRepository.fetchFollowList(
+      return await _followRepository.fetchFollowList(
         uid: uid,
         listType: listType,
         currentFollowings: currentFollowings,

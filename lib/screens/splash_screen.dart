@@ -108,7 +108,7 @@ class _SplashScreenState extends State<SplashScreen> {
         return;
       }
 
-      return _safeOffAllDestination(snapshot.destination);
+      return await _safeOffAllDestination(snapshot.destination);
     } catch (error) {
       // The app could not decide where this launch belongs, so it signs
       // out and shows login. To the user that is "l'application m'a

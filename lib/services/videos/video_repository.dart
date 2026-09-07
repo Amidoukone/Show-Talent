@@ -220,7 +220,7 @@ class VideoRepository {
       await authUser.getIdToken();
 
       final ref = _videosCollection.doc(videoId);
-      return _firestore.runTransaction<ActionResponse>((tx) async {
+      return await _firestore.runTransaction<ActionResponse>((tx) async {
         final snap = await tx.get(ref);
         if (!snap.exists) {
           return ActionResponse.failure(
@@ -291,7 +291,7 @@ class VideoRepository {
       await authUser.getIdToken(true);
 
       final ref = _videosCollection.doc(videoId);
-      return _firestore.runTransaction<ActionResponse>((tx) async {
+      return await _firestore.runTransaction<ActionResponse>((tx) async {
         final snap = await tx.get(ref);
         if (!snap.exists) {
           return ActionResponse.failure(
@@ -357,7 +357,7 @@ class VideoRepository {
       await authUser.getIdToken(true);
 
       final ref = _videosCollection.doc(videoId);
-      return _firestore.runTransaction<ActionResponse>((tx) async {
+      return await _firestore.runTransaction<ActionResponse>((tx) async {
         final snap = await tx.get(ref);
         if (!snap.exists) {
           return ActionResponse.failure(

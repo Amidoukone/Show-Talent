@@ -380,7 +380,9 @@ service cloud.firestore {
     // model would change bytes the rule has no reason to accept.
 
     function currentOfferCandidates() {
-      return resource.data.candidats is list ? resource.data.candidats : [];
+      return ("candidats" in resource.data) && resource.data.candidats is list
+        ? resource.data.candidats
+        : [];
     }
 
     function nextOfferCandidates() {
@@ -420,12 +422,23 @@ service cloud.firestore {
         (canApplyToOffer() || canWithdrawFromOffer());
     }
 
+    // Guarded with `"viewedBy" in resource.data` rather than the bare `is
+    // list` ternary used before: dot-accessing a field Firestore Rules can't
+    // find on the map is an evaluation error, not a null, and an error inside
+    // an `allow` expression denies the request. A document written before
+    // this field existed -- or one whose creator forgot to seed it -- would
+    // therefore fail *every* view-increment attempt forever, since the write
+    // that would create the field is exactly the write being denied.
     function currentOfferViewers() {
-      return resource.data.viewedBy is list ? resource.data.viewedBy : [];
+      return ("viewedBy" in resource.data) && resource.data.viewedBy is list
+        ? resource.data.viewedBy
+        : [];
     }
 
     function currentOfferViewCount() {
-      return resource.data.vues is int ? resource.data.vues : 0;
+      return ("vues" in resource.data) && resource.data.vues is int
+        ? resource.data.vues
+        : 0;
     }
 
     // `viewedBy` is a list of uids, so this one can be pinned exactly: one
@@ -446,7 +459,9 @@ service cloud.firestore {
     }
 
     function currentEventParticipants() {
-      return resource.data.participants is list ? resource.data.participants : [];
+      return ("participants" in resource.data) && resource.data.participants is list
+        ? resource.data.participants
+        : [];
     }
 
     function nextEventParticipants() {
@@ -477,12 +492,23 @@ service cloud.firestore {
         eventParticipantsRemoved()[0].uid == request.auth.uid;
     }
 
+    // Meme garde que currentOfferViewers, pour la meme raison : un evenement
+    // cree sans `viewedBy` -- EventFormScreen ne posait que `views: 0` a la
+    // creation, jamais `viewedBy` -- fait planter l'acces au champ absent, et
+    // l'ecriture qui creerait le champ est justement celle que ca refuse.
+    // Le compteur reste bloque a zero pour toujours, sans aucune erreur
+    // visible : `EventController.incrementVues` avale le `permission-denied`
+    // dans un simple `warning`.
     function currentEventViewers() {
-      return resource.data.viewedBy is list ? resource.data.viewedBy : [];
+      return ("viewedBy" in resource.data) && resource.data.viewedBy is list
+        ? resource.data.viewedBy
+        : [];
     }
 
     function currentEventViewCount() {
-      return resource.data.views is int ? resource.data.views : 0;
+      return ("views" in resource.data) && resource.data.views is int
+        ? resource.data.views
+        : 0;
     }
 
     // Le pendant exact de canMutateOfferViews. Meme forme, meme raison : un
@@ -512,8 +538,16 @@ service cloud.firestore {
         (canJoinEvent() || canLeaveEvent());
     }
 
+    // Guarded like currentEventViewers/currentOfferViewers, for the same
+    // reason -- see the comment there. Currently safe in practice only
+    // because `finalizeUpload` always seeds `likes`/`reports`/`reportCount`/
+    // `shareCount` on every new video document (functions/src/upload_session.ts);
+    // guarding here means a future creation path that forgets to cannot
+    // reintroduce the same permanently-stuck-at-zero failure.
     function currentVideoLikes() {
-      return resource.data.likes is list ? resource.data.likes : [];
+      return ("likes" in resource.data) && resource.data.likes is list
+        ? resource.data.likes
+        : [];
     }
 
     function canAddVideoLike() {
@@ -538,7 +572,9 @@ service cloud.firestore {
     }
 
     function currentVideoShareCount() {
-      return resource.data.shareCount is int ? resource.data.shareCount : 0;
+      return ("shareCount" in resource.data) && resource.data.shareCount is int
+        ? resource.data.shareCount
+        : 0;
     }
 
     function canIncrementVideoShareCount() {
@@ -549,11 +585,13 @@ service cloud.firestore {
     }
 
     function currentVideoReports() {
-      return resource.data.reports is list ? resource.data.reports : [];
+      return ("reports" in resource.data) && resource.data.reports is list
+        ? resource.data.reports
+        : [];
     }
 
     function currentVideoReportCount() {
-      return resource.data.reportCount is int ?
+      return ("reportCount" in resource.data) && resource.data.reportCount is int ?
         resource.data.reportCount :
         currentVideoReports().size();
     }
