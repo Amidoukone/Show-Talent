@@ -8,7 +8,7 @@
   "loginPasswordRequired": "Mot de passe requis",
   "loginForgotPassword": "Mot de passe oublié ?",
   "loginSubmit": "Se connecter",
-  "loginAdminManagedNotice": "Tous les comptes sont maintenant créés par l’administration Adfoot.",
+  "loginAdminManagedNotice": "Tous les comptes sont créés par l’administration Adfoot.",
   "loginNewHere": "Nouveau ici ?",
   "loginGetAccess": "Obtenir un accès",
   "loginEmailRequired": "Veuillez saisir votre e-mail.",
@@ -33,12 +33,12 @@
   },
   "resetPasswordGenericFailureMessage": "Impossible d’envoyer le lien de réinitialisation pour le moment.",
 
-  "signupTitle": "Création de compte centralisée",
-  "signupSubtitle": "L’application mobile ne crée plus de comptes directement.",
-  "signupActiveRuleCardTitle": "Règle active",
-  "signupActiveRuleCardMessage": "La création de compte se fait uniquement via le super admin dans le projet administration Adfoot.",
-  "signupRolesCardTitle": "Rôles concernés",
-  "signupRolesCardMessage": "Tous les comptes sont maintenant provisionnés dans le portail admin : {roles}.",
+  "signupTitle": "Obtenir un accès",
+  "signupSubtitle": "Les comptes Adfoot sont créés par notre équipe, et non directement depuis l’application.",
+  "signupActiveRuleCardTitle": "Comment ça marche",
+  "signupActiveRuleCardMessage": "La création de compte est gérée exclusivement par l’équipe Adfoot.",
+  "signupRolesCardTitle": "Profils concernés",
+  "signupRolesCardMessage": "Tous les comptes sont provisionnés dans le portail admin : {roles}.",
   "@signupRolesCardMessage": {
     "description": "roles is a comma-joined list of internal role identifiers (joueur, fan, club...), not translated.",
     "placeholders": {
@@ -47,8 +47,39 @@
       }
     }
   },
-  "signupUserJourneyCardTitle": "Parcours utilisateur",
+  "signupUserJourneyCardTitle": "Étapes à suivre",
   "signupUserJourneyCardMessage": "1. Contacter l’administration Adfoot.\n2. Recevoir le lien de définition du mot de passe.\n3. Valider l’adresse e-mail.\n4. Se connecter ensuite dans l’application mobile.",
   "signupBackToLogin": "Retour à la connexion",
-  "signupAlreadyHaveAccount": "J’ai déjà un compte"
+  "signupAlreadyHaveAccount": "J’ai déjà un compte",
+
+  "verifyEmailAppBarTitle": "Vérification e-mail",
+  "verifyEmailAppBarSubtitle": "Sécurisation du compte Adfoot",
+  "verifyEmailBackTooltip": "Retour",
+  "verifyEmailLoadingTitle": "Vérification en cours",
+  "verifyEmailLoadingMessage": "Préparation de la vérification...",
+  "verifyEmailAddressLine": "Adresse : {email}",
+  "@verifyEmailAddressLine": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "verifyEmailSentIntro": "Un e-mail de vérification a été envoyé.",
+  "verifyEmailUnsentIntro": "Vérifiez votre boîte mail et cliquez sur le lien de vérification.",
+  "verifyEmailCheckInboxInstruction": "Ouvrez votre boîte de réception et cliquez sur le lien.",
+  "verifyEmailCheckSpamInstruction": "Si vous ne le voyez pas, vérifiez aussi les dossiers Spam, Indésirables ou Promotions.",
+  "verifyEmailReturnToLoginInstruction": "Une fois votre e-mail vérifié dans le navigateur, revenez ici puis retournez à la connexion.",
+  "verifyEmailBackToLogin": "Retour à la connexion",
+  "verifyEmailResendLink": "Renvoyer le lien de vérification",
+  "verifyEmailThrottleTitle": "Veuillez patienter",
+  "verifyEmailThrottleMessage": "Attendez quelques secondes avant de renvoyer.",
+  "verifyEmailGenericErrorTitle": "Erreur",
+  "verifyEmailSendErrorDefault": "Impossible d’envoyer l’e-mail pour le moment.",
+  "verifyEmailResentTitle": "Lien envoyé",
+  "verifyEmailResentMessage": "Un e-mail de vérification a été renvoyé.",
+  "verifyEmailVerifiedNoticeTitle": "E-mail vérifié",
+  "verifyEmailVerifiedNoticeMessage": "Votre e-mail a été vérifié. Connectez-vous pour continuer.",
+  "verifyEmailInvalidLinkMessage": "Le lien de vérification est invalide ou expiré. Demandez un nouveau lien.",
+  "verifyEmailAfterVerificationMessage": "Si la page web indique que votre e-mail a été vérifié, retournez à la connexion puis reconnectez-vous pour activer le compte."
 }

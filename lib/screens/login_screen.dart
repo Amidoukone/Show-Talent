@@ -42,10 +42,22 @@ class _LoginScreenState extends State<LoginScreen> {
   /// messages win in the ordinary case and this only catches what it missed.
   static const Duration _signInTimeout = Duration(seconds: 60);
 
+  bool _sessionNoticeCaptured = false;
+
   @override
-  void initState() {
-    super.initState();
-    _captureSessionNotice();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Not in initState: _captureSessionNotice reads AppLocalizations.of
+    // (context) unconditionally, and Flutter forbids depending on an
+    // inherited widget -- Localizations included -- until after initState
+    // returns. didChangeDependencies is the framework's prescribed place
+    // for exactly this; doing it in initState throws
+    // "dependOnInheritedWidgetOfExactType... called before initState()
+    // completed" the moment this screen mounts.
+    if (!_sessionNoticeCaptured) {
+      _sessionNoticeCaptured = true;
+      _captureSessionNotice();
+    }
   }
 
   @override

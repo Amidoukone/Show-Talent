@@ -1,4 +1,5 @@
 import 'package:adfoot/config/app_routes.dart';
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/verify_email_throttle.dart';
@@ -32,10 +33,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   bool _emailSent = false;
   int? _sentAtMs;
-
-  static const String _loginAfterVerificationMessage =
-      'Si la page web indique que votre e-mail a été vérifié, '
-      'retournez à la connexion puis reconnectez-vous pour activer le compte.';
+  bool _redirectParamsHandled = false;
 
   @override
   void initState() {
@@ -51,24 +49,43 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         );
       }
     }
+  }
 
-    _handlePossibleRedirectParams();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Not in initState: on non-web (the common case), this runs through to
+    // AppLocalizations.of(context) synchronously, before initState returns
+    // -- Flutter forbids depending on an inherited widget (Localizations
+    // included) until after initState completes. didChangeDependencies is
+    // the framework's own prescribed place for exactly this.
+    if (!_redirectParamsHandled) {
+      _redirectParamsHandled = true;
+      _handlePossibleRedirectParams();
+    }
   }
 
   String _defaultUxMessage({required bool emailSent}) {
+    final l10n = AppLocalizations.of(context)!;
     final email = _authSessionService.currentUserEmail;
     final emailLine = (email != null && email.isNotEmpty)
-        ? 'Adresse : $email\n\n'
+        ? '${l10n.verifyEmailAddressLine(email)}\n\n'
         : '';
 
-    return emailSent
-        ? 'Un e-mail de vérification a été envoyé.\n\n$emailLine'
-              'Ouvre ta boîte de réception et clique sur le lien.\n'
-              'Si tu ne le vois pas, vérifie aussi Spam / Indésirables / Promotions.\n\n'
-              'Une fois l’e-mail vérifié dans le navigateur, reviens ici puis retourne à la connexion.'
-        : 'Vérifie ta boîte mail et clique sur le lien de vérification.\n\n$emailLine'
-              'Si tu ne le vois pas, vérifie aussi Spam / Indésirables / Promotions.\n\n'
-              'Une fois l’e-mail vérifié dans le navigateur, reviens ici puis retourne à la connexion.';
+    final buffer = StringBuffer()
+      ..write(emailSent ? l10n.verifyEmailSentIntro : l10n.verifyEmailUnsentIntro)
+      ..write('\n\n')
+      ..write(emailLine);
+    if (emailSent) {
+      buffer
+        ..write(l10n.verifyEmailCheckInboxInstruction)
+        ..write('\n');
+    }
+    buffer
+      ..write(l10n.verifyEmailCheckSpamInstruction)
+      ..write('\n\n')
+      ..write(l10n.verifyEmailReturnToLoginInstruction);
+    return buffer.toString();
   }
 
   Future<void> _goBackToLogin() async {
@@ -98,14 +115,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     await Get.offAllNamed(
       AppRoutes.login,
       arguments: <String, dynamic>{
         if (email != null && email.isNotEmpty) 'prefillEmail': email,
-        'sessionNoticeTitle': 'E-mail vérifié',
+        'sessionNoticeTitle': l10n.verifyEmailVerifiedNoticeTitle,
         'sessionNoticeMessage':
-            message ??
-            'Votre e-mail a été vérifié. Connectez-vous pour continuer.',
+            message ?? l10n.verifyEmailVerifiedNoticeMessage,
         'sessionNoticeKind': 'success',
       },
     );
@@ -120,9 +137,13 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       if (mode == 'verifyEmail' && oobCode != null && oobCode.isNotEmpty) {
         try {
           await _authSessionService.applyEmailVerificationCode(oobCode);
+          if (!mounted) {
+            return;
+          }
+          final l10n = AppLocalizations.of(context)!;
           await _redirectToLogin(
             email: _authSessionService.currentUserEmail,
-            message: _loginAfterVerificationMessage,
+            message: l10n.verifyEmailAfterVerificationMessage,
           );
           return;
         } on FirebaseAuthException catch (error) {
@@ -139,7 +160,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           if (mounted) {
             setState(() {
               _message =
-                  'Le lien de vérification est invalide ou expiré. Demandez un nouveau lien.';
+                  AppLocalizations.of(context)!.verifyEmailInvalidLinkMessage;
             });
           }
         }
@@ -161,10 +182,12 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
+
     if (!VerifyEmailThrottle.canSendNow()) {
       AdFeedback.warning(
-        'Veuillez patienter',
-        'Attendez quelques secondes avant de renvoyer.',
+        l10n.verifyEmailThrottleTitle,
+        l10n.verifyEmailThrottleMessage,
       );
       return;
     }
@@ -184,7 +207,10 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           return;
         }
 
-        AdFeedback.error('Erreur', result.errorMessage ?? 'Erreur d’envoi.');
+        AdFeedback.error(
+          l10n.verifyEmailGenericErrorTitle,
+          result.errorMessage ?? l10n.verifyEmailSendErrorDefault,
+        );
         return;
       }
 
@@ -200,15 +226,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       });
 
       AdFeedback.success(
-        'Lien envoyé',
-        'Un e-mail de vérification a été renvoyé.',
+        l10n.verifyEmailResentTitle,
+        l10n.verifyEmailResentMessage,
       );
     } on AuthFlowException catch (error) {
       if (!mounted) {
         return;
       }
 
-      AdFeedback.error('Erreur', error.message);
+      AdFeedback.error(l10n.verifyEmailGenericErrorTitle, error.message);
     } finally {
       if (mounted) {
         setState(() {
@@ -220,26 +246,27 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AdAppBar(
-        title: 'Vérification e-mail',
-        subtitle: 'Sécurisation du compte Adfoot',
+        title: l10n.verifyEmailAppBarTitle,
+        subtitle: l10n.verifyEmailAppBarSubtitle,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: (_isProcessing || _resending) ? null : _goBackToLogin,
-          tooltip: 'Retour',
+          tooltip: l10n.verifyEmailBackTooltip,
         ),
       ),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(AdSpacing.xl),
           child: _isProcessing
-              ? const AdStatePanel.loading(
-                  title: 'Vérification en cours',
-                  message: 'Préparation du parcours de vérification...',
+              ? AdStatePanel.loading(
+                  title: l10n.verifyEmailLoadingTitle,
+                  message: l10n.verifyEmailLoadingMessage,
                 )
               : ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
@@ -259,7 +286,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                         AdButton(
                           onPressed: _goBackToLogin,
                           leading: Icons.login_outlined,
-                          label: 'Retour à la connexion',
+                          label: l10n.verifyEmailBackToLogin,
                         ),
                         const SizedBox(height: AdSpacing.sm),
                         AdButton(
@@ -267,7 +294,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                           loading: _resending,
                           leading: Icons.email_outlined,
                           kind: AdButtonKind.tonal,
-                          label: 'Renvoyer le lien de vérification',
+                          label: l10n.verifyEmailResendLink,
                         ),
                       ],
                     ),

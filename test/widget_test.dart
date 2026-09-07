@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:get/get.dart';
 
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/main.dart';
 import 'package:adfoot/screens/splash_screen.dart';
 import 'package:adfoot/screens/verify_email_screen.dart';
@@ -77,6 +78,8 @@ void main() {
       (WidgetTester tester) async {
     await tester.pumpWidget(
       GetMaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: SplashScreen(
           fallbackInitializationDelay: Duration.zero,
           fallbackRouteBuilder: () async => const VerifyEmailScreen(),

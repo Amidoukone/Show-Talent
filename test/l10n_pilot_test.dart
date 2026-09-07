@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Verifies the ARB -> AppLocalizations pipeline end to end for each screen
-/// migrated so far (login, signup): both locales resolve, the French
-/// template is not silently used as an English fallback, and parameterized
-/// strings substitute their placeholder correctly in each language.
+/// migrated so far (login, signup, verify email): both locales resolve, the
+/// French template is not silently used as an English fallback, and
+/// parameterized strings substitute their placeholder correctly in each
+/// language.
 void main() {
   Future<AppLocalizations> resolve(
     WidgetTester tester,
@@ -38,11 +39,15 @@ void main() {
       'Lien de réinitialisation envoyé à joueur@example.com. '
       'Pensez à vérifier vos spams si vous ne le voyez pas.',
     );
-    expect(l10n.signupTitle, 'Création de compte centralisée');
+    expect(l10n.signupTitle, 'Obtenir un accès');
     expect(
       l10n.signupRolesCardMessage('joueur, fan, club'),
-      'Tous les comptes sont maintenant provisionnés dans le portail admin : '
+      'Tous les comptes sont provisionnés dans le portail admin : '
       'joueur, fan, club.',
+    );
+    expect(
+      l10n.verifyEmailAddressLine('joueur@example.com'),
+      'Adresse : joueur@example.com',
     );
   });
 
@@ -58,11 +63,15 @@ void main() {
       "Reset link sent to player@example.com. Check your spam folder if "
       "you don't see it.",
     );
-    expect(l10n.signupTitle, isNot('Création de compte centralisée'));
+    expect(l10n.signupTitle, isNot('Obtenir un accès'));
     expect(
       l10n.signupRolesCardMessage('joueur, fan, club'),
-      'All accounts are now provisioned in the admin portal: '
+      'All accounts are provisioned in the admin portal: '
       'joueur, fan, club.',
+    );
+    expect(
+      l10n.verifyEmailAddressLine('player@example.com'),
+      'Address: player@example.com',
     );
   });
 }

@@ -54,9 +54,20 @@ void main() {
     test('verify email screen still redirects to login after verification', () {
       final content =
           File('lib/screens/verify_email_screen.dart').readAsStringSync();
+      final arb = File('lib/l10n/app_fr.arb').readAsStringSync();
 
       expect(content, contains('_redirectToLogin('));
-      expect(content, contains("'sessionNoticeTitle': 'E-mail vérifié'"));
+      expect(
+        content,
+        contains("'sessionNoticeTitle': l10n.verifyEmailVerifiedNoticeTitle"),
+      );
+      // The literal wording moved into the ARB template as part of the
+      // English-localization pass; verified there instead of in the screen
+      // source, which now only references the AppLocalizations key.
+      expect(
+        arb,
+        contains('"verifyEmailVerifiedNoticeTitle": "E-mail vérifié"'),
+      );
       expect(content, contains('Get.offAllNamed('));
       expect(content, contains('EmailActionLinkParser.extract(Uri.base)'));
     });
@@ -64,10 +75,22 @@ void main() {
     test('verify email screen now sends users back to login explicitly', () {
       final content =
           File('lib/screens/verify_email_screen.dart').readAsStringSync();
+      final arb = File('lib/l10n/app_fr.arb').readAsStringSync();
 
-      expect(content, contains('Retour à la connexion'));
+      expect(content, contains('l10n.verifyEmailBackToLogin'));
       expect(content, contains('_goBackToLogin'));
-      expect(content, contains('_loginAfterVerificationMessage'));
+      expect(
+        content,
+        contains('l10n.verifyEmailAfterVerificationMessage'),
+      );
+      expect(
+        arb,
+        contains(
+          '"verifyEmailAfterVerificationMessage": "Si la page web indique '
+          'que votre e-mail a été vérifié, retournez à la connexion puis '
+          'reconnectez-vous pour activer le compte."',
+        ),
+      );
       expect(content, isNot(contains('J’ai cliqué sur le lien, continuer')));
     });
 
