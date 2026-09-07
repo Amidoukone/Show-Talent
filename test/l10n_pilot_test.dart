@@ -4,10 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Verifies the ARB -> AppLocalizations pipeline end to end for each screen
 /// migrated so far (login, signup, verify email, reset password, terms
-/// acceptance, main navigation shell, settings): both locales resolve, the
-/// French template is not silently used as an English fallback, and
-/// parameterized strings substitute their placeholder correctly in each
-/// language.
+/// acceptance, main navigation shell, settings, profile): both locales
+/// resolve, the French template is not silently used as an English
+/// fallback, and parameterized strings substitute their placeholder
+/// correctly in each language.
 void main() {
   Future<AppLocalizations> resolve(
     WidgetTester tester,
@@ -79,6 +79,17 @@ void main() {
       'Faites vérifier toute opportunité via adfoot.org ou WhatsApp : '
       '+225 00 00 00 00.',
     );
+    expect(l10n.profileRoleFan, 'Supporter');
+    expect(
+      l10n.profileStatsAttestedWithDateMessage('12/03/2026'),
+      'Chiffres attestés par Adfoot le 12/03/2026',
+    );
+    expect(
+      l10n.profileSeasonSummaryAppearances(28),
+      '28 matchs',
+    );
+    expect(l10n.profileSeasonSummaryGoals(11), '11 buts');
+    expect(l10n.profileCtaCompleteButton, 'Compléter');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -132,5 +143,16 @@ void main() {
       'Have any opportunity checked via adfoot.org or WhatsApp: '
       '+225 00 00 00 00.',
     );
+    expect(l10n.profileRoleFan, 'Fan');
+    expect(
+      l10n.profileStatsAttestedWithDateMessage('03/12/2026'),
+      'Stats verified by Adfoot on 03/12/2026',
+    );
+    expect(
+      l10n.profileSeasonSummaryAppearances(28),
+      '28 matches',
+    );
+    expect(l10n.profileSeasonSummaryGoals(11), '11 goals');
+    expect(l10n.profileCtaCompleteButton, 'Complete');
   });
 }

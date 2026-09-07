@@ -2,6 +2,7 @@
 import 'dart:async';
 
 import 'package:adfoot/config/feature_controller_registry.dart';
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/player_football_profile.dart';
@@ -36,20 +37,20 @@ import 'package:adfoot/utils/video_ui_strings.dart';
 
 part 'profile_screen_widgets.dart';
 
-String _profileRoleLabel(AppUser user) {
+String _profileRoleLabel(AppLocalizations l10n, AppUser user) {
   switch (user.role) {
     case 'joueur':
-      return 'Joueur';
+      return l10n.profileRoleJoueur;
     case 'coach':
-      return 'Coach';
+      return l10n.profileRoleCoach;
     case 'club':
-      return 'Club';
+      return l10n.profileRoleClub;
     case 'recruteur':
-      return 'Recruteur';
+      return l10n.profileRoleRecruteur;
     case 'agent':
-      return 'Agent';
+      return l10n.profileRoleAgent;
     case 'fan':
-      return 'Supporter';
+      return l10n.profileRoleFan;
     default:
       return user.role;
   }
@@ -260,11 +261,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return GetBuilder<ProfileController>(
       tag: widget.uid,
       builder: (controller) {
         if (controller.user == null) {
-          return _buildProfileLoadState(controller);
+          return _buildProfileLoadState(controller, l10n);
         }
 
         final user = controller.user!;
@@ -277,6 +279,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (!canViewProfile) {
           return _buildPrivateProfile(
             user,
+            l10n,
             isOwnProfile: isOwnProfile,
             canMessage: canMessage,
           );
@@ -285,8 +288,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return Scaffold(
           backgroundColor: kSurface,
           appBar: AdAppBar(
-            title: user.nom.isNotEmpty ? user.nom : 'Profil',
-            subtitle: _profileRoleLabel(user),
+            title: user.nom.isNotEmpty ? user.nom : l10n.profileFallbackTitle,
+            subtitle: _profileRoleLabel(l10n, user),
             showBottomDivider: true,
             actions: [
               // Settings live here now, not in the navigation bar.
@@ -308,7 +311,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               if (isOwnProfile && !widget.isReadOnly)
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
-                  tooltip: 'Outils',
+                  tooltip: l10n.settingsAppBarTitle,
                   onPressed: () => unawaited(Get.to(() => SettingsScreen())),
                 ),
               if (isOwnProfile && !widget.isReadOnly)
@@ -361,7 +364,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: _buildNetworkStatsCard(user),
+                      child: _buildNetworkStatsCard(user, l10n),
                     ),
                   ),
 
@@ -374,6 +377,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         child: _buildFollowMessageRow(
                           user,
+                          l10n,
                           canMessage: canMessage,
                         ),
                       ),
@@ -383,12 +387,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                       child: AdSectionCard(
-                        title: _bioSectionTitle(user),
+                        title: _bioSectionTitle(l10n, user),
                         icon: Icons.notes_rounded,
                         child: Text(
                           user.bio?.isNotEmpty == true
                               ? user.bio!
-                              : _emptyBioMessage(user),
+                              : _emptyBioMessage(l10n, user),
                           style: const TextStyle(fontSize: 15),
                         ),
                       ),
@@ -408,6 +412,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                       child: _buildAdvancedCtaIfNeededClean(
                         user,
+                        l10n,
                         isOwnProfile: isOwnProfile,
                       ),
                     ),
@@ -419,10 +424,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: AdSectionCard(
-                          title: _publicSectionTitleClean(user),
+                          title: _publicSectionTitleClean(l10n, user),
                           icon: Icons.sports_soccer_outlined,
                           child: _buildBaseFootballSectionClean(
                             user,
+                            l10n,
                             isOwnProfile: isOwnProfile,
                           ),
                         ),
@@ -435,10 +441,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: AdSectionCard(
-                          title: _advancedSectionTitleClean(user),
+                          title: _advancedSectionTitleClean(l10n, user),
                           icon: Icons.auto_awesome_rounded,
                           child: _buildAdvancedFootballSectionClean(
                             user,
+                            l10n,
                             isOwnProfile: isOwnProfile,
                           ),
                         ),
@@ -451,9 +458,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: AdSectionCard(
-                          title: 'Documents et preuves',
+                          title: l10n.profileEvidenceSectionTitle,
                           icon: Icons.folder_open_rounded,
-                          child: _buildEvidenceSectionClean(user),
+                          child: _buildEvidenceSectionClean(user, l10n),
                         ),
                       ),
                     ),
@@ -461,12 +468,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SliverToBoxAdapter(child: SizedBox(height: 12)),
 
                   if (user.role == 'joueur') ...[
-                    const SliverToBoxAdapter(
+                    SliverToBoxAdapter(
                       child: Padding(
-                        padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                         child: _SectionHeader(
                           icon: Icons.video_collection_outlined,
-                          title: 'Vidéos',
+                          title: l10n.profileVideosSectionTitle,
                         ),
                       ),
                     ),
@@ -576,7 +583,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileLoadState(ProfileController controller) {
+  Widget _buildProfileLoadState(
+    ProfileController controller,
+    AppLocalizations l10n,
+  ) {
     // Only spin while a load is genuinely running. Reaching this state with
     // no load in flight and no attempt behind it used to leave a spinner that
     // nothing would ever replace; re-arm the load instead so the screen
@@ -596,11 +606,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final errorMessage =
         (controller.profileLoadErrorMessage?.trim().isNotEmpty ?? false)
         ? controller.profileLoadErrorMessage!
-        : 'Chargement du profil impossible. Réessayez dans quelques instants.';
+        : l10n.profileLoadFailureMessage;
 
     return Scaffold(
       backgroundColor: kSurface,
-      appBar: const AdAppBar(title: 'Profil', showBottomDivider: true),
+      appBar: AdAppBar(
+        title: l10n.profileFallbackTitle,
+        showBottomDivider: true,
+      ),
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -615,7 +628,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  controller.profileLoadErrorTitle ?? 'Profil indisponible',
+                  controller.profileLoadErrorTitle ??
+                      l10n.mainProfileUnavailableTitle,
                   textAlign: TextAlign.center,
                   style: Theme.of(
                     context,
@@ -639,7 +653,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.refresh),
-                  label: const Text('Réessayer'),
+                  label: Text(l10n.commonRetry),
                 ),
               ],
             ),
@@ -666,16 +680,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isSenderDisabled = !currentUser.allowMessages;
     final isRecipientDisabled = !user.allowMessages;
 
+    final l10n = AppLocalizations.of(context)!;
     String message;
     if (isSenderDisabled && isRecipientDisabled) {
-      message = 'Les messages sont désactivés pour vous deux.';
+      message = l10n.profileMessagingDisabledBothMessage;
     } else if (isSenderDisabled) {
-      message = 'Vous avez désactivé l’envoi de messages.';
+      message = l10n.profileMessagingDisabledSenderMessage;
     } else {
-      message = 'Cet utilisateur a désactivé les messages.';
+      message = l10n.profileMessagingDisabledRecipientMessage;
     }
 
-    AdFeedback.warning('Messages indisponibles', message);
+    AdFeedback.warning(l10n.profileMessagingDisabledTitle, message);
   }
 
   Future<void> _handleSendMessage(AppUser user) async {
@@ -683,10 +698,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final currentUser = Get.find<UserController>().user ?? _authController.user;
     final currentUserId = currentUser?.uid ?? _authController.currentUid;
     if (currentUser == null || currentUserId == null) {
-      AdFeedback.error('Session invalide', 'Utilisateur non connecté.');
+      AdFeedback.error(
+        l10n.profileInvalidSessionTitle,
+        l10n.profileNotSignedInMessage,
+      );
       return;
     }
 
@@ -749,15 +768,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final conversationId = result.conversationId;
       if (result.createdIntake) {
         AdFeedback.info(
-          'Contact enregistré',
-          'Le premier contact a été cadré et transmis via Adfoot.',
+          l10n.profileContactRecordedTitle,
+          l10n.profileContactRecordedMessage,
         );
       }
 
       if (conversationId.isEmpty) {
         AdFeedback.error(
-          'Erreur',
-          'Impossible d’ouvrir la messagerie pour le moment.',
+          l10n.profileMessagingErrorTitle,
+          l10n.profileMessagingUnavailableMessage,
         );
         return;
       }
@@ -770,11 +789,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         () => ChatScreen(conversationId: conversationId, otherUser: user),
       );
     } on ChatFlowException catch (error) {
-      AdFeedback.error('Erreur', error.message);
+      AdFeedback.error(l10n.profileMessagingErrorTitle, error.message);
     } catch (_) {
       AdFeedback.error(
-        'Erreur',
-        'Impossible d’ouvrir la messagerie pour le moment.',
+        l10n.profileMessagingErrorTitle,
+        l10n.profileMessagingUnavailableMessage,
       );
     } finally {
       if (mounted) {
@@ -784,15 +803,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildPrivateProfile(
-    AppUser user, {
+    AppUser user,
+    AppLocalizations l10n, {
     required bool isOwnProfile,
     required bool canMessage,
   }) {
     return Scaffold(
       backgroundColor: kSurface,
       appBar: AdAppBar(
-        title: user.nom.isNotEmpty ? user.nom : 'Profil',
-        subtitle: _profileRoleLabel(user),
+        title: user.nom.isNotEmpty ? user.nom : l10n.profileFallbackTitle,
+        subtitle: _profileRoleLabel(l10n, user),
         showBottomDivider: true,
         actions: [
           if (!isOwnProfile && _authController.currentUid != null)
@@ -812,15 +832,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const Icon(Icons.lock_outline, size: 48, color: kPrimary),
               const SizedBox(height: 12),
-              const Text(
-                'Profil privé',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              Text(
+                l10n.profilePrivateTitle,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
-                "Ce profil n’est pas visible pour le moment.",
-                style: TextStyle(color: AdColors.onSurfaceMuted),
+                l10n.profilePrivateMessage,
+                style: const TextStyle(color: AdColors.onSurfaceMuted),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -831,13 +854,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : () => _handleSendMessage(user),
                   loading: _isMessageActionLoading,
                   leading: Icons.message_outlined,
-                  label: 'Contacter',
+                  label: l10n.profileContactButton,
                   expanded: false,
                 )
               else
                 Text(
-                  'La messagerie est désactivée pour cet utilisateur.',
-                  style: TextStyle(color: AdColors.onSurfaceMuted),
+                  l10n.profileMessagingDisabledForVisitor,
+                  style: const TextStyle(color: AdColors.onSurfaceMuted),
                   textAlign: TextAlign.center,
                 ),
             ],
@@ -853,7 +876,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Fermer la photo de profil', // Obligatoire
+      barrierLabel: AppLocalizations.of(context)!.profileClosePhotoLabel,
       barrierColor: Colors.black87,
       transitionDuration: const Duration(milliseconds: 200),
       pageBuilder: (context, animation, secondaryAnimation) {
@@ -935,7 +958,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildAdvancedCtaIfNeededClean(
-    AppUser user, {
+    AppUser user,
+    AppLocalizations l10n, {
     required bool isOwnProfile,
   }) {
     if (!isOwnProfile) return const SizedBox.shrink();
@@ -944,23 +968,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final hasAdvancedProfile = user.hasAdvancedProfile;
     final message = hasAdvancedProfile
         ? user.isPlayer
-              ? 'Gardez votre dossier scout à jour pour que les recruteurs disposent d’informations fiables.'
+              ? l10n.profileCtaUpdatePlayerMessage
               : user.isClub
-              ? 'Maintenez la présentation de votre club, vos catégories et vos besoins à jour.'
+              ? l10n.profileCtaUpdateClubMessage
               : user.isRecruiter
               ? user.isAgent
-                    ? 'Maintenez votre cadre de représentation, votre licence et vos zones à jour.'
-                    : 'Maintenez vos références professionnelles et vos zones d’intervention à jour.'
-              : 'Gardez les informations avancées du profil à jour.'
+                    ? l10n.profileCtaUpdateAgentMessage
+                    : l10n.profileCtaUpdateRecruiterMessage
+              : l10n.profileCtaUpdateDefaultMessage
         : user.isPlayer
-        ? 'Complétez votre fiche joueur et votre dossier scout pour présenter un profil plus crédible aux clubs et recruteurs.'
+        ? l10n.profileCtaCompletePlayerMessage
         : user.isClub
-        ? 'Complétez la présentation de votre club pour afficher clairement votre structure, vos catégories et vos besoins.'
+        ? l10n.profileCtaCompleteClubMessage
         : user.isRecruiter
         ? user.isAgent
-              ? 'Complétez votre cadre de représentation pour présenter votre agence, votre licence et vos zones d’intervention.'
-              : 'Complétez vos références professionnelles pour présenter votre structure, vos licences et vos zones d’intervention.'
-        : 'Complétez les informations avancées du profil.';
+              ? l10n.profileCtaCompleteAgentMessage
+              : l10n.profileCtaCompleteRecruiterMessage
+        : l10n.profileCtaCompleteDefaultMessage;
 
     Future<void> openAdvancedEditor() async {
       if (user.isPlayer || user.isClub || user.isRecruiter) {
@@ -984,7 +1008,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           leading: hasAdvancedProfile
               ? Icons.edit_outlined
               : Icons.add_circle_outline_rounded,
-          label: hasAdvancedProfile ? 'Mettre à jour' : 'Compléter',
+          label: hasAdvancedProfile
+              ? l10n.profileCtaUpdateButton
+              : l10n.profileCtaCompleteButton,
           expanded: width == null,
         ),
       );
@@ -1042,22 +1068,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildNetworkStatsCard(AppUser user) {
+  Widget _buildNetworkStatsCard(AppUser user, AppLocalizations l10n) {
     return AdSectionCard(
-      title: 'Réseau',
+      title: l10n.profileNetworkSectionTitle,
       icon: Icons.people_outline,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _StatChip(
-            label: 'Abonnés',
+            label: l10n.profileFollowersLabel,
             value: user.followersList.length,
             onTap: () => Get.to(
               () => FollowListScreen(uid: user.uid, listType: 'followers'),
             ),
           ),
           _StatChip(
-            label: 'Abonnements',
+            label: l10n.profileFollowingLabel,
             value: user.followingsList.length,
             onTap: () => Get.to(
               () => FollowListScreen(uid: user.uid, listType: 'followings'),
@@ -1069,7 +1095,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildBaseFootballSectionClean(
-    AppUser user, {
+    AppUser user,
+    AppLocalizations l10n, {
     required bool isOwnProfile,
   }) {
     final fields =
@@ -1086,7 +1113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (isOwnProfile) {
       fields.add(
         _field(
-          'Téléphone',
+          l10n.profilePhoneLabel,
           user.phone,
           icon: Icons.phone_outlined,
           compact: true,
@@ -1097,7 +1124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user.languages != null && user.languages!.isNotEmpty) {
       fields.add(
         _field(
-          'Langues parlées',
+          l10n.profileLanguagesLabel,
           user.languages!.join(', '),
           icon: Icons.language_outlined,
         ),
@@ -1106,7 +1133,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (location.isNotEmpty) {
       fields.add(
-        _field('Localisation', location, icon: Icons.place_outlined),
+        _field(l10n.profileLocationLabel, location, icon: Icons.place_outlined),
       );
     }
 
@@ -1139,18 +1166,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // L'annee est aussi la bonne unite : les categories du football se
         // comptent par annee de naissance, pas par age au jour pres.
         _field(
-          'Année de naissance',
+          l10n.profileBirthYearLabel,
           user.football.birthYear?.toString(),
           icon: Icons.cake_outlined,
           compact: true,
         ),
         _field(
-          user.isCoach ? 'Fonction sportive' : 'Postes',
+          user.isCoach ? l10n.profileCoachRoleLabel : l10n.profilePositionsLabel,
           positionLabel,
           icon: Icons.sports_outlined,
         ),
         _field(
-          user.isCoach ? 'Club / structure' : 'Club actuel',
+          user.isCoach ? l10n.profileCoachClubLabel : l10n.profileCurrentClubLabel,
           teamLabel,
           icon: Icons.flag_outlined,
         ),
@@ -1158,7 +1185,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } else if (user.isClub) {
       fields.addAll([
         _field(
-          'Ligue / championnat',
+          l10n.profileLeagueLabel,
           user.ligue,
           icon: Icons.emoji_events_outlined,
         ),
@@ -1166,73 +1193,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } else if (user.isRecruiter) {
       fields.addAll([
         _field(
-          user.isAgent ? 'Agence / structure' : 'Structure de recrutement',
+          user.isAgent
+              ? l10n.profileAgencyLabel
+              : l10n.profileRecruitmentStructureLabel,
           user.entreprise,
           icon: Icons.business_outlined,
         ),
         _field(
           user.isAgent
-              ? 'Placements ou signatures réalisés'
-              : 'Recrutements réalisés',
+              ? l10n.profilePlacementsLabel
+              : l10n.profileRecruitmentsLabel,
           user.nombreDeRecrutements?.toString(),
           icon: Icons.how_to_reg_outlined,
           compact: true,
         ),
       ]);
     } else {
-      fields.add(_field('Informations', 'Aucune information renseignée.'));
+      fields.add(_field(l10n.profileNoInfoLabel, l10n.profileNoInfoMessage));
     }
 
-    return _infoTileGrid(fields);
+    return _infoTileGrid(fields, l10n);
   }
 
-  String _bioSectionTitle(AppUser user) {
-    if (user.isPlayer) return 'Présentation du joueur';
-    if (user.isCoach) return 'Présentation du coach';
-    if (user.isClub) return 'Présentation du club';
+  String _bioSectionTitle(AppLocalizations l10n, AppUser user) {
+    if (user.isPlayer) return l10n.profileBioTitlePlayer;
+    if (user.isCoach) return l10n.profileBioTitleCoach;
+    if (user.isClub) return l10n.profileBioTitleClub;
     if (user.isRecruiter) {
       return user.isAgent
-          ? 'Présentation de l’agent'
-          : 'Présentation du recruteur';
+          ? l10n.profileBioTitleAgent
+          : l10n.profileBioTitleRecruiter;
     }
-    return 'Présentation';
+    return l10n.profileBioTitleDefault;
   }
 
-  String _emptyBioMessage(AppUser user) {
-    if (user.isPlayer) return 'Aucune présentation de joueur renseignée.';
-    if (user.isCoach) return 'Aucune présentation de coach renseignée.';
-    if (user.isClub) return 'Aucune présentation de club renseignée.';
+  String _emptyBioMessage(AppLocalizations l10n, AppUser user) {
+    if (user.isPlayer) return l10n.profileEmptyBioPlayer;
+    if (user.isCoach) return l10n.profileEmptyBioCoach;
+    if (user.isClub) return l10n.profileEmptyBioClub;
     if (user.isRecruiter) {
       return user.isAgent
-          ? 'Aucune présentation d’agent renseignée.'
-          : 'Aucune présentation de recruteur renseignée.';
+          ? l10n.profileEmptyBioAgent
+          : l10n.profileEmptyBioRecruiter;
     }
-    return 'Aucune présentation renseignée.';
+    return l10n.profileEmptyBioDefault;
   }
 
   Widget _buildAdvancedFootballSectionClean(
-    AppUser user, {
+    AppUser user,
+    AppLocalizations l10n, {
     required bool isOwnProfile,
   }) {
     if (!user.hasAdvancedProfile) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Aucune information avancée n’a encore été renseignée.',
-            style: TextStyle(color: AdColors.onSurfaceMuted),
+          Text(
+            l10n.profileAdvancedEmptyTitle,
+            style: const TextStyle(color: AdColors.onSurfaceMuted),
           ),
           const SizedBox(height: 8),
           Text(
             user.isPlayer
-                ? 'Ajoutez le gabarit, les postes, les statistiques et la disponibilité du joueur.'
+                ? l10n.profileAdvancedEmptyPlayerHint
                 : user.isClub
-                ? 'Ajoutez la structure du club, les catégories et les besoins de recrutement.'
+                ? l10n.profileAdvancedEmptyClubHint
                 : user.isRecruiter
                 ? user.isAgent
-                      ? 'Ajoutez votre licence, votre pays de délivrance et vos zones de représentation.'
-                      : 'Ajoutez vos références de licence et vos zones d’intervention.'
-                : 'Complétez les informations avancées du profil.',
+                      ? l10n.profileAdvancedEmptyAgentHint
+                      : l10n.profileAdvancedEmptyRecruiterHint
+                : l10n.profileAdvancedEmptyDefaultHint,
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
         ],
@@ -1259,49 +1289,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // joueur complet empile quinze cartes pleine largeur.
           _infoTileGrid([
             _field(
-              'Pied fort',
+              l10n.profileStrongFootLabel,
               football.strongFoot?.labelFr,
               icon: Icons.sports_soccer_outlined,
               compact: true,
             ),
             _field(
-              'Taille',
+              l10n.profileHeightLabel,
               countLabel(football.heightCm, 'cm'),
               icon: Icons.height_outlined,
               compact: true,
             ),
             _field(
-              'Poids',
+              l10n.profileWeightLabel,
               countLabel(football.weightKg, 'kg'),
               icon: Icons.monitor_weight_outlined,
               compact: true,
             ),
             _field(
-              'Nationalités',
+              l10n.profileNationalitiesLabel,
               football.nationalities.isEmpty
                   ? null
                   : football.nationalities.map(countryLabel).join(' · '),
               icon: Icons.public_outlined,
             ),
-          ]),
+          ], l10n),
           // L'annee de naissance n'est plus reprise ici : elle est affichee
           // une fois, avec le reste de l'identite, dans la section du dessus.
           const Divider(),
           _infoTileGrid([
             _field(
-              'Niveau',
+              l10n.profileLevelFieldLabel,
               football.currentClubLevel?.labelFr,
               icon: Icons.stairs_outlined,
               compact: true,
             ),
             _field(
-              'Statut',
+              l10n.profileStatusLabel,
               football.contractStatus?.labelFr,
               icon: Icons.assignment_outlined,
               compact: true,
             ),
             _field(
-              'Fin de contrat',
+              l10n.profileContractEndLabel,
               football.contractStatus?.expectsEndDate == true &&
                       football.contractEndDate != null
                   ? _formatDate(football.contractEndDate!)
@@ -1309,11 +1339,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: Icons.event_outlined,
               compact: true,
             ),
-          ]),
+          ], l10n),
           const Divider(),
           _infoTileGrid([
             _field(
-              'Saison',
+              l10n.profileSeasonLabel,
               [
                 season?.season,
                 season?.competition,
@@ -1328,41 +1358,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: Icons.calendar_month_outlined,
             ),
             _field(
-              'Matchs joués',
+              l10n.profileAppearancesLabel,
               season?.appearances?.toString(),
               icon: Icons.numbers_outlined,
               compact: true,
             ),
             _field(
-              'Temps de jeu',
+              l10n.profilePlaytimeLabel,
               countLabel(season?.minutes, 'min'),
               icon: Icons.timer_outlined,
               compact: true,
             ),
             _field(
-              'Buts inscrits',
+              l10n.profileGoalsLabel,
               season?.goals?.toString(),
               icon: Icons.sports_score_outlined,
               compact: true,
             ),
             _field(
-              'Passes décisives',
+              l10n.profileAssistsLabel,
               season?.assists?.toString(),
               icon: Icons.assistant_direction_outlined,
               compact: true,
             ),
-          ]),
+          ], l10n),
 
           // Le parcours, sous la saison en cours : c'est la lecture d'un
           // recruteur, du present vers ce qui y a mene. Une seule saison ne
           // dit pas si un joueur progresse.
           if (football.seasonHistory.isNotEmpty) ...[
             const Divider(),
-            const Align(
+            Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Parcours',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                l10n.profileHistoryTitle,
+                style: const TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
             const SizedBox(height: 6),
@@ -1374,7 +1404,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ?archived.season,
                     ?archived.clubName,
                   ].join(' · '),
-                  _pastSeasonSummary(archived),
+                  _pastSeasonSummary(archived, l10n),
+                  l10n,
                   icon: Icons.history_rounded,
                 ),
               ),
@@ -1383,26 +1414,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // La provenance, collee aux chiffres et non reléguée dans un badge
           // en haut de page : c'est ici qu'on les lit, donc ici qu'il faut
           // savoir qui les dit.
-          _buildStatsProvenance(user),
+          _buildStatsProvenance(user, l10n),
 
           const Divider(),
           _infoTileGrid([
             _field(
-              'Ouvert aux opportunités',
+              l10n.profileOpenToOpportunitiesLabel,
               user.openToOpportunities == null
                   ? null
-                  : (user.openToOpportunities == true ? 'Oui' : 'Non'),
+                  : (user.openToOpportunities == true
+                        ? l10n.profileYesLabel
+                        : l10n.profileNoLabel),
               icon: Icons.travel_explore,
               compact: true,
             ),
-          ]),
+          ], l10n),
           const SizedBox(height: 6),
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
               user.hasScoutReadyProfile
-                  ? 'Dossier scout prêt'
-                  : 'Dossier scout partiel',
+                  ? l10n.profileScoutReadyLabel
+                  : l10n.profileScoutPartialLabel,
               style: TextStyle(
                 fontWeight: FontWeight.w800,
                 color: user.hasScoutReadyProfile
@@ -1443,13 +1476,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       return _infoTileGrid([
         _field(
-          'Niveau de la structure',
+          l10n.profileClubLevelLabel,
           club.level?.labelFr,
           icon: Icons.account_tree_outlined,
           compact: true,
         ),
         _field(
-          'Catégories engagées',
+          l10n.profileClubCategoriesLabel,
           club.ageCategories.isEmpty
               ? null
               : club.ageCategories.map((c) => c.labelFr).join(' · '),
@@ -1459,12 +1492,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // offres, qui sont datees, moderees et candidatables. Deux sources
         // pour un seul fait finissent par se contredire.
         _field(
-          'Numéro d’affiliation',
+          l10n.profileClubFederationIdLabel,
           club.federationId,
           icon: Icons.badge_outlined,
           compact: true,
         ),
-      ]);
+      ], l10n);
     }
 
     if (user.isRecruiter) {
@@ -1473,14 +1506,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return _infoTileGrid([
         _field(
           user.isAgent
-              ? 'Numéro de licence'
-              : 'Référence de licence ou d’agrément',
+              ? l10n.profileLicenseNumberLabel
+              : l10n.profileAgentLicenseRefLabel,
           agent.licenceNumber,
           icon: Icons.badge_outlined,
           compact: true,
         ),
         _field(
-          'Fédération émettrice',
+          l10n.profileLicenseCountryLabel,
           agent.licenceCountry == null
               ? null
               : countryLabel(agent.licenceCountry),
@@ -1488,19 +1521,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           compact: true,
         ),
         _field(
-          user.isAgent ? 'Pays de représentation' : 'Pays d’intervention',
+          user.isAgent
+              ? l10n.profileAgentCountriesLabel
+              : l10n.profileRecruiterCountriesLabel,
           agent.countries.isEmpty
               ? null
               : agent.countries.map(countryLabel).join(' · '),
           icon: Icons.public_outlined,
         ),
-      ]);
+      ], l10n);
     }
 
-    return const Text('Aucun profil avancé pour ce rôle.');
+    return Text(l10n.profileNoAdvancedProfileMessage);
   }
 
-  Widget _buildEvidenceSectionClean(AppUser user) {
+  Widget _buildEvidenceSectionClean(AppUser user, AppLocalizations l10n) {
     final tiles = <Widget>[];
 
     if (user.isPlayer) {
@@ -1510,8 +1545,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             color: Colors.transparent,
             child: ListTile(
               leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-              title: const Text('Voir le CV'),
-              subtitle: const Text('CV au format PDF'),
+              title: Text(l10n.profileCvViewTitle),
+              subtitle: Text(l10n.profileCvViewSubtitle),
               onTap: () async {
                 final uri = Uri.parse(user.cvUrl!);
                 if (await canLaunchUrl(uri)) {
@@ -1523,12 +1558,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       } else {
         tiles.add(
-          const Material(
+          Material(
             color: Colors.transparent,
             child: ListTile(
-              leading: Icon(Icons.picture_as_pdf_outlined),
-              title: Text('CV'),
-              subtitle: Text('Aucun CV renseigné'),
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: Text(l10n.profileCvMissingTitle),
+              subtitle: Text(l10n.profileCvMissingSubtitle),
             ),
           ),
         );
@@ -1538,31 +1573,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Column(children: tiles);
   }
 
-  String _publicSectionTitleClean(AppUser user) {
-    if (user.isPlayer) return 'Fiche joueur';
-    if (user.isCoach) return 'Profil coach';
-    if (user.isClub) return 'Présentation du club';
+  String _publicSectionTitleClean(AppLocalizations l10n, AppUser user) {
+    if (user.isPlayer) return l10n.profilePublicTitlePlayer;
+    if (user.isCoach) return l10n.profilePublicTitleCoach;
+    if (user.isClub) return l10n.profilePublicTitleClub;
     if (user.isRecruiter) {
       return user.isAgent
-          ? 'Références de représentation'
-          : 'Références professionnelles';
+          ? l10n.profilePublicTitleAgent
+          : l10n.profilePublicTitleRecruiter;
     }
-    return 'Profil public';
+    return l10n.profilePublicTitleDefault;
   }
 
-  String _advancedSectionTitleClean(AppUser user) {
-    if (user.isPlayer) return 'Dossier scout';
-    if (user.isClub) return 'Structure et recrutement';
+  String _advancedSectionTitleClean(AppLocalizations l10n, AppUser user) {
+    if (user.isPlayer) return l10n.profileAdvancedTitlePlayer;
+    if (user.isClub) return l10n.profileAdvancedTitleClub;
     if (user.isRecruiter) {
       return user.isAgent
-          ? 'Licence et zones de représentation'
-          : 'Licence et zones d’intervention';
+          ? l10n.profileAdvancedTitleAgent
+          : l10n.profileAdvancedTitleRecruiter;
     }
-    return 'Informations avancées';
+    return l10n.profileAdvancedTitleDefault;
   }
 
-
-  Widget _buildFollowMessageRow(AppUser user, {required bool canMessage}) {
+  Widget _buildFollowMessageRow(
+    AppUser user,
+    AppLocalizations l10n, {
+    required bool canMessage,
+  }) {
     final currentUserId = _authController.currentUid;
     if (currentUserId == null) {
       return const SizedBox.shrink();
@@ -1577,7 +1615,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             leading: isFollowing
                 ? Icons.person_remove_alt_1
                 : Icons.person_add_alt,
-            label: isFollowing ? 'Se désabonner' : 'S’abonner',
+            label: isFollowing
+                ? l10n.profileUnfollowButton
+                : l10n.profileFollowButton,
             kind: isFollowing ? AdButtonKind.outline : AdButtonKind.tonal,
             loading: _isFollowActionLoading,
             onPressed: _isFollowActionLoading
@@ -1612,7 +1652,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           return;
                         }
 
-                        AdFeedback.error('Erreur', 'Action impossible.');
+                        AdFeedback.error(
+                          l10n.profileActionErrorTitle,
+                          l10n.profileActionImpossibleMessage,
+                        );
                       }
                     } catch (_) {
                       _profileController.applyLocalFollowerChange(
@@ -1620,8 +1663,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         shouldFollow: isFollowing,
                       );
                       AdFeedback.error(
-                        'Erreur',
-                        'Action impossible pour le moment.',
+                        l10n.profileActionErrorTitle,
+                        l10n.profileActionImpossibleNowMessage,
                       );
                     } finally {
                       if (mounted) {
@@ -1635,7 +1678,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Expanded(
           child: AdButton(
             leading: Icons.message_outlined,
-            label: 'Contacter',
+            label: l10n.profileContactButton,
             kind: AdButtonKind.tonal,
             loading: _isMessageActionLoading,
             onPressed: canMessage && !_isMessageActionLoading
@@ -1665,21 +1708,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// c'est se donner deux endroits qui peuvent finir par se contredire -- et
   /// se contredire sur ce point precis reviendrait a afficher une garantie que
   /// personne n'a donnee.
-  Widget _buildStatsProvenance(AppUser user) {
+  Widget _buildStatsProvenance(AppUser user, AppLocalizations l10n) {
     final provenance = user.statsProvenance;
     final (IconData icon, Color color, String label) = switch (provenance) {
       StatsProvenance.attested => (
         Icons.verified_rounded,
         AdColors.success,
         user.profileVerifiedAt == null
-            ? 'Chiffres attestés par Adfoot'
-            : 'Chiffres attestés par Adfoot le '
-                  '${_formatDate(user.profileVerifiedAt!)}',
+            ? l10n.profileStatsAttestedMessage
+            : l10n.profileStatsAttestedWithDateMessage(
+                _formatDate(user.profileVerifiedAt!),
+              ),
       ),
       StatsProvenance.suspended => (
         Icons.shield_moon_outlined,
         AdColors.warning,
-        'Attestation suspendue : le compte n’est plus actif.',
+        l10n.profileStatsSuspendedMessage,
       ),
       // Dit, et non tu. Le taire laisserait un recruteur croire a une
       // garantie que personne n'a donnee -- et c'est cette confusion-la qui
@@ -1687,7 +1731,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       StatsProvenance.declared => (
         Icons.info_outline_rounded,
         AdColors.onSurfaceMuted,
-        'Chiffres déclarés par le joueur, non attestés.',
+        l10n.profileStatsDeclaredMessage,
       ),
     };
 
@@ -1717,20 +1761,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ///
   /// Le niveau du club y figure parce qu'il change tout : « 28 matchs, 11
   /// buts » ne pese pas la meme chose en academie et en premiere division.
-  String? _pastSeasonSummary(SeasonRecord season) {
+  String? _pastSeasonSummary(SeasonRecord season, AppLocalizations l10n) {
     final parts = <String>[
       ?season.competition,
       ?season.clubLevel?.labelFr,
       ?season.ageCategory?.code,
-      if (season.appearances != null) '${season.appearances} matchs',
-      if (season.minutes != null) '${season.minutes} min',
-      if (season.goals != null) '${season.goals} buts',
-      if (season.assists != null) '${season.assists} passes',
+      if (season.appearances != null)
+        l10n.profileSeasonSummaryAppearances(season.appearances!),
+      if (season.minutes != null)
+        l10n.profileSeasonSummaryMinutes(season.minutes!),
+      if (season.goals != null) l10n.profileSeasonSummaryGoals(season.goals!),
+      if (season.assists != null)
+        l10n.profileSeasonSummaryAssists(season.assists!),
     ];
     return parts.isEmpty ? null : parts.join(' · ');
   }
 
-  Widget _infoTile(String label, String? value, {IconData? icon}) {
+  Widget _infoTile(
+    String label,
+    String? value,
+    AppLocalizations l10n, {
+    IconData? icon,
+  }) {
     final hasValue = value?.isNotEmpty == true;
 
     return Container(
@@ -1757,7 +1809,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  hasValue ? value! : 'Non spécifié',
+                  hasValue ? value! : l10n.commonNotSpecified,
                   style: TextStyle(
                     color: hasValue
                         ? AdColors.onSurface
@@ -1795,6 +1847,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget _infoTileGrid(
     List<({String label, String? value, IconData? icon, bool compact})>
     fields,
+    AppLocalizations l10n,
   ) {
     final rows = <Widget>[];
     ({String label, String? value, IconData? icon, bool compact})?
@@ -1802,7 +1855,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     Widget tileFor(
       ({String label, String? value, IconData? icon, bool compact}) field,
-    ) => _infoTile(field.label, field.value, icon: field.icon);
+    ) => _infoTile(field.label, field.value, l10n, icon: field.icon);
 
     void flushPending() {
       final field = pendingCompact;

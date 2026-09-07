@@ -150,7 +150,8 @@ void main() {
       expect(profile, contains('EditProfileScreen('));
       expect(profile, contains('EditAdvancedProfileScreen('));
       expect(profile, contains('_buildAdvancedCtaIfNeededClean('));
-      expect(profile, contains("tooltip: 'Outils',"));
+      // Shared with settings' own AppBar title, since both say "Outils".
+      expect(profile, contains('tooltip: l10n.settingsAppBarTitle,'));
     });
 
     test(

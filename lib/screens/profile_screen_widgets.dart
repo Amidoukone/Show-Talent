@@ -166,7 +166,7 @@ class _HeaderCard extends StatelessWidget {
             top: 10,
             right: 10,
             child: IconButton(
-              tooltip: 'Changer la photo',
+              tooltip: AppLocalizations.of(context)!.profileChangePhotoTooltip,
               icon: const Icon(Icons.camera_alt_outlined),
               color: AdColors.brand,
               onPressed: onChangePhoto,
@@ -486,6 +486,8 @@ class _MissingScoutRequirements extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final l10n = AppLocalizations.of(context)!;
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 10),
@@ -502,10 +504,8 @@ class _MissingScoutRequirements extends StatelessWidget {
         children: [
           if (blocking.isNotEmpty) ...[
             _block(
-              title: 'Votre fiche n’apparaît dans aucune recherche',
-              subtitle:
-                  'Un recruteur qui filtre par poste, par âge ou par '
-                  'nationalité ne peut pas vous trouver tant qu’il manque :',
+              title: l10n.profileBlockingSearchTitle,
+              subtitle: l10n.profileBlockingSearchSubtitle,
               entries: blocking,
               icon: Icons.error_outline_rounded,
               color: AdColors.warning,
@@ -518,10 +518,8 @@ class _MissingScoutRequirements extends StatelessWidget {
           // la contradiction que ce widget existe pour supprimer.
           if (hiddenByChoice) ...[
             _block(
-              title: 'Votre fiche est complète, mais masquée',
-              subtitle:
-                  'Vous avez choisi de ne pas apparaître dans les recherches. '
-                  'Rendez votre profil public pour être trouvé.',
+              title: l10n.profileHiddenByChoiceTitle,
+              subtitle: l10n.profileHiddenByChoiceSubtitle,
               entries: const <String>[],
               icon: Icons.visibility_off_outlined,
               color: AdColors.onSurfaceMuted,
@@ -531,9 +529,9 @@ class _MissingScoutRequirements extends StatelessWidget {
           if (missing.isNotEmpty)
             _block(
               title: blocking.isEmpty
-                  ? 'Il reste à renseigner'
-                  : 'Puis, pour un dossier complet',
-              subtitle: 'Un club ne peut pas décider sur un dossier incomplet.',
+                  ? l10n.profileMissingOnlyTitle
+                  : l10n.profileMissingWithBlockingTitle,
+              subtitle: l10n.profileMissingSubtitle,
               entries: missing,
               icon: Icons.radio_button_unchecked,
               color: AdColors.onSurfaceMuted,

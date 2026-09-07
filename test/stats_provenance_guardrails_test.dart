@@ -116,7 +116,7 @@ void main() {
       final screen = _read('lib/screens/profile_screen.dart');
 
       expect(screen, contains('user.statsProvenance'));
-      expect(screen, contains('_buildStatsProvenance(user)'));
+      expect(screen, contains('_buildStatsProvenance(user, l10n)'));
       expect(screen, isNot(contains('user.profileVerified &&')));
     });
 

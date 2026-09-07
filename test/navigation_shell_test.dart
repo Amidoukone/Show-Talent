@@ -38,7 +38,8 @@ void main() {
       );
 
       final profile = _read('lib/screens/profile_screen.dart');
-      expect(profile, contains("tooltip: 'Outils',"));
+      // Shared with settings' own AppBar title, since both say "Outils".
+      expect(profile, contains('tooltip: l10n.settingsAppBarTitle,'));
       expect(profile, contains('Get.to(() => SettingsScreen())'));
     });
 

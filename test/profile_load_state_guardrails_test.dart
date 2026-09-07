@@ -27,7 +27,10 @@ void main() {
       expect(userController, contains('ensureCurrentUserHydrated'));
       expect(userController, contains('_userHydrationTimeout'));
       expect(screen, contains('_buildProfileLoadState'));
-      expect(screen, contains('Réessayer'));
+      // The literal wording moved into the ARB template as part of the
+      // English-localization pass; the screen now only references the
+      // shared AppLocalizations key.
+      expect(screen, contains('l10n.commonRetry'));
       expect(mainScreen, contains('sessionLoadMessage'));
       expect(mainScreen, contains('ensureCurrentUserHydrated'));
       expect(mainScreen, contains('force: true'));

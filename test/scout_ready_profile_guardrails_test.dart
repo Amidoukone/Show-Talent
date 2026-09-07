@@ -352,11 +352,25 @@ void main() {
       // La regression que ce test tient : les neuf exigences etaient alignees
       // a l'identique, donc rien ne disait au joueur laquelle decidait qu'il
       // existe dans une recherche.
+      // The literal wording moved into the ARB template as part of the
+      // English-localization pass; the widget now only references the
+      // AppLocalizations keys.
+      expect(widgets, contains('l10n.profileBlockingSearchTitle'));
+      expect(widgets, contains('l10n.profileMissingWithBlockingTitle'));
+      final arb = File('lib/l10n/app_fr.arb').readAsStringSync();
       expect(
-        widgets,
-        contains('Votre fiche n’apparaît dans aucune recherche'),
+        arb,
+        contains(
+          '"profileBlockingSearchTitle": "Votre fiche n’apparaît dans '
+          'aucune recherche"',
+        ),
       );
-      expect(widgets, contains('Puis, pour un dossier complet'));
+      expect(
+        arb,
+        contains(
+          '"profileMissingWithBlockingTitle": "Puis, pour un dossier complet"',
+        ),
+      );
       expect(widgets, contains('final List<String> blocking;'));
       expect(widgets, contains('final bool hiddenByChoice;'));
     });

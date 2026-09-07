@@ -17,8 +17,9 @@ void main() {
       profile,
       contains('final hasAdvancedProfile = user.hasAdvancedProfile;'),
     );
-    expect(profile, contains('Gardez votre dossier scout'));
-    expect(profile, contains("hasAdvancedProfile ? 'Mettre"));
+    expect(profile, contains('l10n.profileCtaUpdatePlayerMessage'));
+    expect(profile, contains('l10n.profileCtaUpdateButton'));
+    expect(profile, contains('l10n.profileCtaCompleteButton'));
     expect(profile, contains('constraints.maxWidth < 380'));
     expect(profileSurface, contains('maxLines: 2'));
     expect(profileSurface, contains('overflow: TextOverflow.ellipsis'));
