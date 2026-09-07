@@ -4,6 +4,8 @@
   "commonBackToLogin": "Retour à la connexion",
   "commonCancel": "Annuler",
   "commonRetry": "Réessayer",
+  "commonClear": "Effacer",
+  "commonReset": "Réinitialiser",
 
   "loginScreenTitle": "Connectez-vous",
   "loginScreenSubtitle": "Ravi de vous revoir !",
@@ -446,5 +448,39 @@
   "opportunitiesSubtitleDefault": "Offres et événements",
   "opportunitiesOffersTab": "Offres",
   "opportunitiesEventsTab": "Événements",
-  "opportunitiesPlayersTab": "Joueurs"
+  "opportunitiesPlayersTab": "Joueurs",
+
+  "talentSearchTitle": "Trouver un joueur",
+  "talentSearchSubtitle": "Seules les fiches complètes et publiques apparaissent ici.",
+  "talentSearchNationalityLabel": "Nationalité",
+  "talentSearchAllNationalities": "Toutes",
+  "talentSearchChoose": "Choisir",
+  "talentSearchBornBetweenLabel": "Né entre",
+  "talentSearchBornHint": "Un club raisonne par année de naissance : l’âge change en cours de saison, l’année non.",
+  "talentSearchYearFromLabel": "De",
+  "talentSearchYearToLabel": "À",
+  "talentSearchOpenOnlyLabel": "Ouverts aux opportunités uniquement",
+  "talentSearchSearchButton": "Rechercher",
+  "talentSearchSearchingButton": "Recherche...",
+  "talentSearchUnavailableTitle": "Recherche indisponible",
+  "talentSearchFailureMessage": "La recherche n’a pas pu aboutir. Réessayez dans un instant ; si cela persiste, signalez-le à l’équipe.",
+  "talentSearchNoResultsTitle": "Aucun joueur ne correspond",
+  "talentSearchNoResultsMessage": "Élargissez les critères. Une fiche n’apparaît que si elle porte un poste, une nationalité et une année de naissance.",
+  "talentSearchResultsCountMany": "{count} joueurs — affinez pour voir au-delà",
+  "@talentSearchResultsCountMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "talentSearchResultsCountOne": "1 joueur",
+  "talentSearchResultsCountOther": "{count} joueurs",
+  "@talentSearchResultsCountOther": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

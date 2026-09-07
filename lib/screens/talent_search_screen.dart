@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/profile_screen.dart';
@@ -73,15 +74,14 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
       });
     } catch (error) {
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       setState(() {
         _loading = false;
         // Un index absent renvoie `failed-precondition`, et Firestore repond
         // alors une liste vide plutot qu'une erreur si on ne la dit pas. « Zero
         // resultat » et « la recherche n'a pas pu tourner » ne sont pas la meme
         // information pour un recruteur.
-        _error =
-            'La recherche n’a pas pu aboutir. Réessayez dans un instant ; '
-            'si cela persiste, signalez-le à l’équipe.';
+        _error = l10n.talentSearchFailureMessage;
       });
     }
   }
@@ -106,21 +106,22 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        const Text(
-          'Trouver un joueur',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        Text(
+          l10n.talentSearchTitle,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 4),
-        const Text(
-          'Seules les fiches complètes et publiques apparaissent ici.',
-          style: TextStyle(fontSize: 12, color: AdColors.onSurfaceMuted),
+        Text(
+          l10n.talentSearchSubtitle,
+          style: const TextStyle(fontSize: 12, color: AdColors.onSurfaceMuted),
         ),
         const SizedBox(height: 16),
 
-        const _FilterLabel('Postes'),
+        _FilterLabel(l10n.profilePositionsLabel),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -142,43 +143,42 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
         ),
         const SizedBox(height: 16),
 
-        const _FilterLabel('Nationalité'),
+        _FilterLabel(l10n.talentSearchNationalityLabel),
         const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
               child: Text(
                 _nationality == null
-                    ? 'Toutes'
+                    ? l10n.talentSearchAllNationalities
                     : countryLabel(_nationality),
               ),
             ),
             if (_nationality != null)
               TextButton(
                 onPressed: () => setState(() => _nationality = null),
-                child: const Text('Effacer'),
+                child: Text(l10n.commonClear),
               ),
             TextButton(
               onPressed: _pickNationality,
-              child: const Text('Choisir'),
+              child: Text(l10n.talentSearchChoose),
             ),
           ],
         ),
         const SizedBox(height: 16),
 
-        const _FilterLabel('Né entre'),
+        _FilterLabel(l10n.talentSearchBornBetweenLabel),
         const SizedBox(height: 4),
-        const Text(
-          'Un club raisonne par année de naissance : l’âge change en cours de '
-          'saison, l’année non.',
-          style: TextStyle(fontSize: 12, color: AdColors.onSurfaceMuted),
+        Text(
+          l10n.talentSearchBornHint,
+          style: const TextStyle(fontSize: 12, color: AdColors.onSurfaceMuted),
         ),
         const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
               child: _YearField(
-                label: 'De',
+                label: l10n.talentSearchYearFromLabel,
                 value: _bornFrom,
                 onChanged: (value) => setState(() => _bornFrom = value),
               ),
@@ -186,7 +186,7 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: _YearField(
-                label: 'À',
+                label: l10n.talentSearchYearToLabel,
                 value: _bornUntil,
                 onChanged: (value) => setState(() => _bornUntil = value),
               ),
@@ -198,7 +198,7 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: _openOnly,
-          title: const Text('Ouverts aux opportunités uniquement'),
+          title: Text(l10n.talentSearchOpenOnlyLabel),
           onChanged: (value) => setState(() => _openOnly = value),
         ),
         const SizedBox(height: 12),
@@ -208,39 +208,44 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
             Expanded(
               child: FilledButton(
                 onPressed: _loading ? null : _run,
-                child: Text(_loading ? 'Recherche...' : 'Rechercher'),
+                child: Text(
+                  _loading
+                      ? l10n.talentSearchSearchingButton
+                      : l10n.talentSearchSearchButton,
+                ),
               ),
             ),
             const SizedBox(width: 12),
             TextButton(
               onPressed: _loading ? null : _reset,
-              child: const Text('Réinitialiser'),
+              child: Text(l10n.commonReset),
             ),
           ],
         ),
         const SizedBox(height: 20),
 
         if (_error != null)
-          AdStatePanel.error(title: 'Recherche indisponible', message: _error!)
+          AdStatePanel.error(
+            title: l10n.talentSearchUnavailableTitle,
+            message: _error!,
+          )
         else if (_loading)
           const Center(child: Padding(
             padding: EdgeInsets.all(24),
             child: CircularProgressIndicator(),
           ))
         else if (_results != null)
-          ..._buildResults(_results!),
+          ..._buildResults(_results!, l10n),
       ],
     );
   }
 
-  List<Widget> _buildResults(List<AppUser> results) {
+  List<Widget> _buildResults(List<AppUser> results, AppLocalizations l10n) {
     if (results.isEmpty) {
-      return const <Widget>[
+      return <Widget>[
         AdStatePanel.empty(
-          title: 'Aucun joueur ne correspond',
-          message:
-              'Élargissez les critères. Une fiche n’apparaît que si elle porte '
-              'un poste, une nationalité et une année de naissance.',
+          title: l10n.talentSearchNoResultsTitle,
+          message: l10n.talentSearchNoResultsMessage,
         ),
       ];
     }
@@ -248,8 +253,10 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
     return <Widget>[
       Text(
         results.length >= TalentSearchRepository.pageSize
-            ? '${results.length} joueurs — affinez pour voir au-delà'
-            : '${results.length} joueur${results.length > 1 ? 's' : ''}',
+            ? l10n.talentSearchResultsCountMany(results.length)
+            : (results.length == 1
+                  ? l10n.talentSearchResultsCountOne
+                  : l10n.talentSearchResultsCountOther(results.length)),
         style: const TextStyle(fontWeight: FontWeight.w800),
       ),
       const SizedBox(height: 8),

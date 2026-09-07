@@ -4,6 +4,8 @@
   "commonBackToLogin": "Back to sign in",
   "commonCancel": "Cancel",
   "commonRetry": "Retry",
+  "commonClear": "Clear",
+  "commonReset": "Reset",
 
   "loginScreenTitle": "Sign in",
   "loginScreenSubtitle": "Welcome back!",
@@ -326,5 +328,25 @@
   "opportunitiesSubtitleDefault": "Offers and events",
   "opportunitiesOffersTab": "Offers",
   "opportunitiesEventsTab": "Events",
-  "opportunitiesPlayersTab": "Players"
+  "opportunitiesPlayersTab": "Players",
+
+  "talentSearchTitle": "Find a player",
+  "talentSearchSubtitle": "Only complete, public profiles appear here.",
+  "talentSearchNationalityLabel": "Nationality",
+  "talentSearchAllNationalities": "All",
+  "talentSearchChoose": "Choose",
+  "talentSearchBornBetweenLabel": "Born between",
+  "talentSearchBornHint": "A club thinks in birth year: age changes mid-season, the year doesn't.",
+  "talentSearchYearFromLabel": "From",
+  "talentSearchYearToLabel": "To",
+  "talentSearchOpenOnlyLabel": "Open to opportunities only",
+  "talentSearchSearchButton": "Search",
+  "talentSearchSearchingButton": "Searching...",
+  "talentSearchUnavailableTitle": "Search unavailable",
+  "talentSearchFailureMessage": "The search couldn't complete. Try again in a moment; if it persists, report it to the team.",
+  "talentSearchNoResultsTitle": "No matching player",
+  "talentSearchNoResultsMessage": "Widen your criteria. A profile only appears once it has a position, a nationality, and a birth year.",
+  "talentSearchResultsCountMany": "{count} players — narrow your search to see more",
+  "talentSearchResultsCountOne": "1 player",
+  "talentSearchResultsCountOther": "{count} players"
 }

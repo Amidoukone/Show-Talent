@@ -52,8 +52,17 @@ void main() {
     // exactly like "no player matches". They are not the same information for
     // a recruiter, and the second one is a lie.
     expect(screen, contains('_error ='));
-    expect(screen, contains('Recherche indisponible'));
-    expect(screen, contains('Aucun joueur ne correspond'));
+    // The literal wording moved into the ARB template as part of the
+    // English-localization pass; the screen now only references the
+    // AppLocalizations keys.
+    expect(screen, contains('l10n.talentSearchUnavailableTitle'));
+    expect(screen, contains('l10n.talentSearchNoResultsTitle'));
+    final arb = _read('lib/l10n/app_fr.arb');
+    expect(arb, contains('"talentSearchUnavailableTitle": "Recherche indisponible"'));
+    expect(
+      arb,
+      contains('"talentSearchNoResultsTitle": "Aucun joueur ne correspond"'),
+    );
   });
 
   test('the screen asks the repository rather than filtering itself', () {

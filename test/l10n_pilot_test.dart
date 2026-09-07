@@ -94,6 +94,11 @@ void main() {
       l10n.opportunitiesSubtitleWithPlayers,
       'Offres, événements et joueurs',
     );
+    expect(
+      l10n.talentSearchResultsCountMany(60),
+      '60 joueurs — affinez pour voir au-delà',
+    );
+    expect(l10n.talentSearchResultsCountOther(3), '3 joueurs');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -162,5 +167,10 @@ void main() {
       l10n.opportunitiesSubtitleWithPlayers,
       'Offers, events, and players',
     );
+    expect(
+      l10n.talentSearchResultsCountMany(60),
+      '60 players — narrow your search to see more',
+    );
+    expect(l10n.talentSearchResultsCountOther(3), '3 players');
   });
 }
