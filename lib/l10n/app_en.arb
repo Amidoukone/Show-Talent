@@ -348,5 +348,16 @@
   "talentSearchNoResultsMessage": "Widen your criteria. A profile only appears once it has a position, a nationality, and a birth year.",
   "talentSearchResultsCountMany": "{count} players — narrow your search to see more",
   "talentSearchResultsCountOne": "1 player",
-  "talentSearchResultsCountOther": "{count} players"
+  "talentSearchResultsCountOther": "{count} players",
+
+  "followListSubtitle": "Profile relations",
+  "followListLoadingTitle": "Loading profiles",
+  "followListLoadingMessage": "Syncing the list.",
+  "followListErrorTitle": "Couldn't load",
+  "followListErrorMessage": "Something went wrong. Please try again.",
+  "followListEmptyFollowersTitle": "No followers",
+  "followListEmptyFollowingTitle": "Not following anyone",
+  "followListEmptyFollowersMessage": "No followers yet.",
+  "followListEmptyFollowingMessage": "Not following anyone yet.",
+  "followListActionFailedMessage": "Couldn't complete the action."
 }

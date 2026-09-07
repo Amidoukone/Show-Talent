@@ -99,6 +99,7 @@ void main() {
       '60 joueurs — affinez pour voir au-delà',
     );
     expect(l10n.talentSearchResultsCountOther(3), '3 joueurs');
+    expect(l10n.followListEmptyFollowersMessage, 'Aucun abonné pour l’instant.');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -172,5 +173,6 @@ void main() {
       '60 players — narrow your search to see more',
     );
     expect(l10n.talentSearchResultsCountOther(3), '3 players');
+    expect(l10n.followListEmptyFollowersMessage, 'No followers yet.');
   });
 }

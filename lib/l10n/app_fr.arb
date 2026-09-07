@@ -482,5 +482,16 @@
         "type": "int"
       }
     }
-  }
+  },
+
+  "followListSubtitle": "Relations du profil",
+  "followListLoadingTitle": "Chargement des profils",
+  "followListLoadingMessage": "Synchronisation de la liste en cours.",
+  "followListErrorTitle": "Chargement impossible",
+  "followListErrorMessage": "Une erreur est survenue. Veuillez réessayer.",
+  "followListEmptyFollowersTitle": "Aucun abonné",
+  "followListEmptyFollowingTitle": "Aucun abonnement",
+  "followListEmptyFollowersMessage": "Aucun abonné pour l’instant.",
+  "followListEmptyFollowingMessage": "Aucun abonnement pour l’instant.",
+  "followListActionFailedMessage": "Impossible d’effectuer l’action."
 }

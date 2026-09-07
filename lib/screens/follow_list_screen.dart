@@ -2,6 +2,7 @@ import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:adfoot/controller/follow_controller.dart';
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
@@ -100,10 +101,13 @@ class _FollowListScreenState extends State<FollowListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AdAppBar(
-        title: widget.listType == 'followers' ? 'Abonnés' : 'Abonnements',
-        subtitle: 'Relations du profil',
+        title: widget.listType == 'followers'
+            ? l10n.profileFollowersLabel
+            : l10n.profileFollowingLabel,
+        subtitle: l10n.followListSubtitle,
         showBottomDivider: true,
       ),
       body: RefreshIndicator(
@@ -114,11 +118,11 @@ class _FollowListScreenState extends State<FollowListScreen> {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(AdSpacing.md),
-                children: const [
-                  SizedBox(height: 120),
+                children: [
+                  const SizedBox(height: 120),
                   AdStatePanel.loading(
-                    title: 'Chargement des profils',
-                    message: 'Synchronisation de la liste en cours.',
+                    title: l10n.followListLoadingTitle,
+                    message: l10n.followListLoadingMessage,
                   ),
                 ],
               );
@@ -131,11 +135,11 @@ class _FollowListScreenState extends State<FollowListScreen> {
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: AdStatePanel.error(
-                      title: 'Chargement impossible',
-                      message: 'Une erreur est survenue. Veuillez réessayer.',
+                      title: l10n.followListErrorTitle,
+                      message: l10n.followListErrorMessage,
                       action: AdButton(
                         expanded: false,
-                        label: 'Réessayer',
+                        label: l10n.commonRetry,
                         leading: Icons.refresh_rounded,
                         onPressed: _reloadFollowList,
                       ),
@@ -153,11 +157,11 @@ class _FollowListScreenState extends State<FollowListScreen> {
                     padding: const EdgeInsets.all(16),
                     child: AdStatePanel.empty(
                       title: widget.listType == 'followers'
-                          ? 'Aucun abonné'
-                          : 'Aucun abonnement',
+                          ? l10n.followListEmptyFollowersTitle
+                          : l10n.followListEmptyFollowingTitle,
                       message: widget.listType == 'followers'
-                          ? "Aucun abonné pour l’instant."
-                          : "Aucun abonnement pour l’instant.",
+                          ? l10n.followListEmptyFollowersMessage
+                          : l10n.followListEmptyFollowingMessage,
                     ),
                   ),
                 ],
@@ -260,6 +264,7 @@ class _FollowListButtonState extends State<_FollowListButton> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final currentUserId = Get.find<UserController>().user?.uid ??
         _authSessionService.currentUser?.uid;
     final followCtrl = Get.find<FollowController>();
@@ -290,7 +295,10 @@ class _FollowListButtonState extends State<_FollowListButton> {
           if (!success) {
             widget.u.isFollowing = isFollowing;
             widget.onFollowStateChanged(isFollowing);
-            AdFeedback.error('Erreur', 'Impossible d’effectuer l’action.');
+            AdFeedback.error(
+              l10n.profileActionErrorTitle,
+              l10n.followListActionFailedMessage,
+            );
           } else if (isFollowing &&
               widget.listType == 'followings' &&
               currentUserId == widget.listOwnerUid) {
@@ -299,7 +307,10 @@ class _FollowListButtonState extends State<_FollowListButton> {
         } catch (_) {
           widget.u.isFollowing = isFollowing;
           widget.onFollowStateChanged(isFollowing);
-          AdFeedback.error('Erreur', 'Impossible d’effectuer l’action.');
+          AdFeedback.error(
+            l10n.profileActionErrorTitle,
+            l10n.followListActionFailedMessage,
+          );
         } finally {
           if (mounted) {
             setState(() {
@@ -315,7 +326,9 @@ class _FollowListButtonState extends State<_FollowListButton> {
       leading: widget.u.isFollowing
           ? Icons.person_remove_outlined
           : Icons.person_add_alt_1_outlined,
-      label: widget.u.isFollowing ? 'Se désabonner' : 'S’abonner',
+      label: widget.u.isFollowing
+          ? l10n.profileUnfollowButton
+          : l10n.profileFollowButton,
     );
   }
 }
