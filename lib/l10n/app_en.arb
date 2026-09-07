@@ -391,5 +391,81 @@
   "conversationsEmptyTitle": "No conversations",
   "conversationsEmptyMessage": "Start a conversation with someone to see your exchanges here.",
   "conversationsNewChatButton": "New conversation",
-  "conversationsDefaultUserName": "User"
+  "conversationsDefaultUserName": "User",
+
+  "chatLoadingTitle": "Loading",
+  "chatSubtitle": "Adfoot Messaging",
+  "chatMessagesLoadingTitle": "Loading messages",
+  "chatMessagesLoadingMessage": "Syncing the conversation.",
+  "chatMessagesUnavailableTitle": "Messages unavailable",
+  "chatMessagesUnavailableMessage": "Couldn't load the conversation. Check your connection and try again.",
+  "chatEmptyStateMessage": "Send a first message to {otherUserName}.",
+  "@chatEmptyStateMessage": {
+    "placeholders": {
+      "otherUserName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatEmptyStateDisabledMessage": "The conversation is open, but messaging is currently disabled.",
+  "chatDeleteMessageTitle": "Delete this message",
+  "chatDeleteMessageConfirmMessage": "Are you sure you want to delete this message?",
+  "chatMessageDeletedTitle": "Message deleted",
+  "chatMessageDeletedMessage": "The message was deleted successfully.",
+  "chatDeleteMessageFailedTitle": "Couldn't delete",
+  "chatDeleteMessageFailedGenericMessage": "The message couldn't be deleted. Please try again.",
+  "chatSendDisabledMessage": "Sending messages is disabled for this conversation.",
+  "chatSendFailedTitle": "Couldn't send",
+  "chatSendFailedGenericMessage": "The message couldn't be sent. Please try again.",
+  "chatTodayLabel": "Today",
+  "chatYesterdayLabel": "Yesterday",
+  "chatGuidedContextTitle": "Guided first contact",
+  "chatGuidedContextReasonMessage": "Reason: {reasonLabel}. Adfoot keeps this first exchange in the official flow.",
+  "@chatGuidedContextReasonMessage": {
+    "placeholders": {
+      "reasonLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "chatGuidedContextFollowUpLabel": "Agency follow-up: {followUpLabel}.",
+  "@chatGuidedContextFollowUpLabel": {
+    "placeholders": {
+      "followUpLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "chatFeedbackSignalLabel": "User feedback: {feedbackLabel}",
+  "@chatFeedbackSignalLabel": {
+    "placeholders": {
+      "feedbackLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "chatGiveFeedbackButton": "Give feedback on this introduction",
+  "chatFeedbackRecordedTitle": "Feedback recorded",
+  "chatFeedbackRecordedMessage": "Thank you. This signal helps Adfoot follow up on this opportunity.",
+  "chatFeedbackFailedTitle": "Couldn't send feedback",
+  "chatFeedbackFailedGenericMessage": "The feedback couldn't be sent. Please try again.",
+  "chatFeedbackSheetTitle": "Feedback on this introduction",
+  "chatFeedbackSheetSubtitle": "This information stays structured for Adfoot. It helps support talents without opening the private discussion.",
+  "chatFeedbackOptionNoResponseTitle": "No response yet",
+  "chatFeedbackOptionNoResponseDescription": "The conversation exists, but nothing concrete yet.",
+  "chatFeedbackOptionDiscussionStartedTitle": "Discussion started",
+  "chatFeedbackOptionDiscussionStartedDescription": "A useful exchange has started between both parties.",
+  "chatFeedbackOptionTrialScheduledTitle": "Trial / meeting scheduled",
+  "chatFeedbackOptionTrialScheduledDescription": "A date, trial, or call is concretely scheduled.",
+  "chatFeedbackOptionOpportunitySeriousTitle": "Serious opportunity",
+  "chatFeedbackOptionOpportunitySeriousDescription": "This lead looks credible for the talent's future.",
+  "chatFeedbackOptionNotRelevantTitle": "Not relevant",
+  "chatFeedbackOptionNotRelevantDescription": "This introduction doesn't fit after all.",
+  "chatFeedbackOptionIssueReportedTitle": "Issue reported",
+  "chatFeedbackOptionIssueReportedDescription": "Suspicious behavior, abuse, vague promise, or risk.",
+  "chatFeedbackNoteRequiredError": "Add a short note to give context to this feedback.",
+  "chatFeedbackNoteLabel": "Useful detail for Adfoot",
+  "chatFeedbackNoteHint": "E.g.: trial scheduled Saturday, serious recruiter, no response, suspicious behavior...",
+  "chatFeedbackSubmitButton": "Send feedback",
+  "chatMessageInputHint": "Type a message…"
 }

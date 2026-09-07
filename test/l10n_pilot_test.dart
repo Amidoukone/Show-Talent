@@ -105,6 +105,18 @@ void main() {
       l10n.conversationsDeleteFailedMessage('network error'),
       'Impossible de supprimer la conversation : network error',
     );
+    expect(l10n.chatSubtitle, 'Messagerie Adfoot');
+    expect(
+      l10n.chatEmptyStateMessage('Awa'),
+      'Envoyez un premier message à Awa.',
+    );
+    expect(
+      l10n.chatGuidedContextReasonMessage('Recrutement club'),
+      'Motif : Recrutement club. Adfoot garde ce premier échange dans le '
+      'circuit officiel.',
+    );
+    expect(l10n.chatTodayLabel, 'Aujourd’hui');
+    expect(l10n.chatYesterdayLabel, 'Hier');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -184,5 +196,17 @@ void main() {
       l10n.conversationsDeleteFailedMessage('network error'),
       "Couldn't delete the conversation: network error",
     );
+    expect(l10n.chatSubtitle, isNot('Messagerie Adfoot'));
+    expect(
+      l10n.chatEmptyStateMessage('Awa'),
+      'Send a first message to Awa.',
+    );
+    expect(
+      l10n.chatGuidedContextReasonMessage('Club recruitment'),
+      'Reason: Club recruitment. Adfoot keeps this first exchange in the '
+      'official flow.',
+    );
+    expect(l10n.chatTodayLabel, 'Today');
+    expect(l10n.chatYesterdayLabel, 'Yesterday');
   });
 }

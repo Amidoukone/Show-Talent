@@ -97,50 +97,51 @@ class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
         _selectedStatus == ContactIntakeFeedbackStatus.opportunitySerious;
   }
 
-  List<_FeedbackOption> get _options => const <_FeedbackOption>[
+  List<_FeedbackOption> _options(AppLocalizations l10n) => <_FeedbackOption>[
         _FeedbackOption(
           status: ContactIntakeFeedbackStatus.noResponse,
-          title: 'Pas encore de réponse',
-          description: 'La conversation existe mais rien de concret encore.',
+          title: l10n.chatFeedbackOptionNoResponseTitle,
+          description: l10n.chatFeedbackOptionNoResponseDescription,
           icon: Icons.hourglass_empty_rounded,
         ),
         _FeedbackOption(
           status: ContactIntakeFeedbackStatus.discussionStarted,
-          title: 'Discussion engagée',
-          description: 'Un échange utile a commencé entre les deux parties.',
+          title: l10n.chatFeedbackOptionDiscussionStartedTitle,
+          description: l10n.chatFeedbackOptionDiscussionStartedDescription,
           icon: Icons.forum_outlined,
         ),
         _FeedbackOption(
           status: ContactIntakeFeedbackStatus.trialScheduled,
-          title: 'Essai / rendez-vous prévu',
-          description: 'Une date, un essai ou un appel concret est prévu.',
+          title: l10n.chatFeedbackOptionTrialScheduledTitle,
+          description: l10n.chatFeedbackOptionTrialScheduledDescription,
           icon: Icons.event_available_outlined,
         ),
         _FeedbackOption(
           status: ContactIntakeFeedbackStatus.opportunitySerious,
-          title: 'Opportunité sérieuse',
-          description: 'La piste semble crédible pour la suite du talent.',
+          title: l10n.chatFeedbackOptionOpportunitySeriousTitle,
+          description: l10n.chatFeedbackOptionOpportunitySeriousDescription,
           icon: Icons.workspace_premium_outlined,
         ),
         _FeedbackOption(
           status: ContactIntakeFeedbackStatus.notRelevant,
-          title: 'Non pertinent',
-          description: 'La mise en relation ne correspond finalement pas.',
+          title: l10n.chatFeedbackOptionNotRelevantTitle,
+          description: l10n.chatFeedbackOptionNotRelevantDescription,
           icon: Icons.block_outlined,
         ),
         _FeedbackOption(
           status: ContactIntakeFeedbackStatus.issueReported,
-          title: 'Problème signalé',
-          description: 'Comportement suspect, abus, promesse floue ou risque.',
+          title: l10n.chatFeedbackOptionIssueReportedTitle,
+          description: l10n.chatFeedbackOptionIssueReportedDescription,
           icon: Icons.report_problem_outlined,
         ),
       ];
 
   void _submit() {
+    final l10n = AppLocalizations.of(context)!;
     final note = _noteController.text.trim();
     if (_requiresNote && note.length < 8) {
       setState(() {
-        _errorText = 'Ajoutez une note courte pour contextualiser ce retour.';
+        _errorText = l10n.chatFeedbackNoteRequiredError;
       });
       return;
     }
@@ -155,6 +156,7 @@ class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final media = MediaQuery.of(context);
     final cs = Theme.of(context).colorScheme;
     final bottomInset = media.viewInsets.bottom;
@@ -206,7 +208,7 @@ class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Retour sur la mise en relation',
+                          l10n.chatFeedbackSheetTitle,
                           style:
                               Theme.of(context).textTheme.titleLarge?.copyWith(
                                     fontWeight: FontWeight.w900,
@@ -215,7 +217,7 @@ class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Ces informations restent structurées pour Adfoot. Elles aident à accompagner les talents sans ouvrir la discussion privée.',
+                          l10n.chatFeedbackSheetSubtitle,
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     color: cs.onSurface.withValues(alpha: 0.72),
@@ -223,7 +225,7 @@ class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
                                   ),
                         ),
                         const SizedBox(height: 16),
-                        ..._options.map((option) {
+                        ..._options(l10n).map((option) {
                           final selected = _selectedStatus == option.status;
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 8),
@@ -247,9 +249,8 @@ class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
                           textInputAction: TextInputAction.newline,
                           scrollPadding: const EdgeInsets.only(bottom: 120),
                           decoration: InputDecoration(
-                            labelText: 'Précision utile pour Adfoot',
-                            hintText:
-                                'Ex. : essai prévu samedi, recruteur sérieux, pas de réponse, comportement suspect...',
+                            labelText: l10n.chatFeedbackNoteLabel,
+                            hintText: l10n.chatFeedbackNoteHint,
                             errorText: _errorText,
                             alignLabelWithHint: true,
                           ),
@@ -275,7 +276,7 @@ class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () => Get.back<_ContactFeedbackDraft?>(),
-                            child: const Text('Annuler'),
+                            child: Text(l10n.commonCancel),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -283,7 +284,7 @@ class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
                           child: FilledButton.icon(
                             onPressed: _submit,
                             icon: const Icon(Icons.send_rounded),
-                            label: const Text('Envoyer le retour'),
+                            label: Text(l10n.chatFeedbackSubmitButton),
                           ),
                         ),
                       ],
@@ -569,6 +570,7 @@ class MessageInputBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     return SafeArea(
@@ -618,7 +620,7 @@ class MessageInputBar extends StatelessWidget {
                         onTap: onUserActivity,
                         decoration: InputDecoration(
                           hintText:
-                              enabled ? "Tapez un message…" : disabledHint,
+                              enabled ? l10n.chatMessageInputHint : disabledHint,
                           hintStyle: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.55),
                             fontWeight: FontWeight.w600,

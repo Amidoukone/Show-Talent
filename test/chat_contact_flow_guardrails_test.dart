@@ -37,11 +37,21 @@ void main() {
       final repository = File(
         'lib/services/chat/chat_repository.dart',
       ).readAsStringSync();
+      // The literal wording moved into the ARB template (l10n.chat*).
+      final arbFr = File('lib/l10n/app_fr.arb').readAsStringSync();
 
       expect(chatScreen, contains('watchConversationById'));
-      expect(chatScreen, contains('Premier contact cadré'));
-      expect(chatScreen, contains('Suivi agence :'));
-      expect(chatScreen, contains('Donner un retour sur la mise en relation'));
+      expect(chatScreen, contains('l10n.chatGuidedContextTitle'));
+      expect(arbFr, contains('"chatGuidedContextTitle": "Premier contact cadré"'));
+      expect(chatScreen, contains('l10n.chatGuidedContextFollowUpLabel'));
+      expect(arbFr, contains('"chatGuidedContextFollowUpLabel": "Suivi agence :'));
+      expect(chatScreen, contains('l10n.chatGiveFeedbackButton'));
+      expect(
+        arbFr,
+        contains(
+          '"chatGiveFeedbackButton": "Donner un retour sur la mise en relation"',
+        ),
+      );
       expect(chatScreen, contains('_showContactFeedbackSheet'));
       expect(chatScreen, contains('_resolveContactIntakeId'));
       expect(chatScreen, contains('ContactIntakeFeedbackService'));
@@ -93,15 +103,26 @@ void main() {
       final chatScreen = File(
         'lib/screens/chat_screen.dart',
       ).readAsStringSync();
+      // The literal wording moved into the ARB template (l10n.chat*).
+      final arbFr = File('lib/l10n/app_fr.arb').readAsStringSync();
 
       expect(chatScreen, contains('required bool canMessage'));
+      expect(chatScreen, contains('l10n.chatEmptyStateDisabledMessage'));
       expect(
-        chatScreen,
+        arbFr,
         contains(
-          'La conversation est ouverte, mais la messagerie est désactivée',
+          '"chatEmptyStateDisabledMessage": "La conversation est ouverte, '
+          'mais la messagerie est désactivée',
         ),
       );
-      expect(chatScreen, contains('Le retour n’a pas pu être transmis'));
+      expect(chatScreen, contains('l10n.chatFeedbackFailedGenericMessage'));
+      expect(
+        arbFr,
+        contains(
+          '"chatFeedbackFailedGenericMessage": "Le retour n’a pas pu être '
+          'transmis',
+        ),
+      );
     });
 
     test(

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -170,21 +171,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final currentUser = _resolvedCurrentUser;
     if (currentUser == null && _authSessionService.currentUser != null) {
       return Scaffold(
-        appBar: const AdAppBar(title: 'Chargement'),
+        appBar: AdAppBar(title: l10n.chatLoadingTitle),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (currentUser == null) {
       return Scaffold(
-        appBar: const AdAppBar(title: 'Erreur'),
-        body: const Center(
+        appBar: AdAppBar(title: l10n.profileActionErrorTitle),
+        body: Center(
           child: AdStatePanel.error(
-            title: 'Session invalide',
-            message: 'Utilisateur non connecté.',
+            title: l10n.profileInvalidSessionTitle,
+            message: l10n.profileNotSignedInMessage,
           ),
         ),
       );
@@ -196,10 +198,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final canMessage = currentUser.allowMessages && otherUser.allowMessages;
     final disabledHint =
         (!currentUser.allowMessages && !otherUser.allowMessages)
-        ? 'Les messages sont désactivés pour vous deux.'
+        ? l10n.profileMessagingDisabledBothMessage
         : currentUser.allowMessages
-        ? 'Cet utilisateur a désactivé les messages.'
-        : 'Vous avez désactivé les messages.';
+        ? l10n.profileMessagingDisabledRecipientMessage
+        : l10n.profileMessagingDisabledSenderMessage;
 
     return PopScope(
       canPop: false,
@@ -258,7 +260,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          'Messagerie Adfoot',
+                          l10n.chatSubtitle,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: cs.onSurface.withValues(alpha: 0.75),
                             fontWeight: FontWeight.w700,
@@ -289,11 +291,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     stream: _messagesStream,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Padding(
-                          padding: EdgeInsets.all(16),
+                        return Padding(
+                          padding: const EdgeInsets.all(16),
                           child: AdStatePanel.loading(
-                            title: 'Chargement des messages',
-                            message: 'Synchronisation de la conversation.',
+                            title: l10n.chatMessagesLoadingTitle,
+                            message: l10n.chatMessagesLoadingMessage,
                           ),
                         );
                       }
@@ -309,13 +311,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           'ChatScreen messages stream error: '
                           '${snapshot.error}',
                         );
-                        return const Padding(
-                          padding: EdgeInsets.all(16),
+                        return Padding(
+                          padding: const EdgeInsets.all(16),
                           child: AdStatePanel.error(
-                            title: 'Messages indisponibles',
-                            message:
-                                'Impossible de charger la conversation. '
-                                'Vérifiez votre réseau puis réessayez.',
+                            title: l10n.chatMessagesUnavailableTitle,
+                            message: l10n.chatMessagesUnavailableMessage,
                           ),
                         );
                       }
@@ -514,12 +514,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await AdDialogs.confirm(
       context: context,
-      title: 'Supprimer ce message',
-      message: 'Voulez-vous vraiment supprimer ce message ?',
-      confirmLabel: 'Supprimer',
-      cancelLabel: 'Annuler',
+      title: l10n.chatDeleteMessageTitle,
+      message: l10n.chatDeleteMessageConfirmMessage,
+      confirmLabel: l10n.settingsDeleteAction,
+      cancelLabel: l10n.commonCancel,
       danger: true,
     );
     if (!confirmed) return;
@@ -528,15 +529,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       await chatController.deleteMessage(widget.conversationId, message.id);
       AdFeedback.success(
-        'Message supprimé',
-        'Le message a été supprimé avec succès.',
+        l10n.chatMessageDeletedTitle,
+        l10n.chatMessageDeletedMessage,
       );
     } on ChatFlowException catch (error) {
-      AdFeedback.error('Suppression impossible', error.message);
+      AdFeedback.error(l10n.chatDeleteMessageFailedTitle, error.message);
     } catch (_) {
       AdFeedback.error(
-        'Suppression impossible',
-        'Le message n’a pas pu être supprimé. Merci de réessayer.',
+        l10n.chatDeleteMessageFailedTitle,
+        l10n.chatDeleteMessageFailedGenericMessage,
       );
     } finally {
       if (mounted) {
@@ -602,6 +603,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // Send + scroll - logique existante conservée
   // ------------------------------
   Future<void> _sendMessage(String senderId, String recipientId) async {
+    final l10n = AppLocalizations.of(context)!;
     final content = messageController.text.trim();
     if (content.isEmpty || _isSendingMessage) return;
 
@@ -614,8 +616,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
       if (!canSend) {
         AdFeedback.warning(
-          'Messages indisponibles',
-          "L’envoi de messages est désactivé pour cette conversation.",
+          l10n.profileMessagingDisabledTitle,
+          l10n.chatSendDisabledMessage,
         );
         return;
       }
@@ -643,11 +645,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _scrollToBottom(delay: const Duration(milliseconds: 110));
       _throttledTouchActiveAt();
     } on ChatFlowException catch (error) {
-      AdFeedback.error('Envoi impossible', error.message);
+      AdFeedback.error(l10n.chatSendFailedTitle, error.message);
     } catch (_) {
       AdFeedback.error(
-        'Envoi impossible',
-        'Le message n’a pas pu être envoyé. Merci de réessayer.',
+        l10n.chatSendFailedTitle,
+        l10n.chatSendFailedGenericMessage,
       );
     } finally {
       if (mounted) {
@@ -712,10 +714,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final todayKey = _dayKey(now);
     final dKey = _dayKey(dateTime);
 
-    if (dKey == todayKey) return "Aujourd’hui";
+    final l10n = AppLocalizations.of(context)!;
+    if (dKey == todayKey) return l10n.chatTodayLabel;
 
     final yesterday = now.subtract(const Duration(days: 1));
-    if (_dayKey(yesterday) == dKey) return "Hier";
+    if (_dayKey(yesterday) == dKey) return l10n.chatYesterdayLabel;
 
     final d = dateTime.day.toString().padLeft(2, '0');
     final m = dateTime.month.toString().padLeft(2, '0');
@@ -732,6 +735,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return const SizedBox.shrink();
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
     final contextLabel = ContactContext.labelForType(conversation.contextType);
     final reasonLabel = ContactIntake.reasonLabel(
@@ -765,7 +769,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Premier contact cadré',
+              l10n.chatGuidedContextTitle,
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w900,
                 color: cs.onSecondaryContainer,
@@ -783,7 +787,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 4),
             Text(
-              'Motif : $reasonLabel. Adfoot garde ce premier échange dans le circuit officiel.',
+              l10n.chatGuidedContextReasonMessage(reasonLabel),
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: cs.onSecondaryContainer.withValues(alpha: 0.82),
                 height: 1.3,
@@ -792,7 +796,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             if (followUpStatus != AgencyFollowUpStatus.newLead) ...[
               const SizedBox(height: 4),
               Text(
-                'Suivi agence : $followUpLabel.',
+                l10n.chatGuidedContextFollowUpLabel(followUpLabel),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: cs.onSecondaryContainer.withValues(alpha: 0.82),
                   fontWeight: FontWeight.w700,
@@ -802,7 +806,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             if (feedbackLabel != null) ...[
               const SizedBox(height: 8),
               _FeedbackSignalPill(
-                label: 'Retour utilisateur : $feedbackLabel',
+                label: l10n.chatFeedbackSignalLabel(feedbackLabel),
                 note: feedbackNote,
               ),
             ],
@@ -818,7 +822,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   size: AdButtonSize.compact,
                   expanded: false,
                   leading: Icons.assignment_turned_in_outlined,
-                  label: 'Donner un retour sur la mise en relation',
+                  label: l10n.chatGiveFeedbackButton,
                 ),
               ),
             ],
@@ -858,7 +862,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (draft == null) {
       return;
     }
+    if (!mounted) {
+      return;
+    }
 
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _isSubmittingFeedback = true);
     try {
       final result = await _feedbackService.submitFeedback(
@@ -870,16 +878,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       if (result.success) {
         AdFeedback.success(
-          'Retour enregistré',
-          'Merci. Ce signal aide Adfoot à mieux suivre cette opportunité.',
+          l10n.chatFeedbackRecordedTitle,
+          l10n.chatFeedbackRecordedMessage,
         );
       } else {
-        AdFeedback.error('Retour impossible', result.message);
+        AdFeedback.error(l10n.chatFeedbackFailedTitle, result.message);
       }
     } catch (_) {
       AdFeedback.error(
-        'Retour impossible',
-        'Le retour n’a pas pu être transmis. Merci de réessayer.',
+        l10n.chatFeedbackFailedTitle,
+        l10n.chatFeedbackFailedGenericMessage,
       );
     } finally {
       if (mounted) {
@@ -916,15 +924,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     required String otherUserName,
     required bool canMessage,
   }) {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: AdStatePanel(
           icon: Icons.chat_bubble_outline,
-          title: 'Aucun message',
+          title: l10n.conversationsNoMessage,
           message: canMessage
-              ? 'Envoyez un premier message à $otherUserName.'
-              : 'La conversation est ouverte, mais la messagerie est désactivée pour le moment.',
+              ? l10n.chatEmptyStateMessage(otherUserName)
+              : l10n.chatEmptyStateDisabledMessage,
         ),
       ),
     );

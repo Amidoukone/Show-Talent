@@ -532,5 +532,81 @@
   "conversationsEmptyTitle": "Aucune conversation",
   "conversationsEmptyMessage": "Démarrez une discussion avec un utilisateur pour retrouver vos échanges ici.",
   "conversationsNewChatButton": "Nouvelle discussion",
-  "conversationsDefaultUserName": "Utilisateur"
+  "conversationsDefaultUserName": "Utilisateur",
+
+  "chatLoadingTitle": "Chargement",
+  "chatSubtitle": "Messagerie Adfoot",
+  "chatMessagesLoadingTitle": "Chargement des messages",
+  "chatMessagesLoadingMessage": "Synchronisation de la conversation.",
+  "chatMessagesUnavailableTitle": "Messages indisponibles",
+  "chatMessagesUnavailableMessage": "Impossible de charger la conversation. Vérifiez votre réseau puis réessayez.",
+  "chatEmptyStateMessage": "Envoyez un premier message à {otherUserName}.",
+  "@chatEmptyStateMessage": {
+    "placeholders": {
+      "otherUserName": {
+        "type": "String"
+      }
+    }
+  },
+  "chatEmptyStateDisabledMessage": "La conversation est ouverte, mais la messagerie est désactivée pour le moment.",
+  "chatDeleteMessageTitle": "Supprimer ce message",
+  "chatDeleteMessageConfirmMessage": "Voulez-vous vraiment supprimer ce message ?",
+  "chatMessageDeletedTitle": "Message supprimé",
+  "chatMessageDeletedMessage": "Le message a été supprimé avec succès.",
+  "chatDeleteMessageFailedTitle": "Suppression impossible",
+  "chatDeleteMessageFailedGenericMessage": "Le message n’a pas pu être supprimé. Merci de réessayer.",
+  "chatSendDisabledMessage": "L’envoi de messages est désactivé pour cette conversation.",
+  "chatSendFailedTitle": "Envoi impossible",
+  "chatSendFailedGenericMessage": "Le message n’a pas pu être envoyé. Merci de réessayer.",
+  "chatTodayLabel": "Aujourd’hui",
+  "chatYesterdayLabel": "Hier",
+  "chatGuidedContextTitle": "Premier contact cadré",
+  "chatGuidedContextReasonMessage": "Motif : {reasonLabel}. Adfoot garde ce premier échange dans le circuit officiel.",
+  "@chatGuidedContextReasonMessage": {
+    "placeholders": {
+      "reasonLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "chatGuidedContextFollowUpLabel": "Suivi agence : {followUpLabel}.",
+  "@chatGuidedContextFollowUpLabel": {
+    "placeholders": {
+      "followUpLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "chatFeedbackSignalLabel": "Retour utilisateur : {feedbackLabel}",
+  "@chatFeedbackSignalLabel": {
+    "placeholders": {
+      "feedbackLabel": {
+        "type": "String"
+      }
+    }
+  },
+  "chatGiveFeedbackButton": "Donner un retour sur la mise en relation",
+  "chatFeedbackRecordedTitle": "Retour enregistré",
+  "chatFeedbackRecordedMessage": "Merci. Ce signal aide Adfoot à mieux suivre cette opportunité.",
+  "chatFeedbackFailedTitle": "Retour impossible",
+  "chatFeedbackFailedGenericMessage": "Le retour n’a pas pu être transmis. Merci de réessayer.",
+  "chatFeedbackSheetTitle": "Retour sur la mise en relation",
+  "chatFeedbackSheetSubtitle": "Ces informations restent structurées pour Adfoot. Elles aident à accompagner les talents sans ouvrir la discussion privée.",
+  "chatFeedbackOptionNoResponseTitle": "Pas encore de réponse",
+  "chatFeedbackOptionNoResponseDescription": "La conversation existe mais rien de concret encore.",
+  "chatFeedbackOptionDiscussionStartedTitle": "Discussion engagée",
+  "chatFeedbackOptionDiscussionStartedDescription": "Un échange utile a commencé entre les deux parties.",
+  "chatFeedbackOptionTrialScheduledTitle": "Essai / rendez-vous prévu",
+  "chatFeedbackOptionTrialScheduledDescription": "Une date, un essai ou un appel concret est prévu.",
+  "chatFeedbackOptionOpportunitySeriousTitle": "Opportunité sérieuse",
+  "chatFeedbackOptionOpportunitySeriousDescription": "La piste semble crédible pour la suite du talent.",
+  "chatFeedbackOptionNotRelevantTitle": "Non pertinent",
+  "chatFeedbackOptionNotRelevantDescription": "La mise en relation ne correspond finalement pas.",
+  "chatFeedbackOptionIssueReportedTitle": "Problème signalé",
+  "chatFeedbackOptionIssueReportedDescription": "Comportement suspect, abus, promesse floue ou risque.",
+  "chatFeedbackNoteRequiredError": "Ajoutez une note courte pour contextualiser ce retour.",
+  "chatFeedbackNoteLabel": "Précision utile pour Adfoot",
+  "chatFeedbackNoteHint": "Ex. : essai prévu samedi, recruteur sérieux, pas de réponse, comportement suspect…",
+  "chatFeedbackSubmitButton": "Envoyer le retour",
+  "chatMessageInputHint": "Tapez un message…"
 }
