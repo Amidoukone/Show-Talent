@@ -3,6 +3,7 @@
 
   "commonBackToLogin": "Back to sign in",
   "commonCancel": "Cancel",
+  "commonRetry": "Retry",
 
   "loginScreenTitle": "Sign in",
   "loginScreenSubtitle": "Welcome back!",
@@ -93,5 +94,17 @@
   "termsHighlightNotAgentTitle": "We are not your agent",
   "termsHighlightNotAgentBody": "Adfoot makes you visible to clubs and recruiters, without guaranteeing a trial or a contract, and without commission.",
   "termsHighlightOwnershipTitle": "Your videos belong to you",
-  "termsHighlightOwnershipBody": "You remain the owner. You can remove them, and delete your account, at any time."
+  "termsHighlightOwnershipBody": "You remain the owner. You can remove them, and delete your account, at any time.",
+
+  "mainNavHomeLabel": "Home",
+  "mainNavCareerLabel": "Career",
+  "mainNavChatLabel": "Chat",
+  "mainNavProfileLabel": "Profile",
+  "mainNavPublishLabel": "Post",
+  "mainPublishOfferTitle": "Post an offer",
+  "mainPublishOfferSubtitle": "A position, a trial, an opportunity.",
+  "mainPublishEventTitle": "Create an event",
+  "mainPublishEventSubtitle": "A tryout, a tournament, a date.",
+  "mainProfileUnavailableTitle": "Profile unavailable",
+  "mainProfileLoadFailureMessage": "Couldn't load your profile. Try again in a moment."
 }

@@ -3,6 +3,7 @@
 
   "commonBackToLogin": "Retour à la connexion",
   "commonCancel": "Annuler",
+  "commonRetry": "Réessayer",
 
   "loginScreenTitle": "Connectez-vous",
   "loginScreenSubtitle": "Ravi de vous revoir !",
@@ -147,5 +148,17 @@
   "termsHighlightNotAgentTitle": "Nous ne sommes pas votre agent",
   "termsHighlightNotAgentBody": "Adfoot vous rend visible auprès des clubs et recruteurs, sans garantir un essai ni un contrat, et sans commission.",
   "termsHighlightOwnershipTitle": "Vos vidéos vous appartiennent",
-  "termsHighlightOwnershipBody": "Vous en restez propriétaire. Vous pouvez les retirer, et supprimer votre compte, à tout moment."
+  "termsHighlightOwnershipBody": "Vous en restez propriétaire. Vous pouvez les retirer, et supprimer votre compte, à tout moment.",
+
+  "mainNavHomeLabel": "Accueil",
+  "mainNavCareerLabel": "Carrière",
+  "mainNavChatLabel": "Chat",
+  "mainNavProfileLabel": "Profil",
+  "mainNavPublishLabel": "Publier",
+  "mainPublishOfferTitle": "Publier une offre",
+  "mainPublishOfferSubtitle": "Un poste, un essai, une opportunité.",
+  "mainPublishEventTitle": "Créer un événement",
+  "mainPublishEventSubtitle": "Une détection, un tournoi, une date.",
+  "mainProfileUnavailableTitle": "Profil indisponible",
+  "mainProfileLoadFailureMessage": "Impossible de charger le profil. Réessayez dans quelques instants."
 }

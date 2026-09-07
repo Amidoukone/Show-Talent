@@ -964,7 +964,7 @@ void main() {
         // destination now, reachable from every tab.
         expect(home, isNot(contains('_buildHomeProfileAvatar')));
         expect(home, contains('actions: const [],'));
-        expect(main, contains("label: 'Profil',"));
+        expect(main, contains('label: l10n.mainNavProfileLabel,'));
         expect(main, contains('ProfileScreen(uid: user.uid, isReadOnly: false)'));
 
         // What the avatar guarded still holds where the avatar now lives: no

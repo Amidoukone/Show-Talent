@@ -13,8 +13,12 @@ String _read(String path) => File(path).readAsStringSync();
 /// Outils (a settings screen) was a destination and the profile was not.
 void main() {
   late String main;
+  late String arb;
 
-  setUpAll(() => main = _read('lib/screens/main_screen.dart'));
+  setUpAll(() {
+    main = _read('lib/screens/main_screen.dart');
+    arb = _read('lib/l10n/app_fr.arb');
+  });
 
   group('what is a destination and what is not', () {
     // Settings are visited rarely; a profile constantly. And the profile was
@@ -22,7 +26,11 @@ void main() {
     // Offres, Events or Chat there was no way to your own profile without
     // going back to the feed first.
     test('Profil is a destination, Outils is not', () {
-      expect(main, contains("label: 'Profil',"));
+      // The literal wording moved into the ARB template as part of the
+      // English-localization pass; the screen now only references the
+      // AppLocalizations key.
+      expect(main, contains('label: l10n.mainNavProfileLabel,'));
+      expect(arb, contains('"mainNavProfileLabel": "Profil"'));
       expect(
         main,
         isNot(contains("label: 'Outils',")),
@@ -42,7 +50,8 @@ void main() {
       // 72 dp on a 360 dp screen, and "Opportunités" measures about 74 dp in
       // the selected style. Material puts no ellipsis on a bar label and the
       // word has no break point, so it was cut mid-word.
-      expect(main, contains("label: 'Carrière',"));
+      expect(main, contains('label: l10n.mainNavCareerLabel,'));
+      expect(arb, contains('"mainNavCareerLabel": "Carrière"'));
       expect(main, isNot(contains("label: 'Opportunités',")));
       expect(main, isNot(contains("label: 'Offres',")));
       expect(main, isNot(contains("label: 'Events',")));
@@ -117,8 +126,10 @@ void main() {
       expect(main, contains('Get.to(() => const AddVideo())'));
       expect(main, contains('isOpportunityPublisherRole(user.role)'));
       expect(main, contains('_showPublishOpportunitySheet()'));
-      expect(main, contains("'Publier une offre'"));
-      expect(main, contains("'Créer un événement'"));
+      expect(main, contains('l10n.mainPublishOfferTitle'));
+      expect(main, contains('l10n.mainPublishEventTitle'));
+      expect(arb, contains('"mainPublishOfferTitle": "Publier une offre"'));
+      expect(arb, contains('"mainPublishEventTitle": "Créer un événement"'));
     });
 
     // A fan publishes nothing. A disabled button would be worse than none.
@@ -155,7 +166,8 @@ void main() {
     // Labelled rather than a bare glyph: "+" is unambiguous to a player and
     // means nothing to a club.
     test('it is labelled', () {
-      expect(main, contains("label: 'Publier',"));
+      expect(main, contains('label: l10n.mainNavPublishLabel,'));
+      expect(arb, contains('"mainNavPublishLabel": "Publier"'));
     });
   });
 
@@ -235,7 +247,7 @@ void main() {
       final body = main.substring(shell);
       expect(body, contains('height: _navIconBox,'));
 
-      final publish = main.indexOf('BottomNavigationBarItem _publishBarItem()');
+      final publish = main.indexOf('BottomNavigationBarItem _publishBarItem(');
       expect(publish, isNonNegative);
       expect(
         main.substring(publish, publish + 900),

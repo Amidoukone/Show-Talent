@@ -4,9 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Verifies the ARB -> AppLocalizations pipeline end to end for each screen
 /// migrated so far (login, signup, verify email, reset password, terms
-/// acceptance): both locales resolve, the French template is not silently
-/// used as an English fallback, and parameterized strings substitute their
-/// placeholder correctly in each language.
+/// acceptance, main navigation shell): both locales resolve, the French
+/// template is not silently used as an English fallback, and parameterized
+/// strings substitute their placeholder correctly in each language.
 void main() {
   Future<AppLocalizations> resolve(
     WidgetTester tester,
@@ -63,6 +63,8 @@ void main() {
       'Impossible d’ouvrir le document. '
       'Adresse : https://adfoot.org/legal/terms.html',
     );
+    expect(l10n.mainNavCareerLabel, 'Carrière');
+    expect(l10n.commonRetry, 'Réessayer');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -101,5 +103,7 @@ void main() {
       "Couldn't open the document. "
       'Address: https://adfoot.org/legal/terms.html',
     );
+    expect(l10n.mainNavCareerLabel, isNot('Carrière'));
+    expect(l10n.commonRetry, 'Retry');
   });
 }

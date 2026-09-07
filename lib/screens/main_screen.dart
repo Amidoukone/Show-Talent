@@ -5,6 +5,7 @@ import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/connectivity_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/screens/conversation_screen.dart';
 import 'package:adfoot/screens/home_screen.dart';
 import 'package:adfoot/screens/add_video.dart';
@@ -328,6 +329,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _showPublishOpportunitySheet() async {
+    final l10n = AppLocalizations.of(context)!;
     await showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
@@ -355,11 +357,11 @@ class _MainScreenState extends State<MainScreen> {
                   Icons.local_offer_rounded,
                   color: AdColors.brand,
                 ),
-                title: const Text(
-                  'Publier une offre',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                title: Text(
+                  l10n.mainPublishOfferTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-                subtitle: const Text('Un poste, un essai, une opportunité.'),
+                subtitle: Text(l10n.mainPublishOfferSubtitle),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   _openOpportunities(tab: 0);
@@ -371,11 +373,11 @@ class _MainScreenState extends State<MainScreen> {
                   Icons.event_available_rounded,
                   color: AdColors.brand,
                 ),
-                title: const Text(
-                  'Créer un événement',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+                title: Text(
+                  l10n.mainPublishEventTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-                subtitle: const Text('Une détection, un tournoi, une date.'),
+                subtitle: Text(l10n.mainPublishEventSubtitle),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
                   _openOpportunities(tab: 1);
@@ -431,10 +433,11 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   List<BottomNavigationBarItem> _buildBarItems(AppUser user, int unread) {
+    final l10n = AppLocalizations.of(context)!;
     return <BottomNavigationBarItem>[
       for (final slot in _barSlots(user))
         if (slot == null)
-          _publishBarItem()
+          _publishBarItem(l10n)
         else
           switch (slot) {
             // "Carrière", not "Opportunités".
@@ -446,25 +449,25 @@ class _MainScreenState extends State<MainScreen> {
             // cut. One word of eight characters clears the slot with room to
             // spare, and both tabs under it — an offer to answer, a detection
             // to attend — are steps in a career.
-            _opportunitiesDestination => const BottomNavigationBarItem(
-              icon: Icon(Icons.local_offer_outlined),
-              activeIcon: Icon(Icons.local_offer_rounded),
-              label: 'Carrière',
+            _opportunitiesDestination => BottomNavigationBarItem(
+              icon: const Icon(Icons.local_offer_outlined),
+              activeIcon: const Icon(Icons.local_offer_rounded),
+              label: l10n.mainNavCareerLabel,
             ),
             _chatTab => BottomNavigationBarItem(
               icon: _ChatIconWithBadge(unread: unread, active: false),
               activeIcon: _ChatIconWithBadge(unread: unread, active: true),
-              label: 'Chat',
+              label: l10n.mainNavChatLabel,
             ),
             _profileTab => BottomNavigationBarItem(
               icon: _buildProfileIcon(user: user, active: false),
               activeIcon: _buildProfileIcon(user: user, active: true),
-              label: 'Profil',
+              label: l10n.mainNavProfileLabel,
             ),
             _ => BottomNavigationBarItem(
               icon: _buildHomeIcon(active: false),
               activeIcon: _buildHomeIcon(active: true),
-              label: 'Accueil',
+              label: l10n.mainNavHomeLabel,
             ),
           },
     ];
@@ -474,7 +477,7 @@ class _MainScreenState extends State<MainScreen> {
   ///
   /// Labelled rather than a bare glyph: "+" is unambiguous to a player and
   /// means nothing to a club. One word that is true for both.
-  BottomNavigationBarItem _publishBarItem() {
+  BottomNavigationBarItem _publishBarItem(AppLocalizations l10n) {
     // Boxed to the same height as every other glyph.
     //
     // The tiles of a BottomNavigationBar are a Row of centred Columns, so a
@@ -505,8 +508,8 @@ class _MainScreenState extends State<MainScreen> {
     return BottomNavigationBarItem(
       icon: icon,
       activeIcon: icon,
-      label: 'Publier',
-      tooltip: 'Publier',
+      label: l10n.mainNavPublishLabel,
+      tooltip: l10n.mainNavPublishLabel,
     );
   }
 
@@ -570,6 +573,7 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Obx(() {
       final appUser = userController.user;
       final unread = chatController.totalUnread;
@@ -598,8 +602,7 @@ class _MainScreenState extends State<MainScreen> {
         final message = isLoading || !hasAttempted
             ? ''
             : (userController.sessionLoadMessage.trim().isEmpty
-                  ? 'Impossible de charger le profil. '
-                        'Réessayez dans quelques instants.'
+                  ? l10n.mainProfileLoadFailureMessage
                   : userController.sessionLoadMessage);
 
         return Scaffold(
@@ -618,7 +621,7 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Profil indisponible',
+                          l10n.mainProfileUnavailableTitle,
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w800),
@@ -647,7 +650,7 @@ class _MainScreenState extends State<MainScreen> {
                                   ),
                                 )
                               : const Icon(Icons.refresh),
-                          label: const Text('Réessayer'),
+                          label: Text(l10n.commonRetry),
                         ),
                       ],
                     ),
