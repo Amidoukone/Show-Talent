@@ -41,15 +41,15 @@ class VideoUiStrings {
   static const String videoCaptionOpen = 'Ouvrir la légende';
   static const String videoPublisherProfileSemantic =
       'Ouvrir le profil du joueur';
-  static const String back = 'Retour';
+  static String get back => 'back'.tr;
   // `emptyVideoFeedTitle` / `emptyVideoFeedMessage` sont partis avec
   // `video_feed_screen.dart`, leur seul lecteur : un troisième feed vidéo
   // qu'aucun écran n'ouvrait plus. Les deux feeds qui restent ont leur propre
   // formulation, `emptyProfileVideoFeed*` et `emptyHomeVideoFeed*`, parce que
   // « aucune vidéo » ne se dit pas pareil sur un profil et sur l'accueil.
-  static const String emptyProfileVideoFeedTitle = 'Aucune vidéo à afficher';
-  static const String emptyProfileVideoFeedMessage =
-      'Ce profil n’a pas encore de vidéo disponible.';
+  static String get emptyProfileVideoFeedTitle => 'emptyProfileVideoFeedTitle'.tr;
+  static String get emptyProfileVideoFeedMessage =>
+      'emptyProfileVideoFeedMessage'.tr;
   static String get emptyHomeVideoFeedTitle => 'emptyHomeVideoFeedTitle'.tr;
   static String get emptyHomeVideoFeedPlayerMessage =>
       'emptyHomeVideoFeedPlayerMessage'.tr;

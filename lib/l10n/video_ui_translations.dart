@@ -1,20 +1,22 @@
 import 'package:get/get.dart';
 
-/// GetX translations for [VideoUiStrings][videoUiStringsRef].
+/// GetX translations for context-free string catalogs: [VideoUiStrings]
+/// [videoUiStringsRef] and any other plain static-string helper called from
+/// controllers/services with no `BuildContext` at all -- `success_toast.dart`
+/// so far too.
 ///
 /// A second translation mechanism next to the ARB-based `AppLocalizations`
-/// used for screens: `VideoUiStrings` is a plain static-string catalog read
-/// from controllers and services across the video subsystem (playback,
-/// upload, feed, moderation) that have no `BuildContext` at all, so
-/// `AppLocalizations.of(context)` is not an option there. GetX's `.tr`
-/// extension resolves from `Get.locale`/`Get.translations` globally, without
-/// a context -- already available in this app via `GetMaterialApp`.
+/// used for screens, needed exactly because those callers have no context to
+/// resolve `AppLocalizations.of(context)` with. GetX's `.tr` extension
+/// resolves from `Get.locale`/`Get.translations` globally, without a context
+/// -- already available in this app via `GetMaterialApp`.
 ///
 /// [videoUiStringsRef]: ../utils/video_ui_strings.dart
 ///
-/// Keys are added incrementally as `VideoUiStrings` members are migrated
-/// screen by screen (only the ones `home_screen.dart` uses so far), not all
-/// ~180 at once -- see [[project_adfoot_i18n_ios_effort]] in project memory.
+/// Keys are added incrementally as call sites are migrated screen by screen
+/// (only the ones `home_screen.dart` and `success_toast.dart` use so far),
+/// not all ~180 `VideoUiStrings` members at once -- see
+/// [[project_adfoot_i18n_ios_effort]] in project memory.
 class VideoUiTranslations extends Translations {
   @override
   Map<String, Map<String, String>> get keys => {
@@ -52,6 +54,13 @@ class VideoUiTranslations extends Translations {
     'noInternetMessage':
         'Vérifiez votre réseau, puis relancez le chargement du feed.',
     'retry': 'Réessayer',
+    'actionConfirmedTitle': 'Action confirmée',
+    'actionImpossibleTitle': 'Action impossible',
+    'noteTitle': 'À noter',
+    'emptyProfileVideoFeedTitle': 'Aucune vidéo à afficher',
+    'emptyProfileVideoFeedMessage':
+        'Ce profil n’a pas encore de vidéo disponible.',
+    'back': 'Retour',
   };
 
   static const Map<String, String> _en = {
@@ -83,5 +92,12 @@ class VideoUiTranslations extends Translations {
     'noInternetTitle': 'No internet connection',
     'noInternetMessage': 'Check your connection, then reload the feed.',
     'retry': 'Retry',
+    'actionConfirmedTitle': 'Action confirmed',
+    'actionImpossibleTitle': 'Action unavailable',
+    'noteTitle': 'Note',
+    'emptyProfileVideoFeedTitle': 'No videos to show',
+    'emptyProfileVideoFeedMessage':
+        'This profile has no videos available yet.',
+    'back': 'Back',
   };
 }

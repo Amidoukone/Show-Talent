@@ -50,6 +50,11 @@ void main() {
     expect(VideoUiStrings.videoSearchHint, 'Poste, joueur, club...');
     expect(VideoUiStrings.defaultPublisherName, 'Profil Adfoot');
     expect(VideoUiStrings.videoSearchResultHint, 'Ouvrir cette vidéo');
+    expect(VideoUiStrings.back, 'Retour');
+    expect(
+      VideoUiStrings.emptyProfileVideoFeedTitle,
+      'Aucune vidéo à afficher',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -73,5 +78,7 @@ void main() {
     expect(VideoUiStrings.videoSearchHint, 'Position, player, club...');
     expect(VideoUiStrings.defaultPublisherName, 'Adfoot Profile');
     expect(VideoUiStrings.videoSearchResultHint, 'Open this video');
+    expect(VideoUiStrings.back, 'Back');
+    expect(VideoUiStrings.emptyProfileVideoFeedTitle, 'No videos to show');
   });
 }

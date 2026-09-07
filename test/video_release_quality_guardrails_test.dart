@@ -512,9 +512,18 @@ void main() {
       expect(feedback, isNot(contains('GetSnackBar')));
       expect(feedback, isNot(contains('SnackStyle.FLOATING')));
       expect(feedback, isNot(contains('Get.snackbar(')));
-      expect(toastWrappers, contains('Action confirmée'));
-      expect(toastWrappers, contains('Action impossible'));
-      expect(toastWrappers, contains('À noter'));
+      // The literal wording moved into video_ui_translations.dart's GetX
+      // catalog as part of the English-localization pass; these wrappers now
+      // only reference the translation keys.
+      expect(toastWrappers, contains("'actionConfirmedTitle'.tr"));
+      expect(toastWrappers, contains("'actionImpossibleTitle'.tr"));
+      expect(toastWrappers, contains("'noteTitle'.tr"));
+      final translations = File(
+        'lib/l10n/video_ui_translations.dart',
+      ).readAsStringSync();
+      expect(translations, contains("'actionConfirmedTitle': 'Action confirmée'"));
+      expect(translations, contains("'actionImpossibleTitle': 'Action impossible'"));
+      expect(translations, contains("'noteTitle': 'À noter'"));
       expect(actionResponse, contains('Action réalisée.'));
       expect(actionResponse, contains('Réessaie quand tu es en ligne.'));
       expect(actionResponse, isNot(contains('Ã')));
