@@ -100,6 +100,7 @@ void main() {
     );
     expect(l10n.talentSearchResultsCountOther(3), '3 joueurs');
     expect(l10n.followListEmptyFollowersMessage, 'Aucun abonné pour l’instant.');
+    expect(l10n.selectUserTitle, 'Nouvelle conversation');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -174,5 +175,6 @@ void main() {
     );
     expect(l10n.talentSearchResultsCountOther(3), '3 players');
     expect(l10n.followListEmptyFollowersMessage, 'No followers yet.');
+    expect(l10n.selectUserTitle, 'New conversation');
   });
 }

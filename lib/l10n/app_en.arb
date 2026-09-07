@@ -359,5 +359,17 @@
   "followListEmptyFollowingTitle": "Not following anyone",
   "followListEmptyFollowersMessage": "No followers yet.",
   "followListEmptyFollowingMessage": "Not following anyone yet.",
-  "followListActionFailedMessage": "Couldn't complete the action."
+  "followListActionFailedMessage": "Couldn't complete the action.",
+
+  "selectUserTitle": "New conversation",
+  "selectUserSubtitle": "Choose a contact",
+  "selectUserSearchHint": "Search for a user...",
+  "selectUserEmptyTitle": "No user available",
+  "selectUserEmptyMessage": "There's currently no one to talk to.",
+  "selectUserNoResultsTitle": "No results",
+  "selectUserNoResultsMessage": "No user matches your search.",
+  "selectUserContactContextTitle": "User selection",
+  "selectUserConversationUnavailableMessage": "Conversation unavailable right now.",
+  "selectUserStartConversationFailedMessage": "Couldn't start the conversation.",
+  "selectUserNoRoleLabel": "Role not specified"
 }

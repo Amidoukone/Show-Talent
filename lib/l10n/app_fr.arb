@@ -493,5 +493,17 @@
   "followListEmptyFollowingTitle": "Aucun abonnement",
   "followListEmptyFollowersMessage": "Aucun abonné pour l’instant.",
   "followListEmptyFollowingMessage": "Aucun abonnement pour l’instant.",
-  "followListActionFailedMessage": "Impossible d’effectuer l’action."
+  "followListActionFailedMessage": "Impossible d’effectuer l’action.",
+
+  "selectUserTitle": "Nouvelle conversation",
+  "selectUserSubtitle": "Choisir un contact",
+  "selectUserSearchHint": "Rechercher un utilisateur...",
+  "selectUserEmptyTitle": "Aucun utilisateur disponible",
+  "selectUserEmptyMessage": "Il n’y a actuellement aucun utilisateur avec qui discuter.",
+  "selectUserNoResultsTitle": "Aucun résultat",
+  "selectUserNoResultsMessage": "Aucun utilisateur ne correspond à votre recherche.",
+  "selectUserContactContextTitle": "Sélection utilisateur",
+  "selectUserConversationUnavailableMessage": "Conversation indisponible pour le moment.",
+  "selectUserStartConversationFailedMessage": "Impossible de démarrer la conversation.",
+  "selectUserNoRoleLabel": "Rôle non renseigné"
 }

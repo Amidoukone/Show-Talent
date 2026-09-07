@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:adfoot/controller/auth_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
@@ -47,13 +48,14 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
     return Scaffold(
-      appBar: const AdAppBar(
-        title: 'Nouvelle conversation',
-        subtitle: 'Choisir un contact',
+      appBar: AdAppBar(
+        title: l10n.selectUserTitle,
+        subtitle: l10n.selectUserSubtitle,
         showBottomDivider: true,
       ),
       body: Obx(() {
@@ -62,12 +64,12 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
             currentUser?.uid ?? _authSessionService.currentUser?.uid;
 
         if (currentUid == null) {
-          return const Center(
+          return Center(
             child: Padding(
-              padding: EdgeInsets.all(16),
+              padding: const EdgeInsets.all(16),
               child: AdStatePanel.error(
-                title: 'Session invalide',
-                message: 'Utilisateur non connecté.',
+                title: l10n.profileInvalidSessionTitle,
+                message: l10n.profileNotSignedInMessage,
               ),
             ),
           );
@@ -102,7 +104,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                   onChanged: (value) =>
                       searchTerm.value = value.trim().toLowerCase(),
                   decoration: InputDecoration(
-                    hintText: 'Rechercher un utilisateur...',
+                    hintText: l10n.selectUserSearchHint,
                     prefixIcon: Icon(
                       Icons.search,
                       color: cs.onSurface.withValues(alpha: 0.6),
@@ -110,7 +112,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                     suffixIcon: searchTerm.value.isEmpty
                         ? null
                         : IconButton(
-                            tooltip: 'Effacer',
+                            tooltip: l10n.commonClear,
                             icon: const Icon(Icons.close_rounded),
                             onPressed: () {
                               searchController.clear();
@@ -131,18 +133,16 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
               child: Builder(
                 builder: (context) {
                   if (users.isEmpty) {
-                    return const AdStatePanel.empty(
-                      title: 'Aucun utilisateur disponible',
-                      message:
-                          'Il n’y a actuellement aucun utilisateur avec qui discuter.',
+                    return AdStatePanel.empty(
+                      title: l10n.selectUserEmptyTitle,
+                      message: l10n.selectUserEmptyMessage,
                     );
                   }
 
                   if (filteredUsers.isEmpty) {
-                    return const AdStatePanel.empty(
-                      title: 'Aucun résultat',
-                      message:
-                          'Aucun utilisateur ne correspond à votre recherche.',
+                    return AdStatePanel.empty(
+                      title: l10n.selectUserNoResultsTitle,
+                      message: l10n.selectUserNoResultsMessage,
                     );
                   }
 
@@ -166,8 +166,8 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                             final resolvedCurrentUser = _resolvedCurrentUser();
                             if (resolvedCurrentUser == null) {
                               AdFeedback.error(
-                                'Erreur',
-                                'Utilisateur non connecté.',
+                                l10n.profileMessagingErrorTitle,
+                                l10n.profileNotSignedInMessage,
                               );
                               return;
                             }
@@ -175,10 +175,11 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                             if (!resolvedCurrentUser.allowMessages ||
                                 !user.allowMessages) {
                               AdFeedback.warning(
-                                'Messages indisponibles',
+                                l10n.profileMessagingDisabledTitle,
                                 !resolvedCurrentUser.allowMessages
-                                    ? 'Vous avez désactivé les messages.'
-                                    : 'Cet utilisateur a désactivé les messages.',
+                                    ? l10n.profileMessagingDisabledSenderMessage
+                                    : l10n
+                                          .profileMessagingDisabledRecipientMessage,
                               );
                               return;
                             }
@@ -209,7 +210,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                                     currentUser: resolvedCurrentUser,
                                     otherUser: user,
                                     context: ContactContext.discovery(
-                                      title: 'Sélection utilisateur',
+                                      title: l10n.selectUserContactContextTitle,
                                     ),
                                   ),
                                   isScrollControlled: true,
@@ -231,16 +232,16 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
 
                             if (result.createdIntake) {
                               AdFeedback.info(
-                                'Contact enregistré',
-                                'Le premier contact a été cadré et transmis via Adfoot.',
+                                l10n.profileContactRecordedTitle,
+                                l10n.profileContactRecordedMessage,
                               );
                             }
 
                             final conversationId = result.conversationId.trim();
                             if (conversationId.isEmpty) {
                               AdFeedback.error(
-                                'Erreur',
-                                'Conversation indisponible pour le moment.',
+                                l10n.profileMessagingErrorTitle,
+                                l10n.selectUserConversationUnavailableMessage,
                               );
                               return;
                             }
@@ -255,11 +256,14 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                               ),
                             );
                           } on ChatFlowException catch (error) {
-                            AdFeedback.error('Erreur', error.message);
+                            AdFeedback.error(
+                              l10n.profileMessagingErrorTitle,
+                              error.message,
+                            );
                           } catch (_) {
                             AdFeedback.error(
-                              'Erreur',
-                              'Impossible de démarrer la conversation.',
+                              l10n.profileMessagingErrorTitle,
+                              l10n.selectUserStartConversationFailedMessage,
                             );
                           } finally {
                             if (mounted) {
@@ -351,7 +355,9 @@ class _UserCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        user.role.isNotEmpty ? user.role : 'Rôle non renseigné',
+                        user.role.isNotEmpty
+                            ? user.role
+                            : AppLocalizations.of(context)!.selectUserNoRoleLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
