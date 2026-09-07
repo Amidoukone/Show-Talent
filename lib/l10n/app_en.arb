@@ -1,6 +1,9 @@
 {
   "@@locale": "en",
 
+  "commonBackToLogin": "Back to sign in",
+  "commonCancel": "Cancel",
+
   "loginScreenTitle": "Sign in",
   "loginScreenSubtitle": "Welcome back!",
   "loginEmailLabel": "Email address",
@@ -33,7 +36,6 @@
   "signupRolesCardMessage": "All accounts are provisioned in the admin portal: {roles}.",
   "signupUserJourneyCardTitle": "Steps to follow",
   "signupUserJourneyCardMessage": "1. Contact the Adfoot administration.\n2. Receive the password setup link.\n3. Verify your email address.\n4. Then sign in to the mobile app.",
-  "signupBackToLogin": "Back to sign in",
   "signupAlreadyHaveAccount": "I already have an account",
 
   "verifyEmailAppBarTitle": "Email verification",
@@ -47,7 +49,6 @@
   "verifyEmailCheckInboxInstruction": "Open your inbox and click the link.",
   "verifyEmailCheckSpamInstruction": "If you don't see it, also check Spam / Junk / Promotions.",
   "verifyEmailReturnToLoginInstruction": "Once your email is verified in the browser, come back here and return to sign-in.",
-  "verifyEmailBackToLogin": "Back to sign in",
   "verifyEmailResendLink": "Resend verification link",
   "verifyEmailThrottleTitle": "Please wait",
   "verifyEmailThrottleMessage": "Wait a few seconds before resending.",
@@ -58,5 +59,18 @@
   "verifyEmailVerifiedNoticeTitle": "Email verified",
   "verifyEmailVerifiedNoticeMessage": "Your email has been verified. Sign in to continue.",
   "verifyEmailInvalidLinkMessage": "The verification link is invalid or expired. Request a new link.",
-  "verifyEmailAfterVerificationMessage": "If the web page says your email has been verified, go back to sign-in and log in again to activate your account."
+  "verifyEmailAfterVerificationMessage": "If the web page says your email has been verified, go back to sign-in and log in again to activate your account.",
+
+  "newPasswordScreenTitle": "Reset your password",
+  "newPasswordAccountLabel": "Account: {email}",
+  "newPasswordFieldLabel": "New password",
+  "newPasswordConfirmFieldLabel": "Confirm password",
+  "newPasswordTooShortValidator": "Password must be at least 6 characters long.",
+  "newPasswordConfirmRequiredValidator": "Confirmation required.",
+  "newPasswordMismatchValidator": "Passwords don't match.",
+  "newPasswordSuccessTitle": "Success",
+  "newPasswordSuccessMessage": "Password reset successfully.",
+  "newPasswordSubmit": "Confirm",
+  "newPasswordInvalidLinkTitle": "Invalid link",
+  "newPasswordInvalidLinkMessage": "The reset link is invalid or incomplete. Request a new link from the sign-in page."
 }

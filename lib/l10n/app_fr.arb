@@ -1,6 +1,9 @@
 {
   "@@locale": "fr",
 
+  "commonBackToLogin": "Retour à la connexion",
+  "commonCancel": "Annuler",
+
   "loginScreenTitle": "Connectez-vous",
   "loginScreenSubtitle": "Ravi de vous revoir !",
   "loginEmailLabel": "Adresse e-mail",
@@ -49,7 +52,6 @@
   },
   "signupUserJourneyCardTitle": "Étapes à suivre",
   "signupUserJourneyCardMessage": "1. Contacter l’administration Adfoot.\n2. Recevoir le lien de définition du mot de passe.\n3. Valider l’adresse e-mail.\n4. Se connecter ensuite dans l’application mobile.",
-  "signupBackToLogin": "Retour à la connexion",
   "signupAlreadyHaveAccount": "J’ai déjà un compte",
 
   "verifyEmailAppBarTitle": "Vérification e-mail",
@@ -70,7 +72,6 @@
   "verifyEmailCheckInboxInstruction": "Ouvrez votre boîte de réception et cliquez sur le lien.",
   "verifyEmailCheckSpamInstruction": "Si vous ne le voyez pas, vérifiez aussi les dossiers Spam, Indésirables ou Promotions.",
   "verifyEmailReturnToLoginInstruction": "Une fois votre e-mail vérifié dans le navigateur, revenez ici puis retournez à la connexion.",
-  "verifyEmailBackToLogin": "Retour à la connexion",
   "verifyEmailResendLink": "Renvoyer le lien de vérification",
   "verifyEmailThrottleTitle": "Veuillez patienter",
   "verifyEmailThrottleMessage": "Attendez quelques secondes avant de renvoyer.",
@@ -81,5 +82,25 @@
   "verifyEmailVerifiedNoticeTitle": "E-mail vérifié",
   "verifyEmailVerifiedNoticeMessage": "Votre e-mail a été vérifié. Connectez-vous pour continuer.",
   "verifyEmailInvalidLinkMessage": "Le lien de vérification est invalide ou expiré. Demandez un nouveau lien.",
-  "verifyEmailAfterVerificationMessage": "Si la page web indique que votre e-mail a été vérifié, retournez à la connexion puis reconnectez-vous pour activer le compte."
+  "verifyEmailAfterVerificationMessage": "Si la page web indique que votre e-mail a été vérifié, retournez à la connexion puis reconnectez-vous pour activer le compte.",
+
+  "newPasswordScreenTitle": "Réinitialiser le mot de passe",
+  "newPasswordAccountLabel": "Compte : {email}",
+  "@newPasswordAccountLabel": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "newPasswordFieldLabel": "Nouveau mot de passe",
+  "newPasswordConfirmFieldLabel": "Confirmer le mot de passe",
+  "newPasswordTooShortValidator": "Le mot de passe doit contenir au moins 6 caractères.",
+  "newPasswordConfirmRequiredValidator": "Confirmation requise.",
+  "newPasswordMismatchValidator": "Les mots de passe ne correspondent pas.",
+  "newPasswordSuccessTitle": "Succès",
+  "newPasswordSuccessMessage": "Mot de passe réinitialisé avec succès.",
+  "newPasswordSubmit": "Valider",
+  "newPasswordInvalidLinkTitle": "Lien invalide",
+  "newPasswordInvalidLinkMessage": "Le lien de réinitialisation est invalide ou incomplet. Demandez un nouveau lien depuis la page de connexion."
 }

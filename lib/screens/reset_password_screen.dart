@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:adfoot/config/app_routes.dart';
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/auth/password_reset_flow.dart';
 import 'package:adfoot/theme/ad_colors.dart';
@@ -92,6 +93,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final pass = _passwordController.text;
 
     setState(() => _isLoading = true);
@@ -101,7 +103,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         newPassword: pass,
       );
 
-      AdFeedback.success('Succès', 'Mot de passe réinitialisé avec succès.');
+      AdFeedback.success(
+        l10n.newPasswordSuccessTitle,
+        l10n.newPasswordSuccessMessage,
+      );
 
       final email = widget.accountEmail?.trim();
       await _leaveToLogin(
@@ -114,16 +119,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       );
     } on FirebaseAuthException catch (error) {
       AdFeedback.error(
-        'Réinitialisation impossible',
+        l10n.resetPasswordFailureTitle,
         AuthErrorMapper.toMessage(error),
       );
     } on AuthFlowException catch (error) {
-      AdFeedback.error('Réinitialisation impossible', error.message);
+      AdFeedback.error(l10n.resetPasswordFailureTitle, error.message);
     } catch (_) {
-      AdFeedback.error(
-        'Réinitialisation impossible',
-        'Une erreur inattendue est survenue. Veuillez réessayer.',
-      );
+      AdFeedback.error(l10n.resetPasswordFailureTitle, l10n.loginUnexpectedError);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -132,29 +134,32 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   }
 
   String? _validatePassword(String? value) {
+    final l10n = AppLocalizations.of(context)!;
     final pass = value ?? '';
     if (pass.isEmpty) {
-      return 'Mot de passe requis.';
+      return l10n.loginPasswordRequired;
     }
     if (pass.length < 6) {
-      return 'Le mot de passe doit contenir au moins 6 caractères.';
+      return l10n.newPasswordTooShortValidator;
     }
     return null;
   }
 
   String? _validateConfirmation(String? value) {
+    final l10n = AppLocalizations.of(context)!;
     final confirm = value ?? '';
     if (confirm.isEmpty) {
-      return 'Confirmation requise.';
+      return l10n.newPasswordConfirmRequiredValidator;
     }
     if (confirm != _passwordController.text) {
-      return 'Les mots de passe ne correspondent pas.';
+      return l10n.newPasswordMismatchValidator;
     }
     return null;
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
 
     // The screen is installed with `offAllNamed`, so there is nothing beneath
@@ -180,12 +185,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               constraints: const BoxConstraints(maxWidth: 520),
               child: !_hasValidCode
                   ? AdStatePanel.error(
-                      title: 'Lien invalide',
-                      message:
-                          'Le lien de réinitialisation est invalide ou incomplet. '
-                          'Demandez un nouveau lien depuis la page de connexion.',
+                      title: l10n.newPasswordInvalidLinkTitle,
+                      message: l10n.newPasswordInvalidLinkMessage,
                       action: AdButton(
-                        label: 'Retour à la connexion',
+                        label: l10n.commonBackToLogin,
                         leading: Icons.arrow_back,
                         onPressed: () => unawaited(_leaveToLogin()),
                         kind: AdButtonKind.primary,
@@ -199,7 +202,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Text(
-                              'Réinitialiser le mot de passe',
+                              l10n.newPasswordScreenTitle,
                               style: Theme.of(context).textTheme.titleLarge
                                   ?.copyWith(
                                     fontWeight: FontWeight.bold,
@@ -211,7 +214,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 true) ...[
                               const SizedBox(height: AdSpacing.sm),
                               Text(
-                                'Compte : ${widget.accountEmail!.trim()}',
+                                l10n.newPasswordAccountLabel(
+                                  widget.accountEmail!.trim(),
+                                ),
                                 textAlign: TextAlign.center,
                                 style: const TextStyle(
                                   color: AdColors.onSurfaceMuted,
@@ -222,7 +227,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             const SizedBox(height: AdSpacing.xl),
                             AdTextField(
                               controller: _passwordController,
-                              label: 'Nouveau mot de passe',
+                              label: l10n.newPasswordFieldLabel,
                               isPassword: true,
                               prefixIcon: const Icon(Icons.lock_outline),
                               validator: _validatePassword,
@@ -230,7 +235,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             const SizedBox(height: AdSpacing.md),
                             AdTextField(
                               controller: _confirmController,
-                              label: 'Confirmer le mot de passe',
+                              label: l10n.newPasswordConfirmFieldLabel,
                               isPassword: true,
                               prefixIcon: const Icon(Icons.lock_outline),
                               validator: _validateConfirmation,
@@ -238,7 +243,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             ),
                             const SizedBox(height: AdSpacing.xl),
                             AdButton(
-                              label: 'Valider',
+                              label: l10n.newPasswordSubmit,
                               onPressed: _isLoading ? null : _resetPassword,
                               loading: _isLoading,
                               kind: AdButtonKind.primary,
@@ -246,7 +251,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             ),
                             const SizedBox(height: AdSpacing.sm),
                             AdButton(
-                              label: 'Annuler',
+                              label: l10n.commonCancel,
                               onPressed: _isLoading
                                   ? null
                                   : () => unawaited(_leaveToLogin()),

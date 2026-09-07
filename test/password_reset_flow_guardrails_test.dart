@@ -183,13 +183,18 @@ void main() {
       final handler = _read('lib/services/email_link_handler.dart');
       final routes = _read('lib/config/app_routes.dart');
       final screen = _read('lib/screens/reset_password_screen.dart');
+      final arb = _read('lib/l10n/app_fr.arb');
 
       expect(handler, contains("final email = await FirebaseAuth.instance"));
       expect(handler, contains("if (email.trim().isNotEmpty) 'email'"));
       expect(routes, contains('static String? _resolveResetPasswordEmail()'));
       expect(routes, contains('accountEmail: _resolveResetPasswordEmail()'));
       expect(screen, contains('final String? accountEmail;'));
-      expect(screen, contains("'Compte : \${widget.accountEmail!.trim()}'"));
+      // The literal wording moved into the ARB template as part of the
+      // English-localization pass; the screen now only references the
+      // AppLocalizations key.
+      expect(screen, contains('l10n.newPasswordAccountLabel('));
+      expect(arb, contains('"newPasswordAccountLabel": "Compte : {email}"'));
       // Firebase revokes the old sessions on a password change, so login is
       // always next; carry the address so it is not retyped.
       expect(screen, contains("'prefillEmail': email"));

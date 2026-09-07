@@ -86,7 +86,7 @@ class SignUpScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AdSpacing.xl),
                   AdButton(
-                    label: l10n.signupBackToLogin,
+                    label: l10n.commonBackToLogin,
                     onPressed: () => Get.back(),
                     leading: Icons.arrow_back_rounded,
                     kind: AdButtonKind.primary,

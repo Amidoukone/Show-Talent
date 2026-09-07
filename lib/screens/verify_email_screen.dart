@@ -286,7 +286,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                         AdButton(
                           onPressed: _goBackToLogin,
                           leading: Icons.login_outlined,
-                          label: l10n.verifyEmailBackToLogin,
+                          label: l10n.commonBackToLogin,
                         ),
                         const SizedBox(height: AdSpacing.sm),
                         AdButton(

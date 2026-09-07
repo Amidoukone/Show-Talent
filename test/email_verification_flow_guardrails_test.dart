@@ -77,7 +77,9 @@ void main() {
           File('lib/screens/verify_email_screen.dart').readAsStringSync();
       final arb = File('lib/l10n/app_fr.arb').readAsStringSync();
 
-      expect(content, contains('l10n.verifyEmailBackToLogin'));
+      // Shared with signup_screen.dart/reset_password_screen.dart as
+      // commonBackToLogin once all three needed the identical wording.
+      expect(content, contains('l10n.commonBackToLogin'));
       expect(content, contains('_goBackToLogin'));
       expect(
         content,

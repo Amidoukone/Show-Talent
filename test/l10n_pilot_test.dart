@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Verifies the ARB -> AppLocalizations pipeline end to end for each screen
-/// migrated so far (login, signup, verify email): both locales resolve, the
-/// French template is not silently used as an English fallback, and
-/// parameterized strings substitute their placeholder correctly in each
-/// language.
+/// migrated so far (login, signup, verify email, reset password): both
+/// locales resolve, the French template is not silently used as an English
+/// fallback, and parameterized strings substitute their placeholder
+/// correctly in each language.
 void main() {
   Future<AppLocalizations> resolve(
     WidgetTester tester,
@@ -49,6 +49,11 @@ void main() {
       l10n.verifyEmailAddressLine('joueur@example.com'),
       'Adresse : joueur@example.com',
     );
+    expect(l10n.commonBackToLogin, 'Retour à la connexion');
+    expect(
+      l10n.newPasswordAccountLabel('joueur@example.com'),
+      'Compte : joueur@example.com',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -72,6 +77,11 @@ void main() {
     expect(
       l10n.verifyEmailAddressLine('player@example.com'),
       'Address: player@example.com',
+    );
+    expect(l10n.commonBackToLogin, isNot('Retour à la connexion'));
+    expect(
+      l10n.newPasswordAccountLabel('player@example.com'),
+      'Account: player@example.com',
     );
   });
 }
