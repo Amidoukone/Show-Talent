@@ -1072,7 +1072,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     AppUser user, {
     required bool isOwnProfile,
   }) {
-    final tiles = <Widget>[];
+    final fields =
+        <({String label, String? value, IconData? icon, bool compact})>[];
     final location = [
       user.city,
       user.region,
@@ -1083,12 +1084,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // profile owner — this guard is defense in depth, not the only thing
     // stopping a visitor from seeing it.
     if (isOwnProfile) {
-      tiles.add(_infoTile('Téléphone', user.phone, icon: Icons.phone_outlined));
+      fields.add(
+        _field(
+          'Téléphone',
+          user.phone,
+          icon: Icons.phone_outlined,
+          compact: true,
+        ),
+      );
     }
 
     if (user.languages != null && user.languages!.isNotEmpty) {
-      tiles.add(
-        _infoTile(
+      fields.add(
+        _field(
           'Langues parlées',
           user.languages!.join(', '),
           icon: Icons.language_outlined,
@@ -1097,8 +1105,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     if (location.isNotEmpty) {
-      tiles.add(
-        _infoTile('Localisation', location, icon: Icons.place_outlined),
+      fields.add(
+        _field('Localisation', location, icon: Icons.place_outlined),
       );
     }
 
@@ -1119,7 +1127,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 : user.football.positions
                       .map((position) => position.labelFr)
                       .join(' · '));
-      tiles.addAll([
+      fields.addAll([
         // L'annee derivee, pas l'age calcule depuis `birthDate`.
         //
         // `birthDate` vit dans `private/contact` et n'atteint que le
@@ -1130,50 +1138,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
         //
         // L'annee est aussi la bonne unite : les categories du football se
         // comptent par annee de naissance, pas par age au jour pres.
-        _infoTile(
+        _field(
           'Année de naissance',
           user.football.birthYear?.toString(),
           icon: Icons.cake_outlined,
+          compact: true,
         ),
-        _infoTile(
+        _field(
           user.isCoach ? 'Fonction sportive' : 'Postes',
           positionLabel,
           icon: Icons.sports_outlined,
         ),
-        _infoTile(
+        _field(
           user.isCoach ? 'Club / structure' : 'Club actuel',
           teamLabel,
           icon: Icons.flag_outlined,
         ),
       ]);
     } else if (user.isClub) {
-      tiles.addAll([
-        _infoTile(
+      fields.addAll([
+        _field(
           'Ligue / championnat',
           user.ligue,
           icon: Icons.emoji_events_outlined,
         ),
       ]);
     } else if (user.isRecruiter) {
-      tiles.addAll([
-        _infoTile(
+      fields.addAll([
+        _field(
           user.isAgent ? 'Agence / structure' : 'Structure de recrutement',
           user.entreprise,
           icon: Icons.business_outlined,
         ),
-        _infoTile(
+        _field(
           user.isAgent
               ? 'Placements ou signatures réalisés'
               : 'Recrutements réalisés',
           user.nombreDeRecrutements?.toString(),
           icon: Icons.how_to_reg_outlined,
+          compact: true,
         ),
       ]);
     } else {
-      tiles.add(_infoTile('Informations', 'Aucune information renseignée.'));
+      fields.add(_field('Informations', 'Aucune information renseignée.'));
     }
 
-    return Column(children: tiles);
+    return _infoTileGrid(fields);
   }
 
   String _bioSectionTitle(AppUser user) {
@@ -1243,85 +1253,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Les postes et le club actuel ne sont plus repris ici : ils sont
           // affiches une fois, avec le reste de l'identite, dans la section du
           // dessus. Ce qui reste ici est ce qu'elle ne porte pas.
-          _infoTile(
-            'Pied fort',
-            football.strongFoot?.labelFr,
-            icon: Icons.sports_soccer_outlined,
-          ),
-          _infoTile(
-            'Taille',
-            countLabel(football.heightCm, 'cm'),
-            icon: Icons.height_outlined,
-          ),
-          _infoTile(
-            'Poids',
-            countLabel(football.weightKg, 'kg'),
-            icon: Icons.monitor_weight_outlined,
-          ),
-          _infoTile(
-            'Nationalités',
-            football.nationalities.isEmpty
-                ? null
-                : football.nationalities.map(countryLabel).join(' · '),
-            icon: Icons.public_outlined,
-          ),
+          //
+          // Regroupees deux par deux quand leur valeur tient sur une demi-
+          // largeur (un mot, un chiffre) : c'est ce qui evite qu'un profil
+          // joueur complet empile quinze cartes pleine largeur.
+          _infoTileGrid([
+            _field(
+              'Pied fort',
+              football.strongFoot?.labelFr,
+              icon: Icons.sports_soccer_outlined,
+              compact: true,
+            ),
+            _field(
+              'Taille',
+              countLabel(football.heightCm, 'cm'),
+              icon: Icons.height_outlined,
+              compact: true,
+            ),
+            _field(
+              'Poids',
+              countLabel(football.weightKg, 'kg'),
+              icon: Icons.monitor_weight_outlined,
+              compact: true,
+            ),
+            _field(
+              'Nationalités',
+              football.nationalities.isEmpty
+                  ? null
+                  : football.nationalities.map(countryLabel).join(' · '),
+              icon: Icons.public_outlined,
+            ),
+          ]),
           // L'annee de naissance n'est plus reprise ici : elle est affichee
           // une fois, avec le reste de l'identite, dans la section du dessus.
           const Divider(),
-          _infoTile(
-            'Niveau',
-            football.currentClubLevel?.labelFr,
-            icon: Icons.stairs_outlined,
-          ),
-          _infoTile(
-            'Statut',
-            football.contractStatus?.labelFr,
-            icon: Icons.assignment_outlined,
-          ),
-          _infoTile(
-            'Fin de contrat',
-            football.contractStatus?.expectsEndDate == true &&
-                    football.contractEndDate != null
-                ? _formatDate(football.contractEndDate!)
-                : null,
-            icon: Icons.event_outlined,
-          ),
+          _infoTileGrid([
+            _field(
+              'Niveau',
+              football.currentClubLevel?.labelFr,
+              icon: Icons.stairs_outlined,
+              compact: true,
+            ),
+            _field(
+              'Statut',
+              football.contractStatus?.labelFr,
+              icon: Icons.assignment_outlined,
+              compact: true,
+            ),
+            _field(
+              'Fin de contrat',
+              football.contractStatus?.expectsEndDate == true &&
+                      football.contractEndDate != null
+                  ? _formatDate(football.contractEndDate!)
+                  : null,
+              icon: Icons.event_outlined,
+              compact: true,
+            ),
+          ]),
           const Divider(),
-          _infoTile(
-            'Saison',
-            [
-              season?.season,
-              season?.competition,
-              season?.ageCategory?.code,
-            ].whereType<String>().join(' · ').trim().isEmpty
-                ? null
-                : [
-                    season?.season,
-                    season?.competition,
-                    season?.ageCategory?.code,
-                  ].whereType<String>().join(' · '),
-            icon: Icons.calendar_month_outlined,
-          ),
-          _infoTile(
-            'Matchs joués',
-            season?.appearances?.toString(),
-            icon: Icons.numbers_outlined,
-          ),
-          _infoTile(
-            'Temps de jeu',
-            countLabel(season?.minutes, 'min'),
-            icon: Icons.timer_outlined,
-          ),
-          _infoTile(
-            'Buts inscrits',
-            season?.goals?.toString(),
-            icon: Icons.sports_score_outlined,
-          ),
-          _infoTile(
-            'Passes décisives',
-            season?.assists?.toString(),
-            icon: Icons.assistant_direction_outlined,
-          ),
+          _infoTileGrid([
+            _field(
+              'Saison',
+              [
+                season?.season,
+                season?.competition,
+                season?.ageCategory?.code,
+              ].whereType<String>().join(' · ').trim().isEmpty
+                  ? null
+                  : [
+                      season?.season,
+                      season?.competition,
+                      season?.ageCategory?.code,
+                    ].whereType<String>().join(' · '),
+              icon: Icons.calendar_month_outlined,
+            ),
+            _field(
+              'Matchs joués',
+              season?.appearances?.toString(),
+              icon: Icons.numbers_outlined,
+              compact: true,
+            ),
+            _field(
+              'Temps de jeu',
+              countLabel(season?.minutes, 'min'),
+              icon: Icons.timer_outlined,
+              compact: true,
+            ),
+            _field(
+              'Buts inscrits',
+              season?.goals?.toString(),
+              icon: Icons.sports_score_outlined,
+              compact: true,
+            ),
+            _field(
+              'Passes décisives',
+              season?.assists?.toString(),
+              icon: Icons.assistant_direction_outlined,
+              compact: true,
+            ),
+          ]),
 
           // Le parcours, sous la saison en cours : c'est la lecture d'un
           // recruteur, du present vers ce qui y a mene. Une seule saison ne
@@ -1337,13 +1367,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 6),
             for (final archived in football.seasonHistory)
-              _infoTile(
-                [
-                  ?archived.season,
-                  ?archived.clubName,
-                ].join(' · '),
-                _pastSeasonSummary(archived),
-                icon: Icons.history_rounded,
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _infoTile(
+                  [
+                    ?archived.season,
+                    ?archived.clubName,
+                  ].join(' · '),
+                  _pastSeasonSummary(archived),
+                  icon: Icons.history_rounded,
+                ),
               ),
           ],
 
@@ -1353,13 +1386,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildStatsProvenance(user),
 
           const Divider(),
-          _infoTile(
-            'Ouvert aux opportunités',
-            user.openToOpportunities == null
-                ? null
-                : (user.openToOpportunities == true ? 'Oui' : 'Non'),
-            icon: Icons.travel_explore,
-          ),
+          _infoTileGrid([
+            _field(
+              'Ouvert aux opportunités',
+              user.openToOpportunities == null
+                  ? null
+                  : (user.openToOpportunities == true ? 'Oui' : 'Non'),
+              icon: Icons.travel_explore,
+              compact: true,
+            ),
+          ]),
           const SizedBox(height: 6),
           Align(
             alignment: Alignment.centerLeft,
@@ -1405,60 +1441,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user.isClub) {
       final club = user.club;
 
-      return Column(
-        children: [
-          _infoTile(
-            'Niveau de la structure',
-            club.level?.labelFr,
-            icon: Icons.account_tree_outlined,
-          ),
-          _infoTile(
-            'Catégories engagées',
-            club.ageCategories.isEmpty
-                ? null
-                : club.ageCategories.map((c) => c.labelFr).join(' · '),
-            icon: Icons.groups_2_outlined,
-          ),
-          // Les besoins de recrutement ne sont plus ici : ils vivent dans les
-          // offres, qui sont datees, moderees et candidatables. Deux sources
-          // pour un seul fait finissent par se contredire.
-          _infoTile(
-            'Numéro d’affiliation',
-            club.federationId,
-            icon: Icons.badge_outlined,
-          ),
-        ],
-      );
+      return _infoTileGrid([
+        _field(
+          'Niveau de la structure',
+          club.level?.labelFr,
+          icon: Icons.account_tree_outlined,
+          compact: true,
+        ),
+        _field(
+          'Catégories engagées',
+          club.ageCategories.isEmpty
+              ? null
+              : club.ageCategories.map((c) => c.labelFr).join(' · '),
+          icon: Icons.groups_2_outlined,
+        ),
+        // Les besoins de recrutement ne sont plus ici : ils vivent dans les
+        // offres, qui sont datees, moderees et candidatables. Deux sources
+        // pour un seul fait finissent par se contredire.
+        _field(
+          'Numéro d’affiliation',
+          club.federationId,
+          icon: Icons.badge_outlined,
+          compact: true,
+        ),
+      ]);
     }
 
     if (user.isRecruiter) {
       final agent = user.agent;
 
-      return Column(
-        children: [
-          _infoTile(
-            user.isAgent
-                ? 'Numéro de licence'
-                : 'Référence de licence ou d’agrément',
-            agent.licenceNumber,
-            icon: Icons.badge_outlined,
-          ),
-          _infoTile(
-            'Fédération émettrice',
-            agent.licenceCountry == null
-                ? null
-                : countryLabel(agent.licenceCountry),
-            icon: Icons.flag_circle_outlined,
-          ),
-          _infoTile(
-            user.isAgent ? 'Pays de représentation' : 'Pays d’intervention',
-            agent.countries.isEmpty
-                ? null
-                : agent.countries.map(countryLabel).join(' · '),
-            icon: Icons.public_outlined,
-          ),
-        ],
-      );
+      return _infoTileGrid([
+        _field(
+          user.isAgent
+              ? 'Numéro de licence'
+              : 'Référence de licence ou d’agrément',
+          agent.licenceNumber,
+          icon: Icons.badge_outlined,
+          compact: true,
+        ),
+        _field(
+          'Fédération émettrice',
+          agent.licenceCountry == null
+              ? null
+              : countryLabel(agent.licenceCountry),
+          icon: Icons.flag_circle_outlined,
+          compact: true,
+        ),
+        _field(
+          user.isAgent ? 'Pays de représentation' : 'Pays d’intervention',
+          agent.countries.isEmpty
+              ? null
+              : agent.countries.map(countryLabel).join(' · '),
+          icon: Icons.public_outlined,
+        ),
+      ]);
     }
 
     return const Text('Aucun profil avancé pour ce rôle.');
@@ -1698,7 +1734,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final hasValue = value?.isNotEmpty == true;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: AdColors.surfaceCardAlt,
@@ -1736,6 +1771,87 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  /// Un champ pour [_infoTileGrid] : `compact` dit si sa valeur tient toujours
+  /// sur une largeur de moitie d'ecran (un chiffre, un mot, une date) plutot
+  /// que d'exiger la pleine largeur (une liste de postes, un club, une bio).
+  ({String label, String? value, IconData? icon, bool compact}) _field(
+    String label,
+    String? value, {
+    IconData? icon,
+    bool compact = false,
+  }) => (label: label, value: value, icon: icon, compact: compact);
+
+  /// Deux cartes cote a cote pour les champs `compact` consecutifs, une carte
+  /// pleine largeur pour les autres.
+  ///
+  /// Sans lui, chaque fait de la fiche -- y compris « Taille : 178 cm » ou
+  /// « Pied fort : Droit » -- occupait sa propre ligne pleine largeur : un
+  /// profil joueur complet empilait plus de quinze cartes, et le recruteur
+  /// faisait defiler l'ecran pour lire douze mots. Les champs dont la valeur
+  /// peut etre longue (postes, nationalites, club, saison) restent seuls sur
+  /// leur ligne ; les autres se groupent par deux des qu'ils se suivent.
+  Widget _infoTileGrid(
+    List<({String label, String? value, IconData? icon, bool compact})>
+    fields,
+  ) {
+    final rows = <Widget>[];
+    ({String label, String? value, IconData? icon, bool compact})?
+    pendingCompact;
+
+    Widget tileFor(
+      ({String label, String? value, IconData? icon, bool compact}) field,
+    ) => _infoTile(field.label, field.value, icon: field.icon);
+
+    void flushPending() {
+      final field = pendingCompact;
+      if (field == null) return;
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: tileFor(field),
+        ),
+      );
+      pendingCompact = null;
+    }
+
+    for (final field in fields) {
+      if (!field.compact) {
+        flushPending();
+        rows.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: tileFor(field),
+          ),
+        );
+        continue;
+      }
+
+      final previous = pendingCompact;
+      if (previous == null) {
+        pendingCompact = field;
+        continue;
+      }
+
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: tileFor(previous)),
+              const SizedBox(width: 10),
+              Expanded(child: tileFor(field)),
+            ],
+          ),
+        ),
+      );
+      pendingCompact = null;
+    }
+    flushPending();
+
+    return Column(children: rows);
   }
 }
 
