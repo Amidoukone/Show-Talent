@@ -2,10 +2,10 @@ import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Verifies the ARB -> AppLocalizations pipeline end to end for the login
-/// screen pilot: both locales resolve, the French template is not silently
-/// used as an English fallback, and the one parameterized string substitutes
-/// its placeholder correctly in each language.
+/// Verifies the ARB -> AppLocalizations pipeline end to end for each screen
+/// migrated so far (login, signup): both locales resolve, the French
+/// template is not silently used as an English fallback, and parameterized
+/// strings substitute their placeholder correctly in each language.
 void main() {
   Future<AppLocalizations> resolve(
     WidgetTester tester,
@@ -38,6 +38,12 @@ void main() {
       'Lien de réinitialisation envoyé à joueur@example.com. '
       'Pensez à vérifier vos spams si vous ne le voyez pas.',
     );
+    expect(l10n.signupTitle, 'Création de compte centralisée');
+    expect(
+      l10n.signupRolesCardMessage('joueur, fan, club'),
+      'Tous les comptes sont maintenant provisionnés dans le portail admin : '
+      'joueur, fan, club.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -51,6 +57,12 @@ void main() {
       l10n.resetPasswordEmailSentMessage('player@example.com'),
       "Reset link sent to player@example.com. Check your spam folder if "
       "you don't see it.",
+    );
+    expect(l10n.signupTitle, isNot('Création de compte centralisée'));
+    expect(
+      l10n.signupRolesCardMessage('joueur, fan, club'),
+      'All accounts are now provisioned in the admin portal: '
+      'joueur, fan, club.',
     );
   });
 }

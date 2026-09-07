@@ -31,5 +31,24 @@
       }
     }
   },
-  "resetPasswordGenericFailureMessage": "Impossible d’envoyer le lien de réinitialisation pour le moment."
+  "resetPasswordGenericFailureMessage": "Impossible d’envoyer le lien de réinitialisation pour le moment.",
+
+  "signupTitle": "Création de compte centralisée",
+  "signupSubtitle": "L’application mobile ne crée plus de comptes directement.",
+  "signupActiveRuleCardTitle": "Règle active",
+  "signupActiveRuleCardMessage": "La création de compte se fait uniquement via le super admin dans le projet administration Adfoot.",
+  "signupRolesCardTitle": "Rôles concernés",
+  "signupRolesCardMessage": "Tous les comptes sont maintenant provisionnés dans le portail admin : {roles}.",
+  "@signupRolesCardMessage": {
+    "description": "roles is a comma-joined list of internal role identifiers (joueur, fan, club...), not translated.",
+    "placeholders": {
+      "roles": {
+        "type": "String"
+      }
+    }
+  },
+  "signupUserJourneyCardTitle": "Parcours utilisateur",
+  "signupUserJourneyCardMessage": "1. Contacter l’administration Adfoot.\n2. Recevoir le lien de définition du mot de passe.\n3. Valider l’adresse e-mail.\n4. Se connecter ensuite dans l’application mobile.",
+  "signupBackToLogin": "Retour à la connexion",
+  "signupAlreadyHaveAccount": "J’ai déjà un compte"
 }

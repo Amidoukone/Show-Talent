@@ -23,5 +23,16 @@
   "resetPasswordFailureTitle": "Password reset unavailable",
   "resetPasswordEmailSentTitle": "Email sent",
   "resetPasswordEmailSentMessage": "Reset link sent to {email}. Check your spam folder if you don't see it.",
-  "resetPasswordGenericFailureMessage": "Couldn't send the reset link right now."
+  "resetPasswordGenericFailureMessage": "Couldn't send the reset link right now.",
+
+  "signupTitle": "Centralized account creation",
+  "signupSubtitle": "The mobile app no longer creates accounts directly.",
+  "signupActiveRuleCardTitle": "Active rule",
+  "signupActiveRuleCardMessage": "Account creation is only done by the super admin in the Adfoot administration project.",
+  "signupRolesCardTitle": "Roles concerned",
+  "signupRolesCardMessage": "All accounts are now provisioned in the admin portal: {roles}.",
+  "signupUserJourneyCardTitle": "User journey",
+  "signupUserJourneyCardMessage": "1. Contact the Adfoot administration.\n2. Receive the password setup link.\n3. Verify your email address.\n4. Then sign in to the mobile app.",
+  "signupBackToLogin": "Back to sign in",
+  "signupAlreadyHaveAccount": "I already have an account"
 }

@@ -1,3 +1,4 @@
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/widgets/ad_button.dart';
@@ -10,6 +11,7 @@ class SignUpScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
     final roleLabels = adminProvisionedRoles.join(', ');
 
@@ -40,7 +42,7 @@ class SignUpScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: AdSpacing.md),
                   Text(
-                    'Création de compte centralisée',
+                    l10n.signupTitle,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.w800,
                       color: cs.onSurface,
@@ -49,7 +51,7 @@ class SignUpScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'L’application mobile ne crée plus de comptes directement.',
+                    l10n.signupSubtitle,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: cs.onSurface.withValues(alpha: 0.7),
                       fontWeight: FontWeight.w600,
@@ -60,31 +62,31 @@ class SignUpScreen extends StatelessWidget {
                   _InfoCard(
                     icon: Icons.admin_panel_settings_outlined,
                     color: cs.primary,
-                    title: 'Règle active',
-                    message: publicSignupDisabledMessage,
+                    title: l10n.signupActiveRuleCardTitle,
+                    // Meme regle que publicSignupDisabledMessage
+                    // (account_role_policy.dart), traduite ici pour cet
+                    // affichage. La constante Dart reste la source utilisee
+                    // par auth_session_service.dart/user_repository.dart tant
+                    // que ces flux ne sont pas eux-memes localises.
+                    message: l10n.signupActiveRuleCardMessage,
                   ),
                   const SizedBox(height: 14),
                   _InfoCard(
                     icon: Icons.groups_outlined,
                     color: cs.secondary,
-                    title: 'Rôles concernés',
-                    message:
-                        'Tous les comptes sont maintenant provisionnés dans le portail admin : $roleLabels.',
+                    title: l10n.signupRolesCardTitle,
+                    message: l10n.signupRolesCardMessage(roleLabels),
                   ),
                   const SizedBox(height: 14),
                   _InfoCard(
                     icon: Icons.list_alt_outlined,
                     color: cs.tertiary,
-                    title: 'Parcours utilisateur',
-                    message:
-                        '1. Contacter l’administration Adfoot.\n'
-                        '2. Recevoir le lien de définition du mot de passe.\n'
-                        '3. Valider l’adresse e-mail.\n'
-                        '4. Se connecter ensuite dans l’application mobile.',
+                    title: l10n.signupUserJourneyCardTitle,
+                    message: l10n.signupUserJourneyCardMessage,
                   ),
                   const SizedBox(height: AdSpacing.xl),
                   AdButton(
-                    label: 'Retour à la connexion',
+                    label: l10n.signupBackToLogin,
                     onPressed: () => Get.back(),
                     leading: Icons.arrow_back_rounded,
                     kind: AdButtonKind.primary,
@@ -92,7 +94,7 @@ class SignUpScreen extends StatelessWidget {
                   const SizedBox(height: AdSpacing.xs),
                   TextButton(
                     onPressed: () => Get.back(),
-                    child: const Text('J’ai déjà un compte'),
+                    child: Text(l10n.signupAlreadyHaveAccount),
                   ),
                 ],
               ),
