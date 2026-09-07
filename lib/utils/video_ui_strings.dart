@@ -1,3 +1,5 @@
+import 'package:get/get.dart';
+
 class VideoUiStrings {
   VideoUiStrings._();
 
@@ -9,7 +11,7 @@ class VideoUiStrings {
   static const String playbackUnavailable = 'Lecture vidéo indisponible.';
   static const String playbackInterruptedRetry =
       'Lecture interrompue. Réessayez.';
-  static const String retry = 'Réessayer';
+  static String get retry => 'retry'.tr;
   static const String play = 'Lecture';
   static const String pause = 'Pause';
   static const String playVideo = 'Lancer la vidéo';
@@ -30,7 +32,7 @@ class VideoUiStrings {
       'réessayez.';
   static const String genericActionImpossible = 'Action impossible.';
   static const String genericActionRetry = 'Action impossible pour le moment.';
-  static const String defaultPublisherName = 'Profil Adfoot';
+  static String get defaultPublisherName => 'defaultPublisherName'.tr;
   static const String seeMoreCaption = 'Voir plus la légende';
   static const String seeLessCaption = 'Voir moins la légende';
   static const String seeMore = 'Voir plus';
@@ -48,15 +50,14 @@ class VideoUiStrings {
   static const String emptyProfileVideoFeedTitle = 'Aucune vidéo à afficher';
   static const String emptyProfileVideoFeedMessage =
       'Ce profil n’a pas encore de vidéo disponible.';
-  static const String emptyHomeVideoFeedTitle = 'Aucune vidéo disponible';
-  static const String emptyHomeVideoFeedPlayerMessage =
-      'Soumettez votre première vidéo pour la proposer au feed.';
-  static const String emptyHomeVideoFeedDefaultMessage =
-      'Revenez plus tard ou actualisez le feed.';
-  static const String noInternetTitle = 'Pas de connexion Internet';
-  static const String noInternetMessage =
-      'Vérifiez votre réseau, puis relancez le chargement du feed.';
-  static const String refresh = 'Actualiser';
+  static String get emptyHomeVideoFeedTitle => 'emptyHomeVideoFeedTitle'.tr;
+  static String get emptyHomeVideoFeedPlayerMessage =>
+      'emptyHomeVideoFeedPlayerMessage'.tr;
+  static String get emptyHomeVideoFeedDefaultMessage =>
+      'emptyHomeVideoFeedDefaultMessage'.tr;
+  static String get noInternetTitle => 'noInternetTitle'.tr;
+  static String get noInternetMessage => 'noInternetMessage'.tr;
+  static String get refresh => 'refresh'.tr;
 
   static const String delete = 'Supprimer';
   static const String deleteVideoTitle = 'Supprimer la vidéo';
@@ -87,7 +88,7 @@ class VideoUiStrings {
   static const String moreVideoActions = 'Plus';
   static const String moreVideoActionsSemantic = 'Plus d’actions';
   static const String addVideo = 'Ajouter';
-  static const String addVideoSemantic = 'Soumettre une vidéo';
+  static String get addVideoSemantic => 'addVideoSemantic'.tr;
   static const String profile = 'Profil';
   static const String openProfile = 'Ouvrir le profil';
   static const String followProfile = 'Suivre le profil';
@@ -130,22 +131,19 @@ class VideoUiStrings {
   static const String deleteOffline =
       'Connexion requise pour supprimer cette vidéo.';
 
-  static const String videoSearchOpen = 'Rechercher';
-  static const String videoSearchIdleLabel = 'Poste, joueur, club';
-  static const String videoSearchTitle = 'Recherche vidéo';
-  static const String videoSearchHint = 'Poste, joueur, club...';
-  static const String videoSearchClear = 'Effacer';
-  static const String videoSearchLoadingTitle = 'Recherche en cours';
-  static const String videoSearchLoadingMessage =
-      'Nous cherchons les vidéos correspondantes.';
-  static const String videoSearchEmptyTitle = 'Aucune vidéo trouvée';
-  static const String videoSearchEmptyMessage =
-      'Essayez avec attaquant, défenseur, milieu, gardien ou un autre poste.';
-  static const String videoSearchUnavailable =
-      'Recherche indisponible pour le moment. Réessayez dans un instant.';
+  static String get videoSearchOpen => 'videoSearchOpen'.tr;
+  static String get videoSearchIdleLabel => 'videoSearchIdleLabel'.tr;
+  static String get videoSearchTitle => 'videoSearchTitle'.tr;
+  static String get videoSearchHint => 'videoSearchHint'.tr;
+  static String get videoSearchClear => 'videoSearchClear'.tr;
+  static String get videoSearchLoadingTitle => 'videoSearchLoadingTitle'.tr;
+  static String get videoSearchLoadingMessage => 'videoSearchLoadingMessage'.tr;
+  static String get videoSearchEmptyTitle => 'videoSearchEmptyTitle'.tr;
+  static String get videoSearchEmptyMessage => 'videoSearchEmptyMessage'.tr;
+  static String get videoSearchUnavailable => 'videoSearchUnavailable'.tr;
   static const String videoSearchResultsTitle = 'Résultats';
-  static const String videoSearchResultHint = 'Ouvrir cette vidéo';
-  static const String pendingVideosAction = 'Voir';
+  static String get videoSearchResultHint => 'videoSearchResultHint'.tr;
+  static String get pendingVideosAction => 'pendingVideosAction'.tr;
 
   /* --------------------------- Fin du fil vidéo --------------------------- */
 
@@ -164,13 +162,15 @@ class VideoUiStrings {
   static const String feedEndSearchAction = 'Rechercher un poste';
 
   static String pendingVideosLabel(int count) {
-    return count > 1 ? '$count nouvelles vidéos' : '1 nouvelle vidéo';
+    return count > 1
+        ? 'pendingVideosLabelPlural'.trParams({'count': '$count'})
+        : 'pendingVideosLabelSingular'.tr;
   }
 
   static String pendingVideosSemantic(int count) {
     return count > 1
-        ? '$count nouvelles vidéos disponibles'
-        : '1 nouvelle vidéo disponible';
+        ? 'pendingVideosSemanticPlural'.trParams({'count': '$count'})
+        : 'pendingVideosSemanticSingular'.tr;
   }
 
   static const String uploadMissingRequiredFields =

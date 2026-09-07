@@ -26,7 +26,7 @@ class VideoStateOverlay extends StatelessWidget {
   static const String slowLoadingDetail = VideoUiStrings.slowLoadingDetail;
   static const String errorTitle = VideoUiStrings.playbackErrorTitle;
   static const String errorMessage = VideoUiStrings.playbackUnavailable;
-  static const String retryLabel = VideoUiStrings.retry;
+  static String get retryLabel => VideoUiStrings.retry;
 
   final VideoStateOverlayMode mode;
   final String message;
@@ -111,7 +111,7 @@ class VideoStateOverlay extends StatelessWidget {
                 TextButton.icon(
                   onPressed: onRetry,
                   icon: const Icon(Icons.refresh_rounded, size: 16),
-                  label: const Text(retryLabel),
+                  label: Text(retryLabel),
                   style: TextButton.styleFrom(
                     foregroundColor: Colors.white,
                     minimumSize: const Size(0, 32),
@@ -179,7 +179,7 @@ class VideoStateOverlay extends StatelessWidget {
                   FilledButton.icon(
                     onPressed: onRetry,
                     icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: const Text(retryLabel),
+                    label: Text(retryLabel),
                     style: FilledButton.styleFrom(
                       backgroundColor: AdColors.brand,
                       foregroundColor: AdColors.brandOn,

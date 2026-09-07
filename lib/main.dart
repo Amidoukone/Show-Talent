@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'config/app_bootstrap.dart';
 import 'config/app_routes.dart';
 import 'l10n/generated/app_localizations.dart';
+import 'l10n/video_ui_translations.dart';
 import 'theme/ad_colors.dart';
 import 'theme/app_theme.dart';
 
@@ -94,14 +95,19 @@ class AdfootApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: Get.key,
       theme: AppTheme.light(),
-      // Toujours francais pour l'instant : seul l'ecran de connexion est
-      // migre vers AppLocalizations (pilote). Passer cette valeur a `null`
-      // pour laisser Flutter resoudre la langue de l'appareil n'aura de sens
-      // qu'une fois le reste des ecrans traduits -- sinon un telephone en
-      // anglais verrait un ecran de connexion traduit suivi d'une application
-      // qui repasse en francais partout ailleurs.
+      // Toujours francais pour l'instant : l'app est migree ecran par ecran
+      // vers AppLocalizations (voir chaque ecran pour l'etat d'avancement).
+      // Passer cette valeur a `null` pour laisser Flutter resoudre la langue
+      // de l'appareil n'aura de sens qu'une fois tous les ecrans traduits --
+      // sinon un telephone en anglais verrait certains ecrans traduits et
+      // d'autres repasser en francais.
       locale: const Locale('fr'),
       fallbackLocale: const Locale('fr'),
+      // Traductions GetX pour VideoUiStrings : ce catalogue est lu depuis des
+      // controleurs/services sans BuildContext, ou AppLocalizations.of(context)
+      // n'est pas utilisable. Migre progressivement, cle par cle -- voir
+      // lib/l10n/video_ui_translations.dart.
+      translations: VideoUiTranslations(),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       defaultTransition: Transition.fadeIn,

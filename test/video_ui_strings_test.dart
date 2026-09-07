@@ -1,9 +1,32 @@
 import 'dart:io';
 
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 
 void main() {
+  setUp(() => Get.testMode = true);
+  tearDown(() => Get.reset());
+
+  // Several VideoUiStrings members resolve through GetX's `.tr`, which reads
+  // Get.locale/Get.translations -- populated by a mounted GetMaterialApp, the
+  // way lib/main.dart wires it. Without this pump, `.tr` falls back to
+  // returning the bare translation key, and the assertions below that check
+  // for real French words would be checking against e.g.
+  // "emptyHomeVideoFeedTitle" instead.
+  Future<void> pumpFrenchTranslations(WidgetTester tester) async {
+    await tester.pumpWidget(
+      GetMaterialApp(
+        translations: VideoUiTranslations(),
+        locale: const Locale('fr'),
+        fallbackLocale: const Locale('fr'),
+        home: const SizedBox.shrink(),
+      ),
+    );
+  }
+
   test('video share text keeps Adfoot context without captions', () {
     expect(
       VideoUiStrings.buildShareText(
@@ -53,7 +76,11 @@ void main() {
     expect(VideoUiStrings.selectPlaybackSpeed(1.5), 'Choisir la vitesse 1.5x');
   });
 
-  test('video action and empty-state copy is centralized', () {
+  testWidgets('video action and empty-state copy is centralized', (
+    tester,
+  ) async {
+    await pumpFrenchTranslations(tester);
+
     // `emptyVideoFeedTitle` est parti avec `video_feed_screen.dart`, son seul
     // lecteur. Les deux feeds atteignables ont chacun leur formulation.
     expect(VideoUiStrings.emptyProfileVideoFeedTitle, contains('vidéo'));
@@ -75,28 +102,34 @@ void main() {
     expect(VideoUiStrings.rewindTenSecondsFeedback, '-10s');
   });
 
-  test('sensitive video actions and upload states have centralized copy', () {
-    expect(VideoUiStrings.deleteVideoPrimaryAction, contains('Supprimer'));
-    expect(VideoUiStrings.deleteVideoSheetMessage, contains('feed'));
-    expect(VideoUiStrings.reportVideoPrimaryAction, contains('signalement'));
-    expect(VideoUiStrings.reportVideoSheetMessage, contains('identit'));
-    expect(VideoUiStrings.addVideo, 'Ajouter');
-    expect(VideoUiStrings.addVideoSemantic, contains('Soumettre'));
-    expect(VideoUiStrings.uploadProgressTitle, contains('Soumission'));
-    expect(VideoUiStrings.uploadVideoButton, contains('Soumettre'));
-    expect(VideoUiStrings.uploadSubmittedForReview, contains('revue admin'));
-    expect(VideoUiStrings.uploadSubmittedForReview, contains('validation'));
-    // Deliberately not "revue admin": at this point the video is still being
-    // optimized and has not reached moderation yet. What the message owes the
-    // user is somewhere to look and a promise it will come back to them —
-    // "it's processing", full stop, is what made an upload feel lost.
-    expect(VideoUiStrings.uploadOptimizationPending, contains('profil'));
-    expect(VideoUiStrings.uploadOptimizationPending, contains('notifié'));
-    expect(VideoUiStrings.uploadReminder, contains('150 Mo'));
-    expect(VideoUiStrings.uploadCurrentStepLabel, contains('Étape'));
-    expect(VideoUiStrings.uploadStepPrepare, isNotEmpty);
-    expect(VideoUiStrings.uploadStepFinalize, isNotEmpty);
-  });
+  testWidgets(
+    'sensitive video actions and upload states have centralized copy',
+    (tester) async {
+      await pumpFrenchTranslations(tester);
+
+      expect(VideoUiStrings.deleteVideoPrimaryAction, contains('Supprimer'));
+      expect(VideoUiStrings.deleteVideoSheetMessage, contains('feed'));
+      expect(VideoUiStrings.reportVideoPrimaryAction, contains('signalement'));
+      expect(VideoUiStrings.reportVideoSheetMessage, contains('identit'));
+      expect(VideoUiStrings.addVideo, 'Ajouter');
+      expect(VideoUiStrings.addVideoSemantic, contains('Soumettre'));
+      expect(VideoUiStrings.uploadProgressTitle, contains('Soumission'));
+      expect(VideoUiStrings.uploadVideoButton, contains('Soumettre'));
+      expect(VideoUiStrings.uploadSubmittedForReview, contains('revue admin'));
+      expect(VideoUiStrings.uploadSubmittedForReview, contains('validation'));
+      // Deliberately not "revue admin": at this point the video is still
+      // being optimized and has not reached moderation yet. What the message
+      // owes the user is somewhere to look and a promise it will come back
+      // to them — "it's processing", full stop, is what made an upload feel
+      // lost.
+      expect(VideoUiStrings.uploadOptimizationPending, contains('profil'));
+      expect(VideoUiStrings.uploadOptimizationPending, contains('notifié'));
+      expect(VideoUiStrings.uploadReminder, contains('150 Mo'));
+      expect(VideoUiStrings.uploadCurrentStepLabel, contains('Étape'));
+      expect(VideoUiStrings.uploadStepPrepare, isNotEmpty);
+      expect(VideoUiStrings.uploadStepFinalize, isNotEmpty);
+    },
+  );
 
   test('video UI copy source stays UTF-8 and readable', () {
     final source = File('lib/utils/video_ui_strings.dart').readAsStringSync();

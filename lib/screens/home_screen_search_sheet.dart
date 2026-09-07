@@ -73,10 +73,10 @@ class _VideoSearchSheet extends StatelessWidget {
                     const SizedBox(height: 18),
                     Row(
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: Text(
                             VideoUiStrings.videoSearchTitle,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: AdColors.onSurface,
                               fontSize: 20,
                               fontWeight: FontWeight.w900,
@@ -87,7 +87,7 @@ class _VideoSearchSheet extends StatelessWidget {
                           TextButton.icon(
                             onPressed: onClear,
                             icon: const Icon(Icons.close_rounded, size: 18),
-                            label: const Text(VideoUiStrings.videoSearchClear),
+                            label: Text(VideoUiStrings.videoSearchClear),
                           ),
                       ],
                     ),
@@ -152,7 +152,7 @@ class _VideoSearchSheet extends StatelessWidget {
 
   Widget _buildContent(bool active) {
     if (!active) {
-      return const _VideoSearchEmptyHint(
+      return _VideoSearchEmptyHint(
         icon: Icons.manage_search_rounded,
         title: VideoUiStrings.videoSearchOpen,
         message: VideoUiStrings.videoSearchEmptyMessage,
@@ -160,7 +160,7 @@ class _VideoSearchSheet extends StatelessWidget {
     }
 
     if (isLoading && results.isEmpty) {
-      return const _VideoSearchEmptyHint(
+      return _VideoSearchEmptyHint(
         icon: Icons.search_rounded,
         title: VideoUiStrings.videoSearchLoadingTitle,
         message: VideoUiStrings.videoSearchLoadingMessage,
