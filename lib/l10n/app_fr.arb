@@ -440,5 +440,11 @@
         "type": "int"
       }
     }
-  }
+  },
+
+  "opportunitiesSubtitleWithPlayers": "Offres, événements et joueurs",
+  "opportunitiesSubtitleDefault": "Offres et événements",
+  "opportunitiesOffersTab": "Offres",
+  "opportunitiesEventsTab": "Événements",
+  "opportunitiesPlayersTab": "Joueurs"
 }

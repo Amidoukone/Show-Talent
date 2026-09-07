@@ -90,6 +90,10 @@ void main() {
     );
     expect(l10n.profileSeasonSummaryGoals(11), '11 buts');
     expect(l10n.profileCtaCompleteButton, 'Compléter');
+    expect(
+      l10n.opportunitiesSubtitleWithPlayers,
+      'Offres, événements et joueurs',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -154,5 +158,9 @@ void main() {
     );
     expect(l10n.profileSeasonSummaryGoals(11), '11 goals');
     expect(l10n.profileCtaCompleteButton, 'Complete');
+    expect(
+      l10n.opportunitiesSubtitleWithPlayers,
+      'Offers, events, and players',
+    );
   });
 }

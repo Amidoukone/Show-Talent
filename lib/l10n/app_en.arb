@@ -320,5 +320,11 @@
   "profileSeasonSummaryAppearances": "{count} matches",
   "profileSeasonSummaryMinutes": "{count} min",
   "profileSeasonSummaryGoals": "{count} goals",
-  "profileSeasonSummaryAssists": "{count} assists"
+  "profileSeasonSummaryAssists": "{count} assists",
+
+  "opportunitiesSubtitleWithPlayers": "Offers, events, and players",
+  "opportunitiesSubtitleDefault": "Offers and events",
+  "opportunitiesOffersTab": "Offers",
+  "opportunitiesEventsTab": "Events",
+  "opportunitiesPlayersTab": "Players"
 }

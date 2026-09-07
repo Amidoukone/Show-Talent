@@ -57,16 +57,19 @@ void main() {
       expect(main, isNot(contains("label: 'Offres',")));
       expect(main, isNot(contains("label: 'Events',")));
 
-      final screen0 = _read('lib/screens/opportunities_screen.dart');
+      final screen = _read('lib/screens/opportunities_screen.dart');
+      // Now the same shared key rather than two independently hardcoded
+      // strings that could drift — a stronger version of "must agree" than
+      // the original comment asked for.
       expect(
-        screen0,
-        contains("title: 'Carrière',"),
+        screen,
+        contains('title: l10n.mainNavCareerLabel,'),
         reason: 'the bar and the header it opens must agree',
       );
-
-      final screen = _read('lib/screens/opportunities_screen.dart');
-      expect(screen, contains("Tab(text: 'Offres')"));
-      expect(screen, contains("Tab(text: 'Événements')"));
+      expect(screen, contains('Tab(text: l10n.opportunitiesOffersTab)'));
+      expect(screen, contains('Tab(text: l10n.opportunitiesEventsTab)'));
+      expect(arb, contains('"opportunitiesOffersTab": "Offres"'));
+      expect(arb, contains('"opportunitiesEventsTab": "Événements"'));
       expect(screen, contains('OffreScreen(showAppBar: false)'));
       expect(screen, contains('EventListScreen(showAppBar: false)'));
     });

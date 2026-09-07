@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/screens/event_list_screen.dart';
 import 'package:adfoot/screens/offre_screen.dart';
 import 'package:adfoot/screens/talent_search_screen.dart';
@@ -111,13 +112,14 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: AdColors.surface,
       appBar: AdAppBar(
-        title: 'Carrière',
+        title: l10n.mainNavCareerLabel,
         subtitle: widget.showTalentSearch
-            ? 'Offres, événements et joueurs'
-            : 'Offres et événements',
+            ? l10n.opportunitiesSubtitleWithPlayers
+            : l10n.opportunitiesSubtitleDefault,
         showBottomDivider: false,
         bottom: TabBar(
           controller: _tabController,
@@ -134,9 +136,10 @@ class _OpportunitiesScreenState extends State<OpportunitiesScreen>
             fontSize: 14,
           ),
           tabs: [
-            const Tab(text: 'Offres'),
-            const Tab(text: 'Événements'),
-            if (widget.showTalentSearch) const Tab(text: 'Joueurs'),
+            Tab(text: l10n.opportunitiesOffersTab),
+            Tab(text: l10n.opportunitiesEventsTab),
+            if (widget.showTalentSearch)
+              Tab(text: l10n.opportunitiesPlayersTab),
           ],
         ),
       ),

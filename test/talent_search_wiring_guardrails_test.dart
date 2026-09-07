@@ -14,9 +14,15 @@ void main() {
     // Notifications open this screen by index — 0 is Offres, 1 is Événements.
     // Inserting a tab before them would land an event notification on another
     // page, which is the kind of break nobody attributes to a new tab.
-    final offres = opportunities.indexOf("Tab(text: 'Offres')");
-    final events = opportunities.indexOf("Tab(text: 'Événements')");
-    final players = opportunities.indexOf("Tab(text: 'Joueurs')");
+    final offres = opportunities.indexOf(
+      'Tab(text: l10n.opportunitiesOffersTab)',
+    );
+    final events = opportunities.indexOf(
+      'Tab(text: l10n.opportunitiesEventsTab)',
+    );
+    final players = opportunities.indexOf(
+      'Tab(text: l10n.opportunitiesPlayersTab)',
+    );
 
     expect(offres, greaterThan(-1));
     expect(events, greaterThan(offres));
