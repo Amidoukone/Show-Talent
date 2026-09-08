@@ -565,6 +565,12 @@ class VideoUiTranslations extends Translations {
     'accountCleanupSecuritySessionExpiredMessage':
         'Session de sécurité expirée. Merci de vous reconnecter puis de '
         'relancer la suppression.',
+    'eventNotOpenMessage': 'L’événement n’est pas ouvert.',
+    'eventAlreadyRegisteredMessage': 'Vous êtes déjà inscrit à cet événement.',
+    'eventCapacityFullMessage':
+        'La capacité maximale de cet événement est atteinte.',
+    'eventNoLongerOpenMessage': 'L’événement n’est plus ouvert.',
+    'eventNotRegisteredMessage': 'Vous n’êtes pas inscrit à cet événement.',
   };
 
   static const Map<String, String> _en = {
@@ -1076,5 +1082,11 @@ class VideoUiTranslations extends Translations {
     'accountCleanupSecuritySessionExpiredMessage':
         'Security session expired. Please sign in again, then start the '
         'deletion over.',
+    'eventNotOpenMessage': 'The event is not open.',
+    'eventAlreadyRegisteredMessage':
+        'You are already registered for this event.',
+    'eventCapacityFullMessage': 'This event has reached its maximum capacity.',
+    'eventNoLongerOpenMessage': 'The event is no longer open.',
+    'eventNotRegisteredMessage': 'You are not registered for this event.',
   };
 }

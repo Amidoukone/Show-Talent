@@ -6,6 +6,7 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:get/get.dart';
 
 class EventRepositoryException implements Exception {
   const EventRepositoryException({required this.code, required this.message});
@@ -176,8 +177,9 @@ class EventRepository {
       if (data == null) return;
 
       final rawOrganiser = data['organisateur'];
-      final organiserMap =
-          rawOrganiser is Map ? Map<String, dynamic>.from(rawOrganiser) : null;
+      final organiserMap = rawOrganiser is Map
+          ? Map<String, dynamic>.from(rawOrganiser)
+          : null;
       final organiserId = organiserMap?['uid']?.toString();
 
       final viewedByRaw = data['viewedBy'];
@@ -341,18 +343,18 @@ class EventRepository {
     return _firestore.runTransaction((txn) async {
       final snap = await txn.get(docRef);
       if (!snap.exists) {
-        throw const EventRepositoryException(
+        throw EventRepositoryException(
           code: 'not-found',
-          message: 'L’événement n’existe pas.',
+          message: 'eventNotFoundMessage'.tr,
         );
       }
 
       final event = Event.fromDoc(snap);
       final status = Event.normalizeStatus(event.statut);
       if (status == 'ferme' || status == 'archive') {
-        throw const EventRepositoryException(
+        throw EventRepositoryException(
           code: 'event_closed',
-          message: 'L’événement n’est pas ouvert.',
+          message: 'eventNotOpenMessage'.tr,
         );
       }
 
@@ -360,17 +362,17 @@ class EventRepository {
         (p) => p.uid == participant.uid,
       );
       if (alreadyRegistered) {
-        throw const EventRepositoryException(
+        throw EventRepositoryException(
           code: 'already_registered',
-          message: 'Vous êtes déjà inscrit à cet événement.',
+          message: 'eventAlreadyRegisteredMessage'.tr,
         );
       }
 
       if (event.capaciteMax != null &&
           event.participants.length >= event.capaciteMax!) {
-        throw const EventRepositoryException(
+        throw EventRepositoryException(
           code: 'capacity_reached',
-          message: 'La capacité maximale de cet événement est atteinte.',
+          message: 'eventCapacityFullMessage'.tr,
         );
       }
 
@@ -409,18 +411,18 @@ class EventRepository {
     return _firestore.runTransaction((txn) async {
       final snap = await txn.get(docRef);
       if (!snap.exists) {
-        throw const EventRepositoryException(
+        throw EventRepositoryException(
           code: 'not-found',
-          message: 'L’événement n’existe pas.',
+          message: 'eventNotFoundMessage'.tr,
         );
       }
 
       final event = Event.fromDoc(snap);
       final status = Event.normalizeStatus(event.statut);
       if (status == 'ferme' || status == 'archive') {
-        throw const EventRepositoryException(
+        throw EventRepositoryException(
           code: 'event_closed',
-          message: 'L’événement n’est plus ouvert.',
+          message: 'eventNoLongerOpenMessage'.tr,
         );
       }
 
@@ -428,9 +430,9 @@ class EventRepository {
         (p) => p.uid == participant.uid,
       );
       if (!isRegistered) {
-        throw const EventRepositoryException(
+        throw EventRepositoryException(
           code: 'not_registered',
-          message: 'Vous n’êtes pas inscrit à cet événement.',
+          message: 'eventNotRegisteredMessage'.tr,
         );
       }
 

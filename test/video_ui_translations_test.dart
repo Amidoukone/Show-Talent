@@ -196,6 +196,14 @@ void main() {
       'accountCleanupInvalidSessionMessage'.tr,
       'Session invalide. Veuillez vous reconnecter.',
     );
+    expect(
+      'eventAlreadyRegisteredMessage'.tr,
+      'Vous êtes déjà inscrit à cet événement.',
+    );
+    expect(
+      'eventCapacityFullMessage'.tr,
+      'La capacité maximale de cet événement est atteinte.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -353,6 +361,14 @@ void main() {
     expect(
       'accountCleanupInvalidSessionMessage'.tr,
       'Invalid session. Please sign in again.',
+    );
+    expect(
+      'eventAlreadyRegisteredMessage'.tr,
+      'You are already registered for this event.',
+    );
+    expect(
+      'eventCapacityFullMessage'.tr,
+      'This event has reached its maximum capacity.',
     );
   });
 }
