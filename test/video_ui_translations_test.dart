@@ -90,6 +90,12 @@ void main() {
     expect(VideoUiStrings.deleteVideoSemantic, 'Supprimer la vidéo');
     expect(VideoUiStrings.videoNotFound, 'Vidéo introuvable.');
     expect(VideoUiStrings.likeAdded, 'Mention J’aime ajoutée.');
+    expect(VideoUiStrings.feedEndTitle, 'Vous êtes à jour');
+    expect(
+      VideoUiStrings.feedEndMessage(1),
+      contains('la seule vidéo disponible'),
+    );
+    expect(VideoUiStrings.feedEndMessage(3), contains('les 3 vidéos'));
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -145,5 +151,11 @@ void main() {
     expect(VideoUiStrings.deleteVideoSemantic, 'Delete the video');
     expect(VideoUiStrings.videoNotFound, 'Video not found.');
     expect(VideoUiStrings.likeAdded, 'Like added.');
+    expect(VideoUiStrings.feedEndTitle, 'You are up to date');
+    expect(
+      VideoUiStrings.feedEndMessage(1),
+      contains('the only available video'),
+    );
+    expect(VideoUiStrings.feedEndMessage(3), contains('all 3 available'));
   });
 }

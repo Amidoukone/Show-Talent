@@ -1,9 +1,11 @@
 import 'dart:io';
 
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/video_feed_end_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 
 String _read(String path) => File(path).readAsStringSync();
 
@@ -14,6 +16,20 @@ String _read(String path) => File(path).readAsStringSync();
 /// app and a silent loop reads as a bug, so the last page says "you are up to
 /// date" and offers the two actions that lead somewhere.
 void main() {
+  // Set directly rather than via a pumped GetMaterialApp so `.tr` already
+  // resolves to real French text before any widget builds -- see
+  // [[project_adfoot_i18n_ios_effort]].
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
+
   group('the end of the feed is a page, not a wall', () {
     testWidgets('it names the count and offers both actions', (tester) async {
       var refreshed = 0;
@@ -75,9 +91,7 @@ void main() {
     test('an empty feed never gets one', () {
       expect(
         pager,
-        contains(
-          'widget.endOfFeedBuilder != null && widget.videos.isNotEmpty',
-        ),
+        contains('widget.endOfFeedBuilder != null && widget.videos.isNotEmpty'),
       );
     });
 
@@ -89,11 +103,16 @@ void main() {
       final body = pager.substring(focus, focus + 900);
 
       expect(body, contains('if (_isEndOfFeedIndex(index)) {'));
-      expect(body, contains('widget.videoController.currentIndex.value = index;'));
+      expect(
+        body,
+        contains('widget.videoController.currentIndex.value = index;'),
+      );
       expect(body, contains('_videoManager.pauseAll(widget.contextKey)'));
       expect(
         body.indexOf('if (_isEndOfFeedIndex(index)) {'),
-        lessThan(body.indexOf('if (index < 0 || index >= videos.length) return;')),
+        lessThan(
+          body.indexOf('if (index < 0 || index >= videos.length) return;'),
+        ),
         reason: 'the end page is not a video and must be handled first',
       );
     });
@@ -110,7 +129,10 @@ void main() {
 
     // Search results are an answer to a question, not a fil to exhaust.
     test('a search never ends on it', () {
-      expect(home, contains('!_isSearchActive && !videoController.hasMoreVideos.value'));
+      expect(
+        home,
+        contains('!_isSearchActive && !videoController.hasMoreVideos.value'),
+      );
     });
   });
 }

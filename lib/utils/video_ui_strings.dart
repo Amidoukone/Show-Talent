@@ -143,19 +143,16 @@ class VideoUiStrings {
 
   /* --------------------------- Fin du fil vidéo --------------------------- */
 
-  static const String feedEndTitle = 'Vous êtes à jour';
+  static String get feedEndTitle => 'feedEndTitle'.tr;
 
   static String feedEndMessage(int count) {
-    if (count <= 1) {
-      return 'C’est la fin du fil : la seule vidéo disponible a été '
-          'affichée. Revenez plus tard pour les nouveautés.';
-    }
-    return 'C’est la fin du fil : les $count vidéos disponibles ont toutes '
-        'été affichées. Revenez plus tard pour les nouveautés.';
+    return count > 1
+        ? 'feedEndMessagePlural'.trParams({'count': '$count'})
+        : 'feedEndMessageSingular'.tr;
   }
 
-  static const String feedEndRefreshAction = 'Rafraîchir le fil';
-  static const String feedEndSearchAction = 'Rechercher un poste';
+  static String get feedEndRefreshAction => 'feedEndRefreshAction'.tr;
+  static String get feedEndSearchAction => 'feedEndSearchAction'.tr;
 
   static String pendingVideosLabel(int count) {
     return count > 1

@@ -201,6 +201,16 @@ class VideoUiTranslations extends Translations {
     'reportSent': 'Signalement envoyé, merci !',
     'reportUnavailable': 'Signalement impossible pour le moment.',
     'deleteOffline': 'Connexion requise pour supprimer cette vidéo.',
+
+    'feedEndTitle': 'Vous êtes à jour',
+    'feedEndMessageSingular':
+        'C’est la fin du fil : la seule vidéo disponible a été affichée. '
+        'Revenez plus tard pour les nouveautés.',
+    'feedEndMessagePlural':
+        'C’est la fin du fil : les @count vidéos disponibles ont toutes été '
+        'affichées. Revenez plus tard pour les nouveautés.',
+    'feedEndRefreshAction': 'Rafraîchir le fil',
+    'feedEndSearchAction': 'Rechercher un poste',
   };
 
   static const Map<String, String> _en = {
@@ -375,5 +385,15 @@ class VideoUiTranslations extends Translations {
     'reportSent': 'Report sent, thank you!',
     'reportUnavailable': 'Reporting is unavailable right now.',
     'deleteOffline': 'Connection required to delete this video.',
+
+    'feedEndTitle': 'You are up to date',
+    'feedEndMessageSingular':
+        'That is the end of the feed: the only available video has been '
+        'shown. Check back later for new ones.',
+    'feedEndMessagePlural':
+        'That is the end of the feed: all @count available videos have '
+        'been shown. Check back later for new ones.',
+    'feedEndRefreshAction': 'Refresh the feed',
+    'feedEndSearchAction': 'Search for a position',
   };
 }
