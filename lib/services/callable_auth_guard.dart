@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/app_environment.dart';
@@ -128,7 +129,7 @@ class CallableAuthGuard {
     if (token == null || token.isEmpty) {
       throw _DirectCallableException(
         code: 'unauthenticated',
-        message: 'Authentification requise.',
+        message: 'callableAuthRequiredMessage'.tr,
       );
     }
     // Opportunistic: the header is attached when attestation succeeded, and
@@ -161,9 +162,7 @@ class CallableAuthGuard {
     } on TimeoutException {
       throw _DirectCallableException(
         code: 'deadline-exceeded',
-        message:
-            'Le serveur met trop de temps à répondre. Vérifiez votre réseau '
-            'puis réessayez.',
+        message: 'actionTimedOut'.tr,
       );
     } finally {
       if (shouldCloseClient) {
@@ -190,7 +189,8 @@ class CallableAuthGuard {
     if (error is Map<String, dynamic>) {
       throw _DirectCallableException(
         code: _normalizeCallableErrorCode(error['status']),
-        message: (error['message'] as String?) ?? 'Erreur serveur.',
+        message:
+            (error['message'] as String?) ?? 'callableServerErrorMessage'.tr,
         details: error['details'],
       );
     }
@@ -198,7 +198,9 @@ class CallableAuthGuard {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw _DirectCallableException(
         code: _httpStatusToFunctionsCode(response.statusCode),
-        message: 'Erreur serveur (${response.statusCode}).',
+        message: 'callableServerErrorWithStatusMessage'.trParams({
+          'status': '${response.statusCode}',
+        }),
       );
     }
 
@@ -221,16 +223,19 @@ class CallableAuthGuard {
 
       throw _DirectCallableException(
         code: _httpStatusToFunctionsCode(response.statusCode),
-        message: 'Réponse serveur invalide pendant l’appel $callableName.',
+        message: 'callableInvalidResponseMessage'.trParams({
+          'callable': callableName,
+        }),
       );
     } on FormatException {
       final statusCode = response.statusCode;
       final code = _httpStatusToFunctionsCode(statusCode);
       throw _DirectCallableException(
         code: code,
-        message:
-            'Service serveur indisponible pendant l appel $callableName '
-            '(HTTP $statusCode).',
+        message: 'callableServiceUnavailableMessage'.trParams({
+          'callable': callableName,
+          'status': '$statusCode',
+        }),
       );
     }
   }
@@ -322,9 +327,7 @@ class CallableAuthGuard {
       }
       throw _DirectCallableException(
         code: 'deadline-exceeded',
-        message:
-            'Authentification trop longue. Vérifiez votre réseau puis '
-            'réessayez.',
+        message: 'callableAuthTimeoutMessage'.tr,
       );
     } on FirebaseAuthException catch (error) {
       if (!forceRefresh && _isTransientAuthError(error)) {
@@ -338,9 +341,7 @@ class CallableAuthGuard {
       }
       throw _DirectCallableException(
         code: _isTransientAuthError(error) ? 'unavailable' : 'unauthenticated',
-        message:
-            error.message ??
-            'Authentification indisponible. Reconnectez-vous puis réessayez.',
+        message: error.message ?? 'callableAuthUnavailableMessage'.tr,
       );
     }
   }

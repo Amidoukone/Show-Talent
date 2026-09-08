@@ -613,6 +613,19 @@ class VideoUiTranslations extends Translations {
     'authEmailNotYetVerifiedMessage':
         'Votre e-mail n’est pas encore détecté comme vérifié. Après avoir '
         'cliqué sur le lien, attendez quelques secondes puis réessayez.',
+    'callableAuthRequiredMessage': 'Authentification requise.',
+    'callableServerErrorMessage': 'Erreur serveur.',
+    'callableServerErrorWithStatusMessage': 'Erreur serveur (@status).',
+    'callableInvalidResponseMessage':
+        'Réponse serveur invalide pendant l’appel @callable.',
+    'callableServiceUnavailableMessage':
+        'Service serveur indisponible pendant l’appel @callable '
+        '(HTTP @status).',
+    'callableAuthTimeoutMessage':
+        'Authentification trop longue. Vérifiez votre réseau puis '
+        'réessayez.',
+    'callableAuthUnavailableMessage':
+        'Authentification indisponible. Reconnectez-vous puis réessayez.',
   };
 
   static const Map<String, String> _en = {
@@ -1169,5 +1182,17 @@ class VideoUiTranslations extends Translations {
     'authEmailNotYetVerifiedMessage':
         'Your email is not yet detected as verified. After clicking the '
         'link, wait a few seconds and try again.',
+    'callableAuthRequiredMessage': 'Authentication required.',
+    'callableServerErrorMessage': 'Server error.',
+    'callableServerErrorWithStatusMessage': 'Server error (@status).',
+    'callableInvalidResponseMessage':
+        'Invalid server response during call @callable.',
+    'callableServiceUnavailableMessage':
+        'Server unavailable during call @callable (HTTP @status).',
+    'callableAuthTimeoutMessage':
+        'Authentication is taking too long. Check your network and try '
+        'again.',
+    'callableAuthUnavailableMessage':
+        'Authentication unavailable. Sign in again and try again.',
   };
 }

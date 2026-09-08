@@ -1,10 +1,28 @@
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/services/callable_auth_guard.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 
 void main() {
+  // The FormatException fallback below resolves through GetX's `.tr`, which
+  // needs Get.locale/Get.translations populated -- set directly (no widget
+  // to pump in a pure test) so the assertion checks real French text, not
+  // `.tr` silently falling back to the bare key.
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
+
   group('CallableAuthGuard direct HTTP response decoding', () {
     test(
       'does not retry business permission-denied errors through raw HTTP',

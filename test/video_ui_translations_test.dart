@@ -228,6 +228,14 @@ void main() {
       'authUserNotSignedInMessage'.tr,
       'Utilisateur non connecté. Veuillez vous reconnecter.',
     );
+    expect(
+      'callableServiceUnavailableMessage'.trParams({
+        'callable': 'createUploadSession',
+        'status': '403',
+      }),
+      'Service serveur indisponible pendant l’appel createUploadSession '
+      '(HTTP 403).',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -414,6 +422,13 @@ void main() {
     expect(
       'authUserNotSignedInMessage'.tr,
       'No user signed in. Please sign in again.',
+    );
+    expect(
+      'callableServiceUnavailableMessage'.trParams({
+        'callable': 'createUploadSession',
+        'status': '403',
+      }),
+      'Server unavailable during call createUploadSession (HTTP 403).',
     );
   });
 }
