@@ -917,5 +917,8 @@
   "advancedFormAgentLicenseLabel": "Agent license number",
   "advancedFormAgentLicenseHelper": "Verifiable with the federation that issued it.",
   "advancedFormAgentSaveFailedMessage": "Your professional information wasn't saved.",
-  "advancedFormAgentSaveSuccessMessage": "Your professional information has been saved."
+  "advancedFormAgentSaveSuccessMessage": "Your professional information has been saved.",
+
+  "countryPickerSearchLabel": "Search for a country",
+  "countryPickerNoResultsMessage": "No country found."
 }

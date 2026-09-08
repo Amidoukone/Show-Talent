@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/utils/country_codes.dart';
 
 /// Choisir un pays dans une liste fermée, avec recherche.
@@ -47,6 +48,7 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final query = _query.trim().toLowerCase();
     // Une liste de cent pays sans champ de recherche est une liste qu'on fait
     // defiler jusqu'a renoncer.
@@ -70,16 +72,16 @@ class _CountryPickerSheetState extends State<_CountryPickerSheet> {
                 child: TextField(
                   controller: _searchController,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Rechercher un pays',
-                    prefixIcon: Icon(Icons.search),
+                  decoration: InputDecoration(
+                    labelText: l10n.countryPickerSearchLabel,
+                    prefixIcon: const Icon(Icons.search),
                   ),
                   onChanged: (value) => setState(() => _query = value),
                 ),
               ),
               Expanded(
                 child: visible.isEmpty
-                    ? const Center(child: Text('Aucun pays trouvé.'))
+                    ? Center(child: Text(l10n.countryPickerNoResultsMessage))
                     : ListView.builder(
                         itemCount: visible.length,
                         itemBuilder: (context, index) {

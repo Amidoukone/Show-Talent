@@ -172,6 +172,8 @@ void main() {
       l10n.advancedFormHistorySummaryOther(2, 3),
       '2 saisons archivées sur 3.',
     );
+    expect(l10n.countryPickerSearchLabel, 'Rechercher un pays');
+    expect(l10n.countryPickerNoResultsMessage, 'Aucun pays trouvé.');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -320,5 +322,7 @@ void main() {
       l10n.advancedFormHistorySummaryOther(2, 3),
       '2 archived seasons out of 3.',
     );
+    expect(l10n.countryPickerSearchLabel, 'Search for a country');
+    expect(l10n.countryPickerNoResultsMessage, 'No country found.');
   });
 }

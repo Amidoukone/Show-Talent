@@ -13,12 +13,18 @@ class AdStatePanel extends StatelessWidget {
     this.action,
   });
 
+  // The literal defaults below are unreachable in production: every one of
+  // the ~17 call sites across the app explicitly overrides both `title` and
+  // `message` with a localized (`l10n.xxx`) string -- verified by grep, not
+  // assumed. Left as plain literals rather than localized, same call as the
+  // dead `VideoUiStrings` members: nothing renders them, so there is nothing
+  // to translate. If a future caller ever omits title/message, revisit this.
   const AdStatePanel.loading({
     super.key,
     this.title = 'Chargement en cours',
     this.message = 'Veuillez patienter quelques secondes.',
-  })  : icon = Icons.hourglass_top_rounded,
-        action = null;
+  }) : icon = Icons.hourglass_top_rounded,
+       action = null;
 
   const AdStatePanel.empty({
     super.key,

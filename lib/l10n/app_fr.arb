@@ -1110,5 +1110,8 @@
   "advancedFormAgentLicenseLabel": "Numéro de licence d’agent",
   "advancedFormAgentLicenseHelper": "Vérifiable auprès de la fédération qui l’a délivrée.",
   "advancedFormAgentSaveFailedMessage": "Les informations professionnelles n’ont pas été enregistrées.",
-  "advancedFormAgentSaveSuccessMessage": "Les informations professionnelles ont été enregistrées."
+  "advancedFormAgentSaveSuccessMessage": "Les informations professionnelles ont été enregistrées.",
+
+  "countryPickerSearchLabel": "Rechercher un pays",
+  "countryPickerNoResultsMessage": "Aucun pays trouvé."
 }
