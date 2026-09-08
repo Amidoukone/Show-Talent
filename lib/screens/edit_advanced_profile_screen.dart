@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/generated/app_localizations.dart';
 import '../controller/profile_controller.dart';
 import '../models/user.dart';
 import '../widgets/ad_app_bar.dart';
@@ -74,12 +75,13 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
       if (mounted) Navigator.of(context).pop(result);
       return;
     }
+    final l10n = AppLocalizations.of(context)!;
     final shouldDiscard = await AdDialogs.confirm(
       context: context,
-      title: 'Abandonner les modifications ?',
-      message: 'Les informations saisies ne seront pas enregistrées.',
-      confirmLabel: 'Abandonner',
-      cancelLabel: 'Continuer',
+      title: l10n.editProfileDiscardConfirmTitle,
+      message: l10n.editProfileDiscardConfirmMessage,
+      confirmLabel: l10n.editProfileDiscardAction,
+      cancelLabel: l10n.eventFormContinueEditingAction,
       danger: true,
     );
     if (shouldDiscard && mounted) {
@@ -107,27 +109,35 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
   }
 
   void _showSaveFailure({
+    required AppLocalizations l10n,
     int? tabIndex,
     required String message,
-    String title = 'Sauvegarde impossible',
+    String? title,
   }) {
     if (!mounted) {
       return;
     }
+    final resolvedTitle = title ?? l10n.editProfileSaveFailureFallbackTitle;
     if (tabIndex != null && tabIndex >= 0 && tabIndex < _tabController.length) {
       _tabController.animateTo(tabIndex);
     }
     setState(() {
-      _saveFailureTitle = title;
+      _saveFailureTitle = resolvedTitle;
       _saveFailureMessage = message;
     });
-    AdFeedback.error(title, message, duration: const Duration(seconds: 6));
+    AdFeedback.error(
+      resolvedTitle,
+      message,
+      duration: const Duration(seconds: 6),
+    );
   }
 
   Future<void> _save() async {
     if (_saving || !_hasAdvancedProfileSection) {
       return;
     }
+
+    final l10n = AppLocalizations.of(context)!;
 
     setState(() {
       _saving = true;
@@ -143,18 +153,18 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
 
         if (profileState == null || !profileState.validate()) {
           _showSaveFailure(
+            l10n: l10n,
             tabIndex: 0,
-            message:
-                'Le profil joueur n’a pas été enregistré. Vérifiez les champs, puis réessayez.',
+            message: l10n.editAdvancedProfilePlayerSaveFailedMessage,
           );
           return;
         }
 
         if (scoutState == null || !scoutState.validate()) {
           _showSaveFailure(
+            l10n: l10n,
             tabIndex: 1,
-            message:
-                'Le dossier scout n’a pas été enregistré. Vérifiez les champs, puis réessayez.',
+            message: l10n.editAdvancedProfileScoutSaveFailedMessage,
           );
           return;
         }
@@ -167,21 +177,23 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
           await _profileController.updateProfilePatch(_user.uid, patch);
         } on ProfileAccessRevokedException {
           _showSaveFailure(
+            l10n: l10n,
             tabIndex: _tabController.index,
             title:
                 _profileController.lastProfileWriteErrorTitle ??
-                'Sauvegarde refusée',
+                l10n.editProfileSaveDeniedTitle,
             message:
                 _profileController.lastProfileWriteErrorMessage ??
-                'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.',
+                l10n.editProfileSaveDeniedMessage,
           );
           return;
         } catch (_) {
           _showSaveFailure(
+            l10n: l10n,
             tabIndex: _tabController.index,
             message:
                 _profileController.lastProfileWriteErrorMessage ??
-                'Les informations avancées du joueur n’ont pas été enregistrées. Vérifiez votre connexion puis réessayez.',
+                l10n.editAdvancedProfilePlayerGenericSaveFailedMessage,
           );
           return;
         }
@@ -197,15 +209,15 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
       if (!saved) {
         final message =
             _profileController.lastProfileWriteErrorMessage ??
-            'Les informations avancées n’ont pas été enregistrées. Vérifiez les champs ou la session, puis réessayez.';
+            l10n.editAdvancedProfileGenericSaveFailedMessage;
         if (mounted) {
           setState(() {
-            _saveFailureTitle = 'Sauvegarde impossible';
+            _saveFailureTitle = l10n.editProfileSaveFailureFallbackTitle;
             _saveFailureMessage = message;
           });
         }
         AdFeedback.error(
-          'Sauvegarde impossible',
+          l10n.editProfileSaveFailureFallbackTitle,
           message,
           duration: const Duration(seconds: 6),
         );
@@ -217,7 +229,10 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
       }
 
       _isDirty = false;
-      AdFeedback.success('Succès', 'Informations avancées mises à jour');
+      AdFeedback.success(
+        l10n.editProfileSaveSuccessTitle,
+        l10n.editAdvancedProfileSaveSuccessMessage,
+      );
       Navigator.of(context).pop(true);
     } finally {
       if (mounted) {
@@ -226,7 +241,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
     }
   }
 
-  Widget _buildPlayerBody(BuildContext context) {
+  Widget _buildPlayerBody(BuildContext context, AppLocalizations l10n) {
     return Column(
       children: [
         Padding(
@@ -234,15 +249,16 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
           child: Column(
             children: [
               AdFormHeaderCard(
-                title: 'Dossier joueur',
-                subtitle:
-                    'Les informations sont réparties en deux volets pour vous aider à compléter votre profil sportif avec méthode.',
+                title: l10n.editAdvancedProfilePlayerTitle,
+                subtitle: l10n.editAdvancedProfilePlayerSubtitle,
                 icon: Icons.shield_outlined,
               ),
               if (_saveFailureMessage != null) ...[
                 const SizedBox(height: 12),
                 ProfileActionNotice(
-                  title: _saveFailureTitle ?? 'Sauvegarde impossible',
+                  title:
+                      _saveFailureTitle ??
+                      l10n.editProfileSaveFailureFallbackTitle,
                   message: _saveFailureMessage!,
                 ),
               ],
@@ -254,9 +270,9 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: TabBar(
             controller: _tabController,
-            tabs: const [
-              Tab(text: 'Profil'),
-              Tab(text: 'Stats'),
+            tabs: [
+              Tab(text: l10n.profileFallbackTitle),
+              Tab(text: l10n.editAdvancedProfileStatsTabLabel),
             ],
           ),
         ),
@@ -267,9 +283,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
               SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                 child: AdSectionCard(
-                  title: 'Profil joueur',
-                  subtitle:
-                      'Renseignez le gabarit, le pied préféré, les postes et les qualités fortes du joueur.',
+                  title: l10n.editProfileHeaderTitlePlayer,
+                  subtitle: l10n.editAdvancedProfilePlayerSectionSubtitle,
                   icon: Icons.person_outline,
                   child: PlayerAdvancedForm(
                     key: _playerProfileKey,
@@ -285,9 +300,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
               SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                 child: AdSectionCard(
-                  title: 'Dossier scout',
-                  subtitle:
-                      'Renseignez vos statistiques et votre disponibilité pour compléter votre dossier joueur.',
+                  title: l10n.profileAdvancedTitlePlayer,
+                  subtitle: l10n.editAdvancedProfileScoutSectionSubtitle,
                   icon: Icons.bar_chart_rounded,
                   child: PlayerStatsAvailabilityForm(
                     key: _playerScoutKey,
@@ -308,7 +322,8 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
   }
 
   Widget _buildSingleSectionBody(
-    BuildContext context, {
+    BuildContext context,
+    AppLocalizations l10n, {
     required String title,
     required String subtitle,
     required String sectionTitle,
@@ -324,7 +339,9 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
           if (_saveFailureMessage != null) ...[
             const SizedBox(height: 12),
             ProfileActionNotice(
-              title: _saveFailureTitle ?? 'Sauvegarde impossible',
+              title:
+                  _saveFailureTitle ??
+                  l10n.editProfileSaveFailureFallbackTitle,
               message: _saveFailureMessage!,
             ),
           ],
@@ -342,19 +359,19 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     Widget body;
 
     if (_user.isPlayer) {
-      body = _buildPlayerBody(context);
+      body = _buildPlayerBody(context, l10n);
     } else if (_user.isClub) {
       body = _buildSingleSectionBody(
         context,
-        title: 'Profil club',
-        subtitle:
-            'Renseignez la structure du club, les catégories suivies et les priorités de recrutement pour présenter un cadre sportif clair.',
-        sectionTitle: 'Organisation sportive',
-        sectionSubtitle:
-            'Complétez les éléments qui aident les joueurs, agents et recruteurs à comprendre votre projet de club.',
+        l10n,
+        title: l10n.editProfileHeaderTitleClub,
+        subtitle: l10n.editAdvancedProfileClubSubtitle,
+        sectionTitle: l10n.editAdvancedProfileClubSectionTitle,
+        sectionSubtitle: l10n.editAdvancedProfileClubSectionSubtitle,
         icon: Icons.groups_outlined,
         child: ClubAdvancedForm(
           key: _clubKey,
@@ -369,16 +386,19 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
     } else if (_user.isRecruiter) {
       body = _buildSingleSectionBody(
         context,
-        title: _isAgent ? 'Profil agent' : 'Profil recruteur',
+        l10n,
+        title: _isAgent
+            ? l10n.editProfileHeaderTitleAgent
+            : l10n.editProfileHeaderTitleRecruiter,
         subtitle: _isAgent
-            ? 'Renseignez votre licence, votre pays d’exercice et vos zones d’intervention pour présenter un cadre de représentation crédible.'
-            : 'Renseignez vos références, votre zone de travail et vos informations de licence pour cadrer votre activité de recrutement.',
+            ? l10n.editAdvancedProfileAgentSubtitle
+            : l10n.editAdvancedProfileRecruiterSubtitle,
         sectionTitle: _isAgent
-            ? 'Cadre de représentation'
-            : 'Cadre de recrutement',
+            ? l10n.editAdvancedProfileAgentSectionTitle
+            : l10n.editAdvancedProfileRecruiterSectionTitle,
         sectionSubtitle: _isAgent
-            ? 'Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre d’accompagnement.'
-            : 'Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre de recrutement.',
+            ? l10n.editAdvancedProfileAgentSectionSubtitle
+            : l10n.editAdvancedProfileRecruiterSectionSubtitle,
         icon: Icons.badge_outlined,
         child: AgentAdvancedForm(
           key: _agentKey,
@@ -391,7 +411,7 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
         ),
       );
     } else {
-      body = const Center(child: Text('Aucun profil avancé pour ce rôle'));
+      body = Center(child: Text(l10n.profileNoAdvancedProfileMessage));
     }
 
     return PopScope(
@@ -401,9 +421,9 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
         await _handleBackNavigation(result: result);
       },
       child: Scaffold(
-        appBar: const AdAppBar(
-          title: 'Informations avancées',
-          subtitle: 'Dossier professionnel',
+        appBar: AdAppBar(
+          title: l10n.profileAdvancedTitleDefault,
+          subtitle: l10n.editAdvancedProfileSubtitle,
           showBottomDivider: true,
         ),
         body: SafeArea(child: body),
@@ -416,7 +436,9 @@ class _EditAdvancedProfileScreenState extends State<EditAdvancedProfileScreen>
                     onPressed: _saving ? null : _save,
                     loading: _saving,
                     leading: Icons.save_outlined,
-                    label: _saving ? 'Sauvegarde...' : 'Enregistrer',
+                    label: _saving
+                        ? l10n.editProfileSavingAction
+                        : l10n.editProfileSaveAction,
                   ),
                 ),
               )

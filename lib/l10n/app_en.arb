@@ -841,5 +841,26 @@
   "editProfileCvReplaceAction": "Replace CV",
   "editProfileCvAddAction": "Add a CV",
   "editProfileCvDeletingAction": "Deleting...",
-  "editProfileCvDeleteAction": "Delete CV"
+  "editProfileCvDeleteAction": "Delete CV",
+
+  "editAdvancedProfileSubtitle": "Professional profile",
+  "editAdvancedProfilePlayerTitle": "Player profile",
+  "editAdvancedProfilePlayerSubtitle": "The information is split into two sections to help you methodically complete your sports profile.",
+  "editAdvancedProfileStatsTabLabel": "Stats",
+  "editAdvancedProfilePlayerSectionSubtitle": "Enter the build, preferred foot, positions, and key strengths of the player.",
+  "editAdvancedProfileScoutSectionSubtitle": "Enter your statistics and availability to complete your player profile.",
+  "editAdvancedProfilePlayerSaveFailedMessage": "The player profile wasn’t saved. Check the fields, then try again.",
+  "editAdvancedProfileScoutSaveFailedMessage": "The scout profile wasn’t saved. Check the fields, then try again.",
+  "editAdvancedProfilePlayerGenericSaveFailedMessage": "The player's advanced information wasn’t saved. Check your connection, then try again.",
+  "editAdvancedProfileGenericSaveFailedMessage": "The advanced information wasn’t saved. Check the fields or your session, then try again.",
+  "editAdvancedProfileSaveSuccessMessage": "Advanced information updated",
+  "editAdvancedProfileClubSubtitle": "Enter the club's structure, tracked categories, and recruitment priorities to present a clear sporting framework.",
+  "editAdvancedProfileClubSectionTitle": "Sporting organization",
+  "editAdvancedProfileClubSectionSubtitle": "Complete the elements that help players, agents, and recruiters understand your club project.",
+  "editAdvancedProfileAgentSubtitle": "Enter your license, your country of practice, and your areas of activity to present a credible representation framework.",
+  "editAdvancedProfileRecruiterSubtitle": "Enter your references, your work area, and your license information to frame your recruitment activity.",
+  "editAdvancedProfileAgentSectionTitle": "Representation framework",
+  "editAdvancedProfileRecruiterSectionTitle": "Recruitment framework",
+  "editAdvancedProfileAgentSectionSubtitle": "Complete the elements that let players and clubs identify the scope of your representation.",
+  "editAdvancedProfileRecruiterSectionSubtitle": "Complete the elements that let players and clubs identify the scope of your recruitment."
 }

@@ -1010,5 +1010,26 @@
   "editProfileCvReplaceAction": "Remplacer le CV",
   "editProfileCvAddAction": "Ajouter un CV",
   "editProfileCvDeletingAction": "Suppression...",
-  "editProfileCvDeleteAction": "Supprimer le CV"
+  "editProfileCvDeleteAction": "Supprimer le CV",
+
+  "editAdvancedProfileSubtitle": "Dossier professionnel",
+  "editAdvancedProfilePlayerTitle": "Dossier joueur",
+  "editAdvancedProfilePlayerSubtitle": "Les informations sont réparties en deux volets pour vous aider à compléter votre profil sportif avec méthode.",
+  "editAdvancedProfileStatsTabLabel": "Stats",
+  "editAdvancedProfilePlayerSectionSubtitle": "Renseignez le gabarit, le pied préféré, les postes et les qualités fortes du joueur.",
+  "editAdvancedProfileScoutSectionSubtitle": "Renseignez vos statistiques et votre disponibilité pour compléter votre dossier joueur.",
+  "editAdvancedProfilePlayerSaveFailedMessage": "Le profil joueur n’a pas été enregistré. Vérifiez les champs, puis réessayez.",
+  "editAdvancedProfileScoutSaveFailedMessage": "Le dossier scout n’a pas été enregistré. Vérifiez les champs, puis réessayez.",
+  "editAdvancedProfilePlayerGenericSaveFailedMessage": "Les informations avancées du joueur n’ont pas été enregistrées. Vérifiez votre connexion puis réessayez.",
+  "editAdvancedProfileGenericSaveFailedMessage": "Les informations avancées n’ont pas été enregistrées. Vérifiez les champs ou la session, puis réessayez.",
+  "editAdvancedProfileSaveSuccessMessage": "Informations avancées mises à jour",
+  "editAdvancedProfileClubSubtitle": "Renseignez la structure du club, les catégories suivies et les priorités de recrutement pour présenter un cadre sportif clair.",
+  "editAdvancedProfileClubSectionTitle": "Organisation sportive",
+  "editAdvancedProfileClubSectionSubtitle": "Complétez les éléments qui aident les joueurs, agents et recruteurs à comprendre votre projet de club.",
+  "editAdvancedProfileAgentSubtitle": "Renseignez votre licence, votre pays d’exercice et vos zones d’intervention pour présenter un cadre de représentation crédible.",
+  "editAdvancedProfileRecruiterSubtitle": "Renseignez vos références, votre zone de travail et vos informations de licence pour cadrer votre activité de recrutement.",
+  "editAdvancedProfileAgentSectionTitle": "Cadre de représentation",
+  "editAdvancedProfileRecruiterSectionTitle": "Cadre de recrutement",
+  "editAdvancedProfileAgentSectionSubtitle": "Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre d’accompagnement.",
+  "editAdvancedProfileRecruiterSectionSubtitle": "Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre de recrutement."
 }

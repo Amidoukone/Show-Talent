@@ -66,8 +66,24 @@ void main() {
       advancedEditor,
       isNot(contains('_playerProfileKey.currentState?.save')),
     );
-    expect(advancedEditor, contains('Le profil joueur n’a pas été enregistré'));
-    expect(advancedEditor, contains('Le dossier scout n’a pas été enregistré'));
+    // The literal wording moved into the ARB template (l10n.editAdvancedProfile*).
+    final arbFr = File('lib/l10n/app_fr.arb').readAsStringSync();
+    expect(
+      advancedEditor,
+      contains('l10n.editAdvancedProfilePlayerSaveFailedMessage'),
+    );
+    expect(
+      arbFr,
+      contains('Le profil joueur n’a pas été enregistré'),
+    );
+    expect(
+      advancedEditor,
+      contains('l10n.editAdvancedProfileScoutSaveFailedMessage'),
+    );
+    expect(
+      arbFr,
+      contains('Le dossier scout n’a pas été enregistré'),
+    );
     expect(controller, contains('bool _isAccessDenied(Object error)'));
     expect(
       controller,

@@ -165,6 +165,10 @@ void main() {
       l10n.editProfileCvSizeTooLargeMessage('10 Mo'),
       'Le fichier PDF doit faire 10 Mo maximum.',
     );
+    expect(
+      l10n.editAdvancedProfilePlayerSaveFailedMessage,
+      'Le profil joueur n’a pas été enregistré. Vérifiez les champs, puis réessayez.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -306,6 +310,10 @@ void main() {
     expect(
       l10n.editProfileCvSizeTooLargeMessage('10 MB'),
       'The PDF file must be 10 MB maximum.',
+    );
+    expect(
+      l10n.editAdvancedProfilePlayerSaveFailedMessage,
+      isNot('Le profil joueur n’a pas été enregistré. Vérifiez les champs, puis réessayez.'),
     );
   });
 }
