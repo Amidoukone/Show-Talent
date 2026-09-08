@@ -234,25 +234,25 @@ class _VideoStateBadge {
       case VideoLifecycle.live:
         return null;
       case VideoLifecycle.processing:
-        return const _VideoStateBadge(
+        return _VideoStateBadge(
           label: VideoUiStrings.videoStateProcessing,
           icon: Icons.hourglass_top_rounded,
           color: AdColors.info,
         );
       case VideoLifecycle.underReview:
-        return const _VideoStateBadge(
+        return _VideoStateBadge(
           label: VideoUiStrings.videoStateUnderReview,
           icon: Icons.shield_moon_outlined,
           color: AdColors.warning,
         );
       case VideoLifecycle.moderated:
-        return const _VideoStateBadge(
+        return _VideoStateBadge(
           label: VideoUiStrings.videoStateModerated,
           icon: Icons.visibility_off_outlined,
           color: AdColors.error,
         );
       case VideoLifecycle.failed:
-        return const _VideoStateBadge(
+        return _VideoStateBadge(
           label: VideoUiStrings.videoStateFailed,
           icon: Icons.error_outline_rounded,
           color: AdColors.error,
@@ -562,10 +562,7 @@ class _MissingScoutRequirements extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           subtitle,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AdColors.onSurfaceMuted,
-          ),
+          style: const TextStyle(fontSize: 12, color: AdColors.onSurfaceMuted),
         ),
         if (entries.isNotEmpty) const SizedBox(height: 8),
         // Une colonne, pas une ligne : ces libelles sont des phrases, et un

@@ -96,6 +96,11 @@ void main() {
       contains('la seule vidéo disponible'),
     );
     expect(VideoUiStrings.feedEndMessage(3), contains('les 3 vidéos'));
+    expect(VideoUiStrings.videoStateProcessing, 'Traitement…');
+    expect(
+      VideoUiStrings.videoNotPlayableFailed,
+      'Le traitement de cette vidéo a échoué. Supprimez-la et réessayez.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -157,5 +162,10 @@ void main() {
       contains('the only available video'),
     );
     expect(VideoUiStrings.feedEndMessage(3), contains('all 3 available'));
+    expect(VideoUiStrings.videoStateProcessing, 'Processing…');
+    expect(
+      VideoUiStrings.videoNotPlayableFailed,
+      'Processing this video failed. Delete it and try again.',
+    );
   });
 }

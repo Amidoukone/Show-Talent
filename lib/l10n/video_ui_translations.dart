@@ -211,6 +211,21 @@ class VideoUiTranslations extends Translations {
         'affichées. Revenez plus tard pour les nouveautés.',
     'feedEndRefreshAction': 'Rafraîchir le fil',
     'feedEndSearchAction': 'Rechercher un poste',
+
+    'videoStateProcessing': 'Traitement…',
+    'videoStateUnderReview': 'En validation',
+    'videoStateModerated': 'Retirée',
+    'videoStateFailed': 'Échec',
+    'videoNotPlayableProcessing':
+        'Cette vidéo est encore en cours de traitement.',
+    'videoNotPlayableUnderReview':
+        'Cette vidéo attend la validation d’un administrateur. Vous serez '
+        'notifié dès qu’elle sera visible.',
+    'videoNotPlayableModerated':
+        'Cette vidéo a été retirée du public par la modération. Contactez '
+        'le support si vous pensez qu’il s’agit d’une erreur.',
+    'videoNotPlayableFailed':
+        'Le traitement de cette vidéo a échoué. Supprimez-la et réessayez.',
   };
 
   static const Map<String, String> _en = {
@@ -395,5 +410,19 @@ class VideoUiTranslations extends Translations {
         'been shown. Check back later for new ones.',
     'feedEndRefreshAction': 'Refresh the feed',
     'feedEndSearchAction': 'Search for a position',
+
+    'videoStateProcessing': 'Processing…',
+    'videoStateUnderReview': 'Under review',
+    'videoStateModerated': 'Removed',
+    'videoStateFailed': 'Failed',
+    'videoNotPlayableProcessing': 'This video is still being processed.',
+    'videoNotPlayableUnderReview':
+        'This video is awaiting admin review. You will be notified once it '
+        'is visible.',
+    'videoNotPlayableModerated':
+        'This video was removed from public view by moderation. Contact '
+        'support if you think this is a mistake.',
+    'videoNotPlayableFailed':
+        'Processing this video failed. Delete it and try again.',
   };
 }

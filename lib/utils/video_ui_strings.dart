@@ -233,22 +233,18 @@ class VideoUiStrings {
 
   /* ------------------------------ Cycle de vie ----------------------------- */
 
-  static const String videoStateProcessing = 'Traitement…';
-  static const String videoStateUnderReview = 'En validation';
-  static const String videoStateModerated = 'Retirée';
-  static const String videoStateFailed = 'Échec';
-  static const String videoNotPlayableProcessing =
-      'Cette vidéo est encore en cours de traitement.';
-  static const String videoNotPlayableUnderReview =
-      'Cette vidéo attend la validation d’un administrateur. '
-      'Vous serez notifié dès qu’elle sera visible.';
+  static String get videoStateProcessing => 'videoStateProcessing'.tr;
+  static String get videoStateUnderReview => 'videoStateUnderReview'.tr;
+  static String get videoStateModerated => 'videoStateModerated'.tr;
+  static String get videoStateFailed => 'videoStateFailed'.tr;
+  static String get videoNotPlayableProcessing =>
+      'videoNotPlayableProcessing'.tr;
+  static String get videoNotPlayableUnderReview =>
+      'videoNotPlayableUnderReview'.tr;
   // Deliberately does not promise a notification: the decision has already
   // been taken, so there is nothing left to wait for.
-  static const String videoNotPlayableModerated =
-      'Cette vidéo a été retirée du public par la modération. '
-      'Contactez le support si vous pensez qu’il s’agit d’une erreur.';
-  static const String videoNotPlayableFailed =
-      'Le traitement de cette vidéo a échoué. Supprimez-la et réessayez.';
+  static String get videoNotPlayableModerated => 'videoNotPlayableModerated'.tr;
+  static String get videoNotPlayableFailed => 'videoNotPlayableFailed'.tr;
   static const String uploadAuthRequired =
       'Authentification requise. Reconnectez-vous puis réessayez.';
   static const String uploadPermissionDenied =
