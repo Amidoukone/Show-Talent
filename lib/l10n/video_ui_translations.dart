@@ -571,6 +571,10 @@ class VideoUiTranslations extends Translations {
         'La capacité maximale de cet événement est atteinte.',
     'eventNoLongerOpenMessage': 'L’événement n’est plus ouvert.',
     'eventNotRegisteredMessage': 'Vous n’êtes pas inscrit à cet événement.',
+    'offreNotFoundMessage': 'Offre introuvable.',
+    'offreClosedApplyMessage': 'Vous ne pouvez pas postuler à cette offre.',
+    'offreAlreadyAppliedMessage': 'Vous avez déjà postulé à cette offre.',
+    'offreNotAppliedMessage': 'Vous n’êtes pas inscrit à cette offre.',
   };
 
   static const Map<String, String> _en = {
@@ -1088,5 +1092,9 @@ class VideoUiTranslations extends Translations {
     'eventCapacityFullMessage': 'This event has reached its maximum capacity.',
     'eventNoLongerOpenMessage': 'The event is no longer open.',
     'eventNotRegisteredMessage': 'You are not registered for this event.',
+    'offreNotFoundMessage': 'Offer not found.',
+    'offreClosedApplyMessage': 'You cannot apply to this offer.',
+    'offreAlreadyAppliedMessage': 'You have already applied to this offer.',
+    'offreNotAppliedMessage': 'You are not applied to this offer.',
   };
 }

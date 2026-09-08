@@ -204,6 +204,11 @@ void main() {
       'eventCapacityFullMessage'.tr,
       'La capacité maximale de cet événement est atteinte.',
     );
+    expect('offreNotFoundMessage'.tr, 'Offre introuvable.');
+    expect(
+      'offreAlreadyAppliedMessage'.tr,
+      'Vous avez déjà postulé à cette offre.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -369,6 +374,11 @@ void main() {
     expect(
       'eventCapacityFullMessage'.tr,
       'This event has reached its maximum capacity.',
+    );
+    expect('offreNotFoundMessage'.tr, 'Offer not found.');
+    expect(
+      'offreAlreadyAppliedMessage'.tr,
+      'You have already applied to this offer.',
     );
   });
 }

@@ -1,15 +1,12 @@
-
 import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:get/get.dart';
 
 class OfferRepositoryException implements Exception {
-  const OfferRepositoryException({
-    required this.code,
-    required this.message,
-  });
+  const OfferRepositoryException({required this.code, required this.message});
 
   final String code;
   final String message;
@@ -75,8 +72,9 @@ class OfferQueryFilter {
       .toList();
 
   String get cacheKey {
-    final normalizedStatus =
-        status == null ? 'all' : Offre.normalizeStatus(status!).trim();
+    final normalizedStatus = status == null
+        ? 'all'
+        : Offre.normalizeStatus(status!).trim();
     final dateKey = endingAfter?.millisecondsSinceEpoch.toString() ?? 'all';
     // Trie, sinon deux selections identiques faites dans un ordre different
     // relanceraient le flux pour rien.
@@ -93,7 +91,7 @@ class OfferRepository {
   static const int defaultPageSize = 40;
 
   OfferRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+    : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
 
@@ -150,8 +148,9 @@ class OfferRepository {
       if (data == null) return;
 
       final rawRecruiter = data['recruteur'];
-      final recruiterMap =
-          rawRecruiter is Map ? Map<String, dynamic>.from(rawRecruiter) : null;
+      final recruiterMap = rawRecruiter is Map
+          ? Map<String, dynamic>.from(rawRecruiter)
+          : null;
       final recruiterId = recruiterMap?['uid']?.toString();
 
       final viewedByRaw = data['viewedBy'];
@@ -181,10 +180,7 @@ class OfferRepository {
     return _offersCollection.doc(offer.id).update(payload);
   }
 
-  Future<void> updateStatus({
-    required String offerId,
-    required String status,
-  }) {
+  Future<void> updateStatus({required String offerId, required String status}) {
     final normalized = Offre.normalizeStatus(status);
     return _offersCollection.doc(offerId).update({
       'statut': normalized,
@@ -200,18 +196,15 @@ class OfferRepository {
     return _offersCollection.doc(offerId).delete();
   }
 
-  Future<void> applyToOffer({
-    required AppUser player,
-    required Offre offer,
-  }) {
+  Future<void> applyToOffer({required AppUser player, required Offre offer}) {
     final docRef = _offersCollection.doc(offer.id);
 
     return _firestore.runTransaction((txn) async {
       final snap = await txn.get(docRef);
       if (!snap.exists) {
-        throw const OfferRepositoryException(
+        throw OfferRepositoryException(
           code: 'not-found',
-          message: 'Offre introuvable.',
+          message: 'offreNotFoundMessage'.tr,
         );
       }
 
@@ -220,19 +213,20 @@ class OfferRepository {
         data['statut']?.toString() ?? offer.statut,
       );
       if (!_isOpenStatus(status)) {
-        throw const OfferRepositoryException(
+        throw OfferRepositoryException(
           code: 'offer_closed',
-          message: 'Vous ne pouvez pas postuler \u00e0 cette offre.',
+          message: 'offreClosedApplyMessage'.tr,
         );
       }
 
       final candidates = _extractCandidateMaps(data['candidats']);
-      final alreadyApplied = candidates
-          .any((candidate) => candidate['uid']?.toString() == player.uid);
+      final alreadyApplied = candidates.any(
+        (candidate) => candidate['uid']?.toString() == player.uid,
+      );
       if (alreadyApplied) {
-        throw const OfferRepositoryException(
+        throw OfferRepositoryException(
           code: 'already_applied',
-          message: 'Vous avez d\u00e9j\u00e0 postul\u00e9 \u00e0 cette offre.',
+          message: 'offreAlreadyAppliedMessage'.tr,
         );
       }
 
@@ -254,21 +248,22 @@ class OfferRepository {
     return _firestore.runTransaction((txn) async {
       final snap = await txn.get(docRef);
       if (!snap.exists) {
-        throw const OfferRepositoryException(
+        throw OfferRepositoryException(
           code: 'not-found',
-          message: 'Offre introuvable.',
+          message: 'offreNotFoundMessage'.tr,
         );
       }
 
       final data = snap.data() ?? <String, dynamic>{};
       final candidates = _extractCandidateMaps(data['candidats']);
-      final isCandidate = candidates
-          .any((candidate) => candidate['uid']?.toString() == player.uid);
+      final isCandidate = candidates.any(
+        (candidate) => candidate['uid']?.toString() == player.uid,
+      );
 
       if (!isCandidate) {
-        throw const OfferRepositoryException(
+        throw OfferRepositoryException(
           code: 'not_applied',
-          message: 'Vous n\u2019\u00eates pas inscrit \u00e0 cette offre.',
+          message: 'offreNotAppliedMessage'.tr,
         );
       }
 
@@ -376,20 +371,22 @@ class OfferRepository {
   }
 
   void _closeExpiredOffer(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
-    doc.reference.update({
-      'statut': 'fermee',
-      'lastUpdated': FieldValue.serverTimestamp(),
-    }).catchError((Object error, StackTrace stackTrace) {
-      // The offer stays "ouverte" in Firestore past its end date, so players
-      // keep being invited to apply to something that has closed. Retried
-      // implicitly on the next snapshot, hence `warning` rather than `error`.
-      AppLogger.warning(
-        'expired offer could not be closed; it still reads as open',
-        source: 'offers/auto_close',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    });
+    doc.reference
+        .update({
+          'statut': 'fermee',
+          'lastUpdated': FieldValue.serverTimestamp(),
+        })
+        .catchError((Object error, StackTrace stackTrace) {
+          // The offer stays "ouverte" in Firestore past its end date, so players
+          // keep being invited to apply to something that has closed. Retried
+          // implicitly on the next snapshot, hence `warning` rather than `error`.
+          AppLogger.warning(
+            'expired offer could not be closed; it still reads as open',
+            source: 'offers/auto_close',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        });
   }
 
   /// Construit la requete du fil.
@@ -425,8 +422,9 @@ class OfferRepository {
         'dateFin',
         isGreaterThanOrEqualTo: Timestamp.fromDate(filter.endingAfter!),
       );
-      query =
-          query.orderBy('dateFin').orderBy('dateCreation', descending: true);
+      query = query
+          .orderBy('dateFin')
+          .orderBy('dateCreation', descending: true);
     } else {
       query = query.orderBy('dateCreation', descending: true);
     }
