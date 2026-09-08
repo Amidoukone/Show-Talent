@@ -95,14 +95,23 @@ void main() {
       expect(player, contains('purgeCachedFile: !isFirstAttempt,'));
       expect(
         player,
-        contains('preferDownloadedFile: isFirstAttempt && resolvedUrl.isNotEmpty,'),
-        reason: 'later attempts must stream, which is what the manual retry does',
+        contains(
+          'preferDownloadedFile: isFirstAttempt && resolvedUrl.isNotEmpty,',
+        ),
+        reason:
+            'later attempts must stream, which is what the manual retry does',
       );
     });
 
-    test('purging a cached video drops its cache entry, not just the bytes', () {
-      expect(player, contains('VideoCacheManager.removeCachedFile(cacheUrl)'));
-    });
+    test(
+      'purging a cached video drops its cache entry, not just the bytes',
+      () {
+        expect(
+          player,
+          contains('VideoCacheManager.removeCachedFile(cacheUrl)'),
+        );
+      },
+    );
 
     test('giving up shows the error state, not an endless spinner', () {
       expect(
@@ -131,8 +140,14 @@ void main() {
     test('password reset and verification resend are bounded like sign-in', () {
       final service = _read('lib/services/auth/auth_session_service.dart');
 
-      expect(service, contains("_bounded(send, 'réinitialisation du mot de "));
-      expect(service, contains("_bounded(send, 'envoi de l’e-mail de "));
+      expect(
+        service,
+        contains("_bounded(send, 'authStagePasswordResetLabel'.tr)"),
+      );
+      expect(
+        service,
+        contains("_bounded(send, 'authStageEmailVerificationSendLabel'.tr)"),
+      );
     });
   });
 
@@ -309,16 +324,23 @@ void main() {
 
       expect(registry, contains('class ActiveInitRegistry'));
       expect(registry, contains('void claim(String contextKey, String url)'));
-      expect(registry, contains('bool isClaimed(String contextKey, String url)'));
+      expect(
+        registry,
+        contains('bool isClaimed(String contextKey, String url)'),
+      );
       expect(registry, contains('void release(String contextKey, String url)'));
 
       // Claimed before `attempt` can await anything -- a preload suspended in
       // the slot queue polls for it -- and released whichever way the
       // candidate ends. A claim that outlived its request would let every
       // later preload of that URL skip the queue for the rest of the session.
-      final claim = manager.indexOf('_activeInitClaims.claim(contextKey, effectiveUrl);');
+      final claim = manager.indexOf(
+        '_activeInitClaims.claim(contextKey, effectiveUrl);',
+      );
       final call = manager.indexOf('final player = await attempt(');
-      final release = manager.indexOf('_activeInitClaims.release(contextKey, effectiveUrl);');
+      final release = manager.indexOf(
+        '_activeInitClaims.release(contextKey, effectiveUrl);',
+      );
       expect(claim, isNonNegative);
       expect(call, isNonNegative);
       expect(release, isNonNegative);
@@ -345,16 +367,22 @@ void main() {
     test('an in-flight init is claimed before it queues', () {
       final manager = _read('lib/videos/video_manager.dart');
 
-      expect(manager, contains('Future<CachedVideoPlayerPlus> queueThenLoad()'));
+      expect(
+        manager,
+        contains('Future<CachedVideoPlayerPlus> queueThenLoad()'),
+      );
 
       final claim = manager.indexOf('futures[cacheKey] = future;');
-      final wait = manager.indexOf('while (_activeInits >= _maxConcurrentInits)');
+      final wait = manager.indexOf(
+        'while (_activeInits >= _maxConcurrentInits)',
+      );
       expect(claim, isNonNegative);
       expect(wait, isNonNegative);
       expect(
         wait,
         lessThan(claim),
-        reason: 'the wait must live inside the future being registered, so '
+        reason:
+            'the wait must live inside the future being registered, so '
             'the registration itself stays synchronous',
       );
 
@@ -369,14 +397,17 @@ void main() {
         reason: 'only background work queues for a slot',
       );
       final gate = manager.indexOf('if (isPreload) {');
-      final loop = manager.indexOf('while (_activeInits >= _maxConcurrentInits)');
+      final loop = manager.indexOf(
+        'while (_activeInits >= _maxConcurrentInits)',
+      );
       final take = manager.indexOf('_activeInits++;');
       expect(gate, isNonNegative);
       expect(gate, lessThan(loop), reason: 'the wait is what is gated');
       expect(
         loop,
         lessThan(take),
-        reason: 'an active init still takes a slot, so preloads back off for '
+        reason:
+            'an active init still takes a slot, so preloads back off for '
             'it -- it just never waits for one',
       );
 

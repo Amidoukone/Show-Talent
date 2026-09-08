@@ -215,6 +215,19 @@ void main() {
       }),
       'L’accès à ce compte a été désactivé. Motif : fraude détectée',
     );
+    expect(
+      'authBoundedTimeoutMessage'.trParams({'stage': 'jeton'}),
+      'La connexion au serveur prend trop de temps (jeton). Vérifiez '
+      'votre réseau puis réessayez.',
+    );
+    expect(
+      'authStagePasswordResetLabel'.tr,
+      'réinitialisation du mot de passe',
+    );
+    expect(
+      'authUserNotSignedInMessage'.tr,
+      'Utilisateur non connecté. Veuillez vous reconnecter.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -391,6 +404,16 @@ void main() {
         'reason': 'fraud detected',
       }),
       'Access to this account has been disabled. Reason: fraud detected',
+    );
+    expect(
+      'authBoundedTimeoutMessage'.trParams({'stage': 'token'}),
+      'The connection to the server is taking too long (token). Check '
+      'your network and try again.',
+    );
+    expect('authStagePasswordResetLabel'.tr, 'password reset');
+    expect(
+      'authUserNotSignedInMessage'.tr,
+      'No user signed in. Please sign in again.',
     );
   });
 }

@@ -38,7 +38,10 @@ void main() {
     test('the screen replaces the stack rather than sitting on top of it', () {
       final handler = _read('lib/services/email_link_handler.dart');
 
-      expect(handler, contains('Get.offAllNamed(\n          AppRoutes.resetPassword'));
+      expect(
+        handler,
+        contains('Get.offAllNamed(\n          AppRoutes.resetPassword'),
+      );
       expect(
         handler,
         isNot(contains('Get.toNamed(\n            AppRoutes.resetPassword')),
@@ -70,7 +73,12 @@ void main() {
       final flow = _read('lib/services/auth/password_reset_flow.dart');
 
       expect(screen, contains('Future<void> _leaveToLogin('));
-      expect(screen, contains('PasswordResetFlow.end();\n    await Get.offAllNamed(AppRoutes.login'));
+      expect(
+        screen,
+        contains(
+          'PasswordResetFlow.end();\n    await Get.offAllNamed(AppRoutes.login',
+        ),
+      );
       expect(
         screen,
         isNot(contains('onPressed: () => Get.offAllNamed(AppRoutes.login)')),
@@ -166,7 +174,9 @@ void main() {
 
       expect(
         service,
-        contains("return _bounded(confirm, 'changement du mot de passe');"),
+        contains(
+          "return _bounded(confirm, 'authStagePasswordChangeLabel'.tr);",
+        ),
       );
       // The raw call still exists — inside the bounded closure, which is
       // the point. What must not come back is calling it as the method body.

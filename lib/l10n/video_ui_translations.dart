@@ -582,6 +582,37 @@ class VideoUiTranslations extends Translations {
         'Ce compte est réservé au portail d’administration Adfoot.',
     'userRepositoryDisabledWithReasonMessage':
         'L’accès à ce compte a été désactivé. Motif : @reason',
+    'authAccessMissingProfileMessage':
+        'Compte incomplet ou non provisionné. Contactez l’équipe Adfoot.',
+    'authAccessDisabledMessage':
+        'Ce compte a été désactivé. Contactez l’équipe Adfoot.',
+    'authAccessUnavailableMessage':
+        'Impossible de vérifier votre accès pour le moment. Réessayez '
+        'dans quelques instants.',
+    'authBoundedTimeoutMessage':
+        'La connexion au serveur prend trop de temps (@stage). Vérifiez '
+        'votre réseau puis réessayez.',
+    'authStageAuthenticationLabel': 'authentification',
+    'authStageProfileLabel': 'profil',
+    'authStageTokenLabel': 'jeton',
+    'authStagePasswordResetLabel': 'réinitialisation du mot de passe',
+    'authStagePasswordChangeLabel': 'changement du mot de passe',
+    'authStageEmailVerificationSendLabel': 'envoi de l’e-mail de vérification',
+    'authSignInUnavailableMessage':
+        'Impossible de se connecter pour le moment.',
+    'authSessionNotFoundAfterSignInMessage':
+        'Session introuvable après connexion.',
+    'authSignInHandshakeTimeoutMessage':
+        'La connexion prend trop de temps. Vérifiez votre réseau puis '
+        'réessayez.',
+    'authEmailVerificationSendFailedMessage': 'Erreur d’envoi.',
+    'authUserNotSignedInMessage':
+        'Utilisateur non connecté. Veuillez vous reconnecter.',
+    'authSessionExpiredReconnectMessage':
+        'Session expirée. Veuillez vous reconnecter.',
+    'authEmailNotYetVerifiedMessage':
+        'Votre e-mail n’est pas encore détecté comme vérifié. Après avoir '
+        'cliqué sur le lien, attendez quelques secondes puis réessayez.',
   };
 
   static const Map<String, String> _en = {
@@ -1110,5 +1141,33 @@ class VideoUiTranslations extends Translations {
         'This account is reserved for the Adfoot admin portal.',
     'userRepositoryDisabledWithReasonMessage':
         'Access to this account has been disabled. Reason: @reason',
+    'authAccessMissingProfileMessage':
+        'Account incomplete or not provisioned. Contact the Adfoot team.',
+    'authAccessDisabledMessage':
+        'This account has been disabled. Contact the Adfoot team.',
+    'authAccessUnavailableMessage':
+        'Unable to check your access right now. Try again in a moment.',
+    'authBoundedTimeoutMessage':
+        'The connection to the server is taking too long (@stage). Check '
+        'your network and try again.',
+    'authStageAuthenticationLabel': 'authentication',
+    'authStageProfileLabel': 'profile',
+    'authStageTokenLabel': 'token',
+    'authStagePasswordResetLabel': 'password reset',
+    'authStagePasswordChangeLabel': 'password change',
+    'authStageEmailVerificationSendLabel': 'sending the verification email',
+    'authSignInUnavailableMessage': 'Unable to sign in right now.',
+    'authSessionNotFoundAfterSignInMessage':
+        'Session not found after signing in.',
+    'authSignInHandshakeTimeoutMessage':
+        'The connection is taking too long. Check your network and try '
+        'again.',
+    'authEmailVerificationSendFailedMessage': 'Sending failed.',
+    'authUserNotSignedInMessage': 'No user signed in. Please sign in again.',
+    'authSessionExpiredReconnectMessage':
+        'Session expired. Please sign in again.',
+    'authEmailNotYetVerifiedMessage':
+        'Your email is not yet detected as verified. After clicking the '
+        'link, wait a few seconds and try again.',
   };
 }

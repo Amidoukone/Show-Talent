@@ -34,8 +34,9 @@ void main() {
     late String service;
 
     setUpAll(() {
-      service =
-          File('lib/services/auth/auth_session_service.dart').readAsStringSync();
+      service = File(
+        'lib/services/auth/auth_session_service.dart',
+      ).readAsStringSync();
     });
 
     test('each Firebase Auth round-trip carries a deadline', () {
@@ -67,8 +68,10 @@ void main() {
       // profile, which reads as success -- so the repair was abandoned in
       // silence and re-abandoned identically on every later sign-in.
       final budget = _durationOf(service, '_verifiedSyncBudget');
-      final resolveTimeout =
-          _durationOf(service, '_signInSessionResolveTimeout');
+      final resolveTimeout = _durationOf(
+        service,
+        '_signInSessionResolveTimeout',
+      );
       final callTimeout = _durationOf(service, '_verificationCallableTimeout');
 
       expect(budget, isNotNull, reason: 'the repair must carry a clock budget');
@@ -97,7 +100,8 @@ void main() {
       // A bare TimeoutException would reach the generic "erreur inattendue"
       // catch, which tells the user nothing about what to do.
       expect(service, contains('AuthFlowException'));
-      expect(service, contains('prend trop de temps'));
+      expect(service, contains('authBoundedTimeoutMessage'));
+      expect(service, contains('authSignInHandshakeTimeoutMessage'));
     });
 
     test('the screen that owns the spinner guarantees it stops', () {
@@ -127,8 +131,9 @@ void main() {
     // The user saw a profile that failed to load until the app was restarted,
     // and offers and events that disappeared.
     test('the pop future is never awaited', () {
-      final controller =
-          File('lib/controller/user_controller.dart').readAsStringSync();
+      final controller = File(
+        'lib/controller/user_controller.dart',
+      ).readAsStringSync();
 
       final start = controller.indexOf('Get.offAllNamed(route');
       expect(start, isNonNegative);
@@ -147,17 +152,12 @@ void main() {
     // adfoot-production filled with `navigation timed out for route=/main`
     // written moments after navigations that had worked.
     test('only a navigation that really missed is reported', () {
-      final controller =
-          File('lib/controller/user_controller.dart').readAsStringSync();
+      final controller = File(
+        'lib/controller/user_controller.dart',
+      ).readAsStringSync();
 
-      expect(
-        controller,
-        isNot(contains("'navigation timed out for route=")),
-      );
-      expect(
-        controller,
-        contains("'navigation did not land on route="),
-      );
+      expect(controller, isNot(contains("'navigation timed out for route=")));
+      expect(controller, contains("'navigation did not land on route="));
       expect(controller, contains('if (Get.currentRoute != route) {'));
       expect(controller, contains("stage: 'navigate'"));
     });
@@ -168,8 +168,7 @@ void main() {
     // _safeOffAllDestination -- the fallback to a direct page when named
     // routing fails -- was unreachable from the day it was written.
     test('the startup fallback to a direct page is reachable', () {
-      final splash =
-          File('lib/screens/splash_screen.dart').readAsStringSync();
+      final splash = File('lib/screens/splash_screen.dart').readAsStringSync();
 
       expect(splash, isNot(contains('await Get.offAllNamed(routeName);')));
       expect(splash, isNot(contains('await Get.offAll(() => page);')));
@@ -198,7 +197,9 @@ void main() {
       expect(bindings, contains('_registerPermanent<OffreController>'));
       expect(bindings, contains('Get.put<T>(builder(), permanent: true)'));
 
-      final bootstrap = File('lib/config/app_bootstrap.dart').readAsStringSync();
+      final bootstrap = File(
+        'lib/config/app_bootstrap.dart',
+      ).readAsStringSync();
       expect(
         bootstrap,
         contains('AppBindings.registerPermanentDependencies();'),
@@ -211,13 +212,17 @@ void main() {
     // comment above it must not claim otherwise -- it used to describe a
     // disposal that permanent instances make impossible.
     test('the shell binding is an honest fallback', () {
-      final shell =
-          File('lib/config/app_page_bindings.dart').readAsStringSync();
+      final shell = File(
+        'lib/config/app_page_bindings.dart',
+      ).readAsStringSync();
 
       // fenix is right for the fallback: a lazily built instance really is
       // route-scoped, and without it a disposal would be permanent.
       expect(shell, contains('Get.lazyPut<T>(builder, fenix: true)'));
-      expect(shell, contains('if (Get.isRegistered<T>() || Get.isPrepared<T>())'));
+      expect(
+        shell,
+        contains('if (Get.isRegistered<T>() || Get.isPrepared<T>())'),
+      );
       expect(
         shell,
         contains('bootstrap already put a permanent instance here'),
@@ -228,15 +233,13 @@ void main() {
     // The wait itself is bounded: this method must never again be the thing
     // that blocks session routing.
     test('the frame wait cannot become a new stall', () {
-      final controller =
-          File('lib/controller/user_controller.dart').readAsStringSync();
+      final controller = File(
+        'lib/controller/user_controller.dart',
+      ).readAsStringSync();
 
       final start = controller.indexOf('WidgetsBinding.instance.endOfFrame');
       expect(start, isNonNegative);
-      expect(
-        controller.substring(start, start + 200),
-        contains('.timeout('),
-      );
+      expect(controller.substring(start, start + 200), contains('.timeout('));
     });
   });
 
@@ -263,8 +266,10 @@ void main() {
       );
       expect(
         bootstrap,
-        contains('_reportSilently(\n            FirebaseCrashlytics.instance'
-            '.recordFlutterFatalError(details),'),
+        contains(
+          '_reportSilently(\n            FirebaseCrashlytics.instance'
+          '.recordFlutterFatalError(details),',
+        ),
       );
     });
   });
@@ -274,13 +279,13 @@ void main() {
       // A committed path to a credentials file is an exposure in its own
       // right: it tells a reader exactly which file to go looking for. Secret
       // scanning flags it, correctly.
-      for (final path in Directory('scripts')
-          .listSync()
-          .whereType<File>()
-          .where((file) =>
-              file.path.endsWith('.js') ||
-              file.path.endsWith('.mjs') ||
-              file.path.endsWith('.ps1'))) {
+      for (final path
+          in Directory('scripts').listSync().whereType<File>().where(
+            (file) =>
+                file.path.endsWith('.js') ||
+                file.path.endsWith('.mjs') ||
+                file.path.endsWith('.ps1'),
+          )) {
         expect(
           path.readAsStringSync(),
           isNot(contains('adfoot-production-ops.json')),

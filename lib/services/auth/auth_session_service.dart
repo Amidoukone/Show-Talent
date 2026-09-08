@@ -11,6 +11,7 @@ import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:adfoot/services/app_logger.dart';
+import 'package:get/get.dart';
 
 enum AuthSessionDestination { login, verifyEmail, main }
 
@@ -31,11 +32,11 @@ extension AuthSessionFailureMessage on UserAccessIssue {
   String get loginMessage {
     switch (this) {
       case UserAccessIssue.missingProfile:
-        return 'Compte incomplet ou non provisionné. Contactez l’équipe Adfoot.';
+        return 'authAccessMissingProfileMessage'.tr;
       case UserAccessIssue.adminPortalOnly:
-        return 'Ce compte est réservé au portail d’administration Adfoot.';
+        return 'userRepositoryAdminPortalOnlyMessage'.tr;
       case UserAccessIssue.disabledAccount:
-        return 'Ce compte a été désactivé. Contactez l’équipe Adfoot.';
+        return 'authAccessDisabledMessage'.tr;
     }
   }
 }
@@ -151,9 +152,9 @@ class AuthSessionService {
   /// slow-but-not-timed-out round-trips cannot add up to an unbounded wait.
   static const Duration _signInHandshakeTimeout = Duration(seconds: 45);
 
-  static const String _accessUnavailableTitle = 'Accès indisponible';
-  static const String _accessUnavailableMessage =
-      'Impossible de vérifier votre accès pour le moment. Réessayez dans quelques instants.';
+  static String get _accessUnavailableTitle => 'protectedAccessTitle'.tr;
+  static String get _accessUnavailableMessage =>
+      'authAccessUnavailableMessage'.tr;
 
   /// Runs a Firebase Auth call under [_authCallTimeout].
   ///
@@ -164,8 +165,7 @@ class AuthSessionService {
     return call().timeout(
       _authCallTimeout,
       onTimeout: () => throw AuthFlowException(
-        'La connexion au serveur prend trop de temps ($stage). '
-        'Vérifiez votre réseau puis réessayez.',
+        'authBoundedTimeoutMessage'.trParams({'stage': stage}),
       ),
     );
   }
@@ -506,20 +506,21 @@ class AuthSessionService {
   }) async {
     final userCred = await _bounded(
       () => _auth.signInWithEmailAndPassword(email: email, password: password),
-      'authentification',
+      'authStageAuthenticationLabel'.tr,
     );
 
     final user = userCred.user;
     if (user == null) {
-      throw const AuthFlowException(
-        'Impossible de se connecter pour le moment.',
-      );
+      throw AuthFlowException('authSignInUnavailableMessage'.tr);
     }
 
-    await _bounded(() => user.reload(), 'profil');
+    await _bounded(() => user.reload(), 'authStageProfileLabel'.tr);
     User? refreshed = _auth.currentUser;
     if (refreshed != null) {
-      await _bounded(() => refreshed!.getIdToken(true), 'jeton');
+      await _bounded(
+        () => refreshed!.getIdToken(true),
+        'authStageTokenLabel'.tr,
+      );
     }
     refreshed =
         await _refreshCurrentUserAfterVerification(
@@ -528,7 +529,7 @@ class AuthSessionService {
         ) ??
         refreshed;
     if (refreshed == null) {
-      throw const AuthFlowException('Session introuvable après connexion.');
+      throw AuthFlowException('authSessionNotFoundAfterSignInMessage'.tr);
     }
 
     return refreshed;
@@ -545,10 +546,8 @@ class AuthSessionService {
     final User refreshed =
         await _signInHandshake(email: email, password: password).timeout(
           _signInHandshakeTimeout,
-          onTimeout: () => throw const AuthFlowException(
-            'La connexion prend trop de temps. Vérifiez votre réseau puis '
-            'réessayez.',
-          ),
+          onTimeout: () =>
+              throw AuthFlowException('authSignInHandshakeTimeoutMessage'.tr),
         );
 
     return resolveSessionSafely(
@@ -600,7 +599,7 @@ class AuthSessionService {
       );
     }
 
-    return _bounded(send, 'réinitialisation du mot de passe');
+    return _bounded(send, 'authStagePasswordResetLabel'.tr);
   }
 
   /// Applies the new password under [_authCallTimeout].
@@ -618,7 +617,7 @@ class AuthSessionService {
       return _auth.confirmPasswordReset(code: code, newPassword: newPassword);
     }
 
-    return _bounded(confirm, 'changement du mot de passe');
+    return _bounded(confirm, 'authStagePasswordChangeLabel'.tr);
   }
 
   Future<EmailVerificationSendResult> sendCurrentUserEmailVerification({
@@ -626,9 +625,7 @@ class AuthSessionService {
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
-      throw const AuthFlowException(
-        'Utilisateur non connecté. Veuillez vous reconnecter.',
-      );
+      throw AuthFlowException('authUserNotSignedInMessage'.tr);
     }
 
     Future<void> send() async {
@@ -641,7 +638,7 @@ class AuthSessionService {
       // Bounded for the same reason as the reset link above: the verify-email
       // screen's "Renvoyer" clears its busy state in a `finally` that an
       // unbounded await never reaches.
-      await _bounded(send, 'envoi de l’e-mail de vérification');
+      await _bounded(send, 'authStageEmailVerificationSendLabel'.tr);
       return EmailVerificationSendResult(
         sent: true,
         sentAtMs: DateTime.now().millisecondsSinceEpoch,
@@ -649,7 +646,8 @@ class AuthSessionService {
     } on FirebaseAuthException catch (error) {
       return EmailVerificationSendResult(
         sent: false,
-        errorMessage: error.message ?? 'Erreur d\u2019envoi.',
+        errorMessage:
+            error.message ?? 'authEmailVerificationSendFailedMessage'.tr,
       );
     }
   }
@@ -669,16 +667,12 @@ class AuthSessionService {
   }) async {
     final user = _auth.currentUser;
     if (user == null) {
-      throw const AuthFlowException(
-        'Utilisateur non connecté. Veuillez vous reconnecter.',
-      );
+      throw AuthFlowException('authUserNotSignedInMessage'.tr);
     }
 
     final refreshed = await _refreshCurrentUserAfterVerification();
     if (refreshed == null) {
-      throw const AuthFlowException(
-        'Session expirée. Veuillez vous reconnecter.',
-      );
+      throw AuthFlowException('authSessionExpiredReconnectMessage'.tr);
     }
 
     if (!refreshed.emailVerified) {
@@ -697,9 +691,7 @@ class AuthSessionService {
         );
       }
 
-      throw const AuthFlowException(
-        'Votre e-mail n’est pas encore détecté comme vérifié. Après avoir cliqué sur le lien, attendez quelques secondes puis réessayez.',
-      );
+      throw AuthFlowException('authEmailNotYetVerifiedMessage'.tr);
     }
 
     return resolveSessionSafely(
@@ -878,7 +870,7 @@ class AuthSessionService {
           destination: AuthSessionDestination.login,
           firebaseUser: firebaseUser,
           failure: UserAccessIssue.disabledAccount,
-          failureTitle: 'Compte désactivé',
+          failureTitle: 'accountDisabledTitle'.tr,
           failureMessage: AuthErrorMapper.toMessage(error),
         );
       }
@@ -925,7 +917,7 @@ class AuthSessionService {
         await signOut();
       }
 
-      return const AuthSessionSnapshot(
+      return AuthSessionSnapshot(
         destination: AuthSessionDestination.login,
         failureTitle: _accessUnavailableTitle,
         failureMessage: _accessUnavailableMessage,
