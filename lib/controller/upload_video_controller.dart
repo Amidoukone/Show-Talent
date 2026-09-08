@@ -348,7 +348,7 @@ class UploadVideoController extends GetxController {
   Future<AppUser?> _resolveCurrentUploadUser(int operation) async {
     final authUid = _authSessionService.currentUid;
     if (authUid == null || authUid.isEmpty) {
-      throw const _UploadStageException(
+      throw _UploadStageException(
         'auth-required',
         VideoUiStrings.uploadAuthRequired,
       );
@@ -487,7 +487,7 @@ class UploadVideoController extends GetxController {
             .timeout(_sessionCreationTimeout);
       } on TimeoutException {
         if (!_isCurrentOperation(operation)) return;
-        throw const _UploadStageException(
+        throw _UploadStageException(
           'session-creation-timeout',
           VideoUiStrings.uploadSessionTimeout,
         );
@@ -526,7 +526,7 @@ class UploadVideoController extends GetxController {
       if (!_isCurrentOperation(operation)) return;
 
       if (!videoUploaded) {
-        throw const _UploadStageException(
+        throw _UploadStageException(
           'video-transfer-failed',
           VideoUiStrings.uploadVideoTransferFailed,
         );
@@ -539,7 +539,7 @@ class UploadVideoController extends GetxController {
         if (regenerated != null && await regenerated.exists()) {
           thumbnail = regenerated;
         } else {
-          throw const _UploadStageException(
+          throw _UploadStageException(
             'thumbnail-missing',
             VideoUiStrings.uploadMissingThumbnail,
           );
@@ -573,7 +573,7 @@ class UploadVideoController extends GetxController {
       if (!_isCurrentOperation(operation)) return;
 
       if (!thumbUploaded) {
-        throw const _UploadStageException(
+        throw _UploadStageException(
           'thumbnail-transfer-failed',
           VideoUiStrings.uploadThumbnailTransferFailed,
         );
@@ -620,7 +620,7 @@ class UploadVideoController extends GetxController {
       if (!_isCurrentOperation(operation)) return;
 
       if (!finalized) {
-        throw const _UploadStageException(
+        throw _UploadStageException(
           'finalize-failed',
           VideoUiStrings.uploadFinalizeFailed,
         );

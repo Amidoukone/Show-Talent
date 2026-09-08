@@ -166,44 +166,34 @@ class VideoUiStrings {
         : 'pendingVideosSemanticSingular'.tr;
   }
 
-  static const String uploadMissingRequiredFields =
-      'Merci de renseigner une description et une légende.';
-  static const String uploadSourceNotFound =
-      'Vidéo introuvable. Merci de réessayer.';
-  static const String uploadEmptyFile = 'Le fichier vidéo est vide.';
-  static const String uploadFileTooLarge =
-      'Le fichier vidéo dépasse la limite de 150 Mo.';
-  static const String uploadQualityTooLow =
-      'Qualité vidéo insuffisante (minimum 480x360).';
-  static const String uploadThumbnailFailed =
-      'Erreur lors de la génération de la miniature.';
-  static const String uploadPreparationFailed =
-      'Préparation impossible pour le moment. Merci de réessayer.';
-  static const String uploadPreparationInProgress = 'Préparation en cours...';
-  static const String uploadAlreadyInProgress = 'Téléversement déjà en cours.';
-  static const String uploadMissingFile = 'Fichier manquant.';
-  static const String uploadMissingThumbnail = 'Miniature manquante.';
-  static const String uploadMissingMetadata =
-      'Description ou légende manquante.';
-  static const String uploadVideoTransferFailed =
-      'Échec du téléversement de la vidéo.';
-  static const String uploadThumbnailTransferFailed =
-      'Échec du téléversement de la miniature.';
-  static const String uploadFinalizeFailed =
-      'Échec de la finalisation serveur.';
-  static const String uploadCancelled = 'Téléversement annulé.';
-  static const String uploadPreparationCancelled = 'Préparation annulée.';
-  static const String uploadSuccess = 'Vidéo prête et visible.';
-  static const String uploadSubmittedForReview =
-      'Vidéo soumise à la revue admin. Retrouvez-la dans votre profil ; '
-      'vous serez notifié dès sa validation.';
+  static String get uploadMissingRequiredFields =>
+      'uploadMissingRequiredFields'.tr;
+  static String get uploadSourceNotFound => 'uploadSourceNotFound'.tr;
+  static String get uploadEmptyFile => 'uploadEmptyFile'.tr;
+  static String get uploadFileTooLarge => 'uploadFileTooLarge'.tr;
+  static String get uploadQualityTooLow => 'uploadQualityTooLow'.tr;
+  static String get uploadThumbnailFailed => 'uploadThumbnailFailed'.tr;
+  static String get uploadPreparationFailed => 'uploadPreparationFailed'.tr;
+  static String get uploadPreparationInProgress =>
+      'uploadPreparationInProgress'.tr;
+  static String get uploadAlreadyInProgress => 'uploadAlreadyInProgress'.tr;
+  static String get uploadMissingFile => 'uploadMissingFile'.tr;
+  static String get uploadMissingThumbnail => 'uploadMissingThumbnail'.tr;
+  static String get uploadMissingMetadata => 'uploadMissingMetadata'.tr;
+  static String get uploadVideoTransferFailed => 'uploadVideoTransferFailed'.tr;
+  static String get uploadThumbnailTransferFailed =>
+      'uploadThumbnailTransferFailed'.tr;
+  static String get uploadFinalizeFailed => 'uploadFinalizeFailed'.tr;
+  static String get uploadCancelled => 'uploadCancelled'.tr;
+  static String get uploadPreparationCancelled =>
+      'uploadPreparationCancelled'.tr;
+  static String get uploadSuccess => 'uploadSuccess'.tr;
+  static String get uploadSubmittedForReview => 'uploadSubmittedForReview'.tr;
   // Shown when the app stops waiting before the backend has finished, not
   // when anything failed. It must send the user somewhere concrete, because
   // the alternative — "it's processing", full stop — is what made a
   // successful upload feel like a lost video.
-  static const String uploadOptimizationPending =
-      'Votre vidéo est en cours de traitement. Suivez son avancement '
-      'dans votre profil ; vous serez notifié dès sa validation.';
+  static String get uploadOptimizationPending => 'uploadOptimizationPending'.tr;
 
   /* ------------------------ Plafond de publication ------------------------- */
 
@@ -219,8 +209,7 @@ class VideoUiStrings {
       'uploadQuotaReachedMessage'.trParams({'limit': '$limit'});
 
   static String uploadQuotaReachedShort(int limit) =>
-      'Plafond de $limit vidéos atteint. Contactez l’agence Adfoot pour '
-      'l’augmenter.';
+      'uploadQuotaReachedShort'.trParams({'limit': '$limit'});
 
   static String get uploadQuotaContactAction => 'uploadQuotaContactAction'.tr;
   static String get uploadQuotaDismissAction => 'uploadQuotaDismissAction'.tr;
@@ -245,25 +234,18 @@ class VideoUiStrings {
   // been taken, so there is nothing left to wait for.
   static String get videoNotPlayableModerated => 'videoNotPlayableModerated'.tr;
   static String get videoNotPlayableFailed => 'videoNotPlayableFailed'.tr;
-  static const String uploadAuthRequired =
-      'Authentification requise. Reconnectez-vous puis réessayez.';
-  static const String uploadPermissionDenied =
-      'Votre compte ne peut pas téléverser de vidéos.';
-  static const String uploadServiceUnavailable =
-      'Le service vidéo est temporairement indisponible.';
-  static const String uploadPreconditionFailed =
-      'Votre compte ne remplit pas les conditions pour téléverser.';
+  static String get uploadAuthRequired => 'uploadAuthRequired'.tr;
+  static String get uploadPermissionDenied => 'uploadPermissionDenied'.tr;
+  static String get uploadServiceUnavailable => 'uploadServiceUnavailable'.tr;
+  static String get uploadPreconditionFailed => 'uploadPreconditionFailed'.tr;
+  // No caller anywhere in the app -- left as a plain literal, nothing to
+  // translate.
   static const String uploadProfileLoadFailed =
       'Impossible de charger le profil. Vérifiez votre réseau puis réessayez.';
-  static const String uploadServerError =
-      'Erreur serveur pendant le téléversement.';
-  static const String uploadConnectionUnstable =
-      'Connexion instable pendant le téléversement. Vérifiez votre réseau '
-      'puis réessayez.';
-  static const String uploadSessionTimeout =
-      'Connexion sécurisée trop longue à s’établir. '
-      'Vérifiez votre réseau puis réessayez.';
-  static const String uploadUnknownError = 'Erreur pendant le téléversement.';
+  static String get uploadServerError => 'uploadServerError'.tr;
+  static String get uploadConnectionUnstable => 'uploadConnectionUnstable'.tr;
+  static String get uploadSessionTimeout => 'uploadSessionTimeout'.tr;
+  static String get uploadUnknownError => 'uploadUnknownError'.tr;
   static const String uploadStageAnalyze = 'Analyse de la vidéo...';
   static const String uploadStagePrepareFile = 'Préparation du fichier...';
   static const String uploadStageGenerateThumbnail =
@@ -390,8 +372,7 @@ class VideoUiStrings {
   }
 
   static String uploadOptimizationFailed(String status) {
-    return 'Échec d’optimisation vidéo (statut : $status). '
-        'Merci de réessayer.';
+    return 'uploadOptimizationFailed'.trParams({'status': status});
   }
 
   static String galleryPermissionDetails(Object error) {

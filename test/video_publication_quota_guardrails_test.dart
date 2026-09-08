@@ -30,35 +30,49 @@ const String _productionQuotaMessage =
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUp(() => Get.testMode = true);
-  tearDown(() => Get.reset());
+  // Set directly (not only via the pumped GetMaterialApp below) so plain
+  // `test()` bodies -- e.g. the one calling UploadVideoErrorMapper.toUserMessage
+  // directly -- also see real French text instead of `.tr`/`.trParams`
+  // falling back to the bare key.
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
 
   group('the client cap agrees with the server cap', () {
-    test('MAX_PUBLIC_PLAYER_VIDEOS and maxPublishedVideos are the same number',
-        () {
-      final uploadSession = _read('functions/src/upload_session.ts');
-      final match = RegExp(
-        r'const MAX_PUBLIC_PLAYER_VIDEOS = parsePositiveIntEnv\(\s*'
-        r'process\.env\.MAX_PUBLIC_PLAYER_VIDEOS,\s*(\d+),',
-      ).firstMatch(uploadSession);
+    test(
+      'MAX_PUBLIC_PLAYER_VIDEOS and maxPublishedVideos are the same number',
+      () {
+        final uploadSession = _read('functions/src/upload_session.ts');
+        final match = RegExp(
+          r'const MAX_PUBLIC_PLAYER_VIDEOS = parsePositiveIntEnv\(\s*'
+          r'process\.env\.MAX_PUBLIC_PLAYER_VIDEOS,\s*(\d+),',
+        ).firstMatch(uploadSession);
 
-      expect(
-        match,
-        isNotNull,
-        reason: 'the server default is the number the client mirrors',
-      );
-      expect(
-        int.parse(match!.group(1)!),
-        VideoPublicationQuota.maxPublishedVideos,
-        reason: 'a client that guesses a different cap either blocks uploads '
-            'the server would have accepted, or promises ones it will refuse',
-      );
-    });
+        expect(
+          match,
+          isNotNull,
+          reason: 'the server default is the number the client mirrors',
+        );
+        expect(
+          int.parse(match!.group(1)!),
+          VideoPublicationQuota.maxPublishedVideos,
+          reason:
+              'a client that guesses a different cap either blocks uploads '
+              'the server would have accepted, or promises ones it will refuse',
+        );
+      },
+    );
   });
 
   group('the refusal is recognised and rewritten', () {
-    FirebaseFunctionsException exhausted(String message,
-        {Object? details}) {
+    FirebaseFunctionsException exhausted(String message, {Object? details}) {
       return FirebaseFunctionsException(
         code: 'resource-exhausted',
         message: message,
@@ -106,9 +120,7 @@ void main() {
 
       for (final message in others) {
         expect(
-          UploadVideoErrorMapper.isPublicVideoQuotaFailure(
-            exhausted(message),
-          ),
+          UploadVideoErrorMapper.isPublicVideoQuotaFailure(exhausted(message)),
           isFalse,
           reason: message,
         );
@@ -154,31 +166,33 @@ void main() {
   });
 
   group('the cap is checked before any work is asked of the user', () {
-    test('countPublishedVideos counts this account\'s ready videos only',
-        () async {
-      final firestore = FakeFirebaseFirestore();
-      final repository = UploadVideoRepository(firestore: firestore);
+    test(
+      'countPublishedVideos counts this account\'s ready videos only',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = UploadVideoRepository(firestore: firestore);
 
-      for (var index = 0; index < 10; index++) {
-        await firestore.collection('videos').doc('mine-$index').set({
+        for (var index = 0; index < 10; index++) {
+          await firestore.collection('videos').doc('mine-$index').set({
+            'uid': 'player-1',
+            'status': 'ready',
+          });
+        }
+        // Neither of these is a published video of this player's.
+        await firestore.collection('videos').doc('mine-processing').set({
           'uid': 'player-1',
+          'status': 'under_review',
+        });
+        await firestore.collection('videos').doc('someone-else').set({
+          'uid': 'player-2',
           'status': 'ready',
         });
-      }
-      // Neither of these is a published video of this player's.
-      await firestore.collection('videos').doc('mine-processing').set({
-        'uid': 'player-1',
-        'status': 'under_review',
-      });
-      await firestore.collection('videos').doc('someone-else').set({
-        'uid': 'player-2',
-        'status': 'ready',
-      });
 
-      expect(await repository.countPublishedVideos('player-1'), 10);
-      expect(await repository.countPublishedVideos('player-2'), 1);
-      expect(await repository.countPublishedVideos('nobody'), 0);
-    });
+        expect(await repository.countPublishedVideos('player-1'), 10);
+        expect(await repository.countPublishedVideos('player-2'), 1);
+        expect(await repository.countPublishedVideos('nobody'), 0);
+      },
+    );
 
     test('the picker asks before it opens the gallery', () {
       final addVideo = _read('lib/screens/add_video.dart');
@@ -194,7 +208,8 @@ void main() {
       expect(
         check,
         lessThan(picker),
-        reason: 'the whole point is not to make the user trim a clip that '
+        reason:
+            'the whole point is not to make the user trim a clip that '
             'cannot be published',
       );
       expect(body, contains('VideoPublicationQuotaState.exhausted'));
@@ -240,16 +255,13 @@ void main() {
 
       expect(addVideo, contains('AdfootSupport.openWhatsApp()'));
       expect(addVideo, contains('VideoUiStrings.uploadQuotaContactFallback('));
+      expect(VideoUiStrings.uploadQuotaContactAction, contains('Adfoot'));
+      expect(VideoUiStrings.uploadQuotaReachedMessage(10), contains('Adfoot'));
       expect(
-        VideoUiStrings.uploadQuotaContactAction,
-        contains('Adfoot'),
-      );
-      expect(
-        VideoUiStrings.uploadQuotaReachedMessage(10),
-        contains('Adfoot'),
-      );
-      expect(
-        VideoUiStrings.uploadQuotaContactFallback('+223 70 45 33 45', 'adfoot.org'),
+        VideoUiStrings.uploadQuotaContactFallback(
+          '+223 70 45 33 45',
+          'adfoot.org',
+        ),
         contains('+223 70 45 33 45'),
       );
     });

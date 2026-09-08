@@ -101,6 +101,12 @@ void main() {
       VideoUiStrings.videoNotPlayableFailed,
       'Le traitement de cette vidéo a échoué. Supprimez-la et réessayez.',
     );
+    expect(VideoUiStrings.uploadSuccess, 'Vidéo prête et visible.');
+    expect(VideoUiStrings.uploadFileTooLarge, contains('150 Mo'));
+    expect(
+      VideoUiStrings.uploadOptimizationFailed('failed'),
+      'Échec d’optimisation vidéo (statut : failed). Merci de réessayer.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -166,6 +172,12 @@ void main() {
     expect(
       VideoUiStrings.videoNotPlayableFailed,
       'Processing this video failed. Delete it and try again.',
+    );
+    expect(VideoUiStrings.uploadSuccess, 'Video ready and visible.');
+    expect(VideoUiStrings.uploadFileTooLarge, contains('150 MB'));
+    expect(
+      VideoUiStrings.uploadOptimizationFailed('failed'),
+      'Video optimization failed (status: failed). Please try again.',
     );
   });
 }

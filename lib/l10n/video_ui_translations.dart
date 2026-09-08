@@ -226,6 +226,53 @@ class VideoUiTranslations extends Translations {
         'le support si vous pensez qu’il s’agit d’une erreur.',
     'videoNotPlayableFailed':
         'Le traitement de cette vidéo a échoué. Supprimez-la et réessayez.',
+
+    'uploadMissingRequiredFields':
+        'Merci de renseigner une description et une légende.',
+    'uploadSourceNotFound': 'Vidéo introuvable. Merci de réessayer.',
+    'uploadEmptyFile': 'Le fichier vidéo est vide.',
+    'uploadFileTooLarge': 'Le fichier vidéo dépasse la limite de 150 Mo.',
+    'uploadQualityTooLow': 'Qualité vidéo insuffisante (minimum 480x360).',
+    'uploadThumbnailFailed': 'Erreur lors de la génération de la miniature.',
+    'uploadPreparationFailed':
+        'Préparation impossible pour le moment. Merci de réessayer.',
+    'uploadPreparationInProgress': 'Préparation en cours...',
+    'uploadAlreadyInProgress': 'Téléversement déjà en cours.',
+    'uploadMissingFile': 'Fichier manquant.',
+    'uploadMissingThumbnail': 'Miniature manquante.',
+    'uploadMissingMetadata': 'Description ou légende manquante.',
+    'uploadVideoTransferFailed': 'Échec du téléversement de la vidéo.',
+    'uploadThumbnailTransferFailed': 'Échec du téléversement de la miniature.',
+    'uploadFinalizeFailed': 'Échec de la finalisation serveur.',
+    'uploadCancelled': 'Téléversement annulé.',
+    'uploadPreparationCancelled': 'Préparation annulée.',
+    'uploadSuccess': 'Vidéo prête et visible.',
+    'uploadSubmittedForReview':
+        'Vidéo soumise à la revue admin. Retrouvez-la dans votre profil ; '
+        'vous serez notifié dès sa validation.',
+    'uploadOptimizationPending':
+        'Votre vidéo est en cours de traitement. Suivez son avancement '
+        'dans votre profil ; vous serez notifié dès sa validation.',
+    'uploadQuotaReachedShort':
+        'Plafond de @limit vidéos atteint. Contactez l’agence Adfoot pour '
+        'l’augmenter.',
+    'uploadAuthRequired':
+        'Authentification requise. Reconnectez-vous puis réessayez.',
+    'uploadPermissionDenied': 'Votre compte ne peut pas téléverser de vidéos.',
+    'uploadServiceUnavailable':
+        'Le service vidéo est temporairement indisponible.',
+    'uploadPreconditionFailed':
+        'Votre compte ne remplit pas les conditions pour téléverser.',
+    'uploadServerError': 'Erreur serveur pendant le téléversement.',
+    'uploadConnectionUnstable':
+        'Connexion instable pendant le téléversement. Vérifiez votre '
+        'réseau puis réessayez.',
+    'uploadSessionTimeout':
+        'Connexion sécurisée trop longue à s’établir. '
+        'Vérifiez votre réseau puis réessayez.',
+    'uploadUnknownError': 'Erreur pendant le téléversement.',
+    'uploadOptimizationFailed':
+        'Échec d’optimisation vidéo (statut : @status). Merci de réessayer.',
   };
 
   static const Map<String, String> _en = {
@@ -424,5 +471,50 @@ class VideoUiTranslations extends Translations {
         'support if you think this is a mistake.',
     'videoNotPlayableFailed':
         'Processing this video failed. Delete it and try again.',
+
+    'uploadMissingRequiredFields':
+        'Please fill in a description and a caption.',
+    'uploadSourceNotFound': 'Video not found. Please try again.',
+    'uploadEmptyFile': 'The video file is empty.',
+    'uploadFileTooLarge': 'The video file exceeds the 150 MB limit.',
+    'uploadQualityTooLow': 'Video quality is too low (minimum 480x360).',
+    'uploadThumbnailFailed': 'Error generating the thumbnail.',
+    'uploadPreparationFailed':
+        'Preparation is unavailable right now. Please try again.',
+    'uploadPreparationInProgress': 'Preparing...',
+    'uploadAlreadyInProgress': 'Upload already in progress.',
+    'uploadMissingFile': 'File missing.',
+    'uploadMissingThumbnail': 'Thumbnail missing.',
+    'uploadMissingMetadata': 'Description or caption missing.',
+    'uploadVideoTransferFailed': 'Video upload failed.',
+    'uploadThumbnailTransferFailed': 'Thumbnail upload failed.',
+    'uploadFinalizeFailed': 'Server finalization failed.',
+    'uploadCancelled': 'Upload cancelled.',
+    'uploadPreparationCancelled': 'Preparation cancelled.',
+    'uploadSuccess': 'Video ready and visible.',
+    'uploadSubmittedForReview':
+        'Video submitted for admin review. Find it in your profile; you '
+        'will be notified as soon as it is approved.',
+    'uploadOptimizationPending':
+        'Your video is being processed. Follow its progress in your '
+        'profile; you will be notified as soon as it is approved.',
+    'uploadQuotaReachedShort':
+        'Limit of @limit videos reached. Contact the Adfoot agency to '
+        'raise it.',
+    'uploadAuthRequired': 'Authentication required. Sign in again, then retry.',
+    'uploadPermissionDenied': 'Your account cannot upload videos.',
+    'uploadServiceUnavailable': 'The video service is temporarily unavailable.',
+    'uploadPreconditionFailed':
+        'Your account does not meet the conditions to upload.',
+    'uploadServerError': 'Server error during upload.',
+    'uploadConnectionUnstable':
+        'Unstable connection during upload. Check your connection, then '
+        'try again.',
+    'uploadSessionTimeout':
+        'Establishing a secure connection took too long. Check your '
+        'connection, then try again.',
+    'uploadUnknownError': 'Error during upload.',
+    'uploadOptimizationFailed':
+        'Video optimization failed (status: @status). Please try again.',
   };
 }
