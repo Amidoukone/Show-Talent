@@ -11,9 +11,25 @@ import 'l10n/video_ui_translations.dart';
 import 'theme/ad_colors.dart';
 import 'theme/app_theme.dart';
 
+/// The app's active locale, resolved once from the device's locale.
+///
+/// Only two locales ship copy ([AppLocalizations.supportedLocales]): an
+/// English device gets English, anything else falls back to French -- not a
+/// device-locale exact match, the same fallback the app has always had.
+/// Used both for [AdfootApp]'s `GetMaterialApp.locale` (drives
+/// `AppLocalizations` and, via `Get.locale`, the `VideoUiStrings` `.tr`
+/// catalog) and for [Intl.defaultLocale] in `main()` -- keeping both in sync
+/// is what stops implicit `DateFormat(...)` calls elsewhere in the app (ones
+/// with no explicit locale argument) from rendering month/day names in
+/// French on an English screen.
+Locale resolveAppLocale() {
+  return Get.deviceLocale?.languageCode == 'en'
+      ? const Locale('en')
+      : const Locale('fr');
+}
+
 Future<void> main() async {
   runZonedGuarded(() async {
-    Intl.defaultLocale = 'fr_FR';
     await _bootstrapAndRun();
   }, AppBootstrap.reportZoneError);
 }
@@ -26,6 +42,9 @@ Future<void> main() async {
 Future<void> _bootstrapAndRun() async {
   try {
     await AppBootstrap.initialize();
+    Intl.defaultLocale = resolveAppLocale().languageCode == 'en'
+        ? 'en_US'
+        : 'fr_FR';
     runApp(const MyApp());
   } catch (error, stack) {
     AppBootstrap.reportZoneError(error, stack);
@@ -95,18 +114,16 @@ class AdfootApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: Get.key,
       theme: AppTheme.light(),
-      // Toujours francais pour l'instant : l'app est migree ecran par ecran
-      // vers AppLocalizations (voir chaque ecran pour l'etat d'avancement).
-      // Passer cette valeur a `null` pour laisser Flutter resoudre la langue
-      // de l'appareil n'aura de sens qu'une fois tous les ecrans traduits --
-      // sinon un telephone en anglais verrait certains ecrans traduits et
-      // d'autres repasser en francais.
-      locale: const Locale('fr'),
+      // Resolved from the device locale -- see [resolveAppLocale]. Passing
+      // the resolved value directly (rather than `null`, which would leave
+      // it to Flutter's own resolution) is what also makes `Get.locale`
+      // reflect it, which the `VideoUiStrings` `.tr` catalog below depends
+      // on to pick French vs. English.
+      locale: resolveAppLocale(),
       fallbackLocale: const Locale('fr'),
       // Traductions GetX pour VideoUiStrings : ce catalogue est lu depuis des
       // controleurs/services sans BuildContext, ou AppLocalizations.of(context)
-      // n'est pas utilisable. Migre progressivement, cle par cle -- voir
-      // lib/l10n/video_ui_translations.dart.
+      // n'est pas utilisable. Voir lib/l10n/video_ui_translations.dart.
       translations: VideoUiTranslations(),
       supportedLocales: AppLocalizations.supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,

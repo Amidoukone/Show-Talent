@@ -30,7 +30,11 @@ void main() {
       expect(
         form,
         contains(
-          r"_completeSubmit(l10n, '" r"$" r"{response.message}" r"$" r"flyerNote')",
+          r"_completeSubmit(l10n, '"
+          r"$"
+          r"{response.message}"
+          r"$"
+          r"flyerNote')",
         ),
       );
       expect(form, contains('_buildFormSection('));
@@ -52,8 +56,12 @@ void main() {
       );
       expect(form, contains('maxLength: _maxTitleLength'));
       expect(form, contains('maxLength: _maxDescriptionLength'));
-      expect(form, contains("locale: const Locale('fr', 'FR')"));
-      expect(form, contains("DateFormat('dd MMM yyyy', 'fr_FR')"));
+      // Date formatting follows the active locale rather than being pinned
+      // to French, so the app stays coherent now that English is reachable
+      // (see [[project_adfoot_i18n_ios_effort]]).
+      expect(form, isNot(contains("locale: const Locale('fr', 'FR')")));
+      expect(form, isNot(contains("DateFormat('dd MMM yyyy', 'fr_FR')")));
+      expect(form, contains('Localizations.localeOf(context).toString()'));
       expect(form, isNot(contains('streamingController')));
       expect(form, isNot(contains('flyerController')));
       expect(form, isNot(contains('Lien streaming')));
@@ -274,10 +282,7 @@ void main() {
           repository,
           contains("payload['flyerUrl'] = FieldValue.delete()"),
         );
-        expect(
-          repository,
-          contains("payload['tags'] = FieldValue.delete()"),
-        );
+        expect(repository, contains("payload['tags'] = FieldValue.delete()"));
         expect(
           repository,
           contains("payload['capaciteMax'] = FieldValue.delete()"),
@@ -296,10 +301,7 @@ void main() {
         expect(controller, contains('_replaceLocalEvent(event)'));
         // Le pendant du remplacement local des offres : `participants`
         // etant `final`, la fusion passe par une reconstruction.
-        expect(
-          controller,
-          contains('participants: previous.participants'),
-        );
+        expect(controller, contains('participants: previous.participants'));
         expect(controller, contains('views: previous.views'));
         expect(controller, contains('viewedBy: previous.viewedBy'));
         expect(controller, contains('_removeLocalEvent(eventId)'));
@@ -344,8 +346,7 @@ void main() {
       );
     });
 
-    test('le depot des evenements ne filtre au serveur qu un champ tableau',
-        () {
+    test('le depot des evenements ne filtre au serveur qu un champ tableau', () {
       final repository = File(
         'lib/services/events/event_repository.dart',
       ).readAsStringSync();
@@ -356,7 +357,10 @@ void main() {
       );
       // `ageCategories` est un second champ tableau : Firestore n'en accepte
       // qu'un par index composite, et le mettre ici ferait echouer la requete.
-      expect(repository, isNot(contains("arrayContainsAny: filter.categories")));
+      expect(
+        repository,
+        isNot(contains("arrayContainsAny: filter.categories")),
+      );
       expect(repository, isNot(contains("'ageCategories',")));
     });
 

@@ -166,7 +166,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       child: Scaffold(
         backgroundColor: cs.surface,
         appBar: AdAppBar(
-          title: isEditing ? l10n.offreFormEditTitle : l10n.offreFormCreateTitle,
+          title: isEditing
+              ? l10n.offreFormEditTitle
+              : l10n.offreFormCreateTitle,
           subtitle: l10n.offreFormSubtitle,
           showBottomDivider: true,
           leading: IconButton(
@@ -238,8 +240,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                         // general qui ne dit pas ou regarder.
                         FormField<List<FootballPosition>>(
                           initialValue: _positionCodes,
-                          validator: (value) =>
-                              _validatePositions(l10n, value),
+                          validator: (value) => _validatePositions(l10n, value),
                           builder: (state) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,8 +299,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                           spacing: 8,
                           runSpacing: 8,
                           children: AgeCategory.values.map((category) {
-                            final isSelected =
-                                _ageCategories.contains(category);
+                            final isSelected = _ageCategories.contains(
+                              category,
+                            );
                             return FilterChip(
                               selected: isSelected,
                               label: Text(category.labelFr),
@@ -470,14 +472,10 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       return l10n.eventFormDescriptionRequiredValidator;
     }
     if (normalized.length < _minDescriptionLength) {
-      return l10n.eventFormDescriptionMinLengthValidator(
-        _minDescriptionLength,
-      );
+      return l10n.eventFormDescriptionMinLengthValidator(_minDescriptionLength);
     }
     if (normalized.length > _maxDescriptionLength) {
-      return l10n.eventFormDescriptionMaxLengthValidator(
-        _maxDescriptionLength,
-      );
+      return l10n.eventFormDescriptionMaxLengthValidator(_maxDescriptionLength);
     }
     return null;
   }
@@ -558,7 +556,6 @@ class OffreFormScreenState extends State<OffreFormScreen> {
 
         final pickedDate = await showDatePicker(
           context: context,
-          locale: const Locale('fr', 'FR'),
           initialDate: initialDate,
           firstDate: firstDate,
           lastDate: DateTime(2100),
@@ -588,7 +585,10 @@ class OffreFormScreenState extends State<OffreFormScreen> {
             ),
             Text(
               date != null
-                  ? DateFormat('dd MMM yyyy', 'fr_FR').format(date)
+                  ? DateFormat(
+                      'dd MMM yyyy',
+                      Localizations.localeOf(context).toString(),
+                    ).format(date)
                   : l10n.eventFormChooseDateLabel,
               style: const TextStyle(
                 fontSize: 16,
@@ -689,8 +689,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       dateFin: _dateFin!,
       recruteur: currentUser,
       candidats: isEditing ? editingOffre!.candidats : [],
-      statut:
-          isEditing ? Offre.normalizeStatus(editingOffre!.statut) : 'ouverte',
+      statut: isEditing
+          ? Offre.normalizeStatus(editingOffre!.statut)
+          : 'ouverte',
       dateCreation: isEditing ? editingOffre!.dateCreation : DateTime.now(),
       localisation: _localisationController.text.trim().isEmpty
           ? null
@@ -717,10 +718,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
         if (response.toast == ToastLevel.none) {
           return;
         }
-        AdFeedback.error(
-          l10n.offreFormGenericErrorTitle,
-          response.message,
-        );
+        AdFeedback.error(l10n.offreFormGenericErrorTitle, response.message);
         return;
       }
 
@@ -742,7 +740,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     AdFeedback.dismissCurrent();
 
     final result = OffreFormResult(
-      title: isEditing ? l10n.offreFormUpdatedTitle : l10n.offreFormPublishedTitle,
+      title: isEditing
+          ? l10n.offreFormUpdatedTitle
+          : l10n.offreFormPublishedTitle,
       message: message,
     );
     final navigator = Get.key.currentState;
@@ -751,10 +751,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     } else {
       Get.offAllNamed(
         AppRoutes.main,
-        arguments: <String, dynamic>{
-          'tab': 1,
-          ...result.toRouteArguments(),
-        },
+        arguments: <String, dynamic>{'tab': 1, ...result.toRouteArguments()},
       );
     }
   }

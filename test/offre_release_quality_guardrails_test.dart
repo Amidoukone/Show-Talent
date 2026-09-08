@@ -37,7 +37,10 @@ void main() {
         'lib/services/offers/offer_repository.dart',
       ).readAsStringSync();
 
-      expect(repository, contains("arrayContainsAny: filter.positionCodesForQuery"));
+      expect(
+        repository,
+        contains("arrayContainsAny: filter.positionCodesForQuery"),
+      );
       // `ageCategories` est un second champ tableau : Firestore n'en accepte
       // qu'un par index composite, et le mettre ici ferait echouer la requete.
       expect(repository, isNot(contains("'ageCategories'")));
@@ -61,12 +64,17 @@ void main() {
       // filtre par un poste que plus aucun menu n'affiche.
       expect(
         screen,
-        contains('offreController.setPositionFilter(const <FootballPosition>[])'),
+        contains(
+          'offreController.setPositionFilter(const <FootballPosition>[])',
+        ),
       );
 
       // Un fil vide sous filtre serveur reste un fil filtre : la barre doit
       // rester a l'ecran, sinon l'utilisateur n'a aucun moyen de revenir.
-      expect(screen, contains('final hasServerFilter = _selectedPosition != null;'));
+      expect(
+        screen,
+        contains('final hasServerFilter = _selectedPosition != null;'),
+      );
       expect(screen, contains('if (allOffres.isEmpty && !hasServerFilter)'));
     });
   });
@@ -156,8 +164,12 @@ void main() {
       expect(form, contains('AppRoutes.main'));
       expect(form, contains("'tab': 1"));
       expect(form, contains('_resolveInitialDate('));
-      expect(form, contains("locale: const Locale('fr', 'FR')"));
-      expect(form, contains("DateFormat('dd MMM yyyy', 'fr_FR')"));
+      // Date formatting follows the active locale rather than being pinned
+      // to French, so the app stays coherent now that English is reachable
+      // (see [[project_adfoot_i18n_ios_effort]]).
+      expect(form, isNot(contains("locale: const Locale('fr', 'FR')")));
+      expect(form, isNot(contains("DateFormat('dd MMM yyyy', 'fr_FR')")));
+      expect(form, contains('Localizations.localeOf(context).toString()'));
       expect(form, isNot(contains('_pieceJointeController')));
       expect(form, isNot(contains('Lien document')));
       expect(form, contains('pieceJointeUrl: null'));
@@ -207,10 +219,7 @@ void main() {
         expect(screen, contains('l10n.offreCreateAction'));
         expect(arbFr, contains('"offreCreateAction": "Créer une offre"'));
         expect(screen, contains('hintText: l10n.offreSearchHint'));
-        expect(
-          arbFr,
-          contains('"offreSearchHint": "Rechercher une offre..."'),
-        );
+        expect(arbFr, contains('"offreSearchHint": "Rechercher une offre..."'));
         expect(
           screen,
           contains('constraints: const BoxConstraints(maxWidth: 760)'),

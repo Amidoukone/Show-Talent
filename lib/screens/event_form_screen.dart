@@ -435,8 +435,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
                                 color: AdColors.brand,
                               ),
                               border: OutlineInputBorder(
-                                borderRadius:
-                                    BorderRadius.circular(AdRadius.lg),
+                                borderRadius: BorderRadius.circular(
+                                  AdRadius.lg,
+                                ),
                               ),
                               filled: true,
                               fillColor: AdColors.surfaceCard,
@@ -564,10 +565,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
       children: [
         Text(
           l10n.eventFormFlyerHelpText,
-          style: const TextStyle(
-            color: AdColors.onSurfaceMuted,
-            fontSize: 13,
-          ),
+          style: const TextStyle(color: AdColors.onSurfaceMuted, fontSize: 13),
         ),
         const SizedBox(height: 12),
         if (hasSomething)
@@ -622,7 +620,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
   /// Renvoie le message a ajouter au retour, ou une chaine vide. Un echec ne
   /// remet pas la publication en cause : l'evenement existe, il lui manque une
   /// image, et le dire vaut mieux que faire croire a un echec complet.
-  Future<String> _applyFlyerChange(AppLocalizations l10n, String eventId) async {
+  Future<String> _applyFlyerChange(
+    AppLocalizations l10n,
+    String eventId,
+  ) async {
     final localPath = _pickedFlyerPath;
 
     if (localPath != null) {
@@ -717,8 +718,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
           viewedBy: widget.event!.viewedBy,
         );
 
-        final response =
-            await eventController.updateEvent(updatedEvent, currentUser);
+        final response = await eventController.updateEvent(
+          updatedEvent,
+          currentUser,
+        );
         if (!mounted) return;
 
         if (!response.success) {
@@ -765,8 +768,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
           viewedBy: const <String>[],
         );
 
-        final response =
-            await eventController.createEvent(newEvent, currentUser);
+        final response = await eventController.createEvent(
+          newEvent,
+          currentUser,
+        );
         if (!mounted) return;
 
         if (!response.success) {
@@ -853,8 +858,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
       controller: controller,
       maxLines: maxLines,
       maxLength: maxLength,
-      textInputAction:
-          maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
+      textInputAction: maxLines > 1
+          ? TextInputAction.newline
+          : TextInputAction.next,
       keyboardType: keyboardType,
       validator: validator,
       decoration: InputDecoration(
@@ -900,14 +906,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
     final normalized = value?.trim() ?? '';
     if (normalized.isEmpty) return l10n.eventFormDescriptionRequiredValidator;
     if (normalized.length < _minDescriptionLength) {
-      return l10n.eventFormDescriptionMinLengthValidator(
-        _minDescriptionLength,
-      );
+      return l10n.eventFormDescriptionMinLengthValidator(_minDescriptionLength);
     }
     if (normalized.length > _maxDescriptionLength) {
-      return l10n.eventFormDescriptionMaxLengthValidator(
-        _maxDescriptionLength,
-      );
+      return l10n.eventFormDescriptionMaxLengthValidator(_maxDescriptionLength);
     }
     return null;
   }
@@ -985,7 +987,6 @@ class _EventFormScreenState extends State<EventFormScreen> {
         );
         final pickedDate = await showDatePicker(
           context: context,
-          locale: const Locale('fr', 'FR'),
           initialDate: initialDate,
           firstDate: firstDate,
           lastDate: DateTime(2100),
@@ -1030,7 +1031,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
             ),
             Text(
               date != null
-                  ? DateFormat('dd MMM yyyy', 'fr_FR').format(date)
+                  ? DateFormat(
+                      'dd MMM yyyy',
+                      Localizations.localeOf(context).toString(),
+                    ).format(date)
                   : l10n.eventFormChooseDateLabel,
               style: const TextStyle(
                 fontSize: 16,
