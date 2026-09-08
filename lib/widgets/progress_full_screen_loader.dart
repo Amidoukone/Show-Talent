@@ -6,10 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 class ProgressFullScreenLoader extends StatelessWidget {
-  const ProgressFullScreenLoader({
-    super.key,
-    required this.uploadController,
-  });
+  const ProgressFullScreenLoader({super.key, required this.uploadController});
 
   final UploadVideoController uploadController;
 
@@ -20,8 +17,9 @@ class ProgressFullScreenLoader extends StatelessWidget {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final maxCardWidth =
-                constraints.maxWidth > 460 ? 420.0 : constraints.maxWidth - 40;
+            final maxCardWidth = constraints.maxWidth > 460
+                ? 420.0
+                : constraints.maxWidth - 40;
 
             return Center(
               child: SingleChildScrollView(
@@ -53,8 +51,9 @@ class ProgressFullScreenLoader extends StatelessWidget {
                                 height: 56,
                                 decoration: BoxDecoration(
                                   color: AdColors.brand.withValues(alpha: .14),
-                                  borderRadius:
-                                      BorderRadius.circular(AdRadius.lg),
+                                  borderRadius: BorderRadius.circular(
+                                    AdRadius.lg,
+                                  ),
                                 ),
                                 child: Icon(
                                   state.isOptimizing
@@ -99,9 +98,9 @@ class ProgressFullScreenLoader extends StatelessWidget {
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text(
+                                  Text(
                                     VideoUiStrings.uploadProgressLabel,
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       color: AdColors.onSurfaceMuted,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w700,
@@ -123,8 +122,9 @@ class ProgressFullScreenLoader extends StatelessWidget {
                                 backgroundColor: AdColors.surfaceAlt,
                                 color: AdColors.brand,
                                 minHeight: 8,
-                                borderRadius:
-                                    BorderRadius.circular(AdRadius.pill),
+                                borderRadius: BorderRadius.circular(
+                                  AdRadius.pill,
+                                ),
                               ),
                             ],
                             const SizedBox(height: AdSpacing.xl),
@@ -137,12 +137,14 @@ class ProgressFullScreenLoader extends StatelessWidget {
                                   minimumSize: const Size.fromHeight(50),
                                   foregroundColor: AdColors.error,
                                   side: BorderSide(
-                                    color:
-                                        AdColors.error.withValues(alpha: .45),
+                                    color: AdColors.error.withValues(
+                                      alpha: .45,
+                                    ),
                                   ),
                                   shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(AdRadius.md),
+                                    borderRadius: BorderRadius.circular(
+                                      AdRadius.md,
+                                    ),
                                   ),
                                   textStyle: const TextStyle(
                                     fontWeight: FontWeight.w800,
@@ -171,8 +173,9 @@ class ProgressFullScreenLoader extends StatelessWidget {
 
   _UploadProgressPresentation _presentationState() {
     final rawProgress = uploadController.uploadProgress.value;
-    final progress =
-        rawProgress.isFinite ? rawProgress.clamp(0.0, 1.0).toDouble() : 0.0;
+    final progress = rawProgress.isFinite
+        ? rawProgress.clamp(0.0, 1.0).toDouble()
+        : 0.0;
     final stage = uploadController.uploadStage.value;
     final isPreparing = uploadController.isPreparing.value;
     final isOptimizing = uploadController.isOptimizing.value;
@@ -185,13 +188,13 @@ class ProgressFullScreenLoader extends StatelessWidget {
     final title = isOptimizing
         ? VideoUiStrings.uploadOptimizationTitle
         : isPreparing
-            ? VideoUiStrings.uploadPreparationTitle
-            : VideoUiStrings.uploadProgressTitle;
+        ? VideoUiStrings.uploadPreparationTitle
+        : VideoUiStrings.uploadProgressTitle;
     final subtitle = isOptimizing
         ? VideoUiStrings.uploadOptimizationSubtitle
         : isPreparing
-            ? VideoUiStrings.uploadPreparationSubtitle
-            : VideoUiStrings.uploadProgressSubtitle;
+        ? VideoUiStrings.uploadPreparationSubtitle
+        : VideoUiStrings.uploadProgressSubtitle;
 
     return _UploadProgressPresentation(
       title: title,
@@ -299,9 +302,9 @@ class _UploadCurrentStageCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     VideoUiStrings.uploadCurrentStepLabel,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: AdColors.onSurfaceMuted,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -331,7 +334,7 @@ class _UploadStageTimeline extends StatelessWidget {
 
   final int activeStep;
 
-  static const List<String> _labels = [
+  static List<String> get _labels => [
     VideoUiStrings.uploadStepPrepare,
     VideoUiStrings.uploadStepTransfer,
     VideoUiStrings.uploadStepThumbnail,
@@ -370,8 +373,9 @@ class _UploadStageStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCompleted = index < activeStep;
     final isActive = index == activeStep;
-    final color =
-        isCompleted || isActive ? AdColors.brand : AdColors.onSurfaceDisabled;
+    final color = isCompleted || isActive
+        ? AdColors.brand
+        : AdColors.onSurfaceDisabled;
 
     return Semantics(
       label: label,
@@ -396,8 +400,8 @@ class _UploadStageStep extends StatelessWidget {
                   isCompleted
                       ? Icons.check_rounded
                       : isActive
-                          ? Icons.more_horiz_rounded
-                          : Icons.circle_rounded,
+                      ? Icons.more_horiz_rounded
+                      : Icons.circle_rounded,
                   color: isCompleted ? AdColors.brandOn : color,
                   size: isActive ? 18 : 12,
                 ),
@@ -417,8 +421,9 @@ class _UploadStageStep extends StatelessWidget {
               child: Text(
                 label,
                 style: TextStyle(
-                  color:
-                      isActive ? AdColors.onSurface : AdColors.onSurfaceMuted,
+                  color: isActive
+                      ? AdColors.onSurface
+                      : AdColors.onSurfaceMuted,
                   fontSize: 14,
                   fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
                 ),

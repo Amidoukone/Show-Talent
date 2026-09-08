@@ -273,6 +273,28 @@ class VideoUiTranslations extends Translations {
     'uploadUnknownError': 'Erreur pendant le téléversement.',
     'uploadOptimizationFailed':
         'Échec d’optimisation vidéo (statut : @status). Merci de réessayer.',
+
+    'uploadStageAnalyze': 'Analyse de la vidéo...',
+    'uploadStagePrepareFile': 'Préparation du fichier...',
+    'uploadStageGenerateThumbnail': 'Génération de la miniature...',
+    'uploadStageLoadProfile': 'Vérification du profil...',
+    'uploadStageInitialize': 'Initialisation...',
+    'uploadStageUploading': 'Téléversement...',
+    'uploadStageRefreshSecureLink': 'Renouvellement du lien sécurisé...',
+    'uploadStagePrepareSecureThumbnail': 'Préparation miniature sécurisée...',
+    'uploadStageSendThumbnail': 'Envoi de la miniature...',
+    'uploadStageFinalize': 'Finalisation...',
+    'uploadProgressLabel': 'Progression',
+    'uploadCurrentStepLabel': 'Étape actuelle',
+    'uploadStepPrepare': 'Préparation',
+    'uploadStepTransfer': 'Transfert',
+    'uploadStepThumbnail': 'Miniature',
+    'uploadStepFinalize': 'Finalisation',
+    'uploadStageOptimize': 'Optimisation en cours...',
+    'uploadStagePreparing': 'Préparation...',
+    'uploadStageCompressing': 'Compression...',
+    'uploadStageUploadingVideo': 'Téléversement vidéo...',
+    'uploadStageUploadingThumbnail': 'Téléversement miniature...',
   };
 
   static const Map<String, String> _en = {
@@ -516,5 +538,27 @@ class VideoUiTranslations extends Translations {
     'uploadUnknownError': 'Error during upload.',
     'uploadOptimizationFailed':
         'Video optimization failed (status: @status). Please try again.',
+
+    'uploadStageAnalyze': 'Analyzing the video...',
+    'uploadStagePrepareFile': 'Preparing the file...',
+    'uploadStageGenerateThumbnail': 'Generating the thumbnail...',
+    'uploadStageLoadProfile': 'Checking the profile...',
+    'uploadStageInitialize': 'Initializing...',
+    'uploadStageUploading': 'Uploading...',
+    'uploadStageRefreshSecureLink': 'Renewing the secure link...',
+    'uploadStagePrepareSecureThumbnail': 'Preparing secure thumbnail...',
+    'uploadStageSendThumbnail': 'Sending the thumbnail...',
+    'uploadStageFinalize': 'Finalizing...',
+    'uploadProgressLabel': 'Progress',
+    'uploadCurrentStepLabel': 'Current step',
+    'uploadStepPrepare': 'Prepare',
+    'uploadStepTransfer': 'Transfer',
+    'uploadStepThumbnail': 'Thumbnail',
+    'uploadStepFinalize': 'Finalize',
+    'uploadStageOptimize': 'Optimizing...',
+    'uploadStagePreparing': 'Preparing...',
+    'uploadStageCompressing': 'Compressing...',
+    'uploadStageUploadingVideo': 'Uploading video...',
+    'uploadStageUploadingThumbnail': 'Uploading thumbnail...',
   };
 }

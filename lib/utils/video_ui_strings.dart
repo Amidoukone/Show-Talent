@@ -246,19 +246,19 @@ class VideoUiStrings {
   static String get uploadConnectionUnstable => 'uploadConnectionUnstable'.tr;
   static String get uploadSessionTimeout => 'uploadSessionTimeout'.tr;
   static String get uploadUnknownError => 'uploadUnknownError'.tr;
-  static const String uploadStageAnalyze = 'Analyse de la vidéo...';
-  static const String uploadStagePrepareFile = 'Préparation du fichier...';
-  static const String uploadStageGenerateThumbnail =
-      'Génération de la miniature...';
-  static const String uploadStageLoadProfile = 'Vérification du profil...';
-  static const String uploadStageInitialize = 'Initialisation...';
-  static const String uploadStageUploading = 'Téléversement...';
-  static const String uploadStageRefreshSecureLink =
-      'Renouvellement du lien sécurisé...';
-  static const String uploadStagePrepareSecureThumbnail =
-      'Préparation miniature sécurisée...';
-  static const String uploadStageSendThumbnail = 'Envoi de la miniature...';
-  static const String uploadStageFinalize = 'Finalisation...';
+  static String get uploadStageAnalyze => 'uploadStageAnalyze'.tr;
+  static String get uploadStagePrepareFile => 'uploadStagePrepareFile'.tr;
+  static String get uploadStageGenerateThumbnail =>
+      'uploadStageGenerateThumbnail'.tr;
+  static String get uploadStageLoadProfile => 'uploadStageLoadProfile'.tr;
+  static String get uploadStageInitialize => 'uploadStageInitialize'.tr;
+  static String get uploadStageUploading => 'uploadStageUploading'.tr;
+  static String get uploadStageRefreshSecureLink =>
+      'uploadStageRefreshSecureLink'.tr;
+  static String get uploadStagePrepareSecureThumbnail =>
+      'uploadStagePrepareSecureThumbnail'.tr;
+  static String get uploadStageSendThumbnail => 'uploadStageSendThumbnail'.tr;
+  static String get uploadStageFinalize => 'uploadStageFinalize'.tr;
   static String get uploadOptimizationTitle => 'uploadOptimizationTitle'.tr;
   static String get uploadProgressTitle => 'uploadProgressTitle'.tr;
   static String get uploadPreparationTitle => 'uploadPreparationTitle'.tr;
@@ -266,23 +266,23 @@ class VideoUiStrings {
   static String get uploadPreparationSubtitle => 'uploadPreparationSubtitle'.tr;
   static String get uploadOptimizationSubtitle =>
       'uploadOptimizationSubtitle'.tr;
-  static const String uploadProgressLabel = 'Progression';
-  static const String uploadCurrentStepLabel = 'Étape actuelle';
+  static String get uploadProgressLabel => 'uploadProgressLabel'.tr;
+  static String get uploadCurrentStepLabel => 'uploadCurrentStepLabel'.tr;
   static String get uploadCancelAction => 'uploadCancelAction'.tr;
   static String get discardDraftTitle => 'discardDraftTitle'.tr;
   static String get discardDraftMessage => 'discardDraftMessage'.tr;
   static String get discardDraftConfirm => 'discardDraftConfirm'.tr;
   static String get discardDraftCancel => 'discardDraftCancel'.tr;
-  static const String uploadStepPrepare = 'Préparation';
-  static const String uploadStepTransfer = 'Transfert';
-  static const String uploadStepThumbnail = 'Miniature';
-  static const String uploadStepFinalize = 'Finalisation';
-  static const String uploadStageOptimize = 'Optimisation en cours...';
-  static const String uploadStagePreparing = 'Préparation...';
-  static const String uploadStageCompressing = 'Compression...';
-  static const String uploadStageUploadingVideo = 'Téléversement vidéo...';
-  static const String uploadStageUploadingThumbnail =
-      'Téléversement miniature...';
+  static String get uploadStepPrepare => 'uploadStepPrepare'.tr;
+  static String get uploadStepTransfer => 'uploadStepTransfer'.tr;
+  static String get uploadStepThumbnail => 'uploadStepThumbnail'.tr;
+  static String get uploadStepFinalize => 'uploadStepFinalize'.tr;
+  static String get uploadStageOptimize => 'uploadStageOptimize'.tr;
+  static String get uploadStagePreparing => 'uploadStagePreparing'.tr;
+  static String get uploadStageCompressing => 'uploadStageCompressing'.tr;
+  static String get uploadStageUploadingVideo => 'uploadStageUploadingVideo'.tr;
+  static String get uploadStageUploadingThumbnail =>
+      'uploadStageUploadingThumbnail'.tr;
   static String get addVideoScreenTitle => 'addVideoScreenTitle'.tr;
   static String get addVideoScreenSubtitle => 'addVideoScreenSubtitle'.tr;
   static String get uploadFormTitle => 'uploadFormTitle'.tr;

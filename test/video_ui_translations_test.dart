@@ -107,6 +107,8 @@ void main() {
       VideoUiStrings.uploadOptimizationFailed('failed'),
       'Échec d’optimisation vidéo (statut : failed). Merci de réessayer.',
     );
+    expect(VideoUiStrings.uploadStepPrepare, 'Préparation');
+    expect(VideoUiStrings.uploadStageUploadingVideo, 'Téléversement vidéo...');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -179,5 +181,7 @@ void main() {
       VideoUiStrings.uploadOptimizationFailed('failed'),
       'Video optimization failed (status: failed). Please try again.',
     );
+    expect(VideoUiStrings.uploadStepPrepare, 'Prepare');
+    expect(VideoUiStrings.uploadStageUploadingVideo, 'Uploading video...');
   });
 }
