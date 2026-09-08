@@ -363,6 +363,33 @@ class VideoUiTranslations extends Translations {
         'Votre session n’est plus autorisée. Veuillez vous reconnecter.',
     'accountUnavailableTitle': 'Compte indisponible',
     'accessDeniedTitle': 'Accès refusé',
+
+    'sessionClosedReconnectMessage':
+        'Votre session a été fermée. Veuillez vous reconnecter.',
+    'chatInvalidConversationIdsMessage':
+        'Identifiants de conversation invalides.',
+    'chatCannotChatWithSelfMessage':
+        'Impossible de créer une conversation avec soi-même.',
+    'chatStartConversationFailedMessage':
+        'Impossible de démarrer la conversation pour le moment.',
+    'chatStartGuidedContactFailedMessage':
+        'Impossible de lancer ce premier contact pour le moment.',
+    'chatInvalidSessionMessage':
+        'Session de messagerie invalide. Merci de réessayer.',
+    'chatEmptyMessageError': 'Le message est vide.',
+    'chatMessageTooLongError':
+        'Le message dépasse la limite autorisée (2000 caractères).',
+    'chatSendingDisabledMessage':
+        'L’envoi de messages est désactivé pour cette conversation.',
+    'chatNewMessageNotificationTitle': 'Nouveau message',
+    'chatSendFailedConnectionMessage':
+        'Envoi impossible pour le moment. Vérifiez votre connexion.',
+    'chatSendFailedRetryMessage':
+        'Envoi impossible pour le moment. Merci de réessayer.',
+    'chatDeleteFailedConnectionMessage':
+        'Suppression impossible pour le moment. Vérifiez votre connexion.',
+    'chatDeleteFailedRetryMessage':
+        'Suppression impossible pour le moment. Merci de réessayer.',
   };
 
   static const Map<String, String> _en = {
@@ -693,5 +720,29 @@ class VideoUiTranslations extends Translations {
         'Your session is no longer authorized. Please sign in again.',
     'accountUnavailableTitle': 'Account unavailable',
     'accessDeniedTitle': 'Access denied',
+
+    'sessionClosedReconnectMessage':
+        'Your session was closed. Please sign in again.',
+    'chatInvalidConversationIdsMessage': 'Invalid conversation identifiers.',
+    'chatCannotChatWithSelfMessage':
+        'You cannot start a conversation with yourself.',
+    'chatStartConversationFailedMessage':
+        'Unable to start the conversation right now.',
+    'chatStartGuidedContactFailedMessage':
+        'Unable to start this first contact right now.',
+    'chatInvalidSessionMessage': 'Invalid messaging session. Please try again.',
+    'chatEmptyMessageError': 'The message is empty.',
+    'chatMessageTooLongError':
+        'The message exceeds the allowed limit (2000 characters).',
+    'chatSendingDisabledMessage':
+        'Sending messages is disabled for this conversation.',
+    'chatNewMessageNotificationTitle': 'New message',
+    'chatSendFailedConnectionMessage':
+        'Unable to send right now. Check your connection.',
+    'chatSendFailedRetryMessage': 'Unable to send right now. Please try again.',
+    'chatDeleteFailedConnectionMessage':
+        'Unable to delete right now. Check your connection.',
+    'chatDeleteFailedRetryMessage':
+        'Unable to delete right now. Please try again.',
   };
 }

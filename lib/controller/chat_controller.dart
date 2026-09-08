@@ -300,13 +300,11 @@ class ChatController extends GetxController {
     required String otherUserId,
   }) async {
     if (currentUserId.trim().isEmpty || otherUserId.trim().isEmpty) {
-      throw const ChatFlowException('Identifiants de conversation invalides.');
+      throw ChatFlowException('chatInvalidConversationIdsMessage'.tr);
     }
 
     if (currentUserId == otherUserId) {
-      throw const ChatFlowException(
-        'Impossible de créer une conversation avec soi-même.',
-      );
+      throw ChatFlowException('chatCannotChatWithSelfMessage'.tr);
     }
 
     try {
@@ -323,13 +321,9 @@ class ChatController extends GetxController {
       );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
-        throw const ChatFlowException(
-          'Votre session a été fermée. Veuillez vous reconnecter.',
-        );
+        throw ChatFlowException('sessionClosedReconnectMessage'.tr);
       }
-      throw const ChatFlowException(
-        'Impossible de démarrer la conversation pour le moment.',
-      );
+      throw ChatFlowException('chatStartConversationFailedMessage'.tr);
     } catch (error, st) {
       AppLogger.warning(
         "Erreur création conversation : $error",
@@ -337,9 +331,7 @@ class ChatController extends GetxController {
         error: error,
         stackTrace: st,
       );
-      throw const ChatFlowException(
-        'Impossible de démarrer la conversation pour le moment.',
-      );
+      throw ChatFlowException('chatStartConversationFailedMessage'.tr);
     }
   }
 
@@ -398,13 +390,9 @@ class ChatController extends GetxController {
       );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
-        throw const ChatFlowException(
-          'Votre session a été fermée. Veuillez vous reconnecter.',
-        );
+        throw ChatFlowException('sessionClosedReconnectMessage'.tr);
       }
-      throw const ChatFlowException(
-        'Impossible de lancer ce premier contact pour le moment.',
-      );
+      throw ChatFlowException('chatStartGuidedContactFailedMessage'.tr);
     } catch (error, st) {
       AppLogger.warning(
         "Erreur création contact guide : $error",
@@ -412,9 +400,7 @@ class ChatController extends GetxController {
         error: error,
         stackTrace: st,
       );
-      throw const ChatFlowException(
-        'Impossible de lancer ce premier contact pour le moment.',
-      );
+      throw ChatFlowException('chatStartGuidedContactFailedMessage'.tr);
     }
   }
 
@@ -460,19 +446,15 @@ class ChatController extends GetxController {
     if (normalizedConversationId.isEmpty ||
         normalizedSenderId.isEmpty ||
         normalizedRecipientId.isEmpty) {
-      throw const ChatFlowException(
-        'Session de messagerie invalide. Merci de réessayer.',
-      );
+      throw ChatFlowException('chatInvalidSessionMessage'.tr);
     }
 
     if (normalizedContent.isEmpty) {
-      throw const ChatFlowException('Le message est vide.');
+      throw ChatFlowException('chatEmptyMessageError'.tr);
     }
 
     if (normalizedContent.length > 2000) {
-      throw const ChatFlowException(
-        'Le message dépasse la limite autorisée (2000 caractères).',
-      );
+      throw ChatFlowException('chatMessageTooLongError'.tr);
     }
 
     try {
@@ -482,9 +464,7 @@ class ChatController extends GetxController {
           recipientId: normalizedRecipientId,
         );
         if (!canSend) {
-          throw const ChatFlowException(
-            'L’envoi de messages est désactivé pour cette conversation.',
-          );
+          throw ChatFlowException('chatSendingDisabledMessage'.tr);
         }
       }
 
@@ -531,7 +511,11 @@ class ChatController extends GetxController {
         }
 
         await _notificationSender(
-          title: 'Nouveau message',
+          // Composed in the sender's own locale, not the recipient's --
+          // the push payload has no way to know the reader's app locale at
+          // send time. Same limitation applies to every other push
+          // notification title in this app (e.g. event_controller.dart).
+          title: 'chatNewMessageNotificationTitle'.tr,
           body: normalizedContent,
           recipientUid: normalizedRecipientId,
           contextType: 'message',
@@ -557,13 +541,9 @@ class ChatController extends GetxController {
       );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
-        throw const ChatFlowException(
-          'Votre session a été fermée. Veuillez vous reconnecter.',
-        );
+        throw ChatFlowException('sessionClosedReconnectMessage'.tr);
       }
-      throw const ChatFlowException(
-        'Envoi impossible pour le moment. Vérifiez votre connexion.',
-      );
+      throw ChatFlowException('chatSendFailedConnectionMessage'.tr);
     } catch (error, st) {
       AppLogger.warning(
         "Erreur envoi message : $error",
@@ -571,9 +551,7 @@ class ChatController extends GetxController {
         error: error,
         stackTrace: st,
       );
-      throw const ChatFlowException(
-        'Envoi impossible pour le moment. Merci de réessayer.',
-      );
+      throw ChatFlowException('chatSendFailedRetryMessage'.tr);
     }
   }
 
@@ -748,13 +726,9 @@ class ChatController extends GetxController {
       );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
-        throw const ChatFlowException(
-          'Votre session a été fermée. Veuillez vous reconnecter.',
-        );
+        throw ChatFlowException('sessionClosedReconnectMessage'.tr);
       }
-      throw const ChatFlowException(
-        'Suppression impossible pour le moment. Vérifiez votre connexion.',
-      );
+      throw ChatFlowException('chatDeleteFailedConnectionMessage'.tr);
     } catch (error, st) {
       AppLogger.warning(
         "Erreur suppression message : $error",
@@ -762,9 +736,7 @@ class ChatController extends GetxController {
         error: error,
         stackTrace: st,
       );
-      throw const ChatFlowException(
-        'Suppression impossible pour le moment. Merci de réessayer.',
-      );
+      throw ChatFlowException('chatDeleteFailedRetryMessage'.tr);
     }
   }
 
@@ -785,13 +757,9 @@ class ChatController extends GetxController {
       );
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
-        throw const ChatFlowException(
-          'Votre session a été fermée. Veuillez vous reconnecter.',
-        );
+        throw ChatFlowException('sessionClosedReconnectMessage'.tr);
       }
-      throw const ChatFlowException(
-        'Suppression impossible pour le moment. Vérifiez votre connexion.',
-      );
+      throw ChatFlowException('chatDeleteFailedConnectionMessage'.tr);
     } catch (error, st) {
       AppLogger.warning(
         "Erreur suppression conversation : $error",
@@ -799,9 +767,7 @@ class ChatController extends GetxController {
         error: error,
         stackTrace: st,
       );
-      throw const ChatFlowException(
-        'Suppression impossible pour le moment. Merci de réessayer.',
-      );
+      throw ChatFlowException('chatDeleteFailedRetryMessage'.tr);
     }
   }
 }

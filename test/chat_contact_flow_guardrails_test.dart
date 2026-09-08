@@ -42,9 +42,15 @@ void main() {
 
       expect(chatScreen, contains('watchConversationById'));
       expect(chatScreen, contains('l10n.chatGuidedContextTitle'));
-      expect(arbFr, contains('"chatGuidedContextTitle": "Premier contact cadré"'));
+      expect(
+        arbFr,
+        contains('"chatGuidedContextTitle": "Premier contact cadré"'),
+      );
       expect(chatScreen, contains('l10n.chatGuidedContextFollowUpLabel'));
-      expect(arbFr, contains('"chatGuidedContextFollowUpLabel": "Suivi agence :'));
+      expect(
+        arbFr,
+        contains('"chatGuidedContextFollowUpLabel": "Suivi agence :'),
+      );
       expect(chatScreen, contains('l10n.chatGiveFeedbackButton'));
       expect(
         arbFr,
@@ -96,7 +102,11 @@ void main() {
       expect(chatScreen, contains('on ChatFlowException catch (error)'));
       expect(controller, contains('Future<void> deleteMessage'));
       expect(controller, contains('Future<void> deleteConversation'));
-      expect(controller, contains('throw const ChatFlowException'));
+      // The literal wording moved into the GetX catalog, so the throw can no
+      // longer be `const` (`.tr` is not a compile-time constant) -- see
+      // [[project_adfoot_i18n_ios_effort]].
+      expect(controller, contains("throw ChatFlowException('chat"));
+      expect(controller, isNot(contains('throw const ChatFlowException')));
     });
 
     test('empty chat and feedback failure states stay explicit', () {

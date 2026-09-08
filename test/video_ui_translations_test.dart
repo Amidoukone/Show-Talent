@@ -127,6 +127,11 @@ void main() {
       'profileLoadFailedMessage'.tr,
       contains('Réessayez dans quelques instants'),
     );
+    expect('chatEmptyMessageError'.tr, 'Le message est vide.');
+    expect(
+      'sessionClosedReconnectMessage'.tr,
+      'Votre session a été fermée. Veuillez vous reconnecter.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -222,5 +227,10 @@ void main() {
     );
     expect('accountDisabledTitle'.tr, 'Account disabled');
     expect('profileLoadFailedMessage'.tr, contains('Try again in a moment'));
+    expect('chatEmptyMessageError'.tr, 'The message is empty.');
+    expect(
+      'sessionClosedReconnectMessage'.tr,
+      'Your session was closed. Please sign in again.',
+    );
   });
 }
