@@ -1,40 +1,47 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:get/get.dart';
 
 /// Centralise la traduction des erreurs FirebaseAuth en messages utilisateur.
 /// Homogène pour SignUp et Login.
+///
+/// Traduit via le catalogue GetX (`.tr`, voir `video_ui_translations.dart`)
+/// plutôt que `AppLocalizations` : appelé aussi bien depuis des écrans que
+/// depuis des controllers/services sans `BuildContext`
+/// (`auth_session_service.dart`, `user_controller.dart`,
+/// `email_link_handler.dart`).
 class AuthErrorMapper {
   static String toMessage(FirebaseAuthException e) {
     final normalizedMessage = (e.message ?? '').toUpperCase();
 
     if (normalizedMessage.contains('CONFIGURATION_NOT_FOUND')) {
-      return 'La configuration Firebase Authentication de cet environnement est incomplète. Vérifiez Authentication, le provider Email/Password et la configuration du projet Firebase cible.';
+      return 'authErrorConfigurationMissing'.tr;
     }
 
     switch (e.code) {
       case 'email-already-in-use':
-        return 'Adresse e-mail déjà utilisée.';
+        return 'authErrorEmailAlreadyInUse'.tr;
       case 'weak-password':
-        return 'Mot de passe trop court (minimum 6 caractères).';
+        return 'authErrorWeakPassword'.tr;
       case 'invalid-email':
-        return 'Adresse e-mail invalide.';
+        return 'authErrorInvalidEmail'.tr;
       case 'operation-not-allowed':
-        return 'Inscription par e-mail désactivée.';
+        return 'authErrorSignupDisabled'.tr;
       case 'user-not-found':
-        return 'Ce compte est introuvable. Il a peut-être été supprimé ou cet e-mail est incorrect.';
+        return 'authErrorUserNotFound'.tr;
       case 'wrong-password':
-        return 'Mot de passe incorrect.';
+        return 'authErrorWrongPassword'.tr;
       case 'invalid-credential':
-        return 'Identifiants invalides. Vérifiez votre e-mail et votre mot de passe.';
+        return 'authErrorInvalidCredential'.tr;
       case 'user-disabled':
-        return 'L’accès à ce compte a été désactivé. Contactez le support Adfoot.';
+        return 'authErrorUserDisabled'.tr;
       case 'too-many-requests':
-        return 'Trop de tentatives. Réessayez plus tard.';
+        return 'authErrorTooManyRequests'.tr;
       case 'network-request-failed':
-        return 'Problème de connexion réseau. Vérifiez votre connexion.';
+        return 'authErrorNetworkFailed'.tr;
       case 'internal-error':
-        return 'La plateforme Firebase a retourné une erreur interne pour cet environnement. Vérifiez la configuration Authentication du projet cible.';
+        return 'authErrorInternalError'.tr;
       default:
-        return e.message ?? 'Une erreur est survenue. Réessayez.';
+        return e.message ?? 'authErrorGeneric'.tr;
     }
   }
 }

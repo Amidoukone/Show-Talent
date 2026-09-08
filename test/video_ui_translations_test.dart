@@ -115,6 +115,8 @@ void main() {
     expect(VideoUiStrings.uploadTrimmed(3), 'Vidéo préparée en extrait de 3s.');
     expect('profileLevelElite'.tr, 'Profil Élite');
     expect('profileTrustVerified'.tr, 'Vérifié par Adfoot');
+    expect('authErrorWrongPassword'.tr, 'Mot de passe incorrect.');
+    expect('authErrorUserNotFound'.tr, contains('Ce compte est introuvable'));
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -198,5 +200,10 @@ void main() {
     );
     expect('profileLevelElite'.tr, 'Elite Profile');
     expect('profileTrustVerified'.tr, 'Verified by Adfoot');
+    expect('authErrorWrongPassword'.tr, 'Incorrect password.');
+    expect(
+      'authErrorUserNotFound'.tr,
+      contains('This account could not be found'),
+    );
   });
 }

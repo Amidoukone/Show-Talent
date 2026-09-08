@@ -312,6 +312,32 @@ class VideoUiTranslations extends Translations {
     'profileTrustSuspended': 'Certification suspendue',
     'profileTrustNeedsReview': 'A revalider par Adfoot',
     'profileTrustUnverified': 'Non certifié',
+
+    'authErrorConfigurationMissing':
+        'La configuration Firebase Authentication de cet environnement est '
+        'incomplète. Vérifiez Authentication, le provider Email/Password et '
+        'la configuration du projet Firebase cible.',
+    'authErrorEmailAlreadyInUse': 'Adresse e-mail déjà utilisée.',
+    'authErrorWeakPassword': 'Mot de passe trop court (minimum 6 caractères).',
+    'authErrorInvalidEmail': 'Adresse e-mail invalide.',
+    'authErrorSignupDisabled': 'Inscription par e-mail désactivée.',
+    'authErrorUserNotFound':
+        'Ce compte est introuvable. Il a peut-être été supprimé ou cet '
+        'e-mail est incorrect.',
+    'authErrorWrongPassword': 'Mot de passe incorrect.',
+    'authErrorInvalidCredential':
+        'Identifiants invalides. Vérifiez votre e-mail et votre mot de '
+        'passe.',
+    'authErrorUserDisabled':
+        'L’accès à ce compte a été désactivé. Contactez le support Adfoot.',
+    'authErrorTooManyRequests': 'Trop de tentatives. Réessayez plus tard.',
+    'authErrorNetworkFailed':
+        'Problème de connexion réseau. Vérifiez votre connexion.',
+    'authErrorInternalError':
+        'La plateforme Firebase a retourné une erreur interne pour cet '
+        'environnement. Vérifiez la configuration Authentication du projet '
+        'cible.',
+    'authErrorGeneric': 'Une erreur est survenue. Réessayez.',
   };
 
   static const Map<String, String> _en = {
@@ -594,5 +620,30 @@ class VideoUiTranslations extends Translations {
     'profileTrustSuspended': 'Certification suspended',
     'profileTrustNeedsReview': 'Awaiting Adfoot review',
     'profileTrustUnverified': 'Not certified',
+
+    'authErrorConfigurationMissing':
+        'This environment\'s Firebase Authentication configuration is '
+        'incomplete. Check Authentication, the Email/Password provider, '
+        'and the target Firebase project\'s configuration.',
+    'authErrorEmailAlreadyInUse': 'This email address is already in use.',
+    'authErrorWeakPassword': 'Password too short (minimum 6 characters).',
+    'authErrorInvalidEmail': 'Invalid email address.',
+    'authErrorSignupDisabled': 'Email sign-up is disabled.',
+    'authErrorUserNotFound':
+        'This account could not be found. It may have been deleted, or '
+        'this email address may be incorrect.',
+    'authErrorWrongPassword': 'Incorrect password.',
+    'authErrorInvalidCredential':
+        'Invalid credentials. Check your email and password.',
+    'authErrorUserDisabled':
+        'Access to this account has been disabled. Contact Adfoot support.',
+    'authErrorTooManyRequests': 'Too many attempts. Try again later.',
+    'authErrorNetworkFailed':
+        'Network connection issue. Check your connection.',
+    'authErrorInternalError':
+        'The Firebase platform returned an internal error for this '
+        'environment. Check the target project\'s Authentication '
+        'configuration.',
+    'authErrorGeneric': 'Something went wrong. Please try again.',
   };
 }
