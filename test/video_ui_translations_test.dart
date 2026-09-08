@@ -164,6 +164,11 @@ void main() {
       contains('Code: x/y'),
     );
     expect('profileCvSavedMessage'.tr, 'Votre CV a été ajouté ou mis à jour.');
+    expect('actionResponseDefaultSuccessMessage'.tr, 'Action réalisée.');
+    expect(
+      'actionResponseOfflineMessage'.tr,
+      'Connexion indisponible. Réessaie quand tu es en ligne.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -290,5 +295,10 @@ void main() {
       contains('Code: x/y'),
     );
     expect('profileCvSavedMessage'.tr, 'Your CV has been added or updated.');
+    expect('actionResponseDefaultSuccessMessage'.tr, 'Action completed.');
+    expect(
+      'actionResponseOfflineMessage'.tr,
+      'No connection available. Try again once you\'re back online.',
+    );
   });
 }

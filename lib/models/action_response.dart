@@ -1,4 +1,5 @@
 import 'package:adfoot/screens/success_toast.dart';
+import 'package:get/get.dart';
 
 enum ToastLevel { success, info, error, none }
 
@@ -31,7 +32,10 @@ class ActionResponse {
     return ActionResponse(
       success: ok,
       message:
-          (map['message'] ?? (ok ? 'Action réalisée.' : 'Action impossible.'))
+          (map['message'] ??
+                  (ok
+                      ? 'actionResponseDefaultSuccessMessage'.tr
+                      : 'genericActionImpossible'.tr))
               .toString(),
       code: map['code']?.toString(),
       data: (map['data'] is Map<String, dynamic>)
@@ -59,8 +63,7 @@ class ActionResponse {
 
   factory ActionResponse.offline([String? message]) {
     return ActionResponse.failure(
-      message:
-          message ?? 'Connexion indisponible. Réessaie quand tu es en ligne.',
+      message: message ?? 'actionResponseOfflineMessage'.tr,
       code: 'offline',
       toast: ToastLevel.info,
       retriable: true,

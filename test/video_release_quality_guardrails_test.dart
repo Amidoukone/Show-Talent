@@ -530,8 +530,16 @@ void main() {
         contains("'actionImpossibleTitle': 'Action impossible'"),
       );
       expect(translations, contains("'noteTitle': 'À noter'"));
-      expect(actionResponse, contains('Action réalisée.'));
-      expect(actionResponse, contains('Réessaie quand tu es en ligne.'));
+      expect(actionResponse, contains("'actionResponseDefaultSuccessMessage'"));
+      expect(actionResponse, contains("'actionResponseOfflineMessage'"));
+      expect(
+        translations,
+        contains("'actionResponseDefaultSuccessMessage': 'Action réalisée.'"),
+      );
+      expect(
+        translations,
+        contains('Connexion indisponible. Réessaie quand tu es en ligne.'),
+      );
       expect(actionResponse, isNot(contains('Ã')));
     });
 

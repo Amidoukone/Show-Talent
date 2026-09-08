@@ -512,6 +512,9 @@ class VideoUiTranslations extends Translations {
         'puis réessayez.',
     'profileCvDeleteFailedTitle': 'Suppression impossible',
     'profileCvDeleteUnavailableMessage': 'Impossible de supprimer le CV.',
+    'actionResponseDefaultSuccessMessage': 'Action réalisée.',
+    'actionResponseOfflineMessage':
+        'Connexion indisponible. Réessaie quand tu es en ligne.',
   };
 
   static const Map<String, String> _en = {
@@ -974,5 +977,8 @@ class VideoUiTranslations extends Translations {
         'again and try again.',
     'profileCvDeleteFailedTitle': 'Unable to delete',
     'profileCvDeleteUnavailableMessage': 'Unable to delete the CV.',
+    'actionResponseDefaultSuccessMessage': 'Action completed.',
+    'actionResponseOfflineMessage':
+        'No connection available. Try again once you\'re back online.',
   };
 }
