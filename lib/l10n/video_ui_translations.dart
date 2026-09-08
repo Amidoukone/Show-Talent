@@ -575,6 +575,13 @@ class VideoUiTranslations extends Translations {
     'offreClosedApplyMessage': 'Vous ne pouvez pas postuler à cette offre.',
     'offreAlreadyAppliedMessage': 'Vous avez déjà postulé à cette offre.',
     'offreNotAppliedMessage': 'Vous n’êtes pas inscrit à cette offre.',
+    'userRepositoryMissingProfileMessage':
+        'Ce compte n’est plus disponible. Si vous pensez qu’il s’agit '
+        'd’une erreur, contactez le support Adfoot.',
+    'userRepositoryAdminPortalOnlyMessage':
+        'Ce compte est réservé au portail d’administration Adfoot.',
+    'userRepositoryDisabledWithReasonMessage':
+        'L’accès à ce compte a été désactivé. Motif : @reason',
   };
 
   static const Map<String, String> _en = {
@@ -1096,5 +1103,12 @@ class VideoUiTranslations extends Translations {
     'offreClosedApplyMessage': 'You cannot apply to this offer.',
     'offreAlreadyAppliedMessage': 'You have already applied to this offer.',
     'offreNotAppliedMessage': 'You are not applied to this offer.',
+    'userRepositoryMissingProfileMessage':
+        'This account is no longer available. If you think this is a '
+        'mistake, contact Adfoot support.',
+    'userRepositoryAdminPortalOnlyMessage':
+        'This account is reserved for the Adfoot admin portal.',
+    'userRepositoryDisabledWithReasonMessage':
+        'Access to this account has been disabled. Reason: @reason',
   };
 }

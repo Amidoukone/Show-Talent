@@ -1,7 +1,25 @@
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/services/users/user_repository.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 
 void main() {
+  // UserRepository's titles/messages resolve through GetX's `.tr`, which
+  // needs Get.locale/Get.translations populated -- set directly (no widget
+  // to pump in a pure test) so the assertions below check real French text,
+  // not `.tr` silently falling back to the bare key.
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
+
   group('UserRepository.evaluateUserData', () {
     test('flags a missing profile document', () {
       final decision = UserRepository.evaluateUserData(null);

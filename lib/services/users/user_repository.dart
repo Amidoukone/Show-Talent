@@ -8,6 +8,7 @@ import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:get/get.dart';
 
 enum UserAccessIssue { missingProfile, adminPortalOnly, disabledAccount }
 
@@ -52,15 +53,14 @@ class UserRepository {
 
   final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
-  static const String _missingProfileMessage =
-      'Ce compte n’est plus disponible. Si vous pensez qu’il s’agit d’une erreur, contactez le support Adfoot.';
-  static const String _adminPortalOnlyMessage =
-      'Ce compte est réservé au portail d’administration Adfoot.';
-  static const String _disabledFallbackMessage =
-      'L’accès à ce compte a été désactivé. Contactez le support Adfoot.';
-  static const String _missingProfileTitle = 'Compte indisponible';
-  static const String _adminPortalOnlyTitle = 'Accès refusé';
-  static const String _disabledTitle = 'Compte désactivé';
+  static String get _missingProfileMessage =>
+      'userRepositoryMissingProfileMessage'.tr;
+  static String get _adminPortalOnlyMessage =>
+      'userRepositoryAdminPortalOnlyMessage'.tr;
+  static String get _disabledFallbackMessage => 'authErrorUserDisabled'.tr;
+  static String get _missingProfileTitle => 'accountUnavailableTitle'.tr;
+  static String get _adminPortalOnlyTitle => 'accessDeniedTitle'.tr;
+  static String get _disabledTitle => 'accountDisabledTitle'.tr;
 
   static const Duration firestoreReadTimeout = Duration(seconds: 20);
   static const Duration firestoreWriteTimeout = Duration(seconds: 25);
@@ -122,7 +122,7 @@ class UserRepository {
 
   static UserAccessDecision evaluateUserData(Map<String, dynamic>? data) {
     if (data == null) {
-      return const UserAccessDecision(
+      return UserAccessDecision(
         exists: false,
         issue: UserAccessIssue.missingProfile,
         message: _missingProfileMessage,
@@ -202,7 +202,7 @@ class UserRepository {
   Stream<UserAccessDecision> watchUserAccess(String uid) {
     return _usersCollection.doc(uid).snapshots().map((doc) {
       if (!doc.exists) {
-        return const UserAccessDecision(
+        return UserAccessDecision(
           exists: false,
           issue: UserAccessIssue.missingProfile,
           message: _missingProfileMessage,
@@ -240,7 +240,7 @@ class UserRepository {
         : await _getWithRetry(_usersCollection.doc(uid));
 
     if (doc == null || !doc.exists) {
-      return const UserAccessDecision(
+      return UserAccessDecision(
         exists: false,
         issue: UserAccessIssue.missingProfile,
         message: _missingProfileMessage,
@@ -544,7 +544,9 @@ class UserRepository {
   static String _buildDisabledAccountMessage(AppUser user) {
     final authDisabledReason = _normalizeReason(user.authDisabledReason);
     if (authDisabledReason != null) {
-      return 'L’accès à ce compte a été désactivé. Motif : $authDisabledReason';
+      return 'userRepositoryDisabledWithReasonMessage'.trParams({
+        'reason': authDisabledReason,
+      });
     }
 
     return _disabledFallbackMessage;

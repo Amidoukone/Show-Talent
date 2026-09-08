@@ -209,6 +209,12 @@ void main() {
       'offreAlreadyAppliedMessage'.tr,
       'Vous avez déjà postulé à cette offre.',
     );
+    expect(
+      'userRepositoryDisabledWithReasonMessage'.trParams({
+        'reason': 'fraude détectée',
+      }),
+      'L’accès à ce compte a été désactivé. Motif : fraude détectée',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -379,6 +385,12 @@ void main() {
     expect(
       'offreAlreadyAppliedMessage'.tr,
       'You have already applied to this offer.',
+    );
+    expect(
+      'userRepositoryDisabledWithReasonMessage'.trParams({
+        'reason': 'fraud detected',
+      }),
+      'Access to this account has been disabled. Reason: fraud detected',
     );
   });
 }
