@@ -3,51 +3,51 @@ import 'package:get/get.dart';
 class VideoUiStrings {
   VideoUiStrings._();
 
-  static const String loadingMessage = 'Chargement de la vidéo...';
-  static const String slowLoadingMessage = 'Connexion lente...';
-  static const String slowLoadingDetail =
-      'La vidéo continue de charger. Réessayez si elle reste bloquée.';
-  static const String playbackErrorTitle = 'Lecture impossible';
-  static const String playbackUnavailable = 'Lecture vidéo indisponible.';
-  static const String playbackInterruptedRetry =
-      'Lecture interrompue. Réessayez.';
+  static String get loadingMessage => 'loadingMessage'.tr;
+  static String get slowLoadingMessage => 'slowLoadingMessage'.tr;
+  static String get slowLoadingDetail => 'slowLoadingDetail'.tr;
+  static String get playbackErrorTitle => 'playbackErrorTitle'.tr;
+  static String get playbackUnavailable => 'playbackUnavailable'.tr;
+  static String get playbackInterruptedRetry => 'playbackInterruptedRetry'.tr;
   static String get retry => 'retry'.tr;
-  static const String play = 'Lecture';
-  static const String pause = 'Pause';
-  static const String playVideo = 'Lancer la vidéo';
-  static const String pauseVideo = 'Mettre la vidéo en pause';
-  static const String rewindTenSeconds = 'Reculer de 10 secondes';
-  static const String forwardTenSeconds = 'Avancer de 10 secondes';
-  static const String rewindTenSecondsFeedback = '-10s';
-  static const String forwardTenSecondsFeedback = '+10s';
-  static const String playbackSpeed = 'Vitesse de lecture';
-  static const String currentPlaybackSpeed = 'Vitesse actuelle';
-  static const String progressBarSemantic = 'Progression de la vidéo';
+  static String get play => 'play'.tr;
+  static String get pause => 'pause'.tr;
+  static String get playVideo => 'playVideo'.tr;
+  static String get pauseVideo => 'pauseVideo'.tr;
+  static String get rewindTenSeconds => 'rewindTenSeconds'.tr;
+  static String get forwardTenSeconds => 'forwardTenSeconds'.tr;
+  static String get rewindTenSecondsFeedback => 'rewindTenSecondsFeedback'.tr;
+  static String get forwardTenSecondsFeedback => 'forwardTenSecondsFeedback'.tr;
+  static String get playbackSpeed => 'playbackSpeed'.tr;
+  static String get currentPlaybackSpeed => 'currentPlaybackSpeed'.tr;
+  static String get progressBarSemantic => 'progressBarSemantic'.tr;
 
-  static const String loadingTooLong =
-      'Le chargement prend trop de temps. Réessayez.';
-  static const String playbackError = 'Erreur de lecture';
-  static const String actionTimedOut =
-      'Le serveur met trop de temps à répondre. Vérifiez votre réseau puis '
-      'réessayez.';
-  static const String genericActionImpossible = 'Action impossible.';
-  static const String genericActionRetry = 'Action impossible pour le moment.';
+  static String get loadingTooLong => 'loadingTooLong'.tr;
+  static String get playbackError => 'playbackError'.tr;
+  static String get actionTimedOut => 'actionTimedOut'.tr;
+  static String get genericActionImpossible => 'genericActionImpossible'.tr;
+  static String get genericActionRetry => 'genericActionRetry'.tr;
   static String get defaultPublisherName => 'defaultPublisherName'.tr;
+  // `seeMoreCaption` / `seeLessCaption` / `seeLess` have no callers anywhere
+  // in the app -- `seeMore` alone is used, for a link that always opens the
+  // caption sheet rather than expanding in place. Left as plain literals:
+  // nothing renders them, so there is nothing to translate.
   static const String seeMoreCaption = 'Voir plus la légende';
   static const String seeLessCaption = 'Voir moins la légende';
-  static const String seeMore = 'Voir plus';
+  static String get seeMore => 'seeMore'.tr;
   static const String seeLess = 'Voir moins';
-  static const String videoCaptionSheetTitle = 'Légende';
-  static const String videoCaptionOpen = 'Ouvrir la légende';
-  static const String videoPublisherProfileSemantic =
-      'Ouvrir le profil du joueur';
+  static String get videoCaptionSheetTitle => 'videoCaptionSheetTitle'.tr;
+  static String get videoCaptionOpen => 'videoCaptionOpen'.tr;
+  static String get videoPublisherProfileSemantic =>
+      'videoPublisherProfileSemantic'.tr;
   static String get back => 'back'.tr;
   // `emptyVideoFeedTitle` / `emptyVideoFeedMessage` sont partis avec
   // `video_feed_screen.dart`, leur seul lecteur : un troisième feed vidéo
   // qu'aucun écran n'ouvrait plus. Les deux feeds qui restent ont leur propre
   // formulation, `emptyProfileVideoFeed*` et `emptyHomeVideoFeed*`, parce que
   // « aucune vidéo » ne se dit pas pareil sur un profil et sur l'accueil.
-  static String get emptyProfileVideoFeedTitle => 'emptyProfileVideoFeedTitle'.tr;
+  static String get emptyProfileVideoFeedTitle =>
+      'emptyProfileVideoFeedTitle'.tr;
   static String get emptyProfileVideoFeedMessage =>
       'emptyProfileVideoFeedMessage'.tr;
   static String get emptyHomeVideoFeedTitle => 'emptyHomeVideoFeedTitle'.tr;
@@ -292,8 +292,7 @@ class VideoUiStrings {
   static String get uploadProgressTitle => 'uploadProgressTitle'.tr;
   static String get uploadPreparationTitle => 'uploadPreparationTitle'.tr;
   static String get uploadProgressSubtitle => 'uploadProgressSubtitle'.tr;
-  static String get uploadPreparationSubtitle =>
-      'uploadPreparationSubtitle'.tr;
+  static String get uploadPreparationSubtitle => 'uploadPreparationSubtitle'.tr;
   static String get uploadOptimizationSubtitle =>
       'uploadOptimizationSubtitle'.tr;
   static const String uploadProgressLabel = 'Progression';

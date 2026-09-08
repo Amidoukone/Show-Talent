@@ -521,8 +521,14 @@ void main() {
       final translations = File(
         'lib/l10n/video_ui_translations.dart',
       ).readAsStringSync();
-      expect(translations, contains("'actionConfirmedTitle': 'Action confirmée'"));
-      expect(translations, contains("'actionImpossibleTitle': 'Action impossible'"));
+      expect(
+        translations,
+        contains("'actionConfirmedTitle': 'Action confirmée'"),
+      );
+      expect(
+        translations,
+        contains("'actionImpossibleTitle': 'Action impossible'"),
+      );
       expect(translations, contains("'noteTitle': 'À noter'"));
       expect(actionResponse, contains('Action réalisée.'));
       expect(actionResponse, contains('Réessaie quand tu es en ligne.'));
@@ -815,6 +821,12 @@ void main() {
       final videoStrings = File(
         'lib/utils/video_ui_strings.dart',
       ).readAsStringSync();
+      // The literal wording moved into the GetX catalog (video_ui_strings.dart
+      // now just references '...'.tr; the copy itself lives in
+      // video_ui_translations.dart).
+      final videoTranslations = File(
+        'lib/l10n/video_ui_translations.dart',
+      ).readAsStringSync();
 
       expect(smartPlayer, contains("reason: 'runtime_value_error'"));
       expect(smartPlayer, contains('VideoUiStrings.playbackInterruptedRetry'));
@@ -825,10 +837,18 @@ void main() {
       expect(stateOverlay, contains('VideoUiStrings.loadingMessage'));
       expect(stateOverlay, contains('VideoUiStrings.slowLoadingDetail'));
       expect(stateOverlay, contains('_publicErrorMessage'));
-      expect(videoStrings, contains('Chargement de la vid'));
+      expect(videoStrings, contains("'loadingMessage'.tr"));
+      expect(
+        videoTranslations,
+        contains("'loadingMessage': 'Chargement de la vidéo...'"),
+      );
       expect(tiktokPlayer, contains('_slowLoadingDelay'));
       expect(tiktokPlayer, contains('_syncSlowLoadingState'));
-      expect(videoStrings, contains('Connexion lente...'));
+      expect(videoStrings, contains("'slowLoadingMessage'.tr"));
+      expect(
+        videoTranslations,
+        contains("'slowLoadingMessage': 'Connexion lente...'"),
+      );
       expect(stateOverlay, contains('borderRadius: BorderRadius.circular(16)'));
       expect(tiktokPlayer, contains('class _VideoGestureFeedback'));
       expect(tiktokPlayer, contains('_buildCenterPlaybackIndicator'));
@@ -958,30 +978,27 @@ void main() {
       expect(home, contains('unawaited(_onPageChanged(safeIndex));'));
     });
 
-    test(
-      'the profile action left the feed for the navigation bar',
-      () {
-        final home = File('lib/screens/home_screen.dart').readAsStringSync();
-        final main = File('lib/screens/main_screen.dart').readAsStringSync();
-        final profile = File(
-          'lib/screens/profile_screen.dart',
-        ).readAsStringSync();
+    test('the profile action left the feed for the navigation bar', () {
+      final home = File('lib/screens/home_screen.dart').readAsStringSync();
+      final main = File('lib/screens/main_screen.dart').readAsStringSync();
+      final profile = File(
+        'lib/screens/profile_screen.dart',
+      ).readAsStringSync();
 
-        // The avatar was the only way to your own profile, and it was on the
-        // *home* app bar — so from Offres, Events or Chat there was no way
-        // there at all without going back to the feed first. It is a
-        // destination now, reachable from every tab.
-        expect(home, isNot(contains('_buildHomeProfileAvatar')));
-        expect(home, contains('actions: const [],'));
-        expect(main, contains('label: l10n.mainNavProfileLabel,'));
-        expect(main, contains('ProfileScreen(uid: user.uid, isReadOnly: false)'));
+      // The avatar was the only way to your own profile, and it was on the
+      // *home* app bar — so from Offres, Events or Chat there was no way
+      // there at all without going back to the feed first. It is a
+      // destination now, reachable from every tab.
+      expect(home, isNot(contains('_buildHomeProfileAvatar')));
+      expect(home, contains('actions: const [],'));
+      expect(main, contains('label: l10n.mainNavProfileLabel,'));
+      expect(main, contains('ProfileScreen(uid: user.uid, isReadOnly: false)'));
 
-        // What the avatar guarded still holds where the avatar now lives: no
-        // shipped placeholder photo, initials generated from the name.
-        expect(profile, isNot(contains('assets/default_avatar.jpg')));
-        expect(profile, contains('String _profileInitials(AppUser user)'));
-        expect(profile, contains('errorBuilder'));
-      },
-    );
+      // What the avatar guarded still holds where the avatar now lives: no
+      // shipped placeholder photo, initials generated from the name.
+      expect(profile, isNot(contains('assets/default_avatar.jpg')));
+      expect(profile, contains('String _profileInitials(AppUser user)'));
+      expect(profile, contains('errorBuilder'));
+    });
   });
 }

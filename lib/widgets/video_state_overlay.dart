@@ -6,26 +6,29 @@ import 'package:adfoot/utils/video_ui_strings.dart';
 enum VideoStateOverlayMode { loading, error }
 
 class VideoStateOverlay extends StatelessWidget {
+  // The defaults below stay compile-time constants (`''`) rather than
+  // referencing the getters directly, since a `const` constructor's
+  // parameter defaults must themselves be constant expressions. `_buildLoading`
+  // / `_publicErrorMessage` already treat an empty message as "use the
+  // standard message", so the live translated text is resolved lazily at
+  // build time instead -- same behavior, no eager constant needed.
   const VideoStateOverlay.loading({
     super.key,
-    this.message = loadingMessage,
+    this.message = '',
     this.onRetry,
     this.showRetry = false,
   }) : mode = VideoStateOverlayMode.loading;
 
-  const VideoStateOverlay.error({
-    super.key,
-    String? message,
-    this.onRetry,
-  })  : mode = VideoStateOverlayMode.error,
-        message = message ?? errorMessage,
-        showRetry = true;
+  const VideoStateOverlay.error({super.key, String? message, this.onRetry})
+    : mode = VideoStateOverlayMode.error,
+      message = message ?? '',
+      showRetry = true;
 
-  static const String loadingMessage = VideoUiStrings.loadingMessage;
-  static const String slowLoadingMessage = VideoUiStrings.slowLoadingMessage;
-  static const String slowLoadingDetail = VideoUiStrings.slowLoadingDetail;
-  static const String errorTitle = VideoUiStrings.playbackErrorTitle;
-  static const String errorMessage = VideoUiStrings.playbackUnavailable;
+  static String get loadingMessage => VideoUiStrings.loadingMessage;
+  static String get slowLoadingMessage => VideoUiStrings.slowLoadingMessage;
+  static String get slowLoadingDetail => VideoUiStrings.slowLoadingDetail;
+  static String get errorTitle => VideoUiStrings.playbackErrorTitle;
+  static String get errorMessage => VideoUiStrings.playbackUnavailable;
   static String get retryLabel => VideoUiStrings.retry;
 
   final VideoStateOverlayMode mode;
@@ -44,8 +47,9 @@ class VideoStateOverlay extends StatelessWidget {
   }
 
   Widget _buildLoading() {
-    final resolvedMessage =
-        message.trim().isEmpty ? loadingMessage : message.trim();
+    final resolvedMessage = message.trim().isEmpty
+        ? loadingMessage
+        : message.trim();
     final isSlowLoading = resolvedMessage == slowLoadingMessage;
 
     return Center(
@@ -53,9 +57,7 @@ class VideoStateOverlay extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.52),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.14),
-          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.28),
@@ -137,9 +139,7 @@ class VideoStateOverlay extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.black.withValues(alpha: 0.56),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.14),
-          ),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
@@ -154,10 +154,10 @@ class VideoStateOverlay extends StatelessWidget {
                   color: AdColors.brand,
                 ),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   errorTitle,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -201,7 +201,8 @@ class VideoStateOverlay extends StatelessWidget {
     }
 
     final lower = candidate.toLowerCase();
-    final looksTechnical = candidate.length > 92 ||
+    final looksTechnical =
+        candidate.length > 92 ||
         lower.contains('exception') ||
         lower.contains('http://') ||
         lower.contains('https://') ||

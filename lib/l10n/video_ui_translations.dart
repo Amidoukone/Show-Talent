@@ -19,10 +19,7 @@ import 'package:get/get.dart';
 /// [[project_adfoot_i18n_ios_effort]] in project memory.
 class VideoUiTranslations extends Translations {
   @override
-  Map<String, Map<String, String>> get keys => {
-    'fr': _fr,
-    'en': _en,
-  };
+  Map<String, Map<String, String>> get keys => {'fr': _fr, 'en': _en};
 
   static const Map<String, String> _fr = {
     'videoSearchOpen': 'Rechercher',
@@ -47,7 +44,8 @@ class VideoUiTranslations extends Translations {
     'emptyHomeVideoFeedTitle': 'Aucune vidéo disponible',
     'emptyHomeVideoFeedPlayerMessage':
         'Soumettez votre première vidéo pour la proposer au feed.',
-    'emptyHomeVideoFeedDefaultMessage': 'Revenez plus tard ou actualisez le feed.',
+    'emptyHomeVideoFeedDefaultMessage':
+        'Revenez plus tard ou actualisez le feed.',
     'addVideoSemantic': 'Soumettre une vidéo',
     'refresh': 'Actualiser',
     'noInternetTitle': 'Pas de connexion Internet',
@@ -120,6 +118,36 @@ class VideoUiTranslations extends Translations {
     'autoOptimizationChip': 'Validation admin',
     'overlayLoading': 'Chargement...',
     'overlayWaiting': 'Veuillez patienter...',
+
+    'loadingMessage': 'Chargement de la vidéo...',
+    'slowLoadingMessage': 'Connexion lente...',
+    'slowLoadingDetail':
+        'La vidéo continue de charger. Réessayez si elle reste bloquée.',
+    'playbackErrorTitle': 'Lecture impossible',
+    'playbackUnavailable': 'Lecture vidéo indisponible.',
+    'playbackInterruptedRetry': 'Lecture interrompue. Réessayez.',
+    'play': 'Lecture',
+    'pause': 'Pause',
+    'playVideo': 'Lancer la vidéo',
+    'pauseVideo': 'Mettre la vidéo en pause',
+    'rewindTenSeconds': 'Reculer de 10 secondes',
+    'forwardTenSeconds': 'Avancer de 10 secondes',
+    'rewindTenSecondsFeedback': '-10s',
+    'forwardTenSecondsFeedback': '+10s',
+    'playbackSpeed': 'Vitesse de lecture',
+    'currentPlaybackSpeed': 'Vitesse actuelle',
+    'progressBarSemantic': 'Progression de la vidéo',
+    'loadingTooLong': 'Le chargement prend trop de temps. Réessayez.',
+    'playbackError': 'Erreur de lecture',
+    'actionTimedOut':
+        'Le serveur met trop de temps à répondre. Vérifiez votre réseau '
+        'puis réessayez.',
+    'genericActionImpossible': 'Action impossible.',
+    'genericActionRetry': 'Action impossible pour le moment.',
+    'seeMore': 'Voir plus',
+    'videoCaptionSheetTitle': 'Légende',
+    'videoCaptionOpen': 'Ouvrir la légende',
+    'videoPublisherProfileSemantic': 'Ouvrir le profil du joueur',
   };
 
   static const Map<String, String> _en = {
@@ -155,8 +183,7 @@ class VideoUiTranslations extends Translations {
     'actionImpossibleTitle': 'Action unavailable',
     'noteTitle': 'Note',
     'emptyProfileVideoFeedTitle': 'No videos to show',
-    'emptyProfileVideoFeedMessage':
-        'This profile has no videos available yet.',
+    'emptyProfileVideoFeedMessage': 'This profile has no videos available yet.',
     'back': 'Back',
     'uploadFormTitle': 'Submit a video',
     'uploadFormSubtitle': 'Preview and details',
@@ -172,8 +199,7 @@ class VideoUiTranslations extends Translations {
         'Reminder: max duration 3 min • max file size 150 MB • '
         'admin review before publishing',
     'discardDraftTitle': 'Discard this video?',
-    'discardDraftMessage':
-        'Your description and caption will not be saved.',
+    'discardDraftMessage': 'Your description and caption will not be saved.',
     'discardDraftConfirm': 'Discard',
     'discardDraftCancel': 'Continue',
     'uploadUnexpectedErrorTitle': 'Unexpected error',
@@ -214,5 +240,35 @@ class VideoUiTranslations extends Translations {
     'autoOptimizationChip': 'Admin review',
     'overlayLoading': 'Loading...',
     'overlayWaiting': 'Please wait...',
+
+    'loadingMessage': 'Loading the video...',
+    'slowLoadingMessage': 'Slow connection...',
+    'slowLoadingDetail':
+        'The video is still loading. Try again if it stays stuck.',
+    'playbackErrorTitle': 'Playback failed',
+    'playbackUnavailable': 'Video playback unavailable.',
+    'playbackInterruptedRetry': 'Playback interrupted. Try again.',
+    'play': 'Play',
+    'pause': 'Pause',
+    'playVideo': 'Play the video',
+    'pauseVideo': 'Pause the video',
+    'rewindTenSeconds': 'Rewind 10 seconds',
+    'forwardTenSeconds': 'Forward 10 seconds',
+    'rewindTenSecondsFeedback': '-10s',
+    'forwardTenSecondsFeedback': '+10s',
+    'playbackSpeed': 'Playback speed',
+    'currentPlaybackSpeed': 'Current speed',
+    'progressBarSemantic': 'Video progress',
+    'loadingTooLong': 'Loading is taking too long. Try again.',
+    'playbackError': 'Playback error',
+    'actionTimedOut':
+        'The server is taking too long to respond. Check your connection, '
+        'then try again.',
+    'genericActionImpossible': 'Action unavailable.',
+    'genericActionRetry': 'Action unavailable right now.',
+    'seeMore': 'See more',
+    'videoCaptionSheetTitle': 'Caption',
+    'videoCaptionOpen': 'Open the caption',
+    'videoPublisherProfileSemantic': 'Open the player profile',
   };
 }

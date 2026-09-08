@@ -1,9 +1,30 @@
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/video_playback_controls.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 
 void main() {
+  // Set directly (not via a pumped GetMaterialApp) so `.tr` already resolves
+  // to real French text the moment a test body starts running -- several
+  // tests below evaluate a `VideoUiStrings` getter as a `find.byTooltip`/
+  // `find.text` argument built well after the pump, but the underlying
+  // widgets themselves resolve their labels during `build()`; a
+  // GetMaterialApp mounted as part of the same pumped tree would register
+  // its translations too late relative to any eager evaluation elsewhere in
+  // the test -- see [[project_adfoot_i18n_ios_effort]].
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
+
   Widget host(Widget child, {double height = 120}) {
     return MaterialApp(
       theme: ThemeData(splashFactory: NoSplash.splashFactory),

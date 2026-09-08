@@ -85,9 +85,7 @@ class VideoPlaybackControlButton extends StatelessWidget {
           child: Material(
             color: Colors.black.withValues(alpha: enabled ? 0.56 : 0.34),
             shape: CircleBorder(
-              side: BorderSide(
-                color: Colors.white.withValues(alpha: 0.14),
-              ),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
             ),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
@@ -134,8 +132,9 @@ class VideoProgressBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final durationMs = duration.inMilliseconds;
     final posMs = position.inMilliseconds.clamp(0, durationMs).toInt();
-    final percent =
-        durationMs == 0 ? 0.0 : (posMs / durationMs).clamp(0.0, 1.0);
+    final percent = durationMs == 0
+        ? 0.0
+        : (posMs / durationMs).clamp(0.0, 1.0);
     final displayed = isDragging ? dragProgress : percent;
     final clampedDisplayed = displayed.clamp(0.0, 1.0).toDouble();
     final current = Duration(milliseconds: posMs);
@@ -298,10 +297,10 @@ class VideoPlaybackSpeedSheet extends StatelessWidget {
                       size: 22,
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         VideoUiStrings.playbackSpeed,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 17,
                           fontWeight: FontWeight.w800,
@@ -347,9 +346,7 @@ class _SpeedPill extends StatelessWidget {
         decoration: BoxDecoration(
           color: AdColors.brand.withValues(alpha: 0.16),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: AdColors.brand.withValues(alpha: 0.38),
-          ),
+          border: Border.all(color: AdColors.brand.withValues(alpha: 0.38)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -406,8 +403,9 @@ class _SpeedOptionTile extends StatelessWidget {
                       style: TextStyle(
                         color: selected ? Colors.white : Colors.white70,
                         fontSize: 15,
-                        fontWeight:
-                            selected ? FontWeight.w800 : FontWeight.w600,
+                        fontWeight: selected
+                            ? FontWeight.w800
+                            : FontWeight.w600,
                       ),
                     ),
                   ),

@@ -28,9 +28,7 @@ void main() {
     );
   }
 
-  testWidgets('French resolves to real copy, not the bare key', (
-    tester,
-  ) async {
+  testWidgets('French resolves to real copy, not the bare key', (tester) async {
     await pumpWithLocale(tester, const Locale('fr'));
 
     expect(VideoUiStrings.retry, 'Réessayer');
@@ -74,10 +72,20 @@ void main() {
       'votre plafond.',
     );
     expect(
-      VideoUiStrings.uploadQuotaContactFallback('+225 00 00 00 00', 'adfoot.org'),
+      VideoUiStrings.uploadQuotaContactFallback(
+        '+225 00 00 00 00',
+        'adfoot.org',
+      ),
       'Écrivez à l’agence Adfoot sur WhatsApp au +225 00 00 00 00, ou passez '
       'par adfoot.org, pour faire augmenter votre plafond de vidéos.',
     );
+    expect(VideoUiStrings.loadingMessage, 'Chargement de la vidéo...');
+    expect(VideoUiStrings.playbackErrorTitle, 'Lecture impossible');
+    expect(VideoUiStrings.playVideo, 'Lancer la vidéo');
+    expect(VideoUiStrings.rewindTenSecondsFeedback, '-10s');
+    expect(VideoUiStrings.playbackSpeed, 'Vitesse de lecture');
+    expect(VideoUiStrings.videoCaptionSheetTitle, 'Légende');
+    expect(VideoUiStrings.seeMore, 'Voir plus');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -89,14 +97,8 @@ void main() {
     expect(VideoUiStrings.videoSearchIdleLabel, 'Position, player, club');
     expect(VideoUiStrings.pendingVideosLabel(1), '1 new video');
     expect(VideoUiStrings.pendingVideosLabel(3), '3 new videos');
-    expect(
-      VideoUiStrings.pendingVideosSemantic(1),
-      '1 new video available',
-    );
-    expect(
-      VideoUiStrings.pendingVideosSemantic(5),
-      '5 new videos available',
-    );
+    expect(VideoUiStrings.pendingVideosSemantic(1), '1 new video available');
+    expect(VideoUiStrings.pendingVideosSemantic(5), '5 new videos available');
     expect(VideoUiStrings.videoSearchOpen, 'Search');
     expect(VideoUiStrings.videoSearchHint, 'Position, player, club...');
     expect(VideoUiStrings.defaultPublisherName, 'Adfoot Profile');
@@ -121,9 +123,19 @@ void main() {
       'To publish more, ask the Adfoot agency to raise your limit.',
     );
     expect(
-      VideoUiStrings.uploadQuotaContactFallback('+225 00 00 00 00', 'adfoot.org'),
+      VideoUiStrings.uploadQuotaContactFallback(
+        '+225 00 00 00 00',
+        'adfoot.org',
+      ),
       'Message the Adfoot agency on WhatsApp at +225 00 00 00 00, or go '
       'through adfoot.org, to raise your video limit.',
     );
+    expect(VideoUiStrings.loadingMessage, 'Loading the video...');
+    expect(VideoUiStrings.playbackErrorTitle, 'Playback failed');
+    expect(VideoUiStrings.playVideo, 'Play the video');
+    expect(VideoUiStrings.rewindTenSecondsFeedback, '-10s');
+    expect(VideoUiStrings.playbackSpeed, 'Playback speed');
+    expect(VideoUiStrings.videoCaptionSheetTitle, 'Caption');
+    expect(VideoUiStrings.seeMore, 'See more');
   });
 }

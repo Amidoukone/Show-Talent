@@ -70,10 +70,12 @@ class _VideoActionConfirmationSheet extends StatelessWidget {
                             width: 42,
                             height: 4,
                             decoration: BoxDecoration(
-                              color: AdColors.onSurfaceMuted
-                                  .withValues(alpha: .35),
-                              borderRadius:
-                                  BorderRadius.circular(AdRadius.pill),
+                              color: AdColors.onSurfaceMuted.withValues(
+                                alpha: .35,
+                              ),
+                              borderRadius: BorderRadius.circular(
+                                AdRadius.pill,
+                              ),
                             ),
                           ),
                         ),
@@ -86,8 +88,9 @@ class _VideoActionConfirmationSheet extends StatelessWidget {
                               height: 52,
                               decoration: BoxDecoration(
                                 color: toneColor.withValues(alpha: .14),
-                                borderRadius:
-                                    BorderRadius.circular(AdRadius.lg),
+                                borderRadius: BorderRadius.circular(
+                                  AdRadius.lg,
+                                ),
                               ),
                               child: Icon(icon, color: toneColor, size: 28),
                             ),
@@ -214,16 +217,17 @@ class _VideoCaptionSheet extends StatelessWidget {
                           width: 42,
                           height: 4,
                           decoration: BoxDecoration(
-                            color:
-                                AdColors.onSurfaceMuted.withValues(alpha: .35),
+                            color: AdColors.onSurfaceMuted.withValues(
+                              alpha: .35,
+                            ),
                             borderRadius: BorderRadius.circular(AdRadius.pill),
                           ),
                         ),
                       ),
                       const SizedBox(height: AdSpacing.xl),
-                      const Text(
+                      Text(
                         VideoUiStrings.videoCaptionSheetTitle,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: AdColors.onSurface,
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -274,10 +278,7 @@ class _VideoCaptionSheet extends StatelessWidget {
 }
 
 class _ActionBadge extends StatelessWidget {
-  const _ActionBadge({
-    required this.label,
-    required this.color,
-  });
+  const _ActionBadge({required this.label, required this.color});
 
   final String label;
   final Color color;

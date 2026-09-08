@@ -1,9 +1,30 @@
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/video_state_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 
 void main() {
+  // Set directly (not via a pumped GetMaterialApp) so `.tr` already resolves
+  // to real French text the moment a test body starts running -- several
+  // tests below evaluate a `VideoUiStrings`/`VideoStateOverlay` getter as a
+  // widget constructor argument, which is built *before* `pumpWidget` runs;
+  // a GetMaterialApp only registers its translations once it is actually
+  // mounted, which would be too late for that eager evaluation and would
+  // silently freeze the bare translation key instead -- see
+  // [[project_adfoot_i18n_ios_effort]].
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
+
   Widget host(Widget child) {
     return MaterialApp(
       theme: ThemeData(splashFactory: NoSplash.splashFactory),
