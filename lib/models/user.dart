@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:get/get.dart';
+
 import 'package:adfoot/models/event.dart';
 import 'package:adfoot/models/membership.dart';
 import 'package:adfoot/models/offre.dart';
@@ -31,6 +33,18 @@ enum StatsProvenance {
   /// accusation.
   suspended,
 }
+
+/// Stable identifier behind [AppUser.profileLevelLabel].
+///
+/// Never localized -- UI code that needs to react to the level (badge
+/// styling, for instance) switches on this, not on the translated label.
+enum ProfileLevel { basic, complete, advanced, elite }
+
+/// Stable identifier behind [AppUser.profileTrustLabel].
+///
+/// Never localized -- UI code that needs to react to the trust state
+/// switches on this, not on the translated label.
+enum ProfileTrustStatus { unverified, needsReview, suspended, verified }
 
 class AppUser {
   // =========================
@@ -403,14 +417,12 @@ class AppUser {
 
       performances: map['performances'] is Map
           ? Map<String, double>.fromEntries(
-              (map['performances'] as Map).entries
-                  .map((entry) {
-                    final value = _toNullableDouble(entry.value);
-                    return value == null
-                        ? null
-                        : MapEntry(entry.key.toString(), value);
-                  })
-                  .whereType<MapEntry<String, double>>(),
+              (map['performances'] as Map).entries.map((entry) {
+                final value = _toNullableDouble(entry.value);
+                return value == null
+                    ? null
+                    : MapEntry(entry.key.toString(), value);
+              }).whereType<MapEntry<String, double>>(),
             )
           : null,
 
@@ -451,9 +463,7 @@ class AppUser {
           ? (map['joueursSuivis'] as List)
                 .whereType<Map>()
                 .map(
-                  (j) => AppUser.fromEmbeddedMap(
-                    Map<String, dynamic>.from(j),
-                  ),
+                  (j) => AppUser.fromEmbeddedMap(Map<String, dynamic>.from(j)),
                 )
                 .toList()
           : null,
@@ -462,9 +472,7 @@ class AppUser {
           ? (map['clubsSuivis'] as List)
                 .whereType<Map>()
                 .map(
-                  (c) => AppUser.fromEmbeddedMap(
-                    Map<String, dynamic>.from(c),
-                  ),
+                  (c) => AppUser.fromEmbeddedMap(Map<String, dynamic>.from(c)),
                 )
                 .toList()
           : null,
@@ -687,15 +695,36 @@ class AppUser {
     return StatsProvenance.declared;
   }
 
-  String get profileTrustLabel {
-    if (isProfileTrusted) return 'Vérifié par Adfoot';
+  /// Stable, never-localized counterpart of [profileTrustLabel].
+  ///
+  /// UI code that needs to react to the trust state (badge styling, for
+  /// instance) must switch on this, never on the translated label text --
+  /// see `profile_screen.dart`'s `_profileLevelStyle`.
+  ProfileTrustStatus get profileTrustStatus {
+    if (isProfileTrusted) return ProfileTrustStatus.verified;
     if (profileVerified && !isEffectivelyActiveAccount) {
-      return 'Certification suspendue';
+      return ProfileTrustStatus.suspended;
     }
-    if (profileVerificationNeedsReview) return 'A revalider par Adfoot';
-    return 'Non certifié';
+    if (profileVerificationNeedsReview) return ProfileTrustStatus.needsReview;
+    return ProfileTrustStatus.unverified;
   }
 
+  String get profileTrustLabel {
+    switch (profileTrustStatus) {
+      case ProfileTrustStatus.verified:
+        return 'profileTrustVerified'.tr;
+      case ProfileTrustStatus.suspended:
+        return 'profileTrustSuspended'.tr;
+      case ProfileTrustStatus.needsReview:
+        return 'profileTrustNeedsReview'.tr;
+      case ProfileTrustStatus.unverified:
+        return 'profileTrustUnverified'.tr;
+    }
+  }
+
+  // No UI caller anywhere in the app (only asserted directly by a model
+  // test) -- left as a plain literal, nothing renders it, so there is
+  // nothing to translate.
   String get profileVerificationStatusLabel {
     switch (profileVerificationStatus) {
       case 'verified':
@@ -935,8 +964,7 @@ class AppUser {
   /// Derive de [missingScoutRequirements] plutot que de reevaluer les memes
   /// conditions : c'est la seule facon que l'ecran qui explique et la regle
   /// qui decide ne se contredisent jamais.
-  bool get hasScoutReadyProfile =>
-      isPlayer && missingScoutRequirements.isEmpty;
+  bool get hasScoutReadyProfile => isPlayer && missingScoutRequirements.isEmpty;
 
   /// -------------------------
   /// UI - Afficher bloc "Profil avance" ?
@@ -955,15 +983,32 @@ class AppUser {
     return isMvpProfileComplete && !hasAdvancedProfile;
   }
 
-
   /// -------------------------
   /// Indicateur simple (badge / chip)
   /// -------------------------
+  /// Stable, never-localized counterpart of [profileLevelLabel].
+  ///
+  /// UI code that needs to react to the level (badge styling, for instance)
+  /// must switch on this, never on the translated label text -- see
+  /// `profile_screen.dart`'s `_profileLevelStyle`.
+  ProfileLevel get profileLevel {
+    if (hasScoutReadyProfile) return ProfileLevel.elite;
+    if (hasAdvancedProfile) return ProfileLevel.advanced;
+    if (isMvpProfileComplete) return ProfileLevel.complete;
+    return ProfileLevel.basic;
+  }
+
   String get profileLevelLabel {
-    if (hasScoutReadyProfile) return 'Profil Élite';
-    if (hasAdvancedProfile) return 'Profil avancé';
-    if (isMvpProfileComplete) return 'Profil complet';
-    return 'Profil basique';
+    switch (profileLevel) {
+      case ProfileLevel.elite:
+        return 'profileLevelElite'.tr;
+      case ProfileLevel.advanced:
+        return 'profileLevelAdvanced'.tr;
+      case ProfileLevel.complete:
+        return 'profileLevelComplete'.tr;
+      case ProfileLevel.basic:
+        return 'profileLevelBasic'.tr;
+    }
   }
 
   static DateTime? _parseNullableDate(dynamic value) {

@@ -138,18 +138,24 @@ class _HeaderCard extends StatelessWidget {
                           _InfoPill(
                             icon: Icons.workspace_premium_rounded,
                             label: kAgencyPlayerBadgeLabel,
-                            style: _profileLevelStyle(kAgencyPlayerBadgeLabel),
+                            style: _profileLevelStyle(
+                              _ProfileBadgeKind.agencyPlayer,
+                            ),
                           ),
                         if (user.isProfileTrusted)
                           _InfoPill(
                             icon: Icons.verified_rounded,
                             label: user.profileTrustLabel,
-                            style: _profileLevelStyle(user.profileTrustLabel),
+                            style: _profileLevelStyle(
+                              _badgeKindForTrust(user.profileTrustStatus),
+                            ),
                           ),
                         _InfoPill(
                           icon: Icons.military_tech_outlined,
                           label: user.profileLevelLabel,
-                          style: _profileLevelStyle(user.profileLevelLabel),
+                          style: _profileLevelStyle(
+                            _badgeKindForLevel(user.profileLevel),
+                          ),
                         ),
                       ],
                     ),

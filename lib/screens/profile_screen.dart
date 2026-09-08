@@ -97,49 +97,80 @@ class _ProfileLevelStyle {
   });
 }
 
-_ProfileLevelStyle _profileLevelStyle(String label) {
-  switch (label) {
+/// What a badge looks like, keyed by a stable identifier -- never by the
+/// translated label text, which would tie the visual style to whichever
+/// locale happens to be active. See [AppUser.profileLevel] and
+/// [AppUser.profileTrustStatus].
+enum _ProfileBadgeKind {
+  agencyPlayer,
+  elite,
+  advanced,
+  verifiedTrust,
+  complete,
+  standard,
+}
+
+_ProfileBadgeKind _badgeKindForLevel(ProfileLevel level) {
+  switch (level) {
+    case ProfileLevel.elite:
+      return _ProfileBadgeKind.elite;
+    case ProfileLevel.advanced:
+      return _ProfileBadgeKind.advanced;
+    case ProfileLevel.complete:
+      return _ProfileBadgeKind.complete;
+    case ProfileLevel.basic:
+      return _ProfileBadgeKind.standard;
+  }
+}
+
+_ProfileBadgeKind _badgeKindForTrust(ProfileTrustStatus status) {
+  return status == ProfileTrustStatus.verified
+      ? _ProfileBadgeKind.verifiedTrust
+      : _ProfileBadgeKind.standard;
+}
+
+_ProfileLevelStyle _profileLevelStyle(_ProfileBadgeKind kind) {
+  switch (kind) {
     // Le badge des joueurs que l'agence porte a ses frais. Volontairement
     // sans date ni reference : l'echeance et la reference du dossier sont des
     // informations commerciales internes, et ce badge est vu par les
     // visiteurs du profil autant que par son titulaire.
-    case kAgencyPlayerBadgeLabel:
+    case _ProfileBadgeKind.agencyPlayer:
       return const _ProfileLevelStyle(
         backgroundColor: AdColors.brand,
         foregroundColor: AdColors.brandOn,
         borderColor: AdColors.brand,
         icon: Icons.workspace_premium_rounded,
       );
-    case 'Profil Elite':
-    case 'Profil Élite':
+    case _ProfileBadgeKind.elite:
       return const _ProfileLevelStyle(
         backgroundColor: AdColors.tierElite,
         foregroundColor: Colors.white,
         borderColor: AdColors.tierElite,
         icon: Icons.verified_rounded,
       );
-    case 'Profil avancé':
+    case _ProfileBadgeKind.advanced:
       return const _ProfileLevelStyle(
         backgroundColor: AdColors.accent,
         foregroundColor: Colors.white,
         borderColor: AdColors.accent,
         icon: Icons.auto_awesome_rounded,
       );
-    case 'Vérifié par Adfoot':
+    case _ProfileBadgeKind.verifiedTrust:
       return const _ProfileLevelStyle(
         backgroundColor: AdColors.tierVerified,
         foregroundColor: Colors.white,
         borderColor: AdColors.tierVerified,
         icon: Icons.verified_rounded,
       );
-    case 'Profil complet':
+    case _ProfileBadgeKind.complete:
       return const _ProfileLevelStyle(
         backgroundColor: AdColors.success,
         foregroundColor: Colors.white,
         borderColor: AdColors.success,
         icon: Icons.check_circle_rounded,
       );
-    default:
+    case _ProfileBadgeKind.standard:
       return const _ProfileLevelStyle(
         backgroundColor: AdColors.tierDefaultBg,
         foregroundColor: AdColors.tierDefaultFg,
@@ -932,7 +963,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // =======================
 
   Widget _buildProfileLevelBadge(AppUser user) {
-    final style = _profileLevelStyle(user.profileLevelLabel);
+    final style = _profileLevelStyle(_badgeKindForLevel(user.profileLevel));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1172,12 +1203,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           compact: true,
         ),
         _field(
-          user.isCoach ? l10n.profileCoachRoleLabel : l10n.profilePositionsLabel,
+          user.isCoach
+              ? l10n.profileCoachRoleLabel
+              : l10n.profilePositionsLabel,
           positionLabel,
           icon: Icons.sports_outlined,
         ),
         _field(
-          user.isCoach ? l10n.profileCoachClubLabel : l10n.profileCurrentClubLabel,
+          user.isCoach
+              ? l10n.profileCoachClubLabel
+              : l10n.profileCurrentClubLabel,
           teamLabel,
           icon: Icons.flag_outlined,
         ),
@@ -1345,10 +1380,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _field(
               l10n.profileSeasonLabel,
               [
-                season?.season,
-                season?.competition,
-                season?.ageCategory?.code,
-              ].whereType<String>().join(' · ').trim().isEmpty
+                    season?.season,
+                    season?.competition,
+                    season?.ageCategory?.code,
+                  ].whereType<String>().join(' · ').trim().isEmpty
                   ? null
                   : [
                       season?.season,
@@ -1400,10 +1435,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _infoTile(
-                  [
-                    ?archived.season,
-                    ?archived.clubName,
-                  ].join(' · '),
+                  [?archived.season, ?archived.clubName].join(' · '),
                   _pastSeasonSummary(archived, l10n),
                   l10n,
                   icon: Icons.history_rounded,
@@ -1845,8 +1877,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// peut etre longue (postes, nationalites, club, saison) restent seuls sur
   /// leur ligne ; les autres se groupent par deux des qu'ils se suivent.
   Widget _infoTileGrid(
-    List<({String label, String? value, IconData? icon, bool compact})>
-    fields,
+    List<({String label, String? value, IconData? icon, bool compact})> fields,
     AppLocalizations l10n,
   ) {
     final rows = <Widget>[];

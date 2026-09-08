@@ -113,6 +113,8 @@ void main() {
     expect(VideoUiStrings.likeCountValue(4), '4 mentions J’aime');
     expect(VideoUiStrings.shareCountValue(2), '2 partages');
     expect(VideoUiStrings.uploadTrimmed(3), 'Vidéo préparée en extrait de 3s.');
+    expect('profileLevelElite'.tr, 'Profil Élite');
+    expect('profileTrustVerified'.tr, 'Vérifié par Adfoot');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -194,5 +196,7 @@ void main() {
       VideoUiStrings.uploadTrimmed(3),
       'Video trimmed to a 3-second clip.',
     );
+    expect('profileLevelElite'.tr, 'Elite Profile');
+    expect('profileTrustVerified'.tr, 'Verified by Adfoot');
   });
 }

@@ -1,7 +1,10 @@
 import 'dart:io';
 
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 
 String _read(String path) => File(path).readAsStringSync();
 
@@ -66,6 +69,21 @@ Map<String, dynamic> _completeFootballFile() {
 }
 
 void main() {
+  // profileLevelLabel/profileTrustLabel resolve through GetX's `.tr`, which
+  // needs Get.locale/Get.translations populated -- set directly (no widget
+  // to pump in a pure model test) so the assertions below check real French
+  // text, not `.tr` silently falling back to the bare key.
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
+
   final birthDate = DateTime(2007, 3, 14);
 
   group('an Élite file can be acted on by a club', () {
@@ -204,11 +222,9 @@ void main() {
           cvUrl: 'https://example.org/cv.pdf',
         );
 
-        expect(
-          user.missingScoutRequirements,
-          <String>[expectedLabel],
-          reason: 'removing $field must name exactly "$expectedLabel"',
-        );
+        expect(user.missingScoutRequirements, <String>[
+          expectedLabel,
+        ], reason: 'removing $field must name exactly "$expectedLabel"');
         expect(user.hasScoutReadyProfile, isFalse);
       });
     });
@@ -437,17 +453,19 @@ void main() {
   // etait le defaut : un joueur remplissait sa taille, voyait la liste
   // raccourcir, et restait introuvable.
   group('ce qui rend une fiche trouvable, et ce qui la complete', () {
-    test('les trois exigences bloquantes sont exactement celles du serveur',
-        () {
-      final user = _player(country: 'Côte d’Ivoire');
+    test(
+      'les trois exigences bloquantes sont exactement celles du serveur',
+      () {
+        final user = _player(country: 'Côte d’Ivoire');
 
-      expect(user.missingSearchRequirements, <String>[
-        'Date de naissance',
-        'Poste',
-        'Nationalité',
-      ]);
-      expect(user.isFindableByRecruiters, isFalse);
-    });
+        expect(user.missingSearchRequirements, <String>[
+          'Date de naissance',
+          'Poste',
+          'Nationalité',
+        ]);
+        expect(user.isFindableByRecruiters, isFalse);
+      },
+    );
 
     test('une fiche trouvable peut rester incomplete', () {
       // Le cas qui justifie la separation : le serveur rendrait cette fiche

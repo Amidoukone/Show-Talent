@@ -12,6 +12,12 @@ void main() {
       'lib/widgets/ad_profile_cards.dart',
     ).readAsStringSync();
     final profileSurface = '$profile\n$profileWidgets\n$profileCards';
+    // The literal wording moved into the GetX catalog (badge styling
+    // switches on the stable ProfileTrustStatus.verified enum value, not on
+    // the translated label text -- see [[project_adfoot_i18n_ios_effort]]).
+    final videoTranslations = File(
+      'lib/l10n/video_ui_translations.dart',
+    ).readAsStringSync();
 
     expect(
       profile,
@@ -24,7 +30,11 @@ void main() {
     expect(profileSurface, contains('maxLines: 2'));
     expect(profileSurface, contains('overflow: TextOverflow.ellipsis'));
     expect(profileSurface, contains('user.isProfileTrusted'));
-    expect(profileSurface, contains('Vérifié par Adfoot'));
+    expect(profileSurface, contains('_ProfileBadgeKind.verifiedTrust'));
+    expect(
+      videoTranslations,
+      contains("'profileTrustVerified': 'Vérifié par Adfoot'"),
+    );
     // Une miniature cassée montre le repli, jamais une image brisée.
     // Le mécanisme a changé — `CachedNetworkImage` remplace `Image.network`,
     // qui n'avait aucun cache disque et ignorait le préchargement du

@@ -303,6 +303,15 @@ class VideoUiTranslations extends Translations {
     'shareCountValuePlural': '@count partages',
     'selectPlaybackSpeed': 'Choisir la vitesse @speed',
     'uploadTrimmed': 'Vidéo préparée en extrait de @secondss.',
+
+    'profileLevelElite': 'Profil Élite',
+    'profileLevelAdvanced': 'Profil avancé',
+    'profileLevelComplete': 'Profil complet',
+    'profileLevelBasic': 'Profil basique',
+    'profileTrustVerified': 'Vérifié par Adfoot',
+    'profileTrustSuspended': 'Certification suspendue',
+    'profileTrustNeedsReview': 'A revalider par Adfoot',
+    'profileTrustUnverified': 'Non certifié',
   };
 
   static const Map<String, String> _en = {
@@ -576,5 +585,14 @@ class VideoUiTranslations extends Translations {
     'shareCountValuePlural': '@count shares',
     'selectPlaybackSpeed': 'Choose the @speed speed',
     'uploadTrimmed': 'Video trimmed to a @seconds-second clip.',
+
+    'profileLevelElite': 'Elite Profile',
+    'profileLevelAdvanced': 'Advanced Profile',
+    'profileLevelComplete': 'Complete Profile',
+    'profileLevelBasic': 'Basic Profile',
+    'profileTrustVerified': 'Verified by Adfoot',
+    'profileTrustSuspended': 'Certification suspended',
+    'profileTrustNeedsReview': 'Awaiting Adfoot review',
+    'profileTrustUnverified': 'Not certified',
   };
 }

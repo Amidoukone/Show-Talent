@@ -1,10 +1,13 @@
 import 'package:adfoot/controller/profile_controller.dart';
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/users/profile_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -13,6 +16,21 @@ void main() {
   // mocked SharedPreferences before it can be built off the widget tree.
   TestWidgetsFlutterBinding.ensureInitialized();
   SharedPreferences.setMockInitialValues({});
+
+  // profileLevelLabel/profileTrustLabel resolve through GetX's `.tr`, which
+  // needs Get.locale/Get.translations populated -- set directly so the
+  // assertions below check real French text, not `.tr` silently falling
+  // back to the bare key.
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
 
   group('ProfileRepository', () {
     test(
