@@ -55,10 +55,10 @@ class EventController extends GetxController {
   }
 
   ActionResponse _sessionRevokedResponse() {
-    return const ActionResponse(
+    return ActionResponse(
       success: false,
       code: 'session_revoked',
-      message: 'Votre session a été fermée. Veuillez vous reconnecter.',
+      message: 'sessionClosedReconnectMessage'.tr,
       toast: ToastLevel.none,
     );
   }
@@ -325,10 +325,10 @@ class EventController extends GetxController {
         filePath: filePath,
       );
       await _eventRepository.setFlyerUrl(eventId: eventId, flyerUrl: url);
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'flyer_attached',
-        message: 'Affiche ajoutee.',
+        message: 'eventFlyerAddedMessage'.tr,
         toast: ToastLevel.none,
       );
     } on FirebaseException catch (error, st) {
@@ -344,7 +344,7 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'flyer_failed',
-        message: 'L’affiche n’a pas pu etre ajoutee.',
+        message: 'eventFlyerAddFailedMessage'.tr,
       );
     } catch (e, st) {
       AppLogger.warning(
@@ -355,7 +355,7 @@ class EventController extends GetxController {
       );
       return ActionResponse.failure(
         code: 'flyer_failed',
-        message: 'L’affiche n’a pas pu etre ajoutee.',
+        message: 'eventFlyerAddFailedMessage'.tr,
       );
     }
   }
@@ -365,10 +365,10 @@ class EventController extends GetxController {
     try {
       await _eventRepository.deleteFlyer(eventId);
       await _eventRepository.setFlyerUrl(eventId: eventId, flyerUrl: null);
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'flyer_removed',
-        message: 'Affiche retiree.',
+        message: 'eventFlyerRemovedMessage'.tr,
         toast: ToastLevel.none,
       );
     } catch (e, st) {
@@ -380,7 +380,7 @@ class EventController extends GetxController {
       );
       return ActionResponse.failure(
         code: 'flyer_remove_failed',
-        message: 'L’affiche n’a pas pu etre retiree.',
+        message: 'eventFlyerRemoveFailedMessage'.tr,
       );
     }
   }
@@ -447,16 +447,15 @@ class EventController extends GetxController {
         return ActionResponse(
           success: true,
           code: 'created_notification_failed',
-          message:
-              'Événement créé avec succès, mais les notifications sont indisponibles.',
+          message: 'eventCreatedNotificationFailedMessage'.tr,
           toast: ToastLevel.info,
         );
       }
 
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'created',
-        message: 'Votre événement a été créé avec succès.',
+        message: 'eventCreatedSuccessMessage'.tr,
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
@@ -472,7 +471,7 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'create_failed',
-        message: 'Échec de la création de l’événement.',
+        message: 'eventCreateFailedMessage'.tr,
       );
     } catch (e, st) {
       AppLogger.warning(
@@ -483,7 +482,7 @@ class EventController extends GetxController {
       );
       return ActionResponse.failure(
         code: 'create_failed',
-        message: 'Échec de la création de l’événement.',
+        message: 'eventCreateFailedMessage'.tr,
       );
     }
   }
@@ -495,7 +494,7 @@ class EventController extends GetxController {
     if (utilisateur.uid != event.organisateur.uid) {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Vous ne pouvez modifier que vos propres événements.',
+        message: 'eventUpdateOwnOnlyMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -503,10 +502,10 @@ class EventController extends GetxController {
     try {
       await _eventRepository.updateEvent(event);
       _replaceLocalEvent(event);
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'updated',
-        message: 'Les modifications ont été enregistrées.',
+        message: 'eventUpdateSuccessMessage'.tr,
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
@@ -522,7 +521,7 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'update_failed',
-        message: 'Échec de la mise à jour de l’événement.',
+        message: 'eventUpdateFailedMessage'.tr,
       );
     } catch (e, st) {
       AppLogger.warning(
@@ -533,7 +532,7 @@ class EventController extends GetxController {
       );
       return ActionResponse.failure(
         code: 'update_failed',
-        message: 'Échec de la mise à jour de l’événement.',
+        message: 'eventUpdateFailedMessage'.tr,
       );
     }
   }
@@ -550,7 +549,7 @@ class EventController extends GetxController {
       if (event == null) {
         return ActionResponse.failure(
           code: 'not-found',
-          message: 'L’événement n’existe pas.',
+          message: 'eventNotFoundMessage'.tr,
           toast: ToastLevel.info,
         );
       }
@@ -558,17 +557,17 @@ class EventController extends GetxController {
       if (event.organisateur.uid != utilisateur.uid) {
         return ActionResponse.failure(
           code: 'permission-denied',
-          message: 'Vous ne pouvez supprimer que vos propres événements.',
+          message: 'eventDeleteOwnOnlyMessage'.tr,
           toast: ToastLevel.info,
         );
       }
 
       await _eventRepository.deleteEvent(eventId);
       _removeLocalEvent(eventId);
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'deleted',
-        message: 'L’événement a été supprimé.',
+        message: 'eventDeleteSuccessMessage'.tr,
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
@@ -584,7 +583,7 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'delete_failed',
-        message: 'Échec de la suppression de l’événement.',
+        message: 'eventDeleteFailedMessage'.tr,
       );
     } catch (e, st) {
       AppLogger.warning(
@@ -595,7 +594,7 @@ class EventController extends GetxController {
       );
       return ActionResponse.failure(
         code: 'delete_failed',
-        message: 'Échec de la suppression de l’événement.',
+        message: 'eventDeleteFailedMessage'.tr,
       );
     }
   }
@@ -607,7 +606,7 @@ class EventController extends GetxController {
     if (participant.role != 'joueur') {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Seuls les joueurs peuvent s’inscrire à un événement.',
+        message: 'eventRegisterPlayersOnlyMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -633,10 +632,10 @@ class EventController extends GetxController {
         );
       }
 
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'registered',
-        message: 'Vous êtes inscrit à l’événement.',
+        message: 'eventRegisterSuccessMessage'.tr,
         toast: ToastLevel.success,
       );
     } on EventRepositoryException catch (e) {
@@ -672,7 +671,7 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'registration_failed',
-        message: 'Échec de l’inscription.',
+        message: 'eventRegisterFailedMessage'.tr,
       );
     } catch (e, st) {
       if (localEvent != null && previousParticipants != null) {
@@ -686,7 +685,7 @@ class EventController extends GetxController {
       );
       return ActionResponse.failure(
         code: 'registration_failed',
-        message: 'Échec de l’inscription.',
+        message: 'eventRegisterFailedMessage'.tr,
       );
     }
   }
@@ -698,7 +697,7 @@ class EventController extends GetxController {
     if (participant.role != 'joueur') {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Seuls les joueurs peuvent se désinscrire d’un événement.',
+        message: 'eventUnregisterPlayersOnlyMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -728,10 +727,10 @@ class EventController extends GetxController {
         );
       }
 
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'unregistered',
-        message: 'Vous êtes désinscrit de l’événement.',
+        message: 'eventUnregisterSuccessMessage'.tr,
         toast: ToastLevel.success,
       );
     } on EventRepositoryException catch (e) {
@@ -767,7 +766,7 @@ class EventController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'unregistration_failed',
-        message: 'Échec de la désinscription.',
+        message: 'eventUnregisterFailedMessage'.tr,
       );
     } catch (e, st) {
       if (localEvent != null && previousParticipants != null) {
@@ -781,7 +780,7 @@ class EventController extends GetxController {
       );
       return ActionResponse.failure(
         code: 'unregistration_failed',
-        message: 'Échec de la désinscription.',
+        message: 'eventUnregisterFailedMessage'.tr,
       );
     }
   }
@@ -790,8 +789,7 @@ class EventController extends GetxController {
     if (!utilisateur.canPublishOpportunities) {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message:
-            'Seuls les clubs, recruteurs ou agents peuvent effectuer cette action.',
+        message: 'eventPublisherOnlyMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -932,8 +930,13 @@ class EventController extends GetxController {
   ) {
     return PushNotificationService.sendEventFanout(
       eventId: event.id,
-      title: 'Nouvel événement',
-      body: '${utilisateur.nom} a créé un nouvel événement : ${event.titre}',
+      // Composed in the publisher's own locale, not each recipient's --
+      // same limitation as chat_controller.dart's message notification.
+      title: 'eventNewNotificationTitle'.tr,
+      body: 'eventNewNotificationBody'.trParams({
+        'name': utilisateur.nom,
+        'title': event.titre,
+      }),
     );
   }
 }

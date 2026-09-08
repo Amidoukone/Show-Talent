@@ -132,6 +132,14 @@ void main() {
       'sessionClosedReconnectMessage'.tr,
       'Votre session a été fermée. Veuillez vous reconnecter.',
     );
+    expect(
+      'eventUpdateSuccessMessage'.tr,
+      'Les modifications ont été enregistrées.',
+    );
+    expect(
+      'eventNewNotificationBody'.trParams({'name': 'Awa', 'title': 'U17'}),
+      'Awa a créé un nouvel événement : U17',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -231,6 +239,11 @@ void main() {
     expect(
       'sessionClosedReconnectMessage'.tr,
       'Your session was closed. Please sign in again.',
+    );
+    expect('eventUpdateSuccessMessage'.tr, 'Your changes have been saved.');
+    expect(
+      'eventNewNotificationBody'.trParams({'name': 'Awa', 'title': 'U17'}),
+      'Awa created a new event: U17',
     );
   });
 }

@@ -390,6 +390,38 @@ class VideoUiTranslations extends Translations {
         'Suppression impossible pour le moment. Vérifiez votre connexion.',
     'chatDeleteFailedRetryMessage':
         'Suppression impossible pour le moment. Merci de réessayer.',
+
+    'eventFlyerAddedMessage': 'Affiche ajoutée.',
+    'eventFlyerAddFailedMessage': 'L’affiche n’a pas pu être ajoutée.',
+    'eventFlyerRemovedMessage': 'Affiche retirée.',
+    'eventFlyerRemoveFailedMessage': 'L’affiche n’a pas pu être retirée.',
+    'eventCreatedNotificationFailedMessage':
+        'Événement créé avec succès, mais les notifications sont '
+        'indisponibles.',
+    'eventCreatedSuccessMessage': 'Votre événement a été créé avec succès.',
+    'eventCreateFailedMessage': 'Échec de la création de l’événement.',
+    'eventUpdateOwnOnlyMessage':
+        'Vous ne pouvez modifier que vos propres événements.',
+    'eventUpdateSuccessMessage': 'Les modifications ont été enregistrées.',
+    'eventUpdateFailedMessage': 'Échec de la mise à jour de l’événement.',
+    'eventNotFoundMessage': 'L’événement n’existe pas.',
+    'eventDeleteOwnOnlyMessage':
+        'Vous ne pouvez supprimer que vos propres événements.',
+    'eventDeleteSuccessMessage': 'L’événement a été supprimé.',
+    'eventDeleteFailedMessage': 'Échec de la suppression de l’événement.',
+    'eventRegisterPlayersOnlyMessage':
+        'Seuls les joueurs peuvent s’inscrire à un événement.',
+    'eventRegisterSuccessMessage': 'Vous êtes inscrit à l’événement.',
+    'eventRegisterFailedMessage': 'Échec de l’inscription.',
+    'eventUnregisterPlayersOnlyMessage':
+        'Seuls les joueurs peuvent se désinscrire d’un événement.',
+    'eventUnregisterSuccessMessage': 'Vous êtes désinscrit de l’événement.',
+    'eventUnregisterFailedMessage': 'Échec de la désinscription.',
+    'eventPublisherOnlyMessage':
+        'Seuls les clubs, recruteurs ou agents peuvent effectuer cette '
+        'action.',
+    'eventNewNotificationTitle': 'Nouvel événement',
+    'eventNewNotificationBody': '@name a créé un nouvel événement : @title',
   };
 
   static const Map<String, String> _en = {
@@ -744,5 +776,33 @@ class VideoUiTranslations extends Translations {
         'Unable to delete right now. Check your connection.',
     'chatDeleteFailedRetryMessage':
         'Unable to delete right now. Please try again.',
+
+    'eventFlyerAddedMessage': 'Flyer added.',
+    'eventFlyerAddFailedMessage': 'The flyer could not be added.',
+    'eventFlyerRemovedMessage': 'Flyer removed.',
+    'eventFlyerRemoveFailedMessage': 'The flyer could not be removed.',
+    'eventCreatedNotificationFailedMessage':
+        'Event created successfully, but notifications are unavailable.',
+    'eventCreatedSuccessMessage': 'Your event was created successfully.',
+    'eventCreateFailedMessage': 'Failed to create the event.',
+    'eventUpdateOwnOnlyMessage': 'You can only edit your own events.',
+    'eventUpdateSuccessMessage': 'Your changes have been saved.',
+    'eventUpdateFailedMessage': 'Failed to update the event.',
+    'eventNotFoundMessage': 'This event does not exist.',
+    'eventDeleteOwnOnlyMessage': 'You can only delete your own events.',
+    'eventDeleteSuccessMessage': 'The event has been deleted.',
+    'eventDeleteFailedMessage': 'Failed to delete the event.',
+    'eventRegisterPlayersOnlyMessage':
+        'Only players can register for an event.',
+    'eventRegisterSuccessMessage': 'You are registered for the event.',
+    'eventRegisterFailedMessage': 'Registration failed.',
+    'eventUnregisterPlayersOnlyMessage':
+        'Only players can unregister from an event.',
+    'eventUnregisterSuccessMessage': 'You are unregistered from the event.',
+    'eventUnregisterFailedMessage': 'Unregistration failed.',
+    'eventPublisherOnlyMessage':
+        'Only clubs, recruiters, or agents can perform this action.',
+    'eventNewNotificationTitle': 'New event',
+    'eventNewNotificationBody': '@name created a new event: @title',
   };
 }
