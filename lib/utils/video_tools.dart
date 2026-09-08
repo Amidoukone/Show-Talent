@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:video_player/video_player.dart';
@@ -159,7 +160,7 @@ class VideoTools {
   }) async {
     final source = File(videoPath);
     if (!await source.exists()) {
-      throw const VideoPreparationException('Vidéo introuvable.');
+      throw VideoPreparationException('videoNotFound'.tr);
     }
 
     final sourceDurationMs = await _getDurationMsRobust(videoPath);
@@ -172,10 +173,7 @@ class VideoTools {
         'prepareVideoFileForUpload',
         'Duration probing failed after all retries -> rejecting locally.',
       );
-      throw const VideoPreparationException(
-        'Impossible de déterminer la durée de cette vidéo. '
-        'Réessayez ou choisissez un autre fichier.',
-      );
+      throw VideoPreparationException('videoDurationProbeFailedMessage'.tr);
     }
 
     if (_isWithinDurationLimit(sourceDurationMs, maxDurationSeconds)) {
@@ -202,8 +200,12 @@ class VideoTools {
     if (trimmedDurationMs != null &&
         !_isWithinDurationLimit(trimmedDurationMs, maxDurationSeconds)) {
       throw VideoPreparationException(
-        'La vidéo préparée dure ${_formatDurationSeconds(_durationMsToSeconds(trimmedDurationMs))}. '
-        'La limite est de ${maxDurationSeconds}s.',
+        'videoPreparedDurationExceedsLimitMessage'.trParams({
+          'duration': _formatDurationSeconds(
+            _durationMsToSeconds(trimmedDurationMs),
+          ),
+          'limit': '${maxDurationSeconds}s',
+        }),
       );
     }
 
@@ -286,7 +288,7 @@ class VideoTools {
   }
 
   static String _formatDurationSeconds(int? seconds) {
-    if (seconds == null) return 'inconnue';
+    if (seconds == null) return 'videoDurationUnknownLabel'.tr;
     final minutes = seconds ~/ 60;
     final remainingSeconds = seconds % 60;
     return '${minutes}m ${remainingSeconds.toString().padLeft(2, '0')}s';
@@ -312,16 +314,12 @@ class VideoTools {
           info.isCancel == true ||
           outputPath == null ||
           outputPath.trim().isEmpty) {
-        throw const VideoPreparationException(
-          'Préparation vidéo annulée ou incomplète.',
-        );
+        throw VideoPreparationException('videoPreparationCancelledMessage'.tr);
       }
 
       final file = File(outputPath);
       if (!await file.exists() || await file.length() <= 0) {
-        throw const VideoPreparationException(
-          'Fichier vidéo préparé introuvable.',
-        );
+        throw VideoPreparationException('videoPreparedFileNotFoundMessage'.tr);
       }
 
       return file;
@@ -331,7 +329,7 @@ class VideoTools {
       }
       await _logError('_trimVideoToDuration', error.toString());
       throw VideoPreparationException(
-        'Impossible de préparer un extrait de $maxDurationSeconds secondes.',
+        'videoTrimFailedMessage'.trParams({'seconds': '$maxDurationSeconds'}),
       );
     }
   }

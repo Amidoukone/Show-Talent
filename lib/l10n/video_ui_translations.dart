@@ -535,6 +535,17 @@ class VideoUiTranslations extends Translations {
     'chatGuidedFirstContactReasonPart': 'Motif : @reason.',
     'chatGuidedFirstContactContextWithTitlePart': 'Contexte : @label - @title.',
     'chatGuidedFirstContactContextPart': 'Contexte : @label.',
+    'videoDurationProbeFailedMessage':
+        'Impossible de déterminer la durée de cette vidéo. Réessayez ou '
+        'choisissez un autre fichier.',
+    'videoPreparedDurationExceedsLimitMessage':
+        'La vidéo préparée dure @duration. La limite est de @limit.',
+    'videoDurationUnknownLabel': 'inconnue',
+    'videoPreparationCancelledMessage':
+        'Préparation vidéo annulée ou incomplète.',
+    'videoPreparedFileNotFoundMessage': 'Fichier vidéo préparé introuvable.',
+    'videoTrimFailedMessage':
+        'Impossible de préparer un extrait de @seconds secondes.',
   };
 
   static const Map<String, String> _en = {
@@ -1020,5 +1031,15 @@ class VideoUiTranslations extends Translations {
     'chatGuidedFirstContactReasonPart': 'Reason: @reason.',
     'chatGuidedFirstContactContextWithTitlePart': 'Context: @label - @title.',
     'chatGuidedFirstContactContextPart': 'Context: @label.',
+    'videoDurationProbeFailedMessage':
+        'Unable to determine this video\'s duration. Try again or choose '
+        'a different file.',
+    'videoPreparedDurationExceedsLimitMessage':
+        'The prepared video is @duration long. The limit is @limit.',
+    'videoDurationUnknownLabel': 'unknown',
+    'videoPreparationCancelledMessage':
+        'Video preparation was cancelled or incomplete.',
+    'videoPreparedFileNotFoundMessage': 'Prepared video file not found.',
+    'videoTrimFailedMessage': 'Unable to prepare a @seconds-second clip.',
   };
 }

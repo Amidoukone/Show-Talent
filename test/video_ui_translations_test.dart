@@ -176,6 +176,17 @@ void main() {
       'chatGuidedFirstContactReasonPart'.trParams({'reason': 'Suivi'}),
       'Motif : Suivi.',
     );
+    expect(
+      'videoPreparedDurationExceedsLimitMessage'.trParams({
+        'duration': '3m 05s',
+        'limit': '180s',
+      }),
+      'La vidéo préparée dure 3m 05s. La limite est de 180s.',
+    );
+    expect(
+      'videoTrimFailedMessage'.trParams({'seconds': '180'}),
+      'Impossible de préparer un extrait de 180 secondes.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -313,6 +324,17 @@ void main() {
     expect(
       'chatGuidedFirstContactReasonPart'.trParams({'reason': 'Follow-up'}),
       'Reason: Follow-up.',
+    );
+    expect(
+      'videoPreparedDurationExceedsLimitMessage'.trParams({
+        'duration': '3m 05s',
+        'limit': '180s',
+      }),
+      'The prepared video is 3m 05s long. The limit is 180s.',
+    );
+    expect(
+      'videoTrimFailedMessage'.trParams({'seconds': '180'}),
+      'Unable to prepare a 180-second clip.',
     );
   });
 }
