@@ -86,6 +86,10 @@ void main() {
     expect(VideoUiStrings.playbackSpeed, 'Vitesse de lecture');
     expect(VideoUiStrings.videoCaptionSheetTitle, 'Légende');
     expect(VideoUiStrings.seeMore, 'Voir plus');
+    expect(VideoUiStrings.likeVideo, 'Aimer la vidéo');
+    expect(VideoUiStrings.deleteVideoSemantic, 'Supprimer la vidéo');
+    expect(VideoUiStrings.videoNotFound, 'Vidéo introuvable.');
+    expect(VideoUiStrings.likeAdded, 'Mention J’aime ajoutée.');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -137,5 +141,9 @@ void main() {
     expect(VideoUiStrings.playbackSpeed, 'Playback speed');
     expect(VideoUiStrings.videoCaptionSheetTitle, 'Caption');
     expect(VideoUiStrings.seeMore, 'See more');
+    expect(VideoUiStrings.likeVideo, 'Like the video');
+    expect(VideoUiStrings.deleteVideoSemantic, 'Delete the video');
+    expect(VideoUiStrings.videoNotFound, 'Video not found.');
+    expect(VideoUiStrings.likeAdded, 'Like added.');
   });
 }

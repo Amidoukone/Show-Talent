@@ -7,8 +7,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 
 void main() {
-  setUp(() => Get.testMode = true);
-  tearDown(() => Get.reset());
+  // Set directly (not only via the pumped GetMaterialApp below) so plain
+  // `test()` bodies -- which never pump a widget at all, e.g. the
+  // `buildShareText` tests -- also see real French text instead of `.tr`
+  // falling back to the bare key.
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
 
   // Several VideoUiStrings members resolve through GetX's `.tr`, which reads
   // Get.locale/Get.translations -- populated by a mounted GetMaterialApp, the

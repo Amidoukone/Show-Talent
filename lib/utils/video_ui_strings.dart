@@ -103,31 +103,29 @@ class VideoUiStrings {
   static String get sessionRevokedMessage => 'sessionRevokedMessage'.tr;
   static String get authRequiredMessage => 'authRequiredMessage'.tr;
 
-  static const String missingShareUrl =
-      'Lien vidéo indisponible pour le partage.';
+  static String get missingShareUrl => 'missingShareUrl'.tr;
+  // Developer-facing (fed to the telemetry `message:` field), never shown to
+  // a user -- deliberately left untranslated, unlike `missingShareUrl` right
+  // above it which is the actual on-screen toast for the same failure.
   static const String missingShareUrlLog =
       'Lien video indisponible pour le partage.';
-  static const String shareUnavailable = 'Partage impossible pour le moment.';
-  static const String shareOffline = 'Connexion requise pour partager.';
-  static const String shareRecorded = 'Partage enregistré.';
-  static const String shareTitle = 'Partager la vidéo';
-  static const String shareSubject = 'Vidéo Adfoot';
-  static const String shareEmptyCaption = 'Regarde cette vidéo sur Adfoot.';
-  static const String shareWithCaptionPrefix =
-      'Regarde cette vidéo sur Adfoot :';
-  static const String likeOffline =
-      'Impossible d’aimer la vidéo hors connexion.';
-  static const String likeAdded = 'Mention J’aime ajoutée.';
-  static const String likeRemoved = 'Mention J’aime retirée.';
-  static const String likeUnavailable = 'Like impossible pour le moment.';
-  static const String reportOffline = 'Connexion requise pour signaler.';
-  static const String videoNotFound = 'Vidéo introuvable.';
-  static const String videoAlreadyReported = 'Tu as déjà signalé cette vidéo.';
-  static const String reportSent = 'Signalement envoyé, merci !';
-  static const String reportUnavailable =
-      'Signalement impossible pour le moment.';
-  static const String deleteOffline =
-      'Connexion requise pour supprimer cette vidéo.';
+  static String get shareUnavailable => 'shareUnavailable'.tr;
+  static String get shareOffline => 'shareOffline'.tr;
+  static String get shareRecorded => 'shareRecorded'.tr;
+  static String get shareTitle => 'shareTitle'.tr;
+  static String get shareSubject => 'shareSubject'.tr;
+  static String get shareEmptyCaption => 'shareEmptyCaption'.tr;
+  static String get shareWithCaptionPrefix => 'shareWithCaptionPrefix'.tr;
+  static String get likeOffline => 'likeOffline'.tr;
+  static String get likeAdded => 'likeAdded'.tr;
+  static String get likeRemoved => 'likeRemoved'.tr;
+  static String get likeUnavailable => 'likeUnavailable'.tr;
+  static String get reportOffline => 'reportOffline'.tr;
+  static String get videoNotFound => 'videoNotFound'.tr;
+  static String get videoAlreadyReported => 'videoAlreadyReported'.tr;
+  static String get reportSent => 'reportSent'.tr;
+  static String get reportUnavailable => 'reportUnavailable'.tr;
+  static String get deleteOffline => 'deleteOffline'.tr;
 
   static String get videoSearchOpen => 'videoSearchOpen'.tr;
   static String get videoSearchIdleLabel => 'videoSearchIdleLabel'.tr;

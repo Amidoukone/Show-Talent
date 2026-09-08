@@ -182,6 +182,25 @@ class VideoUiTranslations extends Translations {
     'sessionRevokedMessage':
         'Votre session a été fermée. Veuillez vous reconnecter.',
     'authRequiredMessage': 'Session expirée. Reconnectez-vous puis réessayez.',
+
+    'missingShareUrl': 'Lien vidéo indisponible pour le partage.',
+    'shareUnavailable': 'Partage impossible pour le moment.',
+    'shareOffline': 'Connexion requise pour partager.',
+    'shareRecorded': 'Partage enregistré.',
+    'shareTitle': 'Partager la vidéo',
+    'shareSubject': 'Vidéo Adfoot',
+    'shareEmptyCaption': 'Regarde cette vidéo sur Adfoot.',
+    'shareWithCaptionPrefix': 'Regarde cette vidéo sur Adfoot :',
+    'likeOffline': 'Impossible d’aimer la vidéo hors connexion.',
+    'likeAdded': 'Mention J’aime ajoutée.',
+    'likeRemoved': 'Mention J’aime retirée.',
+    'likeUnavailable': 'Like impossible pour le moment.',
+    'reportOffline': 'Connexion requise pour signaler.',
+    'videoNotFound': 'Vidéo introuvable.',
+    'videoAlreadyReported': 'Tu as déjà signalé cette vidéo.',
+    'reportSent': 'Signalement envoyé, merci !',
+    'reportUnavailable': 'Signalement impossible pour le moment.',
+    'deleteOffline': 'Connexion requise pour supprimer cette vidéo.',
   };
 
   static const Map<String, String> _en = {
@@ -337,5 +356,24 @@ class VideoUiTranslations extends Translations {
         'Please sign in again.',
     'sessionRevokedMessage': 'Your session was closed. Please sign in again.',
     'authRequiredMessage': 'Session expired. Sign in again, then retry.',
+
+    'missingShareUrl': 'Video link unavailable for sharing.',
+    'shareUnavailable': 'Sharing is unavailable right now.',
+    'shareOffline': 'Connection required to share.',
+    'shareRecorded': 'Share recorded.',
+    'shareTitle': 'Share the video',
+    'shareSubject': 'Adfoot video',
+    'shareEmptyCaption': 'Check out this video on Adfoot.',
+    'shareWithCaptionPrefix': 'Check out this video on Adfoot:',
+    'likeOffline': 'Unable to like the video while offline.',
+    'likeAdded': 'Like added.',
+    'likeRemoved': 'Like removed.',
+    'likeUnavailable': 'Like is unavailable right now.',
+    'reportOffline': 'Connection required to report.',
+    'videoNotFound': 'Video not found.',
+    'videoAlreadyReported': 'You already reported this video.',
+    'reportSent': 'Report sent, thank you!',
+    'reportUnavailable': 'Reporting is unavailable right now.',
+    'deleteOffline': 'Connection required to delete this video.',
   };
 }
