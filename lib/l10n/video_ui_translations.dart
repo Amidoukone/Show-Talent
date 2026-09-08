@@ -661,6 +661,16 @@ class VideoUiTranslations extends Translations {
     'emailLinkResetOpenFailedMessage':
         'Impossible d’ouvrir ce lien de réinitialisation. Demandez-en un '
         'nouveau depuis la page de connexion.',
+    'requirementBirthDateLabel': 'Date de naissance',
+    'requirementNationalityLabel': 'Nationalité',
+    'requirementPositionLabel': 'Poste',
+    'requirementCountryLabel': 'Pays',
+    'requirementStrongFootLabel': 'Pied fort',
+    'requirementHeightLabel': 'Taille',
+    'requirementContractStatusLabel': 'Statut contractuel',
+    'requirementCurrentClubLevelLabel': 'Niveau du club actuel',
+    'requirementCurrentSeasonStatsLabel': 'Statistiques de la saison en cours',
+    'requirementVideoOrCvLabel': 'Une vidéo publiée ou un CV',
   };
 
   static const Map<String, String> _en = {
@@ -1262,5 +1272,15 @@ class VideoUiTranslations extends Translations {
     'emailLinkResetOpenFailedMessage':
         'Unable to open this reset link. Request a new one from the sign '
         'in page.',
+    'requirementBirthDateLabel': 'Date of birth',
+    'requirementNationalityLabel': 'Nationality',
+    'requirementPositionLabel': 'Position',
+    'requirementCountryLabel': 'Country',
+    'requirementStrongFootLabel': 'Strong foot',
+    'requirementHeightLabel': 'Height',
+    'requirementContractStatusLabel': 'Contract status',
+    'requirementCurrentClubLevelLabel': 'Current club level',
+    'requirementCurrentSeasonStatsLabel': 'Current season stats',
+    'requirementVideoOrCvLabel': 'A published video or a CV',
   };
 }

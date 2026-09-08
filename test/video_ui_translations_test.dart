@@ -253,6 +253,8 @@ void main() {
       'Retour impossible pour le moment. Réessayez plus tard.',
     );
     expect('emailLinkResetRefusedTitle'.tr, 'Lien de réinitialisation refusé');
+    expect('requirementBirthDateLabel'.tr, 'Date de naissance');
+    expect('requirementVideoOrCvLabel'.tr, 'Une vidéo publiée ou un CV');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -464,5 +466,7 @@ void main() {
       'Unable to send feedback right now. Try again later.',
     );
     expect('emailLinkResetRefusedTitle'.tr, 'Reset link refused');
+    expect('requirementBirthDateLabel'.tr, 'Date of birth');
+    expect('requirementVideoOrCvLabel'.tr, 'A published video or a CV');
   });
 }

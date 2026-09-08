@@ -818,9 +818,9 @@ class AppUser {
   /// chaines recopiees finissent par diverger d'un accent ou d'un pluriel --
   /// donc par afficher deux fois la meme exigence sous deux noms au meme
   /// joueur.
-  static const String requirementBirthDate = 'Date de naissance';
-  static const String requirementNationality = 'Nationalité';
-  static const String requirementPosition = 'Poste';
+  static String get requirementBirthDate => 'requirementBirthDateLabel'.tr;
+  static String get requirementNationality => 'requirementNationalityLabel'.tr;
+  static String get requirementPosition => 'requirementPositionLabel'.tr;
 
   /// Ce qui empeche cette fiche d'apparaitre dans **toute** recherche.
   ///
@@ -886,7 +886,9 @@ class AppUser {
 
     // Le pays d'abord : c'est, avec l'age, ce qu'un club demande avant meme
     // de regarder une video.
-    if (country?.trim().isEmpty ?? true) missing.add('Pays');
+    if (country?.trim().isEmpty ?? true) {
+      missing.add('requirementCountryLabel'.tr);
+    }
 
     // L'age ensuite, parce que sans lui le serveur ne rend pas ce dossier
     // trouvable : `computeIsSearchable` refuse un `birthYear` nul
@@ -901,22 +903,24 @@ class AppUser {
 
     if (profile.nationalities.isEmpty) missing.add(requirementNationality);
     if (profile.positions.isEmpty) missing.add(requirementPosition);
-    if (profile.strongFoot == null) missing.add('Pied fort');
-    if (profile.heightCm == null) missing.add('Taille');
+    if (profile.strongFoot == null) {
+      missing.add('requirementStrongFootLabel'.tr);
+    }
+    if (profile.heightCm == null) missing.add('requirementHeightLabel'.tr);
     if (profile.contractStatus == null) {
-      missing.add('Statut contractuel');
+      missing.add('requirementContractStatusLabel'.tr);
     }
     if (profile.currentClubLevel == null) {
-      missing.add('Niveau du club actuel');
+      missing.add('requirementCurrentClubLevelLabel'.tr);
     }
     if (profile.currentSeason == null) {
-      missing.add('Statistiques de la saison en cours');
+      missing.add('requirementCurrentSeasonStatsLabel'.tr);
     }
 
     final hasEvidence =
         (videosPubliees?.isNotEmpty ?? false) ||
         (cvUrl?.trim().isNotEmpty ?? false);
-    if (!hasEvidence) missing.add('Une vidéo publiée ou un CV');
+    if (!hasEvidence) missing.add('requirementVideoOrCvLabel'.tr);
 
     return List<String>.unmodifiable(missing);
   }
