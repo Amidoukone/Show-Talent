@@ -343,15 +343,22 @@ class VideoUiStrings {
   }
 
   static String playbackProgressValue(Duration current, Duration total) {
-    return '${formatPlaybackTime(current)} sur ${formatPlaybackTime(total)}';
+    return 'playbackProgressValue'.trParams({
+      'current': formatPlaybackTime(current),
+      'total': formatPlaybackTime(total),
+    });
   }
 
   static String likeCountValue(int count) {
-    return count == 1 ? '1 mention J’aime' : '$count mentions J’aime';
+    return count == 1
+        ? 'likeCountValueSingular'.tr
+        : 'likeCountValuePlural'.trParams({'count': '$count'});
   }
 
   static String shareCountValue(int count) {
-    return count == 1 ? '1 partage' : '$count partages';
+    return count == 1
+        ? 'shareCountValueSingular'.tr
+        : 'shareCountValuePlural'.trParams({'count': '$count'});
   }
 
   static String formatPlaybackSpeed(double speed) {
@@ -364,11 +371,13 @@ class VideoUiStrings {
   }
 
   static String selectPlaybackSpeed(double speed) {
-    return 'Choisir la vitesse ${formatPlaybackSpeed(speed)}';
+    return 'selectPlaybackSpeed'.trParams({
+      'speed': formatPlaybackSpeed(speed),
+    });
   }
 
   static String uploadTrimmed(int seconds) {
-    return 'Vidéo préparée en extrait de ${seconds}s.';
+    return 'uploadTrimmed'.trParams({'seconds': '$seconds'});
   }
 
   static String uploadOptimizationFailed(String status) {

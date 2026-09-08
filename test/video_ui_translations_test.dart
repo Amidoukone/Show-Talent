@@ -109,6 +109,10 @@ void main() {
     );
     expect(VideoUiStrings.uploadStepPrepare, 'Préparation');
     expect(VideoUiStrings.uploadStageUploadingVideo, 'Téléversement vidéo...');
+    expect(VideoUiStrings.likeCountValue(1), '1 mention J’aime');
+    expect(VideoUiStrings.likeCountValue(4), '4 mentions J’aime');
+    expect(VideoUiStrings.shareCountValue(2), '2 partages');
+    expect(VideoUiStrings.uploadTrimmed(3), 'Vidéo préparée en extrait de 3s.');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -183,5 +187,12 @@ void main() {
     );
     expect(VideoUiStrings.uploadStepPrepare, 'Prepare');
     expect(VideoUiStrings.uploadStageUploadingVideo, 'Uploading video...');
+    expect(VideoUiStrings.likeCountValue(1), '1 like');
+    expect(VideoUiStrings.likeCountValue(4), '4 likes');
+    expect(VideoUiStrings.shareCountValue(2), '2 shares');
+    expect(
+      VideoUiStrings.uploadTrimmed(3),
+      'Video trimmed to a 3-second clip.',
+    );
   });
 }

@@ -295,6 +295,14 @@ class VideoUiTranslations extends Translations {
     'uploadStageCompressing': 'Compression...',
     'uploadStageUploadingVideo': 'Téléversement vidéo...',
     'uploadStageUploadingThumbnail': 'Téléversement miniature...',
+
+    'playbackProgressValue': '@current sur @total',
+    'likeCountValueSingular': '1 mention J’aime',
+    'likeCountValuePlural': '@count mentions J’aime',
+    'shareCountValueSingular': '1 partage',
+    'shareCountValuePlural': '@count partages',
+    'selectPlaybackSpeed': 'Choisir la vitesse @speed',
+    'uploadTrimmed': 'Vidéo préparée en extrait de @secondss.',
   };
 
   static const Map<String, String> _en = {
@@ -560,5 +568,13 @@ class VideoUiTranslations extends Translations {
     'uploadStageCompressing': 'Compressing...',
     'uploadStageUploadingVideo': 'Uploading video...',
     'uploadStageUploadingThumbnail': 'Uploading thumbnail...',
+
+    'playbackProgressValue': '@current of @total',
+    'likeCountValueSingular': '1 like',
+    'likeCountValuePlural': '@count likes',
+    'shareCountValueSingular': '1 share',
+    'shareCountValuePlural': '@count shares',
+    'selectPlaybackSpeed': 'Choose the @speed speed',
+    'uploadTrimmed': 'Video trimmed to a @seconds-second clip.',
   };
 }
