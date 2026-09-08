@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
@@ -160,20 +161,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return clamped;
   }
 
-  String? _validateOptionalNonNegativeInt(String? value, {int max = 9999}) {
+  String? _validateOptionalNonNegativeInt(
+    AppLocalizations l10n,
+    String? value, {
+    int max = 9999,
+  }) {
     final text = (value ?? '').trim();
     if (text.isEmpty) {
       return null;
     }
     final number = int.tryParse(text);
     if (number == null) {
-      return 'Veuillez saisir un nombre valide.';
+      return l10n.editProfileInvalidNumberValidator;
     }
     if (number < 0) {
-      return 'La valeur doit être positive.';
+      return l10n.editProfilePositiveNumberValidator;
     }
     if (number > max) {
-      return 'La valeur maximale est $max.';
+      return l10n.editProfileMaxValueValidator(max);
     }
     return null;
   }
@@ -232,19 +237,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   /// Le role strict, et non `_isPlayer` qui englobe le coach : un coach n'est
   /// jamais cherchable (la regle exige `role == "joueur"`), donc lui reclamer
   /// sa date de naissance serait une exigence sans contrepartie.
-  Widget _buildBirthDateField(BuildContext context) {
+  Widget _buildBirthDateField(BuildContext context, AppLocalizations l10n) {
     return FormField<DateTime>(
       initialValue: _selectedBirthDate,
       validator: (_) {
         if (!user.isPlayer) return null;
         if (_selectedBirthDate != null) return null;
-        return 'Renseignez votre date de naissance : sans elle, votre fiche '
-            'n’apparaît dans aucune recherche de recruteur.';
+        return l10n.editProfileBirthDateRequiredValidator;
       },
       builder: (state) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildBirthDateInput(context, state),
+          _buildBirthDateInput(context, l10n, state),
           if (state.hasError) ...[
             const SizedBox(height: 6),
             Padding(
@@ -265,19 +269,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Widget _buildBirthDateInput(
     BuildContext context,
+    AppLocalizations l10n,
     FormFieldState<DateTime> state,
   ) {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () async {
-        await _pickBirthDate();
+        await _pickBirthDate(l10n);
         state.didChange(_selectedBirthDate);
       },
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: user.isPlayer
-              ? 'Date de naissance *'
-              : 'Date de naissance',
+              ? l10n.editProfileBirthDateRequiredLabel
+              : l10n.editProfileBirthDateLabel,
           prefixIcon: const Icon(Icons.cake_outlined, color: kPrimary),
           suffixIcon: _selectedBirthDate != null
               ? IconButton(
@@ -286,7 +291,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     setState(() => _selectedBirthDate = null);
                     state.didChange(null);
                   },
-                  tooltip: 'Effacer',
+                  tooltip: l10n.commonClear,
                 )
               : null,
         ),
@@ -296,7 +301,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               child: Text(
                 _selectedBirthDate != null
                     ? _formatBirthDate(_selectedBirthDate!)
-                    : 'Ajoutez votre date de naissance',
+                    : l10n.editProfileBirthDatePlaceholder,
                 style: TextStyle(
                   color: _selectedBirthDate != null
                       ? AdColors.onSurface
@@ -320,7 +325,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return '$day/$month/${date.year}';
   }
 
-  Future<void> _pickBirthDate() async {
+  Future<void> _pickBirthDate(AppLocalizations l10n) async {
     final now = DateTime.now();
     final initial =
         _selectedBirthDate ?? DateTime(now.year - 18, now.month, now.day);
@@ -340,9 +345,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       initialDate: initialDate,
       firstDate: earliest,
       lastDate: latest,
-      helpText: 'Choisir votre date de naissance',
-      confirmText: 'Valider',
-      cancelText: 'Annuler',
+      helpText: l10n.editProfileBirthDatePickerHelpText,
+      confirmText: l10n.newPasswordSubmit,
+      cancelText: l10n.commonCancel,
     );
 
     if (picked != null) {
@@ -356,12 +361,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final shouldDiscard = await AdDialogs.confirm(
       context: context,
-      title: 'Abandonner les modifications ?',
-      message: 'Les informations saisies ne seront pas enregistrées.',
-      confirmLabel: 'Abandonner',
-      cancelLabel: 'Continuer',
+      title: l10n.editProfileDiscardConfirmTitle,
+      message: l10n.editProfileDiscardConfirmMessage,
+      confirmLabel: l10n.editProfileDiscardAction,
+      cancelLabel: l10n.eventFormContinueEditingAction,
       danger: true,
     );
     if (shouldDiscard && mounted) {
@@ -377,6 +383,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
+
+    final l10n = AppLocalizations.of(context)!;
 
     setState(() {
       _saving = true;
@@ -500,7 +508,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       await profileController.updateProfilePatch(user.uid, patch);
 
-      AdFeedback.success('Succès', 'Profil mis à jour.');
+      AdFeedback.success(
+        l10n.editProfileSaveSuccessTitle,
+        l10n.editProfileSaveSuccessMessage,
+      );
       _isDirty = false;
       if (!mounted) {
         return;
@@ -511,11 +522,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final title =
           e.title ??
           profileController.lastProfileWriteErrorTitle ??
-          'Sauvegarde refusée';
+          l10n.editProfileSaveDeniedTitle;
       final message =
           e.message ??
           profileController.lastProfileWriteErrorMessage ??
-          'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.';
+          l10n.editProfileSaveDeniedMessage;
       if (mounted) {
         setState(() {
           _saveFailureTitle = title;
@@ -527,10 +538,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       AppLogger.debug('EditProfile _save error: $e');
       if (mounted) {
         setState(() {
-          _saveFailureTitle = 'Erreur';
+          _saveFailureTitle = l10n.editProfileGenericErrorTitle;
           _saveFailureMessage =
               profileController.lastProfileWriteErrorMessage ??
-              'Impossible de sauvegarder les modifications.';
+              l10n.editProfileSaveFailedMessage;
         });
       }
     } finally {
@@ -543,49 +554,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final inputTheme = _inputDecorationTheme(context);
+    final l10n = AppLocalizations.of(context)!;
     final displayNameLabel = _isClub
-        ? 'Nom du club'
+        ? l10n.editProfileClubNameLabel
         : _isRecruiter
-        ? 'Nom affiché'
-        : 'Nom complet';
+        ? l10n.editProfileDisplayNameLabel
+        : l10n.editProfileFullNameLabel;
     final headerTitle = _isPlayer
         ? user.role == 'coach'
-              ? 'Profil coach'
-              : 'Profil joueur'
+              ? l10n.profilePublicTitleCoach
+              : l10n.editProfileHeaderTitlePlayer
         : _isClub
-        ? 'Profil club'
+        ? l10n.editProfileHeaderTitleClub
         : _isRecruiter
         ? user.isAgent
-              ? 'Profil agent'
-              : 'Profil recruteur'
-        : 'Profil';
+              ? l10n.editProfileHeaderTitleAgent
+              : l10n.editProfileHeaderTitleRecruiter
+        : l10n.profileFallbackTitle;
     final headerSubtitle = _isPlayer
         ? user.role == 'coach'
-              ? 'Présentez vos informations publiques de coach dans un cadre clair, lisible et crédible.'
-              : 'Présentez vos informations publiques de joueur dans un cadre clair, lisible et crédible.'
+              ? l10n.editProfileHeaderSubtitleCoach
+              : l10n.editProfileHeaderSubtitlePlayer
         : _isClub
-        ? 'Rassemblez les informations visibles de votre club dans une présentation professionnelle et cohérente.'
+        ? l10n.editProfileHeaderSubtitleClub
         : _isRecruiter
         ? user.isAgent
-              ? 'Centralisez votre identité professionnelle, votre agence et vos coordonnées dans un profil de représentation plus clair.'
-              : 'Centralisez votre identité professionnelle, votre structure de recrutement et vos coordonnées dans un profil plus clair.'
-        : 'Mettez à jour les informations visibles de votre profil dans un cadre plus clair.';
+              ? l10n.editProfileHeaderSubtitleAgent
+              : l10n.editProfileHeaderSubtitleRecruiter
+        : l10n.editProfileHeaderSubtitleDefault;
     final generalInfoSubtitle = _isClub
-        ? 'Nom du club, contact, langues et présentation visibles sur le profil.'
+        ? l10n.editProfileGeneralInfoSubtitleClub
         : _isRecruiter
-        ? 'Nom affiché, contact, langues et présentation professionnelle visibles sur le profil.'
-        : 'Nom affiché, contact, langues et présentation visible sur le profil.';
+        ? l10n.editProfileGeneralInfoSubtitleRecruiter
+        : l10n.editProfileGeneralInfoSubtitleDefault;
     final bioLabel = _isPlayer
         ? user.role == 'coach'
-              ? 'Présentation du coach'
-              : 'Présentation du joueur'
+              ? l10n.profileBioTitleCoach
+              : l10n.profileBioTitlePlayer
         : _isClub
-        ? 'Présentation du club'
+        ? l10n.profileBioTitleClub
         : _isRecruiter
         ? user.isAgent
-              ? 'Présentation de l’agent'
-              : 'Présentation du recruteur'
-        : 'Présentation';
+              ? l10n.profileBioTitleAgent
+              : l10n.profileBioTitleRecruiter
+        : l10n.profileBioTitleDefault;
 
     return PopScope(
       canPop: false,
@@ -595,7 +607,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       },
       child: Scaffold(
         backgroundColor: kSurface,
-        appBar: const AdAppBar(title: 'Modifier le profil'),
+        appBar: AdAppBar(title: l10n.editProfileAppBarTitle),
         body: Theme(
           data: Theme.of(context).copyWith(
             inputDecorationTheme: inputTheme,
@@ -658,13 +670,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             const SizedBox(height: 16),
                             ProfileActionNotice(
                               title:
-                                  _saveFailureTitle ?? 'Sauvegarde impossible',
+                                  _saveFailureTitle ??
+                                  l10n.editProfileSaveFailureFallbackTitle,
                               message: _saveFailureMessage!,
                             ),
                           ],
                           const SizedBox(height: 16),
                           AdSectionCard(
-                            title: 'Informations générales',
+                            title: l10n.editProfileGeneralInfoSectionTitle,
                             subtitle: generalInfoSubtitle,
                             icon: Icons.badge_rounded,
                             child: Column(
@@ -676,7 +689,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   validator: (value) {
                                     final text = (value ?? '').trim();
                                     if (text.isEmpty) {
-                                      return 'Le nom est requis';
+                                      return l10n
+                                          .editProfileNameRequiredValidator;
                                     }
                                     return null;
                                   },
@@ -684,20 +698,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 const SizedBox(height: 12),
                                 _buildTextField(
                                   controller: _phoneController,
-                                  label: 'Numéro de téléphone',
+                                  label: l10n.editProfilePhoneLabel,
                                   icon: Icons.phone_outlined,
                                   keyboardType: TextInputType.phone,
                                 ),
                                 const SizedBox(height: 12),
                                 _buildTextField(
                                   controller: _languagesController,
-                                  label: 'Langues',
+                                  label: l10n.editProfileLanguagesLabel,
                                   icon: Icons.language_outlined,
-                                  hint: 'Ex : Français, Anglais, Espagnol',
+                                  hint: l10n.editProfileLanguagesHint,
                                 ),
                                 if (_isPlayer) ...[
                                   const SizedBox(height: 12),
-                                  _buildBirthDateField(context),
+                                  _buildBirthDateField(context, l10n),
                                 ],
                                 const SizedBox(height: 12),
                                 _buildTextField(
@@ -713,11 +727,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           if (_isPlayer)
                             AdSectionCard(
                               title: user.role == 'coach'
-                                  ? 'Cadre sportif du coach'
-                                  : 'Identité sportive du joueur',
+                                  ? l10n.editProfileCoachFrameTitle
+                                  : l10n.editProfilePlayerIdentityTitle,
                               subtitle: user.role == 'coach'
-                                  ? 'Renseignez la structure dans laquelle vous intervenez publiquement.'
-                                  : 'Renseignez le club ou l’académie actuellement affichés sur votre profil. Vos postes se cochent dans le profil avancé.',
+                                  ? l10n.editProfileCoachFrameSubtitle
+                                  : l10n.editProfilePlayerIdentitySubtitle,
                               icon: Icons.sports_soccer_outlined,
                               child: Column(
                                 children: [
@@ -728,38 +742,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   if (_isCoach) ...[
                                     _buildTextField(
                                       controller: _positionController,
-                                      label: 'Fonction sportive',
+                                      label: l10n.profileCoachRoleLabel,
                                       icon: Icons.sports_outlined,
-                                      hint:
-                                          'Ex : Coach principal, préparateur physique',
+                                      hint: l10n.editProfilePositionHint,
                                     ),
                                     const SizedBox(height: 12),
                                   ],
                                   _buildTextField(
                                     controller: _teamController,
                                     label: user.role == 'coach'
-                                        ? 'Club / structure actuelle'
-                                        : 'Club actuel',
+                                        ? l10n.editProfileCoachClubLabel
+                                        : l10n.profileCurrentClubLabel,
                                     icon: Icons.flag_outlined,
-                                    hint: 'Ex : AS Bamako',
+                                    hint: l10n.editProfileClubHint,
                                   ),
                                 ],
                               ),
                             )
                           else if (_isClub)
                             AdSectionCard(
-                              title: 'Cadre sportif du club',
-                              subtitle:
-                                  'Renseignez la compétition principale du club pour situer immédiatement son niveau d’évolution.',
+                              title: l10n.editProfileClubFrameTitle,
+                              subtitle: l10n.editProfileClubFrameSubtitle,
                               icon: Icons.stadium_outlined,
                               child: Column(
                                 children: [
                                   _buildTextField(
                                     controller: _ligueController,
-                                    label: 'Ligue / championnat principal',
+                                    label: l10n.editProfileLeagueLabel,
                                     icon: Icons.emoji_events_outlined,
-                                    hint:
-                                        'Ex : Ligue 2, National U19, Régional 1',
+                                    hint: l10n.editProfileLeagueHint,
                                   ),
                                 ],
                               ),
@@ -767,64 +778,71 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           else if (_isRecruiter)
                             AdSectionCard(
                               title: user.isAgent
-                                  ? 'Références de représentation'
-                                  : 'Références de recrutement',
+                                  ? l10n.profilePublicTitleAgent
+                                  : l10n.editProfileRecruitmentReferencesTitle,
                               subtitle: user.isAgent
-                                  ? 'Présentez votre agence ou structure et le volume de mouvements accompagnés pour cadrer votre activité.'
-                                  : 'Présentez votre structure et votre volume de recrutements pour situer clairement votre activité.',
+                                  ? l10n
+                                        .editProfileRecruitmentReferencesSubtitleAgent
+                                  : l10n
+                                        .editProfileRecruitmentReferencesSubtitleDefault,
                               icon: Icons.search_rounded,
                               child: Column(
                                 children: [
                                   _buildTextField(
                                     controller: _entrepriseController,
                                     label: user.isAgent
-                                        ? 'Agence / structure'
-                                        : 'Structure / cellule de recrutement',
+                                        ? l10n.profileAgencyLabel
+                                        : l10n
+                                              .editProfileRecruitmentStructureLabel,
                                     icon: Icons.apartment_outlined,
                                     hint: user.isAgent
-                                        ? 'Ex : Agence Horizon Football'
-                                        : 'Ex : Cellule de recrutement du FC Plateau',
+                                        ? l10n.editProfileAgencyHint
+                                        : l10n
+                                              .editProfileRecruitmentStructureHint,
                                   ),
                                   const SizedBox(height: 12),
                                   _buildTextField(
                                     controller: _nombreRecrutementsController,
                                     label: user.isAgent
-                                        ? 'Placements ou signatures réalisés'
-                                        : 'Recrutements réalisés',
+                                        ? l10n.profilePlacementsLabel
+                                        : l10n.profileRecruitmentsLabel,
                                     icon: Icons.how_to_reg_outlined,
                                     keyboardType: TextInputType.number,
-                                    validator: _validateOptionalNonNegativeInt,
+                                    validator: (value) =>
+                                        _validateOptionalNonNegativeInt(
+                                          l10n,
+                                          value,
+                                        ),
                                   ),
                                 ],
                               ),
                             ),
                           const SizedBox(height: 16),
                           AdSectionCard(
-                            title: 'Localisation',
-                            subtitle:
-                                'Ville, région et pays affichés sur votre profil public lorsque ces informations sont renseignées.',
+                            title: l10n.profileLocationLabel,
+                            subtitle: l10n.editProfileLocationSectionSubtitle,
                             icon: Icons.place_outlined,
                             child: Column(
                               children: [
                                 _buildTextField(
                                   controller: _cityController,
-                                  label: 'Ville',
+                                  label: l10n.editProfileCityLabel,
                                   icon: Icons.location_city_outlined,
-                                  hint: 'Ex : Abidjan',
+                                  hint: l10n.editProfileCityHint,
                                 ),
                                 const SizedBox(height: 12),
                                 _buildTextField(
                                   controller: _regionController,
-                                  label: 'Région / État',
+                                  label: l10n.editProfileRegionLabel,
                                   icon: Icons.map_outlined,
-                                  hint: 'Ex : District autonome d’Abidjan',
+                                  hint: l10n.editProfileRegionHint,
                                 ),
                                 const SizedBox(height: 12),
                                 _buildTextField(
                                   controller: _countryController,
-                                  label: 'Pays',
+                                  label: l10n.editProfileCountryLabel,
                                   icon: Icons.public_outlined,
-                                  hint: 'Ex : Côte d’Ivoire',
+                                  hint: l10n.editProfileCountryHint,
                                 ),
                               ],
                             ),
@@ -854,7 +872,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               onPressed: _saving ? null : _save,
               loading: _saving,
               leading: Icons.save_rounded,
-              label: _saving ? 'Sauvegarde...' : 'Enregistrer',
+              label: _saving
+                  ? l10n.editProfileSavingAction
+                  : l10n.editProfileSaveAction,
             ),
           ),
         ),
@@ -905,9 +925,9 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
     _cvUrl = _currentUser.cvUrl;
   }
 
-  String get _maxCvSizeLabel {
+  String _maxCvSizeLabel(AppLocalizations l10n) {
     final sizeMb = ProfileController.maxCvPdfBytes ~/ (1024 * 1024);
-    return '$sizeMb Mo';
+    return '$sizeMb ${l10n.editProfileCvSizeUnitLabel}';
   }
 
   void _showCvFailure(String title, String message) {
@@ -932,6 +952,7 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
 
   Future<void> _pickAndUploadCv(AppUser user) async {
     var uploadStarted = false;
+    final l10n = AppLocalizations.of(context)!;
 
     try {
       _clearCvFailure();
@@ -947,10 +968,12 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
 
       final pickedFile = result.files.single;
       if (pickedFile.size > ProfileController.maxCvPdfBytes) {
-        final message = 'Le fichier PDF doit faire $_maxCvSizeLabel maximum.';
-        _showCvFailure('CV trop volumineux', message);
+        final message = l10n.editProfileCvSizeTooLargeMessage(
+          _maxCvSizeLabel(l10n),
+        );
+        _showCvFailure(l10n.editProfileCvSizeTooLargeTitle, message);
         AdFeedback.error(
-          'CV trop volumineux',
+          l10n.editProfileCvSizeTooLargeTitle,
           message,
           duration: const Duration(seconds: 6),
         );
@@ -965,10 +988,10 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
       final hasStream = readStream != null;
 
       if (!hasBytes && !hasPath && !hasStream) {
-        const message = 'Impossible de lire ce PDF depuis votre appareil.';
-        _showCvFailure('CV illisible', message);
+        final message = l10n.editProfileCvUnreadableMessage;
+        _showCvFailure(l10n.editProfileCvUnreadableTitle, message);
         AdFeedback.error(
-          'CV illisible',
+          l10n.editProfileCvUnreadableTitle,
           message,
           duration: const Duration(seconds: 6),
         );
@@ -993,10 +1016,10 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
           _cvUrl = _currentUser.cvUrl;
           _cvFailureTitle =
               widget.profileController.lastCvUploadErrorTitle ??
-              'Ajout impossible';
+              l10n.editProfileCvAddFailedTitle;
           _cvFailureMessage =
               widget.profileController.lastCvUploadErrorMessage ??
-              "Impossible d'ajouter ce CV.";
+              l10n.editProfileCvAddFailedMessage;
         });
         return;
       }
@@ -1009,10 +1032,10 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
       return;
     } catch (e, st) {
       AppLogger.debug('CV picker/upload error: $e\n$st');
-      const message = "Impossible de lire ou d'ajouter ce CV.";
-      _showCvFailure('Ajout impossible', message);
+      final message = l10n.editProfileCvPickUploadFailedMessage;
+      _showCvFailure(l10n.editProfileCvAddFailedTitle, message);
       AdFeedback.error(
-        'Ajout impossible',
+        l10n.editProfileCvAddFailedTitle,
         message,
         duration: const Duration(seconds: 6),
       );
@@ -1027,31 +1050,39 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
   Widget build(BuildContext context) {
     final user = _currentUser;
     final hasCv = (_cvUrl ?? '').trim().isNotEmpty;
+    final l10n = AppLocalizations.of(context)!;
 
     return AdSectionCard(
-      title: 'CV (PDF)',
-      subtitle:
-          'Ajoutez un CV football au format PDF pour renforcer la crédibilité de votre présentation.',
+      title: l10n.editProfileCvTitle,
+      subtitle: l10n.editProfileCvSubtitle,
       icon: Icons.picture_as_pdf_outlined,
       trailing: hasCv
-          ? const Chip(
-              label: Text('Disponible'),
-              avatar: Icon(Icons.check_circle, color: Colors.white, size: 18),
+          ? Chip(
+              label: Text(l10n.editProfileCvAvailableLabel),
+              avatar: const Icon(
+                Icons.check_circle,
+                color: Colors.white,
+                size: 18,
+              ),
               backgroundColor: AdColors.success,
-              labelStyle: TextStyle(color: Colors.white),
+              labelStyle: const TextStyle(color: Colors.white),
             )
-          : const Chip(
-              label: Text('Aucun CV'),
-              avatar: Icon(Icons.info_outline, color: Colors.white, size: 18),
+          : Chip(
+              label: Text(l10n.editProfileCvNoneLabel),
+              avatar: const Icon(
+                Icons.info_outline,
+                color: Colors.white,
+                size: 18,
+              ),
               backgroundColor: AdColors.warning,
-              labelStyle: TextStyle(color: Colors.white),
+              labelStyle: const TextStyle(color: Colors.white),
             ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_cvFailureMessage != null) ...[
             ProfileActionNotice(
-              title: _cvFailureTitle ?? 'Ajout impossible',
+              title: _cvFailureTitle ?? l10n.editProfileCvAddFailedTitle,
               message: _cvFailureMessage!,
             ),
             const SizedBox(height: 12),
@@ -1063,10 +1094,10 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
             loading: _isUploading,
             leading: Icons.upload_file_rounded,
             label: _isUploading
-                ? 'Ajout du CV...'
+                ? l10n.editProfileCvUploadingAction
                 : hasCv
-                ? 'Remplacer le CV'
-                : 'Ajouter un CV',
+                ? l10n.editProfileCvReplaceAction
+                : l10n.editProfileCvAddAction,
             kind: AdButtonKind.tonal,
           ),
           if (hasCv) ...[
@@ -1092,7 +1123,9 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
                     },
               loading: _isDeleting,
               leading: Icons.delete_forever_rounded,
-              label: _isDeleting ? 'Suppression...' : 'Supprimer le CV',
+              label: _isDeleting
+                  ? l10n.editProfileCvDeletingAction
+                  : l10n.editProfileCvDeleteAction,
               kind: AdButtonKind.danger,
             ),
           ],

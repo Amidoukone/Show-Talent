@@ -57,15 +57,22 @@ void main() {
       editProfile,
       contains("_putNullableStringPatch(\n        patch,\n        'country'"),
     );
-    expect(editProfile, contains('Localisation'));
+    // The literal wording moved into the ARB template (l10n.editProfile* /
+    // l10n.profileLocationLabel) as part of the English-localization pass.
+    expect(editProfile, contains('l10n.profileLocationLabel'));
+    expect(arb, contains('"profileLocationLabel": "Localisation"'));
     expect(
-      editProfile.indexOf('Identité sportive du joueur'),
-      lessThan(editProfile.indexOf('Localisation')),
+      editProfile.indexOf('l10n.editProfilePlayerIdentityTitle'),
+      lessThan(editProfile.indexOf('l10n.profileLocationLabel')),
     );
     // Le poste libre a quitte l'editeur de base pour le joueur : il se coche
     // dans le profil avance, contre la liste fermee que la recherche filtre.
     // Le coach le garde -- sa fonction n'a pas d'equivalent dans cette liste.
-    expect(editProfile, contains('Vos postes se cochent dans le profil avancé'));
+    expect(editProfile, contains('l10n.editProfilePlayerIdentitySubtitle'));
+    expect(
+      arb,
+      contains('Vos postes se cochent dans le profil avancé'),
+    );
     expect(editProfile, contains('if (_isCoach) ...['));
     expect(editProfile, contains("patch['currentClubName']"));
     expect(editProfile, isNot(contains("patch['team']")));

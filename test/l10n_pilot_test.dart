@@ -157,6 +157,14 @@ void main() {
     expect(l10n.eventFormPublishAction, 'Publier l’événement');
     expect(l10n.offreFormPublishAction, 'Publier l’offre');
     expect(l10n.offreFormPositionsRequiredLabel, 'Postes recherchés *');
+    expect(
+      l10n.editProfileMaxValueValidator(9999),
+      'La valeur maximale est 9999.',
+    );
+    expect(
+      l10n.editProfileCvSizeTooLargeMessage('10 Mo'),
+      'Le fichier PDF doit faire 10 Mo maximum.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -290,6 +298,14 @@ void main() {
     expect(
       l10n.offreFormPositionsRequiredLabel,
       isNot('Postes recherchés *'),
+    );
+    expect(
+      l10n.editProfileMaxValueValidator(9999),
+      'The maximum value is 9999.',
+    );
+    expect(
+      l10n.editProfileCvSizeTooLargeMessage('10 MB'),
+      'The PDF file must be 10 MB maximum.',
     );
   });
 }
