@@ -59,11 +59,7 @@ class EmailLinkHandler {
   /// production but does reach the remote logger, so a broken link flow is
   /// now something that can be seen rather than guessed at.
   static void _logIssue(String message, {Object? error}) {
-    AppLogger.warning(
-      message,
-      source: 'email_link_handler',
-      error: error,
-    );
+    AppLogger.warning(message, source: 'email_link_handler', error: error);
   }
 
   static Future<void> init() async {
@@ -76,9 +72,10 @@ class EmailLinkHandler {
       _appLinks ??= AppLinks();
 
       try {
-        final initialUri = await _appLinks!
-            .getInitialLink()
-            .timeout(const Duration(seconds: 5), onTimeout: () => null);
+        final initialUri = await _appLinks!.getInitialLink().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => null,
+        );
         if (initialUri != null) {
           await _handle(initialUri);
         }
@@ -228,12 +225,9 @@ class EmailLinkHandler {
       // A refusal that came from the network rather than from the code itself
       // must not burn the link for a second tap.
       _handledOobCodes.remove(oob);
-      _logIssue(
-        'resetPassword link refused (${e.code})',
-        error: e,
-      );
+      _logIssue('resetPassword link refused (${e.code})', error: e);
       await _openLoginWithNotice(
-        title: 'Lien de réinitialisation refusé',
+        title: 'emailLinkResetRefusedTitle'.tr,
         message: AuthErrorMapper.toMessage(e),
       );
       return false;
@@ -242,10 +236,8 @@ class EmailLinkHandler {
       _handledOobCodes.remove(oob);
       _logIssue('resetPassword link failed unexpectedly', error: e);
       await _openLoginWithNotice(
-        title: 'Lien de réinitialisation refusé',
-        message:
-            'Impossible d’ouvrir ce lien de réinitialisation. '
-            'Demandez-en un nouveau depuis la page de connexion.',
+        title: 'emailLinkResetRefusedTitle'.tr,
+        message: 'emailLinkResetOpenFailedMessage'.tr,
       );
       return false;
     }

@@ -129,7 +129,7 @@ void main() {
 
       expect(handler, contains('_openLoginWithNotice('));
       expect(handler, contains("'sessionNoticeTitle': title"));
-      expect(handler, contains("title: 'Lien de réinitialisation refusé'"));
+      expect(handler, contains("title: 'emailLinkResetRefusedTitle'.tr"));
       // A network refusal must not burn the link for a second tap.
       expect(handler, contains('_handledOobCodes.remove(oob);'));
     });

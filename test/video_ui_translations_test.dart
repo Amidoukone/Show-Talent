@@ -252,6 +252,7 @@ void main() {
       'contactIntakeFeedbackUnavailableMessage'.tr,
       'Retour impossible pour le moment. Réessayez plus tard.',
     );
+    expect('emailLinkResetRefusedTitle'.tr, 'Lien de réinitialisation refusé');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -462,5 +463,6 @@ void main() {
       'contactIntakeFeedbackUnavailableMessage'.tr,
       'Unable to send feedback right now. Try again later.',
     );
+    expect('emailLinkResetRefusedTitle'.tr, 'Reset link refused');
   });
 }

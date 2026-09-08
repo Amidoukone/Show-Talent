@@ -657,6 +657,10 @@ class VideoUiTranslations extends Translations {
         'Seuls les participants peuvent envoyer ce retour.',
     'contactIntakeFeedbackInvalidMessage':
         'Retour invalide. Vérifiez les informations envoyées.',
+    'emailLinkResetRefusedTitle': 'Lien de réinitialisation refusé',
+    'emailLinkResetOpenFailedMessage':
+        'Impossible d’ouvrir ce lien de réinitialisation. Demandez-en un '
+        'nouveau depuis la page de connexion.',
   };
 
   static const Map<String, String> _en = {
@@ -1254,5 +1258,9 @@ class VideoUiTranslations extends Translations {
         'Only participants can send this feedback.',
     'contactIntakeFeedbackInvalidMessage':
         'Invalid feedback. Check the information sent.',
+    'emailLinkResetRefusedTitle': 'Reset link refused',
+    'emailLinkResetOpenFailedMessage':
+        'Unable to open this reset link. Request a new one from the sign '
+        'in page.',
   };
 }
