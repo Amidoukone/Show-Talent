@@ -334,9 +334,7 @@ class _OffreScreenState extends State<OffreScreen> {
       // Only when this screen stands on its own. Inside `OpportunitiesScreen`
       // the navigation bar's Publier button already creates, and two create
       // buttons fifty pixels apart is worse than the extra tap either saves.
-      floatingActionButton: widget.showAppBar
-          ? _buildFloatingButton()
-          : null,
+      floatingActionButton: widget.showAppBar ? _buildFloatingButton() : null,
     );
   }
 
@@ -360,9 +358,9 @@ class _OffreScreenState extends State<OffreScreen> {
   void _setPositionFilter(FootballPosition? position) {
     setState(() => _selectedPosition = position);
     offreController.setPositionFilter(
-      position == null ? const <FootballPosition>[] : <FootballPosition>[
-        position,
-      ],
+      position == null
+          ? const <FootballPosition>[]
+          : <FootballPosition>[position],
     );
   }
 
@@ -587,12 +585,8 @@ class _OffreScreenState extends State<OffreScreen> {
           // Les libelles, pas les codes : personne ne tape « CB » dans une
           // barre de recherche, et un code affiche nulle part ne peut pas
           // etre recherche.
-          o.positionCodes.any(
-            (p) => p.labelFr.toLowerCase().contains(query),
-          ) ||
-          o.ageCategories.any(
-            (c) => c.labelFr.toLowerCase().contains(query),
-          ) ||
+          o.positionCodes.any((p) => p.labelFr.toLowerCase().contains(query)) ||
+          o.ageCategories.any((c) => c.labelFr.toLowerCase().contains(query)) ||
           (o.clubLevel?.labelFr ?? '').toLowerCase().contains(query) ||
           (o.localisation ?? '').toLowerCase().contains(query) ||
           (o.remuneration ?? '').toLowerCase().contains(query) ||
@@ -1469,9 +1463,12 @@ class _OffreScreenState extends State<OffreScreen> {
   Future<void> _openOfferChat(
     AppUser otherUser,
     Offre offre, {
-    String sourceLabel = 'Offre',
+    String sourceLabel = '',
   }) async {
     final l10n = AppLocalizations.of(context)!;
+    final resolvedSourceLabel = sourceLabel.isEmpty
+        ? ContactContext.labelForType(ContactContextType.offer)
+        : sourceLabel;
     final current = userController.user;
     if (current == null) {
       AdFeedback.error(
@@ -1520,7 +1517,7 @@ class _OffreScreenState extends State<OffreScreen> {
           context: ContactContext.offer(
             offerId: offre.id,
             title: offre.titre,
-            sourceLabel: sourceLabel,
+            sourceLabel: resolvedSourceLabel,
           ),
         ),
         isScrollControlled: true,
@@ -1693,9 +1690,7 @@ class _OffreScreenState extends State<OffreScreen> {
                         offre.positionCodes.length > 1
                             ? l10n.offrePositionsLabelPlural
                             : l10n.offrePositionsLabelSingular,
-                        offre.positionCodes
-                            .map((p) => p.labelFr)
-                            .join(' · '),
+                        offre.positionCodes.map((p) => p.labelFr).join(' · '),
                       ),
                     if (offre.ageCategories.isNotEmpty)
                       _buildDetailTile(
@@ -1866,7 +1861,7 @@ class _OffreScreenState extends State<OffreScreen> {
                             onPressed: () => _openOfferChat(
                               candidat,
                               offre,
-                              sourceLabel: 'Candidats',
+                              sourceLabel: 'offreCandidatesSourceLabel'.tr,
                             ),
                           ),
                         ],

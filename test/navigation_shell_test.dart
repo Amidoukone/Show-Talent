@@ -192,7 +192,9 @@ void main() {
       expect(screen, contains('void didUpdateWidget('));
       expect(
         screen,
-        contains('if (oldWidget.tabRequestSerial == widget.tabRequestSerial) return;'),
+        contains(
+          'if (oldWidget.tabRequestSerial == widget.tabRequestSerial) return;',
+        ),
       );
       expect(main, contains('_opportunitiesTabSerial++'));
     });
@@ -307,7 +309,10 @@ void main() {
     test('the ledger is per consumer and resets on the next navigation', () {
       final intent = _read('lib/services/route_intent.dart');
       expect(intent, contains('static Map<dynamic, dynamic>? readOnce('));
-      expect(intent, contains('if (!identical(arguments, _argumentsIdentity))'));
+      expect(
+        intent,
+        contains('if (!identical(arguments, _argumentsIdentity))'),
+      );
       expect(intent, contains('_consumed.clear();'));
       expect(intent, contains('if (!_consumed.add(key))'));
     });
@@ -332,8 +337,14 @@ void main() {
       final offers = _read('lib/screens/offre_screen.dart');
       final events = _read('lib/screens/event_list_screen.dart');
 
-      expect(offers, contains('widget.showAppBar\n          ? _buildFloatingButton()'));
-      expect(events, contains('widget.showAppBar\n          ? _buildFloatingActionButton('));
+      expect(
+        offers,
+        contains('widget.showAppBar ? _buildFloatingButton() : null'),
+      );
+      expect(
+        events,
+        contains('widget.showAppBar\n          ? _buildFloatingActionButton('),
+      );
     });
 
     // Standing on their own they keep it, so nothing changes for a caller

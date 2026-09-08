@@ -174,6 +174,13 @@ void main() {
     );
     expect(l10n.countryPickerSearchLabel, 'Rechercher un pays');
     expect(l10n.countryPickerNoResultsMessage, 'Aucun pays trouvé.');
+    expect(l10n.offreCandidatesSourceLabel, 'Candidats');
+    expect(l10n.contactIntakeSheetTitle, 'Premier contact guidé');
+    expect(l10n.contactIntakeSheetStartAction, 'Démarrer');
+    expect(
+      l10n.contactIntakeSheetTargetLabel('Awa', 'joueur'),
+      'Contact visé : Awa (joueur)',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -324,5 +331,12 @@ void main() {
     );
     expect(l10n.countryPickerSearchLabel, 'Search for a country');
     expect(l10n.countryPickerNoResultsMessage, 'No country found.');
+    expect(l10n.offreCandidatesSourceLabel, 'Candidates');
+    expect(l10n.contactIntakeSheetTitle, isNot('Premier contact guidé'));
+    expect(l10n.contactIntakeSheetStartAction, 'Start');
+    expect(
+      l10n.contactIntakeSheetTargetLabel('Awa', 'joueur'),
+      'Contacting: Awa (joueur)',
+    );
   });
 }

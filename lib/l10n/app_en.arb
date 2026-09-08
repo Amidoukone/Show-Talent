@@ -920,5 +920,31 @@
   "advancedFormAgentSaveSuccessMessage": "Your professional information has been saved.",
 
   "countryPickerSearchLabel": "Search for a country",
-  "countryPickerNoResultsMessage": "No country found."
+  "countryPickerNoResultsMessage": "No country found.",
+
+  "offreCandidatesSourceLabel": "Candidates",
+
+  "contactIntakeSheetTitle": "Guided first contact",
+  "contactIntakeSheetSubtitle": "Frame the exchange before opening the conversation. Adfoot can track the introduction without accessing private messages.",
+  "contactIntakeSheetReasonLabel": "Reason for contact",
+  "contactIntakeSheetIntroLabel": "Intro message",
+  "contactIntakeSheetIntroHint": "Describe the purpose of the contact and the next step you'd like.",
+  "contactIntakeSheetIntroTooShortError": "Add a slightly more detailed message.",
+  "contactIntakeSheetStartAction": "Start",
+  "contactIntakeSheetTargetLabel": "Contacting: {targetName} ({targetRole})",
+  "@contactIntakeSheetTargetLabel": {
+    "placeholders": {
+      "targetName": {
+        "type": "String"
+      },
+      "targetRole": {
+        "type": "String"
+      }
+    }
+  },
+  "contactIntakeSheetReasonOpportunityDescription": "Reaching out about a concrete opportunity.",
+  "contactIntakeSheetReasonTrialDescription": "Invitation, scouting, or a trial.",
+  "contactIntakeSheetReasonApplicationDescription": "Introducing a profile or expressing interest.",
+  "contactIntakeSheetReasonFollowUpDescription": "Following up on an exchange already underway.",
+  "contactIntakeSheetReasonInformationDescription": "A question or a request for details."
 }

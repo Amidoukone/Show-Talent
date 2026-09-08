@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/widgets/ad_button.dart';
@@ -54,41 +55,39 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
     return ContactReasonCode.information;
   }
 
-  List<_ReasonOption> _reasonOptions() {
-    return const <_ReasonOption>[
+  List<_ReasonOption> _reasonOptions(AppLocalizations l10n) {
+    return <_ReasonOption>[
       _ReasonOption(
         code: ContactReasonCode.opportunity,
-        label: 'Opportunit\u00e9',
-        description:
-            'Prise de contact autour d\u2019une opportunit\u00e9 concr\u00e8te.',
+        label: ContactIntake.reasonLabel(ContactReasonCode.opportunity),
+        description: l10n.contactIntakeSheetReasonOpportunityDescription,
       ),
       _ReasonOption(
         code: ContactReasonCode.trial,
-        label: 'Essai / \u00e9valuation',
-        description: 'Invitation, observation ou mise \u00e0 l\u2019essai.',
+        label: ContactIntake.reasonLabel(ContactReasonCode.trial),
+        description: l10n.contactIntakeSheetReasonTrialDescription,
       ),
       _ReasonOption(
         code: ContactReasonCode.application,
-        label: 'Candidature / pr\u00e9sentation',
-        description:
-            'Pr\u00e9sentation de profil ou manifestation d\u2019int\u00e9r\u00eat.',
+        label: ContactIntake.reasonLabel(ContactReasonCode.application),
+        description: l10n.contactIntakeSheetReasonApplicationDescription,
       ),
       _ReasonOption(
         code: ContactReasonCode.followUp,
-        label: 'Suivi',
-        description:
-            'Relance ou suivi d\u2019un \u00e9change d\u00e9j\u00e0 engag\u00e9.',
+        label: ContactIntake.reasonLabel(ContactReasonCode.followUp),
+        description: l10n.contactIntakeSheetReasonFollowUpDescription,
       ),
       _ReasonOption(
         code: ContactReasonCode.information,
-        label: 'Information',
-        description: 'Question ou demande de pr\u00e9cision.',
+        label: ContactIntake.reasonLabel(ContactReasonCode.information),
+        description: l10n.contactIntakeSheetReasonInformationDescription,
       ),
     ];
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final media = MediaQuery.of(context);
     final cs = Theme.of(context).colorScheme;
     final bottomInset = media.viewInsets.bottom;
@@ -112,8 +111,9 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: cs.surface,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
               border: Border(
                 top: BorderSide(color: cs.outline.withValues(alpha: 0.22)),
               ),
@@ -145,10 +145,8 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                           ),
                           const SizedBox(height: 16),
                           Text(
-                            'Premier contact guid\u00e9',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
+                            l10n.contactIntakeSheetTitle,
+                            style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(
                                   fontWeight: FontWeight.w900,
                                   color: cs.onSurface,
@@ -156,10 +154,8 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Cadrez l\u2019\u00e9change avant l\u2019ouverture de la conversation. Adfoot pourra suivre la mise en relation sans acc\u00e9der aux messages priv\u00e9s.',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
+                            l10n.contactIntakeSheetSubtitle,
+                            style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: cs.onSurface.withValues(alpha: 0.72),
                                   height: 1.35,
@@ -175,10 +171,10 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                           DropdownButtonFormField<String>(
                             initialValue: _selectedReason,
                             isExpanded: true,
-                            decoration: const InputDecoration(
-                              labelText: 'Motif du contact',
+                            decoration: InputDecoration(
+                              labelText: l10n.contactIntakeSheetReasonLabel,
                             ),
-                            items: _reasonOptions()
+                            items: _reasonOptions(l10n)
                                 .map(
                                   (option) => DropdownMenuItem<String>(
                                     value: option.code,
@@ -196,17 +192,15 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            _reasonOptions()
+                            _reasonOptions(l10n)
                                     .firstWhere(
                                       (option) =>
                                           option.code == _selectedReason,
-                                      orElse: () => _reasonOptions().last,
+                                      orElse: () => _reasonOptions(l10n).last,
                                     )
                                     .description ??
                                 '',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
+                            style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
                                   color: cs.onSurface.withValues(alpha: 0.65),
                                   height: 1.28,
@@ -220,16 +214,16 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                             maxLines: 5,
                             scrollPadding: const EdgeInsets.only(bottom: 120),
                             textInputAction: TextInputAction.newline,
-                            decoration: const InputDecoration(
-                              labelText: 'Message d\u2019introduction',
-                              hintText:
-                                  'Pr\u00e9sentez l\u2019objet du contact et la prochaine \u00e9tape souhait\u00e9e.',
+                            decoration: InputDecoration(
+                              labelText: l10n.contactIntakeSheetIntroLabel,
+                              hintText: l10n.contactIntakeSheetIntroHint,
                               alignLabelWithHint: true,
                             ),
                             validator: (value) {
                               final normalized = value?.trim() ?? '';
                               if (normalized.length < 12) {
-                                return 'Ajoutez un message un peu plus pr\u00e9cis.';
+                                return l10n
+                                    .contactIntakeSheetIntroTooShortError;
                               }
                               return null;
                             },
@@ -255,7 +249,7 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                       children: [
                         Expanded(
                           child: AdButton(
-                            label: 'Annuler',
+                            label: l10n.commonCancel,
                             kind: AdButtonKind.outline,
                             size: AdButtonSize.compact,
                             expanded: false,
@@ -265,7 +259,7 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: AdButton(
-                            label: 'D\u00e9marrer',
+                            label: l10n.contactIntakeSheetStartAction,
                             size: AdButtonSize.compact,
                             expanded: false,
                             onPressed: _submit,
@@ -311,6 +305,7 @@ class _ContextCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final cs = Theme.of(context).colorScheme;
 
     return Container(
@@ -329,18 +324,18 @@ class _ContextCard extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: cs.onPrimaryContainer,
-                ),
+              fontWeight: FontWeight.w800,
+              color: cs.onPrimaryContainer,
+            ),
           ),
           const SizedBox(height: 6),
           Text(
-            'Contact vis\u00e9 : $targetName ($targetRole)',
+            l10n.contactIntakeSheetTargetLabel(targetName, targetRole),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: cs.onPrimaryContainer.withValues(alpha: 0.86),
-                ),
+              color: cs.onPrimaryContainer.withValues(alpha: 0.86),
+            ),
           ),
         ],
       ),

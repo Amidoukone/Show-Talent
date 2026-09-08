@@ -1,28 +1,43 @@
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 
 void main() {
+  // ContactContext/ContactIntake labels resolve through GetX's `.tr`, which
+  // needs Get.locale/Get.translations populated -- set directly (no widget
+  // to pump in a pure test) so the assertions below check real French text,
+  // not `.tr` silently falling back to the bare key.
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
+
   group('Contact intake model', () {
     test('parses guided contact payload safely', () {
-      final intake = ContactIntake.fromMap(
-        <String, dynamic>{
-          'requesterUid': 'club-1',
-          'targetUid': 'player-1',
-          'requesterRole': 'club',
-          'targetRole': 'joueur',
-          'contextType': 'event',
-          'contextId': 'event-42',
-          'contextTitle': 'Détection U19',
-          'contactReason': 'trial',
-          'introMessage': 'Nous souhaitons vous observer lors de notre stage.',
-          'status': 'new',
-          'agencyFollowUpStatus': 'new',
-          'conversationId': 'club-1__player-1',
-          'createdAt': Timestamp.fromDate(DateTime.utc(2026, 4, 10, 12)),
-        },
-        fallbackId: 'intake-1',
-      );
+      final intake = ContactIntake.fromMap(<String, dynamic>{
+        'requesterUid': 'club-1',
+        'targetUid': 'player-1',
+        'requesterRole': 'club',
+        'targetRole': 'joueur',
+        'contextType': 'event',
+        'contextId': 'event-42',
+        'contextTitle': 'Détection U19',
+        'contactReason': 'trial',
+        'introMessage': 'Nous souhaitons vous observer lors de notre stage.',
+        'status': 'new',
+        'agencyFollowUpStatus': 'new',
+        'conversationId': 'club-1__player-1',
+        'createdAt': Timestamp.fromDate(DateTime.utc(2026, 4, 10, 12)),
+      }, fallbackId: 'intake-1');
 
       expect(intake.id, 'intake-1');
       expect(intake.contextType, ContactContextType.event);
@@ -37,18 +52,9 @@ void main() {
         ContactIntake.reasonLabel(ContactReasonCode.opportunity),
         'Opportunité',
       );
-      expect(
-        ContactIntake.reasonLabel('unknown'),
-        'Information',
-      );
-      expect(
-        ContactContext.labelForType(ContactContextType.profile),
-        'Profil',
-      );
-      expect(
-        ContactContext.labelForType('random'),
-        'Contact',
-      );
+      expect(ContactIntake.reasonLabel('unknown'), 'Information');
+      expect(ContactContext.labelForType(ContactContextType.profile), 'Profil');
+      expect(ContactContext.labelForType('random'), 'Contact');
     });
 
     test('builds offer contact context for guided conversations', () {
@@ -65,24 +71,23 @@ void main() {
       expect(context.toMap(), containsPair('type', ContactContextType.offer));
     });
 
-    test('normalizes agency follow-up statuses beyond the initial lead state',
-        () {
-      expect(
-        ContactIntake.normalizeAgencyFollowUpStatus('reviewing'),
-        AgencyFollowUpStatus.reviewing,
-      );
-      expect(
-        ContactIntake.normalizeAgencyFollowUpStatus('in_progress'),
-        AgencyFollowUpStatus.inProgress,
-      );
-      expect(
-        ContactIntake.agencyFollowUpLabel(AgencyFollowUpStatus.qualified),
-        'Qualifié',
-      );
-      expect(
-        ContactIntake.agencyFollowUpLabel('unknown'),
-        'Nouveau lead',
-      );
-    });
+    test(
+      'normalizes agency follow-up statuses beyond the initial lead state',
+      () {
+        expect(
+          ContactIntake.normalizeAgencyFollowUpStatus('reviewing'),
+          AgencyFollowUpStatus.reviewing,
+        );
+        expect(
+          ContactIntake.normalizeAgencyFollowUpStatus('in_progress'),
+          AgencyFollowUpStatus.inProgress,
+        );
+        expect(
+          ContactIntake.agencyFollowUpLabel(AgencyFollowUpStatus.qualified),
+          'Qualifié',
+        );
+        expect(ContactIntake.agencyFollowUpLabel('unknown'), 'Nouveau lead');
+      },
+    );
   });
 }

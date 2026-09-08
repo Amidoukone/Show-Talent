@@ -399,7 +399,9 @@ class EventDetailsScreen extends StatelessWidget {
                     context: ContactContext.event(
                       eventId: currentEvent.id,
                       title: currentEvent.titre,
-                      sourceLabel: 'Participants',
+                      sourceLabel: ContactContext.labelForType(
+                        ContactContextType.participants,
+                      ),
                     ),
                   ),
                 ),
@@ -415,7 +417,9 @@ class EventDetailsScreen extends StatelessWidget {
               contactContext: ContactContext.event(
                 eventId: currentEvent.id,
                 title: currentEvent.titre,
-                sourceLabel: 'Participants',
+                sourceLabel: ContactContext.labelForType(
+                  ContactContextType.participants,
+                ),
               ),
             ),
             child: Text(l10n.eventViewAllParticipantsButton),
@@ -427,7 +431,9 @@ class EventDetailsScreen extends StatelessWidget {
               contactContext: ContactContext.event(
                 eventId: currentEvent.id,
                 title: currentEvent.titre,
-                sourceLabel: 'Participants',
+                sourceLabel: ContactContext.labelForType(
+                  ContactContextType.participants,
+                ),
               ),
             ),
             child: Text(l10n.eventManageParticipantsButton),

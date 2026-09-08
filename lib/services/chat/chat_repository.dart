@@ -2,6 +2,7 @@ import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/message_converstion.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:get/get.dart';
 
 class ChatRepository {
   ChatRepository({FirebaseFirestore? firestore})
@@ -646,21 +647,35 @@ class ChatRepository {
     return ids;
   }
 
+  // Composed in the requester's own locale at creation time, not each
+  // reader's -- this text is stored once on the conversation/intake
+  // document, not re-rendered per viewer. Same limitation as the event/offer
+  // push notification bodies.
   static String buildGuidedFirstMessage({
     required ContactContext context,
     required String reasonCode,
     required String introMessage,
   }) {
     final reasonLabel = ContactIntake.reasonLabel(reasonCode);
-    final parts = <String>['Premier contact Adfoot.', 'Motif : $reasonLabel.'];
+    final parts = <String>[
+      'chatGuidedFirstContactIntro'.tr,
+      'chatGuidedFirstContactReasonPart'.trParams({'reason': reasonLabel}),
+    ];
 
     final contextLabel = context.displayLabel;
     final contextTitle = context.normalizedTitle;
     if (contextLabel.isNotEmpty && contextTitle != null) {
-      parts.add('Contexte : $contextLabel - $contextTitle.');
+      parts.add(
+        'chatGuidedFirstContactContextWithTitlePart'.trParams({
+          'label': contextLabel,
+          'title': contextTitle,
+        }),
+      );
     } else if (contextLabel.isNotEmpty &&
         context.normalizedType != ContactContextType.none) {
-      parts.add('Contexte : $contextLabel.');
+      parts.add(
+        'chatGuidedFirstContactContextPart'.trParams({'label': contextLabel}),
+      );
     }
 
     if (introMessage.trim().isNotEmpty) {

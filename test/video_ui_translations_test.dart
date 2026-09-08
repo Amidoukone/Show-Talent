@@ -169,6 +169,13 @@ void main() {
       'actionResponseOfflineMessage'.tr,
       'Connexion indisponible. Réessaie quand tu es en ligne.',
     );
+    expect('contactContextOfferLabel'.tr, 'Offre');
+    expect('contactReasonOpportunityLabel'.tr, 'Opportunité');
+    expect('agencyFollowUpQualifiedLabel'.tr, 'Qualifié');
+    expect(
+      'chatGuidedFirstContactReasonPart'.trParams({'reason': 'Suivi'}),
+      'Motif : Suivi.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -299,6 +306,13 @@ void main() {
     expect(
       'actionResponseOfflineMessage'.tr,
       'No connection available. Try again once you\'re back online.',
+    );
+    expect('contactContextOfferLabel'.tr, 'Offer');
+    expect('contactReasonOpportunityLabel'.tr, 'Opportunity');
+    expect('agencyFollowUpQualifiedLabel'.tr, 'Qualified');
+    expect(
+      'chatGuidedFirstContactReasonPart'.trParams({'reason': 'Follow-up'}),
+      'Reason: Follow-up.',
     );
   });
 }

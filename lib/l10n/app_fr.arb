@@ -1113,5 +1113,31 @@
   "advancedFormAgentSaveSuccessMessage": "Les informations professionnelles ont été enregistrées.",
 
   "countryPickerSearchLabel": "Rechercher un pays",
-  "countryPickerNoResultsMessage": "Aucun pays trouvé."
+  "countryPickerNoResultsMessage": "Aucun pays trouvé.",
+
+  "offreCandidatesSourceLabel": "Candidats",
+
+  "contactIntakeSheetTitle": "Premier contact guidé",
+  "contactIntakeSheetSubtitle": "Cadrez l’échange avant l’ouverture de la conversation. Adfoot pourra suivre la mise en relation sans accéder aux messages privés.",
+  "contactIntakeSheetReasonLabel": "Motif du contact",
+  "contactIntakeSheetIntroLabel": "Message d’introduction",
+  "contactIntakeSheetIntroHint": "Présentez l’objet du contact et la prochaine étape souhaitée.",
+  "contactIntakeSheetIntroTooShortError": "Ajoutez un message un peu plus précis.",
+  "contactIntakeSheetStartAction": "Démarrer",
+  "contactIntakeSheetTargetLabel": "Contact visé : {targetName} ({targetRole})",
+  "@contactIntakeSheetTargetLabel": {
+    "placeholders": {
+      "targetName": {
+        "type": "String"
+      },
+      "targetRole": {
+        "type": "String"
+      }
+    }
+  },
+  "contactIntakeSheetReasonOpportunityDescription": "Prise de contact autour d’une opportunité concrète.",
+  "contactIntakeSheetReasonTrialDescription": "Invitation, observation ou mise à l’essai.",
+  "contactIntakeSheetReasonApplicationDescription": "Présentation de profil ou manifestation d’intérêt.",
+  "contactIntakeSheetReasonFollowUpDescription": "Relance ou suivi d’un échange déjà engagé.",
+  "contactIntakeSheetReasonInformationDescription": "Question ou demande de précision."
 }

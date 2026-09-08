@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:get/get.dart';
 
 class ContactContextType {
   ContactContextType._();
@@ -58,15 +59,12 @@ class ContactContext {
   final String? title;
   final String? sourceLabel;
 
-  factory ContactContext.profile({
-    required String profileUid,
-    String? title,
-  }) {
+  factory ContactContext.profile({required String profileUid, String? title}) {
     return ContactContext(
       type: ContactContextType.profile,
       id: profileUid.trim(),
       title: title?.trim(),
-      sourceLabel: 'Profil',
+      sourceLabel: labelForType(ContactContextType.profile),
     );
   }
 
@@ -81,7 +79,7 @@ class ContactContext {
       title: title?.trim(),
       sourceLabel: sourceLabel?.trim().isNotEmpty == true
           ? sourceLabel!.trim()
-          : 'Événement',
+          : labelForType(ContactContextType.event),
     );
   }
 
@@ -96,17 +94,15 @@ class ContactContext {
       title: title?.trim(),
       sourceLabel: sourceLabel?.trim().isNotEmpty == true
           ? sourceLabel!.trim()
-          : 'Offre',
+          : labelForType(ContactContextType.offer),
     );
   }
 
-  factory ContactContext.discovery({
-    String? title,
-  }) {
+  factory ContactContext.discovery({String? title}) {
     return ContactContext(
       type: ContactContextType.discovery,
       title: title?.trim(),
-      sourceLabel: 'Découverte',
+      sourceLabel: labelForType(ContactContextType.discovery),
     );
   }
 
@@ -158,17 +154,17 @@ class ContactContext {
   static String labelForType(String? type) {
     switch (type?.trim().toLowerCase()) {
       case ContactContextType.profile:
-        return 'Profil';
+        return 'contactContextProfileLabel'.tr;
       case ContactContextType.event:
-        return 'Événement';
+        return 'contactContextEventLabel'.tr;
       case ContactContextType.participants:
-        return 'Participants';
+        return 'contactContextParticipantsLabel'.tr;
       case ContactContextType.discovery:
-        return 'Découverte';
+        return 'contactContextDiscoveryLabel'.tr;
       case ContactContextType.offer:
-        return 'Offre';
+        return 'contactContextOfferLabel'.tr;
       default:
-        return 'Contact';
+        return 'contactContextDefaultLabel'.tr;
     }
   }
 }
@@ -255,9 +251,7 @@ class ContactIntake {
       'targetUid': targetUid,
       'requesterRole': requesterRole,
       'targetRole': targetRole,
-      'contextType': ContactContext(
-        type: contextType,
-      ).normalizedType,
+      'contextType': ContactContext(type: contextType).normalizedType,
       'contactReason': normalizeReasonCode(contactReason),
       'introMessage': introMessage.trim(),
       'status': normalizeStatus(status),
@@ -280,19 +274,20 @@ class ContactIntake {
       if (createdAt != null) 'createdAt': Timestamp.fromDate(createdAt!),
       if (updatedAt != null) 'updatedAt': Timestamp.fromDate(updatedAt!),
       if (latestParticipantFeedbackStatus?.trim().isNotEmpty == true)
-        'latestParticipantFeedbackStatus':
-            latestParticipantFeedbackStatus!.trim(),
+        'latestParticipantFeedbackStatus': latestParticipantFeedbackStatus!
+            .trim(),
       if (latestParticipantFeedbackNote?.trim().isNotEmpty == true)
         'latestParticipantFeedbackNote': latestParticipantFeedbackNote!.trim(),
       if (latestParticipantFeedbackByUid?.trim().isNotEmpty == true)
-        'latestParticipantFeedbackByUid':
-            latestParticipantFeedbackByUid!.trim(),
+        'latestParticipantFeedbackByUid': latestParticipantFeedbackByUid!
+            .trim(),
       if (latestParticipantFeedbackByRole?.trim().isNotEmpty == true)
-        'latestParticipantFeedbackByRole':
-            latestParticipantFeedbackByRole!.trim(),
+        'latestParticipantFeedbackByRole': latestParticipantFeedbackByRole!
+            .trim(),
       if (latestParticipantFeedbackAt != null)
-        'latestParticipantFeedbackAt':
-            Timestamp.fromDate(latestParticipantFeedbackAt!),
+        'latestParticipantFeedbackAt': Timestamp.fromDate(
+          latestParticipantFeedbackAt!,
+        ),
       if (suggestedAgencyFollowUpStatus?.trim().isNotEmpty == true)
         'suggestedAgencyFollowUpStatus': suggestedAgencyFollowUpStatus!.trim(),
     };
@@ -311,8 +306,9 @@ class ContactIntake {
       targetUid: map['targetUid']?.toString() ?? '',
       requesterRole: map['requesterRole']?.toString() ?? '',
       targetRole: map['targetRole']?.toString() ?? '',
-      contextType: ContactContext(type: map['contextType']?.toString() ?? '')
-          .normalizedType,
+      contextType: ContactContext(
+        type: map['contextType']?.toString() ?? '',
+      ).normalizedType,
       contactReason: normalizeReasonCode(map['contactReason']?.toString()),
       introMessage: map['introMessage']?.toString() ?? '',
       status: normalizeStatus(map['status']?.toString()),
@@ -320,8 +316,9 @@ class ContactIntake {
         map['agencyFollowUpStatus']?.toString(),
       ),
       agencyFollowUpNote: _normalizeNullableString(map['agencyFollowUpNote']),
-      agencyLastUpdatedByUid:
-          _normalizeNullableString(map['agencyLastUpdatedByUid']),
+      agencyLastUpdatedByUid: _normalizeNullableString(
+        map['agencyLastUpdatedByUid'],
+      ),
       agencyLastUpdatedAt: _parseNullableDate(map['agencyLastUpdatedAt']),
       conversationId: _normalizeNullableString(map['conversationId']),
       contextId: _normalizeNullableString(map['contextId']),
@@ -330,18 +327,24 @@ class ContactIntake {
       targetSnapshot: _normalizeMap(map['targetSnapshot']),
       createdAt: _parseNullableDate(map['createdAt']),
       updatedAt: _parseNullableDate(map['updatedAt']),
-      latestParticipantFeedbackStatus:
-          _normalizeNullableString(map['latestParticipantFeedbackStatus']),
-      latestParticipantFeedbackNote:
-          _normalizeNullableString(map['latestParticipantFeedbackNote']),
-      latestParticipantFeedbackByUid:
-          _normalizeNullableString(map['latestParticipantFeedbackByUid']),
-      latestParticipantFeedbackByRole:
-          _normalizeNullableString(map['latestParticipantFeedbackByRole']),
-      latestParticipantFeedbackAt:
-          _parseNullableDate(map['latestParticipantFeedbackAt']),
-      suggestedAgencyFollowUpStatus:
-          _normalizeNullableString(map['suggestedAgencyFollowUpStatus']),
+      latestParticipantFeedbackStatus: _normalizeNullableString(
+        map['latestParticipantFeedbackStatus'],
+      ),
+      latestParticipantFeedbackNote: _normalizeNullableString(
+        map['latestParticipantFeedbackNote'],
+      ),
+      latestParticipantFeedbackByUid: _normalizeNullableString(
+        map['latestParticipantFeedbackByUid'],
+      ),
+      latestParticipantFeedbackByRole: _normalizeNullableString(
+        map['latestParticipantFeedbackByRole'],
+      ),
+      latestParticipantFeedbackAt: _parseNullableDate(
+        map['latestParticipantFeedbackAt'],
+      ),
+      suggestedAgencyFollowUpStatus: _normalizeNullableString(
+        map['suggestedAgencyFollowUpStatus'],
+      ),
     );
   }
 
@@ -387,31 +390,31 @@ class ContactIntake {
   static String reasonLabel(String code) {
     switch (normalizeReasonCode(code)) {
       case ContactReasonCode.opportunity:
-        return 'Opportunité';
+        return 'contactReasonOpportunityLabel'.tr;
       case ContactReasonCode.trial:
-        return 'Essai / Évaluation';
+        return 'contactReasonTrialLabel'.tr;
       case ContactReasonCode.application:
-        return 'Candidature / Présentation';
+        return 'contactReasonApplicationLabel'.tr;
       case ContactReasonCode.followUp:
-        return 'Suivi';
+        return 'contactReasonFollowUpLabel'.tr;
       default:
-        return 'Information';
+        return 'contactReasonInformationLabel'.tr;
     }
   }
 
   static String agencyFollowUpLabel(String code) {
     switch (normalizeAgencyFollowUpStatus(code)) {
       case AgencyFollowUpStatus.reviewing:
-        return 'En revue';
+        return 'agencyFollowUpReviewingLabel'.tr;
       case AgencyFollowUpStatus.inProgress:
-        return 'En accompagnement';
+        return 'agencyFollowUpInProgressLabel'.tr;
       case AgencyFollowUpStatus.qualified:
-        return 'Qualifié';
+        return 'agencyFollowUpQualifiedLabel'.tr;
       case AgencyFollowUpStatus.closed:
-        return 'Clos';
+        return 'agencyFollowUpClosedLabel'.tr;
       case AgencyFollowUpStatus.newLead:
       default:
-        return 'Nouveau lead';
+        return 'agencyFollowUpNewLeadLabel'.tr;
     }
   }
 

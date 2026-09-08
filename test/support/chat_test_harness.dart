@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:adfoot/controller/chat_controller.dart';
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/chat/chat_repository.dart';
@@ -10,13 +11,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_core_platform_interface/test.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 
 class TestAuthSessionService extends AuthSessionService {
   TestAuthSessionService(User? user)
-      : _currentUser = user,
-        _idTokenController = StreamController<User?>.broadcast() {
+    : _currentUser = user,
+      _idTokenController = StreamController<User?>.broadcast() {
     _idTokenController.add(user);
   }
 
@@ -89,6 +91,12 @@ class ChatTestHarness {
   }) async {
     await ensureFirebaseInitialized();
     Get.testMode = true;
+    // Mirrors main.dart's GetMaterialApp wiring so .tr calls in the code
+    // under test (chat_repository/chat_controller messages) resolve to
+    // real copy instead of silently falling back to the bare key.
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
 
     final currentUser = _buildUser(
       uid: 'user_a',
@@ -116,12 +124,14 @@ class ChatTestHarness {
       authObject: auth.authForFakeFirestore,
     );
     await Future<void>.delayed(Duration.zero);
-    await firestore.collection('users').doc(currentUser.uid).set(
-          currentUser.toMap(),
-        );
-    await firestore.collection('users').doc(otherUser.uid).set(
-          otherUser.toMap(),
-        );
+    await firestore
+        .collection('users')
+        .doc(currentUser.uid)
+        .set(currentUser.toMap());
+    await firestore
+        .collection('users')
+        .doc(otherUser.uid)
+        .set(otherUser.toMap());
     if (enforceProjectRules) {
       firestore.securityRules = FakeFirebaseFirestore(
         authObject: auth.authForFakeFirestore,
@@ -135,7 +145,8 @@ class ChatTestHarness {
     final chatController = ChatController(
       authSessionService: authSessionService,
       chatRepository: chatRepository,
-      notificationSender: notificationSender ??
+      notificationSender:
+          notificationSender ??
           ({
             required String title,
             required String body,
