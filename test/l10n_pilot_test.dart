@@ -9,10 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// fallback, and parameterized strings substitute their placeholder
 /// correctly in each language.
 void main() {
-  Future<AppLocalizations> resolve(
-    WidgetTester tester,
-    Locale locale,
-  ) async {
+  Future<AppLocalizations> resolve(WidgetTester tester, Locale locale) async {
     late AppLocalizations resolved;
     await tester.pumpWidget(
       MaterialApp(
@@ -66,10 +63,7 @@ void main() {
     );
     expect(l10n.mainNavCareerLabel, 'Carrière');
     expect(l10n.commonRetry, 'Réessayer');
-    expect(
-      l10n.settingsAcceptedVersionLabel('2.1'),
-      'Version 2.1, acceptée',
-    );
+    expect(l10n.settingsAcceptedVersionLabel('2.1'), 'Version 2.1, acceptée');
     expect(
       l10n.settingsContactTeamSubtitle('+225 00 00 00 00'),
       'Ouvrir WhatsApp : +225 00 00 00 00',
@@ -84,10 +78,7 @@ void main() {
       l10n.profileStatsAttestedWithDateMessage('12/03/2026'),
       'Chiffres attestés par Adfoot le 12/03/2026',
     );
-    expect(
-      l10n.profileSeasonSummaryAppearances(28),
-      '28 matchs',
-    );
+    expect(l10n.profileSeasonSummaryAppearances(28), '28 matchs');
     expect(l10n.profileSeasonSummaryGoals(11), '11 buts');
     expect(l10n.profileCtaCompleteButton, 'Compléter');
     expect(
@@ -99,7 +90,10 @@ void main() {
       '60 joueurs — affinez pour voir au-delà',
     );
     expect(l10n.talentSearchResultsCountOther(3), '3 joueurs');
-    expect(l10n.followListEmptyFollowersMessage, 'Aucun abonné pour l’instant.');
+    expect(
+      l10n.followListEmptyFollowersMessage,
+      'Aucun abonné pour l’instant.',
+    );
     expect(l10n.selectUserTitle, 'Nouvelle conversation');
     expect(
       l10n.conversationsDeleteFailedMessage('network error'),
@@ -169,6 +163,15 @@ void main() {
       l10n.editAdvancedProfilePlayerSaveFailedMessage,
       'Le profil joueur n’a pas été enregistré. Vérifiez les champs, puis réessayez.',
     );
+    expect(
+      l10n.advancedFormBoundedInvalidMessage('Taille'),
+      'Taille non valide',
+    );
+    expect(l10n.advancedFormHistorySummaryOne(3), '1 saison archivée sur 3.');
+    expect(
+      l10n.advancedFormHistorySummaryOther(2, 3),
+      '2 saisons archivées sur 3.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -209,10 +212,7 @@ void main() {
     );
     expect(l10n.mainNavCareerLabel, isNot('Carrière'));
     expect(l10n.commonRetry, 'Retry');
-    expect(
-      l10n.settingsAcceptedVersionLabel('2.1'),
-      'Version 2.1, accepted',
-    );
+    expect(l10n.settingsAcceptedVersionLabel('2.1'), 'Version 2.1, accepted');
     expect(
       l10n.settingsContactTeamSubtitle('+225 00 00 00 00'),
       'Open WhatsApp: +225 00 00 00 00',
@@ -227,10 +227,7 @@ void main() {
       l10n.profileStatsAttestedWithDateMessage('03/12/2026'),
       'Stats verified by Adfoot on 03/12/2026',
     );
-    expect(
-      l10n.profileSeasonSummaryAppearances(28),
-      '28 matches',
-    );
+    expect(l10n.profileSeasonSummaryAppearances(28), '28 matches');
     expect(l10n.profileSeasonSummaryGoals(11), '11 goals');
     expect(l10n.profileCtaCompleteButton, 'Complete');
     expect(
@@ -249,10 +246,7 @@ void main() {
       "Couldn't delete the conversation: network error",
     );
     expect(l10n.chatSubtitle, isNot('Messagerie Adfoot'));
-    expect(
-      l10n.chatEmptyStateMessage('Awa'),
-      'Send a first message to Awa.',
-    );
+    expect(l10n.chatEmptyStateMessage('Awa'), 'Send a first message to Awa.');
     expect(
       l10n.chatGuidedContextReasonMessage('Club recruitment'),
       'Reason: Club recruitment. Adfoot keeps this first exchange in the '
@@ -299,10 +293,7 @@ void main() {
     );
     expect(l10n.eventFormPublishAction, isNot('Publier l’événement'));
     expect(l10n.offreFormPublishAction, isNot('Publier l’offre'));
-    expect(
-      l10n.offreFormPositionsRequiredLabel,
-      isNot('Postes recherchés *'),
-    );
+    expect(l10n.offreFormPositionsRequiredLabel, isNot('Postes recherchés *'));
     expect(
       l10n.editProfileMaxValueValidator(9999),
       'The maximum value is 9999.',
@@ -313,7 +304,21 @@ void main() {
     );
     expect(
       l10n.editAdvancedProfilePlayerSaveFailedMessage,
-      isNot('Le profil joueur n’a pas été enregistré. Vérifiez les champs, puis réessayez.'),
+      isNot(
+        'Le profil joueur n’a pas été enregistré. Vérifiez les champs, puis réessayez.',
+      ),
+    );
+    expect(
+      l10n.advancedFormBoundedInvalidMessage('Height'),
+      'Height is invalid',
+    );
+    expect(
+      l10n.advancedFormHistorySummaryOne(3),
+      '1 archived season out of 3.',
+    );
+    expect(
+      l10n.advancedFormHistorySummaryOther(2, 3),
+      '2 archived seasons out of 3.',
     );
   });
 }

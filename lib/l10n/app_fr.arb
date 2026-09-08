@@ -1031,5 +1031,84 @@
   "editAdvancedProfileAgentSectionTitle": "Cadre de représentation",
   "editAdvancedProfileRecruiterSectionTitle": "Cadre de recrutement",
   "editAdvancedProfileAgentSectionSubtitle": "Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre d’accompagnement.",
-  "editAdvancedProfileRecruiterSectionSubtitle": "Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre de recrutement."
+  "editAdvancedProfileRecruiterSectionSubtitle": "Complétez les éléments qui permettent aux joueurs et clubs d’identifier votre périmètre de recrutement.",
+
+  "advancedFormSaveAction": "Sauvegarder",
+  "advancedFormSaveSuccessTitle": "Profil mis à jour",
+  "advancedFormAddAction": "Ajouter",
+  "advancedFormNotProvidedLabel": "Non renseignée",
+  "advancedFormInvalidNumberMessage": "Nombre invalide",
+  "advancedFormNegativeValueMessage": "Valeur négative",
+  "advancedFormBoundedInvalidMessage": "{label} non valide",
+  "@advancedFormBoundedInvalidMessage": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+
+  "advancedFormPositionsRequiredLabel": "Postes *",
+  "advancedFormPositionsHelper": "Trois au maximum. Le premier choisi est votre poste principal.",
+  "advancedFormPositionsRequiredValidator": "Choisissez au moins un poste : sans lui, votre fiche n’apparaît dans aucune recherche de recruteur.",
+  "advancedFormHeightFieldLabel": "Taille (cm)",
+  "advancedFormWeightFieldLabel": "Poids (kg)",
+  "advancedFormNationalitiesRequiredLabel": "Nationalités *",
+  "advancedFormNationalitiesHelper": "Le passeport détermine les démarches d’un club étranger. Trois au maximum.",
+  "advancedFormNationalitiesRequiredValidator": "Ajoutez au moins une nationalité : sans elle, votre fiche n’apparaît dans aucune recherche de recruteur.",
+  "advancedFormSituationLabel": "Situation",
+  "advancedFormClubLevelFieldLabel": "Niveau du club",
+  "advancedFormContractStatusLabel": "Statut contractuel",
+  "advancedFormPlayerSaveFailedMessage": "Les informations avancées du joueur n’ont pas été enregistrées.",
+  "advancedFormPlayerSaveSuccessMessage": "Les informations avancées du joueur ont été enregistrées.",
+
+  "advancedFormCurrentSeasonTitle": "Saison en cours",
+  "advancedFormCurrentSeasonHelper": "Des chiffres sans saison ni compétition ne veulent rien dire pour un recruteur.",
+  "advancedFormSeasonHint": "2025-26",
+  "advancedFormCompetitionLabel": "Compétition",
+  "advancedFormCompetitionHint": "Ligue 1 CIV, Coupe nationale...",
+  "advancedFormAgeCategoryLabel": "Catégorie",
+  "advancedFormMinutesLabel": "Minutes jouées",
+  "advancedFormGoalsLabel": "Buts",
+  "advancedFormOpenToTrialsSubtitle": "Visible par les clubs et les recruteurs.",
+  "advancedFormStatsSaveFailedMessage": "Le dossier scout n’a pas été enregistré.",
+  "advancedFormStatsSaveSuccessTitle": "Dossier mis à jour",
+  "advancedFormStatsSaveSuccessMessage": "Le dossier scout a été enregistré.",
+  "advancedFormHistoryHelperEmpty": "Aucune saison archivée. Une seule saison ne montre pas une progression.",
+  "advancedFormHistorySummaryOne": "1 saison archivée sur {max}.",
+  "@advancedFormHistorySummaryOne": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "advancedFormHistorySummaryOther": "{count} saisons archivées sur {max}.",
+  "@advancedFormHistorySummaryOther": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "advancedFormRemoveSeasonTooltip": "Retirer cette saison",
+  "advancedFormArchiveSeasonAction": "Archiver cette saison",
+  "advancedFormHistoryFullMessage": "Parcours complet : retirez une saison pour en archiver une autre.",
+  "advancedFormArchivedSeasonFallback": "Saison archivée",
+
+  "advancedFormClubTitle": "Profil du club",
+  "advancedFormClubFederationIdLabel": "Numéro d’affiliation à la fédération",
+  "advancedFormClubFederationIdHelper": "C’est ce qui permet de vérifier le club auprès de sa fédération.",
+  "advancedFormClubSaveFailedMessage": "Les informations du club n’ont pas été enregistrées.",
+  "advancedFormClubSaveSuccessMessage": "Les informations du club ont été enregistrées.",
+
+  "advancedFormAgentTitle": "Profil de l’agent",
+  "advancedFormRecruiterTitle": "Profil du recruteur",
+  "advancedFormAgentLicenseLabel": "Numéro de licence d’agent",
+  "advancedFormAgentLicenseHelper": "Vérifiable auprès de la fédération qui l’a délivrée.",
+  "advancedFormAgentSaveFailedMessage": "Les informations professionnelles n’ont pas été enregistrées.",
+  "advancedFormAgentSaveSuccessMessage": "Les informations professionnelles ont été enregistrées."
 }

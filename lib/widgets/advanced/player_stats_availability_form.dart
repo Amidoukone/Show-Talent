@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../models/football_vocabulary.dart';
 import '../../models/player_football_profile.dart';
 import '../../models/user.dart';
@@ -140,9 +141,10 @@ class PlayerStatsAvailabilityFormState
     );
 
     setState(() {
-      _history = <SeasonRecord>[archived, ..._history]
-          .take(PlayerFootballProfile.maxSeasonHistory)
-          .toList();
+      _history = <SeasonRecord>[
+        archived,
+        ..._history,
+      ].take(PlayerFootballProfile.maxSeasonHistory).toList();
       _seasonController.clear();
       _competitionController.clear();
       _appearancesController.clear();
@@ -184,6 +186,8 @@ class PlayerStatsAvailabilityFormState
       return false;
     }
 
+    final l10n = AppLocalizations.of(context)!;
+
     setState(() => _saving = true);
     try {
       final patch = buildPatch();
@@ -196,16 +200,16 @@ class PlayerStatsAvailabilityFormState
       } on ProfileAccessRevokedException {
         if (showFeedback) {
           AdFeedback.error(
-            'Sauvegarde refusée',
-            'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.',
+            l10n.editProfileSaveDeniedTitle,
+            l10n.editProfileSaveDeniedMessage,
           );
         }
         return false;
       } catch (_) {
         if (showFeedback) {
           AdFeedback.error(
-            'Sauvegarde impossible',
-            'Le dossier scout n’a pas été enregistré.',
+            l10n.editProfileSaveFailureFallbackTitle,
+            l10n.advancedFormStatsSaveFailedMessage,
           );
         }
         return false;
@@ -217,8 +221,8 @@ class PlayerStatsAvailabilityFormState
 
       if (showFeedback) {
         AdFeedback.success(
-          'Dossier mis à jour',
-          'Le dossier scout a été enregistré.',
+          l10n.advancedFormStatsSaveSuccessTitle,
+          l10n.advancedFormStatsSaveSuccessMessage,
         );
       }
 
@@ -232,6 +236,8 @@ class PlayerStatsAvailabilityFormState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Form(
       key: _formKey,
       onChanged: widget.onDirty,
@@ -241,40 +247,44 @@ class PlayerStatsAvailabilityFormState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (widget.showSectionTitle) ...[
-              const Text(
-                'Saison en cours',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              Text(
+                l10n.advancedFormCurrentSeasonTitle,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Des chiffres sans saison ni compétition ne veulent rien dire '
-                'pour un recruteur.',
-                style: TextStyle(fontSize: 12),
+              Text(
+                l10n.advancedFormCurrentSeasonHelper,
+                style: const TextStyle(fontSize: 12),
               ),
               const SizedBox(height: 12),
             ],
 
             TextFormField(
               controller: _seasonController,
-              decoration: const InputDecoration(
-                labelText: 'Saison',
-                hintText: '2025-26',
+              decoration: InputDecoration(
+                labelText: l10n.profileSeasonLabel,
+                hintText: l10n.advancedFormSeasonHint,
               ),
             ),
             const SizedBox(height: 12),
 
             TextFormField(
               controller: _competitionController,
-              decoration: const InputDecoration(
-                labelText: 'Compétition',
-                hintText: 'Ligue 1 CIV, Coupe nationale...',
+              decoration: InputDecoration(
+                labelText: l10n.advancedFormCompetitionLabel,
+                hintText: l10n.advancedFormCompetitionHint,
               ),
             ),
             const SizedBox(height: 12),
 
             DropdownButtonFormField<AgeCategory>(
               initialValue: _ageCategory,
-              decoration: const InputDecoration(labelText: 'Catégorie'),
+              decoration: InputDecoration(
+                labelText: l10n.advancedFormAgeCategoryLabel,
+              ),
               items: AgeCategory.values
                   .map(
                     (category) => DropdownMenuItem<AgeCategory>(
@@ -290,13 +300,13 @@ class PlayerStatsAvailabilityFormState
             ),
             const SizedBox(height: 12),
 
-            _countField(_appearancesController, 'Matchs joués'),
+            _countField(_appearancesController, l10n.profileAppearancesLabel),
             const SizedBox(height: 12),
-            _countField(_minutesController, 'Minutes jouées'),
+            _countField(_minutesController, l10n.advancedFormMinutesLabel),
             const SizedBox(height: 12),
-            _countField(_goalsController, 'Buts'),
+            _countField(_goalsController, l10n.advancedFormGoalsLabel),
             const SizedBox(height: 12),
-            _countField(_assistsController, 'Passes décisives'),
+            _countField(_assistsController, l10n.profileAssistsLabel),
 
             const SizedBox(height: 20),
             _buildSeasonHistory(),
@@ -305,10 +315,8 @@ class PlayerStatsAvailabilityFormState
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _openToTrials,
-              title: const Text('Ouvert aux opportunités'),
-              subtitle: const Text(
-                'Visible par les clubs et les recruteurs.',
-              ),
+              title: Text(l10n.profileOpenToOpportunitiesLabel),
+              subtitle: Text(l10n.advancedFormOpenToTrialsSubtitle),
               onChanged: (value) {
                 setState(() => _openToTrials = value);
                 widget.onDirty?.call();
@@ -320,7 +328,7 @@ class PlayerStatsAvailabilityFormState
               AdButton(
                 leading: Icons.save_rounded,
                 loading: _saving,
-                label: 'Sauvegarder',
+                label: l10n.advancedFormSaveAction,
                 onPressed: _saving ? null : () => save(),
               ),
             ],
@@ -336,20 +344,27 @@ class PlayerStatsAvailabilityFormState
   /// porte l'evenement reel -- une saison se termine -- plutot qu'un
   /// formulaire de plus a remplir ligne par ligne.
   Widget _buildSeasonHistory() {
-    final isFull = _history.length >= PlayerFootballProfile.maxSeasonHistory;
+    final l10n = AppLocalizations.of(context)!;
+    final maxSeasonHistory = PlayerFootballProfile.maxSeasonHistory;
+    final isFull = _history.length >= maxSeasonHistory;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'Parcours',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        Text(
+          l10n.profileHistoryTitle,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 4),
         Text(
           _history.isEmpty
-              ? 'Aucune saison archivée. Une seule saison ne montre pas une progression.'
-              : '${_history.length} saison${_history.length > 1 ? 's' : ''} archivée${_history.length > 1 ? 's' : ''} sur ${PlayerFootballProfile.maxSeasonHistory}.',
+              ? l10n.advancedFormHistoryHelperEmpty
+              : (_history.length == 1
+                    ? l10n.advancedFormHistorySummaryOne(maxSeasonHistory)
+                    : l10n.advancedFormHistorySummaryOther(
+                        _history.length,
+                        maxSeasonHistory,
+                      )),
           style: const TextStyle(fontSize: 12),
         ),
         const SizedBox(height: 12),
@@ -361,7 +376,7 @@ class PlayerStatsAvailabilityFormState
               children: [
                 Expanded(child: Text(_archivedSeasonLabel(archived))),
                 IconButton(
-                  tooltip: 'Retirer cette saison',
+                  tooltip: l10n.advancedFormRemoveSeasonTooltip,
                   icon: const Icon(Icons.close_rounded, size: 18),
                   onPressed: () => _removeArchivedSeason(index),
                 ),
@@ -371,17 +386,17 @@ class PlayerStatsAvailabilityFormState
 
         AdButton(
           leading: Icons.archive_outlined,
-          label: 'Archiver cette saison',
+          label: l10n.advancedFormArchiveSeasonAction,
           // Desactive plutot que masque : le joueur doit comprendre que le
           // geste existe et pourquoi il ne s'offre pas encore a lui.
           onPressed: _canArchiveCurrentSeason ? _archiveCurrentSeason : null,
         ),
         if (isFull)
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
             child: Text(
-              'Parcours complet : retirez une saison pour en archiver une autre.',
-              style: TextStyle(fontSize: 12),
+              l10n.advancedFormHistoryFullMessage,
+              style: const TextStyle(fontSize: 12),
             ),
           ),
       ],
@@ -390,6 +405,7 @@ class PlayerStatsAvailabilityFormState
 
   /// « 2024-25 · Ligue 1 CIV · ASEC Mimosas · 28 matchs, 11 buts »
   String _archivedSeasonLabel(SeasonRecord season) {
+    final l10n = AppLocalizations.of(context)!;
     final head = <String>[
       ?season.season,
       ?season.competition,
@@ -397,16 +413,24 @@ class PlayerStatsAvailabilityFormState
     ].join(' · ');
 
     final figures = <String>[
-      if (season.appearances != null) '${season.appearances} matchs',
-      if (season.goals != null) '${season.goals} buts',
-      if (season.assists != null) '${season.assists} passes',
+      if (season.appearances != null)
+        l10n.profileSeasonSummaryAppearances(season.appearances!),
+      if (season.goals != null) l10n.profileSeasonSummaryGoals(season.goals!),
+      if (season.assists != null)
+        l10n.profileSeasonSummaryAssists(season.assists!),
     ].join(', ');
 
-    if (head.isEmpty) return figures.isEmpty ? 'Saison archivée' : figures;
+    if (head.isEmpty) {
+      return figures.isEmpty
+          ? l10n.advancedFormArchivedSeasonFallback
+          : figures;
+    }
     return figures.isEmpty ? head : '$head · $figures';
   }
 
   Widget _countField(TextEditingController controller, String label) {
+    final l10n = AppLocalizations.of(context)!;
+
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(labelText: label),
@@ -416,8 +440,8 @@ class PlayerStatsAvailabilityFormState
         if (text.isEmpty) return null;
 
         final parsed = int.tryParse(text);
-        if (parsed == null) return 'Nombre invalide';
-        if (parsed < 0) return 'Valeur négative';
+        if (parsed == null) return l10n.advancedFormInvalidNumberMessage;
+        if (parsed < 0) return l10n.advancedFormNegativeValueMessage;
         return null;
       },
     );

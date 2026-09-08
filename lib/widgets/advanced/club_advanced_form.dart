@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../models/football_vocabulary.dart';
 import '../../models/org_football_profile.dart';
 import '../../models/user.dart';
@@ -88,6 +89,8 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
       return false;
     }
 
+    final l10n = AppLocalizations.of(context)!;
+
     setState(() => _saving = true);
     try {
       final patch = buildPatch();
@@ -100,16 +103,16 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
       } on ProfileAccessRevokedException {
         if (showFeedback) {
           AdFeedback.error(
-            'Sauvegarde refusée',
-            'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.',
+            l10n.editProfileSaveDeniedTitle,
+            l10n.editProfileSaveDeniedMessage,
           );
         }
         return false;
       } catch (_) {
         if (showFeedback) {
           AdFeedback.error(
-            'Sauvegarde impossible',
-            'Les informations du club n’ont pas été enregistrées.',
+            l10n.editProfileSaveFailureFallbackTitle,
+            l10n.advancedFormClubSaveFailedMessage,
           );
         }
         return false;
@@ -121,8 +124,8 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
 
       if (showFeedback) {
         AdFeedback.success(
-          'Profil mis à jour',
-          'Les informations du club ont été enregistrées.',
+          l10n.advancedFormSaveSuccessTitle,
+          l10n.advancedFormClubSaveSuccessMessage,
         );
       }
 
@@ -136,6 +139,8 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Form(
       key: _formKey,
       onChanged: widget.onDirty,
@@ -145,17 +150,20 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (widget.showSectionTitle) ...[
-              const Text(
-                'Profil du club',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              Text(
+                l10n.advancedFormClubTitle,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 12),
             ],
 
             DropdownButtonFormField<ClubLevel>(
               initialValue: _level,
-              decoration: const InputDecoration(
-                labelText: 'Niveau de la structure',
+              decoration: InputDecoration(
+                labelText: l10n.profileClubLevelLabel,
               ),
               items: ClubLevel.values
                   .map(
@@ -172,11 +180,11 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
             ),
             const SizedBox(height: 20),
 
-            const Align(
+            Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Catégories engagées',
-                style: TextStyle(fontWeight: FontWeight.w700),
+                l10n.profileClubCategoriesLabel,
+                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
             const SizedBox(height: 8),
@@ -205,11 +213,9 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
 
             TextFormField(
               controller: _federationIdController,
-              decoration: const InputDecoration(
-                labelText: 'Numéro d’affiliation à la fédération',
-                helperText:
-                    'C’est ce qui permet de vérifier le club auprès de sa '
-                    'fédération.',
+              decoration: InputDecoration(
+                labelText: l10n.advancedFormClubFederationIdLabel,
+                helperText: l10n.advancedFormClubFederationIdHelper,
                 helperMaxLines: 2,
               ),
             ),
@@ -219,7 +225,7 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
               AdButton(
                 leading: Icons.save_rounded,
                 loading: _saving,
-                label: 'Sauvegarder',
+                label: l10n.advancedFormSaveAction,
                 onPressed: _saving ? null : () => save(),
               ),
             ],

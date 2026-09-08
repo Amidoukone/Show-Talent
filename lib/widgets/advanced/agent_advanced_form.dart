@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../models/org_football_profile.dart';
 import '../../models/user.dart';
 import '../../utils/country_codes.dart';
@@ -107,6 +108,8 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
       return false;
     }
 
+    final l10n = AppLocalizations.of(context)!;
+
     setState(() => _saving = true);
     try {
       final patch = buildPatch();
@@ -119,16 +122,16 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
       } on ProfileAccessRevokedException {
         if (showFeedback) {
           AdFeedback.error(
-            'Sauvegarde refusée',
-            'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.',
+            l10n.editProfileSaveDeniedTitle,
+            l10n.editProfileSaveDeniedMessage,
           );
         }
         return false;
       } catch (_) {
         if (showFeedback) {
           AdFeedback.error(
-            'Sauvegarde impossible',
-            'Les informations professionnelles n’ont pas été enregistrées.',
+            l10n.editProfileSaveFailureFallbackTitle,
+            l10n.advancedFormAgentSaveFailedMessage,
           );
         }
         return false;
@@ -140,8 +143,8 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
 
       if (showFeedback) {
         AdFeedback.success(
-          'Profil mis à jour',
-          'Les informations professionnelles ont été enregistrées.',
+          l10n.advancedFormSaveSuccessTitle,
+          l10n.advancedFormAgentSaveSuccessMessage,
         );
       }
 
@@ -155,6 +158,7 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final isAgent = widget.user.isAgent;
 
     return Form(
@@ -167,7 +171,9 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
           children: [
             if (widget.showSectionTitle) ...[
               Text(
-                isAgent ? 'Profil de l’agent' : 'Profil du recruteur',
+                isAgent
+                    ? l10n.advancedFormAgentTitle
+                    : l10n.advancedFormRecruiterTitle,
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
@@ -180,31 +186,30 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
               controller: _licenceController,
               decoration: InputDecoration(
                 labelText: isAgent
-                    ? 'Numéro de licence d’agent'
-                    : 'Référence de licence ou d’agrément',
-                helperText:
-                    'Vérifiable auprès de la fédération qui l’a délivrée.',
+                    ? l10n.advancedFormAgentLicenseLabel
+                    : l10n.profileAgentLicenseRefLabel,
+                helperText: l10n.advancedFormAgentLicenseHelper,
                 helperMaxLines: 2,
               ),
             ),
             const SizedBox(height: 12),
 
             InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Fédération émettrice',
+              decoration: InputDecoration(
+                labelText: l10n.profileLicenseCountryLabel,
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       _licenceCountry == null
-                          ? 'Non renseignée'
+                          ? l10n.advancedFormNotProvidedLabel
                           : countryLabel(_licenceCountry),
                     ),
                   ),
                   TextButton(
                     onPressed: _pickLicenceCountry,
-                    child: const Text('Choisir'),
+                    child: Text(l10n.talentSearchChoose),
                   ),
                 ],
               ),
@@ -214,7 +219,9 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                isAgent ? 'Pays de représentation' : 'Pays d’intervention',
+                isAgent
+                    ? l10n.profileAgentCountriesLabel
+                    : l10n.profileRecruiterCountriesLabel,
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
@@ -239,7 +246,7 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
                 if (_countries.length < AgentFootballProfile.maxCountries)
                   ActionChip(
                     avatar: const Icon(Icons.add, size: 18),
-                    label: const Text('Ajouter'),
+                    label: Text(l10n.advancedFormAddAction),
                     onPressed: _addCountry,
                   ),
               ],
@@ -250,7 +257,7 @@ class AgentAdvancedFormState extends State<AgentAdvancedForm> {
               AdButton(
                 leading: Icons.save_rounded,
                 loading: _saving,
-                label: 'Sauvegarder',
+                label: l10n.advancedFormSaveAction,
                 onPressed: _saving ? null : () => save(),
               ),
             ],

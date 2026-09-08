@@ -72,18 +72,12 @@ void main() {
       advancedEditor,
       contains('l10n.editAdvancedProfilePlayerSaveFailedMessage'),
     );
-    expect(
-      arbFr,
-      contains('Le profil joueur n’a pas été enregistré'),
-    );
+    expect(arbFr, contains('Le profil joueur n’a pas été enregistré'));
     expect(
       advancedEditor,
       contains('l10n.editAdvancedProfileScoutSaveFailedMessage'),
     );
-    expect(
-      arbFr,
-      contains('Le dossier scout n’a pas été enregistré'),
-    );
+    expect(arbFr, contains('Le dossier scout n’a pas été enregistré'));
     expect(controller, contains('bool _isAccessDenied(Object error)'));
     expect(
       controller,
@@ -93,12 +87,17 @@ void main() {
       controller,
       isNot(contains('if (ProfileRepository.isUnauthorized(e))')),
     );
+    // The literal wording moved into the ARB template (l10n.editProfileSaveDenied*).
+    expect(
+      arbFr,
+      contains('"editProfileSaveDeniedTitle": "Sauvegarde refusée"'),
+    );
     expect(playerAdvanced, contains('} catch (_) {'));
-    expect(playerAdvanced, contains('Sauvegarde refusée'));
+    expect(playerAdvanced, contains('l10n.editProfileSaveDeniedTitle'));
     expect(playerStats, contains('} catch (_) {'));
     expect(playerAdvanced, contains('Map<String, dynamic> buildPatch()'));
     expect(playerStats, contains('Map<String, dynamic> buildPatch()'));
-    expect(playerStats, contains('Sauvegarde refusée'));
+    expect(playerStats, contains('l10n.editProfileSaveDeniedTitle'));
     // Le poste est ecrit en codes, jamais en libelles : c'est ce qui rend la
     // fiche filtrable. Le libelle libre a disparu avec la refonte, et le
     // laisser revenir ici rouvrirait la porte au CSV.

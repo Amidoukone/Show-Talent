@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../controller/profile_controller.dart';
+import '../../l10n/generated/app_localizations.dart';
 import '../../models/football_vocabulary.dart';
 import '../../models/player_football_profile.dart';
 import '../../models/user.dart';
@@ -125,8 +126,9 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
   /// pourquoi, et un joueur qui ne sait pas pourquoi remplit mal ou pas.
   String? _validatePositions(List<FootballPosition>? positions) {
     if (positions == null || positions.isEmpty) {
-      return 'Choisissez au moins un poste : sans lui, votre fiche '
-          'n’apparaît dans aucune recherche de recruteur.';
+      return AppLocalizations.of(
+        context,
+      )!.advancedFormPositionsRequiredValidator;
     }
     return null;
   }
@@ -134,8 +136,9 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
   /// Meme enjeu, meme formulation.
   String? _validateNationalities(List<String>? nationalities) {
     if (nationalities == null || nationalities.isEmpty) {
-      return 'Ajoutez au moins une nationalité : sans elle, votre fiche '
-          'n’apparaît dans aucune recherche de recruteur.';
+      return AppLocalizations.of(
+        context,
+      )!.advancedFormNationalitiesRequiredValidator;
     }
     return null;
   }
@@ -177,6 +180,8 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
       return false;
     }
 
+    final l10n = AppLocalizations.of(context)!;
+
     setState(() => _saving = true);
     try {
       final patch = buildPatch();
@@ -189,16 +194,16 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
       } on ProfileAccessRevokedException {
         if (showFeedback) {
           AdFeedback.error(
-            'Sauvegarde refusée',
-            'Votre session ne permet pas de modifier ce profil. Reconnectez-vous, puis réessayez.',
+            l10n.editProfileSaveDeniedTitle,
+            l10n.editProfileSaveDeniedMessage,
           );
         }
         return false;
       } catch (_) {
         if (showFeedback) {
           AdFeedback.error(
-            'Sauvegarde impossible',
-            'Les informations avancées du joueur n’ont pas été enregistrées.',
+            l10n.editProfileSaveFailureFallbackTitle,
+            l10n.advancedFormPlayerSaveFailedMessage,
           );
         }
         return false;
@@ -210,8 +215,8 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
 
       if (showFeedback) {
         AdFeedback.success(
-          'Profil mis à jour',
-          'Les informations avancées du joueur ont été enregistrées.',
+          l10n.advancedFormSaveSuccessTitle,
+          l10n.advancedFormPlayerSaveSuccessMessage,
         );
       }
 
@@ -224,13 +229,14 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
   }
 
   Future<void> _pickContractEndDate() async {
+    final l10n = AppLocalizations.of(context)!;
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
       initialDate: _contractEndDate ?? DateTime(now.year + 1, 6, 30),
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 10),
-      helpText: 'Fin de contrat',
+      helpText: l10n.profileContractEndLabel,
     );
     if (picked == null) return;
 
@@ -248,6 +254,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final expectsEndDate = _contractStatus?.expectsEndDate == true;
 
     return Form(
@@ -259,17 +266,20 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (widget.showSectionTitle) ...[
-              const Text(
-                'Profil joueur',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              Text(
+                l10n.editProfileHeaderTitlePlayer,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 12),
             ],
 
-            _label('Postes *'),
-            const Text(
-              'Trois au maximum. Le premier choisi est votre poste principal.',
-              style: TextStyle(fontSize: 12),
+            _label(l10n.advancedFormPositionsRequiredLabel),
+            Text(
+              l10n.advancedFormPositionsHelper,
+              style: const TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 8),
             // Un `FormField` plutot qu'un simple selecteur : le poste decide
@@ -313,7 +323,9 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
 
             DropdownButtonFormField<StrongFoot>(
               initialValue: _strongFoot,
-              decoration: const InputDecoration(labelText: 'Pied fort'),
+              decoration: InputDecoration(
+                labelText: l10n.profileStrongFootLabel,
+              ),
               items: StrongFoot.values
                   .map(
                     (foot) => DropdownMenuItem<StrongFoot>(
@@ -331,35 +343,38 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
 
             TextFormField(
               controller: _heightController,
-              decoration: const InputDecoration(labelText: 'Taille (cm)'),
+              decoration: InputDecoration(
+                labelText: l10n.advancedFormHeightFieldLabel,
+              ),
               keyboardType: TextInputType.number,
               validator: (value) => _validateBounded(
                 value,
                 PlayerFootballProfile.minHeightCm,
                 PlayerFootballProfile.maxHeightCm,
-                'Taille',
+                l10n.profileHeightLabel,
               ),
             ),
             const SizedBox(height: 12),
 
             TextFormField(
               controller: _weightController,
-              decoration: const InputDecoration(labelText: 'Poids (kg)'),
+              decoration: InputDecoration(
+                labelText: l10n.advancedFormWeightFieldLabel,
+              ),
               keyboardType: TextInputType.number,
               validator: (value) => _validateBounded(
                 value,
                 PlayerFootballProfile.minWeightKg,
                 PlayerFootballProfile.maxWeightKg,
-                'Poids',
+                l10n.profileWeightLabel,
               ),
             ),
             const SizedBox(height: 20),
 
-            _label('Nationalités *'),
-            const Text(
-              'Le passeport détermine les démarches d’un club étranger. '
-              'Trois au maximum.',
-              style: TextStyle(fontSize: 12),
+            _label(l10n.advancedFormNationalitiesRequiredLabel),
+            Text(
+              l10n.advancedFormNationalitiesHelper,
+              style: const TextStyle(fontSize: 12),
             ),
             const SizedBox(height: 8),
             // Meme raison que les postes : `computeIsSearchable` exige au
@@ -374,7 +389,8 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
                   children: [
                     _NationalityList(
                       codes: _nationalities,
-                      canAdd: _nationalities.length <
+                      canAdd:
+                          _nationalities.length <
                           PlayerFootballProfile.maxNationalities,
                       onRemove: (code) {
                         setState(() {
@@ -406,18 +422,22 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             ),
             const SizedBox(height: 20),
 
-            _label('Situation'),
+            _label(l10n.advancedFormSituationLabel),
             const SizedBox(height: 8),
             TextFormField(
               controller: _clubNameController,
-              decoration: const InputDecoration(labelText: 'Club actuel'),
+              decoration: InputDecoration(
+                labelText: l10n.profileCurrentClubLabel,
+              ),
               textCapitalization: TextCapitalization.words,
             ),
             const SizedBox(height: 12),
 
             DropdownButtonFormField<ClubLevel>(
               initialValue: _clubLevel,
-              decoration: const InputDecoration(labelText: 'Niveau du club'),
+              decoration: InputDecoration(
+                labelText: l10n.advancedFormClubLevelFieldLabel,
+              ),
               items: ClubLevel.values
                   .map(
                     (level) => DropdownMenuItem<ClubLevel>(
@@ -435,7 +455,9 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
 
             DropdownButtonFormField<ContractStatus>(
               initialValue: _contractStatus,
-              decoration: const InputDecoration(labelText: 'Statut contractuel'),
+              decoration: InputDecoration(
+                labelText: l10n.advancedFormContractStatusLabel,
+              ),
               items: ContractStatus.values
                   .map(
                     (status) => DropdownMenuItem<ContractStatus>(
@@ -461,13 +483,15 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
             if (expectsEndDate) ...[
               const SizedBox(height: 12),
               InputDecorator(
-                decoration: const InputDecoration(labelText: 'Fin de contrat'),
+                decoration: InputDecoration(
+                  labelText: l10n.profileContractEndLabel,
+                ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         _contractEndDate == null
-                            ? 'Non renseignée'
+                            ? l10n.advancedFormNotProvidedLabel
                             : '${_contractEndDate!.day.toString().padLeft(2, '0')}/'
                                   '${_contractEndDate!.month.toString().padLeft(2, '0')}/'
                                   '${_contractEndDate!.year}',
@@ -475,7 +499,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
                     ),
                     TextButton(
                       onPressed: _pickContractEndDate,
-                      child: const Text('Choisir'),
+                      child: Text(l10n.talentSearchChoose),
                     ),
                   ],
                 ),
@@ -487,7 +511,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
               AdButton(
                 leading: Icons.save_rounded,
                 loading: _saving,
-                label: 'Sauvegarder',
+                label: l10n.advancedFormSaveAction,
                 onPressed: _saving ? null : () => save(),
               ),
             ],
@@ -507,8 +531,14 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
     if (text.isEmpty) return null;
 
     final parsed = int.tryParse(text);
-    if (parsed == null) return 'Nombre invalide';
-    if (parsed < min || parsed > max) return '$label non valide';
+    if (parsed == null) {
+      return AppLocalizations.of(context)!.advancedFormInvalidNumberMessage;
+    }
+    if (parsed < min || parsed > max) {
+      return AppLocalizations.of(
+        context,
+      )!.advancedFormBoundedInvalidMessage(label);
+    }
     return null;
   }
 }
@@ -540,9 +570,7 @@ class _PositionSelector extends StatelessWidget {
               ? null
               : (_) => onToggle(position),
           label: Text(
-            isSelected
-                ? '${index + 1}. ${position.labelFr}'
-                : position.labelFr,
+            isSelected ? '${index + 1}. ${position.labelFr}' : position.labelFr,
           ),
         );
       }).toList(),
@@ -566,6 +594,8 @@ class _NationalityList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -579,7 +609,7 @@ class _NationalityList extends StatelessWidget {
         if (canAdd)
           ActionChip(
             avatar: const Icon(Icons.add, size: 18),
-            label: const Text('Ajouter'),
+            label: Text(l10n.advancedFormAddAction),
             onPressed: onAdd,
           ),
       ],
