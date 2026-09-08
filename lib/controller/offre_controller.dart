@@ -64,10 +64,10 @@ class OffreController extends GetxController {
   }
 
   ActionResponse _sessionRevokedResponse() {
-    return const ActionResponse(
+    return ActionResponse(
       success: false,
       code: 'session_revoked',
-      message: 'Votre session a été fermée. Veuillez vous reconnecter.',
+      message: 'sessionClosedReconnectMessage'.tr,
       toast: ToastLevel.none,
     );
   }
@@ -336,8 +336,7 @@ class OffreController extends GetxController {
     if (!utilisateur.canPublishOpportunities) {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message:
-            'Seuls les clubs, recruteurs ou agents peuvent publier des offres.',
+        message: 'offreCreatePublisherOnlyMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -349,17 +348,16 @@ class OffreController extends GetxController {
       if (!fanoutResult.success) {
         return ActionResponse(
           success: true,
-          message:
-              'Offre publiée avec succès, mais les notifications sont temporairement indisponibles.',
+          message: 'offreCreatedNotificationFailedMessage'.tr,
           code: 'published_notification_failed',
           toast: ToastLevel.info,
         );
       }
 
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'published',
-        message: 'Offre publiée avec succès.',
+        message: 'offreCreatedSuccessMessage'.tr,
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
@@ -375,7 +373,7 @@ class OffreController extends GetxController {
       }
       return ActionResponse.failure(
         code: 'publish_failed',
-        message: 'Impossible de publier l’offre pour le moment.',
+        message: 'offreCreateFailedMessage'.tr,
       );
     } catch (e, st) {
       AppLogger.warning(
@@ -386,7 +384,7 @@ class OffreController extends GetxController {
       );
       return ActionResponse.failure(
         code: 'publish_failed',
-        message: 'Impossible de publier l’offre pour le moment.',
+        message: 'offreCreateFailedMessage'.tr,
       );
     }
   }
@@ -397,8 +395,10 @@ class OffreController extends GetxController {
   ) async {
     final response = await PushNotificationService.sendOfferFanout(
       offerId: offre.id,
-      title: 'Nouvelle offre disponible',
-      body: 'Une nouvelle offre a été publiée par ${recruteur.nom}.',
+      // Composed in the publisher's own locale, not each recipient's --
+      // same limitation as event_controller.dart's notification.
+      title: 'offreNewNotificationTitle'.tr,
+      body: 'offreNewNotificationBody'.trParams({'name': recruteur.nom}),
     );
 
     if (!response.success) {
@@ -415,7 +415,7 @@ class OffreController extends GetxController {
     if (utilisateur.uid != offre.recruteur.uid) {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Vous ne pouvez modifier que vos propres offres.',
+        message: 'offreUpdateOwnOnlyMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -423,10 +423,10 @@ class OffreController extends GetxController {
     try {
       await _offerRepository.updateOffer(offre);
       _replaceLocalOffer(offre);
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'updated',
-        message: 'Offre modifiée avec succès.',
+        message: 'offreUpdateSuccessMessage'.tr,
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
@@ -444,7 +444,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'update_failed',
-        message: 'Impossible de modifier l’offre pour le moment.',
+        message: 'offreUpdateFailedMessage'.tr,
       );
     } catch (e, st) {
       AppLogger.warning(
@@ -456,7 +456,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'update_failed',
-        message: 'Impossible de modifier l’offre pour le moment.',
+        message: 'offreUpdateFailedMessage'.tr,
       );
     }
   }
@@ -469,7 +469,7 @@ class OffreController extends GetxController {
     if (utilisateur.uid != offre.recruteur.uid) {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Vous ne pouvez modifier que vos propres offres.',
+        message: 'offreUpdateOwnOnlyMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -479,7 +479,7 @@ class OffreController extends GetxController {
     if (!allowed.contains(normalized)) {
       return ActionResponse.failure(
         code: 'invalid-argument',
-        message: 'Statut invalide.',
+        message: 'offreInvalidStatusMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -496,7 +496,7 @@ class OffreController extends GetxController {
       return ActionResponse(
         success: true,
         code: 'status_updated',
-        message: 'Le statut est maintenant "$normalized".',
+        message: 'offreStatusUpdatedMessage'.trParams({'status': normalized}),
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
@@ -514,7 +514,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'status_update_failed',
-        message: 'Impossible de modifier le statut pour le moment.',
+        message: 'offreStatusUpdateFailedMessage'.tr,
       );
     } catch (e, st) {
       AppLogger.warning(
@@ -526,7 +526,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'status_update_failed',
-        message: 'Impossible de modifier le statut pour le moment.',
+        message: 'offreStatusUpdateFailedMessage'.tr,
       );
     }
   }
@@ -539,7 +539,7 @@ class OffreController extends GetxController {
     if (utilisateur.uid != offre.recruteur.uid) {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Vous ne pouvez supprimer que vos propres offres.',
+        message: 'offreDeleteOwnOnlyMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -547,10 +547,10 @@ class OffreController extends GetxController {
     try {
       await _offerRepository.deleteOffer(offreId);
       _removeLocalOffer(offreId);
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'deleted',
-        message: 'Offre supprimée avec succès.',
+        message: 'offreDeleteSuccessMessage'.tr,
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
@@ -568,7 +568,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'delete_failed',
-        message: 'Impossible de supprimer l’offre pour le moment.',
+        message: 'offreDeleteFailedMessage'.tr,
       );
     } catch (e, st) {
       AppLogger.warning(
@@ -580,7 +580,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'delete_failed',
-        message: 'Impossible de supprimer l’offre pour le moment.',
+        message: 'offreDeleteFailedMessage'.tr,
       );
     }
   }
@@ -589,7 +589,7 @@ class OffreController extends GetxController {
     if (joueur.role != 'joueur') {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Seuls les joueurs peuvent postuler à une offre.',
+        message: 'offreApplyPlayersOnlyMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -601,10 +601,10 @@ class OffreController extends GetxController {
       await _offerRepository.applyToOffer(player: joueur, offer: offre);
       _setLocalOfferCandidateState(offre, joueur, applied: true);
 
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'applied',
-        message: 'Vous avez postulé à l’offre.',
+        message: 'offreApplySuccessMessage'.tr,
         toast: ToastLevel.success,
       );
     } on OfferRepositoryException catch (e) {
@@ -630,7 +630,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'apply_failed',
-        message: 'Impossible de postuler pour le moment.',
+        message: 'offreApplyFailedMessage'.tr,
       );
     } catch (e, st) {
       _restoreLocalOfferCandidates(offre, previousCandidates);
@@ -643,7 +643,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'apply_failed',
-        message: 'Impossible de postuler pour le moment.',
+        message: 'offreApplyFailedMessage'.tr,
       );
     }
   }
@@ -652,7 +652,7 @@ class OffreController extends GetxController {
     if (joueur.role != 'joueur') {
       return ActionResponse.failure(
         code: 'permission-denied',
-        message: 'Seuls les joueurs peuvent se désinscrire.',
+        message: 'offreWithdrawPlayersOnlyMessage'.tr,
         toast: ToastLevel.info,
       );
     }
@@ -664,10 +664,10 @@ class OffreController extends GetxController {
       await _offerRepository.withdrawFromOffer(player: joueur, offer: offre);
       _setLocalOfferCandidateState(offre, joueur, applied: false);
 
-      return const ActionResponse(
+      return ActionResponse(
         success: true,
         code: 'withdrawn',
-        message: 'Vous vous êtes désinscrit de l’offre.',
+        message: 'offreWithdrawSuccessMessage'.tr,
         toast: ToastLevel.success,
       );
     } on OfferRepositoryException catch (e) {
@@ -693,7 +693,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'withdraw_failed',
-        message: 'Impossible de se désinscrire pour le moment.',
+        message: 'offreWithdrawFailedMessage'.tr,
       );
     } catch (e, st) {
       _restoreLocalOfferCandidates(offre, previousCandidates);
@@ -706,7 +706,7 @@ class OffreController extends GetxController {
 
       return ActionResponse.failure(
         code: 'withdraw_failed',
-        message: 'Impossible de se désinscrire pour le moment.',
+        message: 'offreWithdrawFailedMessage'.tr,
       );
     }
   }

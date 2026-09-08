@@ -140,6 +140,19 @@ void main() {
       'eventNewNotificationBody'.trParams({'name': 'Awa', 'title': 'U17'}),
       'Awa a créé un nouvel événement : U17',
     );
+    expect(
+      'offreUpdateSuccessMessage'.tr,
+      'Les modifications ont été enregistrées.',
+    );
+    expect(
+      'offreStatusUpdatedMessage'.trParams({'status': 'active'}),
+      'Le statut est maintenant "active".',
+    );
+    expect('offreDeleteSuccessMessage'.tr, 'Offre supprimée avec succès.');
+    expect(
+      'offreApplyPlayersOnlyMessage'.tr,
+      'Seuls les joueurs peuvent postuler à une offre.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -244,6 +257,16 @@ void main() {
     expect(
       'eventNewNotificationBody'.trParams({'name': 'Awa', 'title': 'U17'}),
       'Awa created a new event: U17',
+    );
+    expect('offreUpdateSuccessMessage'.tr, 'Your changes have been saved.');
+    expect(
+      'offreStatusUpdatedMessage'.trParams({'status': 'active'}),
+      'The status is now "active".',
+    );
+    expect('offreDeleteSuccessMessage'.tr, 'Offer deleted successfully.');
+    expect(
+      'offreApplyPlayersOnlyMessage'.tr,
+      'Only players can apply to an offer.',
     );
   });
 }

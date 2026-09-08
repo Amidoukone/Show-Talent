@@ -422,6 +422,37 @@ class VideoUiTranslations extends Translations {
         'action.',
     'eventNewNotificationTitle': 'Nouvel événement',
     'eventNewNotificationBody': '@name a créé un nouvel événement : @title',
+    'offreCreatePublisherOnlyMessage':
+        'Seuls les clubs, recruteurs ou agents peuvent publier une offre.',
+    'offreCreatedNotificationFailedMessage':
+        'Offre créée avec succès, mais les notifications sont '
+        'indisponibles.',
+    'offreCreatedSuccessMessage': 'Votre offre a été créée avec succès.',
+    'offreCreateFailedMessage': 'Échec de la création de l’offre.',
+    'offreNewNotificationTitle': 'Nouvelle offre',
+    'offreNewNotificationBody': '@name a publié une nouvelle offre : @title',
+    'offreUpdateOwnOnlyMessage':
+        'Vous ne pouvez modifier que vos propres offres.',
+    'offreUpdateSuccessMessage': 'Les modifications ont été enregistrées.',
+    'offreUpdateFailedMessage': 'Échec de la mise à jour de l’offre.',
+    'offreInvalidStatusMessage': 'Statut invalide.',
+    'offreStatusUpdatedMessage': 'Le statut est maintenant "@status".',
+    'offreStatusUpdateFailedMessage':
+        'Impossible de modifier le statut pour le moment.',
+    'offreDeleteOwnOnlyMessage':
+        'Vous ne pouvez supprimer que vos propres offres.',
+    'offreDeleteSuccessMessage': 'Offre supprimée avec succès.',
+    'offreDeleteFailedMessage':
+        'Impossible de supprimer l’offre pour le moment.',
+    'offreApplyPlayersOnlyMessage':
+        'Seuls les joueurs peuvent postuler à une offre.',
+    'offreApplySuccessMessage': 'Vous avez postulé à l’offre.',
+    'offreApplyFailedMessage': 'Impossible de postuler pour le moment.',
+    'offreWithdrawPlayersOnlyMessage':
+        'Seuls les joueurs peuvent se désinscrire.',
+    'offreWithdrawSuccessMessage': 'Vous vous êtes désinscrit de l’offre.',
+    'offreWithdrawFailedMessage':
+        'Impossible de se désinscrire pour le moment.',
   };
 
   static const Map<String, String> _en = {
@@ -804,5 +835,28 @@ class VideoUiTranslations extends Translations {
         'Only clubs, recruiters, or agents can perform this action.',
     'eventNewNotificationTitle': 'New event',
     'eventNewNotificationBody': '@name created a new event: @title',
+    'offreCreatePublisherOnlyMessage':
+        'Only clubs, recruiters, or agents can publish an offer.',
+    'offreCreatedNotificationFailedMessage':
+        'Offer created successfully, but notifications are unavailable.',
+    'offreCreatedSuccessMessage': 'Your offer has been created successfully.',
+    'offreCreateFailedMessage': 'Failed to create the offer.',
+    'offreNewNotificationTitle': 'New offer',
+    'offreNewNotificationBody': '@name published a new offer: @title',
+    'offreUpdateOwnOnlyMessage': 'You can only edit your own offers.',
+    'offreUpdateSuccessMessage': 'Your changes have been saved.',
+    'offreUpdateFailedMessage': 'Failed to update the offer.',
+    'offreInvalidStatusMessage': 'Invalid status.',
+    'offreStatusUpdatedMessage': 'The status is now "@status".',
+    'offreStatusUpdateFailedMessage': 'Unable to update the status right now.',
+    'offreDeleteOwnOnlyMessage': 'You can only delete your own offers.',
+    'offreDeleteSuccessMessage': 'Offer deleted successfully.',
+    'offreDeleteFailedMessage': 'Unable to delete the offer right now.',
+    'offreApplyPlayersOnlyMessage': 'Only players can apply to an offer.',
+    'offreApplySuccessMessage': 'You have applied to the offer.',
+    'offreApplyFailedMessage': 'Unable to apply right now.',
+    'offreWithdrawPlayersOnlyMessage': 'Only players can withdraw.',
+    'offreWithdrawSuccessMessage': 'You have withdrawn from the offer.',
+    'offreWithdrawFailedMessage': 'Unable to withdraw right now.',
   };
 }
