@@ -626,6 +626,21 @@ class VideoUiTranslations extends Translations {
         'réessayez.',
     'callableAuthUnavailableMessage':
         'Authentification indisponible. Reconnectez-vous puis réessayez.',
+    'uploadClientCallableFailedMessage': 'Échec appel @callable.',
+    'uploadClientIncompleteResponseMessage':
+        'Réponse incomplète du serveur pendant @callable '
+        '(champ « @field »).',
+    'uploadClientRetryNotFoundMessage': 'Échec upload : tentative introuvable.',
+    'uploadClientFileNotFoundMessage': 'Fichier @label introuvable.',
+    'uploadClientFileEmptyMessage': 'Fichier @label vide.',
+    'uploadClientTransferTooSlowMessage':
+        'Le transfert vidéo prend trop de temps sur cette connexion. '
+        'Vérifiez votre réseau puis réessayez.',
+    'uploadClientInvalid308VideoMessage':
+        'Réponse 308 invalide pendant l’upload vidéo.',
+    'uploadClientThumbnailLinkExpiredMessage': 'Lien miniature expiré.',
+    'uploadClientInvalid308ThumbnailMessage':
+        'Réponse 308 invalide pendant l’upload miniature.',
   };
 
   static const Map<String, String> _en = {
@@ -1194,5 +1209,19 @@ class VideoUiTranslations extends Translations {
         'again.',
     'callableAuthUnavailableMessage':
         'Authentication unavailable. Sign in again and try again.',
+    'uploadClientCallableFailedMessage': 'Call @callable failed.',
+    'uploadClientIncompleteResponseMessage':
+        'Incomplete server response during @callable (field "@field").',
+    'uploadClientRetryNotFoundMessage': 'Upload failed: attempt not found.',
+    'uploadClientFileNotFoundMessage': '@label file not found.',
+    'uploadClientFileEmptyMessage': '@label file is empty.',
+    'uploadClientTransferTooSlowMessage':
+        'The video transfer is taking too long on this connection. Check '
+        'your network and try again.',
+    'uploadClientInvalid308VideoMessage':
+        'Invalid 308 response during the video upload.',
+    'uploadClientThumbnailLinkExpiredMessage': 'Thumbnail link expired.',
+    'uploadClientInvalid308ThumbnailMessage':
+        'Invalid 308 response during the thumbnail upload.',
   };
 }

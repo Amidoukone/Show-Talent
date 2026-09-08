@@ -236,6 +236,14 @@ void main() {
       'Service serveur indisponible pendant l’appel createUploadSession '
       '(HTTP 403).',
     );
+    expect(
+      'uploadClientThumbnailLinkExpiredMessage'.tr,
+      'Lien miniature expiré.',
+    );
+    expect(
+      'uploadClientFileNotFoundMessage'.trParams({'label': 'video'}),
+      'Fichier video introuvable.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -429,6 +437,14 @@ void main() {
         'status': '403',
       }),
       'Server unavailable during call createUploadSession (HTTP 403).',
+    );
+    expect(
+      'uploadClientThumbnailLinkExpiredMessage'.tr,
+      'Thumbnail link expired.',
+    );
+    expect(
+      'uploadClientFileNotFoundMessage'.trParams({'label': 'video'}),
+      'video file not found.',
     );
   });
 }

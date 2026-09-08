@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:get/get.dart' hide Response;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -266,7 +267,9 @@ class UploadClient {
       }
     }
 
-    throw UploadClientException('Échec appel $callableName.');
+    throw UploadClientException(
+      'uploadClientCallableFailedMessage'.trParams({'callable': callableName}),
+    );
   }
 
   /// Reads a required String out of a callable payload.
@@ -288,8 +291,10 @@ class UploadClient {
       return value;
     }
     throw UploadClientException(
-      'Réponse incomplète du serveur pendant $callableName '
-      '(champ « $key »).',
+      'uploadClientIncompleteResponseMessage'.trParams({
+        'callable': callableName,
+        'field': key,
+      }),
     );
   }
 
@@ -303,8 +308,10 @@ class UploadClient {
       return value.toInt();
     }
     throw UploadClientException(
-      'Réponse incomplète du serveur pendant $callableName '
-      '(champ « $key »).',
+      'uploadClientIncompleteResponseMessage'.trParams({
+        'callable': callableName,
+        'field': key,
+      }),
     );
   }
 
@@ -544,7 +551,7 @@ class UploadClient {
       }
     }
 
-    throw const UploadClientException('Échec upload : tentative introuvable.');
+    throw UploadClientException('uploadClientRetryNotFoundMessage'.tr);
   }
 
   Future<int> _queryRemoteOffset(
@@ -590,12 +597,16 @@ class UploadClient {
     required String label,
   }) async {
     if (!await file.exists()) {
-      throw UploadClientException('Fichier $label introuvable.');
+      throw UploadClientException(
+        'uploadClientFileNotFoundMessage'.trParams({'label': label}),
+      );
     }
 
     final totalBytes = await file.length();
     if (totalBytes <= 0) {
-      throw UploadClientException('Fichier $label vide.');
+      throw UploadClientException(
+        'uploadClientFileEmptyMessage'.trParams({'label': label}),
+      );
     }
 
     return totalBytes;
@@ -624,10 +635,7 @@ class UploadClient {
     while (uploadedBytes < totalBytes) {
       if (current.isExpired) {
         if (sessionRefreshCount >= _maxSessionRefreshes) {
-          throw const UploadClientException(
-            'Le transfert vidéo prend trop de temps sur cette connexion. '
-            'Vérifiez votre réseau puis réessayez.',
-          );
+          throw UploadClientException('uploadClientTransferTooSlowMessage'.tr);
         }
         sessionRefreshCount++;
         current = await refreshSession(current);
@@ -681,9 +689,7 @@ class UploadClient {
           response.headers.value('range'),
         );
         if (lastPersistedByte < chunkStart || lastPersistedByte >= totalBytes) {
-          throw const UploadClientException(
-            'Réponse 308 invalide pendant l’upload vidéo.',
-          );
+          throw UploadClientException('uploadClientInvalid308VideoMessage'.tr);
         }
         uploadedBytes = lastPersistedByte + 1;
       } else {
@@ -742,7 +748,7 @@ class UploadClient {
     CancelToken? cancelToken,
   }) async {
     if (ticket.isExpired) {
-      throw const UploadClientException('Lien miniature expiré.');
+      throw UploadClientException('uploadClientThumbnailLinkExpiredMessage'.tr);
     }
 
     final totalBytes = await _readValidFileLength(
@@ -777,8 +783,8 @@ class UploadClient {
           response.headers.value('range'),
         );
         if (lastPersistedByte < chunkStart || lastPersistedByte >= totalBytes) {
-          throw const UploadClientException(
-            'Réponse 308 invalide pendant l’upload miniature.',
+          throw UploadClientException(
+            'uploadClientInvalid308ThumbnailMessage'.tr,
           );
         }
         uploadedBytes = lastPersistedByte + 1;
