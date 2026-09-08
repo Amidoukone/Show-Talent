@@ -1,3 +1,5 @@
+import 'package:get/get.dart';
+
 const publicSelfSignupRoles = <String>[];
 
 const adminProvisionedRoles = <String>[
@@ -8,24 +10,13 @@ const adminProvisionedRoles = <String>[
   'agent',
 ];
 
-const publicSignupDisabledMessage =
-    'La création de compte est gérée exclusivement par l’équipe Adfoot.';
+String get publicSignupDisabledMessage => 'publicSignupDisabledMessage'.tr;
 
-const managedAccountRoles = <String>[
-  'club',
-  'recruteur',
-  'agent',
-];
+const managedAccountRoles = <String>['club', 'recruteur', 'agent'];
 
-const opportunityPublisherRoles = <String>[
-  'club',
-  'recruteur',
-  'agent',
-];
+const opportunityPublisherRoles = <String>['club', 'recruteur', 'agent'];
 
-const adminPortalOnlyRoles = <String>[
-  'admin',
-];
+const adminPortalOnlyRoles = <String>['admin'];
 
 String normalizeUserRole(String? role) => role?.trim().toLowerCase() ?? '';
 

@@ -160,10 +160,7 @@ class AuthSessionService {
   /// A timeout is reported as an [AuthFlowException] rather than a bare
   /// [TimeoutException] because the login screen already maps that to a
   /// message the user can read and act on.
-  static Future<T> _bounded<T>(
-    Future<T> Function() call,
-    String stage,
-  ) {
+  static Future<T> _bounded<T>(Future<T> Function() call, String stage) {
     return call().timeout(
       _authCallTimeout,
       onTimeout: () => throw AuthFlowException(
@@ -508,10 +505,7 @@ class AuthSessionService {
     required String password,
   }) async {
     final userCred = await _bounded(
-      () => _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      ),
+      () => _auth.signInWithEmailAndPassword(email: email, password: password),
       'authentification',
     );
 
@@ -548,16 +542,14 @@ class AuthSessionService {
     // own. Bounded individually *and* as a sequence: unbounded, a stall here
     // never returns to the login screen at all, so its `finally` never clears
     // the busy state and the user is left watching a spinner that cannot end.
-    final User refreshed = await _signInHandshake(
-      email: email,
-      password: password,
-    ).timeout(
-      _signInHandshakeTimeout,
-      onTimeout: () => throw const AuthFlowException(
-        'La connexion prend trop de temps. Vérifiez votre réseau puis '
-        'réessayez.',
-      ),
-    );
+    final User refreshed =
+        await _signInHandshake(email: email, password: password).timeout(
+          _signInHandshakeTimeout,
+          onTimeout: () => throw const AuthFlowException(
+            'La connexion prend trop de temps. Vérifiez votre réseau puis '
+            'réessayez.',
+          ),
+        );
 
     return resolveSessionSafely(
       refreshed,
@@ -586,7 +578,7 @@ class AuthSessionService {
     String? phone,
     ActionCodeSettings? emailVerificationSettings,
   }) async {
-    throw const AuthFlowException(publicSignupDisabledMessage);
+    throw AuthFlowException(publicSignupDisabledMessage);
   }
 
   /// Sends the reset link under [_authCallTimeout].

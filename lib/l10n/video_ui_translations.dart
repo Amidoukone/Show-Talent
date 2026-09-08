@@ -338,6 +338,10 @@ class VideoUiTranslations extends Translations {
         'environnement. Vérifiez la configuration Authentication du projet '
         'cible.',
     'authErrorGeneric': 'Une erreur est survenue. Réessayez.',
+
+    'publicSignupDisabledMessage':
+        'La création de compte est gérée exclusivement par l’équipe '
+        'Adfoot.',
   };
 
   static const Map<String, String> _en = {
@@ -645,5 +649,8 @@ class VideoUiTranslations extends Translations {
         'environment. Check the target project\'s Authentication '
         'configuration.',
     'authErrorGeneric': 'Something went wrong. Please try again.',
+
+    'publicSignupDisabledMessage':
+        'Account creation is managed exclusively by the Adfoot team.',
   };
 }

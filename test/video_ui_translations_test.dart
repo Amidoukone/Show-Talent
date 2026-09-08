@@ -117,6 +117,7 @@ void main() {
     expect('profileTrustVerified'.tr, 'Vérifié par Adfoot');
     expect('authErrorWrongPassword'.tr, 'Mot de passe incorrect.');
     expect('authErrorUserNotFound'.tr, contains('Ce compte est introuvable'));
+    expect('publicSignupDisabledMessage'.tr, contains('équipe Adfoot'));
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -205,5 +206,6 @@ void main() {
       'authErrorUserNotFound'.tr,
       contains('This account could not be found'),
     );
+    expect('publicSignupDisabledMessage'.tr, contains('Adfoot team'));
   });
 }
