@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/controller/event_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/action_response.dart';
@@ -179,6 +180,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     return PopScope<void>(
       canPop: false,
@@ -191,9 +193,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
         resizeToAvoidBottomInset: true,
         appBar: AdAppBar(
           title: widget.event != null
-              ? 'Modifier l’événement'
-              : 'Créer un événement',
-          subtitle: 'Publication encadrée',
+              ? l10n.eventFormEditTitle
+              : l10n.eventCreateAction,
+          subtitle: l10n.eventFormSubtitle,
           showBottomDivider: true,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
@@ -217,62 +219,67 @@ class _EventFormScreenState extends State<EventFormScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildFormSection(
-                        title: 'Résumé',
+                        title: l10n.eventFormSummarySectionTitle,
                         children: [
                           _buildTextField(
                             controller: titleController,
-                            labelText: 'Titre',
-                            hintText: 'Saisissez le titre de l’événement',
+                            labelText: l10n.eventFormTitleLabel,
+                            hintText: l10n.eventFormTitleHint,
                             icon: Icons.title,
                             maxLength: _maxTitleLength,
-                            validator: _validateTitle,
+                            validator: (value) => _validateTitle(l10n, value),
                           ),
                           const SizedBox(height: 16),
                           _buildTextField(
                             controller: descriptionController,
-                            labelText: 'Description',
-                            hintText: 'Décrivez l’événement',
+                            labelText: l10n.offreDescriptionLabel,
+                            hintText: l10n.eventFormDescriptionHint,
                             icon: Icons.description,
                             maxLines: 5,
                             maxLength: _maxDescriptionLength,
-                            validator: _validateDescription,
+                            validator: (value) =>
+                                _validateDescription(l10n, value),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
                       _buildFormSection(
-                        title: 'Organisation',
+                        title: l10n.eventFormOrganizationSectionTitle,
                         children: [
                           _buildTextField(
                             controller: locationController,
-                            labelText: 'Lieu',
-                            hintText: 'Ville, stade ou adresse',
+                            labelText: l10n.offreLocationLabel,
+                            hintText: l10n.eventFormLocationHint,
                             icon: Icons.location_on,
-                            validator: _validateRequiredLocation,
+                            validator: (value) =>
+                                _validateRequiredLocation(l10n, value),
                           ),
                           const SizedBox(height: 16),
                           _buildTextField(
                             controller: capacityController,
-                            labelText: 'Capacité maximale (optionnel)',
-                            hintText: 'Ex: 50',
+                            labelText: l10n.eventFormCapacityLabel,
+                            hintText: l10n.eventFormCapacityHint,
                             icon: Icons.groups,
                             keyboardType: TextInputType.number,
-                            validator: _validateOptionalCapacity,
+                            validator: (value) =>
+                                _validateOptionalCapacity(l10n, value),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
                       _buildFormSection(
-                        title: 'Profil recherché',
+                        title: l10n.eventFormSoughtProfileSectionTitle,
                         children: [
                           // Le poste se choisit, il ne se tape plus : c'est ce
                           // qui permet a cet evenement de rencontrer les
                           // joueurs qui declarent le meme code.
-                          const Align(
+                          Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              'Postes concernés *',
-                              style: TextStyle(fontWeight: FontWeight.w700),
+                              l10n.eventFormPositionsRequiredLabel,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -285,7 +292,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
                           // dans c80719c.
                           FormField<List<FootballPosition>>(
                             initialValue: _positionCodes,
-                            validator: _validatePositions,
+                            validator: (value) =>
+                                _validatePositions(l10n, value),
                             builder: (state) {
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -331,11 +339,13 @@ class _EventFormScreenState extends State<EventFormScreen> {
                             },
                           ),
                           const SizedBox(height: 16),
-                          const Align(
+                          Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              'Catégories visées',
-                              style: TextStyle(fontWeight: FontWeight.w700),
+                              l10n.eventFormCategoriesLabel,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -365,7 +375,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                           DropdownButtonFormField<ClubLevel>(
                             initialValue: _clubLevel,
                             decoration: InputDecoration(
-                              labelText: 'Niveau de la structure',
+                              labelText: l10n.eventFormClubLevelLabel,
                               prefixIcon: const Icon(
                                 Icons.leaderboard_outlined,
                                 color: AdColors.brand,
@@ -394,7 +404,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       ),
                       const SizedBox(height: 16),
                       _buildFormSection(
-                        title: 'Accès',
+                        title: l10n.eventFormAccessSectionTitle,
                         children: [
                           // Ce reglage decrit votre facon de recruter les
                           // participants, pas la visibilite de l'evenement :
@@ -408,11 +418,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
                           // `profilePublic`, documentee dans firestore.rules).
                           SwitchListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: const Text('Inscription ouverte à tous'),
-                            subtitle: const Text(
-                              'Désactivez si vous sélectionnez vous-même les '
-                              'participants. Dans les deux cas, l’événement '
-                              'reste visible par tous les membres.',
+                            title: Text(l10n.eventFormOpenRegistrationLabel),
+                            subtitle: Text(
+                              l10n.eventFormOpenRegistrationSubtitle,
                             ),
                             value: estPublic,
                             onChanged: (v) => setState(() => estPublic = v),
@@ -421,7 +429,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                           DropdownButtonFormField<String>(
                             initialValue: statut,
                             decoration: InputDecoration(
-                              labelText: 'Statut',
+                              labelText: l10n.profileStatusLabel,
                               prefixIcon: const Icon(
                                 Icons.flag_outlined,
                                 color: AdColors.brand,
@@ -433,22 +441,22 @@ class _EventFormScreenState extends State<EventFormScreen> {
                               filled: true,
                               fillColor: AdColors.surfaceCard,
                             ),
-                            items: const [
+                            items: [
                               DropdownMenuItem(
                                 value: 'brouillon',
-                                child: Text('Brouillon'),
+                                child: Text(l10n.eventStatusDraftLabel),
                               ),
                               DropdownMenuItem(
                                 value: 'ouvert',
-                                child: Text('Ouvert'),
+                                child: Text(l10n.eventStatusOpenLabel),
                               ),
                               DropdownMenuItem(
                                 value: 'ferme',
-                                child: Text('Fermé'),
+                                child: Text(l10n.eventStatusClosedLabel),
                               ),
                               DropdownMenuItem(
                                 value: 'archive',
-                                child: Text('Archivé'),
+                                child: Text(l10n.eventStatusArchivedLabel),
                               ),
                             ],
                             onChanged: (v) =>
@@ -458,17 +466,19 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       ),
                       const SizedBox(height: 16),
                       _buildFormSection(
-                        title: 'Dates',
+                        title: l10n.eventFormDatesSectionTitle,
                         children: [
                           _buildDatePicker(
-                            'Date de début',
+                            l10n,
+                            l10n.eventFormStartDateLabel,
                             startDate,
                             _setStartDate,
                             isStart: true,
                           ),
                           const SizedBox(height: 16),
                           _buildDatePicker(
-                            'Date de fin',
+                            l10n,
+                            l10n.eventFormEndDateLabel,
                             endDate,
                             _setEndDate,
                           ),
@@ -476,8 +486,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       ),
                       const SizedBox(height: 16),
                       _buildFormSection(
-                        title: 'Affiche',
-                        children: [_buildFlyerPicker()],
+                        title: l10n.eventFormFlyerSectionTitle,
+                        children: [_buildFlyerPicker(l10n)],
                       ),
                       const SizedBox(height: 24),
                       AdButton(
@@ -487,8 +497,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
                             ? Icons.save_rounded
                             : Icons.publish_rounded,
                         label: widget.event != null
-                            ? 'Mettre à jour'
-                            : 'Publier l’événement',
+                            ? l10n.eventFormUpdateAction
+                            : l10n.eventFormPublishAction,
                       ),
                     ],
                   ),
@@ -522,9 +532,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
       });
     } catch (error) {
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context)!;
       AdFeedback.error(
-        'Affiche',
-        'Impossible d\u2019ouvrir la galerie.',
+        l10n.eventFormFlyerPickErrorTitle,
+        l10n.eventFormFlyerPickErrorMessage,
       );
       AppLogger.warning(
         'Selection affiche evenement echouee: $error',
@@ -543,7 +554,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     });
   }
 
-  Widget _buildFlyerPicker() {
+  Widget _buildFlyerPicker(AppLocalizations l10n) {
     final localPath = _pickedFlyerPath;
     final remoteUrl = _visibleFlyerUrl;
     final hasSomething = localPath != null || remoteUrl != null;
@@ -552,9 +563,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Une affiche donne a votre evenement le format que le football '
-          'amateur partage deja. Facultative.',
-          style: TextStyle(color: AdColors.onSurfaceMuted, fontSize: 13),
+          l10n.eventFormFlyerHelpText,
+          style: const TextStyle(
+            color: AdColors.onSurfaceMuted,
+            fontSize: 13,
+          ),
         ),
         const SizedBox(height: 12),
         if (hasSomething)
@@ -584,7 +597,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
                 onPressed: _submitLocked ? null : _pickFlyer,
                 icon: const Icon(Icons.image_outlined),
                 label: Text(
-                  hasSomething ? 'Remplacer' : 'Ajouter une affiche',
+                  hasSomething
+                      ? l10n.eventFormFlyerReplaceAction
+                      : l10n.eventFormFlyerAddAction,
                 ),
               ),
             ),
@@ -593,7 +608,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
               OutlinedButton.icon(
                 onPressed: _submitLocked ? null : _clearFlyer,
                 icon: const Icon(Icons.delete_outline),
-                label: const Text('Retirer'),
+                label: Text(l10n.eventFormFlyerRemoveAction),
               ),
             ],
           ],
@@ -607,7 +622,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   /// Renvoie le message a ajouter au retour, ou une chaine vide. Un echec ne
   /// remet pas la publication en cause : l'evenement existe, il lui manque une
   /// image, et le dire vaut mieux que faire croire a un echec complet.
-  Future<String> _applyFlyerChange(String eventId) async {
+  Future<String> _applyFlyerChange(AppLocalizations l10n, String eventId) async {
     final localPath = _pickedFlyerPath;
 
     if (localPath != null) {
@@ -615,12 +630,12 @@ class _EventFormScreenState extends State<EventFormScreen> {
         eventId: eventId,
         filePath: localPath,
       );
-      return response.success ? '' : ' L\u2019affiche n\u2019a pas pu etre ajoutee.';
+      return response.success ? '' : l10n.eventFormFlyerAttachFailedNote;
     }
 
     if (_flyerRemoved && _flyerUrl != null) {
       final response = await eventController.removeFlyer(eventId);
-      return response.success ? '' : ' L\u2019affiche n\u2019a pas pu etre retiree.';
+      return response.success ? '' : l10n.eventFormFlyerRemoveFailedNote;
     }
 
     return '';
@@ -629,20 +644,22 @@ class _EventFormScreenState extends State<EventFormScreen> {
   Future<void> _handleSubmit() async {
     if (_submitLocked) return;
 
+    final l10n = AppLocalizations.of(context)!;
+
     if (!(_formKey.currentState?.validate() ?? false) ||
         startDate == null ||
         endDate == null) {
       AdFeedback.error(
-        'Erreur',
-        'Veuillez remplir tous les champs obligatoires.',
+        l10n.eventFormGenericErrorTitle,
+        l10n.eventFormMissingFieldsMessage,
       );
       return;
     }
 
     if (endDate!.isBefore(startDate!)) {
       AdFeedback.error(
-        'Erreur date',
-        'La date de fin doit être après la date de début.',
+        l10n.eventFormDateErrorTitle,
+        l10n.eventFormDateErrorMessage,
       );
       return;
     }
@@ -652,8 +669,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
       capacite = int.tryParse(capacityController.text.trim());
       if (capacite == null || capacite <= 0) {
         AdFeedback.error(
-          'Capacité invalide',
-          'Entrez un nombre positif.',
+          l10n.eventFormInvalidCapacityTitle,
+          l10n.eventFormPositiveNumberMessage,
         );
         return;
       }
@@ -662,8 +679,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
     final AppUser? currentUser = Get.find<UserController>().user;
     if (currentUser == null) {
       AdFeedback.error(
-        'Erreur',
-        'Utilisateur introuvable. Merci de vous reconnecter.',
+        l10n.eventFormGenericErrorTitle,
+        l10n.commonUserNotFoundMessage,
       );
       return;
     }
@@ -708,14 +725,14 @@ class _EventFormScreenState extends State<EventFormScreen> {
           if (response.toast == ToastLevel.none) {
             return;
           }
-          AdFeedback.error('Erreur', response.message);
+          AdFeedback.error(l10n.eventFormGenericErrorTitle, response.message);
           return;
         }
 
-        final flyerNote = await _applyFlyerChange(widget.event!.id);
+        final flyerNote = await _applyFlyerChange(l10n, widget.event!.id);
         if (!mounted) return;
 
-        _completeSubmit('${response.message}$flyerNote');
+        _completeSubmit(l10n, '${response.message}$flyerNote');
       } else {
         final newEvent = Event(
           id: _draftEventId,
@@ -756,14 +773,14 @@ class _EventFormScreenState extends State<EventFormScreen> {
           if (response.toast == ToastLevel.none) {
             return;
           }
-          AdFeedback.error('Erreur', response.message);
+          AdFeedback.error(l10n.eventFormGenericErrorTitle, response.message);
           return;
         }
 
-        final flyerNote = await _applyFlyerChange(_draftEventId);
+        final flyerNote = await _applyFlyerChange(l10n, _draftEventId);
         if (!mounted) return;
 
-        _completeSubmit('${response.message}$flyerNote');
+        _completeSubmit(l10n, '${response.message}$flyerNote');
       }
     } finally {
       if (mounted && !_hasCompletedSubmit) {
@@ -772,7 +789,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     }
   }
 
-  void _completeSubmit(String message) {
+  void _completeSubmit(AppLocalizations l10n, String message) {
     AdFeedback.dismissCurrent();
 
     if (mounted) {
@@ -783,8 +800,9 @@ class _EventFormScreenState extends State<EventFormScreen> {
 
     Get.back(
       result: EventFormResult(
-        title:
-            widget.event != null ? 'Événement mis à jour' : 'Événement publié',
+        title: widget.event != null
+            ? l10n.eventFormUpdatedTitle
+            : l10n.eventFormPublishedTitle,
         message: message,
       ),
     );
@@ -859,47 +877,53 @@ class _EventFormScreenState extends State<EventFormScreen> {
   /// n'en porte aucun n'apparait dans aucune recherche par poste, et son
   /// organisateur n'a aucun moyen de s'en apercevoir -- l'evenement s'affiche
   /// normalement dans la liste non filtree. Meme raisonnement que pour l'offre.
-  String? _validatePositions(List<FootballPosition>? positions) {
+  String? _validatePositions(
+    AppLocalizations l10n,
+    List<FootballPosition>? positions,
+  ) {
     if (positions == null || positions.isEmpty) {
-      return 'Choisissez au moins un poste : sans lui, l’événement '
-          'n’apparaît dans aucune recherche par poste.';
+      return l10n.eventFormPositionsRequiredValidator;
     }
     return null;
   }
 
-  String? _validateTitle(String? value) {
+  String? _validateTitle(AppLocalizations l10n, String? value) {
     final normalized = value?.trim() ?? '';
-    if (normalized.isEmpty) return 'Le titre est requis.';
+    if (normalized.isEmpty) return l10n.eventFormTitleRequiredValidator;
     if (normalized.length > _maxTitleLength) {
-      return 'Limitez le titre à $_maxTitleLength caractères.';
+      return l10n.eventFormTitleMaxLengthValidator(_maxTitleLength);
     }
     return null;
   }
 
-  String? _validateDescription(String? value) {
+  String? _validateDescription(AppLocalizations l10n, String? value) {
     final normalized = value?.trim() ?? '';
-    if (normalized.isEmpty) return 'La description est requise.';
+    if (normalized.isEmpty) return l10n.eventFormDescriptionRequiredValidator;
     if (normalized.length < _minDescriptionLength) {
-      return 'Ajoutez au moins $_minDescriptionLength caractères.';
+      return l10n.eventFormDescriptionMinLengthValidator(
+        _minDescriptionLength,
+      );
     }
     if (normalized.length > _maxDescriptionLength) {
-      return 'Limitez la description à $_maxDescriptionLength caractères.';
+      return l10n.eventFormDescriptionMaxLengthValidator(
+        _maxDescriptionLength,
+      );
     }
     return null;
   }
 
-  String? _validateRequiredLocation(String? value) {
+  String? _validateRequiredLocation(AppLocalizations l10n, String? value) {
     final normalized = value?.trim() ?? '';
-    if (normalized.isEmpty) return 'Le lieu est requis.';
+    if (normalized.isEmpty) return l10n.eventFormLocationRequiredValidator;
     return null;
   }
 
-  String? _validateOptionalCapacity(String? value) {
+  String? _validateOptionalCapacity(AppLocalizations l10n, String? value) {
     final normalized = value?.trim() ?? '';
     if (normalized.isEmpty) return null;
     final capacity = int.tryParse(normalized);
     if (capacity == null || capacity <= 0) {
-      return 'Entrez un nombre positif.';
+      return l10n.eventFormPositiveNumberMessage;
     }
     return null;
   }
@@ -925,12 +949,13 @@ class _EventFormScreenState extends State<EventFormScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final discard = await AdDialogs.confirm(
       context: context,
-      title: 'Quitter sans enregistrer ?',
-      message: 'Les modifications de cet événement ne seront pas conservées.',
-      confirmLabel: 'Quitter',
-      cancelLabel: 'Continuer',
+      title: l10n.eventFormDiscardConfirmTitle,
+      message: l10n.eventFormDiscardConfirmMessage,
+      confirmLabel: l10n.eventFormDiscardAction,
+      cancelLabel: l10n.eventFormContinueEditingAction,
       danger: true,
     );
     if (discard && mounted) {
@@ -939,6 +964,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   }
 
   Widget _buildDatePicker(
+    AppLocalizations l10n,
     String label,
     DateTime? date,
     ValueChanged<DateTime> onDateSelected, {
@@ -1005,7 +1031,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
             Text(
               date != null
                   ? DateFormat('dd MMM yyyy', 'fr_FR').format(date)
-                  : 'Choisir une date',
+                  : l10n.eventFormChooseDateLabel,
               style: const TextStyle(
                 fontSize: 16,
                 color: AdColors.brand,

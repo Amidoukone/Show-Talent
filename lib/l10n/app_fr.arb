@@ -824,5 +824,78 @@
   "eventParticipantsTitle": "Participants",
   "eventNoParticipantsMessage": "Aucun participant pour le moment.",
   "eventViewAllParticipantsButton": "Voir tous les participants",
-  "eventManageParticipantsButton": "Gérer les participants"
+  "eventManageParticipantsButton": "Gérer les participants",
+
+  "eventFormEditTitle": "Modifier l’événement",
+  "eventFormSubtitle": "Publication encadrée",
+  "eventFormSummarySectionTitle": "Résumé",
+  "eventFormOrganizationSectionTitle": "Organisation",
+  "eventFormSoughtProfileSectionTitle": "Profil recherché",
+  "eventFormAccessSectionTitle": "Accès",
+  "eventFormDatesSectionTitle": "Dates",
+  "eventFormFlyerSectionTitle": "Affiche",
+  "eventFormTitleLabel": "Titre",
+  "eventFormTitleHint": "Saisissez le titre de l’événement",
+  "eventFormDescriptionHint": "Décrivez l’événement",
+  "eventFormLocationHint": "Ville, stade ou adresse",
+  "eventFormCapacityLabel": "Capacité maximale (optionnel)",
+  "eventFormCapacityHint": "Ex: 50",
+  "eventFormPositionsRequiredLabel": "Postes concernés *",
+  "eventFormCategoriesLabel": "Catégories visées",
+  "eventFormClubLevelLabel": "Niveau de la structure",
+  "eventFormOpenRegistrationLabel": "Inscription ouverte à tous",
+  "eventFormOpenRegistrationSubtitle": "Désactivez si vous sélectionnez vous-même les participants. Dans les deux cas, l’événement reste visible par tous les membres.",
+  "eventFormStartDateLabel": "Date de début",
+  "eventFormEndDateLabel": "Date de fin",
+  "eventFormChooseDateLabel": "Choisir une date",
+  "eventFormUpdateAction": "Mettre à jour",
+  "eventFormPublishAction": "Publier l’événement",
+  "eventFormFlyerHelpText": "Une affiche donne à votre événement le format que le football amateur partage déjà. Facultative.",
+  "eventFormFlyerReplaceAction": "Remplacer",
+  "eventFormFlyerAddAction": "Ajouter une affiche",
+  "eventFormFlyerRemoveAction": "Retirer",
+  "eventFormFlyerPickErrorTitle": "Affiche",
+  "eventFormFlyerPickErrorMessage": "Impossible d’ouvrir la galerie.",
+  "eventFormFlyerAttachFailedNote": " L’affiche n’a pas pu être ajoutée.",
+  "eventFormFlyerRemoveFailedNote": " L’affiche n’a pas pu être retirée.",
+  "eventFormGenericErrorTitle": "Erreur",
+  "eventFormMissingFieldsMessage": "Veuillez remplir tous les champs obligatoires.",
+  "eventFormDateErrorTitle": "Erreur date",
+  "eventFormDateErrorMessage": "La date de fin doit être après la date de début.",
+  "eventFormInvalidCapacityTitle": "Capacité invalide",
+  "eventFormPositiveNumberMessage": "Entrez un nombre positif.",
+  "eventFormUpdatedTitle": "Événement mis à jour",
+  "eventFormPublishedTitle": "Événement publié",
+  "eventFormDiscardConfirmTitle": "Quitter sans enregistrer ?",
+  "eventFormDiscardConfirmMessage": "Les modifications de cet événement ne seront pas conservées.",
+  "eventFormDiscardAction": "Quitter",
+  "eventFormContinueEditingAction": "Continuer",
+  "eventFormTitleRequiredValidator": "Le titre est requis.",
+  "eventFormTitleMaxLengthValidator": "Limitez le titre à {max} caractères.",
+  "@eventFormTitleMaxLengthValidator": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "eventFormDescriptionRequiredValidator": "La description est requise.",
+  "eventFormDescriptionMinLengthValidator": "Ajoutez au moins {min} caractères.",
+  "@eventFormDescriptionMinLengthValidator": {
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "eventFormDescriptionMaxLengthValidator": "Limitez la description à {max} caractères.",
+  "@eventFormDescriptionMaxLengthValidator": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "eventFormLocationRequiredValidator": "Le lieu est requis.",
+  "eventFormPositionsRequiredValidator": "Choisissez au moins un poste : sans lui, l’événement n’apparaît dans aucune recherche par poste."
 }

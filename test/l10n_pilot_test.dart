@@ -142,6 +142,19 @@ void main() {
     );
     expect(l10n.eventCapacityValueLabel(8, 20), '8 / 20 participants');
     expect(l10n.eventRegistrationOpenToAllLabel, 'Ouverte à tous');
+    expect(
+      l10n.eventFormTitleMaxLengthValidator(120),
+      'Limitez le titre à 120 caractères.',
+    );
+    expect(
+      l10n.eventFormDescriptionMinLengthValidator(20),
+      'Ajoutez au moins 20 caractères.',
+    );
+    expect(
+      l10n.eventFormDescriptionMaxLengthValidator(1200),
+      'Limitez la description à 1200 caractères.',
+    );
+    expect(l10n.eventFormPublishAction, 'Publier l’événement');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -258,5 +271,18 @@ void main() {
     );
     expect(l10n.eventCapacityValueLabel(8, 20), '8 / 20 participants');
     expect(l10n.eventRegistrationOpenToAllLabel, isNot('Ouverte à tous'));
+    expect(
+      l10n.eventFormTitleMaxLengthValidator(120),
+      'Limit the title to 120 characters.',
+    );
+    expect(
+      l10n.eventFormDescriptionMinLengthValidator(20),
+      'Add at least 20 characters.',
+    );
+    expect(
+      l10n.eventFormDescriptionMaxLengthValidator(1200),
+      'Limit the description to 1200 characters.',
+    );
+    expect(l10n.eventFormPublishAction, isNot('Publier l’événement'));
   });
 }

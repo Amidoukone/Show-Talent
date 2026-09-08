@@ -9,6 +9,8 @@ void main() {
       final form = File(
         'lib/screens/event_form_screen.dart',
       ).readAsStringSync();
+      // The literal wording moved into the ARB template (l10n.eventForm*).
+      final arbFr = File('lib/l10n/app_fr.arb').readAsStringSync();
 
       expect(form, contains('Future<void> _handleSubmit() async'));
       expect(form, contains('await eventController.updateEvent'));
@@ -25,7 +27,12 @@ void main() {
       expect(form, contains('id: _draftEventId'));
       // Le message rendu vient toujours du controleur ; il porte en plus la
       // suite du sort de l'affiche, qui peut echouer seule.
-      expect(form, contains(r"_completeSubmit('" r"$" r"{response.message}" r"$" r"flyerNote')"));
+      expect(
+        form,
+        contains(
+          r"_completeSubmit(l10n, '" r"$" r"{response.message}" r"$" r"flyerNote')",
+        ),
+      );
       expect(form, contains('_buildFormSection('));
       expect(
         form,
@@ -34,9 +41,15 @@ void main() {
       expect(form, contains('width: double.infinity'));
       expect(form, contains('_setStartDate'));
       expect(form, contains('_setEndDate'));
-      expect(form, contains("child: Text('Fermé')"));
-      expect(form, contains("child: Text('Archivé')"));
-      expect(form, contains('Publier l’événement'));
+      expect(form, contains('child: Text(l10n.eventStatusClosedLabel)'));
+      expect(arbFr, contains('"eventStatusClosedLabel": "Fermé"'));
+      expect(form, contains('child: Text(l10n.eventStatusArchivedLabel)'));
+      expect(arbFr, contains('"eventStatusArchivedLabel": "Archivé"'));
+      expect(form, contains('l10n.eventFormPublishAction'));
+      expect(
+        arbFr,
+        contains('"eventFormPublishAction": "Publier l’événement"'),
+      );
       expect(form, contains('maxLength: _maxTitleLength'));
       expect(form, contains('maxLength: _maxDescriptionLength'));
       expect(form, contains("locale: const Locale('fr', 'FR')"));
@@ -51,14 +64,14 @@ void main() {
       // avant son image. L'affiche est attachee juste apres, par
       // `_applyFlyerChange`.
       expect(form, contains('flyerUrl: null'));
-      expect(form, contains('_applyFlyerChange(_draftEventId)'));
+      expect(form, contains('_applyFlyerChange(l10n, _draftEventId)'));
 
       // L'edition, elle, doit reconduire l'affiche existante. Sans cette
       // ligne le formulaire envoyait null a chaque fois et `updateEvent`
       // supprimait le champ : editer un evenement effacait son affiche, sans
       // que rien ne le dise.
       expect(form, contains('flyerUrl: _visibleFlyerUrl'));
-      expect(form, contains('_applyFlyerChange(widget.event!.id)'));
+      expect(form, contains('_applyFlyerChange(l10n, widget.event!.id)'));
     });
 
     // Le vocabulaire footballistique remplace le champ « Tags / Categories ».
@@ -68,15 +81,22 @@ void main() {
       final form = File(
         'lib/screens/event_form_screen.dart',
       ).readAsStringSync();
+      // The literal wording moved into the ARB template (l10n.eventForm*).
+      final arbFr = File('lib/l10n/app_fr.arb').readAsStringSync();
 
       // Le poste est obligatoire, par un `FormField` et non par un test dans
       // `_handleSubmit` : il est valide par le meme `validate()` que le titre,
       // et l'erreur se pose sous les puces au lieu d'un message general.
       expect(form, contains('FormField<List<FootballPosition>>('));
-      expect(form, contains('validator: _validatePositions'));
+      expect(form, contains('validator: (value) =>'));
+      expect(form, contains('_validatePositions(l10n, value)'));
       expect(form, contains('state.didChange(_positionCodes)'));
       expect(form, contains('String? _validatePositions('));
-      expect(form, contains('Postes concernés *'));
+      expect(form, contains('l10n.eventFormPositionsRequiredLabel'));
+      expect(
+        arbFr,
+        contains('"eventFormPositionsRequiredLabel": "Postes concernés *"'),
+      );
 
       // Ce que le formulaire envoie vient de son propre etat, pas de
       // l'evenement d'origine : sinon editer ne changerait jamais le
