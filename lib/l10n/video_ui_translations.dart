@@ -546,6 +546,25 @@ class VideoUiTranslations extends Translations {
     'videoPreparedFileNotFoundMessage': 'Fichier vidéo préparé introuvable.',
     'videoTrimFailedMessage':
         'Impossible de préparer un extrait de @seconds secondes.',
+    'accountCleanupReauthRequiredMessage':
+        'Vérification de sécurité requise. Merci de vous reconnecter puis '
+        'de relancer la suppression.',
+    'accountCleanupGenericFailedMessage':
+        'Suppression impossible pour le moment. Vérifiez votre connexion '
+        'puis réessayez.',
+    'accountCleanupNotDeletableInAppMessage':
+        'Ce compte ne peut pas être supprimé depuis l’application.',
+    'accountCleanupTimeoutMessage':
+        'La suppression a pris trop de temps. Vérifiez votre connexion '
+        'puis réessayez.',
+    'accountCleanupUnknownErrorMessage':
+        'Une erreur est survenue pendant la suppression. Merci de '
+        'réessayer.',
+    'accountCleanupInvalidSessionMessage':
+        'Session invalide. Veuillez vous reconnecter.',
+    'accountCleanupSecuritySessionExpiredMessage':
+        'Session de sécurité expirée. Merci de vous reconnecter puis de '
+        'relancer la suppression.',
   };
 
   static const Map<String, String> _en = {
@@ -1041,5 +1060,21 @@ class VideoUiTranslations extends Translations {
         'Video preparation was cancelled or incomplete.',
     'videoPreparedFileNotFoundMessage': 'Prepared video file not found.',
     'videoTrimFailedMessage': 'Unable to prepare a @seconds-second clip.',
+    'accountCleanupReauthRequiredMessage':
+        'Security check required. Please sign in again, then start the '
+        'deletion over.',
+    'accountCleanupGenericFailedMessage':
+        'Unable to delete right now. Check your connection and try again.',
+    'accountCleanupNotDeletableInAppMessage':
+        'This account cannot be deleted from the app.',
+    'accountCleanupTimeoutMessage':
+        'The deletion took too long. Check your connection and try again.',
+    'accountCleanupUnknownErrorMessage':
+        'Something went wrong during the deletion. Please try again.',
+    'accountCleanupInvalidSessionMessage':
+        'Invalid session. Please sign in again.',
+    'accountCleanupSecuritySessionExpiredMessage':
+        'Security session expired. Please sign in again, then start the '
+        'deletion over.',
   };
 }

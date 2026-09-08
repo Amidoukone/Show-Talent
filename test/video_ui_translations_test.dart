@@ -187,6 +187,15 @@ void main() {
       'videoTrimFailedMessage'.trParams({'seconds': '180'}),
       'Impossible de préparer un extrait de 180 secondes.',
     );
+    expect(
+      'accountCleanupReauthRequiredMessage'.tr,
+      'Vérification de sécurité requise. Merci de vous reconnecter puis '
+      'de relancer la suppression.',
+    );
+    expect(
+      'accountCleanupInvalidSessionMessage'.tr,
+      'Session invalide. Veuillez vous reconnecter.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -335,6 +344,15 @@ void main() {
     expect(
       'videoTrimFailedMessage'.trParams({'seconds': '180'}),
       'Unable to prepare a 180-second clip.',
+    );
+    expect(
+      'accountCleanupReauthRequiredMessage'.tr,
+      'Security check required. Please sign in again, then start the '
+      'deletion over.',
+    );
+    expect(
+      'accountCleanupInvalidSessionMessage'.tr,
+      'Invalid session. Please sign in again.',
     );
   });
 }

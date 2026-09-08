@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/services/callable_auth_guard.dart';
+import 'package:get/get.dart';
 
 class AccountCleanupException implements Exception {
   const AccountCleanupException({
@@ -60,9 +61,7 @@ class AccountCleanupService {
   /// default callable timeout on a heavy account.
   static const Duration _callableTimeout = Duration(seconds: 300);
 
-  static const String _reauthMessage =
-      'Vérification de sécurité requise. Merci de vous reconnecter puis de '
-      'relancer la suppression.';
+  static String get _reauthMessage => 'accountCleanupReauthRequiredMessage'.tr;
 
   /// Deletes the account and every document it owns.
   ///
@@ -92,10 +91,8 @@ class AccountCleanupService {
       AppLogger.debug(
         'AccountCleanup deleteOwnAccount error: $error\n$stackTrace',
       );
-      throw const AccountCleanupException(
-        message:
-            'Suppression impossible pour le moment. Vérifiez votre connexion '
-            'puis réessayez.',
+      throw AccountCleanupException(
+        message: 'accountCleanupGenericFailedMessage'.tr,
       );
     }
 
@@ -115,7 +112,7 @@ class AccountCleanupService {
     FirebaseFunctionsException error,
   ) {
     if (_requiresRecentLogin(error)) {
-      return const AccountCleanupException(
+      return AccountCleanupException(
         message: _reauthMessage,
         requiresRecentLogin: true,
       );
@@ -123,28 +120,22 @@ class AccountCleanupService {
 
     switch (error.code) {
       case 'unauthenticated':
-        return const AccountCleanupException(
+        return AccountCleanupException(
           message: _reauthMessage,
           requiresRecentLogin: true,
         );
       case 'permission-denied':
         return AccountCleanupException(
-          message:
-              error.message ??
-              'Ce compte ne peut pas être supprimé depuis l’application.',
+          message: error.message ?? 'accountCleanupNotDeletableInAppMessage'.tr,
         );
       case 'deadline-exceeded':
       case 'unavailable':
-        return const AccountCleanupException(
-          message:
-              'La suppression a pris trop de temps. Vérifiez votre connexion '
-              'puis réessayez.',
+        return AccountCleanupException(
+          message: 'accountCleanupTimeoutMessage'.tr,
         );
       default:
-        return const AccountCleanupException(
-          message:
-              'Une erreur est survenue pendant la suppression. Merci de '
-              'réessayer.',
+        return AccountCleanupException(
+          message: 'accountCleanupUnknownErrorMessage'.tr,
         );
     }
   }
@@ -171,14 +162,14 @@ class AccountCleanupService {
   void _assertCanDeleteCurrentAuthUser(String uid) {
     final current = _auth.currentUser;
     if (current == null || current.uid != uid) {
-      throw const AccountCleanupException(
-        message: 'Session invalide. Veuillez vous reconnecter.',
+      throw AccountCleanupException(
+        message: 'accountCleanupInvalidSessionMessage'.tr,
       );
     }
 
     final lastSignIn = current.metadata.lastSignInTime;
     if (lastSignIn == null) {
-      throw const AccountCleanupException(
+      throw AccountCleanupException(
         message: _reauthMessage,
         requiresRecentLogin: true,
       );
@@ -186,10 +177,8 @@ class AccountCleanupService {
 
     final age = DateTime.now().difference(lastSignIn);
     if (age > _maxDeleteAuthSessionAge) {
-      throw const AccountCleanupException(
-        message:
-            'Session de sécurité expirée. Merci de vous reconnecter puis de '
-            'relancer la suppression.',
+      throw AccountCleanupException(
+        message: 'accountCleanupSecuritySessionExpiredMessage'.tr,
         requiresRecentLogin: true,
       );
     }
