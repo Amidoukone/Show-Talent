@@ -55,6 +55,16 @@ void main() {
       VideoUiStrings.emptyProfileVideoFeedTitle,
       'Aucune vidéo à afficher',
     );
+    expect(VideoUiStrings.uploadFormTitle, 'Soumettre une vidéo');
+    expect(VideoUiStrings.uploadFormSubtitle, 'Prévisualisation et détails');
+    expect(VideoUiStrings.descriptionLabel, 'Description (obligatoire)');
+    expect(VideoUiStrings.captionLabel, 'Légende (obligatoire)');
+    expect(VideoUiStrings.discardDraftTitle, 'Abandonner cette vidéo ?');
+    expect(VideoUiStrings.discardDraftConfirm, 'Abandonner');
+    expect(
+      VideoUiStrings.unexpectedUploadError('network error'),
+      'Erreur inattendue : network error',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -80,5 +90,15 @@ void main() {
     expect(VideoUiStrings.videoSearchResultHint, 'Open this video');
     expect(VideoUiStrings.back, 'Back');
     expect(VideoUiStrings.emptyProfileVideoFeedTitle, 'No videos to show');
+    expect(VideoUiStrings.uploadFormTitle, 'Submit a video');
+    expect(VideoUiStrings.uploadFormSubtitle, 'Preview and details');
+    expect(VideoUiStrings.descriptionLabel, 'Description (required)');
+    expect(VideoUiStrings.captionLabel, 'Caption (required)');
+    expect(VideoUiStrings.discardDraftTitle, 'Discard this video?');
+    expect(VideoUiStrings.discardDraftConfirm, 'Discard');
+    expect(
+      VideoUiStrings.unexpectedUploadError('network error'),
+      'Unexpected error: network error',
+    );
   });
 }

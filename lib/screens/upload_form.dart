@@ -220,9 +220,9 @@ class _UploadFormState extends State<UploadForm> with WidgetsBindingObserver {
         await _handleBackNavigation();
       },
       child: Scaffold(
-        appBar: const AdAppBar(
+        appBar: AdAppBar(
           title: VideoUiStrings.uploadFormTitle,
-          subtitle: 'Prévisualisation et détails',
+          subtitle: VideoUiStrings.uploadFormSubtitle,
           showBottomDivider: true,
         ),
         body: Obx(() {
@@ -340,12 +340,12 @@ class _UploadFormState extends State<UploadForm> with WidgetsBindingObserver {
                                 style: const TextStyle(
                                   color: AdColors.onSurface,
                                 ),
-                                decoration: const InputDecoration(
+                                decoration: InputDecoration(
                                   labelText: VideoUiStrings.descriptionLabel,
                                   counterText: '',
                                   filled: true,
                                   fillColor: AdColors.surfaceCard,
-                                  border: OutlineInputBorder(
+                                  border: const OutlineInputBorder(
                                     borderRadius: BorderRadius.all(
                                       Radius.circular(10),
                                     ),

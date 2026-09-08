@@ -61,6 +61,26 @@ class VideoUiTranslations extends Translations {
     'emptyProfileVideoFeedMessage':
         'Ce profil n’a pas encore de vidéo disponible.',
     'back': 'Retour',
+    'uploadFormTitle': 'Soumettre une vidéo',
+    'uploadFormSubtitle': 'Prévisualisation et détails',
+    'descriptionLabel': 'Description (obligatoire)',
+    'descriptionHint': 'Ex: Dribble + frappe pied gauche',
+    'descriptionRequired': 'La description est requise.',
+    'minThreeChars': 'Au moins 3 caractères.',
+    'captionLabel': 'Légende (obligatoire)',
+    'captionHint': 'Ex: #U17 #Ailier #Vitesse',
+    'captionRequired': 'La légende est requise.',
+    'uploadVideoButton': 'Soumettre la vidéo',
+    'uploadReminder':
+        'Rappel : durée max 3 min • fichier max 150 Mo • '
+        'validation admin avant publication',
+    'discardDraftTitle': 'Abandonner cette vidéo ?',
+    'discardDraftMessage':
+        'Votre description et votre légende ne seront pas enregistrées.',
+    'discardDraftConfirm': 'Abandonner',
+    'discardDraftCancel': 'Continuer',
+    'uploadUnexpectedErrorTitle': 'Erreur inattendue',
+    'unexpectedUploadError': 'Erreur inattendue : @error',
   };
 
   static const Map<String, String> _en = {
@@ -99,5 +119,25 @@ class VideoUiTranslations extends Translations {
     'emptyProfileVideoFeedMessage':
         'This profile has no videos available yet.',
     'back': 'Back',
+    'uploadFormTitle': 'Submit a video',
+    'uploadFormSubtitle': 'Preview and details',
+    'descriptionLabel': 'Description (required)',
+    'descriptionHint': 'E.g.: Dribble + left-foot shot',
+    'descriptionRequired': 'Description is required.',
+    'minThreeChars': 'At least 3 characters.',
+    'captionLabel': 'Caption (required)',
+    'captionHint': 'E.g.: #U17 #Winger #Speed',
+    'captionRequired': 'Caption is required.',
+    'uploadVideoButton': 'Submit the video',
+    'uploadReminder':
+        'Reminder: max duration 3 min • max file size 150 MB • '
+        'admin review before publishing',
+    'discardDraftTitle': 'Discard this video?',
+    'discardDraftMessage':
+        'Your description and caption will not be saved.',
+    'discardDraftConfirm': 'Discard',
+    'discardDraftCancel': 'Continue',
+    'uploadUnexpectedErrorTitle': 'Unexpected error',
+    'unexpectedUploadError': 'Unexpected error: @error',
   };
 }

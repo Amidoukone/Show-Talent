@@ -300,11 +300,10 @@ class VideoUiStrings {
   static const String uploadProgressLabel = 'Progression';
   static const String uploadCurrentStepLabel = 'Étape actuelle';
   static const String uploadCancelAction = 'Annuler le téléversement';
-  static const String discardDraftTitle = 'Abandonner cette vidéo ?';
-  static const String discardDraftMessage =
-      'Votre description et votre légende ne seront pas enregistrées.';
-  static const String discardDraftConfirm = 'Abandonner';
-  static const String discardDraftCancel = 'Continuer';
+  static String get discardDraftTitle => 'discardDraftTitle'.tr;
+  static String get discardDraftMessage => 'discardDraftMessage'.tr;
+  static String get discardDraftConfirm => 'discardDraftConfirm'.tr;
+  static String get discardDraftCancel => 'discardDraftCancel'.tr;
   static const String uploadStepPrepare = 'Préparation';
   static const String uploadStepTransfer = 'Transfert';
   static const String uploadStepThumbnail = 'Miniature';
@@ -317,14 +316,16 @@ class VideoUiStrings {
       'Téléversement miniature...';
   static const String addVideoScreenTitle = 'Ajouter une vidéo';
   static const String addVideoScreenSubtitle = 'Soumission vidéo';
-  static const String uploadFormTitle = 'Soumettre une vidéo';
+  static String get uploadFormTitle => 'uploadFormTitle'.tr;
+  static String get uploadFormSubtitle => 'uploadFormSubtitle'.tr;
   static const String noVideoSelected = 'Aucune vidéo sélectionnée.';
   static const String galleryPermissionTitle = 'Autorisation requise';
   static const String galleryPermissionMessage =
       'Veuillez autoriser l’accès à la galerie pour '
       'sélectionner une vidéo.';
   static const String videoSelectionErrorTitle = 'Sélection impossible';
-  static const String uploadUnexpectedErrorTitle = 'Erreur inattendue';
+  static String get uploadUnexpectedErrorTitle =>
+      'uploadUnexpectedErrorTitle'.tr;
   static const String addVideoPickTitle = 'Sélectionnez une vidéo à soumettre';
   static const String uploadConstraintsHint =
       'Durée max 3 min • Fichier max 150 Mo • Qualité minimale 480×360';
@@ -336,17 +337,15 @@ class VideoUiStrings {
   static const String overlayLoading = 'Chargement...';
   static const String overlayUploading = 'Téléversement en cours';
   static const String overlayWaiting = 'Veuillez patienter...';
-  static const String descriptionLabel = 'Description (obligatoire)';
-  static const String descriptionHint = 'Ex: Dribble + frappe pied gauche';
-  static const String descriptionRequired = 'La description est requise.';
-  static const String minThreeChars = 'Au moins 3 caractères.';
-  static const String captionLabel = 'Légende (obligatoire)';
-  static const String captionHint = 'Ex: #U17 #Ailier #Vitesse';
-  static const String captionRequired = 'La légende est requise.';
-  static const String uploadVideoButton = 'Soumettre la vidéo';
-  static const String uploadReminder =
-      'Rappel : durée max 3 min • fichier max 150 Mo • '
-      'validation admin avant publication';
+  static String get descriptionLabel => 'descriptionLabel'.tr;
+  static String get descriptionHint => 'descriptionHint'.tr;
+  static String get descriptionRequired => 'descriptionRequired'.tr;
+  static String get minThreeChars => 'minThreeChars'.tr;
+  static String get captionLabel => 'captionLabel'.tr;
+  static String get captionHint => 'captionHint'.tr;
+  static String get captionRequired => 'captionRequired'.tr;
+  static String get uploadVideoButton => 'uploadVideoButton'.tr;
+  static String get uploadReminder => 'uploadReminder'.tr;
 
   static String buildShareText({
     required String shareUrl,
@@ -420,6 +419,6 @@ class VideoUiStrings {
   }
 
   static String unexpectedUploadError(Object error) {
-    return 'Erreur inattendue : $error';
+    return 'unexpectedUploadError'.trParams({'error': '$error'});
   }
 }
