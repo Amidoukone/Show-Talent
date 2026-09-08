@@ -220,23 +220,23 @@ class VideoUiStrings {
   // peut pas faire : archiver n'existe pas dans l'application. La seule issue
   // réelle est de faire relever le plafond par l'agence, donc c'est ce que le
   // message doit dire.
-  static const String uploadQuotaReachedTitle = 'Plafond de vidéos atteint';
+  static String get uploadQuotaReachedTitle => 'uploadQuotaReachedTitle'.tr;
 
   static String uploadQuotaReachedMessage(int limit) =>
-      'Votre compte a atteint son plafond de $limit vidéos publiées. '
-      'Pour en publier davantage, demandez à l’agence Adfoot d’augmenter '
-      'votre plafond.';
+      'uploadQuotaReachedMessage'.trParams({'limit': '$limit'});
 
   static String uploadQuotaReachedShort(int limit) =>
       'Plafond de $limit vidéos atteint. Contactez l’agence Adfoot pour '
       'l’augmenter.';
 
-  static const String uploadQuotaContactAction = 'Contacter l’agence Adfoot';
-  static const String uploadQuotaDismissAction = 'Fermer';
+  static String get uploadQuotaContactAction => 'uploadQuotaContactAction'.tr;
+  static String get uploadQuotaDismissAction => 'uploadQuotaDismissAction'.tr;
 
   static String uploadQuotaContactFallback(String phone, String website) =>
-      'Écrivez à l’agence Adfoot sur WhatsApp au $phone, ou passez par '
-      '$website, pour faire augmenter votre plafond de vidéos.';
+      'uploadQuotaContactFallback'.trParams({
+        'phone': phone,
+        'website': website,
+      });
 
   /* ------------------------------ Cycle de vie ----------------------------- */
 
@@ -288,18 +288,17 @@ class VideoUiStrings {
       'Préparation miniature sécurisée...';
   static const String uploadStageSendThumbnail = 'Envoi de la miniature...';
   static const String uploadStageFinalize = 'Finalisation...';
-  static const String uploadOptimizationTitle = 'Optimisation en cours';
-  static const String uploadProgressTitle = 'Soumission en cours';
-  static const String uploadPreparationTitle = 'Préparation de la vidéo';
-  static const String uploadProgressSubtitle =
-      'Garde l’application ouverte pendant le transfert.';
-  static const String uploadPreparationSubtitle =
-      'Nous préparons le fichier et la miniature avant l’envoi.';
-  static const String uploadOptimizationSubtitle =
-      'Nous finalisons la lecture et la qualité avant la revue admin.';
+  static String get uploadOptimizationTitle => 'uploadOptimizationTitle'.tr;
+  static String get uploadProgressTitle => 'uploadProgressTitle'.tr;
+  static String get uploadPreparationTitle => 'uploadPreparationTitle'.tr;
+  static String get uploadProgressSubtitle => 'uploadProgressSubtitle'.tr;
+  static String get uploadPreparationSubtitle =>
+      'uploadPreparationSubtitle'.tr;
+  static String get uploadOptimizationSubtitle =>
+      'uploadOptimizationSubtitle'.tr;
   static const String uploadProgressLabel = 'Progression';
   static const String uploadCurrentStepLabel = 'Étape actuelle';
-  static const String uploadCancelAction = 'Annuler le téléversement';
+  static String get uploadCancelAction => 'uploadCancelAction'.tr;
   static String get discardDraftTitle => 'discardDraftTitle'.tr;
   static String get discardDraftMessage => 'discardDraftMessage'.tr;
   static String get discardDraftConfirm => 'discardDraftConfirm'.tr;
@@ -314,29 +313,26 @@ class VideoUiStrings {
   static const String uploadStageUploadingVideo = 'Téléversement vidéo...';
   static const String uploadStageUploadingThumbnail =
       'Téléversement miniature...';
-  static const String addVideoScreenTitle = 'Ajouter une vidéo';
-  static const String addVideoScreenSubtitle = 'Soumission vidéo';
+  static String get addVideoScreenTitle => 'addVideoScreenTitle'.tr;
+  static String get addVideoScreenSubtitle => 'addVideoScreenSubtitle'.tr;
   static String get uploadFormTitle => 'uploadFormTitle'.tr;
   static String get uploadFormSubtitle => 'uploadFormSubtitle'.tr;
-  static const String noVideoSelected = 'Aucune vidéo sélectionnée.';
-  static const String galleryPermissionTitle = 'Autorisation requise';
-  static const String galleryPermissionMessage =
-      'Veuillez autoriser l’accès à la galerie pour '
-      'sélectionner une vidéo.';
-  static const String videoSelectionErrorTitle = 'Sélection impossible';
+  static String get noVideoSelected => 'noVideoSelected'.tr;
+  static String get galleryPermissionTitle => 'galleryPermissionTitle'.tr;
+  static String get galleryPermissionMessage => 'galleryPermissionMessage'.tr;
+  static String get videoSelectionErrorTitle => 'videoSelectionErrorTitle'.tr;
   static String get uploadUnexpectedErrorTitle =>
       'uploadUnexpectedErrorTitle'.tr;
-  static const String addVideoPickTitle = 'Sélectionnez une vidéo à soumettre';
-  static const String uploadConstraintsHint =
-      'Durée max 3 min • Fichier max 150 Mo • Qualité minimale 480×360';
-  static const String chooseFromGallery = 'Choisir depuis la galerie';
-  static const String maxDurationChip = '≤ 3 minutes';
-  static const String minQualityChip = '≥ 480×360';
-  static const String maxFileSizeChip = '≤ 150 Mo';
-  static const String autoOptimizationChip = 'Validation admin';
-  static const String overlayLoading = 'Chargement...';
+  static String get addVideoPickTitle => 'addVideoPickTitle'.tr;
+  static String get uploadConstraintsHint => 'uploadConstraintsHint'.tr;
+  static String get chooseFromGallery => 'chooseFromGallery'.tr;
+  static String get maxDurationChip => 'maxDurationChip'.tr;
+  static String get minQualityChip => 'minQualityChip'.tr;
+  static String get maxFileSizeChip => 'maxFileSizeChip'.tr;
+  static String get autoOptimizationChip => 'autoOptimizationChip'.tr;
+  static String get overlayLoading => 'overlayLoading'.tr;
   static const String overlayUploading = 'Téléversement en cours';
-  static const String overlayWaiting = 'Veuillez patienter...';
+  static String get overlayWaiting => 'overlayWaiting'.tr;
   static String get descriptionLabel => 'descriptionLabel'.tr;
   static String get descriptionHint => 'descriptionHint'.tr;
   static String get descriptionRequired => 'descriptionRequired'.tr;
@@ -415,7 +411,7 @@ class VideoUiStrings {
   }
 
   static String videoSelectionFailed(Object error) {
-    return 'Échec lors de la sélection : $error';
+    return 'videoSelectionFailed'.trParams({'error': '$error'});
   }
 
   static String unexpectedUploadError(Object error) {

@@ -81,6 +81,45 @@ class VideoUiTranslations extends Translations {
     'discardDraftCancel': 'Continuer',
     'uploadUnexpectedErrorTitle': 'Erreur inattendue',
     'unexpectedUploadError': 'Erreur inattendue : @error',
+    'uploadQuotaReachedTitle': 'Plafond de vidéos atteint',
+    'uploadQuotaReachedMessage':
+        'Votre compte a atteint son plafond de @limit vidéos publiées. '
+        'Pour en publier davantage, demandez à l’agence Adfoot d’augmenter '
+        'votre plafond.',
+    'uploadQuotaContactAction': 'Contacter l’agence Adfoot',
+    'uploadQuotaDismissAction': 'Fermer',
+    'uploadQuotaContactFallback':
+        'Écrivez à l’agence Adfoot sur WhatsApp au @phone, ou passez par '
+        '@website, pour faire augmenter votre plafond de vidéos.',
+    'uploadOptimizationTitle': 'Optimisation en cours',
+    'uploadProgressTitle': 'Soumission en cours',
+    'uploadPreparationTitle': 'Préparation de la vidéo',
+    'uploadProgressSubtitle':
+        'Garde l’application ouverte pendant le transfert.',
+    'uploadPreparationSubtitle':
+        'Nous préparons le fichier et la miniature avant l’envoi.',
+    'uploadOptimizationSubtitle':
+        'Nous finalisons la lecture et la qualité avant la revue admin.',
+    'uploadCancelAction': 'Annuler le téléversement',
+    'addVideoScreenTitle': 'Ajouter une vidéo',
+    'addVideoScreenSubtitle': 'Soumission vidéo',
+    'noVideoSelected': 'Aucune vidéo sélectionnée.',
+    'galleryPermissionTitle': 'Autorisation requise',
+    'galleryPermissionMessage':
+        'Veuillez autoriser l’accès à la galerie pour '
+        'sélectionner une vidéo.',
+    'videoSelectionErrorTitle': 'Sélection impossible',
+    'videoSelectionFailed': 'Échec lors de la sélection : @error',
+    'addVideoPickTitle': 'Sélectionnez une vidéo à soumettre',
+    'uploadConstraintsHint':
+        'Durée max 3 min • Fichier max 150 Mo • Qualité minimale 480×360',
+    'chooseFromGallery': 'Choisir depuis la galerie',
+    'maxDurationChip': '≤ 3 minutes',
+    'minQualityChip': '≥ 480×360',
+    'maxFileSizeChip': '≤ 150 Mo',
+    'autoOptimizationChip': 'Validation admin',
+    'overlayLoading': 'Chargement...',
+    'overlayWaiting': 'Veuillez patienter...',
   };
 
   static const Map<String, String> _en = {
@@ -139,5 +178,41 @@ class VideoUiTranslations extends Translations {
     'discardDraftCancel': 'Continue',
     'uploadUnexpectedErrorTitle': 'Unexpected error',
     'unexpectedUploadError': 'Unexpected error: @error',
+    'uploadQuotaReachedTitle': 'Video limit reached',
+    'uploadQuotaReachedMessage':
+        'Your account has reached its limit of @limit published videos. '
+        'To publish more, ask the Adfoot agency to raise your limit.',
+    'uploadQuotaContactAction': 'Contact the Adfoot agency',
+    'uploadQuotaDismissAction': 'Close',
+    'uploadQuotaContactFallback':
+        'Message the Adfoot agency on WhatsApp at @phone, or go through '
+        '@website, to raise your video limit.',
+    'uploadOptimizationTitle': 'Optimizing',
+    'uploadProgressTitle': 'Submission in progress',
+    'uploadPreparationTitle': 'Preparing the video',
+    'uploadProgressSubtitle': 'Keep the app open during the transfer.',
+    'uploadPreparationSubtitle':
+        'We are preparing the file and thumbnail before sending.',
+    'uploadOptimizationSubtitle':
+        'We are finalizing playback and quality before admin review.',
+    'uploadCancelAction': 'Cancel upload',
+    'addVideoScreenTitle': 'Add a video',
+    'addVideoScreenSubtitle': 'Video submission',
+    'noVideoSelected': 'No video selected.',
+    'galleryPermissionTitle': 'Permission required',
+    'galleryPermissionMessage':
+        'Please allow access to the gallery to select a video.',
+    'videoSelectionErrorTitle': 'Selection failed',
+    'videoSelectionFailed': 'Selection failed: @error',
+    'addVideoPickTitle': 'Select a video to submit',
+    'uploadConstraintsHint':
+        'Max duration 3 min • Max file 150 MB • Minimum quality 480×360',
+    'chooseFromGallery': 'Choose from gallery',
+    'maxDurationChip': '≤ 3 minutes',
+    'minQualityChip': '≥ 480×360',
+    'maxFileSizeChip': '≤ 150 MB',
+    'autoOptimizationChip': 'Admin review',
+    'overlayLoading': 'Loading...',
+    'overlayWaiting': 'Please wait...',
   };
 }

@@ -149,7 +149,7 @@ class ProgressFullScreenLoader extends StatelessWidget {
                                   ),
                                 ),
                                 icon: const Icon(Icons.close_rounded, size: 20),
-                                label: const Text(
+                                label: Text(
                                   VideoUiStrings.uploadCancelAction,
                                   textAlign: TextAlign.center,
                                 ),

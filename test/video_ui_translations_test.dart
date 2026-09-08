@@ -65,6 +65,19 @@ void main() {
       VideoUiStrings.unexpectedUploadError('network error'),
       'Erreur inattendue : network error',
     );
+    expect(VideoUiStrings.addVideoScreenTitle, 'Ajouter une vidéo');
+    expect(VideoUiStrings.chooseFromGallery, 'Choisir depuis la galerie');
+    expect(
+      VideoUiStrings.uploadQuotaReachedMessage(10),
+      'Votre compte a atteint son plafond de 10 vidéos publiées. '
+      'Pour en publier davantage, demandez à l’agence Adfoot d’augmenter '
+      'votre plafond.',
+    );
+    expect(
+      VideoUiStrings.uploadQuotaContactFallback('+225 00 00 00 00', 'adfoot.org'),
+      'Écrivez à l’agence Adfoot sur WhatsApp au +225 00 00 00 00, ou passez '
+      'par adfoot.org, pour faire augmenter votre plafond de vidéos.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -99,6 +112,18 @@ void main() {
     expect(
       VideoUiStrings.unexpectedUploadError('network error'),
       'Unexpected error: network error',
+    );
+    expect(VideoUiStrings.addVideoScreenTitle, 'Add a video');
+    expect(VideoUiStrings.chooseFromGallery, 'Choose from gallery');
+    expect(
+      VideoUiStrings.uploadQuotaReachedMessage(10),
+      'Your account has reached its limit of 10 published videos. '
+      'To publish more, ask the Adfoot agency to raise your limit.',
+    );
+    expect(
+      VideoUiStrings.uploadQuotaContactFallback('+225 00 00 00 00', 'adfoot.org'),
+      'Message the Adfoot agency on WhatsApp at +225 00 00 00 00, or go '
+      'through adfoot.org, to raise your video limit.',
     );
   });
 }

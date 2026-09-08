@@ -1,12 +1,15 @@
 import 'dart:io';
 
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/services/videos/upload_video_error_mapper.dart';
 import 'package:adfoot/services/videos/upload_video_repository.dart';
 import 'package:adfoot/utils/video_publication_quota.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 
 /// A player at their publication cap used to find out the hard way.
 ///
@@ -27,6 +30,8 @@ const String _productionQuotaMessage =
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => Get.testMode = true);
+  tearDown(() => Get.reset());
 
   group('the client cap agrees with the server cap', () {
     test('MAX_PUBLIC_PLAYER_VIDEOS and maxPublishedVideos are the same number',
@@ -215,7 +220,22 @@ void main() {
       expect(body, contains('} catch (error, stackTrace) {'));
     });
 
-    test('the notice offers the agency, and a readable fallback', () {
+    testWidgets('the notice offers the agency, and a readable fallback', (
+      tester,
+    ) async {
+      // `.tr`/`.trParams` resolve through Get.locale/Get.translations,
+      // populated by a mounted GetMaterialApp -- without this pump they fall
+      // back to the bare key, which would make the `contains('Adfoot')`
+      // checks below fail loudly rather than pass trivially.
+      await tester.pumpWidget(
+        GetMaterialApp(
+          translations: VideoUiTranslations(),
+          locale: const Locale('fr'),
+          fallbackLocale: const Locale('fr'),
+          home: const SizedBox.shrink(),
+        ),
+      );
+
       final addVideo = _read('lib/screens/add_video.dart');
 
       expect(addVideo, contains('AdfootSupport.openWhatsApp()'));

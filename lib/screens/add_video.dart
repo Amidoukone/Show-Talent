@@ -122,7 +122,7 @@ class _AddVideoState extends State<AddVideo> {
 
     return Scaffold(
       extendBodyBehindAppBar: false,
-      appBar: const AdAppBar(
+      appBar: AdAppBar(
         title: VideoUiStrings.addVideoScreenTitle,
         subtitle: VideoUiStrings.addVideoScreenSubtitle,
         showBottomDivider: true,
@@ -245,7 +245,7 @@ class _BodyCard extends StatelessWidget {
           const SizedBox(height: 14),
 
           // Tips + puces
-          const Wrap(
+          Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,
             runSpacing: 8,
@@ -455,7 +455,7 @@ class _ProgressOverlay extends StatelessWidget {
                         foregroundColor: Colors.white,
                       ),
                       icon: const Icon(Icons.close_rounded, size: 18),
-                      label: const Text(VideoUiStrings.uploadCancelAction),
+                      label: Text(VideoUiStrings.uploadCancelAction),
                     ),
                   ],
                 ],

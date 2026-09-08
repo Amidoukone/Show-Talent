@@ -5,14 +5,14 @@ import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 
 class ProcessingDialog extends StatefulWidget {
-  final String message;
+  final String? message;
   final String? uploadStage;
   final double? progressPercent; // 0.0 to 1.0
   final VoidCallback? onCancel;
 
   const ProcessingDialog({
     super.key,
-    this.message = VideoUiStrings.uploadOptimizationTitle,
+    this.message,
     this.uploadStage,
     this.progressPercent,
     this.onCancel,
@@ -74,10 +74,12 @@ class _ProcessingDialogState extends State<ProcessingDialog>
                   animation: _dotAnimation,
                   builder: (context, child) {
                     final progress = _clampedProgress;
+                    final message =
+                        widget.message ?? VideoUiStrings.uploadOptimizationTitle;
 
                     return Semantics(
                       namesRoute: true,
-                      label: widget.message,
+                      label: message,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -114,7 +116,7 @@ class _ProcessingDialogState extends State<ProcessingDialog>
                           ),
                           const SizedBox(height: AdSpacing.lg),
                           Text(
-                            '${widget.message}${getDots(_dotAnimation.value)}',
+                            '$message${getDots(_dotAnimation.value)}',
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               color: AdColors.onSurface,
@@ -123,10 +125,10 @@ class _ProcessingDialogState extends State<ProcessingDialog>
                             ),
                           ),
                           const SizedBox(height: AdSpacing.xs),
-                          const Text(
+                          Text(
                             VideoUiStrings.uploadOptimizationSubtitle,
                             textAlign: TextAlign.center,
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: AdColors.onSurfaceMuted,
                               fontSize: 14,
                               height: 1.38,
@@ -173,7 +175,7 @@ class _ProcessingDialogState extends State<ProcessingDialog>
                                 ),
                               ),
                               icon: const Icon(Icons.close_rounded, size: 20),
-                              label: const Text(
+                              label: Text(
                                 VideoUiStrings.uploadCancelAction,
                                 textAlign: TextAlign.center,
                               ),
