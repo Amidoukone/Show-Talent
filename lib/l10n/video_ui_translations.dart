@@ -148,6 +148,40 @@ class VideoUiTranslations extends Translations {
     'videoCaptionSheetTitle': 'Légende',
     'videoCaptionOpen': 'Ouvrir la légende',
     'videoPublisherProfileSemantic': 'Ouvrir le profil du joueur',
+
+    'deleteVideoTitle': 'Supprimer la vidéo',
+    'deleteVideoSheetMessage':
+        'Cette vidéo sera retirée du feed et ne pourra plus '
+        'être lue par les autres utilisateurs.',
+    'deleteVideoPrimaryAction': 'Supprimer définitivement',
+    'deleteVideoSemantic': 'Supprimer la vidéo',
+    'likeVideo': 'Aimer la vidéo',
+    'unlikeVideo': 'Retirer la mention J’aime',
+    'shareVideo': 'Partager la vidéo',
+    'reportVideoTitle': 'Signaler la vidéo',
+    'reportVideoSemantic': 'Signaler la vidéo',
+    'reportedVideoSemantic': 'Vidéo déjà signalée',
+    'reportVideoSheetMessage':
+        'Notre équipe vérifiera cette vidéo. Le créateur '
+        'ne verra pas ton identité.',
+    'reportVideoPrimaryAction': 'Envoyer le signalement',
+    'sensitiveActionWarning': 'Action sensible',
+    'moderationReviewLabel': 'Revue modération',
+    'moreVideoActions': 'Plus',
+    'moreVideoActionsSemantic': 'Plus d’actions',
+    'profile': 'Profil',
+    'openProfile': 'Ouvrir le profil',
+    'followProfile': 'Suivre le profil',
+    'followingProfile': 'Profil suivi',
+    'ownProfile': 'Votre profil',
+    'followUnavailable': 'Impossible de suivre ce profil pour le moment.',
+    'protectedAccessTitle': 'Accès indisponible',
+    'protectedAccessMessage':
+        'Votre session a été fermée pour protéger votre '
+        'compte. Veuillez vous reconnecter.',
+    'sessionRevokedMessage':
+        'Votre session a été fermée. Veuillez vous reconnecter.',
+    'authRequiredMessage': 'Session expirée. Reconnectez-vous puis réessayez.',
   };
 
   static const Map<String, String> _en = {
@@ -270,5 +304,38 @@ class VideoUiTranslations extends Translations {
     'videoCaptionSheetTitle': 'Caption',
     'videoCaptionOpen': 'Open the caption',
     'videoPublisherProfileSemantic': 'Open the player profile',
+
+    'deleteVideoTitle': 'Delete the video',
+    'deleteVideoSheetMessage':
+        'This video will be removed from the feed and can no longer be '
+        'watched by other users.',
+    'deleteVideoPrimaryAction': 'Delete permanently',
+    'deleteVideoSemantic': 'Delete the video',
+    'likeVideo': 'Like the video',
+    'unlikeVideo': 'Remove the like',
+    'shareVideo': 'Share the video',
+    'reportVideoTitle': 'Report the video',
+    'reportVideoSemantic': 'Report the video',
+    'reportedVideoSemantic': 'Video already reported',
+    'reportVideoSheetMessage':
+        'Our team will review this video. The creator will not see your '
+        'identity.',
+    'reportVideoPrimaryAction': 'Send the report',
+    'sensitiveActionWarning': 'Sensitive action',
+    'moderationReviewLabel': 'Moderation review',
+    'moreVideoActions': 'More',
+    'moreVideoActionsSemantic': 'More actions',
+    'profile': 'Profile',
+    'openProfile': 'Open the profile',
+    'followProfile': 'Follow the profile',
+    'followingProfile': 'Following profile',
+    'ownProfile': 'Your profile',
+    'followUnavailable': 'Unable to follow this profile right now.',
+    'protectedAccessTitle': 'Access unavailable',
+    'protectedAccessMessage':
+        'Your session was closed to protect your account. '
+        'Please sign in again.',
+    'sessionRevokedMessage': 'Your session was closed. Please sign in again.',
+    'authRequiredMessage': 'Session expired. Sign in again, then retry.',
   };
 }

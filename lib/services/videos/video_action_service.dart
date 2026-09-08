@@ -10,11 +10,9 @@ import 'package:adfoot/services/callable_auth_guard.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 
 class VideoActionService {
-  VideoActionService({
-    FirebaseFunctions? functions,
-    Connectivity? connectivity,
-  })  : _injectedFunctions = functions,
-        _injectedConnectivity = connectivity;
+  VideoActionService({FirebaseFunctions? functions, Connectivity? connectivity})
+    : _injectedFunctions = functions,
+      _injectedConnectivity = connectivity;
 
   // Même raison que dans VideoRepository : `FirebaseFunctions.instanceFor`
   // lève sans app Firebase démarrée, et ce service est construit par défaut
@@ -55,17 +53,14 @@ class VideoActionService {
 
       final callable = _functions.httpsCallable(
         functionName,
-        options: HttpsCallableOptions(
-          timeout: const Duration(seconds: 10),
-        ),
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
       );
 
-      final data = await CallableAuthGuard.callDataWithHttpFallback<
-          Map<String, dynamic>>(
-        callable,
-        functionName,
-        payload,
-      ).timeout(_actionTimeout);
+      final data =
+          await CallableAuthGuard.callDataWithHttpFallback<
+                Map<String, dynamic>
+              >(callable, functionName, payload)
+              .timeout(_actionTimeout);
       return ActionResponse.fromMap(data);
     } on TimeoutException {
       return ActionResponse.failure(
@@ -115,7 +110,7 @@ class VideoActionService {
   }
 
   static ActionResponse sessionRevokedResponse() {
-    return const ActionResponse(
+    return ActionResponse(
       success: false,
       code: 'session_revoked',
       message: VideoUiStrings.sessionRevokedMessage,
@@ -124,7 +119,7 @@ class VideoActionService {
   }
 
   static ActionResponse authRequiredResponse() {
-    return const ActionResponse(
+    return ActionResponse(
       success: false,
       code: 'unauthenticated',
       message: VideoUiStrings.authRequiredMessage,

@@ -92,9 +92,7 @@ class VideoActionRail extends StatelessWidget {
               semanticLabel: isLiked
                   ? VideoUiStrings.unlikeVideo
                   : VideoUiStrings.likeVideo,
-              semanticValue: VideoUiStrings.likeCountValue(
-                video.likes.length,
-              ),
+              semanticValue: VideoUiStrings.likeCountValue(video.likes.length),
             ),
             SizedBox(height: actionSpacing),
             _VideoRailActionButton(
@@ -108,10 +106,7 @@ class VideoActionRail extends StatelessWidget {
             ),
             if (showProfileAction) ...[
               SizedBox(height: sectionSpacing),
-              _buildProfileAction(
-                isOwner: isOwner,
-                isFollowing: isFollowing,
-              ),
+              _buildProfileAction(isOwner: isOwner, isFollowing: isFollowing),
             ],
             SizedBox(height: actionSpacing),
             _buildMoreAction(
@@ -134,8 +129,8 @@ class VideoActionRail extends StatelessWidget {
     final profileSemanticLabel = isOwner
         ? VideoUiStrings.ownProfile
         : isFollowing
-            ? VideoUiStrings.followingProfile
-            : VideoUiStrings.openProfile;
+        ? VideoUiStrings.followingProfile
+        : VideoUiStrings.openProfile;
 
     return Column(
       children: [
@@ -189,8 +184,9 @@ class VideoActionRail extends StatelessWidget {
                                 width: 14,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor:
-                                      AlwaysStoppedAnimation(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation(
+                                    Colors.white,
+                                  ),
                                 ),
                               )
                             : Icon(
@@ -208,9 +204,9 @@ class VideoActionRail extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        const Text(
+        Text(
           VideoUiStrings.profile,
-          style: TextStyle(color: Colors.white, fontSize: 12),
+          style: const TextStyle(color: Colors.white, fontSize: 12),
         ),
       ],
     );
@@ -285,9 +281,9 @@ class VideoActionRail extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 18),
-                        const Text(
+                        Text(
                           VideoUiStrings.moreVideoActionsSemantic,
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: AdColors.onSurface,
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
@@ -314,8 +310,9 @@ class VideoActionRail extends StatelessWidget {
                           label: hasReported
                               ? VideoUiStrings.reportedVideoSemantic
                               : VideoUiStrings.reportVideoSemantic,
-                          color:
-                              hasReported ? AdColors.warning : AdColors.white,
+                          color: hasReported
+                              ? AdColors.warning
+                              : AdColors.white,
                           isLoading: isReportLoading,
                           onTap: hasReported || isReportLoading
                               ? null
@@ -414,12 +411,14 @@ class _VideoRailActionButton extends StatelessWidget {
                 height: VideoActionRail.buttonExtent,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color:
-                      Colors.black.withValues(alpha: emphasized ? 0.24 : 0.18),
+                  color: Colors.black.withValues(
+                    alpha: emphasized ? 0.24 : 0.18,
+                  ),
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color:
-                        Colors.white.withValues(alpha: emphasized ? 0.2 : 0.12),
+                    color: Colors.white.withValues(
+                      alpha: emphasized ? 0.2 : 0.12,
+                    ),
                     width: 1,
                   ),
                   boxShadow: [
@@ -458,10 +457,7 @@ class _VideoRailActionButton extends StatelessWidget {
                   minWidth: 32,
                   maxWidth: VideoActionRail.labelMaxWidth,
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 2,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(12),
@@ -548,8 +544,9 @@ class _VideoMoreActionTile extends StatelessWidget {
               ),
               Icon(
                 Icons.chevron_right_rounded,
-                color:
-                    Colors.white.withValues(alpha: onTap == null ? 0.18 : 0.5),
+                color: Colors.white.withValues(
+                  alpha: onTap == null ? 0.18 : 0.5,
+                ),
               ),
             ],
           ),

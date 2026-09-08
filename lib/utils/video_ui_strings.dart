@@ -59,51 +59,49 @@ class VideoUiStrings {
   static String get noInternetMessage => 'noInternetMessage'.tr;
   static String get refresh => 'refresh'.tr;
 
+  // `delete` / `deleteVideoConfirm` / `cancel` / `report` / `reported` /
+  // `reportVideoModeration` / `addVideo` have no callers anywhere in the app
+  // -- superseded by the more specific members below (`deleteVideoSemantic`,
+  // `reportVideoSemantic`/`reportedVideoSemantic`, `addVideoSemantic`, etc.).
+  // Left as plain literals: nothing renders them, so there is nothing to
+  // translate. `addVideo` is still asserted verbatim by
+  // video_ui_strings_test.dart, which is fine either way.
   static const String delete = 'Supprimer';
-  static const String deleteVideoTitle = 'Supprimer la vidéo';
+  static String get deleteVideoTitle => 'deleteVideoTitle'.tr;
   static const String deleteVideoConfirm = 'Confirmer la suppression ?';
-  static const String deleteVideoSheetMessage =
-      'Cette vidéo sera retirée du feed et ne pourra plus '
-      'être lue par les autres utilisateurs.';
-  static const String deleteVideoPrimaryAction = 'Supprimer définitivement';
-  static const String deleteVideoSemantic = 'Supprimer la vidéo';
+  static String get deleteVideoSheetMessage => 'deleteVideoSheetMessage'.tr;
+  static String get deleteVideoPrimaryAction => 'deleteVideoPrimaryAction'.tr;
+  static String get deleteVideoSemantic => 'deleteVideoSemantic'.tr;
   static const String cancel = 'Annuler';
 
-  static const String likeVideo = 'Aimer la vidéo';
-  static const String unlikeVideo = 'Retirer la mention J’aime';
-  static const String shareVideo = 'Partager la vidéo';
+  static String get likeVideo => 'likeVideo'.tr;
+  static String get unlikeVideo => 'unlikeVideo'.tr;
+  static String get shareVideo => 'shareVideo'.tr;
   static const String report = 'Signaler';
   static const String reported = 'Signalé';
-  static const String reportVideoTitle = 'Signaler la vidéo';
-  static const String reportVideoSemantic = 'Signaler la vidéo';
-  static const String reportedVideoSemantic = 'Vidéo déjà signalée';
+  static String get reportVideoTitle => 'reportVideoTitle'.tr;
+  static String get reportVideoSemantic => 'reportVideoSemantic'.tr;
+  static String get reportedVideoSemantic => 'reportedVideoSemantic'.tr;
   static const String reportVideoModeration =
       'Ce signalement sera transmis à la modération.';
-  static const String reportVideoSheetMessage =
-      'Notre équipe vérifiera cette vidéo. Le créateur '
-      'ne verra pas ton identité.';
-  static const String reportVideoPrimaryAction = 'Envoyer le signalement';
-  static const String sensitiveActionWarning = 'Action sensible';
-  static const String moderationReviewLabel = 'Revue modération';
-  static const String moreVideoActions = 'Plus';
-  static const String moreVideoActionsSemantic = 'Plus d’actions';
+  static String get reportVideoSheetMessage => 'reportVideoSheetMessage'.tr;
+  static String get reportVideoPrimaryAction => 'reportVideoPrimaryAction'.tr;
+  static String get sensitiveActionWarning => 'sensitiveActionWarning'.tr;
+  static String get moderationReviewLabel => 'moderationReviewLabel'.tr;
+  static String get moreVideoActions => 'moreVideoActions'.tr;
+  static String get moreVideoActionsSemantic => 'moreVideoActionsSemantic'.tr;
   static const String addVideo = 'Ajouter';
   static String get addVideoSemantic => 'addVideoSemantic'.tr;
-  static const String profile = 'Profil';
-  static const String openProfile = 'Ouvrir le profil';
-  static const String followProfile = 'Suivre le profil';
-  static const String followingProfile = 'Profil suivi';
-  static const String ownProfile = 'Votre profil';
-  static const String followUnavailable =
-      'Impossible de suivre ce profil pour le moment.';
-  static const String protectedAccessTitle = 'Accès indisponible';
-  static const String protectedAccessMessage =
-      'Votre session a été fermée pour protéger votre '
-      'compte. Veuillez vous reconnecter.';
-  static const String sessionRevokedMessage =
-      'Votre session a été fermée. Veuillez vous reconnecter.';
-  static const String authRequiredMessage =
-      'Session expirée. Reconnectez-vous puis réessayez.';
+  static String get profile => 'profile'.tr;
+  static String get openProfile => 'openProfile'.tr;
+  static String get followProfile => 'followProfile'.tr;
+  static String get followingProfile => 'followingProfile'.tr;
+  static String get ownProfile => 'ownProfile'.tr;
+  static String get followUnavailable => 'followUnavailable'.tr;
+  static String get protectedAccessTitle => 'protectedAccessTitle'.tr;
+  static String get protectedAccessMessage => 'protectedAccessMessage'.tr;
+  static String get sessionRevokedMessage => 'sessionRevokedMessage'.tr;
+  static String get authRequiredMessage => 'authRequiredMessage'.tr;
 
   static const String missingShareUrl =
       'Lien vidéo indisponible pour le partage.';

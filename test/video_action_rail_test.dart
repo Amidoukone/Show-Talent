@@ -1,9 +1,11 @@
+import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/video_action_rail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 
 AppUser buildUser({
   required String uid,
@@ -50,18 +52,29 @@ Widget host(Widget child) {
   return MaterialApp(
     home: Scaffold(
       backgroundColor: Colors.black,
-      body: SizedBox(
-        width: 390,
-        height: 760,
-        child: Stack(children: [child]),
-      ),
+      body: SizedBox(width: 390, height: 760, child: Stack(children: [child])),
     ),
   );
 }
 
 void main() {
-  testWidgets('action rail exposes guarded modern action states',
-      (tester) async {
+  // Set directly rather than via a pumped GetMaterialApp so `.tr` already
+  // resolves to real French text before any widget builds -- see
+  // [[project_adfoot_i18n_ios_effort]].
+  setUp(() {
+    Get.testMode = true;
+    Get.addTranslations(VideoUiTranslations().keys);
+    Get.locale = const Locale('fr');
+    Get.fallbackLocale = const Locale('fr');
+  });
+  tearDown(() {
+    Get.clearTranslations();
+    Get.reset();
+  });
+
+  testWidgets('action rail exposes guarded modern action states', (
+    tester,
+  ) async {
     var likes = 0;
     var shares = 0;
     var openedProfile = 0;
@@ -101,8 +114,10 @@ void main() {
 
     expect(find.byTooltip(VideoUiStrings.unlikeVideo), findsOneWidget);
     expect(find.byTooltip(VideoUiStrings.shareVideo), findsOneWidget);
-    expect(find.byTooltip(VideoUiStrings.moreVideoActionsSemantic),
-        findsOneWidget);
+    expect(
+      find.byTooltip(VideoUiStrings.moreVideoActionsSemantic),
+      findsOneWidget,
+    );
     expect(find.byTooltip(VideoUiStrings.followingProfile), findsWidgets);
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
     expect(find.text('1.3k'), findsOneWidget);
@@ -123,8 +138,9 @@ void main() {
     expect(find.text(VideoUiStrings.reportVideoSemantic), findsOneWidget);
   });
 
-  testWidgets('follow badge calls the follow action when available',
-      (tester) async {
+  testWidgets('follow badge calls the follow action when available', (
+    tester,
+  ) async {
     var follows = 0;
 
     await tester.pumpWidget(
