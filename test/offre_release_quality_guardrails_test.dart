@@ -74,6 +74,8 @@ void main() {
   group('Offre release quality guardrails', () {
     test('offre form awaits controller result before system feedback', () {
       final form = File('lib/screens/offres_form.dart').readAsStringSync();
+      // The literal wording moved into the ARB template (l10n.offreForm*).
+      final arbFr = File('lib/l10n/app_fr.arb').readAsStringSync();
 
       expect(form, contains('Future<void> _submitForm() async'));
       expect(form, contains('await offreController.modifierOffre'));
@@ -104,10 +106,15 @@ void main() {
       // `FormField`, donc par le meme `validate()` que le titre, et l'erreur
       // se pose sous les puces plutot que dans un message general.
       expect(form, contains('FormField<List<FootballPosition>>('));
-      expect(form, contains('validator: _validatePositions'));
+      expect(form, contains('validator: (value) =>'));
+      expect(form, contains('_validatePositions(l10n, value)'));
       expect(form, contains('state.didChange(_positionCodes)'));
       expect(form, contains('String? _validatePositions('));
-      expect(form, contains('Postes recherchés *'));
+      expect(form, contains('l10n.offreFormPositionsRequiredLabel'));
+      expect(
+        arbFr,
+        contains('"offreFormPositionsRequiredLabel": "Postes recherchés *"'),
+      );
       expect(form, contains('maxLength: _maxTitleLength'));
       expect(form, contains('maxLength: _maxDescriptionLength'));
       expect(form, contains('bool get _hasUnsavedChanges'));
@@ -140,7 +147,7 @@ void main() {
       );
       expect(
         form,
-        contains('_navigateAfterSuccessfulSubmit(response.message)'),
+        contains('_navigateAfterSuccessfulSubmit(l10n, response.message)'),
       );
       expect(form, contains('AdFeedback.dismissCurrent();'));
       expect(form, contains('Get.back(result: result);'));

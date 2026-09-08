@@ -155,6 +155,8 @@ void main() {
       'Limitez la description à 1200 caractères.',
     );
     expect(l10n.eventFormPublishAction, 'Publier l’événement');
+    expect(l10n.offreFormPublishAction, 'Publier l’offre');
+    expect(l10n.offreFormPositionsRequiredLabel, 'Postes recherchés *');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -284,5 +286,10 @@ void main() {
       'Limit the description to 1200 characters.',
     );
     expect(l10n.eventFormPublishAction, isNot('Publier l’événement'));
+    expect(l10n.offreFormPublishAction, isNot('Publier l’offre'));
+    expect(
+      l10n.offreFormPositionsRequiredLabel,
+      isNot('Postes recherchés *'),
+    );
   });
 }

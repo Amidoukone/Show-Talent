@@ -735,5 +735,27 @@
   "eventFormDescriptionMinLengthValidator": "Add at least {min} characters.",
   "eventFormDescriptionMaxLengthValidator": "Limit the description to {max} characters.",
   "eventFormLocationRequiredValidator": "Location is required.",
-  "eventFormPositionsRequiredValidator": "Choose at least one position: without it, the event won’t appear in any position-based search."
+  "eventFormPositionsRequiredValidator": "Choose at least one position: without it, the event won’t appear in any position-based search.",
+
+  "offreFormEditTitle": "Edit offer",
+  "offreFormCreateTitle": "New offer",
+  "offreFormSubtitle": "Sports opportunity",
+  "offreFormConditionsSectionTitle": "Conditions",
+  "offreFormPeriodSectionTitle": "Period",
+  "offreFormTitleLabel": "Offer title",
+  "offreFormTitleHint": "E.g., Looking for a U19 right back",
+  "offreFormDescriptionHint": "Profile, context, expectations, and next steps",
+  "offreFormPositionsRequiredLabel": "Positions sought *",
+  "offreFormLocationLabel": "Location",
+  "offreFormLocationHint": "City, country, or region",
+  "offreFormCompensationLabel": "Compensation (optional)",
+  "offreFormCompensationHint": "E.g., 2k-3k €/month",
+  "offreFormPublishAction": "Publish offer",
+  "offreFormPositionsRequiredValidator": "Choose at least one position: without it, the offer won’t appear in any position-based search.",
+  "offreFormDiscardConfirmMessage": "Your changes to this offer will not be kept.",
+  "offreFormGenericErrorTitle": "Error",
+  "offreFormMissingFieldsMessage": "Please fill in the required information and the period.",
+  "offreFormDateOrderMessage": "The start date must come before the end date.",
+  "offreFormUpdatedTitle": "Offer updated",
+  "offreFormPublishedTitle": "Offer published"
 }

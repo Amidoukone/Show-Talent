@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
+import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/controller/offre_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/config/app_routes.dart';
@@ -154,6 +155,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     return PopScope<void>(
       canPop: false,
@@ -164,8 +166,8 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       child: Scaffold(
         backgroundColor: cs.surface,
         appBar: AdAppBar(
-          title: isEditing ? 'Modifier l’offre' : 'Nouvelle offre',
-          subtitle: 'Opportunité sportive',
+          title: isEditing ? l10n.offreFormEditTitle : l10n.offreFormCreateTitle,
+          subtitle: l10n.offreFormSubtitle,
           showBottomDivider: true,
           leading: IconButton(
             icon: Icon(Icons.arrow_back, color: cs.onSurface),
@@ -184,18 +186,18 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildFormSection(
-                      title: 'Résumé',
+                      title: l10n.eventFormSummarySectionTitle,
                       children: [
                         TextFormField(
                           controller: _titreController,
                           maxLength: _maxTitleLength,
                           textInputAction: TextInputAction.next,
                           decoration: _buildInputDecoration(
-                            'Titre de l’offre',
-                            'Ex: Recherche latéral droit U19',
+                            l10n.offreFormTitleLabel,
+                            l10n.offreFormTitleHint,
                             Icons.work_outline,
                           ),
-                          validator: _validateTitle,
+                          validator: (value) => _validateTitle(l10n, value),
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
@@ -204,26 +206,27 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                           minLines: 5,
                           maxLines: 8,
                           decoration: _buildInputDecoration(
-                            'Description',
-                            'Profil, contexte, attentes et prochaines étapes',
+                            l10n.offreDescriptionLabel,
+                            l10n.offreFormDescriptionHint,
                             Icons.description_outlined,
                           ),
-                          validator: _validateDescription,
+                          validator: (value) =>
+                              _validateDescription(l10n, value),
                         ),
                       ],
                     ),
                     const SizedBox(height: 16),
                     _buildFormSection(
-                      title: 'Profil recherché',
+                      title: l10n.eventFormSoughtProfileSectionTitle,
                       children: [
                         // Le poste se choisit, il ne se tape plus : c'est
                         // ce qui permet a cette offre de rencontrer les
                         // joueurs qui declarent le meme code.
-                        const Align(
+                        Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'Postes recherchés *',
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                            l10n.offreFormPositionsRequiredLabel,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -235,7 +238,8 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                         // general qui ne dit pas ou regarder.
                         FormField<List<FootballPosition>>(
                           initialValue: _positionCodes,
-                          validator: _validatePositions,
+                          validator: (value) =>
+                              _validatePositions(l10n, value),
                           builder: (state) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,11 +286,11 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
-                        const Align(
+                        Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'Catégories visées',
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                            l10n.eventFormCategoriesLabel,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -315,7 +319,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                         DropdownButtonFormField<ClubLevel>(
                           initialValue: _clubLevel,
                           decoration: _buildInputDecoration(
-                            'Niveau de la structure',
+                            l10n.eventFormClubLevelLabel,
                             '',
                             Icons.leaderboard_outlined,
                           ),
@@ -335,8 +339,8 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                           controller: _localisationController,
                           textInputAction: TextInputAction.next,
                           decoration: _buildInputDecoration(
-                            'Localisation',
-                            'Ville, pays ou région',
+                            l10n.offreFormLocationLabel,
+                            l10n.offreFormLocationHint,
                             Icons.place_outlined,
                           ),
                         ),
@@ -344,14 +348,14 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildFormSection(
-                      title: 'Conditions',
+                      title: l10n.offreFormConditionsSectionTitle,
                       children: [
                         TextFormField(
                           controller: _remunerationController,
                           textInputAction: TextInputAction.done,
                           decoration: _buildInputDecoration(
-                            'Rémunération (optionnel)',
-                            'Ex: 2k-3k €/mois',
+                            l10n.offreFormCompensationLabel,
+                            l10n.offreFormCompensationHint,
                             Icons.payments_outlined,
                           ),
                         ),
@@ -359,17 +363,19 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildFormSection(
-                      title: 'Période',
+                      title: l10n.offreFormPeriodSectionTitle,
                       children: [
                         _buildDatePicker(
-                          'Date de début',
+                          l10n,
+                          l10n.eventFormStartDateLabel,
                           _dateDebut,
                           _setStartDate,
                           isStart: true,
                         ),
                         const SizedBox(height: 16),
                         _buildDatePicker(
-                          'Date de fin',
+                          l10n,
+                          l10n.eventFormEndDateLabel,
                           _dateFin,
                           _setEndDate,
                         ),
@@ -382,7 +388,9 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                       leading: isEditing
                           ? Icons.save_rounded
                           : Icons.publish_rounded,
-                      label: isEditing ? 'Mettre à jour' : 'Publier l’offre',
+                      label: isEditing
+                          ? l10n.eventFormUpdateAction
+                          : l10n.offreFormPublishAction,
                     ),
                   ],
                 ),
@@ -445,27 +453,31 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     );
   }
 
-  String? _validateTitle(String? value) {
+  String? _validateTitle(AppLocalizations l10n, String? value) {
     final normalized = value?.trim() ?? '';
     if (normalized.isEmpty) {
-      return 'Le titre est requis.';
+      return l10n.eventFormTitleRequiredValidator;
     }
     if (normalized.length > _maxTitleLength) {
-      return 'Limitez le titre à $_maxTitleLength caractères.';
+      return l10n.eventFormTitleMaxLengthValidator(_maxTitleLength);
     }
     return null;
   }
 
-  String? _validateDescription(String? value) {
+  String? _validateDescription(AppLocalizations l10n, String? value) {
     final normalized = value?.trim() ?? '';
     if (normalized.isEmpty) {
-      return 'La description est requise.';
+      return l10n.eventFormDescriptionRequiredValidator;
     }
     if (normalized.length < _minDescriptionLength) {
-      return 'Ajoutez au moins $_minDescriptionLength caractères.';
+      return l10n.eventFormDescriptionMinLengthValidator(
+        _minDescriptionLength,
+      );
     }
     if (normalized.length > _maxDescriptionLength) {
-      return 'Limitez la description à $_maxDescriptionLength caractères.';
+      return l10n.eventFormDescriptionMaxLengthValidator(
+        _maxDescriptionLength,
+      );
     }
     return null;
   }
@@ -477,10 +489,12 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   /// par poste -- pas « moins souvent » : jamais. Elle n'est visible que dans
   /// la liste non filtree, c'est-a-dire de moins en moins a mesure que le
   /// catalogue grossit, et son auteur n'a aucun moyen de s'en apercevoir.
-  String? _validatePositions(List<FootballPosition>? positions) {
+  String? _validatePositions(
+    AppLocalizations l10n,
+    List<FootballPosition>? positions,
+  ) {
     if (positions == null || positions.isEmpty) {
-      return 'Choisissez au moins un poste : sans lui, l’offre '
-          'n’apparaît dans aucune recherche par poste.';
+      return l10n.offreFormPositionsRequiredValidator;
     }
     return null;
   }
@@ -508,12 +522,13 @@ class OffreFormScreenState extends State<OffreFormScreen> {
       return;
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final discard = await AdDialogs.confirm(
       context: context,
-      title: 'Quitter sans enregistrer ?',
-      message: 'Les modifications de cette offre ne seront pas conservées.',
-      confirmLabel: 'Quitter',
-      cancelLabel: 'Continuer',
+      title: l10n.eventFormDiscardConfirmTitle,
+      message: l10n.offreFormDiscardConfirmMessage,
+      confirmLabel: l10n.eventFormDiscardAction,
+      cancelLabel: l10n.eventFormContinueEditingAction,
       danger: true,
     );
     if (discard && mounted) {
@@ -522,6 +537,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   }
 
   Widget _buildDatePicker(
+    AppLocalizations l10n,
     String label,
     DateTime? date,
     Function(DateTime) onDateSelected, {
@@ -573,7 +589,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
             Text(
               date != null
                   ? DateFormat('dd MMM yyyy', 'fr_FR').format(date)
-                  : 'Choisir une date',
+                  : l10n.eventFormChooseDateLabel,
               style: const TextStyle(
                 fontSize: 16,
                 color: AdColors.brand,
@@ -622,20 +638,22 @@ class OffreFormScreenState extends State<OffreFormScreen> {
   Future<void> _submitForm() async {
     if (_submitLocked) return;
 
+    final l10n = AppLocalizations.of(context)!;
+
     if (!_formKey.currentState!.validate() ||
         _dateDebut == null ||
         _dateFin == null) {
       AdFeedback.error(
-        'Erreur',
-        'Veuillez renseigner les informations obligatoires et la période.',
+        l10n.offreFormGenericErrorTitle,
+        l10n.offreFormMissingFieldsMessage,
       );
       return;
     }
 
     if (_dateDebut!.isAfter(_dateFin!)) {
       AdFeedback.error(
-        'Erreur',
-        'La date de début doit précéder la date de fin.',
+        l10n.offreFormGenericErrorTitle,
+        l10n.offreFormDateOrderMessage,
       );
       return;
     }
@@ -643,19 +661,19 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     final currentUser = userController.user;
     if (currentUser == null) {
       AdFeedback.error(
-        'Erreur',
-        'Utilisateur introuvable. Merci de vous reconnecter.',
+        l10n.offreFormGenericErrorTitle,
+        l10n.commonUserNotFoundMessage,
       );
       return;
     }
 
     final titre = _titreController.text.trim();
     final description = _descriptionController.text.trim();
-    final titleValidation = _validateTitle(titre);
-    final descriptionValidation = _validateDescription(description);
+    final titleValidation = _validateTitle(l10n, titre);
+    final descriptionValidation = _validateDescription(l10n, description);
     if (titleValidation != null || descriptionValidation != null) {
       AdFeedback.error(
-        'Erreur',
+        l10n.offreFormGenericErrorTitle,
         titleValidation ?? descriptionValidation!,
       );
       return;
@@ -700,7 +718,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
           return;
         }
         AdFeedback.error(
-          'Erreur',
+          l10n.offreFormGenericErrorTitle,
           response.message,
         );
         return;
@@ -712,7 +730,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
         _hasCompletedSubmit = true;
       }
 
-      _navigateAfterSuccessfulSubmit(response.message);
+      _navigateAfterSuccessfulSubmit(l10n, response.message);
     } finally {
       if (mounted && !_hasCompletedSubmit) {
         setState(() => _isSubmitting = false);
@@ -720,11 +738,11 @@ class OffreFormScreenState extends State<OffreFormScreen> {
     }
   }
 
-  void _navigateAfterSuccessfulSubmit(String message) {
+  void _navigateAfterSuccessfulSubmit(AppLocalizations l10n, String message) {
     AdFeedback.dismissCurrent();
 
     final result = OffreFormResult(
-      title: isEditing ? 'Offre mise à jour' : 'Offre publiée',
+      title: isEditing ? l10n.offreFormUpdatedTitle : l10n.offreFormPublishedTitle,
       message: message,
     );
     final navigator = Get.key.currentState;

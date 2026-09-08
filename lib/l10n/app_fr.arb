@@ -897,5 +897,27 @@
     }
   },
   "eventFormLocationRequiredValidator": "Le lieu est requis.",
-  "eventFormPositionsRequiredValidator": "Choisissez au moins un poste : sans lui, l’événement n’apparaît dans aucune recherche par poste."
+  "eventFormPositionsRequiredValidator": "Choisissez au moins un poste : sans lui, l’événement n’apparaît dans aucune recherche par poste.",
+
+  "offreFormEditTitle": "Modifier l’offre",
+  "offreFormCreateTitle": "Nouvelle offre",
+  "offreFormSubtitle": "Opportunité sportive",
+  "offreFormConditionsSectionTitle": "Conditions",
+  "offreFormPeriodSectionTitle": "Période",
+  "offreFormTitleLabel": "Titre de l’offre",
+  "offreFormTitleHint": "Ex: Recherche latéral droit U19",
+  "offreFormDescriptionHint": "Profil, contexte, attentes et prochaines étapes",
+  "offreFormPositionsRequiredLabel": "Postes recherchés *",
+  "offreFormLocationLabel": "Localisation",
+  "offreFormLocationHint": "Ville, pays ou région",
+  "offreFormCompensationLabel": "Rémunération (optionnel)",
+  "offreFormCompensationHint": "Ex: 2k-3k €/mois",
+  "offreFormPublishAction": "Publier l’offre",
+  "offreFormPositionsRequiredValidator": "Choisissez au moins un poste : sans lui, l’offre n’apparaît dans aucune recherche par poste.",
+  "offreFormDiscardConfirmMessage": "Les modifications de cette offre ne seront pas conservées.",
+  "offreFormGenericErrorTitle": "Erreur",
+  "offreFormMissingFieldsMessage": "Veuillez renseigner les informations obligatoires et la période.",
+  "offreFormDateOrderMessage": "La date de début doit précéder la date de fin.",
+  "offreFormUpdatedTitle": "Offre mise à jour",
+  "offreFormPublishedTitle": "Offre publiée"
 }
