@@ -244,6 +244,14 @@ void main() {
       'uploadClientFileNotFoundMessage'.trParams({'label': 'video'}),
       'Fichier video introuvable.',
     );
+    expect(
+      'contactIntakeFeedbackOpportunitySeriousLabel'.tr,
+      'Opportunité sérieuse',
+    );
+    expect(
+      'contactIntakeFeedbackUnavailableMessage'.tr,
+      'Retour impossible pour le moment. Réessayez plus tard.',
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -445,6 +453,14 @@ void main() {
     expect(
       'uploadClientFileNotFoundMessage'.trParams({'label': 'video'}),
       'video file not found.',
+    );
+    expect(
+      'contactIntakeFeedbackOpportunitySeriousLabel'.tr,
+      'Serious opportunity',
+    );
+    expect(
+      'contactIntakeFeedbackUnavailableMessage'.tr,
+      'Unable to send feedback right now. Try again later.',
     );
   });
 }

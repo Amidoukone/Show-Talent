@@ -641,6 +641,22 @@ class VideoUiTranslations extends Translations {
     'uploadClientThumbnailLinkExpiredMessage': 'Lien miniature expiré.',
     'uploadClientInvalid308ThumbnailMessage':
         'Réponse 308 invalide pendant l’upload miniature.',
+    'contactIntakeFeedbackDiscussionStartedLabel': 'Discussion engagée',
+    'contactIntakeFeedbackTrialScheduledLabel': 'Essai / rendez-vous prévu',
+    'contactIntakeFeedbackOpportunitySeriousLabel': 'Opportunité sérieuse',
+    'contactIntakeFeedbackNotRelevantLabel': 'Non pertinent',
+    'contactIntakeFeedbackIssueReportedLabel': 'Problème signalé',
+    'contactIntakeFeedbackNoResponseLabel': 'Pas encore de réponse',
+    'contactIntakeFeedbackRecordedMessage':
+        'Retour de mise en relation enregistré.',
+    'contactIntakeFeedbackIntakeNotFoundMessage':
+        'Mise en relation introuvable.',
+    'contactIntakeFeedbackUnavailableMessage':
+        'Retour impossible pour le moment. Réessayez plus tard.',
+    'contactIntakeFeedbackPermissionDeniedMessage':
+        'Seuls les participants peuvent envoyer ce retour.',
+    'contactIntakeFeedbackInvalidMessage':
+        'Retour invalide. Vérifiez les informations envoyées.',
   };
 
   static const Map<String, String> _en = {
@@ -1223,5 +1239,20 @@ class VideoUiTranslations extends Translations {
     'uploadClientThumbnailLinkExpiredMessage': 'Thumbnail link expired.',
     'uploadClientInvalid308ThumbnailMessage':
         'Invalid 308 response during the thumbnail upload.',
+    'contactIntakeFeedbackDiscussionStartedLabel': 'Discussion started',
+    'contactIntakeFeedbackTrialScheduledLabel': 'Trial / meeting scheduled',
+    'contactIntakeFeedbackOpportunitySeriousLabel': 'Serious opportunity',
+    'contactIntakeFeedbackNotRelevantLabel': 'Not relevant',
+    'contactIntakeFeedbackIssueReportedLabel': 'Issue reported',
+    'contactIntakeFeedbackNoResponseLabel': 'No response yet',
+    'contactIntakeFeedbackRecordedMessage':
+        'Feedback on the introduction recorded.',
+    'contactIntakeFeedbackIntakeNotFoundMessage': 'Introduction not found.',
+    'contactIntakeFeedbackUnavailableMessage':
+        'Unable to send feedback right now. Try again later.',
+    'contactIntakeFeedbackPermissionDeniedMessage':
+        'Only participants can send this feedback.',
+    'contactIntakeFeedbackInvalidMessage':
+        'Invalid feedback. Check the information sent.',
   };
 }

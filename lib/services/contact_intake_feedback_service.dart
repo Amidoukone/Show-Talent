@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:get/get.dart';
 
 import '../config/app_environment.dart';
 import 'callable_auth_guard.dart';
@@ -43,18 +44,18 @@ class ContactIntakeFeedbackStatus {
   static String label(String? value) {
     switch (normalize(value)) {
       case discussionStarted:
-        return 'Discussion engagée';
+        return 'contactIntakeFeedbackDiscussionStartedLabel'.tr;
       case trialScheduled:
-        return 'Essai / rendez-vous prévu';
+        return 'contactIntakeFeedbackTrialScheduledLabel'.tr;
       case opportunitySerious:
-        return 'Opportunité sérieuse';
+        return 'contactIntakeFeedbackOpportunitySeriousLabel'.tr;
       case notRelevant:
-        return 'Non pertinent';
+        return 'contactIntakeFeedbackNotRelevantLabel'.tr;
       case issueReported:
-        return 'Problème signalé';
+        return 'contactIntakeFeedbackIssueReportedLabel'.tr;
       case noResponse:
       default:
-        return 'Pas encore de réponse';
+        return 'contactIntakeFeedbackNoResponseLabel'.tr;
     }
   }
 }
@@ -79,17 +80,18 @@ class ContactIntakeFeedbackResult {
     final payload = data is Map<String, dynamic>
         ? data
         : data is Map
-            ? Map<String, dynamic>.from(data)
-            : const <String, dynamic>{};
+        ? Map<String, dynamic>.from(data)
+        : const <String, dynamic>{};
 
     return ContactIntakeFeedbackResult(
       success: map['success'] == true,
       code: map['code']?.toString() ?? 'unknown',
-      message: map['message']?.toString() ??
-          'Retour de mise en relation enregistré.',
+      message:
+          map['message']?.toString() ??
+          'contactIntakeFeedbackRecordedMessage'.tr,
       status: payload['status']?.toString(),
-      suggestedAgencyFollowUpStatus:
-          payload['suggestedAgencyFollowUpStatus']?.toString(),
+      suggestedAgencyFollowUpStatus: payload['suggestedAgencyFollowUpStatus']
+          ?.toString(),
     );
   }
 
@@ -104,10 +106,11 @@ class ContactIntakeFeedbackResult {
 
 class ContactIntakeFeedbackService {
   ContactIntakeFeedbackService({FirebaseFunctions? functions})
-      : _functions = functions ??
-            FirebaseFunctions.instanceFor(
-              region: AppEnvironmentConfig.functionsRegion,
-            );
+    : _functions =
+          functions ??
+          FirebaseFunctions.instanceFor(
+            region: AppEnvironmentConfig.functionsRegion,
+          );
 
   final FirebaseFunctions _functions;
 
@@ -123,36 +126,32 @@ class ContactIntakeFeedbackService {
 
     if (normalizedIntakeId.isEmpty) {
       return ContactIntakeFeedbackResult.failure(
-        'Mise en relation introuvable.',
+        'contactIntakeFeedbackIntakeNotFoundMessage'.tr,
       );
     }
 
     try {
       final callable = _functions.httpsCallable('submitContactIntakeFeedback');
-      final result = await CallableAuthGuard.call<dynamic>(
-        callable,
-        <String, dynamic>{
-          'contactIntakeId': normalizedIntakeId,
-          'status': normalizedStatus,
-          'note': normalizedNote,
-          if (conversationId?.trim().isNotEmpty == true)
-            'conversationId': conversationId!.trim(),
-        },
-      );
+      final result =
+          await CallableAuthGuard.call<dynamic>(callable, <String, dynamic>{
+            'contactIntakeId': normalizedIntakeId,
+            'status': normalizedStatus,
+            'note': normalizedNote,
+            if (conversationId?.trim().isNotEmpty == true)
+              'conversationId': conversationId!.trim(),
+          });
       final data = result.data;
       final map = data is Map<String, dynamic>
           ? data
           : data is Map
-              ? Map<String, dynamic>.from(data)
-              : <String, dynamic>{};
+          ? Map<String, dynamic>.from(data)
+          : <String, dynamic>{};
       return ContactIntakeFeedbackResult.fromMap(map);
     } on FirebaseFunctionsException catch (error) {
-      return ContactIntakeFeedbackResult.failure(
-        _mapFunctionsError(error),
-      );
+      return ContactIntakeFeedbackResult.failure(_mapFunctionsError(error));
     } catch (_) {
       return ContactIntakeFeedbackResult.failure(
-        'Retour impossible pour le moment. Réessayez plus tard.',
+        'contactIntakeFeedbackUnavailableMessage'.tr,
       );
     }
   }
@@ -170,15 +169,15 @@ class ContactIntakeFeedbackService {
 
     switch (error.code) {
       case 'unauthenticated':
-        return 'Session expirée. Reconnectez-vous.';
+        return 'sessionLoadExpiredMessage'.tr;
       case 'permission-denied':
-        return 'Seuls les participants peuvent envoyer ce retour.';
+        return 'contactIntakeFeedbackPermissionDeniedMessage'.tr;
       case 'not-found':
-        return 'Mise en relation introuvable.';
+        return 'contactIntakeFeedbackIntakeNotFoundMessage'.tr;
       case 'invalid-argument':
-        return 'Retour invalide. Vérifiez les informations envoyées.';
+        return 'contactIntakeFeedbackInvalidMessage'.tr;
       default:
-        return 'Retour impossible pour le moment. Réessayez plus tard.';
+        return 'contactIntakeFeedbackUnavailableMessage'.tr;
     }
   }
 }
