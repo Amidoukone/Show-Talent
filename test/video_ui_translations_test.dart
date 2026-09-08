@@ -153,6 +153,17 @@ void main() {
       'offreApplyPlayersOnlyMessage'.tr,
       'Seuls les joueurs peuvent postuler à une offre.',
     );
+    expect('profileUnavailableTitle'.tr, 'Profil indisponible');
+    expect('profileNotFoundMessage'.tr, 'Profil introuvable.');
+    expect(
+      'profileLoadConnectionUnstableMessage'.tr,
+      'Connexion instable. Vérifiez votre réseau puis réessayez.',
+    );
+    expect(
+      'profileWriteAppCheckDeniedMessage'.trParams({'code': 'x/y'}),
+      contains('Code: x/y'),
+    );
+    expect('profileCvSavedMessage'.tr, 'Votre CV a été ajouté ou mis à jour.');
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -268,5 +279,16 @@ void main() {
       'offreApplyPlayersOnlyMessage'.tr,
       'Only players can apply to an offer.',
     );
+    expect('profileUnavailableTitle'.tr, 'Profile unavailable');
+    expect('profileNotFoundMessage'.tr, 'Profile not found.');
+    expect(
+      'profileLoadConnectionUnstableMessage'.tr,
+      'Unstable connection. Check your network, then try again.',
+    );
+    expect(
+      'profileWriteAppCheckDeniedMessage'.trParams({'code': 'x/y'}),
+      contains('Code: x/y'),
+    );
+    expect('profileCvSavedMessage'.tr, 'Your CV has been added or updated.');
   });
 }

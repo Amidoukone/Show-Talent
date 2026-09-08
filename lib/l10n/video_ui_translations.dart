@@ -453,6 +453,65 @@ class VideoUiTranslations extends Translations {
     'offreWithdrawSuccessMessage': 'Vous vous êtes désinscrit de l’offre.',
     'offreWithdrawFailedMessage':
         'Impossible de se désinscrire pour le moment.',
+    'profileFirebaseSessionExpiredMessage':
+        'La session Firebase est expirée. Reconnectez-vous puis réessayez.',
+    'profileSessionMismatchMessage':
+        'La session active ne correspond pas au profil ouvert. '
+        'Reconnectez-vous avec le bon compte puis réessayez.',
+    'profileWriteAppCheckDeniedMessage':
+        'Firebase refuse cette session. Vérifiez App Check pour ce '
+        'build/téléphone, puis réessayez. Code: @code',
+    'profileWriteGenericDeniedMessage':
+        'Votre session ne permet pas de modifier ce profil. '
+        'Reconnectez-vous puis réessayez. Si le problème persiste sur ce '
+        'build, vérifiez App Check et le déploiement des règles '
+        'Firestore. Code: @code',
+    'profileCvStorageAppCheckDeniedMessage':
+        'Firebase Storage ou App Check refuse ce build/téléphone. '
+        'Vérifiez que le debug token de ce téléphone est enregistré, ou '
+        'utilisez Play Integrity pour la version finale. Code: @code',
+    'profileCvStorageGenericDeniedMessage':
+        'Firebase Storage refuse actuellement l’ajout du CV pour cette '
+        'session. Vérifiez que les règles Storage déployées autorisent '
+        'les CV PDF du propriétaire et que App Check est actif pour ce '
+        'build. Code: @code',
+    'profileNoAccessCurrentSessionMessage':
+        'Vous n’avez pas accès à ce profil avec la session actuelle.',
+    'profileLoadUnavailableMessage':
+        'Chargement du profil impossible. Réessayez dans quelques '
+        'instants.',
+    'profileLoadUnavailableShortMessage': 'Chargement du profil impossible.',
+    'profileWriteUnavailableMessage': 'Impossible de mettre à jour le profil.',
+    'profileSecureConnectionUnavailableMessage':
+        'Connexion sécurisée indisponible. Réessayez dans quelques '
+        'instants.',
+    'profilePhotoUpdateUnavailableMessage':
+        'Impossible de mettre à jour la photo.',
+    'profileUnavailableTitle': 'Profil indisponible',
+    'profileNotFoundMessage': 'Profil introuvable.',
+    'profileInvalidSessionTitle': 'Session invalide',
+    'profileUpdateFailedTitle': 'Mise à jour impossible',
+    'profilePermissionDeniedTitle': 'Autorisation refusée',
+    'profilePhotoPermissionDeniedMessage':
+        'Votre session ne permet pas de modifier cette photo. '
+        'Reconnectez-vous puis réessayez.',
+    'profilePhotoUpdatedTitle': 'Photo mise à jour',
+    'profilePhotoUpdatedMessage': 'Votre photo de profil a été enregistrée.',
+    'profilePhotoUpdateFailedTitle': 'Photo non mise à jour',
+    'profileVideosUnavailableTitle': 'Vidéos indisponibles',
+    'profileVideosLoadUnavailableMessage': 'Chargement des vidéos impossible.',
+    'profileCvSavedTitle': 'CV enregistré',
+    'profileCvSavedMessage': 'Votre CV a été ajouté ou mis à jour.',
+    'profileCvRejectedTitle': 'CV non accepté',
+    'profileCvAddFailedTitle': 'Ajout impossible',
+    'profileCvAddUnavailableMessage': 'Impossible d’ajouter le CV.',
+    'profileCvDeletedTitle': 'CV supprimé',
+    'profileCvDeletedMessage': 'Le CV a été retiré du profil.',
+    'profileCvDeletePermissionDeniedMessage':
+        'Votre session ne permet pas de supprimer ce CV. Reconnectez-vous '
+        'puis réessayez.',
+    'profileCvDeleteFailedTitle': 'Suppression impossible',
+    'profileCvDeleteUnavailableMessage': 'Impossible de supprimer le CV.',
   };
 
   static const Map<String, String> _en = {
@@ -858,5 +917,62 @@ class VideoUiTranslations extends Translations {
     'offreWithdrawPlayersOnlyMessage': 'Only players can withdraw.',
     'offreWithdrawSuccessMessage': 'You have withdrawn from the offer.',
     'offreWithdrawFailedMessage': 'Unable to withdraw right now.',
+    'profileFirebaseSessionExpiredMessage':
+        'Your Firebase session has expired. Please sign in again and '
+        'try again.',
+    'profileSessionMismatchMessage':
+        'The active session does not match the profile that is open. '
+        'Sign in with the correct account and try again.',
+    'profileWriteAppCheckDeniedMessage':
+        'Firebase rejects this session. Check App Check for this '
+        'build/device, then try again. Code: @code',
+    'profileWriteGenericDeniedMessage':
+        'Your session does not allow you to edit this profile. Sign in '
+        'again and try again. If the problem persists on this build, '
+        'check App Check and the Firestore rules deployment. '
+        'Code: @code',
+    'profileCvStorageAppCheckDeniedMessage':
+        'Firebase Storage or App Check rejects this build/device. Check '
+        'that this device\'s debug token is registered, or use Play '
+        'Integrity for the final version. Code: @code',
+    'profileCvStorageGenericDeniedMessage':
+        'Firebase Storage currently rejects adding the CV for this '
+        'session. Check that the deployed Storage rules allow the '
+        'owner\'s CV PDFs and that App Check is active for this build. '
+        'Code: @code',
+    'profileNoAccessCurrentSessionMessage':
+        'You do not have access to this profile with the current session.',
+    'profileLoadUnavailableMessage':
+        'Unable to load the profile. Try again in a moment.',
+    'profileLoadUnavailableShortMessage': 'Unable to load the profile.',
+    'profileWriteUnavailableMessage': 'Unable to update the profile.',
+    'profileSecureConnectionUnavailableMessage':
+        'Secure connection unavailable. Try again in a moment.',
+    'profilePhotoUpdateUnavailableMessage': 'Unable to update the photo.',
+    'profileUnavailableTitle': 'Profile unavailable',
+    'profileNotFoundMessage': 'Profile not found.',
+    'profileInvalidSessionTitle': 'Invalid session',
+    'profileUpdateFailedTitle': 'Unable to update',
+    'profilePermissionDeniedTitle': 'Permission denied',
+    'profilePhotoPermissionDeniedMessage':
+        'Your session does not allow you to edit this photo. Sign in '
+        'again and try again.',
+    'profilePhotoUpdatedTitle': 'Photo updated',
+    'profilePhotoUpdatedMessage': 'Your profile photo has been saved.',
+    'profilePhotoUpdateFailedTitle': 'Photo not updated',
+    'profileVideosUnavailableTitle': 'Videos unavailable',
+    'profileVideosLoadUnavailableMessage': 'Unable to load the videos.',
+    'profileCvSavedTitle': 'CV saved',
+    'profileCvSavedMessage': 'Your CV has been added or updated.',
+    'profileCvRejectedTitle': 'CV not accepted',
+    'profileCvAddFailedTitle': 'Unable to add',
+    'profileCvAddUnavailableMessage': 'Unable to add the CV.',
+    'profileCvDeletedTitle': 'CV deleted',
+    'profileCvDeletedMessage': 'The CV has been removed from the profile.',
+    'profileCvDeletePermissionDeniedMessage':
+        'Your session does not allow you to delete this CV. Sign in '
+        'again and try again.',
+    'profileCvDeleteFailedTitle': 'Unable to delete',
+    'profileCvDeleteUnavailableMessage': 'Unable to delete the CV.',
   };
 }

@@ -124,10 +124,10 @@ class ProfileController extends GetxController {
   String? _ownerSessionProblemMessage(String uid) {
     final authUid = _profileRepository.currentAuthUid;
     if (authUid == null) {
-      return 'La session Firebase est expirée. Reconnectez-vous puis réessayez.';
+      return 'profileFirebaseSessionExpiredMessage'.tr;
     }
     if (authUid != uid) {
-      return 'La session active ne correspond pas au profil ouvert. Reconnectez-vous avec le bon compte puis réessayez.';
+      return 'profileSessionMismatchMessage'.tr;
     }
     return null;
   }
@@ -140,10 +140,10 @@ class ProfileController extends GetxController {
     }
 
     if (ProfileRepository.isUnauthorized(error)) {
-      return 'Firebase refuse cette session. Vérifiez App Check pour ce build/téléphone, puis réessayez. Code: $code';
+      return 'profileWriteAppCheckDeniedMessage'.trParams({'code': code});
     }
 
-    return 'Votre session ne permet pas de modifier ce profil. Reconnectez-vous puis réessayez. Si le problème persiste sur ce build, vérifiez App Check et le déploiement des règles Firestore. Code: $code';
+    return 'profileWriteGenericDeniedMessage'.trParams({'code': code});
   }
 
   String _cvAccessDeniedMessage(Object error, String uid) {
@@ -154,10 +154,10 @@ class ProfileController extends GetxController {
     }
 
     if (ProfileRepository.isUnauthorized(error)) {
-      return 'Firebase Storage ou App Check refuse ce build/téléphone. Vérifiez que le debug token de ce téléphone est enregistré, ou utilisez Play Integrity pour la version finale. Code: $code';
+      return 'profileCvStorageAppCheckDeniedMessage'.trParams({'code': code});
     }
 
-    return 'Firebase Storage refuse actuellement l’ajout du CV pour cette session. Vérifiez que les règles Storage déployées autorisent les CV PDF du propriétaire et que App Check est actif pour ce build. Code: $code';
+    return 'profileCvStorageGenericDeniedMessage'.trParams({'code': code});
   }
 
   String _profileLoadErrorMessage(Object error) {
@@ -166,34 +166,34 @@ class ProfileController extends GetxController {
     }
 
     if (_isPermissionDenied(error)) {
-      return 'Vous n’avez pas accès à ce profil avec la session actuelle.';
+      return 'profileNoAccessCurrentSessionMessage'.tr;
     }
 
     if (_isTransientFirestoreError(error)) {
-      return 'Connexion instable. Vérifiez votre réseau puis réessayez.';
+      return 'profileLoadConnectionUnstableMessage'.tr;
     }
 
-    return 'Chargement du profil impossible. Réessayez dans quelques instants.';
+    return 'profileLoadUnavailableMessage'.tr;
   }
 
   String _profileWriteFailureMessage(Object error) {
     if (_isTransientFirestoreError(error)) {
-      return 'Connexion instable. Vérifiez votre réseau puis réessayez.';
+      return 'profileLoadConnectionUnstableMessage'.tr;
     }
 
-    return 'Impossible de mettre à jour le profil.';
+    return 'profileWriteUnavailableMessage'.tr;
   }
 
   String _profilePhotoFailureMessage(Object error) {
     if (error is FirebaseException && error.plugin == 'firebase_app_check') {
-      return 'Connexion sécurisée indisponible. Réessayez dans quelques instants.';
+      return 'profileSecureConnectionUnavailableMessage'.tr;
     }
 
     if (_isTransientFirestoreError(error)) {
-      return 'Connexion instable. Vérifiez votre réseau puis réessayez.';
+      return 'profileLoadConnectionUnstableMessage'.tr;
     }
 
-    return 'Impossible de mettre à jour la photo.';
+    return 'profilePhotoUpdateUnavailableMessage'.tr;
   }
 
   Future<void> _handleProtectedAccessDenied() async {
@@ -266,7 +266,7 @@ class ProfileController extends GetxController {
         return;
       }
       if (fetchedUser == null) {
-        throw const ProfileLoadException('Profil introuvable.');
+        throw ProfileLoadException('profileNotFoundMessage'.tr);
       }
 
       user = fetchedUser;
@@ -288,7 +288,7 @@ class ProfileController extends GetxController {
       );
       isLoadingUser = false;
       hasAttemptedProfileLoad = true;
-      profileLoadErrorTitle = 'Profil indisponible';
+      profileLoadErrorTitle = 'profileUnavailableTitle'.tr;
       profileLoadErrorMessage = _profileLoadErrorMessage(e);
       update();
       if (_isPermissionDenied(e)) {
@@ -296,8 +296,8 @@ class ProfileController extends GetxController {
         return;
       }
       AdFeedback.error(
-        'Profil indisponible',
-        'Chargement du profil impossible.',
+        'profileUnavailableTitle'.tr,
+        'profileLoadUnavailableShortMessage'.tr,
       );
     } finally {
       // Guarantees the screen can always leave its loading state: a settled
@@ -309,9 +309,8 @@ class ProfileController extends GetxController {
         if (user == null &&
             (profileLoadErrorMessage == null ||
                 profileLoadErrorMessage!.trim().isEmpty)) {
-          profileLoadErrorTitle = 'Profil indisponible';
-          profileLoadErrorMessage =
-              'Chargement du profil impossible. Réessayez dans quelques instants.';
+          profileLoadErrorTitle = 'profileUnavailableTitle'.tr;
+          profileLoadErrorMessage = 'profileLoadUnavailableMessage'.tr;
         }
         update();
       }
@@ -336,7 +335,7 @@ class ProfileController extends GetxController {
           onError: (error, stackTrace) {
             AppLogger.debug('profile user listener error: $error\n$stackTrace');
             if (user == null) {
-              profileLoadErrorTitle = 'Profil indisponible';
+              profileLoadErrorTitle = 'profileUnavailableTitle'.tr;
               profileLoadErrorMessage = _profileLoadErrorMessage(error);
               update();
             }
@@ -374,14 +373,14 @@ class ProfileController extends GetxController {
       );
       if (_isAccessDenied(e)) {
         AdFeedback.error(
-          'Autorisation refusée',
-          'Votre session ne permet pas de modifier cette photo. Reconnectez-vous puis réessayez.',
+          'profilePermissionDeniedTitle'.tr,
+          'profilePhotoPermissionDeniedMessage'.tr,
         );
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
       final message = _profileWriteFailureMessage(e);
-      AdFeedback.error('Mise à jour impossible', message);
+      AdFeedback.error('profileUpdateFailedTitle'.tr, message);
       rethrow;
     }
   }
@@ -399,11 +398,12 @@ class ProfileController extends GetxController {
       }
       final ownerProblem = _ownerSessionProblemMessage(uid);
       if (ownerProblem != null) {
-        _setProfileWriteError('Session invalide', ownerProblem);
-        AdFeedback.error('Session invalide', ownerProblem);
+        final sessionInvalidTitle = 'profileInvalidSessionTitle'.tr;
+        _setProfileWriteError(sessionInvalidTitle, ownerProblem);
+        AdFeedback.error(sessionInvalidTitle, ownerProblem);
         unawaited(_handleProtectedAccessDenied());
         throw ProfileAccessRevokedException(
-          title: 'Session invalide',
+          title: sessionInvalidTitle,
           message: ownerProblem,
         );
       }
@@ -445,7 +445,8 @@ class ProfileController extends GetxController {
       );
       if (_isAccessDenied(e)) {
         final message = _profileWriteAccessDeniedMessage(e, uid);
-        _setProfileWriteError('Accès refusé', message);
+        final accessDeniedTitle = 'accessDeniedTitle'.tr;
+        _setProfileWriteError(accessDeniedTitle, message);
         AppLogger.error(
           'Profile write rejected',
           source: 'ProfileController.updateProfilePatch',
@@ -459,18 +460,19 @@ class ProfileController extends GetxController {
           },
         );
         AdFeedback.error(
-          'Accès refusé',
+          accessDeniedTitle,
           message,
           duration: const Duration(seconds: 6),
         );
         unawaited(_handleProtectedAccessDenied());
         throw ProfileAccessRevokedException(
-          title: 'Accès refusé',
+          title: accessDeniedTitle,
           message: message,
         );
       }
       final message = _profileWriteFailureMessage(e);
-      _setProfileWriteError('Mise à jour impossible', message);
+      final updateFailedTitle = 'profileUpdateFailedTitle'.tr;
+      _setProfileWriteError(updateFailedTitle, message);
       AppLogger.error(
         'Profile write failed',
         source: 'ProfileController.updateProfilePatch',
@@ -484,7 +486,7 @@ class ProfileController extends GetxController {
         },
       );
       AdFeedback.error(
-        'Mise à jour impossible',
+        updateFailedTitle,
         message,
         duration: const Duration(seconds: 6),
       );
@@ -662,8 +664,8 @@ class ProfileController extends GetxController {
       await _safeRefreshCurrentUser();
 
       AdFeedback.success(
-        'Photo mise à jour',
-        'Votre photo de profil a été enregistrée.',
+        'profilePhotoUpdatedTitle'.tr,
+        'profilePhotoUpdatedMessage'.tr,
       );
     } catch (e, st) {
       AppLogger.warning(
@@ -676,7 +678,10 @@ class ProfileController extends GetxController {
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
-      AdFeedback.error('Photo non mise à jour', _profilePhotoFailureMessage(e));
+      AdFeedback.error(
+        'profilePhotoUpdateFailedTitle'.tr,
+        _profilePhotoFailureMessage(e),
+      );
     } finally {
       isLoadingPhoto.value = false;
     }
@@ -768,8 +773,8 @@ class ProfileController extends GetxController {
       }
       if (videoList.isEmpty) {
         AdFeedback.error(
-          'Vidéos indisponibles',
-          'Chargement des vidéos impossible.',
+          'profileVideosUnavailableTitle'.tr,
+          'profileVideosLoadUnavailableMessage'.tr,
         );
       }
     } finally {
@@ -798,8 +803,9 @@ class ProfileController extends GetxController {
       _clearCvUploadError();
       final ownerProblem = _ownerSessionProblemMessage(uid);
       if (ownerProblem != null) {
-        _setCvUploadError('Session invalide', ownerProblem);
-        AdFeedback.error('Session invalide', ownerProblem);
+        final sessionInvalidTitle = 'profileInvalidSessionTitle'.tr;
+        _setCvUploadError(sessionInvalidTitle, ownerProblem);
+        AdFeedback.error(sessionInvalidTitle, ownerProblem);
         unawaited(_handleProtectedAccessDenied());
         return null;
       }
@@ -818,16 +824,14 @@ class ProfileController extends GetxController {
 
       await _safeRefreshCurrentUser();
 
-      AdFeedback.success(
-        'CV enregistré',
-        'Votre CV a été ajouté ou mis à jour.',
-      );
+      AdFeedback.success('profileCvSavedTitle'.tr, 'profileCvSavedMessage'.tr);
       return url;
     } catch (e, st) {
       if (e is CvUploadValidationException) {
-        _setCvUploadError('CV non accepté', e.message);
+        final cvRejectedTitle = 'profileCvRejectedTitle'.tr;
+        _setCvUploadError(cvRejectedTitle, e.message);
         AdFeedback.error(
-          'CV non accepté',
+          cvRejectedTitle,
           e.message,
           duration: const Duration(seconds: 6),
         );
@@ -835,7 +839,8 @@ class ProfileController extends GetxController {
       }
       if (_isAccessDenied(e)) {
         final message = _cvAccessDeniedMessage(e, uid);
-        _setCvUploadError('Autorisation refusée', message);
+        final permissionDeniedTitle = 'profilePermissionDeniedTitle'.tr;
+        _setCvUploadError(permissionDeniedTitle, message);
         AppLogger.error(
           'CV upload rejected',
           source: 'ProfileController.uploadCvPdf',
@@ -851,14 +856,15 @@ class ProfileController extends GetxController {
           },
         );
         AdFeedback.error(
-          'Autorisation refusée',
+          permissionDeniedTitle,
           message,
           duration: const Duration(seconds: 6),
         );
         return null;
       }
-      const message = "Impossible d'ajouter le CV.";
-      _setCvUploadError('Ajout impossible', message);
+      final message = 'profileCvAddUnavailableMessage'.tr;
+      final cvAddFailedTitle = 'profileCvAddFailedTitle'.tr;
+      _setCvUploadError(cvAddFailedTitle, message);
       AppLogger.error(
         'CV upload failed',
         source: 'ProfileController.uploadCvPdf',
@@ -874,7 +880,7 @@ class ProfileController extends GetxController {
         },
       );
       AdFeedback.error(
-        'Ajout impossible',
+        cvAddFailedTitle,
         message,
         duration: const Duration(seconds: 6),
       );
@@ -891,7 +897,10 @@ class ProfileController extends GetxController {
 
       await _safeRefreshCurrentUser();
 
-      AdFeedback.success('CV supprimé', 'Le CV a été retiré du profil.');
+      AdFeedback.success(
+        'profileCvDeletedTitle'.tr,
+        'profileCvDeletedMessage'.tr,
+      );
     } catch (e, st) {
       AppLogger.warning(
         'deleteCv error: $e',
@@ -901,15 +910,15 @@ class ProfileController extends GetxController {
       );
       if (_isAccessDenied(e)) {
         AdFeedback.error(
-          'Autorisation refusée',
-          'Votre session ne permet pas de supprimer ce CV. Reconnectez-vous puis réessayez.',
+          'profilePermissionDeniedTitle'.tr,
+          'profileCvDeletePermissionDeniedMessage'.tr,
         );
         unawaited(_handleProtectedAccessDenied());
         throw const ProfileAccessRevokedException();
       }
       AdFeedback.error(
-        'Suppression impossible',
-        'Impossible de supprimer le CV.',
+        'profileCvDeleteFailedTitle'.tr,
+        'profileCvDeleteUnavailableMessage'.tr,
       );
     }
   }

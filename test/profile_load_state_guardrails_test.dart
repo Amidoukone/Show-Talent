@@ -23,7 +23,7 @@ void main() {
       expect(controller, contains('profileLoadErrorMessage'));
       expect(controller, contains('_profileLoadTimeout'));
       expect(controller, contains('.timeout(_profileLoadTimeout)'));
-      expect(controller, contains('Connexion instable'));
+      expect(controller, contains('profileLoadConnectionUnstableMessage'));
       expect(userController, contains('ensureCurrentUserHydrated'));
       expect(userController, contains('_userHydrationTimeout'));
       expect(screen, contains('_buildProfileLoadState'));
