@@ -342,6 +342,27 @@ class VideoUiTranslations extends Translations {
     'publicSignupDisabledMessage':
         'La création de compte est gérée exclusivement par l’équipe '
         'Adfoot.',
+
+    'sessionLoadExpiredMessage': 'Session expirée. Reconnectez-vous.',
+    'profileLoadFailedMessage':
+        'Impossible de charger le profil. Réessayez dans quelques instants.',
+    'profileLoadConnectionUnstableMessage':
+        'Connexion instable. Vérifiez votre réseau puis réessayez.',
+    'sessionCannotLoadProfileMessage':
+        'Votre session ne permet pas de charger ce profil.',
+    'profileLoadConnectionTooSlowMessage':
+        'Connexion trop lente. Vérifiez votre réseau puis réessayez.',
+    'signOutFailedTitle': 'Déconnexion impossible',
+    'signOutFailedMessage':
+        'La session n’a pas pu être fermée. Réessayez dans quelques '
+        'instants.',
+    'sessionNoLongerAuthorizedMessage': 'Votre session n’est plus autorisée.',
+    'accountDisabledTitle': 'Compte désactivé',
+    'sessionClosedTitle': 'Session fermée',
+    'sessionExpiredReconnectMessage':
+        'Votre session n’est plus autorisée. Veuillez vous reconnecter.',
+    'accountUnavailableTitle': 'Compte indisponible',
+    'accessDeniedTitle': 'Accès refusé',
   };
 
   static const Map<String, String> _en = {
@@ -652,5 +673,25 @@ class VideoUiTranslations extends Translations {
 
     'publicSignupDisabledMessage':
         'Account creation is managed exclusively by the Adfoot team.',
+
+    'sessionLoadExpiredMessage': 'Session expired. Please sign in again.',
+    'profileLoadFailedMessage':
+        'Unable to load your profile. Try again in a moment.',
+    'profileLoadConnectionUnstableMessage':
+        'Unstable connection. Check your network, then try again.',
+    'sessionCannotLoadProfileMessage':
+        'Your session does not allow loading this profile.',
+    'profileLoadConnectionTooSlowMessage':
+        'Connection too slow. Check your network, then try again.',
+    'signOutFailedTitle': 'Sign-out failed',
+    'signOutFailedMessage':
+        'The session could not be closed. Try again in a moment.',
+    'sessionNoLongerAuthorizedMessage': 'Your session is no longer authorized.',
+    'accountDisabledTitle': 'Account disabled',
+    'sessionClosedTitle': 'Session closed',
+    'sessionExpiredReconnectMessage':
+        'Your session is no longer authorized. Please sign in again.',
+    'accountUnavailableTitle': 'Account unavailable',
+    'accessDeniedTitle': 'Access denied',
   };
 }

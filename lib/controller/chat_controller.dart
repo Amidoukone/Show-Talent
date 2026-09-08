@@ -9,6 +9,7 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/chat/chat_repository.dart';
+import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
@@ -98,9 +99,8 @@ class ChatController extends GetxController {
     }
 
     await Get.find<UserController>().handleProtectedAccessDenied(
-      fallbackTitle: 'Accès indisponible',
-      fallbackMessage:
-          'Votre session a été fermée pour protéger votre compte. Veuillez vous reconnecter.',
+      fallbackTitle: VideoUiStrings.protectedAccessTitle,
+      fallbackMessage: VideoUiStrings.protectedAccessMessage,
     );
   }
 

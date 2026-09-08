@@ -118,6 +118,15 @@ void main() {
     expect('authErrorWrongPassword'.tr, 'Mot de passe incorrect.');
     expect('authErrorUserNotFound'.tr, contains('Ce compte est introuvable'));
     expect('publicSignupDisabledMessage'.tr, contains('équipe Adfoot'));
+    expect(
+      'sessionNoLongerAuthorizedMessage'.tr,
+      'Votre session n’est plus autorisée.',
+    );
+    expect('accountDisabledTitle'.tr, 'Compte désactivé');
+    expect(
+      'profileLoadFailedMessage'.tr,
+      contains('Réessayez dans quelques instants'),
+    );
   });
 
   testWidgets('English resolves to real translations, not the French '
@@ -207,5 +216,11 @@ void main() {
       contains('This account could not be found'),
     );
     expect('publicSignupDisabledMessage'.tr, contains('Adfoot team'));
+    expect(
+      'sessionNoLongerAuthorizedMessage'.tr,
+      'Your session is no longer authorized.',
+    );
+    expect('accountDisabledTitle'.tr, 'Account disabled');
+    expect('profileLoadFailedMessage'.tr, contains('Try again in a moment'));
   });
 }

@@ -6,6 +6,7 @@ import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/services/users/profile_repository.dart';
+import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/videos/video_manager.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -201,9 +202,8 @@ class ProfileController extends GetxController {
     }
 
     await Get.find<UserController>().handleProtectedAccessDenied(
-      fallbackTitle: 'Accès indisponible',
-      fallbackMessage:
-          'Votre session a été fermée pour protéger votre compte. Veuillez vous reconnecter.',
+      fallbackTitle: VideoUiStrings.protectedAccessTitle,
+      fallbackMessage: VideoUiStrings.protectedAccessMessage,
     );
   }
 

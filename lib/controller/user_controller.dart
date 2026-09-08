@@ -381,7 +381,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
     final uid = _authSessionService.currentUser?.uid;
     if (uid == null || uid.isEmpty) {
       _hasAttemptedHydration.value = true;
-      _sessionLoadMessage.value = 'Session expirée. Reconnectez-vous.';
+      _sessionLoadMessage.value = 'sessionLoadExpiredMessage'.tr;
       return;
     }
 
@@ -412,8 +412,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
           .fetchUserById(uid)
           .timeout(_userHydrationTimeout);
       if (hydrated == null) {
-        _sessionLoadMessage.value =
-            'Impossible de charger le profil. Réessayez dans quelques instants.';
+        _sessionLoadMessage.value = 'profileLoadFailedMessage'.tr;
         return;
       }
 
@@ -430,15 +429,12 @@ class UserController extends GetxController with WidgetsBindingObserver {
         stackTrace: st,
       );
       if (AuthSessionService.isTransientFirebaseFailure(error)) {
-        _sessionLoadMessage.value =
-            'Connexion instable. Vérifiez votre réseau puis réessayez.';
+        _sessionLoadMessage.value = 'profileLoadConnectionUnstableMessage'.tr;
       } else if (_isPermissionDenied(error)) {
-        _sessionLoadMessage.value =
-            'Votre session ne permet pas de charger ce profil.';
+        _sessionLoadMessage.value = 'sessionCannotLoadProfileMessage'.tr;
         unawaited(_enforceCurrentSessionAccess());
       } else {
-        _sessionLoadMessage.value =
-            'Impossible de charger le profil. Réessayez dans quelques instants.';
+        _sessionLoadMessage.value = 'profileLoadFailedMessage'.tr;
       }
     } on TimeoutException catch (error, st) {
       AppLogger.warning(
@@ -447,8 +443,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         error: error,
         stackTrace: st,
       );
-      _sessionLoadMessage.value =
-          'Connexion trop lente. Vérifiez votre réseau puis réessayez.';
+      _sessionLoadMessage.value = 'profileLoadConnectionTooSlowMessage'.tr;
     } catch (error) {
       // This is the "Profil indisponible" screen the user is now looking
       // at, with a Réessayer button and no idea why.
@@ -457,8 +452,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         stage: 'hydrate_profile',
         error: error,
       );
-      _sessionLoadMessage.value =
-          'Impossible de charger le profil. Réessayez dans quelques instants.';
+      _sessionLoadMessage.value = 'profileLoadFailedMessage'.tr;
     } finally {
       _hasAttemptedHydration.value = true;
       // Belt and braces: every failure branch above sets a message, but if a
@@ -466,8 +460,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
       // leave the spinner. An empty message with no user is exactly the
       // dead-end state this whole method exists to avoid.
       if (_user.value == null && _sessionLoadMessage.value.isEmpty) {
-        _sessionLoadMessage.value =
-            'Impossible de charger le profil. Réessayez dans quelques instants.';
+        _sessionLoadMessage.value = 'profileLoadFailedMessage'.tr;
       }
       _isUserHydrationPending.value = false;
       _hydrationInFlight = null;
@@ -491,10 +484,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         error: error,
         stackTrace: st,
       );
-      AdFeedback.error(
-        'Déconnexion impossible',
-        'La session n’a pas pu être fermée. Réessayez dans quelques instants.',
-      );
+      AdFeedback.error('signOutFailedTitle'.tr, 'signOutFailedMessage'.tr);
     }
   }
 
@@ -630,7 +620,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
           message:
               snapshot.failureMessage ??
               snapshot.failure?.loginMessage ??
-              'Votre session n’est plus autorisée.',
+              'sessionNoLongerAuthorizedMessage'.tr,
         ),
       );
     } on FirebaseAuthException catch (error, st) {
@@ -649,7 +639,7 @@ class UserController extends GetxController with WidgetsBindingObserver {
         UserAccessDecision(
           exists: true,
           issue: UserAccessIssue.disabledAccount,
-          title: 'Compte désactivé',
+          title: 'accountDisabledTitle'.tr,
           message: AuthErrorMapper.toMessage(error),
         ),
       );
@@ -684,20 +674,30 @@ class UserController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  // Empty defaults, not the literal fallback text: a `.tr` call is not a
+  // compile-time constant, so it cannot sit in a parameter's default value
+  // directly. Resolved just below instead -- same pattern as
+  // VideoStateOverlay's loading/error constructors.
   Future<void> handleProtectedAccessDenied({
-    String fallbackTitle = 'Session fermée',
-    String fallbackMessage =
-        'Votre session n’est plus autorisée. Veuillez vous reconnecter.',
+    String fallbackTitle = '',
+    String fallbackMessage = '',
   }) async {
     if (_accessRevocationInProgress) {
       return;
     }
 
+    final resolvedFallbackTitle = fallbackTitle.isEmpty
+        ? 'sessionClosedTitle'.tr
+        : fallbackTitle;
+    final resolvedFallbackMessage = fallbackMessage.isEmpty
+        ? 'sessionExpiredReconnectMessage'.tr
+        : fallbackMessage;
+
     final firebaseUser = _authSessionService.currentUser;
     if (firebaseUser == null) {
       _pendingSessionNotice = <String, String>{
-        'sessionNoticeTitle': fallbackTitle,
-        'sessionNoticeMessage': fallbackMessage,
+        'sessionNoticeTitle': resolvedFallbackTitle,
+        'sessionNoticeMessage': resolvedFallbackMessage,
       };
       await _safeOffAllNamed(AppRoutes.login, arguments: _pendingSessionNotice);
       return;
@@ -724,11 +724,11 @@ class UserController extends GetxController with WidgetsBindingObserver {
           exists: snapshot.failure != UserAccessIssue.missingProfile,
           issue: snapshot.failure,
           user: snapshot.appUser,
-          title: snapshot.failureTitle ?? fallbackTitle,
+          title: snapshot.failureTitle ?? resolvedFallbackTitle,
           message:
               snapshot.failureMessage ??
               snapshot.failure?.loginMessage ??
-              fallbackMessage,
+              resolvedFallbackMessage,
         ),
       );
     } catch (error, st) {
@@ -742,8 +742,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
         UserAccessDecision(
           exists: true,
           issue: null,
-          title: fallbackTitle,
-          message: fallbackMessage,
+          title: resolvedFallbackTitle,
+          message: resolvedFallbackMessage,
         ),
       );
     }
@@ -755,16 +755,16 @@ class UserController extends GetxController with WidgetsBindingObserver {
     final title =
         decision.title ??
         switch (decision.issue) {
-          UserAccessIssue.missingProfile => 'Compte indisponible',
-          UserAccessIssue.adminPortalOnly => 'Accès refusé',
-          UserAccessIssue.disabledAccount => 'Compte désactivé',
-          null => 'Session fermée',
+          UserAccessIssue.missingProfile => 'accountUnavailableTitle'.tr,
+          UserAccessIssue.adminPortalOnly => 'accessDeniedTitle'.tr,
+          UserAccessIssue.disabledAccount => 'accountDisabledTitle'.tr,
+          null => 'sessionClosedTitle'.tr,
         };
 
     final message =
         decision.message ??
         decision.issue?.loginMessage ??
-        'Votre session n’est plus autorisée.';
+        'sessionNoLongerAuthorizedMessage'.tr;
 
     return <String, String>{
       'sessionNoticeTitle': title,
