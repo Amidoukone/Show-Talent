@@ -12,7 +12,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../controller/auth_controller.dart';
-import '../controller/user_controller.dart';
 import 'package:adfoot/services/app_logger.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -44,14 +43,17 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
     _authControllerPresent = Get.isRegistered<AuthController>();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      try {
-        Get.find<UserController>().kickstart();
-      } catch (error) {
-        AppLogger.debug('Splash kickstart error: $error');
-      }
-    });
-
+    // No kickstart() call here on purpose. UserController.onInit() already
+    // subscribes to idTokenChanges() (which emits the current auth state on
+    // subscribe) *and* schedules its own postFrameCallback calling
+    // kickstart() -- and UserController is registered permanently during
+    // AppBootstrap.initialize(), before runApp(), so that postFrameCallback
+    // already fires on this screen's very first frame. A second kickstart()
+    // scheduled from here used to fire on that same frame, tripling the
+    // Auth reload() + Firestore access-check network round-trips every
+    // single cold start -- real, measurable waste (worse on a slow network)
+    // that a `_routeRequestVersion` guard only stopped from causing a wrong
+    // navigation, not from happening.
     if (!_authControllerPresent) {
       unawaited(_initializeFallback());
     } else {
