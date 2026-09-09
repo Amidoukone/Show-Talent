@@ -22,7 +22,13 @@ class AdColors {
   static const info = Color(0xFF4EA8FF);
   static const warning = Color(0xFFE6C75A);
   static const error = Color(0xFFE53935);
-  static const success = Color(0xFF26C165);
+  // Deliberately not brandVariant's exact green: this is a status color
+  // (a "succès" toast, a verified badge, the online dot), not a brand
+  // accent, and the two used to be the same value -- a success state and
+  // an active nav icon could render pixel-identical. Shifted cooler
+  // (toward teal) rather than just darker/lighter, so the difference reads
+  // even at icon/badge size, not only in a side-by-side swatch.
+  static const success = Color(0xFF10B981);
 
   // States
   static const disabled = Color(0xFF5F6A75);
