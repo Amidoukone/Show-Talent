@@ -115,7 +115,12 @@ class _MainScreenState extends State<MainScreen> {
   /// the create action belongs to the navigation, not to the screen.
   List<int?> _barSlots(AppUser user) {
     if (!_canPublish(user)) {
-      return const <int?>[_homeTab, _opportunitiesDestination, _chatTab, _profileTab];
+      return const <int?>[
+        _homeTab,
+        _opportunitiesDestination,
+        _chatTab,
+        _profileTab,
+      ];
     }
     return const <int?>[
       _homeTab,
@@ -450,8 +455,14 @@ class _MainScreenState extends State<MainScreen> {
             // spare, and both tabs under it — an offer to answer, a detection
             // to attend — are steps in a career.
             _opportunitiesDestination => BottomNavigationBarItem(
-              icon: const Icon(Icons.local_offer_outlined),
-              activeIcon: const Icon(Icons.local_offer_rounded),
+              icon: const _NavIconShell(
+                active: false,
+                child: _FootballIcon(active: false),
+              ),
+              activeIcon: const _NavIconShell(
+                active: true,
+                child: _FootballIcon(active: true),
+              ),
               label: l10n.mainNavCareerLabel,
             ),
             _chatTab => BottomNavigationBarItem(
@@ -482,24 +493,46 @@ class _MainScreenState extends State<MainScreen> {
     //
     // The tiles of a BottomNavigationBar are a Row of centred Columns, so a
     // shorter icon does not sit lower — it drags its whole tile, label
-    // included, off the line its neighbours share. This pill is 30 px tall
-    // against the 34 px of [_NavIconShell], and those four pixels were
-    // visible: the "+" and the word under it floated above Accueil and Chat.
+    // included, off the line its neighbours share. This pill has no chalk
+    // mark of its own (it is an action, not a place, so it is never
+    // "active"), but still sits inside a box of the same [_navIconBox]
+    // height as every other tile for that reason.
+    //
+    // Charcoal, not brand green: a solid green block was the one thing in
+    // the bar louder than everything around it. The fringe -- a hairline
+    // shadow offset to each side, green on the left and off-white on the
+    // right -- borrows TikTok's dual-shadow "+" technique without its
+    // colours, so Publier reads as *the* create action through shape and
+    // restraint rather than through being the only saturated thing on
+    // screen.
     final icon = SizedBox(
       height: _navIconBox,
       child: Center(
         child: Container(
-          width: 38,
-          height: 30,
+          width: 42,
+          height: 32,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AdColors.brand,
+            color: AdColors.surfaceCard,
             borderRadius: BorderRadius.circular(AdRadius.md),
+            border: Border.all(
+              color: AdColors.onSurface.withValues(alpha: 0.1),
+            ),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: AdColors.brand.withValues(alpha: 0.85),
+                offset: const Offset(-1.5, 0),
+              ),
+              BoxShadow(
+                color: AdColors.onSurface.withValues(alpha: 0.3),
+                offset: const Offset(1.5, 0),
+              ),
+            ],
           ),
           child: const Icon(
             Icons.add_rounded,
-            color: AdColors.brandOn,
-            size: 22,
+            color: AdColors.onSurface,
+            size: 19,
           ),
         ),
       ),
@@ -533,22 +566,38 @@ class _MainScreenState extends State<MainScreen> {
     // `CircleAvatar` — so the same two steps are spelled out here, or this one
     // tab would sit still while its neighbours moved.
     final diameter = active ? 26.0 : 24.0;
+    // A thin ring rather than a pastille: with the pastille gone (see
+    // _NavActiveMark), the photo needs its own quiet "yours" marker at rest,
+    // the way a squad-sheet photo sits inside a frame.
+    const ringWidth = 1.3;
 
     return _NavIconShell(
       active: active,
-      child: SizedBox(
+      child: Container(
         width: diameter,
         height: diameter,
-        child: AdAvatar(
-          photoUrl: user.photoProfil,
-          radius: diameter / 2,
-          backgroundColor: active
-              ? AdColors.brand.withValues(alpha: 0.24)
-              : AdColors.onSurfaceMuted.withValues(alpha: 0.18),
-          fallback: Icon(
-            active ? Icons.person_rounded : Icons.person_outline_rounded,
-            size: diameter * 0.66,
-            color: active ? AdColors.brand : AdColors.onSurfaceMuted,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: active
+                ? AdColors.brand
+                : AdColors.onSurfaceMuted.withValues(alpha: 0.4),
+            width: ringWidth,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(ringWidth),
+          child: AdAvatar(
+            photoUrl: user.photoProfil,
+            radius: (diameter - ringWidth * 2) / 2,
+            backgroundColor: active
+                ? AdColors.brand.withValues(alpha: 0.14)
+                : AdColors.onSurfaceMuted.withValues(alpha: 0.16),
+            fallback: Icon(
+              active ? Icons.person_rounded : Icons.person_outline_rounded,
+              size: diameter * 0.6,
+              color: active ? AdColors.brand : AdColors.onSurfaceMuted,
+            ),
           ),
         ),
       ),
@@ -557,17 +606,25 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildHomeIcon({required bool active}) {
     final icon = active ? Icons.home_rounded : Icons.home_outlined;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: <Widget>[
-        _NavIconShell(active: active, child: Icon(icon)),
-        if (!_isOnline)
-          const Positioned(
-            right: -2,
-            top: -2,
-            child: CircleAvatar(radius: 4, backgroundColor: AdColors.error),
-          ),
-      ],
+    // The offline dot is a child of the glyph, not of the whole shell --
+    // same reasoning as _ChatIconWithBadge's unread badge: the shell now
+    // reserves extra room below the glyph for the chalk mark, so a marker
+    // positioned relative to the shell's own bounds would drift away from
+    // the icon it decorates.
+    return _NavIconShell(
+      active: active,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          Icon(icon),
+          if (!_isOnline)
+            const Positioned(
+              right: -2,
+              top: -2,
+              child: CircleAvatar(radius: 4, backgroundColor: AdColors.error),
+            ),
+        ],
+      ),
     );
   }
 
@@ -680,7 +737,7 @@ class _MainScreenState extends State<MainScreen> {
           top: false,
           child: ClipRRect(
             clipBehavior: Clip.hardEdge,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
               child: Container(
@@ -693,12 +750,6 @@ class _MainScreenState extends State<MainScreen> {
                       AdColors.surface.withValues(alpha: 0.95),
                     ],
                   ),
-                  border: Border(
-                    top: BorderSide(
-                      color: AdColors.divider.withValues(alpha: 0.9),
-                      width: 1.2,
-                    ),
-                  ),
                   boxShadow: <BoxShadow>[
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.35),
@@ -707,29 +758,55 @@ class _MainScreenState extends State<MainScreen> {
                     ),
                   ],
                 ),
-                child: _NavBarTextScale(
-                  child: BottomNavigationBar(
-                    backgroundColor: Colors.transparent,
-                    selectedItemColor: AdColors.brand,
-                    unselectedItemColor: AdColors.onSurfaceMuted,
-                    currentIndex: _barIndexFor(_selectedIndex, appUser),
-                    onTap: (index) => _onBarItemTapped(index, appUser),
-                    type: BottomNavigationBarType.fixed,
-                    showUnselectedLabels: true,
-                    selectedFontSize: 12,
-                    unselectedFontSize: 11,
-                    selectedLabelStyle: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.2,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // A touchline, not a divider: a plain solid rule read as
+                    // corporate chrome next to the pitch-and-ball language
+                    // used everywhere else in the bar. Green at the centre,
+                    // fading to a barely-there off-white at both ends -- the
+                    // same restraint as the Publier button's fringe, not a
+                    // literal painted line.
+                    Container(
+                      height: 1.2,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: <Color>[
+                            AdColors.onSurface.withValues(alpha: 0),
+                            AdColors.onSurface.withValues(alpha: 0.3),
+                            AdColors.brand.withValues(alpha: 0.45),
+                            AdColors.onSurface.withValues(alpha: 0.3),
+                            AdColors.onSurface.withValues(alpha: 0),
+                          ],
+                          stops: const <double>[0, 0.22, 0.5, 0.78, 1],
+                        ),
+                      ),
                     ),
-                    unselectedLabelStyle: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.1,
+                    _NavBarTextScale(
+                      child: BottomNavigationBar(
+                        backgroundColor: Colors.transparent,
+                        selectedItemColor: AdColors.brand,
+                        unselectedItemColor: AdColors.onSurfaceMuted,
+                        currentIndex: _barIndexFor(_selectedIndex, appUser),
+                        onTap: (index) => _onBarItemTapped(index, appUser),
+                        type: BottomNavigationBarType.fixed,
+                        showUnselectedLabels: true,
+                        selectedFontSize: 12,
+                        unselectedFontSize: 11,
+                        selectedLabelStyle: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.2,
+                        ),
+                        unselectedLabelStyle: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.1,
+                        ),
+                        selectedIconTheme: const IconThemeData(size: 26),
+                        unselectedIconTheme: const IconThemeData(size: 24),
+                        items: _buildBarItems(appUser, unread),
+                      ),
                     ),
-                    selectedIconTheme: const IconThemeData(size: 26),
-                    unselectedIconTheme: const IconThemeData(size: 24),
-                    items: _buildBarItems(appUser, unread),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -750,40 +827,47 @@ class _ChatIconWithBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final baseIcon = active ? Icons.chat_bubble : Icons.chat_bubble_outline;
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: <Widget>[
-        _NavIconShell(active: active, child: Icon(baseIcon)),
-        if (unread > 0)
-          Positioned(
-            right: -6,
-            top: -4,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(
-                color: AdColors.error,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: const <BoxShadow>[
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 2,
-                    offset: Offset(0, 1),
-                  ),
-                ],
-              ),
-              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-              child: Text(
-                unread > 9 ? '9+' : unread.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
+    // The badge is a child of the glyph itself, not of the whole shell: the
+    // shell now reserves extra room below the glyph for the chalk mark
+    // (_NavIconShell), so a badge positioned relative to the shell's own
+    // bounds would drift away from the icon it is meant to sit on.
+    return _NavIconShell(
+      active: active,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: <Widget>[
+          Icon(baseIcon),
+          if (unread > 0)
+            Positioned(
+              right: -6,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AdColors.error,
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: const <BoxShadow>[
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 2,
+                      offset: Offset(0, 1),
+                    ),
+                  ],
                 ),
-                textAlign: TextAlign.center,
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                child: Text(
+                  unread > 9 ? '9+' : unread.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -818,15 +902,19 @@ class _NavBarTextScale extends StatelessWidget {
   }
 }
 
-/// The height every glyph in the bar occupies, selected or not.
+/// The height every icon+mark column occupies in the bar, selected or not.
 ///
-/// Fixed on purpose. `selectedIconTheme` grows the glyph from 24 to 26, and
-/// the shell used to grow with it — so the icon row measured 36 px on four
-/// tiles and 38 on the fifth, and the tiles being centred Columns, the label
-/// of whichever tab was selected sat a pixel off its neighbours. Selection is
-/// now expressed entirely inside a box of constant height: the pill grows,
-/// the row does not move.
-const double _navIconBox = 36;
+/// Fixed on purpose. `selectedIconTheme` grows the glyph from 24 to 26, and a
+/// shell that grew with it used to put the icon row at 36 px on four tiles
+/// and 38 on the fifth — the tiles being centred Columns, the label of
+/// whichever tab was selected sat a pixel off its neighbours. Selection is
+/// expressed entirely inside a box of constant height: the glyph area is 26
+/// (room for the largest size), a 4 px gap, then the 3 px chalk-mark row —
+/// the mark's own width animates, never this box.
+const double _navGlyphHeight = 26;
+const double _navMarkGap = 4;
+const double _navMarkHeight = 3;
+const double _navIconBox = _navGlyphHeight + _navMarkGap + _navMarkHeight;
 
 class _NavIconShell extends StatelessWidget {
   final Widget child;
@@ -838,34 +926,143 @@ class _NavIconShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: _navIconBox,
-      child: Center(
-        child: AnimatedContainer(
-          duration: AdMotion.normal,
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: active
-                ? AdColors.brand.withValues(alpha: 0.18)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(AdRadius.md),
-            border: Border.all(
-              color: active
-                  ? AdColors.brand.withValues(alpha: 0.35)
-                  : Colors.transparent,
-              width: 1,
-            ),
-            boxShadow: active
-                ? <BoxShadow>[
-                    BoxShadow(
-                      color: AdColors.brand.withValues(alpha: 0.25),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : const <BoxShadow>[],
-          ),
-          child: child,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          Expanded(child: Center(child: child)),
+          const SizedBox(height: _navMarkGap),
+          _NavActiveMark(active: active),
+        ],
       ),
     );
   }
+}
+
+/// The active indicator itself: a short chalk-line mark under the current
+/// tab, not a filled pastille.
+///
+/// A translucent green pill on every active tab (the bar's original
+/// treatment) read as loud next to the Publier button once that button
+/// stopped being a solid green block -- one prop-driven fringe language
+/// (green fading into off-white, the same pairing Publier's shadow uses)
+/// reads as a single design instead of two different ones bolted together.
+/// Only the width animates, so [_navIconBox] never has to move to fit it.
+class _NavActiveMark extends StatelessWidget {
+  final bool active;
+
+  const _NavActiveMark({required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: AdMotion.normal,
+      curve: Curves.easeOut,
+      width: active ? 16 : 0,
+      height: _navMarkHeight,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(_navMarkHeight),
+        gradient: active
+            ? const LinearGradient(
+                colors: <Color>[AdColors.brand, AdColors.onSurface],
+              )
+            : null,
+      ),
+    );
+  }
+}
+
+/// The Carrière tab's glyph: a stylised ball, not a price tag.
+///
+/// Drawn rather than picked from Material's icon set, because no bundled
+/// glyph gives a football outline in the same single-stroke, no-fill
+/// language as the rest of the bar (a tag doesn't read as football at all,
+/// and Material's own soccer-ball glyph is a filled shape, not a stroked
+/// outline that could sit next to Accueil's house or Chat's bubble without
+/// clashing). A circle, an inset pentagon and five short seam stubs -- the
+/// minimum a glance needs to read "ball" without becoming a literal emoji.
+class _FootballIcon extends StatelessWidget {
+  final bool active;
+
+  const _FootballIcon({required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    // Mirrors the 24 -> 26 growth `selectedIconTheme` gives every other
+    // glyph in the bar; this one isn't an `Icon`, so it doesn't inherit that
+    // theme automatically.
+    final size = active ? 26.0 : 24.0;
+    final color = active ? AdColors.brand : AdColors.onSurfaceMuted;
+
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _FootballPainter(color: color)),
+    );
+  }
+}
+
+class _FootballPainter extends CustomPainter {
+  _FootballPainter({required this.color});
+
+  final Color color;
+
+  // Pentagon and seam-stub points, authored on a 24x24 grid (the same
+  // viewBox every other hand-drawn icon in this design used) and scaled to
+  // the painted size in [paint].
+  static const List<List<double>> _pentagon = <List<double>>[
+    <double>[12, 6.7],
+    <double>[15.1, 8.9],
+    <double>[13.9, 12.6],
+    <double>[10.1, 12.6],
+    <double>[8.9, 8.9],
+  ];
+
+  static const List<List<double>> _seams = <List<double>>[
+    <double>[12, 6.7, 12, 4.3],
+    <double>[15.1, 8.9, 18.2, 7.9],
+    <double>[13.9, 12.6, 15.8, 15.6],
+    <double>[10.1, 12.6, 8.2, 15.6],
+    <double>[8.9, 8.9, 5.8, 7.9],
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.08
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    Offset scaled(double x, double y) =>
+        Offset(x / 24 * size.width, y / 24 * size.height);
+
+    final center = Offset(size.width / 2, size.height / 2);
+    canvas.drawCircle(center, size.width / 2 - paint.strokeWidth / 2, paint);
+
+    final pentagon = Path()
+      ..moveTo(
+        scaled(_pentagon[0][0], _pentagon[0][1]).dx,
+        scaled(_pentagon[0][0], _pentagon[0][1]).dy,
+      );
+    for (final point in _pentagon.skip(1)) {
+      final p = scaled(point[0], point[1]);
+      pentagon.lineTo(p.dx, p.dy);
+    }
+    pentagon.close();
+    canvas.drawPath(pentagon, paint);
+
+    for (final seam in _seams) {
+      canvas.drawLine(
+        scaled(seam[0], seam[1]),
+        scaled(seam[2], seam[3]),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FootballPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

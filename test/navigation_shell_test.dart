@@ -115,7 +115,7 @@ void main() {
     // IconTheme does not reach a CircleAvatar.
     test('it grows with its neighbours when selected', () {
       expect(main, contains('final diameter = active ? 26.0 : 24.0;'));
-      expect(main, contains('radius: diameter / 2,'));
+      expect(main, contains('radius: (diameter - ringWidth * 2) / 2,'));
     });
   });
 
@@ -146,7 +146,13 @@ void main() {
       expect(body, contains('if (!_canPublish(user))'));
       expect(
         body,
-        contains('_homeTab, _opportunitiesDestination, _chatTab, _profileTab'),
+        contains(
+          '        _homeTab,\n'
+          '        _opportunitiesDestination,\n'
+          '        _chatTab,\n'
+          '        _profileTab,\n'
+          '      ];',
+        ),
         reason: 'four entries, no null slot',
       );
     });
@@ -246,7 +252,13 @@ void main() {
     // and the tiles being centred Columns, the selected label sat off its
     // neighbours. The publish pill was worse: 30 px against 36.
     test('every glyph occupies the same height, selected or not', () {
-      expect(main, contains('const double _navIconBox = 36;'));
+      expect(
+        main,
+        contains(
+          'const double _navIconBox = '
+          '_navGlyphHeight + _navMarkGap + _navMarkHeight;',
+        ),
+      );
 
       final shell = main.indexOf('class _NavIconShell');
       expect(shell, isNonNegative);
@@ -256,7 +268,7 @@ void main() {
       final publish = main.indexOf('BottomNavigationBarItem _publishBarItem(');
       expect(publish, isNonNegative);
       expect(
-        main.substring(publish, publish + 900),
+        main.substring(publish, publish + 1100),
         contains('height: _navIconBox,'),
         reason: 'the action sits on the same line as the destinations',
       );
@@ -268,7 +280,7 @@ void main() {
     test('label scaling is bounded, and only here', () {
       expect(main, contains('class _NavBarTextScale'));
       expect(main, contains('.clamp(0.85, 1.15)'));
-      expect(main, contains('child: _NavBarTextScale('));
+      expect(main, contains('_NavBarTextScale(\n'));
 
       final app = _read('lib/main.dart');
       expect(
