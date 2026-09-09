@@ -256,6 +256,15 @@ class ProfileController extends GetxController {
     update();
 
     try {
+      // Started alongside the user-doc fetch, not after it: fetchUserVideos
+      // only ever needs `uid` (see isOwnProfile, which reads the signed-in
+      // uid, never `user`'s content), so the two reads have no data
+      // dependency and don't need to be sequential. fetchUserVideos never
+      // rethrows (it reports its own failures internally), so starting it
+      // here cannot turn into an unhandled error if the user fetch below
+      // fails instead.
+      final videosFuture = fetchUserVideos(uid, isRefresh: true);
+
       final fetchedUser = await _profileRepository
           .fetchUser(
             uid,
@@ -275,7 +284,7 @@ class ProfileController extends GetxController {
       update();
 
       _startUserListener(uid);
-      await fetchUserVideos(uid, isRefresh: true);
+      await videosFuture;
     } catch (e, st) {
       if (requestSerial != _profileLoadSerial) {
         return;

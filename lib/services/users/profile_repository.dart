@@ -326,6 +326,15 @@ class ProfileRepository {
     String uid, {
     bool includePrivateFields = false,
   }) async {
+    // Started before the main doc is awaited, not after: it only needs
+    // `uid`, never the main doc's content, so the two reads have no
+    // dependency on each other and don't need to be sequential. Halves the
+    // network latency of loading your own profile (the common case, since
+    // includePrivateFields is only true for the signed-in user's own uid).
+    final privateContactFuture = includePrivateFields
+        ? _fetchPrivateContact(uid)
+        : null;
+
     final doc = await _getWithRetry(_usersCollection.doc(uid));
     if (!doc.exists) {
       return null;
@@ -336,9 +345,7 @@ class ProfileRepository {
       return null;
     }
 
-    final privateContact = includePrivateFields
-        ? await _fetchPrivateContact(uid)
-        : null;
+    final privateContact = await privateContactFuture;
     return AppUser.fromMap(data, privateContact: privateContact);
   }
 
