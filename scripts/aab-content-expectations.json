@@ -1,24 +1,14 @@
 {
-  "_": "Chaines temoins lues dans base/lib/<abi>/libapp.so par scripts/check-aab-contents.ps1. Une chaine n'est un temoin que si elle discrimine : chacune de celles-ci a ete verifiee absente du bundle cache du 2 septembre (versionCode 31) et presente dans ce checkout. 'Date de naissance', 'Parcours', 'Dossier scout partiel' et 'Annee de naissance' ont ete essayees et ecartees : elles existaient deja dans le 30. Preferer un nom de champ a un libelle quand les deux conviennent -- un libelle se reformule, un champ non. Liste remplacee pour le 34 : les temoins du 33 (Version indisponible, Archiver cette saison, etc.) existaient deja dans ce checkout et ne discriminaient plus rien -- verifie via `git show 47fea12:<path>` (le commit qui a fixe la version a 33) qu'aucun des trois nouveaux temoins n'existait a ce commit ; lib/l10n/video_ui_translations.dart n'existait meme pas.",
-  "forVersionCode": 34,
+  "_": "Chaines temoins lues dans base/lib/<abi>/libapp.so par scripts/check-aab-contents.ps1. Une chaine n'est un temoin que si elle discrimine : chacune de celles-ci a ete verifiee absente du bundle cache du 2 septembre (versionCode 31) et presente dans ce checkout. 'Date de naissance', 'Parcours', 'Dossier scout partiel' et 'Annee de naissance' ont ete essayees et ecartees : elles existaient deja dans le 30. Preferer un nom de champ a un libelle quand les deux conviennent -- un libelle se reformule, un champ non. Liste remplacee pour le 34 : les temoins du 33 (Version indisponible, Archiver cette saison, etc.) existaient deja dans ce checkout et ne discriminaient plus rien -- verifie via `git show 47fea12:<path>` (le commit qui a fixe la version a 33) qu'aucun des trois nouveaux temoins n'existait a ce commit ; lib/l10n/video_ui_translations.dart n'existait meme pas. Liste remplacee pour le 35 : verifie via `git show af42907:<path>` (commit de la version 34) que ni le fichier locale_preference.dart, ni le message anglais du selecteur de langue n'existaient a ce commit.",
+  "forVersionCode": 35,
   "mustContain": [
     {
-      "text": "A published video or a CV",
-      "why": "bd9db22, valeur anglaise de requirementVideoOrCvLabel ; l'anglais du dossier scout n'existait pas avant la 34"
+      "text": "app.locale_preference.v1",
+      "why": "cle SharedPreferences de LocalePreferenceStore (lib/l10n/locale_preference.dart) ; le fichier entier n'existait pas avant la 35 -- nom de champ, pas un libelle, prefere en tete de liste"
     },
     {
-      "text": "Reset link refused",
-      "why": "560c7fb, valeur anglaise de emailLinkResetRefusedTitle"
-    },
-    {
-      "text": "Cabo Verde",
-      "why": "de097c2, nom anglais du Cap-Vert dans _countryNamesEn ; la table anglaise des pays n'existait pas avant la 34"
-    }
-  ],
-  "mustNotContain": [
-    {
-      "text": "Poste principal",
-      "why": "348cd3d, libelle supprime du profil ; c'est lui qui a trahi le 31 cache"
+      "text": "Suit la langue de votre téléphone",
+      "why": "valeur francaise de settingsLanguageSystemSubtitle (app_fr.arb), sous-titre de l'option Automatique du nouveau selecteur de langue ajoute en 35 -- sans apostrophe, pour eviter le piege d'echappement \\' du dart genere par flutter gen-l10n"
     }
   ]
 }
