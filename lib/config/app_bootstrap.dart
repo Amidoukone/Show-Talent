@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/locale_preference.dart';
 import '../services/app_check_service.dart';
 import '../services/email_link_handler.dart';
 import '../services/notifications.dart';
@@ -28,6 +29,14 @@ class AppBootstrap {
     WidgetsFlutterBinding.ensureInitialized();
     _configureSystemUi();
     _configureFlutterErrors();
+
+    // A local disk read, not a network call, so blocking briefly here is
+    // unrelated to the network-latency reasoning below (App Check, etc.). It
+    // has to finish before runApp(): resolveAppLocale() is called the moment
+    // MyApp first builds, and it needs a manually chosen language (if any)
+    // already in memory -- otherwise the first frame would flash the
+    // device-derived language before correcting itself.
+    await LocalePreferenceStore.instance.ensureLoaded();
 
     // Hard dependency: the app genuinely cannot run without Firebase, so a
     // final failure is still allowed to propagate and abort startup

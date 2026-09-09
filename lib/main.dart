@@ -7,26 +7,15 @@ import 'package:intl/intl.dart';
 import 'config/app_bootstrap.dart';
 import 'config/app_routes.dart';
 import 'l10n/generated/app_localizations.dart';
+import 'l10n/locale_preference.dart';
 import 'l10n/video_ui_translations.dart';
 import 'theme/ad_colors.dart';
 import 'theme/app_theme.dart';
 
-/// The app's active locale, resolved once from the device's locale.
-///
-/// Only two locales ship copy ([AppLocalizations.supportedLocales]): an
-/// English device gets English, anything else falls back to French -- not a
-/// device-locale exact match, the same fallback the app has always had.
-/// Used both for [AdfootApp]'s `GetMaterialApp.locale` (drives
-/// `AppLocalizations` and, via `Get.locale`, the `VideoUiStrings` `.tr`
-/// catalog) and for [Intl.defaultLocale] in `main()` -- keeping both in sync
-/// is what stops implicit `DateFormat(...)` calls elsewhere in the app (ones
-/// with no explicit locale argument) from rendering month/day names in
-/// French on an English screen.
-Locale resolveAppLocale() {
-  return Get.deviceLocale?.languageCode == 'en'
-      ? const Locale('en')
-      : const Locale('fr');
-}
+// resolveAppLocale (and applyLocalePreference, used by the language picker
+// in Outils) live in l10n/locale_preference.dart, not here -- re-exported so
+// existing callers of `package:adfoot/main.dart` keep working unchanged.
+export 'l10n/locale_preference.dart' show resolveAppLocale;
 
 Future<void> main() async {
   runZonedGuarded(() async {

@@ -73,6 +73,10 @@ void main() {
       'Faites vérifier toute opportunité via adfoot.org ou WhatsApp : '
       '+225 00 00 00 00.',
     );
+    expect(l10n.settingsLanguageSectionTitle, 'Langue');
+    expect(l10n.settingsLanguageSystemTitle, 'Automatique');
+    expect(l10n.settingsLanguageFrenchTitle, 'Français');
+    expect(l10n.settingsLanguageEnglishTitle, 'English');
     expect(l10n.profileRoleFan, 'Supporter');
     expect(
       l10n.profileStatsAttestedWithDateMessage('12/03/2026'),
@@ -231,6 +235,10 @@ void main() {
       'Have any opportunity checked via adfoot.org or WhatsApp: '
       '+225 00 00 00 00.',
     );
+    expect(l10n.settingsLanguageSectionTitle, 'Language');
+    expect(l10n.settingsLanguageSystemTitle, 'Automatic');
+    expect(l10n.settingsLanguageFrenchTitle, 'Français');
+    expect(l10n.settingsLanguageEnglishTitle, 'English');
     expect(l10n.profileRoleFan, 'Fan');
     expect(
       l10n.profileStatsAttestedWithDateMessage('03/12/2026'),

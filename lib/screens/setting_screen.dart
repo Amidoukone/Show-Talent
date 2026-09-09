@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:adfoot/config/app_routes.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/l10n/generated/app_localizations.dart';
+import 'package:adfoot/l10n/locale_preference.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/legal/terms_acceptance_service.dart';
 import 'package:adfoot/services/users/user_repository.dart';
@@ -49,6 +50,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _profilePublic = true;
   bool _allowMessages = true;
+
+  String _languagePreference = LocalePreferenceStore.instance.current;
+  bool _changingLanguage = false;
 
   @override
   void initState() {
@@ -232,6 +236,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Get.offAllNamed(AppRoutes.login);
   }
 
+  Future<void> _handleLanguageChange(String value) async {
+    if (_changingLanguage || _languagePreference == value) {
+      return;
+    }
+
+    final previous = _languagePreference;
+    setState(() {
+      _languagePreference = value;
+      _changingLanguage = true;
+    });
+
+    try {
+      await applyLocalePreference(value);
+    } catch (error, st) {
+      AppLogger.debug('SettingsScreen language change error: $error\n$st');
+      if (!mounted) return;
+      setState(() {
+        _languagePreference = previous;
+        _changingLanguage = false;
+      });
+      final l10n = AppLocalizations.of(context)!;
+      AdFeedback.error(l10n.settingsGenericErrorTitle, l10n.settingsSaveFailureMessage);
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() => _changingLanguage = false);
+    // Re-resolved after applyLocalePreference: context now reflects the new
+    // language, so this confirmation itself renders in it.
+    final l10n = AppLocalizations.of(context)!;
+    AdFeedback.info(l10n.settingsLanguageSectionTitle, l10n.settingsLanguageUpdatedMessage);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -313,6 +350,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: l10n.settingsSignOutSubtitle,
                           enabled: !_isDeleting,
                           onTap: _handleSignOut,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildSectionCard(
+                      title: l10n.settingsLanguageSectionTitle,
+                      icon: Icons.translate_rounded,
+                      subtitle: l10n.settingsLanguageSectionSubtitle,
+                      children: [
+                        _buildLanguageOption(
+                          value: LocalePreferenceStore.system,
+                          title: l10n.settingsLanguageSystemTitle,
+                          subtitle: l10n.settingsLanguageSystemSubtitle,
+                        ),
+                        _buildDivider(),
+                        _buildLanguageOption(
+                          value: 'fr',
+                          title: l10n.settingsLanguageFrenchTitle,
+                        ),
+                        _buildDivider(),
+                        _buildLanguageOption(
+                          value: 'en',
+                          title: l10n.settingsLanguageEnglishTitle,
                         ),
                       ],
                     ),
@@ -711,6 +771,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               Icon(Icons.chevron_right_rounded, color: muted, size: 22),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// One row of the Langue section: `value` is `LocalePreferenceStore.system`,
+  /// `'fr'` or `'en'`. Selected state comes straight from `_languagePreference`
+  /// (set optimistically in `_handleLanguageChange` before the switch
+  /// actually completes), so tapping the row shows its own spinner rather
+  /// than a generic screen-wide one.
+  Widget _buildLanguageOption({
+    required String value,
+    required String title,
+    String? subtitle,
+  }) {
+    final selected = _languagePreference == value;
+    final enabled = !_changingLanguage;
+    final foreground = enabled ? AdColors.onSurface : AdColors.onSurfaceDisabled;
+    final muted = enabled ? AdColors.onSurfaceMuted : AdColors.onSurfaceDisabled;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? () => _handleLanguageChange(value) : null,
+        borderRadius: BorderRadius.circular(AdRadius.md),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AdSpacing.sm),
+          child: Row(
+            children: [
+              _buildTileIcon(
+                selected ? Icons.check_circle_rounded : Icons.circle_outlined,
+                selected
+                    ? (enabled ? AdColors.brand : AdColors.onSurfaceDisabled)
+                    : muted,
+              ),
+              const SizedBox(width: AdSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: foreground,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        style: TextStyle(color: muted, fontSize: 12, height: 1.25),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (_changingLanguage && selected)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
             ],
           ),
         ),
