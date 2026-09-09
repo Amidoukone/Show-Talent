@@ -1,7 +1,10 @@
 import 'dart:io';
 
 import 'package:adfoot/config/feature_controller_registry.dart';
+import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/controller/video_controller.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core_platform_interface/test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +21,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// pair.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    setupFirebaseCoreMocks();
+    SharedPreferences.setMockInitialValues({});
+    try {
+      await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: 'test-api-key',
+          appId: '1:1234567890:android:test',
+          messagingSenderId: '1234567890',
+          projectId: 'test-project',
+          storageBucket: 'test-project.appspot.com',
+        ),
+      );
+    } on FirebaseException catch (e) {
+      if (e.code != 'duplicate-app') rethrow;
+    }
+  });
 
   const contextKey = 'profile:registry-test';
 
@@ -188,5 +209,116 @@ void main() {
 
       expect(offenders, isEmpty);
     });
+  });
+
+  // MainScreen swaps tab bodies directly (no IndexedStack), so leaving the
+  // Profil tab used to tear the controller down immediately -- a full
+  // user-doc refetch and a video-page-1 refetch even to look at the same
+  // profile a few seconds later. releaseProfileController now gives it
+  // profileControllerGracePeriod to be reclaimed instead of deleting on the
+  // spot; see the doc comment on that field for why this is safe (the
+  // profile grid holds no live video players to begin with).
+  group('a profile controller survives a short grace period', () {
+    const uid = 'profile-grace-test';
+
+    ProfileController ensure() =>
+        FeatureControllerRegistry.ensureProfileController(uid);
+
+    setUp(() {
+      FeatureControllerRegistry.resetProfileControllerStateForTests();
+      FeatureControllerRegistry.profileControllerGracePeriod =
+          const Duration(milliseconds: 20);
+      if (Get.isRegistered<ProfileController>(tag: uid)) {
+        Get.delete<ProfileController>(tag: uid);
+      }
+    });
+
+    tearDown(() {
+      FeatureControllerRegistry.resetProfileControllerStateForTests();
+      if (Get.isRegistered<ProfileController>(tag: uid)) {
+        Get.delete<ProfileController>(tag: uid);
+      }
+    });
+
+    test('releasing the last holder does not tear it down right away', () {
+      ensure();
+      FeatureControllerRegistry.releaseProfileController(uid);
+
+      expect(Get.isRegistered<ProfileController>(tag: uid), isTrue);
+      expect(
+        FeatureControllerRegistry.profileControllerGraceTimerPending(uid),
+        isTrue,
+      );
+    });
+
+    test(
+      'reclaiming within the grace period reuses the same instance and '
+      'cancels the pending teardown',
+      () {
+        final first = ensure();
+        FeatureControllerRegistry.releaseProfileController(uid);
+
+        final second = ensure();
+
+        expect(identical(first, second), isTrue);
+        expect(
+          FeatureControllerRegistry.profileControllerGraceTimerPending(uid),
+          isFalse,
+        );
+      },
+    );
+
+    test('the controller is torn down once the grace period elapses', () async {
+      ensure();
+      FeatureControllerRegistry.releaseProfileController(uid);
+      expect(Get.isRegistered<ProfileController>(tag: uid), isTrue);
+
+      await Future<void>.delayed(
+        FeatureControllerRegistry.profileControllerGracePeriod * 3,
+      );
+
+      expect(Get.isRegistered<ProfileController>(tag: uid), isFalse);
+      expect(
+        FeatureControllerRegistry.profileControllerGraceTimerPending(uid),
+        isFalse,
+      );
+    });
+
+    // The counted-holders case (ProfileScreen + ProfileVideoScrollView
+    // sharing one uid, exactly like the VideoController hazard documented
+    // above) must still work: a grace timer is only ever started once the
+    // ref count reaches zero, never on an intermediate release.
+    test('a second holder is still respected before the grace period starts', () {
+      ensure();
+      ensure();
+
+      FeatureControllerRegistry.releaseProfileController(uid);
+
+      expect(Get.isRegistered<ProfileController>(tag: uid), isTrue);
+      expect(
+        FeatureControllerRegistry.profileControllerGraceTimerPending(uid),
+        isFalse,
+        reason: 'one holder is still around; nothing should be counting '
+            'down yet',
+      );
+    });
+
+    test(
+      'reclaiming after the grace period expired builds a fresh instance',
+      () async {
+        final first = ensure();
+        FeatureControllerRegistry.releaseProfileController(uid);
+
+        await Future<void>.delayed(
+          FeatureControllerRegistry.profileControllerGracePeriod * 3,
+        );
+        expect(Get.isRegistered<ProfileController>(tag: uid), isFalse);
+
+        final second = ensure();
+
+        expect(identical(first, second), isFalse);
+        expect(Get.isRegistered<ProfileController>(tag: uid), isTrue);
+      },
+    );
   });
 }

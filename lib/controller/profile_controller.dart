@@ -243,6 +243,25 @@ class ProfileController extends GetxController {
   bool hasAttemptedProfileLoad = false;
 
   Future<void> updateUserId(String uid) async {
+    // Reused from FeatureControllerRegistry's grace period: the screen for
+    // this uid was released and reclaimed before the controller was torn
+    // down, so this is the same instance that already loaded this profile
+    // -- its Firestore listener (_startUserListener) never stopped, so
+    // what's already in [user]/[videoList] is still current, not stale.
+    // Skipping the refetch is what makes returning to a just-left profile
+    // instant instead of paying for a second full network round trip.
+    //
+    // The two other call sites of this method (profile_screen.dart's
+    // self-heal re-arm and its Réessayer button) never hit this: the first
+    // only fires while `hasAttemptedProfileLoad` is still false, the second
+    // only shows once a load attempt failed to produce a `user` -- both
+    // leave the guard below false, so a real fetch still runs. Pull-to-
+    // refresh goes through refreshProfileVideos() instead, which this does
+    // not touch at all.
+    if (user?.uid == uid && hasAttemptedProfileLoad) {
+      return;
+    }
+
     final requestSerial = ++_profileLoadSerial;
     isLoadingUser = true;
     profileLoadErrorTitle = null;

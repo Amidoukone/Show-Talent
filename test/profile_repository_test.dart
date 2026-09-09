@@ -541,6 +541,85 @@ void main() {
       expect(events.any((u) => u?.phone == '+2250700000001'), isTrue);
     });
   });
+
+  // FeatureControllerRegistry now keeps a released ProfileController alive
+  // for a short grace period (lib/config/feature_controller_registry.dart)
+  // instead of tearing it down the instant the Profil tab is left, so a
+  // reclaimed controller's updateUserId() must not repeat the fetch it
+  // already did -- see the guard at the top of that method for the reasoning.
+  group('ProfileController.updateUserId reuses an already-loaded profile', () {
+    test(
+      'a second call for the same uid does not refetch the user document',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final user = _user(uid: 'player-cached', name: 'Cached Player');
+        await firestore.collection('users').doc(user.uid).set(user.toMap());
+
+        final repository = _CountingProfileRepository(firestore, uid: user.uid);
+        final controller = ProfileController(profileRepository: repository);
+        addTearDown(controller.onClose);
+
+        await controller.updateUserId(user.uid);
+        expect(repository.fetchUserCallCount, 1);
+        expect(controller.user?.uid, user.uid);
+        expect(controller.hasAttemptedProfileLoad, isTrue);
+
+        await controller.updateUserId(user.uid);
+
+        expect(
+          repository.fetchUserCallCount,
+          1,
+          reason: 'this mirrors FeatureControllerRegistry reclaiming the '
+              'same controller within its grace period: the profile is '
+              'already loaded, so refetching it would be wasted network '
+              'work for data the still-live Firestore listener already '
+              'keeps current',
+        );
+      },
+    );
+
+    test('a call for a different uid still fetches for real', () async {
+      final firestore = FakeFirebaseFirestore();
+      final userA = _user(uid: 'player-a', name: 'Player A');
+      final userB = _user(uid: 'player-b', name: 'Player B');
+      await firestore.collection('users').doc(userA.uid).set(userA.toMap());
+      await firestore.collection('users').doc(userB.uid).set(userB.toMap());
+
+      final repository = _CountingProfileRepository(firestore, uid: userA.uid);
+      final controller = ProfileController(profileRepository: repository);
+      addTearDown(controller.onClose);
+
+      await controller.updateUserId(userA.uid);
+      await controller.updateUserId(userB.uid);
+
+      expect(repository.fetchUserCallCount, 2);
+      expect(controller.user?.uid, userB.uid);
+    });
+  });
+}
+
+/// Counts real [fetchUser] calls, so a test can assert one was skipped
+/// without depending on the live Firestore listener also happening to keep
+/// [ProfileController.user] unchanged (which it would, correctly, since
+/// nothing in these tests mutates the document after the first load).
+class _CountingProfileRepository extends ProfileRepository {
+  _CountingProfileRepository(FakeFirebaseFirestore firestore, {required String uid})
+    : super(
+        firestore: firestore,
+        auth: MockFirebaseAuth(
+          signedIn: true,
+          mockUser: MockUser(uid: uid, email: '$uid@example.com'),
+        ),
+        appCheckReady: ({required forceRefresh, timeout}) async => true,
+      );
+
+  int fetchUserCallCount = 0;
+
+  @override
+  Future<AppUser?> fetchUser(String uid, {bool includePrivateFields = false}) {
+    fetchUserCallCount++;
+    return super.fetchUser(uid, includePrivateFields: includePrivateFields);
+  }
 }
 
 AppUser _user({required String uid, required String name}) {
