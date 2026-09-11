@@ -11,6 +11,73 @@ Nothing in this file runs automatically yet — both workflows have no
 in the Codemagic dashboard. Add automatic triggering later, once a build has
 actually succeeded once.
 
+**STATUS (2026-09-11): DONE — first `ios-staging` build succeeded and was
+accepted by App Store Connect (build 36, "Although delivery was successful"
+email, only a non-blocking advisory left).** Everything below this line is
+now historical/reference material for the next person (or session) touching
+this pipeline — the setup is complete and working. Four real, distinct bugs
+were hit and fixed in this exact order on the way to a green build, none of
+them hypothetical/guessed — each was diagnosed from an actual Codemagic or
+Apple error message:
+
+1. **`keychain add-certificates` before `fetch-signing-files`** — the
+   original script order tried to add certificates to the keychain before
+   `app-store-connect fetch-signing-files --create` had downloaded/created
+   any `.p12` to add, failing with "Did not find any certificates from
+   specified locations." Fixed by splitting `keychain_setup` into
+   `keychain_initialize` (runs first) and `keychain_add_certificates` (runs
+   after `fetch_signing_files`) in `codemagic.yaml`.
+2. **Missing `CERTIFICATE_PRIVATE_KEY`** — `fetch-signing-files --create`
+   cannot generate a brand-new distribution certificate without a private
+   key handed to it explicitly (env var or `--certificate-key`); failed with
+   "Cannot save Signing Certificates without certificate private key" even
+   with zero existing certificates on the Apple account. Fixed by generating
+   a 2048-bit RSA key (`openssl genrsa` + `openssl rsa -traditional` for the
+   classic `RSA PRIVATE KEY` PEM header) and adding it as `CERTIFICATE_PRIVATE_KEY`
+   in Codemagic's `appstore_credentials` environment variable group (already
+   referenced by both workflows' `groups:`).
+3. **iOS deployment target too low for Firebase's Swift Package Manager
+   dependencies** — Xcode archiving failed with "Target Integrity: the
+   package product 'cloud-firestore' (and 6 other Firebase products)
+   requires minimum platform version 15.0 ... but this target supports
+   13.0." Fixed by raising `IPHONEOS_DEPLOYMENT_TARGET` (12 configs in
+   `ios/Runner.xcodeproj/project.pbxproj`), `platform :ios` in `ios/Podfile`,
+   and `MinimumOSVersion` in `ios/Flutter/AppFrameworkInfo.plist` all to
+   `15.0`. Real consequence, not just config: the app no longer installs on
+   iOS 12/13/14 — unavoidable given the currently pinned Firebase plugin
+   versions.
+4. **App icon PNGs misplaced one directory level too deep** —
+   `ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json` referenced
+   e.g. `152.png` (relative to the appiconset folder itself, as Xcode
+   expects), but the actual files were committed one level down, in an
+   `AppIcon.appiconset/_/` subfolder — invisible to `actool` since it never
+   surfaced until this, the very first real iOS build ever attempted on this
+   project. App Store Connect rejected the upload with "Missing required
+   icon file ... 167x167 / 152x152 ... for iPad." Fixed with `git mv` of all
+   34 PNGs up one level, no content changes.
+5. **Missing Info.plist purpose strings (`ITMS-90683`)** — the app's own
+   `lib/` code never calls the camera or location APIs directly (all
+   `image_picker` calls use `ImageSource.gallery`), but a dependency
+   references those APIs at the native level regardless, and Apple statically
+   scans the linked binary rather than actual call sites. Two rounds of this,
+   one key at a time as each successive upload surfaced the next missing key
+   Apple's scanner happened to report: `NSCameraUsageDescription` (blocking,
+   build 35 was rejected outright), then `NSLocationWhenInUseUsageDescription`
+   and `NSLocationAlwaysAndWhenInUseUsageDescription` (both advisory only,
+   build 36 was still accepted). All three added to `ios/Runner/Info.plist`
+   with honest, generic French copy matching the existing entries' style. If
+   a *third* variant (e.g. background location) gets flagged on a future
+   upload, same pattern: add the key, no need to treat it as a regression.
+
+Two housekeeping items that came along for the ride, not bugs but required
+by this project's own guardrail tests once the build number moved:
+`pubspec.yaml` bumped `1.0.7+35` → `1.0.7+36` (Apple had already "consumed"
+35 with the rejected upload, so the retry needed a new number), and
+`scripts/aab-content-expectations.json`'s `forVersionCode` updated to match
+(same witnesses kept — `lib/` had not changed since 35, only `ios/` and
+`pubspec.yaml`, so nothing needed re-verifying against the Android bundle
+content).
+
 ## What you need to do yourself (no Mac required — all of this is browser-based)
 
 ### 1. Apple Developer Program
