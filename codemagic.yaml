@@ -9,6 +9,11 @@ definitions:
     script: |
       set -e
       find . -name "Podfile" -maxdepth 2 -execdir pod install \;
+  keychain_initialize: &keychain_initialize
+    name: Set up keychain to store code signing certificates
+    script: |
+      set -e
+      keychain initialize
   fetch_signing_files: &fetch_signing_files
     name: Fetch signing files from App Store Connect
     script: |
@@ -16,11 +21,10 @@ definitions:
       app-store-connect fetch-signing-files "$BUNDLE_ID" \
         --type IOS_APP_STORE \
         --create
-  keychain_setup: &keychain_setup
-    name: Set up keychain and certificates for code signing
+  keychain_add_certificates: &keychain_add_certificates
+    name: Add certificates to keychain
     script: |
       set -e
-      keychain initialize
       keychain add-certificates
   use_profiles: &use_profiles
     name: Apply the fetched provisioning profile to the Xcode project
@@ -65,8 +69,9 @@ workflows:
     scripts:
       - *flutter_setup
       - *pod_install
-      - *keychain_setup
+      - *keychain_initialize
       - *fetch_signing_files
+      - *keychain_add_certificates
       - *use_profiles
       - name: Flutter build ipa (staging flavor)
         script: |
@@ -116,8 +121,9 @@ workflows:
     scripts:
       - *flutter_setup
       - *pod_install
-      - *keychain_setup
+      - *keychain_initialize
       - *fetch_signing_files
+      - *keychain_add_certificates
       - *use_profiles
       - name: Flutter build ipa (production flavor)
         script: |

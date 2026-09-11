@@ -19,6 +19,42 @@ Non-negotiable, independent of Codemagic: https://developer.apple.com/programs/
 — $99/year. Required to get an App Store Connect account, a Team ID, and to
 create App Store Connect API keys.
 
+**Decision (2026-09-10): enroll as an Individual, not an Organization.**
+Organization enrollment requires a D-U-N-S number (a registered legal entity
+lookup, free but can take 1-3 weeks to issue/verify) and shows "Adfoot" as
+the seller name. Individual enrollment verifies against a personal Apple ID
++ government ID and is typically approved same-day to 48h, but shows the
+enrolled person's legal name as the App Store "seller" (e.g. "Amidou Koné"),
+not "Adfoot" — acceptable tradeoff to unblock the release now. The account
+can be converted to an Organization later without losing the app or its
+TestFlight/App Store history, once a D-U-N-S number is available. To enroll:
+
+1. Use (or create) an Apple ID with the exact legal name/address that
+   matches a government-issued ID — mismatches are the #1 cause of
+   enrollment delay/rejection.
+2. Go to https://developer.apple.com/programs/enroll/, sign in, choose
+   "Individual", pay the $99 with a card that bills to the same name/address.
+3. Apple may ask for an ID photo/verification call for individual
+   enrollment in some countries — expect this, it's normal.
+4. Wait for the confirmation email before moving to step 2 below —
+   App Store Connect access unlocks only after enrollment is approved.
+
+**Status (2026-09-11): APPROVED — activation email received.**
+Apple ID `amidoudev@gmail.com` (Amidou Kone), account region corrected from
+a default "United States" to **Mali** via account.apple.com > Personal
+Information > Country/Region *before* enrolling — the enrollment form
+inherits the Apple ID's region, so this had to be fixed first (it was
+showing US-only address fields like "State"). Enrollment order confirmed:
+**Enrollment ID `HB8Y6QXX28`**, $99 charged. Apple's activation email
+arrived on 2026-09-11 — the Individual Apple Developer Program membership is
+now active, App Store Connect access is unlocked. Next actionable steps are
+2-4 below (App Store Connect app records, API key, Codemagic integration).
+
+Codemagic account creation + GitHub repo connection (step 5 below) is
+**already done** in parallel: Individual plan, repo connected in YAML mode,
+`codemagic.yaml` auto-detected with both `ios-staging`/`ios-production`
+workflows visible.
+
 ### 2. Create the two app records in App Store Connect
 
 App Store Connect > Apps > + > New App, once for each bundle ID already fixed
@@ -66,9 +102,31 @@ Codemagic > Add application > select this GitHub repo. Codemagic auto-detects
 From the Codemagic dashboard, pick `ios-staging`, click "Start new build."
 Watch the log. Expected failure modes on a first attempt, and what they mean:
 
+- **`Set up keychain and certificates for code signing` fails with "Did not
+  find any certificates from specified locations" (hit on the actual first
+  build, 2026-09-11)** → the original `codemagic.yaml` ran `keychain
+  add-certificates` *before* `app-store-connect fetch-signing-files`, but
+  `add-certificates` only picks up `.p12` files that `fetch-signing-files
+  --create` itself downloads/creates on disk — so with the steps in that
+  order, nothing exists yet to add. Fixed by splitting the old combined
+  `keychain_setup` anchor into `keychain_initialize` (runs first) and
+  `keychain_add_certificates` (runs *after* `fetch_signing_files`) in both
+  workflows. If you ever reorder these scripts again, the correct sequence
+  is: `keychain initialize` → `app-store-connect fetch-signing-files` →
+  `keychain add-certificates` → `xcode-project use-profiles`.
 - `fetch-signing-files` fails / no signing files found → the App Store
   Connect API key's role is too low, or the app record for that bundle ID
   (step 2) does not exist yet.
+- Provisioning profile / entitlements mismatch mentioning
+  `com.apple.developer.associated-domains` → `ios/Runner/Runner.entitlements`
+  declares `applinks:adfoot.org`, but `fetch-signing-files ... --create`
+  only auto-creates a *basic* App ID with no capabilities. Fix: Apple
+  Developer > Certificates, Identifiers & Profiles > Identifiers > pick
+  `org.adfoot.app` (and `org.adfoot.app.staging`) > enable the **Associated
+  Domains** capability > Save, then re-run the build so a fresh profile
+  picks it up. (Push Notifications capability is not yet declared in the
+  entitlements file, so it does not block this build — only relevant if/when
+  APNs is wired up for chat push notifications.)
 - CocoaPods install fails → almost always a Flutter/CocoaPods version
   mismatch; check the Codemagic build log for the actual pod error before
   changing `codemagic.yaml`'s pinned `flutter:`/`cocoapods:` versions.
@@ -98,6 +156,52 @@ local-only today — do not commit the real plist contents to get there.
 - Apple Developer Program: $99/year, regardless of CI choice.
 - Codemagic: free tier is 500 build minutes/month, generally enough for
   occasional TestFlight builds. Paid tiers exist if that stops being true.
+
+## Testing without owning an iPhone
+
+Codemagic itself needs no Apple hardware (it builds on Mac cloud runners),
+but *installing and using* a TestFlight build normally happens on a real
+iOS device or the Simulator. Options, cheapest/fastest first:
+
+1. **Borrow a device** for the critical-path smoke test before each public
+   release (signup, camera/video upload, push notification receipt, deep
+   links) — these are the areas most likely to behave differently from
+   Android; most other UI/logic bugs will already show up on Android since
+   it's the same Flutter codebase. A single borrowed session before a
+   public (not staging) release is enough; it does not need to be your own
+   device.
+2. **Ask a friend/beta tester to join TestFlight** — invite by email from
+   App Store Connect once a build is up; they test on their own device and
+   report back. This is the normal way small teams do iOS QA without every
+   developer owning a device.
+3. **Cloud real-device farms** (BrowserStack App Live, AWS Device Farm,
+   Sauce Labs) — install the `.ipa` Codemagic produces on a real iOS device
+   rented by the minute, remotely, from a browser. Paid, but no purchase
+   commitment; useful for a one-off pre-submission check.
+4. **Xcode Simulator** — Codemagic's Mac runner has it, but you can't drive
+   it remotely through the CI log; it's mainly useful for *screenshots* (see
+   below), not interactive testing, since you have no way to click into it
+   from Windows.
+
+**None of this blocks shipping.** TestFlight review and App Store review
+both happen without you needing a device — Apple's automated + human review
+runs the build itself. A device only matters for *your own* QA confidence.
+
+## App Store screenshots without a device
+
+App Store Connect requires screenshots per size class (6.9" and 6.5" iPhone
+at minimum, iPad if the app supports it — check "supports iPad" in Xcode
+project settings). None of these require a physical device:
+
+- Simplest: add a `screenshot` step to the `ios-staging` workflow that runs
+  the app in the Mac runner's iOS Simulator and captures screenshots via
+  `flutter drive` + `flutter_driver` or Fastlane `snapshot` — fully
+  automatable in CI, zero device needed. Not wired up yet in
+  `codemagic.yaml`; add this once the first signed build succeeds, so it
+  can be debugged against a known-working pipeline.
+- Manual fallback: run the app in Android Studio's iOS Simulator support or
+  any Mac you have brief access to (a friend's, a library, a cloud Mac
+  rental) just long enough to screenshot each required size.
 
 ## Promoting a build past TestFlight
 
