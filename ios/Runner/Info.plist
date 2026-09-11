@@ -61,6 +61,8 @@
 	<string>Cette application a besoin d'accéder à l'appareil photo pour vous permettre de prendre des photos ou des vidéos à ajouter à votre profil ou vos publications.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Cette application peut utiliser votre position pour vous proposer des offres et événements plus proches de vous.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Cette application peut utiliser votre position pour vous proposer des offres et événements plus proches de vous.</string>
 
 </dict>
 </plist>
