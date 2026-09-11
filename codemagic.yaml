@@ -144,3 +144,68 @@ workflows:
         notify:
           success: true
           failure: true
+
+  # ---------------------------------------------------------------------
+  # iOS - Simulator Preview (manual, no signing, no publishing)
+  #
+  # Not for shipping anything -- for looking at the app. Builds an unsigned
+  # simulator binary (no Apple certificate/provisioning profile needed at
+  # all), boots an iOS Simulator on the Mac runner, installs and launches
+  # the app on it, then idles so you can connect to the runner's desktop
+  # over VNC and use the Simulator interactively, live, from Windows,
+  # without owning a Mac or an iPhone.
+  #
+  # How to use it:
+  #   1. Install a VNC client on Windows (e.g. RealVNC Viewer:
+  #      https://www.realvnc.com/en/connect/download/viewer/windows/).
+  #   2. Codemagic > this app > pick this workflow > "Start new build" >
+  #      tick "Enable SSH/VNC access" in the start-build dialog. Without
+  #      this box checked, none of the rest works.
+  #   3. Once the build is running, click "Explore build machine via SSH or
+  #      VNC/RDP client" above the build steps for the host:port and
+  #      credentials, and enter them in the VNC client.
+  #   4. Wait for the "Boot Simulator and launch the app" step below to
+  #      finish (a few minutes) -- the Simulator window then appears on the
+  #      remote desktop with Adfoot (staging) already running. Interact
+  #      with it like a real phone: tap, type, scroll.
+  #   5. The final step just sleeps to keep the VM (and your VNC session)
+  #      alive for the rest of max_build_duration. Cancel the build from
+  #      the Codemagic dashboard whenever you're done early.
+  # ---------------------------------------------------------------------
+  ios-simulator-preview:
+    name: iOS - Simulator Preview
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: 3.44.2
+      xcode: latest
+      cocoapods: default
+      vars:
+        XCODE_SCHEME: "staging"
+    scripts:
+      - *flutter_setup
+      - *pod_install
+      - name: Flutter build for iOS Simulator (staging flavor, unsigned)
+        script: |
+          set -e
+          flutter build ios --debug --simulator \
+            --flavor staging \
+            -t lib/main.dart
+      - name: Boot Simulator and launch the app
+        script: |
+          set -e
+          DEVICE_LINE=$(xcrun simctl list devices available | grep -m1 "iPhone")
+          echo "Simulateur choisi : $DEVICE_LINE"
+          DEVICE_UDID=$(echo "$DEVICE_LINE" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
+          xcrun simctl boot "$DEVICE_UDID" || true
+          open -a Simulator --args -CurrentDeviceUDID "$DEVICE_UDID"
+          xcrun simctl bootstatus "$DEVICE_UDID" -b
+          APP_PATH=$(find build/ios/iphonesimulator -maxdepth 1 -name "*.app" | head -1)
+          echo "App trouvee : $APP_PATH"
+          xcrun simctl install "$DEVICE_UDID" "$APP_PATH"
+          xcrun simctl launch "$DEVICE_UDID" org.adfoot.app.staging
+      - name: Keep the VM alive for interactive VNC use
+        script: |
+          set -e
+          echo "Simulateur pret. Connecte-toi en VNC maintenant si ce n'est pas deja fait."
+          sleep 2700
