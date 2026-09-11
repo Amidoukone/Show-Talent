@@ -56,5 +56,11 @@
 	<key>NSFileProviderDomainUsageDescription</key>
 	<string>Cette application a besoin d'accéder à vos fichiers pour gérer le téléchargement et l'ajout de documents PDF.</string>
 
+	<!-- AUTORISATIONS CAMERA ET LOCALISATION -->
+	<key>NSCameraUsageDescription</key>
+	<string>Cette application a besoin d'accéder à l'appareil photo pour vous permettre de prendre des photos ou des vidéos à ajouter à votre profil ou vos publications.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Cette application peut utiliser votre position pour vous proposer des offres et événements plus proches de vous.</string>
+
 </dict>
 </plist>
