@@ -203,7 +203,20 @@ workflows:
           APP_PATH=$(find build/ios/iphonesimulator -maxdepth 1 -name "*.app" | head -1)
           echo "App trouvee : $APP_PATH"
           xcrun simctl install "$DEVICE_UDID" "$APP_PATH"
-          xcrun simctl launch "$DEVICE_UDID" org.adfoot.app.staging
+
+          set +e
+          xcrun simctl launch --console-pty "$DEVICE_UDID" org.adfoot.app.staging \
+            > /tmp/adfoot_launch.log 2>&1 &
+          LAUNCH_PID=$!
+          sleep 20
+          kill $LAUNCH_PID 2>/dev/null
+          set -e
+
+          echo "===== Sortie console de l'app (20s apres le lancement) ====="
+          cat /tmp/adfoot_launch.log || echo "(rien capture)"
+          echo "===== Rapports de crash recents pour Runner ====="
+          find "$HOME/Library/Logs/DiagnosticReports" -iname "*Runner*" -mmin -10 2>/dev/null \
+            -exec sh -c 'echo "--- $1 ---"; cat "$1"' _ {} \; || echo "(aucun rapport de crash trouve)"
       - name: Keep the VM alive for interactive VNC use
         script: |
           set -e
