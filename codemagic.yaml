@@ -61,6 +61,15 @@ workflows:
         # values here directly (most setups don't: the App Store Connect
         # integration below supplies them). See the setup runbook.
         - appstore_credentials
+        # FIREBASE_IOS_API_KEY, FIREBASE_IOS_APP_ID, FIREBASE_PROJECT_ID,
+        # FIREBASE_MESSAGING_SENDER_ID, FIREBASE_STORAGE_BUCKET, APP_ENV --
+        # values taken from ios/Firebase/staging/GoogleService-Info.plist
+        # (gitignored, not read natively by the app -- the real Firebase
+        # config only reaches the app through --dart-define below). Without
+        # this group the app runs on firebase_options.dart's placeholder
+        # values and Firebase crashes it on launch (real incident, see
+        # runbook).
+        - firebase_ios_staging
     integrations:
       # Name of the App Store Connect integration you create in Codemagic
       # under Team settings > Integrations > Apple Developer Portal.
@@ -79,6 +88,13 @@ workflows:
           flutter build ipa --release \
             --flavor staging \
             -t lib/main.dart \
+            --dart-define=APP_ENV="$APP_ENV" \
+            --dart-define=FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID" \
+            --dart-define=FIREBASE_MESSAGING_SENDER_ID="$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define=FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
+            --dart-define=FIREBASE_IOS_API_KEY="$FIREBASE_IOS_API_KEY" \
+            --dart-define=FIREBASE_IOS_APP_ID="$FIREBASE_IOS_APP_ID" \
+            --dart-define=FIREBASE_IOS_BUNDLE_ID="$FIREBASE_IOS_BUNDLE_ID" \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts: *artifacts
     publishing:
@@ -116,6 +132,9 @@ workflows:
         XCODE_SCHEME: "production"
       groups:
         - appstore_credentials
+        # Same rationale as ios-staging's firebase_ios_staging group, values
+        # from ios/Firebase/production/GoogleService-Info.plist instead.
+        - firebase_ios_production
     integrations:
       app_store_connect: adfoot_app_store_connect
     scripts:
@@ -131,6 +150,13 @@ workflows:
           flutter build ipa --release \
             --flavor production \
             -t lib/main.dart \
+            --dart-define=APP_ENV="$APP_ENV" \
+            --dart-define=FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID" \
+            --dart-define=FIREBASE_MESSAGING_SENDER_ID="$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define=FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
+            --dart-define=FIREBASE_IOS_API_KEY="$FIREBASE_IOS_API_KEY" \
+            --dart-define=FIREBASE_IOS_APP_ID="$FIREBASE_IOS_APP_ID" \
+            --dart-define=FIREBASE_IOS_BUNDLE_ID="$FIREBASE_IOS_BUNDLE_ID" \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts: *artifacts
     publishing:
@@ -182,6 +208,13 @@ workflows:
       cocoapods: default
       vars:
         XCODE_SCHEME: "staging"
+      groups:
+        # Same real-config gap as ios-staging (see its firebase_ios_staging
+        # comment): without this, Firebase crashes the app on launch --
+        # confirmed by an actual crash (EXC_CRASH/SIGABRT in
+        # +[FIRApp configureWithName:options:]) on 2026-09-12, the first
+        # time this app was ever really executed on iOS.
+        - firebase_ios_staging
     scripts:
       - *flutter_setup
       - *pod_install
@@ -190,7 +223,14 @@ workflows:
           set -e
           flutter build ios --debug --simulator \
             --flavor staging \
-            -t lib/main.dart
+            -t lib/main.dart \
+            --dart-define=APP_ENV="$APP_ENV" \
+            --dart-define=FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID" \
+            --dart-define=FIREBASE_MESSAGING_SENDER_ID="$FIREBASE_MESSAGING_SENDER_ID" \
+            --dart-define=FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
+            --dart-define=FIREBASE_IOS_API_KEY="$FIREBASE_IOS_API_KEY" \
+            --dart-define=FIREBASE_IOS_APP_ID="$FIREBASE_IOS_APP_ID" \
+            --dart-define=FIREBASE_IOS_BUNDLE_ID="$FIREBASE_IOS_BUNDLE_ID"
       - name: Boot Simulator and launch the app
         script: |
           set -e
