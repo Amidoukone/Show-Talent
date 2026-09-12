@@ -78,6 +78,74 @@ by this project's own guardrail tests once the build number moved:
 `pubspec.yaml`, so nothing needed re-verifying against the Android bundle
 content).
 
+**STATUS UPDATE (2026-09-12): a sixth, more serious bug found and fixed —
+the app crashed on every real launch, on all three iOS workflows, since
+build 35.** Uploads to App Store Connect had succeeded (Apple's automated
+checks don't launch the app), but nobody had ever actually *run* the app on
+iOS until this date, via a new `ios-simulator-preview` workflow (see below).
+First real launch crashed immediately: `EXC_CRASH`/`SIGABRT` inside
+`+[FIRApp configureWithName:options:]`. Root cause:
+`lib/firebase_options.dart` ships only placeholder Firebase values; the real
+ones are meant to arrive via `--dart-define` (`FIREBASE_IOS_API_KEY`,
+`FIREBASE_IOS_APP_ID`, `FIREBASE_IOS_BUNDLE_ID`, `FIREBASE_PROJECT_ID`,
+`FIREBASE_MESSAGING_SENDER_ID`, `FIREBASE_STORAGE_BUCKET`, `APP_ENV`, per
+`lib/config/app_environment.dart`), and none of the iOS workflows ever
+passed them. Android never surfaced this because it self-initializes
+Firebase natively from `google-services.json`, independent of Dart-side
+`FirebaseOptions` — iOS has no such fallback and crashes hard instead.
+Fixed by adding two Codemagic environment variable groups,
+`firebase_ios_staging` and `firebase_ios_production` (values sourced from
+the gitignored `ios/Firebase/{staging,production}/GoogleService-Info.plist`
+files, which are never read natively by the app but are the correct source
+of truth for these exact values), and passing them as `--dart-define` in
+all three workflows. **If a fourth iOS workflow is ever added, it needs
+this same block of `--dart-define` flags — Firebase does not "just work" on
+iOS the way it silently does on Android.** Diagnosis note: pulling the
+crash's `.ips` report over a plain non-interactive SSH command (stripping
+the Codemagic-provided script's `-t ... < /dev/tty` for a straight `ssh -i
+key -p PORT user@host "cat ~/Library/Logs/DiagnosticReports/Runner-*.ips"`)
+was far more reliable than trying to copy long text out of a VNC session's
+clipboard, which does not reliably sync with this setup.
+
+## Testing on the iOS Simulator without a Mac or an iPhone (`ios-simulator-preview`)
+
+A third workflow, `ios-simulator-preview`, exists purely for interactive
+testing — no signing, no publishing, nothing shipped anywhere. It builds an
+**unsigned** debug binary for the Simulator (no Apple certificate needed at
+all), boots a Simulator on the Codemagic Mac runner, installs and launches
+the app, then idles so you can connect to the runner's desktop.
+
+How to use it:
+1. Install a VNC client with no account requirement — RealVNC Viewer works
+   but now pushes a "VNC Connect" account signup that isn't actually needed
+   for a direct connection; **TigerVNC Viewer**
+   (https://github.com/TigerVNC/tigervnc/releases) has no such friction.
+2. Codemagic > this app > pick **iOS - Simulator Preview** > "Start new
+   build" > tick **Enable SSH/VNC access** in the dialog (easy to miss the
+   checkbox, or to accidentally leave the wrong workflow selected from a
+   previous run — verify both fields).
+3. Once running, click **"Explore build machine via SSH or VNC client"**
+   above the build steps for a host:port, a username (`builder`), and a
+   password. Fresh per build — old sessions' credentials do not carry over.
+4. Connect with the VNC client using all three (host:port, username,
+   password).
+5. Wait for the **"Boot Simulator and launch the app"** step to finish (a
+   few minutes) — the Simulator window appears on the remote desktop with
+   the app already running. If you quit the app or the Simulator yourself
+   during the session, relaunch it without a new build: on the remote
+   desktop, Cmd+Space > `Terminal` > `xcrun simctl launch booted
+   org.adfoot.app.staging` — far more reliable than hunting for the app
+   icon on the simulated home screen.
+6. The final step just sleeps (45 minutes) to keep the VM and VNC session
+   alive. Cancel the build from the dashboard whenever done early.
+
+If the app crashes during one of these sessions, don't fight the VNC
+clipboard for the crash log — use the SSH option from the same "Explore
+build machine" panel instead (see the diagnosis note above), or rely on the
+step's own automatic capture: it runs the app for 20 seconds right after
+install and prints both its console output and any fresh crash report from
+`~/Library/Logs/DiagnosticReports` directly into the Codemagic build log.
+
 ## What you need to do yourself (no Mac required — all of this is browser-based)
 
 ### 1. Apple Developer Program
