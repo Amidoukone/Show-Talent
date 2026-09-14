@@ -54,6 +54,25 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  rules-test:
+    name: Firestore & Storage rules tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - uses: actions/setup-java@v4
+        with:
+          # firebase-tools' bundled emulators require Java 21+; the repo's
+          # own local dev machines still run Java 17 as of this writing, so
+          # this job is the only place these tests actually run today.
+          distribution: "temurin"
+          java-version: "21"
+      - run: npm ci
+      - run: npm run rules:test:all
+
   secrets-scan:
     name: Tracked secrets scan
     runs-on: windows-latest
