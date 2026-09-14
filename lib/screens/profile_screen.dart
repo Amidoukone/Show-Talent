@@ -1837,7 +1837,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: AdColors.onSurfaceMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1846,7 +1850,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: hasValue
                         ? AdColors.onSurface
                         : AdColors.onSurfaceMuted,
-                    fontWeight: hasValue ? FontWeight.w600 : FontWeight.w500,
+                    fontSize: 15,
+                    fontWeight: hasValue ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
               ],
