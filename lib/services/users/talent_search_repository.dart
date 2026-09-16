@@ -104,10 +104,7 @@ class TalentSearchRepository {
     }
 
     if (search.bornFrom != null) {
-      query = query.where(
-        'birthYear',
-        isGreaterThanOrEqualTo: search.bornFrom,
-      );
+      query = query.where('birthYear', isGreaterThanOrEqualTo: search.bornFrom);
     }
     if (search.bornUntil != null) {
       query = query.where('birthYear', isLessThanOrEqualTo: search.bornUntil);
@@ -122,10 +119,13 @@ class TalentSearchRepository {
   /// `failed-precondition`, et le laisser remonter afficherait un écran vide
   /// indistinguable d'une recherche sans résultat. L'appelant reçoit l'erreur
   /// telle quelle et doit la dire.
-  Future<List<AppUser>> search(TalentSearchQuery query) async {
+  Future<List<AppUser>> search(
+    TalentSearchQuery query, {
+    Set<String> excludedUids = const {},
+  }) async {
     final snapshot = await buildQuery(query).get();
 
-    final results = snapshot.docs
+    var results = snapshot.docs
         .map((doc) {
           final data = doc.data();
           return AppUser.fromMap(<String, dynamic>{
@@ -136,14 +136,24 @@ class TalentSearchRepository {
         .where((user) => user.uid.trim().isNotEmpty)
         .toList();
 
-    if (!query.needsClientSideNationalityFilter) {
+    if (query.needsClientSideNationalityFilter) {
+      // Le second critere tableau, applique sur une page deja bornee : trente
+      // documents au maximum, pas la collection.
+      results = results
+          .where(
+            (user) => user.football.nationalities.contains(query.nationality),
+          )
+          .toList();
+    }
+
+    if (excludedUids.isEmpty) {
       return results;
     }
 
-    // Le second critere tableau, applique sur une page deja bornee : trente
-    // documents au maximum, pas la collection.
-    return results
-        .where((user) => user.football.nationalities.contains(query.nationality))
-        .toList();
+    // Meme logique que le filtre nationalite ci-dessus : une page deja
+    // bornee et deja recuperee, pas une seconde requete. Sert a retirer les
+    // profils bloques mutuellement (voir BlockController) sans toucher a la
+    // requete Firestore elle-meme.
+    return results.where((user) => !excludedUids.contains(user.uid)).toList();
   }
 }

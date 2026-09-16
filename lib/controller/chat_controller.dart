@@ -307,6 +307,13 @@ class ChatController extends GetxController {
       throw ChatFlowException('chatCannotChatWithSelfMessage'.tr);
     }
 
+    if (await _chatRepository.isBlockedPair(
+      uidA: currentUserId,
+      uidB: otherUserId,
+    )) {
+      throw ChatFlowException('chatBlockedMessage'.tr);
+    }
+
     try {
       return await _chatRepository.createOrGetConversation(
         currentUserId: currentUserId,
@@ -373,6 +380,13 @@ class ChatController extends GetxController {
     required String contactReason,
     required String introMessage,
   }) async {
+    if (await _chatRepository.isBlockedPair(
+      uidA: currentUser.uid,
+      uidB: otherUser.uid,
+    )) {
+      throw ChatFlowException('chatBlockedMessage'.tr);
+    }
+
     try {
       return await _chatRepository.startGuidedConversation(
         currentUser: currentUser,
@@ -459,6 +473,14 @@ class ChatController extends GetxController {
 
     try {
       if (!skipPermissionCheck) {
+        final blocked = await _chatRepository.isBlockedPair(
+          uidA: normalizedSenderId,
+          uidB: normalizedRecipientId,
+        );
+        if (blocked) {
+          throw ChatFlowException('chatBlockedMessage'.tr);
+        }
+
         final canSend = await canSendMessage(
           senderId: normalizedSenderId,
           recipientId: normalizedRecipientId,

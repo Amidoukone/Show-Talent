@@ -381,6 +381,8 @@ class VideoUiTranslations extends Translations {
         'Le message dépasse la limite autorisée (2000 caractères).',
     'chatSendingDisabledMessage':
         'L’envoi de messages est désactivé pour cette conversation.',
+    'chatBlockedMessage':
+        'Vous ne pouvez plus échanger de messages avec cet utilisateur.',
     'chatNewMessageNotificationTitle': 'Nouveau message',
     'chatSendFailedConnectionMessage':
         'Envoi impossible pour le moment. Vérifiez votre connexion.',
@@ -1017,6 +1019,7 @@ class VideoUiTranslations extends Translations {
         'The message exceeds the allowed limit (2000 characters).',
     'chatSendingDisabledMessage':
         'Sending messages is disabled for this conversation.',
+    'chatBlockedMessage': 'You can no longer exchange messages with this user.',
     'chatNewMessageNotificationTitle': 'New message',
     'chatSendFailedConnectionMessage':
         'Unable to send right now. Check your connection.',

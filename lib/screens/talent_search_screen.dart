@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:adfoot/controller/block_controller.dart';
 import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
@@ -66,7 +67,13 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
     });
 
     try {
-      final results = await _repository.search(_query);
+      final excludedUids = Get.isRegistered<BlockController>()
+          ? Get.find<BlockController>().blockedPairUids.toSet()
+          : const <String>{};
+      final results = await _repository.search(
+        _query,
+        excludedUids: excludedUids,
+      );
       if (!mounted) return;
       setState(() {
         _results = results;
@@ -230,10 +237,12 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
             message: _error!,
           )
         else if (_loading)
-          const Center(child: Padding(
-            padding: EdgeInsets.all(24),
-            child: CircularProgressIndicator(),
-          ))
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
+            ),
+          )
         else if (_results != null)
           ..._buildResults(_results!, l10n),
       ],
@@ -312,10 +321,7 @@ class _YearFieldState extends State<_YearField> {
     return TextField(
       controller: _controller,
       keyboardType: TextInputType.number,
-      decoration: InputDecoration(
-        labelText: widget.label,
-        hintText: '2006',
-      ),
+      decoration: InputDecoration(labelText: widget.label, hintText: '2006'),
       onChanged: (raw) {
         final parsed = int.tryParse(raw.trim());
         // Une annee hors de ces bornes ne decrit aucun joueur : la transmettre

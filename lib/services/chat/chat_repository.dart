@@ -1,12 +1,16 @@
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/message_converstion.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/users/block_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 
 class ChatRepository {
-  ChatRepository({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  ChatRepository({
+    FirebaseFirestore? firestore,
+    BlockRepository? blockRepository,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _blockRepository = blockRepository ?? BlockRepository();
 
   static const int _messageWriteBatchLimit = 450;
 
@@ -41,6 +45,10 @@ class ChatRepository {
   static const int conversationWatchLimit = 200;
 
   final FirebaseFirestore _firestore;
+  final BlockRepository _blockRepository;
+
+  Future<bool> isBlockedPair({required String uidA, required String uidB}) =>
+      _blockRepository.isBlockedEitherWay(uidA, uidB);
 
   CollectionReference<Map<String, dynamic>> get _conversationsCollection =>
       _firestore.collection('conversations');

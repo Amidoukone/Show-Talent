@@ -6,6 +6,7 @@ import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/services/chat/chat_repository.dart';
+import 'package:adfoot/services/users/block_repository.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
@@ -141,7 +142,15 @@ class ChatTestHarness {
 
     final sentNotifications = <Map<String, String>>[];
     final authSessionService = TestAuthSessionService(auth.currentUser);
-    final chatRepository = ChatRepository(firestore: firestore);
+    // Without this, ChatRepository would fall back to its default
+    // BlockRepository(), which reaches the real FirebaseFirestore.instance
+    // -- isBlockedPair() (called from createOrGetConversation/
+    // startGuidedConversation/sendMessage) would then hit an unmocked
+    // plugin channel instead of this harness's fake instance.
+    final chatRepository = ChatRepository(
+      firestore: firestore,
+      blockRepository: BlockRepository(firestore: firestore),
+    );
     final chatController = ChatController(
       authSessionService: authSessionService,
       chatRepository: chatRepository,
@@ -219,7 +228,8 @@ class ChatTestHarness {
     if (!projectRules.contains('activeConversationId') ||
         !projectRules.contains('contact_intakes') ||
         !projectRules.contains('contact_intake_limits') ||
-        !projectRules.contains('match /conversations/{conversationId}')) {
+        !projectRules.contains('match /conversations/{conversationId}') ||
+        !projectRules.contains('match /blocks/{blockId}')) {
       throw StateError(
         'Les règles Firestore du projet ont changé; mettez à jour le harness chat.',
       );
@@ -247,6 +257,10 @@ service cloud.firestore {
 
     match /contact_intake_limits/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /blocks/{blockId} {
+      allow read, write: if request.auth != null;
     }
 
     match /{document=**} {

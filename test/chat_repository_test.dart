@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:adfoot/l10n/video_ui_translations.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/services/chat/chat_repository.dart';
+import 'package:adfoot/services/users/block_repository.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -131,5 +133,64 @@ void main() {
     expect(repository, contains("'email': user.email.trim()"));
     expect(repository, contains("'organisation': ?organization"));
     expect(repository, contains('_resolveUserOrganization(AppUser user)'));
+  });
+
+  group('isBlockedPair', () {
+    test('true once either side has blocked the other', () async {
+      final firestore = FakeFirebaseFirestore();
+      final chatRepository = ChatRepository(
+        firestore: firestore,
+        blockRepository: BlockRepository(firestore: firestore),
+      );
+
+      expect(
+        await chatRepository.isBlockedPair(uidA: 'player', uidB: 'recruiter'),
+        isFalse,
+      );
+
+      await BlockRepository(
+        firestore: firestore,
+      ).blockUser(blockerUid: 'recruiter', blockedUid: 'player');
+
+      // Symmetric: it doesn't matter which side is asked first.
+      expect(
+        await chatRepository.isBlockedPair(uidA: 'player', uidB: 'recruiter'),
+        isTrue,
+      );
+      expect(
+        await chatRepository.isBlockedPair(uidA: 'recruiter', uidB: 'player'),
+        isTrue,
+      );
+    });
+
+    test(
+      'canSendMessage stays about allowMessages alone, not blocking',
+      () async {
+        // Deliberate separation of concerns: ChatController checks
+        // isBlockedPair itself (to throw a distinct "blocked" message)
+        // before ever calling canSendMessage, which stays a pure
+        // allowMessages check.
+        final firestore = FakeFirebaseFirestore();
+        await firestore.collection('users').doc('player').set({
+          'allowMessages': true,
+        });
+        await firestore.collection('users').doc('recruiter').set({
+          'allowMessages': true,
+        });
+        await BlockRepository(
+          firestore: firestore,
+        ).blockUser(blockerUid: 'recruiter', blockedUid: 'player');
+
+        final chatRepository = ChatRepository(firestore: firestore);
+
+        expect(
+          await chatRepository.canSendMessage(
+            senderId: 'player',
+            recipientId: 'recruiter',
+          ),
+          isTrue,
+        );
+      },
+    );
   });
 }

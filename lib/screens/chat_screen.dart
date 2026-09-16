@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/auth_controller.dart';
+import 'package:adfoot/controller/block_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/message_converstion.dart';
@@ -75,6 +76,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final ChatController chatController = Get.find<ChatController>();
   final UserController _userController = Get.find<UserController>();
+  final BlockController _blockController = Get.find<BlockController>();
   final AuthSessionService _authSessionService = AuthSessionService();
   final ContactIntakeFeedbackService _feedbackService =
       ContactIntakeFeedbackService();
@@ -169,6 +171,87 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (mounted) Get.back(result: result);
   }
 
+  Future<void> _handleToggleBlock(AppUser user) async {
+    final l10n = AppLocalizations.of(context)!;
+    final isBlockedByMe = _blockController.isBlockedByMe(user.uid);
+
+    final confirmed = await AdDialogs.confirm(
+      context: context,
+      title: isBlockedByMe
+          ? l10n.profileUnblockUserConfirmTitle
+          : l10n.profileBlockUserConfirmTitle,
+      message: isBlockedByMe
+          ? l10n.profileUnblockUserConfirmMessage
+          : l10n.profileBlockUserConfirmMessage,
+      confirmLabel: isBlockedByMe
+          ? l10n.profileUnblockUserAction
+          : l10n.profileBlockUserAction,
+      cancelLabel: l10n.commonCancel,
+      danger: !isBlockedByMe,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    final success = isBlockedByMe
+        ? await _blockController.unblockUser(user.uid)
+        : await _blockController.blockUser(user.uid);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (success) {
+      AdFeedback.success(
+        l10n.commonActionConfirmedTitle,
+        isBlockedByMe
+            ? l10n.profileUnblockUserSuccessMessage
+            : l10n.profileBlockUserSuccessMessage,
+      );
+    } else {
+      AdFeedback.error(
+        l10n.profileActionErrorTitle,
+        l10n.profileActionImpossibleNowMessage,
+      );
+    }
+    setState(() {});
+  }
+
+  Widget _buildBlockMenu(AppUser user) {
+    final isBlockedByMe = _blockController.isBlockedByMe(user.uid);
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert_rounded, color: AdColors.onSurfaceMuted),
+      color: AdColors.surfaceCard,
+      onSelected: (_) => unawaited(_handleToggleBlock(user)),
+      itemBuilder: (context) {
+        final l10n = AppLocalizations.of(context)!;
+        return [
+          PopupMenuItem(
+            value: 'toggle_block',
+            child: Row(
+              children: [
+                Icon(
+                  isBlockedByMe ? Icons.lock_open_outlined : Icons.block,
+                  size: 18,
+                  color: isBlockedByMe ? null : AdColors.error,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  isBlockedByMe
+                      ? l10n.profileUnblockUserAction
+                      : l10n.profileBlockUserAction,
+                  style: isBlockedByMe
+                      ? null
+                      : const TextStyle(color: AdColors.error),
+                ),
+              ],
+            ),
+          ),
+        ];
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -195,9 +278,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final otherUser = _otherUser;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final canMessage = currentUser.allowMessages && otherUser.allowMessages;
-    final disabledHint =
-        (!currentUser.allowMessages && !otherUser.allowMessages)
+    final isBlockedPair = _blockController.isBlocked(otherUser.uid);
+    final canMessage =
+        currentUser.allowMessages && otherUser.allowMessages && !isBlockedPair;
+    final disabledHint = isBlockedPair
+        ? l10n.chatComposerBlockedHint
+        : (!currentUser.allowMessages && !otherUser.allowMessages)
         ? l10n.profileMessagingDisabledBothMessage
         : currentUser.allowMessages
         ? l10n.profileMessagingDisabledRecipientMessage
@@ -273,6 +359,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               ),
             ],
           ),
+          actions: [_buildBlockMenu(otherUser)],
         ),
         body: DecoratedBox(
           // ✅ fond subtil (moderne) sans assets

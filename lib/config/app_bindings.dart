@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:get/get.dart';
 
 import '../controller/auth_controller.dart';
+import '../controller/block_controller.dart';
 import '../controller/chat_controller.dart';
 import '../controller/event_controller.dart';
 import '../controller/follow_controller.dart';
@@ -20,8 +21,9 @@ class AppBindings {
 
   static void registerPermanentDependencies() {
     final videoManager = _registerPermanent<VideoManager>(() => VideoManager());
-    videoManager.onMetrics =
-        VideoMetricsObserver(videoManager: videoManager).handle;
+    videoManager.onMetrics = VideoMetricsObserver(
+      videoManager: videoManager,
+    ).handle;
 
     // Registered here rather than by a screen, because what kept playing in
     // the background was never a screen's controller: it was an
@@ -34,6 +36,7 @@ class AppBindings {
     _registerPermanent<AuthController>(() => AuthController());
     _registerPermanent<UserController>(() => UserController());
     _registerPermanent<FollowController>(() => FollowController());
+    _registerPermanent<BlockController>(() => BlockController());
     _registerPermanent<ChatController>(() => ChatController());
     _registerPermanent<EventController>(() => EventController());
     _registerPermanent<OffreController>(() => OffreController());

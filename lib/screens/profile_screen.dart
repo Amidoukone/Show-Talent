@@ -13,6 +13,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:adfoot/controller/block_controller.dart';
 import 'package:adfoot/controller/follow_controller.dart';
 import 'package:adfoot/controller/profile_controller.dart';
 import 'package:adfoot/controller/auth_controller.dart';
@@ -27,6 +28,7 @@ import 'package:adfoot/screens/follow_list_screen.dart';
 import 'package:adfoot/widgets/ad_agency_badge.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_button.dart';
+import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_profile_cards.dart';
 import 'package:adfoot/videos/video_manager.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
@@ -201,6 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late final ProfileController _profileController;
   final AuthController _authController = Get.find<AuthController>();
   final FollowController _followController = Get.find<FollowController>();
+  final BlockController _blockController = Get.find<BlockController>();
   final ChatController _chatController = Get.find<ChatController>();
   final ImagePicker _imagePicker = ImagePicker();
   final VideoManager _videoManager = VideoManager();
@@ -304,7 +307,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final currentUid = _authController.currentUid;
         final isOwnProfile = currentUid != null && currentUid == user.uid;
         final canMessage = _canSendMessage(user);
-        final canViewProfile = isOwnProfile || user.profilePublic;
+        final isBlockedPair = _blockController.isBlocked(user.uid);
+        final canViewProfile =
+            isOwnProfile || (user.profilePublic && !isBlockedPair);
         final visibleVideos = _getVisibleVideos(controller.videoList);
 
         if (!canViewProfile) {
@@ -360,13 +365,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     }
                   },
                 )
-              else if (!isOwnProfile && currentUid != null)
+              else if (!isOwnProfile && currentUid != null) ...[
                 IconButton(
                   icon: const Icon(Icons.message),
                   onPressed: canMessage && !_isMessageActionLoading
                       ? () => _handleSendMessage(user)
                       : null,
                 ),
+                _buildBlockMenu(user),
+              ],
             ],
           ),
           body: SafeArea(
@@ -833,6 +840,87 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _handleToggleBlock(AppUser user) async {
+    final l10n = AppLocalizations.of(context)!;
+    final isBlockedByMe = _blockController.isBlockedByMe(user.uid);
+
+    final confirmed = await AdDialogs.confirm(
+      context: context,
+      title: isBlockedByMe
+          ? l10n.profileUnblockUserConfirmTitle
+          : l10n.profileBlockUserConfirmTitle,
+      message: isBlockedByMe
+          ? l10n.profileUnblockUserConfirmMessage
+          : l10n.profileBlockUserConfirmMessage,
+      confirmLabel: isBlockedByMe
+          ? l10n.profileUnblockUserAction
+          : l10n.profileBlockUserAction,
+      cancelLabel: l10n.commonCancel,
+      danger: !isBlockedByMe,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    final success = isBlockedByMe
+        ? await _blockController.unblockUser(user.uid)
+        : await _blockController.blockUser(user.uid);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (success) {
+      AdFeedback.success(
+        l10n.commonActionConfirmedTitle,
+        isBlockedByMe
+            ? l10n.profileUnblockUserSuccessMessage
+            : l10n.profileBlockUserSuccessMessage,
+      );
+    } else {
+      AdFeedback.error(
+        l10n.profileActionErrorTitle,
+        l10n.profileActionImpossibleNowMessage,
+      );
+    }
+    setState(() {});
+  }
+
+  Widget _buildBlockMenu(AppUser user) {
+    final isBlockedByMe = _blockController.isBlockedByMe(user.uid);
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert_rounded, color: AdColors.onSurfaceMuted),
+      color: AdColors.surfaceCard,
+      onSelected: (_) => unawaited(_handleToggleBlock(user)),
+      itemBuilder: (context) {
+        final l10n = AppLocalizations.of(context)!;
+        return [
+          PopupMenuItem(
+            value: 'toggle_block',
+            child: Row(
+              children: [
+                Icon(
+                  isBlockedByMe ? Icons.lock_open_outlined : Icons.block,
+                  size: 18,
+                  color: isBlockedByMe ? null : AdColors.error,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  isBlockedByMe
+                      ? l10n.profileUnblockUserAction
+                      : l10n.profileBlockUserAction,
+                  style: isBlockedByMe
+                      ? null
+                      : const TextStyle(color: AdColors.error),
+                ),
+              ],
+            ),
+          ),
+        ];
+      },
+    );
+  }
+
   Widget _buildPrivateProfile(
     AppUser user,
     AppLocalizations l10n, {
@@ -846,13 +934,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         subtitle: _profileRoleLabel(l10n, user),
         showBottomDivider: true,
         actions: [
-          if (!isOwnProfile && _authController.currentUid != null)
+          if (!isOwnProfile && _authController.currentUid != null) ...[
             IconButton(
               icon: const Icon(Icons.message),
               onPressed: canMessage && !_isMessageActionLoading
                   ? () => _handleSendMessage(user)
                   : null,
             ),
+            // Reachable even though the profile itself is hidden -- the
+            // blocker's own view of this profile goes private the moment
+            // they block, and this menu is the only way back to
+            // "Débloquer" if there is no shared conversation to reopen it
+            // from instead.
+            _buildBlockMenu(user),
+          ],
         ],
       ),
       body: Center(

@@ -235,6 +235,89 @@ await check('un participant ajoute un tiers a la conversation', 'deny', () =>
 await check('un tiers lit la conversation', 'deny', () =>
   getDoc(doc(outsider, 'conversations', CONV)));
 
+/* ---------------- Blocks ---------------- */
+
+await check('un joueur bloque un rival', 'allow', () =>
+  setDoc(doc(player, 'blocks', `${PLAYER}_${RIVAL}`), {
+    blockerUid: PLAYER, blockedUid: RIVAL, createdAt: serverTimestamp(),
+  }));
+
+await check('usurper le blockerUid d\'un autre', 'deny', () =>
+  setDoc(doc(player, 'blocks', `${RIVAL}_${OUTSIDER}`), {
+    blockerUid: RIVAL, blockedUid: OUTSIDER, createdAt: serverTimestamp(),
+  }));
+
+await check('se bloquer soi-meme', 'deny', () =>
+  setDoc(doc(player, 'blocks', `${PLAYER}_${PLAYER}`), {
+    blockerUid: PLAYER, blockedUid: PLAYER, createdAt: serverTimestamp(),
+  }));
+
+await check('un id de doc qui ne correspond pas aux champs', 'deny', () =>
+  setDoc(doc(player, 'blocks', 'id_incoherent'), {
+    blockerUid: PLAYER, blockedUid: OUTSIDER, createdAt: serverTimestamp(),
+  }));
+
+await check('createdAt sans horodatage serveur', 'deny', () =>
+  setDoc(doc(player, 'blocks', `${PLAYER}_${OUTSIDER}`), {
+    blockerUid: PLAYER, blockedUid: OUTSIDER,
+    createdAt: new Date('2020-01-01T00:00:00Z'),
+  }));
+
+await check('le bloqueur relit son propre blocage', 'allow', () =>
+  getDoc(doc(player, 'blocks', `${PLAYER}_${RIVAL}`)));
+
+await check('la personne bloquee lit le blocage qui la vise', 'allow', () =>
+  getDoc(doc(env.authenticatedContext(RIVAL).firestore(), 'blocks', `${PLAYER}_${RIVAL}`)));
+
+await check('un tiers lit un blocage qui ne le concerne pas', 'deny', () =>
+  getDoc(doc(outsider, 'blocks', `${PLAYER}_${RIVAL}`)));
+
+await check('la personne bloquee supprime le blocage qui la vise', 'deny', () =>
+  deleteDoc(doc(env.authenticatedContext(RIVAL).firestore(), 'blocks', `${PLAYER}_${RIVAL}`)));
+
+await check('un tiers supprime un blocage qui ne le concerne pas', 'deny', () =>
+  deleteDoc(doc(outsider, 'blocks', `${PLAYER}_${RIVAL}`)));
+
+await check('le bloqueur retire son propre blocage', 'allow', () =>
+  deleteDoc(doc(player, 'blocks', `${PLAYER}_${RIVAL}`)));
+
+// Le joueur bloque maintenant le recruteur -- ceci doit couper les NOUVEAUX
+// messages entre eux dans les deux sens, sans jamais toucher a la lecture de
+// l'historique deja echange (m_player/m_recruiter, geres plus haut).
+await check('un joueur bloque le recruteur', 'allow', () =>
+  setDoc(doc(player, 'blocks', `${PLAYER}_${RECRUITER}`), {
+    blockerUid: PLAYER, blockedUid: RECRUITER, createdAt: serverTimestamp(),
+  }));
+
+await check('le joueur tente d\'ecrire au recruteur bloque', 'deny', () =>
+  setDoc(doc(player, 'conversations', CONV, 'messages', 'm_blocked_attempt_by_player'), {
+    expediteurId: PLAYER, destinataireId: RECRUITER,
+    contenu: 'Un dernier message.', estLu: false,
+  }));
+
+await check('le recruteur tente d\'ecrire au joueur qui l\'a bloque', 'deny', () =>
+  setDoc(doc(recruiter, 'conversations', CONV, 'messages', 'm_blocked_attempt_by_recruiter'), {
+    expediteurId: RECRUITER, destinataireId: PLAYER,
+    contenu: 'Toujours la ?', estLu: false,
+  }));
+
+await check('l\'historique reste lisible malgre le blocage', 'allow', () =>
+  getDoc(doc(recruiter, 'conversations', CONV, 'messages', 'm_player')));
+
+await check('une nouvelle conversation entre deux bloques est refusee', 'deny', () =>
+  setDoc(doc(player, 'conversations', 'conv_blocked_new'), {
+    utilisateurIds: [PLAYER, RECRUITER],
+  }));
+
+await check('le joueur debloque le recruteur', 'allow', () =>
+  deleteDoc(doc(player, 'blocks', `${PLAYER}_${RECRUITER}`)));
+
+await check('l\'envoi redevient possible apres deblocage', 'allow', () =>
+  setDoc(doc(player, 'conversations', CONV, 'messages', 'm_after_unblock'), {
+    expediteurId: PLAYER, destinataireId: RECRUITER,
+    contenu: 'Toujours partant.', estLu: false,
+  }));
+
 /* ---------------- Terms acceptance ---------------- */
 
 await check('un utilisateur enregistre son acceptation des CGU', 'allow', () =>

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/auth_controller.dart';
+import 'package:adfoot/controller/block_controller.dart';
 import 'package:adfoot/controller/chat_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/l10n/generated/app_localizations.dart';
@@ -30,6 +31,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
   final UserController userController = Get.find<UserController>();
   final ChatController chatController = Get.find<ChatController>();
   final AuthController authController = Get.find<AuthController>();
+  final BlockController blockController = Get.find<BlockController>();
   final AuthSessionService _authSessionService = AuthSessionService();
 
   final TextEditingController searchController = TextEditingController();
@@ -80,7 +82,9 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
         }
 
         final users = userController.userList.where((user) {
-          return user.uid != currentUid && user.canAppearInMessagingDirectory;
+          return user.uid != currentUid &&
+              user.canAppearInMessagingDirectory &&
+              !blockController.isBlocked(user.uid);
         }).toList();
 
         final filteredUsers = users.where((user) {
@@ -178,8 +182,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                                 l10n.profileMessagingDisabledTitle,
                                 !resolvedCurrentUser.allowMessages
                                     ? l10n.profileMessagingDisabledSenderMessage
-                                    : l10n
-                                          .profileMessagingDisabledRecipientMessage,
+                                    : l10n.profileMessagingDisabledRecipientMessage,
                               );
                               return;
                             }
@@ -357,7 +360,9 @@ class _UserCard extends StatelessWidget {
                       Text(
                         user.role.isNotEmpty
                             ? user.role
-                            : AppLocalizations.of(context)!.selectUserNoRoleLabel,
+                            : AppLocalizations.of(
+                                context,
+                              )!.selectUserNoRoleLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.bodySmall?.copyWith(
