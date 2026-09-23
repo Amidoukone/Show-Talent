@@ -108,6 +108,11 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   generate: true
+  # CocoaPods already installs the iOS Firebase plugins in Codemagic. Flutter
+  # 3.44's automatic SwiftPM integration separately downloads gRPC binaries
+  # from dl.google.com, which timed out on the production TestFlight runner.
+  config:
+    enable-swift-package-manager: false
 
   assets:
     - assets/logo.png
