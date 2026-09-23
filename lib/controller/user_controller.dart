@@ -92,9 +92,10 @@ class UserController extends GetxController with WidgetsBindingObserver {
       ),
     );
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      kickstart();
-    });
+    // idTokenChanges() emits the current user when subscribed. A second
+    // kickstart on the first frame repeated Auth reload and the Firestore
+    // access check on every cold launch. SplashScreen has an 8s watchdog if
+    // the stream never emits.
   }
 
   void kickstart() {

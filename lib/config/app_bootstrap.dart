@@ -57,9 +57,19 @@ class AppBootstrap {
 
     AppBindings.registerPermanentDependencies();
 
-    // Everything below is best-effort: a failure here must never prevent
-    // runApp() from ever executing, which would otherwise strand the user
-    // on a blank/native splash screen forever with no way to recover.
+    // These services have no UI startup dependency. In particular, local
+    // notification setup and getInitialMessage() cross platform channels and
+    // can take seconds on a cold iOS launch. Start them now, but let the first
+    // Flutter frame render while they finish.
+    unawaited(_initializeBackgroundServices());
+
+    // The initial app link is the exception: it can claim a password reset
+    // before UserController routes the session from the splash screen.
+    await _initializeEmailLinkHandler();
+  }
+
+  static Future<void> _initializeBackgroundServices() async {
+    // Everything here is best-effort: a failure must never prevent runApp().
     await _runNonCritical(
       'FirebaseAuth.setLanguageCode',
       () async => FirebaseAuth.instance.setLanguageCode('fr'),
@@ -142,8 +152,6 @@ class AppBootstrap {
         ),
       );
     }
-
-    await _initializeEmailLinkHandler();
   }
 
   // A cold app start with a weak/just-connecting network (the normal case

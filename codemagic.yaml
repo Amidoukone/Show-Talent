@@ -139,6 +139,17 @@ workflows:
       app_store_connect: adfoot_app_store_connect
     scripts:
       - *flutter_setup
+      - name: Verify production iOS target
+        script: |
+          set -eu
+          test "$APP_ENV" = "production" || { echo "APP_ENV must be production"; exit 1; }
+          test "$BUNDLE_ID" = "org.adfoot.app" || { echo "Unexpected iOS bundle ID"; exit 1; }
+          test "$FIREBASE_IOS_BUNDLE_ID" = "$BUNDLE_ID" || { echo "Firebase iOS bundle ID mismatch"; exit 1; }
+          test "$FIREBASE_PROJECT_ID" = "adfoot-production" || { echo "Unexpected Firebase project"; exit 1; }
+          : "${FIREBASE_IOS_API_KEY:?Missing Firebase iOS API key}"
+          : "${FIREBASE_IOS_APP_ID:?Missing Firebase iOS app ID}"
+          : "${FIREBASE_MESSAGING_SENDER_ID:?Missing Firebase messaging sender ID}"
+          : "${FIREBASE_STORAGE_BUCKET:?Missing Firebase storage bucket}"
       - *pod_install
       - *keychain_initialize
       - *fetch_signing_files

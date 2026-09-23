@@ -1,0 +1,33 @@
+# Audit avant TestFlight production iOS — 23 septembre 2026
+
+## État du dépôt
+
+- Version source : `1.0.7+41` dans `pubspec.yaml`, car le build 40 est déjà consommé dans App Store Connect. `codemagic.yaml` utilise cette version pour `ios-production`, sans `--build-number` distinct. Le numéro Android déjà publié peut être différent : les deux stores suivent chacun leurs propres builds.
+- Le workflow `ios-production` cible `org.adfoot.app` et le groupe `firebase_ios_production`, envoie à TestFlight et ne soumet pas à l’App Store public. Son préflight refuse désormais un `APP_ENV`, un bundle ID ou un projet Firebase qui ne correspond pas à la production, ainsi que les identifiants Firebase iOS essentiels manquants.
+- `check-ios-release-readiness.ps1 -Environment production -ReleaseGate` et `validate-release-config.ps1 -Strict -SkipLocal -SkipStaging` passent localement. Le scan des secrets suivis passe aussi. Ces contrôles portent sur les fichiers locaux, pas sur les valeurs réellement présentes dans Codemagic ou sur les services déployés.
+
+## Démarrage à froid
+
+Le chemin critique est : lecture de la langue locale, initialisation Firebase, enregistrement des contrôleurs, lecture du lien initial, rendu du splash, puis résolution Auth et Firestore du compte. La résolution garde ses vérifications d’accès ; les supprimer pour accélérer le splash exposerait un compte désactivé.
+
+Deux attentes inutiles ont été supprimées : les services secondaires (notifications locales, listeners FCM, profil réseau et entretien du cache) démarrent sans bloquer `runApp()`, et le second appel de résolution de session au premier frame a été retiré. Le flux `idTokenChanges()` déclenche déjà une résolution initiale ; le watchdog du splash reste présent si le flux ne répond pas. La lecture du lien initial reste avant le routage de session pour préserver les liens de réinitialisation de mot de passe.
+
+Risque résiduel : `EmailLinkHandler.getInitialLink()` peut encore attendre jusqu’à cinq secondes avant le premier frame, et `FirebaseAuth.reload()` puis l’accès Firestore peuvent garder le splash visible sur un réseau lent. La vitesse réelle de cette modification doit être mesurée sur l’iPhone 12 avec un build **release production TestFlight**. Faire au moins cinq démarrages après fermeture complète, d’abord en Wi-Fi puis sur réseau cellulaire, avec compte connecté et déconnecté. Relever temps jusqu’au premier écran utilisable et temps jusqu’au premier contenu, avec et sans connexion ; conserver la médiane et le pire cas. Comparer au build staging précédent sur le même appareil et le même réseau.
+
+## Points de release à vérifier
+
+1. **Push iOS** : le contrôle local signale l’absence de `aps-environment` dans `Runner.entitlements`. Vérifier dans le build signé et dans Apple Developer que la capacité Push Notifications, le profil et la clé APNs Firebase sont cohérents. Tester une notification reçue application ouverte, en arrière-plan et fermée, puis son ouverture vers le bon écran. Aucun test Windows ne prouve ces points.
+2. **Configuration et services production** : lancer `ios-production` sur Codemagic, puis vérifier dans TestFlight le bundle ID, la version, le projet Firebase, App Check DeviceCheck, connexion, reset/validation d’e-mail, accès Firestore, upload/lecture vidéo, messagerie, offres, événements, signalement/blocage et suppression de compte. Lire Crashlytics et les `client_logs` après ces essais ; une absence d’erreurs dans les tests locaux ne remplace pas ces journaux.
+3. **Backend déployé** : comparer règles Firestore/Storage, index, fonctions et configuration du projet `adfoot-production` à ce checkout avant de juger un écran vide comme un problème client. Les contrôles de parité distants exigent des identifiants et n’ont pas été lancés ici.
+4. **Contenu et droits** : les documents juridiques détaillés sont encore des brouillons non publiés ; la page de confidentialité actuellement dans `site_pub/legal/` dit explicitement qu’elle peut être complétée. Avant publicité ou captures montrant des joueurs, conserver une autorisation écrite qui couvre précisément ces usages, la durée, les territoires et le retrait, ainsi que les droits du photographe et des autres personnes identifiables. Pour les captures App Store, privilégier des comptes de démonstration : [Apple demande les droits sur les images et déconseille les données d’une vraie personne dans les métadonnées](https://developer.apple.com/app-store/review/guidelines/). Écarter les images de mineurs tant que les autorisations et le traitement adapté ne sont pas établis. Mettre les pages publiées et les [réponses App Privacy](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy) à jour selon les traitements réels.
+5. **Publication** : tester le build production dans TestFlight interne avant toute diffusion publique. L’immatriculation de l’entreprise, l’identité du titulaire Apple, les informations légales, les métadonnées et les captures doivent être décidées et validées avant soumission App Store. Le workflow ne publie pas automatiquement.
+
+## Vérifications locales
+
+- `flutter analyze --no-pub` : réussi, zéro problème. Le dossier racine `node_modules/` est maintenant exclu ; son modèle Firebase Dart ne fait pas partie de l’application.
+- `flutter test --no-pub -r compact` : 950 tests réussis avant le passage à `+41`. Après ce passage, les 11 tests ciblant le démarrage et les témoins Android passent ; `flutter analyze --no-pub` reste sans problème.
+- `check-ios-release-readiness.ps1` : réussi, avertissements `Podfile.lock` absent sur Windows et entitlement push à vérifier.
+- `validate-release-config.ps1` en mode strict production et `check-tracked-secrets.ps1` : réussis.
+- `npm.cmd --prefix functions run lint` et `npm.cmd --prefix functions run build` : réussis.
+
+Cet audit ne valide pas un IPA, un profil de signature, les paramètres App Store Connect, les autorisations d’image ni la disponibilité du backend réel.
