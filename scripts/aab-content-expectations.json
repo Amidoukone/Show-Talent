@@ -1,6 +1,6 @@
 {
-  "_": "Chaines temoins lues dans base/lib/<abi>/libapp.so par scripts/check-aab-contents.ps1. Les deux premiers temoins viennent de la version 35 et etaient absents du bundle 31. Le temoin chatBlockedMessage a ete ajoute avec le blocage utilisateur apres la version 37 ; il reste valide pour le prochain bundle Android, qui n'a pas encore ete construit depuis ces changements. Le bump 41 est destine au TestFlight iOS ; le controle du bundle devra etre execute sur l'AAB reel avant publication Android.",
-  "forVersionCode": 41,
+  "_": "Chaines temoins lues dans base/lib/<abi>/libapp.so par scripts/check-aab-contents.ps1. Les deux premiers temoins viennent de la version 35 et etaient absents du bundle 31. Le temoin chatBlockedMessage a ete ajoute avec le blocage utilisateur apres la version 37 ; il reste valide pour le prochain bundle Android, qui n'a pas encore ete construit depuis ces changements. Le bump 42 est destine au TestFlight iOS ; le controle du bundle devra etre execute sur l'AAB reel avant publication Android.",
+  "forVersionCode": 42,
   "mustContain": [
     {
       "text": "app.locale_preference.v1",

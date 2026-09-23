@@ -6,10 +6,13 @@ import process from 'node:process';
 
 const DEFAULT_ENVIRONMENT = 'staging';
 const INVALID_PRECHECK_EMAIL = 'not-an-email';
+const PLATFORMS = new Set(['android', 'ios']);
 
 function parseArgs(argv) {
   const parsed = {
     environment: DEFAULT_ENVIRONMENT,
+    platform: 'android',
+    fromEnv: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -19,6 +22,10 @@ function parseArgs(argv) {
     }
 
     const key = arg.slice(2);
+    if (key === 'from-env') {
+      parsed.fromEnv = true;
+      continue;
+    }
     const next = argv[i + 1];
     if (!next || next.startsWith('--')) {
       throw new Error(`Missing value for --${key}`);
@@ -30,6 +37,12 @@ function parseArgs(argv) {
         break;
       case 'config':
         parsed.configPath = next.trim();
+        break;
+      case 'platform':
+        parsed.platform = next.trim().toLowerCase();
+        if (!PLATFORMS.has(parsed.platform)) {
+          throw new Error(`Unsupported platform: ${parsed.platform}`);
+        }
         break;
       default:
         throw new Error(`Unsupported option --${key}`);
@@ -74,13 +87,18 @@ function buildProbePassword() {
   return `Probe-${Date.now().toString(36)}-${entropy}!Aa1`;
 }
 
-async function restJson(url, payload) {
+function buildProbeEmail() {
+  return `auth-preflight-${Date.now()}-${Math.random().toString(36).slice(2)}@example.invalid`;
+}
+
+async function restJson(url, payload, { method = 'POST', headers = {} } = {}) {
   const response = await fetch(url, {
-    method: 'POST',
+    method,
     headers: {
       'Content-Type': 'application/json',
+      ...headers,
     },
-    body: JSON.stringify(payload),
+    ...(method === 'POST' ? { body: JSON.stringify(payload) } : {}),
   });
 
   const text = await response.text();
@@ -97,9 +115,9 @@ async function restJson(url, payload) {
     );
     error.details = {
       status: response.status,
-      body: parsed,
-      url,
-      method: 'POST',
+      remoteCode: parsed?.error?.message || null,
+      endpoint: new URL(url).pathname,
+      method,
     };
     throw error;
   }
@@ -107,7 +125,7 @@ async function restJson(url, payload) {
   return parsed;
 }
 
-async function probePasswordSignup(apiKey) {
+async function probePasswordSignup(apiKey, headers = {}) {
   const url =
     'https://identitytoolkit.googleapis.com/v1/accounts:signUp' +
     `?key=${encodeURIComponent(apiKey)}`;
@@ -117,7 +135,7 @@ async function probePasswordSignup(apiKey) {
       email: INVALID_PRECHECK_EMAIL,
       password: buildProbePassword(),
       returnSecureToken: false,
-    });
+    }, { headers });
 
     return {
       ok: false,
@@ -125,9 +143,7 @@ async function probePasswordSignup(apiKey) {
       message: 'Unexpected success from preflight probe.',
     };
   } catch (error) {
-    const remoteCode = String(
-      error?.details?.body?.error?.message || error?.message || '',
-    ).trim();
+    const remoteCode = String(error?.details?.remoteCode || error?.message || '').trim();
 
     switch (remoteCode) {
       case 'INVALID_EMAIL':
@@ -161,6 +177,47 @@ async function probePasswordSignup(apiKey) {
         };
     }
   }
+}
+
+async function probePasswordSignIn(apiKey, headers = {}) {
+  const url =
+    'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword' +
+    `?key=${encodeURIComponent(apiKey)}`;
+  try {
+    await restJson(url, {
+      email: buildProbeEmail(),
+      password: buildProbePassword(),
+      returnSecureToken: false,
+    }, { headers });
+    throw new Error('Unexpected sign-in with a random, nonexistent account.');
+  } catch (error) {
+    const remoteCode = String(error?.details?.remoteCode || error?.message || '').trim();
+    if (['INVALID_LOGIN_CREDENTIALS', 'EMAIL_NOT_FOUND', 'INVALID_PASSWORD'].includes(remoteCode)) {
+      return;
+    }
+    throw new Error(`Firebase Email/Password sign-in probe failed: ${remoteCode}`);
+  }
+}
+
+async function probeIosProject({ apiKey, bundleId, appId, projectNumber }) {
+  const url = new URL('https://identitytoolkit.googleapis.com/v1/projects');
+  url.searchParams.set('key', apiKey);
+  url.searchParams.set('iosBundleId', bundleId);
+  url.searchParams.set('firebaseAppId', appId);
+
+  const config = await restJson(url, null, {
+    method: 'GET',
+    headers: { 'X-Ios-Bundle-Identifier': bundleId },
+  });
+  // This legacy endpoint returns the numeric Google project number in
+  // `projectId`, not the human-readable Firebase project ID.
+  if (String(config.projectId) !== projectNumber) {
+    throw new Error(
+      `iOS API key resolves to project number ${config.projectId || '<unknown>'}, ` +
+      `expected ${projectNumber}.`,
+    );
+  }
+  return config.projectId;
 }
 
 function printChecklist(projectId, probe) {
@@ -206,32 +263,55 @@ function printChecklist(projectId, probe) {
 async function run() {
   const args = parseArgs(process.argv.slice(2));
   const configPath = resolveConfigPath(args.environment, args.configPath);
-  const config = readJson(configPath);
+  const config = args.fromEnv ? process.env : readJson(configPath);
   const projectId = String(config.FIREBASE_PROJECT_ID || '').trim();
-  const apiKey = String(config.FIREBASE_ANDROID_API_KEY || '').trim();
+  const apiKeyName = args.platform === 'ios'
+    ? 'FIREBASE_IOS_API_KEY'
+    : 'FIREBASE_ANDROID_API_KEY';
+  const apiKey = String(config[apiKeyName] || '').trim();
 
   if (!projectId) {
     throw new Error(`Missing FIREBASE_PROJECT_ID in ${configPath}`);
   }
 
   if (!apiKey) {
-    throw new Error(`Missing FIREBASE_ANDROID_API_KEY in ${configPath}`);
+    throw new Error(`Missing ${apiKeyName} in ${args.fromEnv ? 'environment' : configPath}`);
+  }
+
+  const bundleId = String(config.FIREBASE_IOS_BUNDLE_ID || '').trim();
+  const appId = String(config.FIREBASE_IOS_APP_ID || '').trim();
+  const projectNumber = String(config.FIREBASE_MESSAGING_SENDER_ID || '').trim();
+  if (args.platform === 'ios' && (!bundleId || !appId || !projectNumber)) {
+    throw new Error('Missing Firebase iOS bundle ID, app ID or project number.');
   }
 
   process.stdout.write(`Environment : ${args.environment}\n`);
+  process.stdout.write(`Platform    : ${args.platform}\n`);
   process.stdout.write(`Project     : ${projectId}\n`);
-  process.stdout.write(`Config file : ${configPath}\n`);
+  process.stdout.write(`Config source: ${args.fromEnv ? 'environment' : configPath}\n`);
   process.stdout.write(`API key     : ${maskApiKey(apiKey)}\n`);
   process.stdout.write('\n');
 
-  const probe = await probePasswordSignup(apiKey);
+  const headers = args.platform === 'ios'
+    ? { 'X-Ios-Bundle-Identifier': bundleId }
+    : {};
+  if (args.platform === 'ios') {
+    const resolvedProjectId = await probeIosProject({
+      apiKey, bundleId, appId, projectNumber,
+    });
+    process.stdout.write(`iOS key, app ID and bundle resolve to ${resolvedProjectId}.\n`);
+  }
+
+  const probe = await probePasswordSignup(apiKey, headers);
   if (!probe.ok) {
     printChecklist(projectId, probe);
     process.exitCode = 1;
     return;
   }
 
+  await probePasswordSignIn(apiKey, headers);
   process.stdout.write(`${probe.message}\n`);
+  process.stdout.write('Firebase Email/Password sign-in endpoint responds correctly.\n');
 }
 
 run().catch((error) => {

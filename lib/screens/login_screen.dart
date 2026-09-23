@@ -3,6 +3,7 @@ import 'dart:async';
 
 import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/screens/signup_screen.dart';
+import 'package:adfoot/services/auth/auth_diagnostics.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
@@ -117,7 +118,8 @@ class _LoginScreenState extends State<LoginScreen> {
             const Duration(seconds: 12),
             onTimeout: () => userController.kickstart(),
           );
-    } on FirebaseAuthException catch (error) {
+    } on FirebaseAuthException catch (error, stackTrace) {
+      _reportInfrastructureAuthFailure(error, stackTrace, stage: 'login');
       _showErrorSnackbar(AuthErrorMapper.toMessage(error));
     } on AuthFlowException catch (error) {
       _showErrorSnackbar(error.message);
@@ -161,7 +163,12 @@ class _LoginScreenState extends State<LoginScreen> {
         l10n.resetPasswordEmailSentMessage(email),
         duration: const Duration(seconds: 6),
       );
-    } on FirebaseAuthException catch (error) {
+    } on FirebaseAuthException catch (error, stackTrace) {
+      _reportInfrastructureAuthFailure(
+        error,
+        stackTrace,
+        stage: 'password_reset',
+      );
       _showErrorSnackbar(
         AuthErrorMapper.toMessage(error),
         title: l10n.resetPasswordFailureTitle,
@@ -177,6 +184,27 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         setState(() => _isResettingPassword = false);
       }
+    }
+  }
+
+  void _reportInfrastructureAuthFailure(
+    FirebaseAuthException error,
+    StackTrace stackTrace, {
+    required String stage,
+  }) {
+    // A release login can fail before there is an authenticated session.
+    // Crashlytics records the Firebase code and underlying error without
+    // logging the email or password entered into the form.
+    if (error.code == 'internal-error' ||
+        error.code == 'invalid-api-key' ||
+        error.code == 'app-not-authorized' ||
+        error.code == 'operation-not-allowed') {
+      AuthDiagnostics.failure(
+        'Firebase Auth request failed (${error.code})',
+        stage: stage,
+        error: error,
+        stackTrace: stackTrace,
+      );
     }
   }
 

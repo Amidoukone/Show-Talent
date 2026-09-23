@@ -76,6 +76,18 @@ Remote Firebase Auth preflight before a real device test:
 
 ```powershell
 npm.cmd run mobile:auth:preflight:staging
+node scripts/check-mobile-auth-preflight.mjs --environment production --platform ios
+```
+
+For Codemagic's `ios-production` workflow, update `FIREBASE_IOS_API_KEY` in
+the `firebase_ios_production` environment group from the current production
+`GoogleService-Info.plist` (`API_KEY`). The production workflow runs the same
+remote check against its own environment variables before building the IPA.
+Updating an ignored local config file alone does not change a Codemagic build.
+On this workstation, read the refreshed value for the Codemagic variable with:
+
+```powershell
+(Get-Content config/mobile/production.json -Raw | ConvertFrom-Json).FIREBASE_IOS_API_KEY
 ```
 
 `scripts/flutter-run-mobile-env.ps1` now runs this preflight automatically for
