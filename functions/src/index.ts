@@ -1195,7 +1195,15 @@ export const optimizeMp4Video = onObjectFinalized(
 /* EXISTING EXPORTS                                                            */
 /* -------------------------------------------------------------------------- */
 
-export {cleanupUnverifiedUsers, reapAbandonedUploadSessions} from "./cleanup";
+export {
+  cleanupUnverifiedUsers,
+  reapAbandonedUploadSessions,
+  retryPendingAccountDeletions,
+  migrateLegacyFcmTokens,
+  migrateLegacyCvUrls,
+  backfillPublicProfiles,
+  backfillConversationSortDates,
+} from "./cleanup";
 
 /* -------------------------------------------------------------------------- */
 /* ACTIONS (Cloud Functions callable)                                          */
@@ -1213,7 +1221,8 @@ export {
   shareVideo,
   videoActionLog,
 } from "./actions";
-export {followUser, unfollowUser} from "./follow_actions";
+export {followUser, unfollowUser, listUserFollows} from "./follow_actions";
+export {drainPushCampaigns} from "./fanout_campaigns";
 
 export {provisionManagedAccount} from "./managed_accounts";
 export {
@@ -1243,10 +1252,12 @@ export {
 export {completeEmailVerification} from "./account_verification_actions";
 export {deleteOwnAccount} from "./account_deletion_actions";
 export {videoSharePage} from "./video_share_page";
+export {createCvViewLink, cvViewPage, cleanupExpiredCvViewTickets} from "./cv_view";
 export {
   deriveUserSearchFields,
   deriveUserSearchFieldsFromContact,
 } from "./user_search_fields";
+export {syncPublicProfileOnUserWrite} from "./public_profile_projection";
 export {notifyContactIntakeCreated} from "./contact_intake_notifications";
 
 /* -------------------------------------------------------------------------- */

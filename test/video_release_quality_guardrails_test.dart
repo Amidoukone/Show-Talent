@@ -160,6 +160,8 @@ void main() {
 
     test('push notification copy is normalized before FCM send', () {
       final actions = File('functions/src/actions.ts').readAsStringSync();
+      final fanout =
+          File('functions/src/fanout_campaigns.ts').readAsStringSync();
       final adminActions = File(
         'functions/src/admin_content_actions.ts',
       ).readAsStringSync();
@@ -183,11 +185,11 @@ void main() {
         ),
       );
       expect(
-        actions,
+        fanout,
         contains('title: normalizeNotificationText(params.title, 120)'),
       );
       expect(
-        actions,
+        fanout,
         contains('body: normalizeNotificationText(params.body, 300)'),
       );
       expect(

@@ -1067,6 +1067,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } on AccountCleanupException catch (error) {
       closeBlockingDialog();
 
+      if (error.deletionPending) {
+        if (!mounted) return;
+        Get.offAllNamed(AppRoutes.login);
+        AdFeedback.info(
+          l10n.settingsAccountDeletedTitle,
+          error.message,
+          duration: const Duration(seconds: 7),
+        );
+        return;
+      }
+
       if (error.requiresRecentLogin) {
         await _promptReauthenticationForDeletion(error.message);
         return;

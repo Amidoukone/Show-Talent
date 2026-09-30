@@ -105,7 +105,7 @@ function Get-ExpectedFunctionsPolicy {
             return @{
                 "ENFORCE_APPCHECK" = "false"
                 "STORAGE_BUCKET" = "adfoot-staging.firebasestorage.app"
-                "OPTIMIZE_TRIGGER_REGION" = "us-central1"
+                "OPTIMIZE_TRIGGER_REGION" = "europe-west1"
                 "VIDEO_UPLOADS_ENABLED" = "true"
                 "MAX_VIDEO_UPLOADS_PER_DAY" = "5"
                 "MAX_CONCURRENT_VIDEO_UPLOADS" = "1"

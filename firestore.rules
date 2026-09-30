@@ -52,21 +52,14 @@ service cloud.firestore {
     function isAdminOperator() {
       return signedIn() &&
         (
-          request.auth.token.admin == true ||
-          request.auth.token.platformAdmin == true ||
-          request.auth.token.superAdmin == true
+          request.auth.token.get('admin', false) == true ||
+          request.auth.token.get('platformAdmin', false) == true ||
+          request.auth.token.get('superAdmin', false) == true
         );
     }
 
     function changesOnly(allowedKeys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowedKeys);
-    }
-
-    function canUpdateOwnFcmToken() {
-      return changesOnly(["fcmToken"]) &&
-        request.resource.data.fcmToken is string &&
-        request.resource.data.fcmToken.size() > 0 &&
-        request.resource.data.fcmToken.size() <= 4096;
     }
 
     // Accepting the terms is its own write, deliberately kept out of
@@ -103,10 +96,8 @@ service cloud.firestore {
       // privateContactChangesOnly() below) and are written together with
       // this doc in the same client WriteBatch, so keep them out of this
       // list: it only needs to cover fields still writable directly here.
-      // cvUrl stays on this doc on purpose — unlike phone/birthDate it's
-      // meant to be visible to third parties whenever profilePublic is
-      // true (Storage rules already gate the actual PDF the same way), so
-      // it can't move to an owner/admin-only doc without breaking that.
+      // Only a Storage path belongs on this readable document; a tokenized
+      // download URL would bypass the CV read rule after being disclosed.
       return request.resource.data.diff(resource.data).affectedKeys().hasAny([
         "nom",
         "languages",
@@ -249,7 +240,10 @@ service cloud.firestore {
             (
               request.resource.data.cvUrl is string &&
               request.resource.data.cvUrl.size() > 0 &&
-              request.resource.data.cvUrl.size() <= 2048
+              request.resource.data.cvUrl.size() <= 2048 &&
+              request.resource.data.cvUrl.matches(
+                '^gs://[^/]+/cvs/' + request.auth.uid + '/cv_[0-9]+[.]pdf$'
+              )
             )
           )
         );
@@ -615,43 +609,25 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // `profilePublic` is deliberately NOT consulted here, and that is a
-      // limitation worth stating rather than a gap to assume away.
-      //
-      // What the setting actually does today: it gates the profile *screen*
-      // (profile_screen.dart) and the CV object (storage.rules canReadCv).
-      // What it does not do: hide this document. Any active account can read
-      // every users/* document through the SDK.
-      //
-      // It cannot simply be added: a Firestore `list` fails entirely if the
-      // rule denies any document in the result, and UserRepository.watchAllUsers
-      // reads the directory as one query. Gating reads on `profilePublic` would
-      // not hide private profiles — it would empty the directory, the search and
-      // every publisher name in the feed for everyone.
-      //
-      // Closing it properly means splitting the document: a public projection
-      // anyone may list, and the rest owner/admin-only, the way phone, birthDate
-      // and email were already moved to private/contact. That is a schema
-      // change with an admin-portal counterpart, not a rule edit.
-      allow read: if signedIn() &&
-        (hasActiveAccount(request.auth.uid) || isOwner(userId));
+      // Full user documents contain internal account and social state. Other
+      // clients read only the server-maintained public_profiles projection.
+      allow read: if isOwner(userId) || isAdminOperator();
       allow create: if false;
       allow update: if isOwner(userId) &&
         hasActiveAccount(request.auth.uid) &&
         (
-          canUpdateOwnFcmToken() ||
           canUpdateOwnChatPresence() ||
           canAcceptOwnTerms() ||
           canUpdateOwnProfile()
         );
-      allow delete: if isOwner(userId);
+      // Account deletion must pass through deleteOwnAccount so Auth, Storage,
+      // follow references and subcollections are purged together.
+      allow delete: if false;
 
       // Sensitive fields (phone/birthDate/email/authDisabledReason) live
       // here instead of on the parent doc so a third party can no longer
-      // read them just by having an active account. cvUrl deliberately
-      // stays on the parent doc instead (see ownerProfileTrustFieldsChanged
-      // comment) — it's meant to be visible to third parties once
-      // profilePublic is true, same as the Storage rule already gates the
+      // read them just by having an active account. cvUrl stays on the parent
+      // only as a non-tokenized gs:// reference; Storage rules still gate the
       // actual PDF. email/authDisabledReason are admin/Cloud-Function
       // managed only (no client "allow write" covers them);
       // phone/birthDate stay owner-editable exactly like before, just
@@ -675,7 +651,7 @@ service cloud.firestore {
           hasActiveAccount(request.auth.uid) &&
           changesOnly(["phone", "birthDate"]) &&
           !contactOwnerProfileVerified(userId);
-        allow delete: if isOwner(userId);
+        allow delete: if false;
       }
 
       // Internal admin commentary on a profile review — never shown to the
@@ -683,6 +659,28 @@ service cloud.firestore {
       match /private/adminNotes {
         allow read: if isAdminOperator();
       }
+
+      // Follow edges are server-maintained documents so popular accounts no
+      // longer rewrite unbounded arrays on every follow. A client only needs
+      // its own outgoing set to render follow buttons; lists for other users
+      // are paged through listUserFollows, which also enforces profile privacy.
+      match /following/{targetUserId} {
+        allow read: if isOwner(userId) && hasActiveAccount(userId);
+        allow write: if false;
+      }
+
+      match /followers/{followerUserId} {
+        allow read, write: if false;
+      }
+    }
+
+    match /public_profiles/{userId} {
+      allow read: if signedInAndActive();
+      allow write: if false;
+    }
+
+    match /user_push_tokens/{uid} {
+      allow read, write: if false;
     }
 
     // The two rules above grant `get` on a literal document id (contact,
@@ -781,12 +779,18 @@ service cloud.firestore {
         allow create: if signedInAndActive() &&
           isConversationMember(conversationId) &&
           request.resource.data.expediteurId == request.auth.uid &&
+          request.resource.data.destinataireId != request.auth.uid &&
+          request.resource.data.destinataireId in
+            get(/databases/$(database)/documents/conversations/$(conversationId)).data.utilisateurIds &&
+          request.resource.data.contenu is string &&
+          request.resource.data.contenu.size() > 0 &&
+          request.resource.data.contenu.size() <= 2000 &&
           !isBlockedPair(
             request.resource.data.expediteurId,
             request.resource.data.destinataireId
           );
 
-        // Only your own message, and only its read state.
+        // Message text and participant identities are immutable after send.
         //
         // `create` has always checked the author; update and delete checked
         // only membership. A recruiter could therefore rewrite or erase what a
@@ -801,16 +805,9 @@ service cloud.firestore {
         // only ever be set to true.
         allow update: if signedInAndActive() &&
           isConversationMember(conversationId) &&
-          (
-            (
-              resource.data.expediteurId == request.auth.uid &&
-              request.resource.data.expediteurId == resource.data.expediteurId
-            ) ||
-            (
-              changesOnly(["estLu"]) &&
-              request.resource.data.estLu == true
-            )
-          );
+          resource.data.destinataireId == request.auth.uid &&
+          changesOnly(["estLu"]) &&
+          request.resource.data.estLu == true;
         allow delete: if signedInAndActive() &&
           isConversationMember(conversationId) &&
           resource.data.expediteurId == request.auth.uid;
@@ -851,8 +848,10 @@ service cloud.firestore {
     function contactIntakeCooldownOk() {
       let limitPath =
         /databases/$(database)/documents/contact_intake_limits/$(request.auth.uid);
-      return !exists(limitPath) ||
-        request.time > get(limitPath).data.lastIntakeAt + duration.value(60, "s");
+      return (!exists(limitPath) ||
+        request.time > get(limitPath).data.lastIntakeAt + duration.value(60, "s")) &&
+        existsAfter(limitPath) &&
+        getAfter(limitPath).data.lastIntakeAt == request.time;
     }
 
     match /contact_intakes/{intakeId} {
@@ -866,10 +865,14 @@ service cloud.firestore {
         request.resource.data.requesterUid == request.auth.uid &&
         request.resource.data.targetUid is string &&
         request.resource.data.targetUid != request.auth.uid &&
+        hasActiveAccount(request.resource.data.targetUid) &&
         request.resource.data.status == "new" &&
         request.resource.data.agencyFollowUpStatus == "new" &&
         request.resource.data.contactReason is string &&
+        request.resource.data.contactReason.size() > 0 &&
+        request.resource.data.contactReason.size() <= 120 &&
         request.resource.data.introMessage is string &&
+        request.resource.data.introMessage.size() <= 3000 &&
         contactIntakeCooldownOk();
       allow update, delete: if isAdminOperator();
     }

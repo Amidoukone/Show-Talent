@@ -152,6 +152,18 @@ class _AdFeedbackOverlay extends StatelessWidget {
   final AdSystemNoticeData notice;
   final VoidCallback onDismiss;
 
+  // This notice is a screen-agnostic overlay: it has no idea which screen is
+  // showing or how tall that screen's own AppBar is. `SafeArea` alone only
+  // clears the device chrome (status bar / notch), not the app's AppBar on
+  // top of it -- with just `AdSpacing.sm` (12px) added, the notice started
+  // well inside every AppBar's own band (56px plain, 72px for AdAppBar's
+  // title+subtitle variant, which profile_screen.dart always uses), so its
+  // title/message routinely rendered under the AppBar's title. 80px clears
+  // the tallest AppBar variant in the app (AdAppBar with a subtitle) plus a
+  // small margin; screens with a shorter or no AppBar just get a little
+  // extra breathing room instead of an overlap.
+  static const double _minimumTopClearance = 80;
+
   @override
   Widget build(BuildContext context) {
     return Positioned(
@@ -161,7 +173,7 @@ class _AdFeedbackOverlay extends StatelessWidget {
       child: SafeArea(
         minimum: const EdgeInsets.fromLTRB(
           AdSpacing.md,
-          AdSpacing.sm,
+          _minimumTopClearance,
           AdSpacing.md,
           0,
         ),

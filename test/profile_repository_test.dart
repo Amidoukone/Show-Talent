@@ -42,7 +42,7 @@ void main() {
         expect(await repository.fetchUser('missing'), isNull);
 
         await firestore
-            .collection('users')
+            .collection('public_profiles')
             .doc('player-1')
             .set(_user(uid: 'player-1', name: 'Awa Traore').toMap());
 
@@ -72,7 +72,10 @@ void main() {
         'profileVerificationInvalidationReason': 'profile_updated_by_user',
       });
 
-      final user = await repository.fetchUser('player-verified');
+      final user = await repository.fetchUser(
+        'player-verified',
+        includePrivateFields: true,
+      );
 
       expect(user?.profileLevelLabel, 'Profil complet');
       expect(user?.profileVerified, isTrue);
@@ -569,7 +572,8 @@ void main() {
         expect(
           repository.fetchUserCallCount,
           1,
-          reason: 'this mirrors FeatureControllerRegistry reclaiming the '
+          reason:
+              'this mirrors FeatureControllerRegistry reclaiming the '
               'same controller within its grace period: the profile is '
               'already loaded, so refetching it would be wasted network '
               'work for data the still-live Firestore listener already '
@@ -583,7 +587,10 @@ void main() {
       final userA = _user(uid: 'player-a', name: 'Player A');
       final userB = _user(uid: 'player-b', name: 'Player B');
       await firestore.collection('users').doc(userA.uid).set(userA.toMap());
-      await firestore.collection('users').doc(userB.uid).set(userB.toMap());
+      await firestore
+          .collection('public_profiles')
+          .doc(userB.uid)
+          .set(userB.toMap());
 
       final repository = _CountingProfileRepository(firestore, uid: userA.uid);
       final controller = ProfileController(profileRepository: repository);
@@ -603,15 +610,17 @@ void main() {
 /// [ProfileController.user] unchanged (which it would, correctly, since
 /// nothing in these tests mutates the document after the first load).
 class _CountingProfileRepository extends ProfileRepository {
-  _CountingProfileRepository(FakeFirebaseFirestore firestore, {required String uid})
-    : super(
-        firestore: firestore,
-        auth: MockFirebaseAuth(
-          signedIn: true,
-          mockUser: MockUser(uid: uid, email: '$uid@example.com'),
-        ),
-        appCheckReady: ({required forceRefresh, timeout}) async => true,
-      );
+  _CountingProfileRepository(
+    FakeFirebaseFirestore firestore, {
+    required String uid,
+  }) : super(
+         firestore: firestore,
+         auth: MockFirebaseAuth(
+           signedIn: true,
+           mockUser: MockUser(uid: uid, email: '$uid@example.com'),
+         ),
+         appCheckReady: ({required forceRefresh, timeout}) async => true,
+       );
 
   int fetchUserCallCount = 0;
 

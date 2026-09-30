@@ -4,7 +4,7 @@
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 
-import {auth, db} from "./firebase";
+import {auth, db, fieldValue} from "./firebase";
 import {MOBILE_CALLABLE_OPTIONS, logAppCheckState} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 import {purgeAccountData} from "./admin_account_actions";
@@ -109,20 +109,21 @@ export const deleteOwnAccount = onCall(
     try {
       await auth.deleteUser(uid);
     } catch (error) {
-      // The Firestore side is already gone at this point, so surfacing a
-      // failure as "deletion failed" would be wrong: retrying would find
-      // nothing left to erase. Report it loudly instead -- an orphaned Auth
-      // user with no profile cannot sign in (the session resolver treats a
-      // missing profile as a closed account) and is cleaned up by
-      // cleanupUnverifiedUsers or by an admin.
+      // Verified Auth users are deliberately skipped by cleanupUnverifiedUsers.
+      // Record a durable retry after the data purge so this failure cannot
+      // leave a verified Auth identity behind indefinitely.
       logger.error("self-service auth deletion failed after data purge", {
         uid,
         error,
       });
+      await db.collection("account_deletion_pending").doc(uid).set({
+        createdAt: fieldValue.serverTimestamp(),
+        lastErrorAt: fieldValue.serverTimestamp(),
+      }, {merge: true});
       return {
         success: true,
         code: "account_data_deleted_auth_pending",
-        message: "Compte supprime.",
+        message: "Donnees supprimees. Finalisation du compte en cours.",
         data: {uid, authDeleted: false},
       };
     }

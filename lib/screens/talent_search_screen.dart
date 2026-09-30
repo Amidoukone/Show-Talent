@@ -44,6 +44,12 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
 
   List<AppUser>? _results;
   bool _loading = false;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  TalentSearchCursor? _cursor;
+  TalentSearchQuery? _activeQuery;
+  Set<String> _excludedUids = const <String>{};
+  int _searchGeneration = 0;
   String? _error;
 
   @override
@@ -52,35 +58,42 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
     _repository = widget.repository ?? const TalentSearchRepository();
   }
 
-  TalentSearchQuery get _query => TalentSearchQuery(
-    positions: _positions,
-    nationality: _nationality,
-    bornFrom: _bornFrom,
-    bornUntil: _bornUntil,
-    openToOpportunitiesOnly: _openOnly,
-  );
-
   Future<void> _run() async {
+    final generation = ++_searchGeneration;
+    final query = TalentSearchQuery(
+      positions: List<FootballPosition>.of(_positions),
+      nationality: _nationality,
+      bornFrom: _bornFrom,
+      bornUntil: _bornUntil,
+      openToOpportunitiesOnly: _openOnly,
+    );
     setState(() {
       _loading = true;
       _error = null;
+      _results = null;
+      _cursor = null;
+      _hasMore = false;
     });
 
     try {
       final excludedUids = Get.isRegistered<BlockController>()
           ? Get.find<BlockController>().blockedPairUids.toSet()
           : const <String>{};
-      final results = await _repository.search(
-        _query,
+      final page = await _repository.searchPage(
+        query,
         excludedUids: excludedUids,
       );
-      if (!mounted) return;
+      if (!mounted || generation != _searchGeneration) return;
       setState(() {
-        _results = results;
+        _results = page.results;
+        _cursor = page.cursor;
+        _hasMore = page.hasMore;
+        _activeQuery = query;
+        _excludedUids = excludedUids;
         _loading = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || generation != _searchGeneration) return;
       final l10n = AppLocalizations.of(context)!;
       setState(() {
         _loading = false;
@@ -93,7 +106,34 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
     }
   }
 
+  Future<void> _loadMore() async {
+    if (_loading || _loadingMore || !_hasMore || _activeQuery == null) return;
+    final generation = _searchGeneration;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await _repository.searchPage(
+        _activeQuery!,
+        excludedUids: _excludedUids,
+        cursor: _cursor,
+      );
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() {
+        _results = <AppUser>[...?_results, ...page.results];
+        _cursor = page.cursor;
+        _hasMore = page.hasMore;
+        _loadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted || generation != _searchGeneration) return;
+      setState(() {
+        _loadingMore = false;
+        _error = AppLocalizations.of(context)!.talentSearchFailureMessage;
+      });
+    }
+  }
+
   void _reset() {
+    _searchGeneration++;
     setState(() {
       _positions.clear();
       _nationality = null;
@@ -102,6 +142,11 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
       _openOnly = false;
       _results = null;
       _error = null;
+      _loading = false;
+      _loadingMore = false;
+      _hasMore = false;
+      _cursor = null;
+      _activeQuery = null;
     });
   }
 
@@ -214,7 +259,7 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
           children: [
             Expanded(
               child: FilledButton(
-                onPressed: _loading ? null : _run,
+                onPressed: _loading || _loadingMore ? null : _run,
                 child: Text(
                   _loading
                       ? l10n.talentSearchSearchingButton
@@ -224,7 +269,7 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
             ),
             const SizedBox(width: 12),
             TextButton(
-              onPressed: _loading ? null : _reset,
+              onPressed: _loading || _loadingMore ? null : _reset,
               child: Text(l10n.commonReset),
             ),
           ],
@@ -250,7 +295,7 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
   }
 
   List<Widget> _buildResults(List<AppUser> results, AppLocalizations l10n) {
-    if (results.isEmpty) {
+    if (results.isEmpty && !_hasMore) {
       return <Widget>[
         AdStatePanel.empty(
           title: l10n.talentSearchNoResultsTitle,
@@ -260,16 +305,26 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
     }
 
     return <Widget>[
-      Text(
-        results.length >= TalentSearchRepository.pageSize
-            ? l10n.talentSearchResultsCountMany(results.length)
-            : (results.length == 1
-                  ? l10n.talentSearchResultsCountOne
-                  : l10n.talentSearchResultsCountOther(results.length)),
-        style: const TextStyle(fontWeight: FontWeight.w800),
-      ),
+      if (results.isNotEmpty)
+        Text(
+          results.length == 1
+              ? l10n.talentSearchResultsCountOne
+              : l10n.talentSearchResultsCountOther(results.length),
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
       const SizedBox(height: 8),
       ...results.map((user) => _TalentResultTile(user: user)),
+      if (_hasMore)
+        Center(
+          child: OutlinedButton(
+            onPressed: _loadingMore ? null : _loadMore,
+            child: Text(
+              _loadingMore
+                  ? l10n.talentSearchLoadingMore
+                  : l10n.talentSearchLoadMore,
+            ),
+          ),
+        ),
     ];
   }
 }

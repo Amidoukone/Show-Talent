@@ -179,10 +179,9 @@ if (Test-Path -LiteralPath $entitlementsPath) {
         }
     }
 
-    if ($entitlementsRaw -notmatch 'aps-environment') {
-        $warnings.Add(
-            "Runner.entitlements does not contain aps-environment. If push is enabled, verify entitlement in Xcode signing."
-        )
+    if ($entitlementsRaw -notmatch '<key>aps-environment</key>') {
+        $message = "Runner.entitlements does not contain aps-environment."
+        if ($ReleaseGate) { $errors.Add($message) } else { $warnings.Add($message) }
     }
 } else {
     $message = "Missing iOS entitlements file: $entitlementsPath"
@@ -191,6 +190,21 @@ if (Test-Path -LiteralPath $entitlementsPath) {
     } else {
         $warnings.Add($message)
     }
+}
+
+if (Test-Path -LiteralPath $infoPlistPath) {
+    $infoRaw = Get-Content -LiteralPath $infoPlistPath -Raw
+    if ($infoRaw -notmatch '<key>UIBackgroundModes</key>' -or
+        $infoRaw -notmatch '<string>remote-notification</string>') {
+        $message = "Runner/Info.plist does not enable remote notifications in UIBackgroundModes."
+        if ($ReleaseGate) { $errors.Add($message) } else { $warnings.Add($message) }
+    }
+}
+
+if ((Test-Path -LiteralPath $projectPath) -and
+    $projectRaw -notmatch 'com\.apple\.Push\s*=\s*\{\s*enabled\s*=\s*1') {
+    $message = "Runner target does not enable the Xcode Push Notifications capability."
+    if ($ReleaseGate) { $errors.Add($message) } else { $warnings.Add($message) }
 }
 
 if (Test-Path -LiteralPath $environmentFirebasePath) {

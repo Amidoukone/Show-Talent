@@ -11,6 +11,11 @@
                                                     ],
                                          "components":  [
                                                             {
+                                                                "/":  "/cv/view/*",
+                                                                "exclude":  true,
+                                                                "comment":  "CV PDFs stay in Safari for inline viewing."
+                                                            },
+                                                            {
                                                                 "/":  "/v/*",
                                                                 "comment":  "Adfoot video share links."
                                                             },
@@ -28,6 +33,7 @@
                                                             }
                                                         ],
                                          "paths":  [
+                                                       "NOT /cv/view/*",
                                                        "/v/*",
                                                        "/account/verify*",
                                                        "/account/reset*",

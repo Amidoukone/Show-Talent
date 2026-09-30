@@ -8,7 +8,10 @@ import 'package:adfoot/models/video.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
+import 'package:adfoot/config/app_environment.dart';
+import 'package:adfoot/services/callable_auth_guard.dart';
 import '../app_logger.dart';
 import '../app_check_service.dart';
 
@@ -71,10 +74,12 @@ class ProfileRepository {
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
     FirebaseAuth? auth,
+    FirebaseFunctions? functions,
     AppCheckReadyCallback? appCheckReady,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _storageOverride = storage,
        _authOverride = auth,
+       _functionsOverride = functions,
        _appCheckReady = appCheckReady ?? _defaultAppCheckReady;
 
   static const ProfileFieldDelete deleteField = ProfileFieldDelete._();
@@ -161,17 +166,25 @@ class ProfileRepository {
   // Fields that must land in users/{uid}/private/contact instead of the
   // main doc. Still trust-sensitive (see above) — moving where a field is
   // physically stored doesn't change whether editing it should invalidate
-  // an existing verification. cvUrl deliberately stays out of this set and
-  // on the main doc — see toEmbeddedMap()/toMap() in AppUser for why.
+  // an existing verification. cvUrl is a non-tokenized gs:// reference on
+  // the main doc; Storage rules still authorize the actual download.
   static const Set<String> _privateContactKeys = {'phone', 'birthDate'};
 
   final FirebaseFirestore _firestore;
   final FirebaseStorage? _storageOverride;
   final FirebaseAuth? _authOverride;
+  final FirebaseFunctions? _functionsOverride;
   final AppCheckReadyCallback _appCheckReady;
+
+  FirebaseFunctions get _functions =>
+      _functionsOverride ??
+      FirebaseFunctions.instanceFor(region: AppEnvironmentConfig.functionsRegion);
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
+
+  CollectionReference<Map<String, dynamic>> get _publicProfilesCollection =>
+      _firestore.collection('public_profiles');
 
   CollectionReference<Map<String, dynamic>> get _videosCollection =>
       _firestore.collection('videos');
@@ -335,7 +348,10 @@ class ProfileRepository {
         ? _fetchPrivateContact(uid)
         : null;
 
-    final doc = await _getWithRetry(_usersCollection.doc(uid));
+    final source = includePrivateFields
+        ? _usersCollection
+        : _publicProfilesCollection;
+    final doc = await _getWithRetry(source.doc(uid));
     if (!doc.exists) {
       return null;
     }
@@ -374,7 +390,7 @@ class ProfileRepository {
 
   Stream<AppUser?> watchUser(String uid, {bool includePrivateFields = false}) {
     if (!includePrivateFields) {
-      return _usersCollection.doc(uid).snapshots().map((snapshot) {
+      return _publicProfilesCollection.doc(uid).snapshots().map((snapshot) {
         final data = snapshot.data();
         if (!snapshot.exists || data == null) {
           return null;
@@ -759,9 +775,9 @@ class ProfileRepository {
 
       late final String url;
       try {
-        url = await uploadTask.ref.getDownloadURL().timeout(
-          firestoreReadTimeout,
-        );
+        // Store an authenticated Storage reference, never the long-lived
+        // tokenized download URL on a profile readable by other accounts.
+        url = 'gs://${uploadTask.ref.bucket}/${uploadTask.ref.fullPath}';
 
         final patch = <String, dynamic>{'cvUrl': url};
         await _appendVerificationInvalidationIfCurrentProfileIsVerified(
@@ -827,6 +843,41 @@ class ProfileRepository {
         );
       }
     }
+  }
+
+  /// Creates a short-lived, authorized adfoot.org link. The browser never
+  /// receives a persistent Firebase Storage download token.
+  Future<String> createCvViewUrl(String ownerUid) async {
+    final uid = ownerUid.trim();
+    if (uid.isEmpty) {
+      throw const CvUploadValidationException('Profil invalide.');
+    }
+    final callable = _functions.httpsCallable(
+      'createCvViewLink',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+    );
+    final result =
+        await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
+          callable,
+          'createCvViewLink',
+          {'ownerUid': uid},
+        );
+    final rawUrl = result['url']?.toString() ?? '';
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        !AppEnvironmentConfig.videoShareAllowedHosts.contains(
+          uri.host.toLowerCase(),
+        ) ||
+        uri.pathSegments.length != 3 ||
+        uri.pathSegments[0] != 'cv' ||
+        uri.pathSegments[1] != 'view' ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(uri.pathSegments[2]) ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw const CvUploadValidationException('Lien de CV invalide.');
+    }
+    return uri.toString();
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>> _getWithRetry(

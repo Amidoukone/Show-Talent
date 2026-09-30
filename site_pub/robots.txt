@@ -7,9 +7,11 @@
 # en-tete et dans la page ; cette ligne est la premiere barriere.
 #
 # /verify/ et /reset/ portent des liens d'action a usage unique.
+# /cv/view/ porte des acces PDF temporaires a ne jamais indexer.
 
 User-agent: *
 Disallow: /v/
+Disallow: /cv/view/
 Disallow: /verify/
 Disallow: /reset/
 Disallow: /account/

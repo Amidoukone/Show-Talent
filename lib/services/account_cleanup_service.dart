@@ -9,10 +9,12 @@ class AccountCleanupException implements Exception {
   const AccountCleanupException({
     required this.message,
     this.requiresRecentLogin = false,
+    this.deletionPending = false,
   });
 
   final String message;
   final bool requiresRecentLogin;
+  final bool deletionPending;
 
   @override
   String toString() => message;
@@ -74,6 +76,7 @@ class AccountCleanupService {
     bool deleteAuthUser = false,
   }) async {
     _assertCanDeleteCurrentAuthUser(uid);
+    var deletionPending = false;
 
     try {
       final callable = _functions.httpsCallable(
@@ -84,7 +87,14 @@ class AccountCleanupService {
       // and a platform-channel map that refuses to cast to
       // Map<String, dynamic> would report a failure for a deletion that
       // actually succeeded — the one outcome the user must never see.
-      await CallableAuthGuard.call<dynamic>(callable);
+      final result = await CallableAuthGuard.call<dynamic>(callable);
+      final payload = result.data;
+      if (payload is Map) {
+        final data = payload['data'];
+        deletionPending =
+            payload['code'] == 'account_data_deleted_auth_pending' ||
+            (data is Map && data['authDeleted'] == false);
+      }
     } on FirebaseFunctionsException catch (error) {
       throw _mapCallableFailure(error);
     } catch (error, stackTrace) {
@@ -105,6 +115,12 @@ class AccountCleanupService {
       await _auth.signOut();
     } catch (error) {
       AppLogger.debug('AccountCleanup post-deletion signOut error: $error');
+    }
+    if (deletionPending) {
+      throw AccountCleanupException(
+        message: 'settingsAccountDeletionPendingMessage'.tr,
+        deletionPending: true,
+      );
     }
   }
 

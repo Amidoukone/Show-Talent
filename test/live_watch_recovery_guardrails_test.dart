@@ -66,13 +66,6 @@ void main() {
       );
     });
 
-    // Already fixed for the user directory; asserted here so the four watches
-    // stay consistent with each other.
-    test('users: the directory watch releases its handle', () {
-      final users = _read('lib/controller/user_controller.dart');
-      expect(users, contains('_usersSub = null;'));
-      expect(users, contains("stage: 'directory_watch'"));
-    });
   });
 
   group('a dead watch says so where it can be read', () {

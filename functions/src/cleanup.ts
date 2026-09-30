@@ -3,11 +3,311 @@
 
 import {onSchedule} from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
+import {FieldPath} from "firebase-admin/firestore";
 
 import {auth, db, fieldValue} from "./firebase";
 import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
+import {pushTokenRef} from "./push_delivery";
+import {syncPublicProfile} from "./public_profile_projection";
 const DEFAULT_RETENTION_DAYS = 3;
 const MANAGED_ROLES = new Set(["admin", "club", "recruteur", "agent"]);
+
+/**
+ * Migrates one user's legacy array into relation documents.
+ * @param {string} uid Source user ID.
+ * @param {unknown} rawFollowings Legacy following IDs.
+ * @return {Promise<number>} Number of migrated edges.
+ */
+async function migrateLegacyFollowEdges(
+  uid: string,
+  rawFollowings: unknown,
+): Promise<number> {
+  const followingIds = Array.isArray(rawFollowings) ?
+    [...new Set(rawFollowings
+      .map((value) => String(value ?? "").trim())
+      .filter((value) => value && value !== uid))] : [];
+  if (followingIds.length === 0) return 0;
+
+  const writer = db.bulkWriter();
+  writer.onWriteError((error) => {
+    if (error.code === 6) return false;
+    return error.failedAttempts < 3;
+  });
+  const writes: Promise<unknown>[] = [];
+  for (const targetUid of followingIds) {
+    const relation = {
+      followerUid: uid,
+      followingUid: targetUid,
+      active: true,
+      migratedAt: fieldValue.serverTimestamp(),
+    };
+    for (const ref of [
+      db.collection("users").doc(uid).collection("following").doc(targetUid),
+      db.collection("users").doc(targetUid).collection("followers").doc(uid),
+    ]) {
+      writes.push(writer.create(ref, relation).catch((error: {code?: unknown}) => {
+        if (error.code !== 6 && error.code !== "already-exists") throw error;
+      }));
+    }
+  }
+  await writer.close();
+  await Promise.all(writes);
+  return followingIds.length;
+}
+
+/**
+ * Convert an app-owned Firebase download URL to its authenticated gs:// path.
+ * @param {string} raw Candidate legacy download URL.
+ * @param {string} uid Expected CV owner.
+ * @return {string|null} Safe Storage path, or null for an unknown URL.
+ */
+function legacyCvStorageUrl(raw: string, uid: string): string | null {
+  try {
+    const parsed = new URL(raw);
+    const parts = parsed.pathname.split("/");
+    if (parsed.protocol !== "https:" ||
+        parsed.hostname !== "firebasestorage.googleapis.com" ||
+        parts[1] !== "v0" || parts[2] !== "b" ||
+        parts[4] !== "o" || !parts[3] || !parts[5]) return null;
+    const path = decodeURIComponent(parts.slice(5).join("/"));
+    const prefix = `cvs/${uid}/`;
+    if (!path.startsWith(prefix) ||
+        !/^cv_[0-9]+[.]pdf$/.test(path.slice(prefix.length))) return null;
+    return `gs://${parts[3]}/${path}`;
+  } catch {
+    return null;
+  }
+}
+
+// Legacy CV URLs include long-lived download tokens on readable profiles.
+// Convert known app-owned URLs to Storage paths; retain unusual values only
+// in the owner's private contact document for manual review.
+export const migrateLegacyCvUrls = onSchedule(
+  {
+    ...LOW_CPU_REGION_OPTIONS,
+    schedule: "every 5 minutes",
+    timeZone: "UTC",
+    memory: "256MiB",
+  },
+  async () => {
+    // Old installed clients open cvUrl directly in a browser. Converting it
+    // before they have upgraded would silently break their CV button. Enable
+    // this migration only at the final access-tightening phase.
+    if (process.env.ENABLE_LEGACY_CV_URL_MIGRATION !== "true") return;
+    const users = await db.collection("users")
+      .where("cvUrl", ">=", "http")
+      .where("cvUrl", "<", "http\uf8ff")
+      .limit(100)
+      .get();
+    let converted = 0;
+    let heldForReview = 0;
+    for (const user of users.docs) {
+      await db.runTransaction(async (tx) => {
+        const current = await tx.get(user.ref);
+        const raw = current.data()?.cvUrl;
+        if (typeof raw !== "string" || !raw.startsWith("http")) return;
+        const storageUrl = legacyCvStorageUrl(raw, user.id);
+        if (storageUrl) {
+          tx.update(user.ref, {cvUrl: storageUrl});
+          converted++;
+        } else {
+          tx.set(user.ref.collection("private").doc("contact"), {
+            legacyCvUrl: raw,
+            legacyCvReviewAt: fieldValue.serverTimestamp(),
+          }, {merge: true});
+          tx.update(user.ref, {cvUrl: fieldValue.delete()});
+          heldForReview++;
+        }
+      });
+    }
+    if (converted || heldForReview) {
+      logger.info("legacy CV URLs removed from readable profiles", {
+        converted,
+        heldForReview,
+      });
+    }
+  },
+);
+
+// Drain legacy tokens from publicly readable user documents after the new
+// private-token backend has been deployed. Each run is bounded and resumable.
+export const migrateLegacyFcmTokens = onSchedule(
+  {
+    ...LOW_CPU_REGION_OPTIONS,
+    schedule: "every 5 minutes",
+    timeZone: "UTC",
+    memory: "256MiB",
+  },
+  async () => {
+    const legacyUsers = await db.collection("users")
+      .where("fcmToken", ">", "")
+      .limit(100)
+      .get();
+    let migrated = 0;
+    for (const user of legacyUsers.docs) {
+      await db.runTransaction(async (tx) => {
+        const current = await tx.get(user.ref);
+        const tokenRef = pushTokenRef(user.id);
+        const privateToken = await tx.get(tokenRef);
+        const legacy = current.data()?.fcmToken;
+        if (typeof legacy !== "string" || !legacy.trim()) return;
+        if (!privateToken.exists) {
+          tx.set(tokenRef, {
+            token: legacy.trim(),
+            updatedAt: fieldValue.serverTimestamp(),
+          });
+        }
+        tx.update(user.ref, {
+          fcmToken: fieldValue.delete(),
+          fcmTokenUpdatedAt: fieldValue.delete(),
+        });
+        migrated++;
+      });
+    }
+    if (migrated > 0) logger.info("legacy FCM tokens migrated", {migrated});
+  },
+);
+
+// An account whose data was purged but whose Auth deletion failed needs its
+// own retry queue. The unverified-account cleanup below skips verified users.
+export const retryPendingAccountDeletions = onSchedule(
+  {
+    ...LOW_CPU_REGION_OPTIONS,
+    schedule: "every 1 hours",
+    timeZone: "UTC",
+    memory: "256MiB",
+  },
+  async () => {
+    const pending = await db.collection("account_deletion_pending")
+      .orderBy("lastErrorAt")
+      .limit(100)
+      .get();
+    for (const marker of pending.docs) {
+      try {
+        await auth.deleteUser(marker.id);
+        await marker.ref.delete();
+        logger.info("pending account Auth deletion completed", {uid: marker.id});
+      } catch (error) {
+        if (isAuthUserNotFound(error)) {
+          await marker.ref.delete();
+          continue;
+        }
+        await marker.ref.update({
+          lastErrorAt: fieldValue.serverTimestamp(),
+          attemptCount: fieldValue.increment(1),
+        });
+        logger.error("pending account Auth deletion retry failed", {
+          uid: marker.id,
+          error,
+        });
+      }
+    }
+  },
+);
+
+// Existing users predate public_profiles and relation-based follows. The
+// cursor makes both migrations bounded and resumable. BulkWriter.create keeps
+// an unfollow tombstone written during migration from being overwritten.
+export const backfillPublicProfiles = onSchedule(
+  {
+    ...LOW_CPU_REGION_OPTIONS,
+    schedule: "every 1 hours",
+    timeZone: "UTC",
+    memory: "256MiB",
+  },
+  async () => {
+    const cleanupLegacyArrays =
+      process.env.ENABLE_LEGACY_FOLLOW_FIELD_CLEANUP === "true";
+    const stateRef = db.collection("migration_state")
+      // v3 reindexes search prefixes even when the v2 projection/follow
+      // migration already completed on a deployed environment.
+      .doc(cleanupLegacyArrays ?
+        "public_profiles_follow_cleanup_v1" :
+        "public_profiles_and_follows_v3");
+    const state = await stateRef.get();
+    if (state.data()?.completed === true) return;
+
+    let query = db.collection("users")
+      .orderBy(FieldPath.documentId())
+      .limit(200);
+    const cursor = state.data()?.cursor;
+    if (typeof cursor === "string" && cursor) {
+      query = query.startAfter(cursor);
+    }
+    const users = await query.get();
+    let migratedEdges = 0;
+    for (const user of users.docs) {
+      await syncPublicProfile(user.id);
+      migratedEdges += await migrateLegacyFollowEdges(
+        user.id,
+        user.data().followingsList,
+      );
+      if (cleanupLegacyArrays) {
+        await user.ref.update({
+          followersList: fieldValue.delete(),
+          followingsList: fieldValue.delete(),
+        });
+      }
+    }
+
+    if (users.empty || users.size < 200) {
+      await stateRef.set({
+        completed: true,
+        completedAt: fieldValue.serverTimestamp(),
+      });
+      logger.info("public profile and follow backfill completed", {
+        processed: users.size,
+        migratedEdges,
+      });
+      return;
+    }
+    await stateRef.set({
+      cursor: users.docs[users.docs.length - 1].id,
+      updatedAt: fieldValue.serverTimestamp(),
+    }, {merge: true});
+  },
+);
+
+// Firestore orderBy excludes documents without the ordered field. Older
+// conversations can therefore disappear from the paged inbox until repaired.
+export const backfillConversationSortDates = onSchedule(
+  {
+    ...LOW_CPU_REGION_OPTIONS,
+    schedule: "every 1 hours",
+    timeZone: "UTC",
+    memory: "256MiB",
+  },
+  async () => {
+    const stateRef = db.collection("migration_state")
+      .doc("conversation_sort_dates_v1");
+    const state = await stateRef.get();
+    if (state.data()?.completed === true) return;
+    let query = db.collection("conversations")
+      .orderBy(FieldPath.documentId()).limit(100);
+    const cursor = state.data()?.cursor;
+    if (typeof cursor === "string" && cursor) query = query.startAfter(cursor);
+    const conversations = await query.get();
+    for (const conversation of conversations.docs) {
+      if (Object.prototype.hasOwnProperty.call(
+        conversation.data(), "lastMessageDate",
+      )) continue;
+      const newest = await conversation.ref.collection("messages")
+        .orderBy("dateEnvoi", "desc").limit(1).get();
+      const newestDate = newest.docs[0]?.data()?.dateEnvoi;
+      await conversation.ref.update({
+        lastMessageDate: newestDate ?? conversation.data().createdAt ?? null,
+      });
+    }
+    if (conversations.size < 100) {
+      await stateRef.set({completed: true, completedAt: fieldValue.serverTimestamp()});
+    } else {
+      await stateRef.set({
+        cursor: conversations.docs[conversations.docs.length - 1].id,
+        updatedAt: fieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
+  },
+);
 
 /**
  * Parse an integer env value with positive fallback.

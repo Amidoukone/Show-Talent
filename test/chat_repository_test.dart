@@ -101,7 +101,7 @@ void main() {
       );
       expect(
         repository,
-        contains("patch['lastMessageDate'] = FieldValue.delete();"),
+        contains("patch['lastMessageDate'] = null;"),
       );
       expect(
         repository,
@@ -171,10 +171,10 @@ void main() {
         // before ever calling canSendMessage, which stays a pure
         // allowMessages check.
         final firestore = FakeFirebaseFirestore();
-        await firestore.collection('users').doc('player').set({
+        await firestore.collection('public_profiles').doc('player').set({
           'allowMessages': true,
         });
-        await firestore.collection('users').doc('recruiter').set({
+        await firestore.collection('public_profiles').doc('recruiter').set({
           'allowMessages': true,
         });
         await BlockRepository(

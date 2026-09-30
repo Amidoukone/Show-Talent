@@ -82,13 +82,12 @@ void main() {
       },
     );
 
-    test('rules allow only narrow owner FCM token updates', () {
+    test('rules keep FCM tokens out of readable profiles', () {
       final rules = File('firestore.rules').readAsStringSync();
 
-      expect(rules, contains('function canUpdateOwnFcmToken() {'));
-      expect(rules, contains('changesOnly(["fcmToken"])'));
-      expect(rules, contains('request.resource.data.fcmToken is string'));
-      expect(rules, contains('request.resource.data.fcmToken.size() <= 4096'));
+      expect(rules, isNot(contains('canUpdateOwnFcmToken()')));
+      expect(rules, contains('match /user_push_tokens/{uid}'));
+      expect(rules, contains('allow read, write: if false;'));
     });
 
     test('rules allow narrow self-service profile updates for mobile', () {

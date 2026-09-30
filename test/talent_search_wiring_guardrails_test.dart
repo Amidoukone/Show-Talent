@@ -66,12 +66,14 @@ void main() {
   });
 
   test('the screen asks the repository rather than filtering itself', () {
-    expect(screen, contains('_repository.search('));
-    expect(screen, contains('_query,'));
+    expect(screen, contains('_repository.searchPage('));
+    expect(screen, contains('cursor: _cursor'));
+    expect(screen, contains('_activeQuery!'));
     // excludedUids only narrows the page the repository already fetched
     // (blocked-pair hiding); it is not the screen re-filtering the query's
     // own criteria itself.
     expect(screen, contains('excludedUids: excludedUids'));
+    expect(screen, contains('excludedUids: _excludedUids'));
     // Hydrating players to filter them on the phone is the thing this replaces.
     expect(screen, isNot(contains('fetchSearchablePlayers')));
   });

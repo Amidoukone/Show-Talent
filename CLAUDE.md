@@ -27,11 +27,19 @@ le mobile ecrivait `currentClubName`, la fiche affichait tantot l'un tantot
 l'autre) : voir `docs/inter-repo-admin-mobile-runbook.md` section "Ordre de
 deploiement entre les deux depots".
 
-Ordre obligatoire, sans exception :
+Ordre normal pour une evolution compatible :
 
 1. Regles Firestore + Cloud Functions (ce depot)
 2. Build mobile publie et installe
 3. Portail admin
+
+Exception documentee pour la migration `users` vers `public_profiles` :
+`docs/checklists/public-profile-rollout-2026-09-28.md`. Une regle qui retire la
+lecture de `users` avant migration des clients deja installes casse ces clients.
+Deployer d'abord le contrat additif (index, Functions, regles de transition),
+remplir les projections, distribuer le mobile compatible, puis fermer l'ancien
+acces seulement apres mesure des versions actives. Le portail admin reste le
+dernier lecteur/ecrivain a changer.
 
 ## Avant toute action qui touche le contrat partage
 

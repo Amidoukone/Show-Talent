@@ -9,7 +9,8 @@ import {db, fieldValue, messaging, storage} from "./firebase";
 import {MOBILE_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 import {normalizeNotificationText} from "./notification_text";
-import {handlePushSendError, isUnregisteredTokenError, pruneUnregisteredToken} from "./push_delivery";
+import {getUserPushToken, handlePushSendError, pushTokenRef} from "./push_delivery";
+import {enqueueFanoutCampaign} from "./fanout_campaigns";
 
 type SuccessResponse<T> = {
   success: true;
@@ -26,7 +27,7 @@ type ErrorResponse = {
 };
 
 type ActionResponse<T> = SuccessResponse<T> | ErrorResponse;
-type FanoutStats = {targeted: number; sent: number; failed: number};
+type FanoutStats = {queued: boolean};
 
 const ok = <T>(code: string, message: string, data?: T): SuccessResponse<T> => ({
   success: true,
@@ -330,15 +331,6 @@ function safeJson(value: unknown): Record<string, unknown> {
   }
 }
 
-function chunkArray<T>(items: T[], size: number): T[][] {
-  if (size <= 0) return [items];
-  const chunks: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    chunks.push(items.slice(i, i + size));
-  }
-  return chunks;
-}
-
 function clampSampleRate(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -602,7 +594,7 @@ export const shareVideo = onCall(
 /**
  * @param {string} senderUid UID de l'expéditeur
  * @param {string} recipientUid UID du destinataire
- * @param {string} contextType Type de contexte (message/offre/event)
+ * @param {string} contextType Type de contexte (message only)
  * @param {string} contextData ID du contexte
  * @return {Promise<void>}
  */
@@ -629,20 +621,51 @@ async function assertPushPermission(
         "Envoi interdit pour cette conversation."
       );
     }
+    const [forwardBlock, reverseBlock] = await Promise.all([
+      db.collection("blocks").doc(`${senderUid}_${recipientUid}`).get(),
+      db.collection("blocks").doc(`${recipientUid}_${senderUid}`).get(),
+    ]);
+    if (forwardBlock.exists || reverseBlock.exists) {
+      throw new HttpsError("permission-denied", "Conversation bloquée.");
+    }
     return;
   }
 
-  if (contextType === "offre") {
-    await assertOfferOwner(senderUid, contextData);
-    return;
-  }
+  // Offers and events use sendOfferFanout/sendEventFanout. A direct callable
+  // has no recipient relationship to validate and would let the owner send
+  // arbitrary copy to any active account.
+  throw new HttpsError("permission-denied", "Notification directe interdite.");
+}
 
-  if (contextType === "event") {
-    await assertEventOwner(senderUid, contextData);
-    return;
+async function messageBodyForPush(
+  conversationId: string,
+  messageId: string,
+  senderUid: string,
+  recipientUid: string,
+): Promise<string> {
+  if (!messageId || messageId.length > 128 || messageId.includes("/")) {
+    throw new HttpsError("invalid-argument", "messageId invalide.");
   }
-
-  throw new HttpsError("invalid-argument", "contextType invalide.");
+  const messageSnap = await db.collection("conversations").doc(conversationId)
+    .collection("messages").doc(messageId).get();
+  const data = messageSnap.data();
+  if (!data || getString(data, "expediteurId") !== senderUid ||
+      getString(data, "destinataireId") !== recipientUid) {
+    throw new HttpsError("permission-denied", "Message non autorisé.");
+  }
+  const sentAtMs = timestampToMillis(data.dateEnvoi);
+  const messageAgeMs = Date.now() - sentAtMs;
+  if (!sentAtMs || messageAgeMs < -60_000 || messageAgeMs > 5 * 60_000) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Ce message est trop ancien pour déclencher une notification.",
+    );
+  }
+  const body = normalizeNotificationText(getString(data, "contenu"), 300);
+  if (!body) {
+    throw new HttpsError("invalid-argument", "Message vide.");
+  }
+  return body;
 }
 
 async function assertOfferOwner(senderUid: string, offerId: string): Promise<void> {
@@ -675,35 +698,6 @@ async function assertEventOwner(senderUid: string, eventId: string): Promise<voi
   }
 }
 
-/** One reachable player: the token to send to, and who it belongs to. */
-type PlayerPushTarget = {uid: string; token: string};
-
-// Carries the uid alongside the token. Dropping it — as this used to, by
-// collecting bare tokens into a Set — makes the per-recipient failures that
-// sendEachForMulticast reports unattributable, so a dead token can never be
-// cleaned up and stays in the fanout forever, burning a send on every offer
-// and every event for the lifetime of the account.
-async function listPlayerTargets(
-  excludedUid: string,
-): Promise<PlayerPushTarget[]> {
-  const usersSnap = await db
-    .collection("users")
-    .where("role", "==", "joueur")
-    .select("fcmToken")
-    .get();
-
-  const byToken = new Map<string, PlayerPushTarget>();
-  for (const doc of usersSnap.docs) {
-    if (doc.id === excludedUid) continue;
-    const token = getString(doc.data(), "fcmToken");
-    if (token && !byToken.has(token)) {
-      byToken.set(token, {uid: doc.id, token});
-    }
-  }
-
-  return Array.from(byToken.values());
-}
-
 async function sendFanoutToPlayers(params: {
   senderUid: string;
   title: string;
@@ -711,80 +705,8 @@ async function sendFanoutToPlayers(params: {
   contextType: "offre" | "event";
   contextData: string;
 }): Promise<FanoutStats> {
-  const targets = await listPlayerTargets(params.senderUid);
-  if (!targets.length) {
-    return {targeted: 0, sent: 0, failed: 0};
-  }
-
-  let sent = 0;
-  let failed = 0;
-  let pruned = 0;
-
-  for (const chunk of chunkArray(targets, 500)) {
-    const response = await messaging.sendEachForMulticast({
-      tokens: chunk.map((target) => target.token),
-      notification: {
-        title: normalizeNotificationText(params.title, 120),
-        body: normalizeNotificationText(params.body, 300),
-      },
-      data: {
-        type: params.contextType,
-        id: params.contextData,
-        senderId: params.senderUid,
-      },
-      android: {
-        priority: "high",
-        notification: {
-          channelId: "high_importance_channel",
-          sound: "default",
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            sound: "default",
-          },
-        },
-      },
-    });
-
-    sent += response.successCount;
-    failed += response.failureCount;
-
-    // responses is index-aligned with the tokens we submitted, which is what
-    // makes the uid recoverable here.
-    if (response.failureCount > 0) {
-      const prunes: Promise<boolean>[] = [];
-      response.responses.forEach((result, index) => {
-        if (result.success || !isUnregisteredTokenError(result.error)) {
-          return;
-        }
-        const target = chunk[index];
-        if (!target) return;
-        prunes.push(
-          pruneUnregisteredToken({
-            uid: target.uid,
-            token: target.token,
-            reason: `fanout_${params.contextType}`,
-          }),
-        );
-      });
-      pruned += (await Promise.all(prunes)).filter(Boolean).length;
-    }
-  }
-
-  if (pruned > 0) {
-    logger.info("fanout pruned unregistered tokens", {
-      contextType: params.contextType,
-      pruned,
-    });
-  }
-
-  return {
-    targeted: targets.length,
-    sent,
-    failed,
-  };
+  await enqueueFanoutCampaign(params);
+  return {queued: true};
 }
 
 /**
@@ -798,6 +720,7 @@ export const sendUserPush = onCall(
     const recipientUid = getString(request.data, "recipientUid");
     const contextType = getString(request.data, "contextType");
     const contextData = getString(request.data, "contextData");
+    const messageId = getString(request.data, "messageId");
     const title = normalizeNotificationText(getString(request.data, "title"), 120);
     const body = normalizeNotificationText(getString(request.data, "body"), 300);
 
@@ -806,6 +729,9 @@ export const sendUserPush = onCall(
     }
 
     await assertPushPermission(uid, recipientUid, contextType, contextData);
+    const safeBody = contextType === "message" ?
+      await messageBodyForPush(contextData, messageId, uid, recipientUid) : body;
+    const safeTitle = contextType === "message" ? "Message" : title;
     await enforceCallRateLimit(
       "push_call_limits",
       `directPush_${uid}`,
@@ -817,16 +743,46 @@ export const sendUserPush = onCall(
     if (!userSnap.exists) {
       throw new HttpsError("not-found", "Destinataire introuvable.");
     }
+    if (userSnap.data()?.authDisabled === true || userSnap.data()?.estActif === false) {
+      throw new HttpsError("permission-denied", "Destinataire inactif.");
+    }
+    if (contextType === "message") {
+      const recipientData = userSnap.data() ?? {};
+      const activeAtMs = timestampToMillis(recipientData.activeAt);
+      if (getString(recipientData, "activeConversationId") === contextData &&
+          activeAtMs > 0 && Date.now() - activeAtMs <= 25_000) {
+        return ok("recipient_active", "Conversation déjà ouverte.", {sent: false});
+      }
+    }
 
-    const token = getString(userSnap.data(), "fcmToken");
+    const token = await getUserPushToken(recipientUid);
     if (!token) {
       return err("token_missing", "Destinataire sans token FCM.");
+    }
+
+    // A persisted message can trigger at most one direct push, even when the
+    // caller retries the callable or makes concurrent requests.
+    const receiptRef = contextType === "message" ?
+      db.collection("push_message_receipts").doc(contextData)
+        .collection("messages").doc(messageId) : null;
+    if (receiptRef) {
+      const claimed = await db.runTransaction(async (tx) => {
+        const receipt = await tx.get(receiptRef);
+        if (receipt.exists) return false;
+        tx.create(receiptRef, {
+          senderUid: uid,
+          recipientUid,
+          createdAt: fieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+      if (!claimed) return ok("already_sent", "Notification déjà traitée.", {sent: false});
     }
 
     try {
       await messaging.send({
         token,
-        notification: {title, body},
+        notification: {title: safeTitle, body: safeBody},
         data: {
           type: contextType,
           id: contextData,
@@ -850,6 +806,11 @@ export const sendUserPush = onCall(
 
       return ok("sent", "Notification envoyée.", {sent: true});
     } catch (error) {
+      if (receiptRef) {
+        await receiptRef.delete().catch((releaseError) => {
+          logger.error("Unable to release failed message push receipt", releaseError);
+        });
+      }
       // An unregistered token is a permanent condition, not a hiccup: the
       // recipient reinstalled or restored the app and the stored token will
       // now fail every single time. Clear it and answer accordingly, so the
@@ -890,13 +851,16 @@ export const saveUserFcmToken = onCall(
       throw new HttpsError("permission-denied", "Compte désactivé.");
     }
 
-    await userRef.set(
-      {
-        fcmToken: token,
-        fcmTokenUpdatedAt: fieldValue.serverTimestamp(),
-      },
-      {merge: true}
-    );
+    const batch = db.batch();
+    batch.set(pushTokenRef(uid), {
+      token,
+      updatedAt: fieldValue.serverTimestamp(),
+    });
+    batch.update(userRef, {
+      fcmToken: fieldValue.delete(),
+      fcmTokenUpdatedAt: fieldValue.delete(),
+    });
+    await batch.commit();
 
     return ok("saved", "Token FCM enregistre.", {saved: true});
   }
@@ -935,7 +899,7 @@ export const sendOfferFanout = onCall(
         contextType: "offre",
         contextData: offerId,
       });
-      return ok("fanout_sent", "Notifications offre envoyées.", stats);
+      return ok("fanout_queued", "Notifications offre programmées.", stats);
     } catch (error) {
       logger.error("❌ sendOfferFanout error", error);
       return err("fanout_failed", "Échec fanout offre.", true);
@@ -978,7 +942,7 @@ export const sendEventFanout = onCall(
         contextType: "event",
         contextData: eventId,
       });
-      return ok("fanout_sent", "Notifications événement envoyées.", stats);
+      return ok("fanout_queued", "Notifications événement programmées.", stats);
     } catch (error) {
       logger.error("❌ sendEventFanout error", error);
       return err("fanout_failed", "Échec fanout événement.", true);

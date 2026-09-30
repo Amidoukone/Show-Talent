@@ -340,6 +340,22 @@ project settings). None of these require a physical device:
 
 ## Promoting a build past TestFlight
 
+The `ios-staging` and `ios-production` workflows now run
+`scripts/verify-ios-ipa.sh` after `flutter build ipa` and before Codemagic
+uploads the artifact. The check fails the build unless the IPA signature is
+valid and the signed bundle carries the intended bundle ID,
+`aps-environment=production`, and `applinks:adfoot.org`. Apple sets the APNs
+environment from the distribution provisioning profile; the literal
+`development` value in the source entitlement file is not the final answer.
+Keep the successful Codemagic log and the exact IPA/build number with the
+TestFlight test evidence. Test push delivery on the physical iPhone in the
+foreground, background, and after a cold launch.
+
+The current `ios-production` workflow uploads to TestFlight only. After the
+production TestFlight smoke and the store metadata/privacy review, select the
+same processed build in App Store Connect and submit it for App Review there.
+This can be done from a browser on Windows; a personal Mac is not required.
+
 Both workflows are deliberately `submit_to_app_store: false`. Moving a
 TestFlight build to the public App Store listing is a distinct, manual
 decision made in App Store Connect once you're ready — this pipeline will

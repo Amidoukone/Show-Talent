@@ -34,6 +34,7 @@ class PushNotificationService {
     required String recipientUid,
     required String contextType,
     required String contextData,
+    required String messageId,
   }) async {
     try {
       await _invoke('sendUserPush', {
@@ -42,6 +43,7 @@ class PushNotificationService {
         'recipientUid': recipientUid,
         'contextType': contextType,
         'contextData': contextData,
+        'messageId': messageId,
       });
     } on FirebaseFunctionsException catch (e, st) {
       AppLogger.warning(

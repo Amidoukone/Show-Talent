@@ -22,6 +22,7 @@ typedef ChatNotificationSender =
       required String recipientUid,
       required String contextType,
       required String contextData,
+      required String messageId,
     });
 
 class ChatFlowException implements Exception {
@@ -34,8 +35,6 @@ class ChatFlowException implements Exception {
 }
 
 class ChatController extends GetxController {
-  static const Duration _activeWindowTolerance = Duration(seconds: 25);
-
   ChatController({
     AuthSessionService? authSessionService,
     ChatRepository? chatRepository,
@@ -60,6 +59,9 @@ class ChatController extends GetxController {
 
   final RxInt _totalUnread = 0.obs;
   int get totalUnread => _totalUnread.value;
+  final RxBool _hasMoreConversations = false.obs;
+  bool get hasMoreConversations => _hasMoreConversations.value;
+  int _conversationWindow = ChatRepository.defaultConversationWindow;
 
   StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _convSub;
@@ -163,6 +165,15 @@ class ChatController extends GetxController {
     _bindConversationsFor(uid);
   }
 
+  void loadMoreConversations() {
+    if (!_hasMoreConversations.value || _boundUid == null) return;
+    _conversationWindow += ChatRepository.conversationWindowIncrement;
+    final uid = _boundUid!;
+    _unbindConversations();
+    _boundUid = null;
+    _bindConversationsFor(uid);
+  }
+
   Stream<AppUser?> watchUserById(String uid) {
     return _chatRepository.watchUserById(uid);
   }
@@ -188,6 +199,8 @@ class ChatController extends GetxController {
   void _resetLocalState() {
     _conversations.value = <Conversation>[];
     _totalUnread.value = 0;
+    _hasMoreConversations.value = false;
+    _conversationWindow = ChatRepository.defaultConversationWindow;
     _conversations.refresh();
     update();
   }
@@ -203,7 +216,7 @@ class ChatController extends GetxController {
     final myEpoch = ++_bindEpoch;
 
     _convSub = _chatRepository
-        .watchConversationsForUser(userId)
+        .watchConversationsForUser(userId, limit: _conversationWindow)
         .listen(
           (snapshot) {
             try {
@@ -211,7 +224,9 @@ class ChatController extends GetxController {
                 return;
               }
 
-              final items = snapshot.docs.map((doc) {
+              _hasMoreConversations.value =
+                  snapshot.docs.length > _conversationWindow;
+              final items = snapshot.docs.take(_conversationWindow).map((doc) {
                 final data = doc.data();
                 data['id'] = doc.id;
 
@@ -499,7 +514,7 @@ class ChatController extends GetxController {
         estLu: false,
       );
 
-      await _chatRepository.persistMessageAndConversation(
+      final messageId = await _chatRepository.persistMessageAndConversation(
         conversationId: normalizedConversationId,
         message: message,
         senderId: normalizedSenderId,
@@ -523,15 +538,6 @@ class ChatController extends GetxController {
       }
 
       try {
-        final shouldNotify = await _chatRepository.shouldSendNotification(
-          recipientId: normalizedRecipientId,
-          conversationId: normalizedConversationId,
-          activeWindowTolerance: _activeWindowTolerance,
-        );
-        if (!shouldNotify) {
-          return;
-        }
-
         await _notificationSender(
           // Composed in the sender's own locale, not the recipient's --
           // the push payload has no way to know the reader's app locale at
@@ -542,6 +548,7 @@ class ChatController extends GetxController {
           recipientUid: normalizedRecipientId,
           contextType: 'message',
           contextData: normalizedConversationId,
+          messageId: messageId,
         );
       } catch (notificationError, notificationStackTrace) {
         AppLogger.warning(

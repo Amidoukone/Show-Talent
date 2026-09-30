@@ -6,6 +6,34 @@ import * as logger from "firebase-functions/logger";
 import {db, fieldValue} from "./firebase";
 
 /**
+ * Server-only token document; never part of a readable user profile.
+ * @param {string} uid User ID.
+ * @return {FirebaseFirestore.DocumentReference} Private token reference.
+ */
+export function pushTokenRef(uid: string) {
+  return db.collection("user_push_tokens").doc(uid);
+}
+
+/**
+ * Read the private token, with a short-lived legacy fallback for migration.
+ * @param {string} uid User ID.
+ * @return {Promise<string>} Registration token, if any.
+ */
+export async function getUserPushToken(uid: string): Promise<string> {
+  const [privateSnap, userSnap] = await Promise.all([
+    pushTokenRef(uid).get(),
+    db.collection("users").doc(uid).get(),
+  ]);
+  const privateToken = privateSnap.data()?.token;
+  if (typeof privateToken === "string" && privateToken.trim()) {
+    return privateToken.trim();
+  }
+  // Compatibility only while migrateLegacyFcmTokens clears old documents.
+  const legacy = userSnap.data()?.fcmToken;
+  return typeof legacy === "string" ? legacy.trim() : "";
+}
+
+/**
  * FCM error code meaning "this token no longer belongs to an install".
  *
  * FCM rotates and revokes registration tokens on its own: an app uninstall, a
@@ -37,8 +65,8 @@ export function isUnregisteredTokenError(error: unknown): boolean {
 }
 
 /**
- * Drops a dead token from `users/{uid}`, but only if it is still the one we
- * just failed to send to.
+ * Drops a dead token from its private token document (and any legacy public
+ * field), but only if it is still the one we just failed to send to.
  *
  * The compare-and-clear matters. A send is not instantaneous, and the client
  * persists a new token as soon as FirebaseMessaging hands one over (see
@@ -62,29 +90,32 @@ export async function pruneUnregisteredToken(params: {
   }
 
   const userRef = db.collection("users").doc(uid);
+  const tokenRef = pushTokenRef(uid);
 
   try {
     return await db.runTransaction(async (transaction) => {
       const snap = await transaction.get(userRef);
+      const privateSnap = await transaction.get(tokenRef);
       if (!snap.exists) {
         return false;
       }
 
-      const stored = snap.data()?.fcmToken;
-      if (typeof stored !== "string" || stored.trim() !== token) {
-        return false;
+      const privateStored = privateSnap.data()?.token;
+      const legacyStored = snap.data()?.fcmToken;
+      let pruned = false;
+      if (typeof privateStored === "string" && privateStored.trim() === token) {
+        transaction.delete(tokenRef);
+        pruned = true;
       }
-
-      transaction.set(
-        userRef,
-        {
+      if (typeof legacyStored === "string" && legacyStored.trim() === token) {
+        transaction.set(userRef, {
           fcmToken: fieldValue.delete(),
           fcmTokenUpdatedAt: fieldValue.delete(),
           fcmTokenPrunedAt: fieldValue.serverTimestamp(),
-        },
-        {merge: true},
-      );
-      return true;
+        }, {merge: true});
+        pruned = true;
+      }
+      return pruned;
     });
   } catch (error) {
     // Cleanup is opportunistic: the notification outcome must never depend on

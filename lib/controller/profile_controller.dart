@@ -951,6 +951,9 @@ class ProfileController extends GetxController {
     }
   }
 
+  Future<String> createCvViewUrl(String ownerUid) =>
+      _profileRepository.createCvViewUrl(ownerUid);
+
   Future<void> pauseAll() async {
     final ctx = 'profile:${user?.uid ?? ''}';
     await _videoManager.pauseAll(ctx);

@@ -25,13 +25,12 @@ class UserController extends GetxController with WidgetsBindingObserver {
 
   final Rx<AppUser?> _user = Rx<AppUser?>(null);
   AppUser? get user => _user.value;
+  Stream<AppUser?> get userChanges => _user.stream;
 
-  final Rx<List<AppUser>> _userList = Rx<List<AppUser>>([]);
-  List<AppUser> get userList => _userList.value;
+  List<AppUser> get userList => usersCache.values.toList(growable: false);
 
   final RxMap<String, AppUser> usersCache = <String, AppUser>{}.obs;
 
-  StreamSubscription<List<AppUser>>? _usersSub;
   StreamSubscription<UserAccessDecision>? _currentUserAccessSub;
   String? _currentUserAccessUid;
   Map<String, String>? _pendingSessionNotice;
@@ -236,57 +235,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  void _listenAllUsers() {
-    if (_authSessionService.currentUser == null || _usersSub != null) {
-      return;
-    }
-
-    _usersSub?.cancel();
-    _usersSub = _userRepository.watchAllUsers().listen(
-      (users) {
-        final list = <AppUser>[];
-
-        for (final user in users) {
-          usersCache[user.uid] = user;
-
-          if (_user.value?.uid == user.uid) {
-            _user.value = user;
-          }
-
-          if (user.nom.trim().isNotEmpty) {
-            list.add(user);
-          }
-        }
-
-        _userList.value = list;
-        update();
-      },
-      onError: (Object error) {
-        _usersSub = null;
-
-        // Nothing re-subscribes on its own. Until some other path happens to
-        // call _listenAllUsers again, `usersCache` stops updating and the
-        // people list is frozen — and with `debug` writing nowhere in a
-        // release build, that was indistinguishable from "this app knows no
-        // other users". The same shape as the access watcher, which was
-        // already given a report for the same reason.
-        AuthDiagnostics.handled(
-          'user directory watch stopped; the cache will go stale',
-          stage: 'directory_watch',
-          error: error,
-        );
-
-        if (_isPermissionDenied(error)) {
-          unawaited(_enforceCurrentSessionAccess());
-        }
-      },
-    );
-  }
-
   Future<void> _stopAllUsersWatch() async {
-    await _usersSub?.cancel();
-    _usersSub = null;
-    _userList.value = const <AppUser>[];
+    usersCache.clear();
   }
 
   /// Uids already being fetched by [getUserById], so a grid rebuilding many
@@ -300,25 +250,25 @@ class UserController extends GetxController with WidgetsBindingObserver {
       return cached;
     }
 
-    // The directory listener is capped (UserRepository.directoryWatchLimit),
-    // so a uid outside that window is legitimately absent from the cache
-    // rather than nonexistent. Fetch it once in the background; `usersCache`
-    // is observable, so the caller repaints with the real author on the next
-    // frame instead of permanently rendering a placeholder.
+    // Directory pages do not fill the whole cache. Resolve a missing author
+    // on demand so the caller repaints when the public identity arrives.
     unawaited(_hydrateCachedUser(uid));
     return null;
   }
 
   Future<void> _hydrateCachedUser(String uid) async {
+    final sessionUid = _authSessionService.currentUser?.uid;
     if (uid.trim().isEmpty ||
+        sessionUid == null ||
         usersCache.containsKey(uid) ||
         !_pendingCacheHydrations.add(uid)) {
       return;
     }
 
     try {
-      final fetched = await _userRepository.fetchUserById(uid);
-      if (fetched != null) {
+      final fetched = await _userRepository.fetchPublicUserById(uid);
+      if (fetched != null &&
+          _authSessionService.currentUser?.uid == sessionUid) {
         usersCache[fetched.uid] = fetched;
         update();
       }
@@ -333,6 +283,24 @@ class UserController extends GetxController with WidgetsBindingObserver {
       _pendingCacheHydrations.remove(uid);
     }
   }
+
+  Future<void> ensurePublicUsers(Iterable<String> ids) async {
+    final sessionUid = _authSessionService.currentUser?.uid;
+    if (sessionUid == null) return;
+    final missing = ids.where((id) => !usersCache.containsKey(id)).toSet();
+    if (missing.isEmpty) return;
+    final users = await _userRepository.fetchPublicUsersByIds(missing);
+    if (_authSessionService.currentUser?.uid != sessionUid) return;
+    for (final user in users) {
+      usersCache[user.uid] = user;
+    }
+  }
+
+  Future<PublicUserPage> fetchPublicDirectoryPage({
+    String search = '',
+    PublicUserCursor? cursor,
+  }) =>
+      _userRepository.fetchPublicDirectoryPage(search: search, cursor: cursor);
 
   Future<void> refreshUser() async {
     final uid = _authSessionService.currentUser?.uid;
@@ -420,7 +388,6 @@ class UserController extends GetxController with WidgetsBindingObserver {
       _user.value = hydrated;
       usersCache[hydrated.uid] = hydrated;
       _sessionLoadMessage.value = '';
-      _listenAllUsers();
       update();
     } on FirebaseException catch (error, st) {
       AppLogger.warning(
@@ -875,7 +842,6 @@ class UserController extends GetxController with WidgetsBindingObserver {
         } else {
           unawaited(ensureCurrentUserHydrated());
         }
-        _listenAllUsers();
         if (!_isLatestRouteRequest(requestVersion)) {
           return;
         }
@@ -1007,7 +973,6 @@ class UserController extends GetxController with WidgetsBindingObserver {
   @override
   void onClose() {
     WidgetsBinding.instance.removeObserver(this);
-    _usersSub?.cancel();
     _currentUserAccessSub?.cancel();
     _stopAccessHeartbeat();
     super.onClose();

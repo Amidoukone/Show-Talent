@@ -42,7 +42,8 @@ class ChatRepository {
   /// hold more than this, the ordering has to move server-side — a
   /// `lastMessageDate` sort with the composite index it requires — rather
   /// than the cap being raised.
-  static const int conversationWatchLimit = 200;
+  static const int defaultConversationWindow = 50;
+  static const int conversationWindowIncrement = 50;
 
   final FirebaseFirestore _firestore;
   final BlockRepository _blockRepository;
@@ -55,6 +56,9 @@ class ChatRepository {
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
+
+  CollectionReference<Map<String, dynamic>> get _publicProfilesCollection =>
+      _firestore.collection('public_profiles');
 
   CollectionReference<Map<String, dynamic>> get _contactIntakesCollection =>
       _firestore.collection('contact_intakes');
@@ -79,11 +83,13 @@ class ChatRepository {
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> watchConversationsForUser(
-    String userId,
-  ) {
+    String userId, {
+    int limit = defaultConversationWindow,
+  }) {
     return _conversationsCollection
         .where('utilisateurIds', arrayContains: userId)
-        .limit(conversationWatchLimit)
+        .orderBy('lastMessageDate', descending: true)
+        .limit(limit + 1)
         .snapshots();
   }
 
@@ -382,7 +388,7 @@ class ChatRepository {
     return intake;
   }
 
-  Future<void> persistMessageAndConversation({
+  Future<String> persistMessageAndConversation({
     required String conversationId,
     required Message message,
     required String senderId,
@@ -405,14 +411,15 @@ class ChatRepository {
     }, SetOptions(merge: true));
 
     await batch.commit();
+    return messageRef.id;
   }
 
   Future<bool> canSendMessage({
     required String senderId,
     required String recipientId,
   }) async {
-    final senderDoc = await _usersCollection.doc(senderId).get();
-    final recipientDoc = await _usersCollection.doc(recipientId).get();
+    final senderDoc = await _publicProfilesCollection.doc(senderId).get();
+    final recipientDoc = await _publicProfilesCollection.doc(recipientId).get();
 
     if (!senderDoc.exists || !recipientDoc.exists) {
       return false;
@@ -423,28 +430,6 @@ class ChatRepository {
         recipientDoc.data()?['allowMessages'] as bool? ?? true;
 
     return senderAllow && recipientAllow;
-  }
-
-  Future<bool> shouldSendNotification({
-    required String recipientId,
-    required String conversationId,
-    required Duration activeWindowTolerance,
-  }) async {
-    final doc = await _usersCollection.doc(recipientId).get();
-    if (!doc.exists) return true;
-
-    final data = doc.data() ?? <String, dynamic>{};
-    final activeConvId = data['activeConversationId'] as String?;
-    final ts = data['activeAt'] as Timestamp?;
-    final activeAt = ts?.toDate();
-
-    if (activeConvId == conversationId && activeAt != null) {
-      final isRecent =
-          DateTime.now().difference(activeAt) <= activeWindowTolerance;
-      return !isRecent;
-    }
-
-    return true;
   }
 
   Future<void> markMessageAsRead({
@@ -539,7 +524,7 @@ class ChatRepository {
 
     if (latestMessageSnapshot.docs.isEmpty) {
       patch['lastMessage'] = FieldValue.delete();
-      patch['lastMessageDate'] = FieldValue.delete();
+      patch['lastMessageDate'] = null;
     } else {
       final latestMessage = Message.fromMap(
         latestMessageSnapshot.docs.first.data(),
@@ -578,7 +563,7 @@ class ChatRepository {
   }
 
   Stream<AppUser?> watchUserById(String uid) {
-    return _usersCollection.doc(uid).snapshots().map((snapshot) {
+    return _publicProfilesCollection.doc(uid).snapshots().map((snapshot) {
       if (!snapshot.exists) {
         return null;
       }

@@ -162,6 +162,7 @@ class ChatTestHarness {
             required String recipientUid,
             required String contextType,
             required String contextData,
+            required String messageId,
           }) async {
             sentNotifications.add(<String, String>{
               'title': title,
@@ -169,6 +170,7 @@ class ChatTestHarness {
               'recipientUid': recipientUid,
               'contextType': contextType,
               'contextData': contextData,
+              'messageId': messageId,
             });
           },
       protectedAccessDeniedHandler: () async {},

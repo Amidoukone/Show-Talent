@@ -1203,14 +1203,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           _StatChip(
             label: l10n.profileFollowersLabel,
-            value: user.followersList.length,
+            value: user.followers,
             onTap: () => Get.to(
               () => FollowListScreen(uid: user.uid, listType: 'followers'),
             ),
           ),
           _StatChip(
             label: l10n.profileFollowingLabel,
-            value: user.followingsList.length,
+            value: user.followings,
             onTap: () => Get.to(
               () => FollowListScreen(uid: user.uid, listType: 'followings'),
             ),
@@ -1675,9 +1675,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
               title: Text(l10n.profileCvViewTitle),
               subtitle: Text(l10n.profileCvViewSubtitle),
               onTap: () async {
-                final uri = Uri.parse(user.cvUrl!);
-                if (await canLaunchUrl(uri)) {
-                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                try {
+                  final authorizedUrl = await _profileController
+                      .createCvViewUrl(user.uid);
+                  final uri = Uri.parse(authorizedUrl);
+                  final opened = await launchUrl(
+                    uri,
+                    mode: LaunchMode.externalApplication,
+                  );
+                  if (!opened) {
+                    throw StateError('CV browser launch failed');
+                  }
+                } catch (error) {
+                  AdFeedback.error(
+                    l10n.profileCvViewTitle,
+                    l10n.profileCvUnavailable,
+                  );
                 }
               },
             ),
@@ -1733,7 +1746,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return const SizedBox.shrink();
     }
 
-    final bool isFollowing = user.followersList.contains(currentUserId);
+    final bool isFollowing =
+        Get.find<UserController>().user?.followingsList.contains(user.uid) ??
+        false;
 
     return Row(
       children: [

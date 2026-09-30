@@ -12,7 +12,7 @@ import {
   getString,
 } from "./admin_account_support";
 import {normalizeNotificationText} from "./notification_text";
-import {handlePushSendError} from "./push_delivery";
+import {getUserPushToken, handlePushSendError} from "./push_delivery";
 
 const OFFER_STATUSES = new Set(["brouillon", "ouverte", "fermee", "archivee"]);
 const EVENT_STATUSES = new Set(["brouillon", "ouvert", "ferme", "archive"]);
@@ -576,7 +576,7 @@ async function notifyVideoOwner(params: {
       return false;
     }
 
-    const token = getString(userSnap.data(), "fcmToken");
+    const token = await getUserPushToken(params.ownerUid);
     if (!token) {
       return false;
     }
@@ -1126,4 +1126,3 @@ export const adminDeleteEvent = onCall(
     request,
   ),
 );
-

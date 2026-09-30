@@ -109,18 +109,22 @@ void main() {
     expect(pushDelivery, contains('runTransaction'));
 
     expect(actions, contains('handlePushSendError'));
-    expect(actions, contains('pruneUnregisteredToken'));
+    expect(
+      File('functions/src/fanout_campaigns.ts').readAsStringSync(),
+      contains('pruneUnregisteredToken'),
+    );
     expect(adminContent, contains('handlePushSendError'));
   });
 
   test('the fanout keeps the uid that owns each token', () {
-    final actions = File('functions/src/actions.ts').readAsStringSync();
+    final fanout =
+        File('functions/src/fanout_campaigns.ts').readAsStringSync();
 
     // Collecting bare tokens made sendEachForMulticast failures
     // unattributable, so a dead token could never be cleaned up and stayed in
     // every future fanout.
-    expect(actions, contains('listPlayerTargets'));
-    expect(actions, isNot(contains('listPlayerTokens')));
-    expect(actions, contains('type PlayerPushTarget'));
+    expect(fanout, contains('uid: player.id'));
+    expect(fanout, contains('token: target.token'));
+    expect(fanout, contains('uid: target.uid'));
   });
 }

@@ -90,6 +90,13 @@ export function toBirthYear(value: unknown): number | null {
   // Une annee hors de ces bornes ne decrit aucun joueur vivant : mieux vaut
   // aucune valeur qu'une valeur qui fausserait un filtre par tranche d'age.
   if (year < MIN_BIRTH_YEAR || year > new Date().getUTCFullYear()) return null;
+  // The service requires adults. Compare the full UTC date: a birth year by
+  // itself would expose a player who has not yet reached their 18th birthday.
+  const now = new Date();
+  const eighteenthBirthday = new Date(Date.UTC(
+    year + 18, date.getUTCMonth(), date.getUTCDate(),
+  ));
+  if (eighteenthBirthday.getTime() > now.getTime()) return null;
   return year;
 }
 

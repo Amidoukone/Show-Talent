@@ -96,6 +96,8 @@ workflows:
             --dart-define=FIREBASE_IOS_APP_ID="$FIREBASE_IOS_APP_ID" \
             --dart-define=FIREBASE_IOS_BUNDLE_ID="$FIREBASE_IOS_BUNDLE_ID" \
             --export-options-plist=/Users/builder/export_options.plist
+      - name: Verify signed staging IPA
+        script: bash scripts/verify-ios-ipa.sh "$BUNDLE_ID" production
     artifacts: *artifacts
     publishing:
       app_store_connect:
@@ -170,6 +172,8 @@ workflows:
             --dart-define=FIREBASE_IOS_APP_ID="$FIREBASE_IOS_APP_ID" \
             --dart-define=FIREBASE_IOS_BUNDLE_ID="$FIREBASE_IOS_BUNDLE_ID" \
             --export-options-plist=/Users/builder/export_options.plist
+      - name: Verify signed production IPA
+        script: bash scripts/verify-ios-ipa.sh "$BUNDLE_ID" production
     artifacts: *artifacts
     publishing:
       app_store_connect:

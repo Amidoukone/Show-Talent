@@ -248,6 +248,13 @@
         }
       },
       {
+        "source": "/cv/view/**",
+        "function": {
+          "functionId": "cvViewPage",
+          "region": "europe-west1"
+        }
+      },
+      {
         "source": "/verify",
         "destination": "/verify/index.html"
       },

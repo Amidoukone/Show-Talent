@@ -18,7 +18,7 @@ Future<void> _addPlayer(
   int? birthYear,
   bool openToOpportunities = false,
 }) {
-  return firestore.collection('users').doc(uid).set(<String, dynamic>{
+  return firestore.collection('public_profiles').doc(uid).set(<String, dynamic>{
     'uid': uid,
     'nom': 'Player $uid',
     'role': 'joueur',
@@ -31,6 +31,31 @@ Future<void> _addPlayer(
 }
 
 void main() {
+  test('search pages continue without repeating or skipping players', () async {
+    final firestore = FakeFirebaseFirestore();
+    for (var index = 0; index < 35; index++) {
+      await _addPlayer(
+        firestore,
+        'player${index.toString().padLeft(2, '0')}',
+        isSearchable: true,
+      );
+    }
+    final repository = TalentSearchRepository(firestore: firestore);
+    final first = await repository.searchPage(const TalentSearchQuery());
+    final second = await repository.searchPage(
+      const TalentSearchQuery(),
+      cursor: first.cursor,
+    );
+    expect(first.results, hasLength(30));
+    expect(first.hasMore, isTrue);
+    expect(second.results, hasLength(5));
+    expect(second.hasMore, isFalse);
+    expect(<String>{
+      ...first.results.map((user) => user.uid),
+      ...second.results.map((user) => user.uid),
+    }, hasLength(35));
+  });
+
   group('the gate comes first', () {
     test('a file the server did not mark searchable never appears', () async {
       // Disabled, private or incomplete accounts are excluded by the index
@@ -133,6 +158,37 @@ void main() {
   });
 
   group('filtering by nationality', () {
+    test('finds a match beyond the first Firestore page', () async {
+      final firestore = FakeFirebaseFirestore();
+      for (var index = 0; index < TalentSearchRepository.pageSize; index++) {
+        await _addPlayer(
+          firestore,
+          'a${index.toString().padLeft(2, '0')}',
+          isSearchable: true,
+          positionCodes: <String>['CB'],
+          nationalities: <String>['ML'],
+        );
+      }
+      await _addPlayer(
+        firestore,
+        'z-match',
+        isSearchable: true,
+        positionCodes: <String>['CB'],
+        nationalities: <String>['CI'],
+      );
+
+      final page = await TalentSearchRepository(firestore: firestore)
+          .searchPage(
+            const TalentSearchQuery(
+              positions: <FootballPosition>[FootballPosition.centreBack],
+              nationality: 'CI',
+            ),
+          );
+
+      expect(page.results.map((user) => user.uid), <String>['z-match']);
+      expect(page.hasMore, isFalse);
+    });
+
     test('it is a server filter when no position is asked for', () async {
       final firestore = FakeFirebaseFirestore();
       await _addPlayer(

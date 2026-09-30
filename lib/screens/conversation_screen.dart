@@ -10,6 +10,7 @@ import '../l10n/generated/app_localizations.dart';
 import '../models/user.dart';
 import '../services/auth/auth_session_service.dart';
 import '../widgets/ad_app_bar.dart';
+import '../widgets/ad_button.dart';
 import '../widgets/ad_dialogs.dart';
 import '../widgets/ad_feedback.dart';
 import '../widgets/ad_state_panel.dart';
@@ -35,6 +36,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   final AuthSessionService _authSessionService = AuthSessionService();
   bool _isOpeningConversation = false;
   final Set<String> _deletingConversationIds = <String>{};
+  final Set<String> _requestedUserIds = <String>{};
 
   @override
   void initState() {
@@ -142,7 +144,20 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
             // ✅ Map uid -> AppUser pour accès O(1)
             final Map<String, AppUser> usersById = {
               for (final u in userController.userList) u.uid: u,
+              for (final u in userController.usersCache.values) u.uid: u,
             };
+            final missingUserIds = conversations
+                .expand((conversation) => conversation.utilisateurIds)
+                .where(
+                  (uid) => uid != currentUserId && !usersById.containsKey(uid),
+                )
+                .where(_requestedUserIds.add)
+                .toSet();
+            if (missingUserIds.isNotEmpty) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                userController.ensurePublicUsers(missingUserIds);
+              });
+            }
 
             return Center(
               child: ConstrainedBox(
@@ -154,9 +169,21 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
                   child: ListView.separated(
                     physics: const BouncingScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 86),
-                    itemCount: sorted.length,
+                    itemCount:
+                        sorted.length +
+                        (chatController.hasMoreConversations ? 1 : 0),
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
+                      if (index == sorted.length) {
+                        return Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: AdButton(
+                            label: l10n.conversationsLoadMore,
+                            kind: AdButtonKind.outline,
+                            onPressed: chatController.loadMoreConversations,
+                          ),
+                        );
+                      }
                       final conversation = sorted[index];
 
                       final otherUserId = conversation.utilisateurIds
@@ -282,7 +309,9 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
   }
 
   String _formatDateOrTime(DateTime? dateTime) {
-    if (dateTime == null) return AppLocalizations.of(context)!.conversationsUnknownDate;
+    if (dateTime == null) {
+      return AppLocalizations.of(context)!.conversationsUnknownDate;
+    }
 
     final now = DateTime.now();
     final isToday =

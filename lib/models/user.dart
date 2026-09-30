@@ -533,7 +533,7 @@ class AppUser {
     };
   }
 
-  /// Fields for the users/{uid} doc. phone, birthDate, cvUrl, email and
+  /// Fields for the users/{uid} doc. phone, birthDate, email and
   /// authDisabledReason are intentionally absent — they live in
   /// users/{uid}/private/contact (see [toPrivateContactMap]) and
   /// profileVerificationNote lives in users/{uid}/private/adminNotes
@@ -605,10 +605,8 @@ class AppUser {
       'followersList': followersList,
       'followingsList': followingsList,
 
-      // Docs — cvUrl stays on this doc on purpose: it's meant to be
-      // visible to third parties once profilePublic is true, same as the
-      // Storage rule already gates the actual PDF (unlike phone/birthDate,
-      // which never had a legitimate third-party audience).
+      // Docs — this is an authenticated gs:// Storage reference. It carries
+      // no download token; Storage rules authorize access to the PDF.
       'cvUrl': cvUrl,
 
       // Droits — jamais ecrits par le client, la regle Firestore les refuse.

@@ -82,7 +82,7 @@ void main() {
 
     List<Map<String, dynamic>> userIndexes() => declared
         .cast<Map<String, dynamic>>()
-        .where((index) => index['collectionGroup'] == 'users')
+        .where((index) => index['collectionGroup'] == 'public_profiles')
         .toList();
 
     test('no composite index carries two array fields', () {

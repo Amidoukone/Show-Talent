@@ -1,6 +1,20 @@
 {
   "indexes": [
     {
+      "collectionGroup": "conversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "utilisateurIds",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "lastMessageDate",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "notifications",
       "queryScope": "COLLECTION",
       "fields": [
@@ -251,7 +265,21 @@
       ]
     },
     {
-      "collectionGroup": "users",
+      "collectionGroup": "public_profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSearchable",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "searchPrefixes",
+          "arrayConfig": "CONTAINS"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "public_profiles",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -269,7 +297,7 @@
       ]
     },
     {
-      "collectionGroup": "users",
+      "collectionGroup": "public_profiles",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -287,7 +315,7 @@
       ]
     },
     {
-      "collectionGroup": "users",
+      "collectionGroup": "public_profiles",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -305,7 +333,7 @@
       ]
     },
     {
-      "collectionGroup": "users",
+      "collectionGroup": "public_profiles",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -320,6 +348,122 @@
           "fieldPath": "currentClubLevel",
           "order": "ASCENDING"
         }
+      ]
+    },
+    {
+      "collectionGroup": "public_profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSearchable",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "openToOpportunities",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "birthYear",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "public_profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSearchable",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "positionCodes",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "openToOpportunities",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "birthYear",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "public_profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSearchable",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "nationalities",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "openToOpportunities",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "public_profiles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isSearchable",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "nationalities",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "openToOpportunities",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "birthYear",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isSearchable", "order": "ASCENDING" },
+        { "fieldPath": "positionCodes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "birthYear", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isSearchable", "order": "ASCENDING" },
+        { "fieldPath": "positionCodes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "openToOpportunities", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isSearchable", "order": "ASCENDING" },
+        { "fieldPath": "nationalities", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "birthYear", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isSearchable", "order": "ASCENDING" },
+        { "fieldPath": "positionCodes", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "currentClubLevel", "order": "ASCENDING" }
       ]
     }
   ],

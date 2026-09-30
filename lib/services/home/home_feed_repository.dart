@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/utils/video_search_matcher.dart';
 
 class HomeFeedRepository {
   const HomeFeedRepository({FirebaseFirestore? firestore})
@@ -30,20 +31,33 @@ class HomeFeedRepository {
     return video;
   }
 
-  Future<List<AppUser>> fetchSearchablePlayers({int limit = 300}) async {
-    final snapshot = await _firestore
-        .collection('users')
-        .where('role', isEqualTo: 'joueur')
-        .limit(limit)
-        .get();
-
-    return snapshot.docs
-        .map((doc) {
-          final data = doc.data();
-          return AppUser.fromMap({...data, 'uid': data['uid'] ?? doc.id});
-        })
-        .where((user) => user.uid.trim().isNotEmpty)
+  Future<List<AppUser>> searchPlayers(String rawQuery, {int limit = 60}) async {
+    final normalized = normalizeVideoSearchText(rawQuery);
+    if (normalized.isEmpty || limit <= 0) return const <AppUser>[];
+    final tokens = expandVideoSearchQuery(rawQuery)
+        .where((term) => !term.contains(' ') && term.length <= 24)
+        .take(30)
         .toList(growable: false);
+    if (tokens.isEmpty) return const <AppUser>[];
+    final results = <AppUser>[];
+    DocumentSnapshot<Map<String, dynamic>>? cursor;
+    final query = _firestore
+        .collection('public_profiles')
+        .where('isSearchable', isEqualTo: true)
+        .where('searchPrefixes', arrayContainsAny: tokens);
+    while (results.length < limit) {
+      final page = await (cursor == null
+          ? query.limit(100)
+          : query.startAfterDocument(cursor).limit(100)).get();
+      for (final doc in page.docs) {
+        final user = AppUser.fromMap({...doc.data(), 'uid': doc.id});
+        if (matchesUserVideoSearch(user, rawQuery)) results.add(user);
+        if (results.length >= limit) break;
+      }
+      if (page.docs.length < 100) break;
+      cursor = page.docs.last;
+    }
+    return results;
   }
 
   Future<List<Video>> fetchReadyVideosForAuthors(

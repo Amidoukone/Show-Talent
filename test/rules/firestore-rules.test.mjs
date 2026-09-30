@@ -20,7 +20,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   doc, getDoc, setDoc, updateDoc, deleteDoc,
-  serverTimestamp, increment, arrayUnion,
+  serverTimestamp, increment, arrayUnion, writeBatch,
 } from 'firebase/firestore';
 
 const REPO = path.resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -69,8 +69,14 @@ async function seed() {
       [RECRUITER, 'recruteur'], [PLAYER, 'joueur'],
       [RIVAL, 'joueur'], [OUTSIDER, 'joueur'],
     ]) {
-      await setDoc(doc(db, 'users', uid), { ...embedded(uid, role), authDisabled: false });
+      const profile = { ...embedded(uid, role), authDisabled: false };
+      await setDoc(doc(db, 'users', uid), profile);
+      await setDoc(doc(db, 'public_profiles', uid), profile);
     }
+    await setDoc(doc(db, 'users', PLAYER, 'private', 'contact'), {phone: '+000000'});
+    await setDoc(doc(db, 'users', PLAYER, 'following', RIVAL), {
+      followerUid: PLAYER, followingUid: RIVAL, active: true,
+    });
 
     await setDoc(doc(db, 'offres', OFFER), {
       statut: 'ouverte',
@@ -206,7 +212,7 @@ await check('l\'organisateur modifie son evenement', 'allow', () =>
 
 /* ---------------- Messages ---------------- */
 
-await check('l\'auteur modifie son propre message', 'allow', () =>
+await check('l\'auteur ne reecrit pas un message envoye', 'deny', () =>
   updateDoc(doc(player, 'conversations', CONV, 'messages', 'm_player'), {
     contenu: 'Bonjour, candidature mise a jour.',
   }));
@@ -222,6 +228,12 @@ await check('le recruteur supprime le message du joueur', 'deny', () =>
 await check('le destinataire marque le message comme lu', 'allow', () =>
   updateDoc(doc(recruiter, 'conversations', CONV, 'messages', 'm_player'), {
     estLu: true,
+  }));
+
+await check('un membre ne peut pas creer un message vers un tiers', 'deny', () =>
+  setDoc(doc(player, 'conversations', CONV, 'messages', 'm_wrong_recipient'), {
+    expediteurId: PLAYER, destinataireId: OUTSIDER,
+    contenu: 'Message detourne.', estLu: false,
   }));
 
 await check('l\'auteur supprime son propre message', 'allow', () =>
@@ -317,6 +329,83 @@ await check('l\'envoi redevient possible apres deblocage', 'allow', () =>
     expediteurId: PLAYER, destinataireId: RECRUITER,
     contenu: 'Toujours partant.', estLu: false,
   }));
+
+/* ---------------- Account deletion and contact intake ---------------- */
+
+await check('un utilisateur relit son profil interne', 'allow', () =>
+  getDoc(doc(player, 'users', PLAYER)));
+
+await check('un tiers ne lit pas le profil interne', 'deny', () =>
+  getDoc(doc(recruiter, 'users', PLAYER)));
+
+await check('un utilisateur actif lit une projection publique', 'allow', () =>
+  getDoc(doc(recruiter, 'public_profiles', PLAYER)));
+
+await check('un client ne modifie pas une projection publique', 'deny', () =>
+  updateDoc(doc(player, 'public_profiles', PLAYER), {nom: 'Nom detourne'}));
+
+await check('un utilisateur lit ses propres abonnements', 'allow', () =>
+  getDoc(doc(player, 'users', PLAYER, 'following', RIVAL)));
+
+await check("un tiers ne lit pas les relations d'abonnement", 'deny', () =>
+  getDoc(doc(recruiter, 'users', PLAYER, 'following', RIVAL)));
+
+await check("un client n'ecrit pas directement une relation", 'deny', () =>
+  setDoc(doc(player, 'users', PLAYER, 'following', OUTSIDER), {
+    followerUid: PLAYER, followingUid: OUTSIDER, active: true,
+  }));
+
+await check('suppression directe du profil refusee', 'deny', () =>
+  deleteDoc(doc(player, 'users', PLAYER)));
+
+await check('suppression directe du contact prive refusee', 'deny', () =>
+  deleteDoc(doc(player, 'users', PLAYER, 'private', 'contact')));
+
+await check('ecriture directe du jeton FCM public refusee', 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {fcmToken: 'device-secret'}));
+
+await check('lecture du jeton FCM prive refusee', 'deny', () =>
+  getDoc(doc(player, 'user_push_tokens', PLAYER)));
+
+await check('ecriture du jeton FCM prive refusee', 'deny', () =>
+  setDoc(doc(player, 'user_push_tokens', PLAYER), {token: 'device-secret'}));
+
+await check('chemin Storage de CV accepte', 'allow', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    cvUrl: `gs://demo-bucket/cvs/${PLAYER}/cv_123.pdf`,
+  }));
+
+await check('URL de CV avec jeton refusee', 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    cvUrl: `https://firebasestorage.googleapis.com/v0/b/demo/o/cvs%2F${PLAYER}%2Fcv_123.pdf?token=leaked`,
+  }));
+
+const intakeData = {
+  requesterUid: PLAYER, targetUid: RECRUITER,
+  status: 'new', agencyFollowUpStatus: 'new',
+  contactReason: 'recrutement', introMessage: 'Bonjour',
+};
+
+await check('demande de contact sans mise a jour du quota refusee', 'deny', () =>
+  setDoc(doc(player, 'contact_intakes', 'intake_without_limit'), intakeData));
+
+await check('demande de contact avec quota atomique autorisee', 'allow', () => {
+  const batch = writeBatch(player);
+  batch.set(doc(player, 'contact_intakes', 'intake_valid'), intakeData);
+  batch.set(doc(player, 'contact_intake_limits', PLAYER), {
+    lastIntakeAt: serverTimestamp(),
+  });
+  return batch.commit();
+});
+
+await check('deuxieme demande immediate refusee', 'deny', () => {
+  const batch = writeBatch(player);
+  batch.set(doc(player, 'contact_intakes', 'intake_too_soon'), intakeData);
+  batch.set(doc(player, 'contact_intake_limits', PLAYER), {
+    lastIntakeAt: serverTimestamp(),
+  });
+  return batch.commit();
+});
 
 /* ---------------- Terms acceptance ---------------- */
 

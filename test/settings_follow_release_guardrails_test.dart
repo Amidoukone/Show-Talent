@@ -200,7 +200,7 @@ void main() {
       expect(repository, contains("'unfollowUser'"));
       expect(backend, contains('export const followUser = onCall('));
       expect(backend, contains('export const unfollowUser = onCall('));
-      expect(exports, contains('export {followUser, unfollowUser}'));
+      expect(exports, contains('export {followUser, unfollowUser, listUserFollows}'));
     });
 
     test('follow controller rolls back optimistic state on backend rejection', () {

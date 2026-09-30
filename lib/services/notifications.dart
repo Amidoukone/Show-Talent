@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'notification_route.dart';
@@ -40,6 +41,14 @@ class NotificationService {
 
   /// Init notifs locales (à appeler au démarrage)
   static Future<void> initLocal() async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+      await FirebaseMessaging.instance
+          .setForegroundNotificationPresentationOptions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+    }
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );

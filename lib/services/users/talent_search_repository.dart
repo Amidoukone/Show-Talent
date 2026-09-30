@@ -50,6 +50,25 @@ class TalentSearchQuery {
       positions.isNotEmpty && nationality != null;
 }
 
+class TalentSearchPage {
+  const TalentSearchPage({
+    required this.results,
+    required this.cursor,
+    required this.hasMore,
+  });
+
+  final List<AppUser> results;
+  final TalentSearchCursor? cursor;
+  final bool hasMore;
+}
+
+/// Opaque continuation token. Firestore details stay inside the repository.
+class TalentSearchCursor {
+  const TalentSearchCursor._(this.snapshot);
+
+  final DocumentSnapshot<Map<String, dynamic>> snapshot;
+}
+
 /// La recherche de talents, côté serveur.
 ///
 /// Remplace l'hydratation de trois cents joueurs sur le téléphone suivie d'un
@@ -78,9 +97,12 @@ class TalentSearchRepository {
   /// service qu'on lui rend.
   static const int pageSize = 30;
 
-  Query<Map<String, dynamic>> buildQuery(TalentSearchQuery search) {
+  Query<Map<String, dynamic>> buildQuery(TalentSearchQuery search) =>
+      _buildBaseQuery(search).limit(pageSize);
+
+  Query<Map<String, dynamic>> _buildBaseQuery(TalentSearchQuery search) {
     Query<Map<String, dynamic>> query = _firestore
-        .collection('users')
+        .collection('public_profiles')
         .where('isSearchable', isEqualTo: true);
 
     if (search.positions.isNotEmpty) {
@@ -110,7 +132,10 @@ class TalentSearchRepository {
       query = query.where('birthYear', isLessThanOrEqualTo: search.bornUntil);
     }
 
-    return query.limit(pageSize);
+    if (search.bornFrom != null || search.bornUntil != null) {
+      query = query.orderBy('birthYear');
+    }
+    return query.orderBy(FieldPath.documentId);
   }
 
   /// Les joueurs correspondant à [search].
@@ -123,37 +148,58 @@ class TalentSearchRepository {
     TalentSearchQuery query, {
     Set<String> excludedUids = const {},
   }) async {
-    final snapshot = await buildQuery(query).get();
+    final page = await searchPage(query, excludedUids: excludedUids);
+    return page.results;
+  }
 
-    var results = snapshot.docs
-        .map((doc) {
-          final data = doc.data();
-          return AppUser.fromMap(<String, dynamic>{
-            ...data,
-            'uid': data['uid'] ?? doc.id,
-          });
-        })
-        .where((user) => user.uid.trim().isNotEmpty)
-        .toList();
-
-    if (query.needsClientSideNationalityFilter) {
-      // Le second critere tableau, applique sur une page deja bornee : trente
-      // documents au maximum, pas la collection.
-      results = results
-          .where(
-            (user) => user.football.nationalities.contains(query.nationality),
-          )
-          .toList();
+  /// Scans a bounded number of Firestore pages because nationality and blocks
+  /// may be filtered locally. The cursor tracks the last *source* document,
+  /// including filtered documents, so later matches are never skipped.
+  Future<TalentSearchPage> searchPage(
+    TalentSearchQuery query, {
+    Set<String> excludedUids = const {},
+    TalentSearchCursor? cursor,
+  }) async {
+    final results = <AppUser>[];
+    var nextSnapshot = cursor?.snapshot;
+    var hasMore = true;
+    for (var batch = 0; batch < 3 && results.length < pageSize; batch++) {
+      var firestoreQuery = _buildBaseQuery(query);
+      if (nextSnapshot != null) {
+        firestoreQuery = firestoreQuery.startAfterDocument(nextSnapshot);
+      }
+      final snapshot = await firestoreQuery.limit(pageSize).get();
+      if (snapshot.docs.isEmpty) {
+        hasMore = false;
+        break;
+      }
+      nextSnapshot = snapshot.docs.last;
+      final candidates = snapshot.docs
+          .map((doc) {
+            final data = doc.data();
+            return AppUser.fromMap(<String, dynamic>{
+              ...data,
+              'uid': data['uid'] ?? doc.id,
+            });
+          })
+          .where((user) => user.uid.trim().isNotEmpty);
+      results.addAll(
+        candidates.where(
+          (user) =>
+              !excludedUids.contains(user.uid) &&
+              (!query.needsClientSideNationalityFilter ||
+                  user.football.nationalities.contains(query.nationality)),
+        ),
+      );
+      if (snapshot.docs.length < pageSize) {
+        hasMore = false;
+        break;
+      }
     }
-
-    if (excludedUids.isEmpty) {
-      return results;
-    }
-
-    // Meme logique que le filtre nationalite ci-dessus : une page deja
-    // bornee et deja recuperee, pas une seconde requete. Sert a retirer les
-    // profils bloques mutuellement (voir BlockController) sans toucher a la
-    // requete Firestore elle-meme.
-    return results.where((user) => !excludedUids.contains(user.uid)).toList();
+    return TalentSearchPage(
+      results: results,
+      cursor: nextSnapshot == null ? null : TalentSearchCursor._(nextSnapshot),
+      hasMore: hasMore,
+    );
   }
 }

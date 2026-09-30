@@ -5,6 +5,7 @@ import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/services/callable_auth_guard.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
+import 'package:adfoot/utils/video_search_matcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -68,6 +69,9 @@ class UserRepository {
 
   CollectionReference<Map<String, dynamic>> get _usersCollection =>
       _firestore.collection('users');
+
+  CollectionReference<Map<String, dynamic>> get _publicProfilesCollection =>
+      _firestore.collection('public_profiles');
 
   DocumentReference<Map<String, dynamic>> _privateContactDoc(String uid) =>
       _usersCollection.doc(uid).collection('private').doc('contact');
@@ -183,7 +187,7 @@ class UserRepository {
   static const int directoryWatchLimit = 300;
 
   Stream<List<AppUser>> watchAllUsers({int limit = directoryWatchLimit}) {
-    return _usersCollection
+    return _publicProfilesCollection
         .limit(limit)
         .snapshots()
         .map(
@@ -197,6 +201,38 @@ class UserRepository {
               .whereType<AppUser>()
               .toList(growable: false),
         );
+  }
+
+  Future<PublicUserPage> fetchPublicDirectoryPage({
+    String search = '',
+    PublicUserCursor? cursor,
+    int pageSize = 30,
+  }) async {
+    Query<Map<String, dynamic>> query = _publicProfilesCollection;
+    final normalized = normalizeVideoSearchText(search);
+    if (normalized.isNotEmpty) {
+      query = query.where(
+        'directoryPrefixes',
+        arrayContains: normalized.split(' ').first,
+      );
+    }
+    query = query.orderBy(FieldPath.documentId);
+    if (cursor != null) query = query.startAfterDocument(cursor.snapshot);
+    final snapshot = await query.limit(pageSize + 1).get();
+    final docs = snapshot.docs.take(pageSize).toList(growable: false);
+    return PublicUserPage(
+      users: docs
+          .map(
+            (doc) => _parseUserSafely({
+              ...doc.data(),
+              'uid': doc.id,
+            }, source: 'UserRepository.fetchPublicDirectoryPage'),
+          )
+          .whereType<AppUser>()
+          .toList(growable: false),
+      cursor: docs.isEmpty ? null : PublicUserCursor._(docs.last),
+      hasMore: snapshot.docs.length > pageSize,
+    );
   }
 
   Stream<UserAccessDecision> watchUserAccess(String uid) {
@@ -227,6 +263,39 @@ class UserRepository {
       privateContact: privateContact,
       source: 'UserRepository.fetchUserById',
     );
+  }
+
+  Future<AppUser?> fetchPublicUserById(String uid) async {
+    final doc = await _getWithRetry(_publicProfilesCollection.doc(uid));
+    final data = doc.data();
+    if (!doc.exists || data == null) return null;
+    return _parseUserSafely(data, source: 'UserRepository.fetchPublicUserById');
+  }
+
+  Future<List<AppUser>> fetchPublicUsersByIds(Iterable<String> rawIds) async {
+    final ids = rawIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    final users = <AppUser>[];
+    for (var offset = 0; offset < ids.length; offset += 10) {
+      final chunk = ids.sublist(offset, (offset + 10).clamp(0, ids.length));
+      final snapshot = await _publicProfilesCollection
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      users.addAll(
+        snapshot.docs
+            .map(
+              (doc) => _parseUserSafely({
+                ...doc.data(),
+                'uid': doc.id,
+              }, source: 'UserRepository.fetchPublicUsersByIds'),
+            )
+            .whereType<AppUser>(),
+      );
+    }
+    return users;
   }
 
   Future<UserAccessDecision> fetchUserAccess(
@@ -420,22 +489,11 @@ class UserRepository {
     unawaited(_retryFcmTokenSave(uid, sanitized, serial));
   }
 
-  /// One full attempt: the callable, then the direct write. True if either won.
+  /// Tokens are stored by the callable in a server-only document.
   Future<bool> _writeFcmToken(String uid, String token) async {
     try {
       final callable = _functions.httpsCallable('saveUserFcmToken');
       await CallableAuthGuard.call(callable, {'token': token});
-      return true;
-    } catch (_) {
-      // FCM is non-critical. Keep a direct fallback for environments where the
-      // callable has not been deployed yet, but never block login/upload.
-    }
-
-    try {
-      await _usersCollection
-          .doc(uid)
-          .set({'fcmToken': token}, SetOptions(merge: true))
-          .timeout(firestoreWriteTimeout);
       return true;
     } catch (_) {}
 
@@ -560,4 +618,22 @@ class UserRepository {
 
     return normalized;
   }
+}
+
+class PublicUserCursor {
+  const PublicUserCursor._(this.snapshot);
+
+  final DocumentSnapshot<Map<String, dynamic>> snapshot;
+}
+
+class PublicUserPage {
+  const PublicUserPage({
+    required this.users,
+    required this.cursor,
+    required this.hasMore,
+  });
+
+  final List<AppUser> users;
+  final PublicUserCursor? cursor;
+  final bool hasMore;
 }

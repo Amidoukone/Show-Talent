@@ -30,6 +30,18 @@ class FollowMutationResult {
   }
 }
 
+class FollowListPage {
+  const FollowListPage({
+    required this.items,
+    required this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<Map<String, dynamic>> items;
+  final String? nextCursor;
+  final bool hasMore;
+}
+
 class FollowRepository {
   FollowRepository({FirebaseFirestore? firestore, FirebaseFunctions? functions})
     : _injectedFirestore = firestore,
@@ -59,61 +71,49 @@ class FollowRepository {
     return _runFollowMutationWithRetry('unfollowUser', targetUserId);
   }
 
-  Future<List<Map<String, dynamic>>> fetchFollowList({
+  Stream<Set<String>> watchFollowingIds(String uid) {
+    return _firestore
+        .collection('users')
+        .doc(uid)
+        .collection('following')
+        .where('active', isEqualTo: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) => doc.id).toSet());
+  }
+
+  Future<FollowListPage> fetchFollowList({
     required String uid,
     required String listType,
-    required Set<String> currentFollowings,
+    String? cursor,
   }) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
-    if (!doc.exists) return [];
-
-    final data = doc.data() ?? const <String, dynamic>{};
-    final rawIds =
-        (listType == 'followers'
-                ? data['followersList']
-                : data['followingsList'])
-            as List<dynamic>? ??
-        const <dynamic>[];
-    final ids = <String>[];
-    final seen = <String>{};
-
-    for (final value in rawIds) {
-      final normalized = value.toString().trim();
-      if (normalized.isEmpty || !seen.add(normalized)) {
-        continue;
-      }
-      ids.add(normalized);
-    }
-
-    if (ids.isEmpty) return [];
-
-    final resultById = <String, Map<String, dynamic>>{};
-    const int batchSize = 10;
-
-    for (int i = 0; i < ids.length; i += batchSize) {
-      final chunk = ids.sublist(i, (i + batchSize).clamp(0, ids.length));
-
-      final querySnapshot = await _firestore
-          .collection('users')
-          .where(FieldPath.documentId, whereIn: chunk)
-          .get();
-
-      for (final doc in querySnapshot.docs) {
-        final data = doc.data();
-        resultById[doc.id] = {
-          'uid': doc.id,
-          'nom': data['nom'] ?? '',
-          'photoProfil': data['photoProfil'] ?? '',
-          'role': data['role'] ?? 'Non specifie',
-          'isFollowing': currentFollowings.contains(doc.id),
-        };
-      }
-    }
-
-    return ids
-        .map((id) => resultById[id])
-        .whereType<Map<String, dynamic>>()
-        .toList(growable: false);
+    final callable = _functions.httpsCallable(
+      'listUserFollows',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+    );
+    final raw =
+        await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
+          callable,
+          'listUserFollows',
+          {
+            'uid': uid,
+            'listType': listType,
+            if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
+          },
+        );
+    final response = ActionResponse.fromMap(
+      raw,
+      toastOverride: ToastLevel.none,
+    );
+    final data = response.data ?? const <String, dynamic>{};
+    final rawItems = data['items'] as List<dynamic>? ?? const <dynamic>[];
+    return FollowListPage(
+      items: rawItems
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList(growable: false),
+      nextCursor: data['nextCursor'] as String?,
+      hasMore: data['hasMore'] == true,
+    );
   }
 
   Future<FollowMutationResult> _runFollowMutation(

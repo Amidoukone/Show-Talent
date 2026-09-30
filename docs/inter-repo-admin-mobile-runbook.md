@@ -204,12 +204,17 @@ suffire.
 Un champ partage a toujours un depot qui l ecrit et un depot qui le lit. Le
 lecteur doit etre deploye **avant** l ecrivain, jamais l inverse.
 
-L ordre est donc, sans exception :
+Pour une evolution compatible, l ordre est :
 
 1. **Regles Firestore et Cloud Functions** (depuis le depot mobile, seul a les
    deployer)
 2. **Build mobile** publie et installe
 3. **Portail admin**
+
+La migration `users` vers `public_profiles` retire un acces utilise par les
+clients deja installes. Elle suit le plan de transition specifique
+`docs/checklists/public-profile-rollout-2026-09-28.md` : contrat additif,
+backfill, nouveau mobile, puis fermeture de l'ancien acces apres mesure.
 
 ### Pourquoi cet ordre, et pas un autre
 

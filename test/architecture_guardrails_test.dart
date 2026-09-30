@@ -269,10 +269,7 @@ void main() {
           'lib/screens/profil_video_scrollview.dart',
         ).readAsStringSync();
         expect(content, contains('Obx(()'));
-        expect(
-          content,
-          contains('VideoUiStrings.emptyProfileVideoFeedTitle'),
-        );
+        expect(content, contains('VideoUiStrings.emptyProfileVideoFeedTitle'));
       },
     );
 
@@ -429,10 +426,7 @@ void main() {
         );
       }
 
-      expect(
-        bootstrap.indexOf('fatal: false'),
-        lessThan(fatalReport),
-      );
+      expect(bootstrap.indexOf('fatal: false'), lessThan(fatalReport));
 
       // Scoped to the reporting call itself: searching the rest of the file
       // would let one site's `fatal: true` vouch for the other's.
@@ -477,14 +471,20 @@ void main() {
       expect(gradle, contains('abiFilters "armeabi-v7a", "arm64-v8a"'));
     });
 
-    test('the artifact checker enforces the ARM ABIs it cannot read from source',
-        () {
-      final checker =
-          File('scripts/check-aab-native-alignment.ps1').readAsStringSync();
+    test(
+      'the artifact checker enforces the ARM ABIs it cannot read from source',
+      () {
+        final checker = File(
+          'scripts/check-aab-native-alignment.ps1',
+        ).readAsStringSync();
 
-      expect(checker, contains(r'$requiredAbis = @("armeabi-v7a", "arm64-v8a")'));
-      expect(checker, contains('ABI manquante'));
-    });
+        expect(
+          checker,
+          contains(r'$requiredAbis = @("armeabi-v7a", "arm64-v8a")'),
+        );
+        expect(checker, contains('ABI manquante'));
+      },
+    );
 
     test(
       'Sprint 4 phase D email link handler is test-safe and resilient to init failures',
@@ -574,7 +574,7 @@ void main() {
 
         expect(rootDependencies.keys, unorderedEquals(['firebase-admin']));
         expect(functionsDependencies, isNot(contains('adfoot')));
-        expect(functionsDependencies['firebase-admin'], startsWith('^13.'));
+        expect(functionsDependencies['firebase-admin'], startsWith('^14.'));
         expect(functionsDependencies['firebase-functions'], startsWith('^7.'));
         expect(functionsDevDependencies['typescript'], startsWith('^5.'));
         expect(functionsEngines['node'], '22');

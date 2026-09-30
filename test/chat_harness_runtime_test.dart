@@ -75,7 +75,8 @@ void main() {
 
     expect(remainingMessages.docs, isEmpty);
     expect(conversationData.containsKey('lastMessage'), isFalse);
-    expect(conversationData.containsKey('lastMessageDate'), isFalse);
+    expect(conversationData.containsKey('lastMessageDate'), isTrue);
+    expect(conversationData['lastMessageDate'], isNull);
     expect(harness.projectRulesEnforced, isTrue);
     expect(
       (conversationData['unreadCountByUser']
@@ -93,6 +94,7 @@ void main() {
         required String recipientUid,
         required String contextType,
         required String contextData,
+        required String messageId,
       }) async {
         throw StateError('push offline');
       },

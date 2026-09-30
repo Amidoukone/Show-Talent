@@ -108,9 +108,6 @@ void main() {
       // Handled, so sampled rather than certain.
       expect(auth, contains("AuthDiagnostics.handled("));
       expect(auth, contains("stage: 'sync_state'"));
-      // The user directory watch dying leaves usersCache frozen, which is
-      // indistinguishable from "this app knows no other users".
-      expect(controller, contains("stage: 'directory_watch'"));
       // The backstop for the access watcher failing is itself a place the
       // session is kept unverified.
       expect(controller, contains("stage: 'access_check'"));
@@ -154,7 +151,7 @@ void main() {
 
       final start = controller.indexOf('Future<void> _routeFromAuth(');
       expect(start, isNonNegative);
-      final end = controller.indexOf('void _listenAllUsers()', start);
+      final end = controller.indexOf('Future<void> _stopAllUsersWatch()', start);
       expect(end, isNonNegative);
 
       final method = controller.substring(start, end);

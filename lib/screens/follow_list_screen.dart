@@ -33,7 +33,10 @@ class _FollowListScreenState extends State<FollowListScreen> {
 
   List<FollowUserItem> _items = const <FollowUserItem>[];
   bool _isLoading = true;
+  bool _isLoadingMore = false;
   bool _hasLoadError = false;
+  bool _hasMore = false;
+  String? _nextCursor;
 
   @override
   void initState() {
@@ -50,11 +53,11 @@ class _FollowListScreenState extends State<FollowListScreen> {
     }
 
     try {
-      final raw = await _followController.fetchFollowList(
+      final page = await _followController.fetchFollowList(
         widget.uid,
         widget.listType,
       );
-      final items = raw.map((m) => FollowUserItem.fromMap(m)).toList();
+      final items = page.items.map(FollowUserItem.fromMap).toList();
 
       if (!mounted) {
         return;
@@ -62,6 +65,8 @@ class _FollowListScreenState extends State<FollowListScreen> {
 
       setState(() {
         _items = items;
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
         _isLoading = false;
         _hasLoadError = false;
       });
@@ -75,6 +80,39 @@ class _FollowListScreenState extends State<FollowListScreen> {
         _isLoading = false;
         _hasLoadError = true;
       });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_isLoadingMore || !_hasMore || _nextCursor == null) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final page = await _followController.fetchFollowList(
+        widget.uid,
+        widget.listType,
+        cursor: _nextCursor,
+      );
+      if (!mounted) return;
+      final knownIds = _items.map((item) => item.uid).toSet();
+      setState(() {
+        _items = <FollowUserItem>[
+          ..._items,
+          ...page.items
+              .map(FollowUserItem.fromMap)
+              .where((item) => knownIds.add(item.uid)),
+        ];
+        _nextCursor = page.nextCursor;
+        _hasMore = page.hasMore;
+      });
+    } catch (_) {
+      if (mounted) {
+        AdFeedback.error(
+          AppLocalizations.of(context)!.profileActionErrorTitle,
+          AppLocalizations.of(context)!.followListErrorMessage,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingMore = false);
     }
   }
 
@@ -172,8 +210,19 @@ class _FollowListScreenState extends State<FollowListScreen> {
               physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics(),
               ),
-              itemCount: _items.length,
+              itemCount: _items.length + (_hasMore ? 1 : 0),
               itemBuilder: (context, index) {
+                if (index == _items.length) {
+                  return Padding(
+                    padding: const EdgeInsets.all(AdSpacing.md),
+                    child: AdButton(
+                      label: l10n.followListLoadMore,
+                      loading: _isLoadingMore,
+                      onPressed: _isLoadingMore ? null : _loadMore,
+                      kind: AdButtonKind.outline,
+                    ),
+                  );
+                }
                 final u = _items[index];
                 return Padding(
                   padding: const EdgeInsets.symmetric(
@@ -265,7 +314,8 @@ class _FollowListButtonState extends State<_FollowListButton> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final currentUserId = Get.find<UserController>().user?.uid ??
+    final currentUserId =
+        Get.find<UserController>().user?.uid ??
         _authSessionService.currentUser?.uid;
     final followCtrl = Get.find<FollowController>();
 

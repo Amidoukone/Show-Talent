@@ -54,14 +54,12 @@ class _HomeScreenState extends State<HomeScreen> {
   final ValueNotifier<int> _searchUiRevision = ValueNotifier<int>(0);
   final VideoManager videoManager = VideoManager();
 
-
   static const int _searchUidBatchSize = 10;
   static const int _searchResultLimit = 60;
   static const int _searchRecentScanLimit = 120;
 
   bool _isConnected = true;
   bool _isSearchLoading = false;
-  bool _searchUsersHydrated = false;
   String _searchQuery = '';
   String? _searchError;
   List<Video> _searchResults = const <Video>[];
@@ -469,7 +467,13 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      await _hydrateSearchUsersIfNeeded();
+      final indexedPlayers = await widget.homeFeedRepository.searchPlayers(
+        query,
+        limit: _searchResultLimit,
+      );
+      for (final user in indexedPlayers) {
+        userController.usersCache[user.uid] = user;
+      }
       final matchesById = <String, Video>{};
       final matchingAuthors = _matchingAuthorsForQuery(query);
 
@@ -514,24 +518,6 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       _notifySearchUi();
     }
-  }
-
-  Future<void> _hydrateSearchUsersIfNeeded() async {
-    final hasWatchedPlayers = userController.userList.any(
-      (user) => user.isPlayer,
-    );
-    if (_searchUsersHydrated || hasWatchedPlayers) {
-      return;
-    }
-
-    final players = await widget.homeFeedRepository.fetchSearchablePlayers(
-      limit: 300,
-    );
-    for (final user in players) {
-      userController.usersCache[user.uid] = user;
-    }
-
-    _searchUsersHydrated = true;
   }
 
   List<AppUser> _matchingAuthorsForQuery(String query) {
@@ -706,10 +692,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isSearchActive) return true;
 
     final shouldApplyPendingLiveOnTop = videoController
-        .shouldSurfacePendingLiveAt(
-          previousIndex: previousIndex,
-          index: index,
-        );
+        .shouldSurfacePendingLiveAt(previousIndex: previousIndex, index: index);
     if (!shouldApplyPendingLiveOnTop) return true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1072,81 +1055,78 @@ class _HomeScreenState extends State<HomeScreen> {
   /// The feed itself, or whichever state stands in for it.
   Widget _buildFeedBody() {
     return Obx(() {
-              final feedVideos = videoController.videoList;
-              final videos = _currentVideos;
-              final feedBecameAvailable =
-                  !_isSearchActive &&
-                  _wasHomeFeedEmpty &&
-                  feedVideos.isNotEmpty;
-              if (!_isSearchActive) {
-                _wasHomeFeedEmpty = feedVideos.isEmpty;
-              }
+      final feedVideos = videoController.videoList;
+      final videos = _currentVideos;
+      final feedBecameAvailable =
+          !_isSearchActive && _wasHomeFeedEmpty && feedVideos.isNotEmpty;
+      if (!_isSearchActive) {
+        _wasHomeFeedEmpty = feedVideos.isEmpty;
+      }
 
-              if (_isSearchActive && videos.isEmpty) {
-                if (_isSearchLoading) {
-                  return _buildSearchState(
-                    icon: Icons.search_rounded,
-                    title: VideoUiStrings.videoSearchLoadingTitle,
-                    message: VideoUiStrings.videoSearchLoadingMessage,
-                    showClearAction: false,
-                  );
-                }
+      if (_isSearchActive && videos.isEmpty) {
+        if (_isSearchLoading) {
+          return _buildSearchState(
+            icon: Icons.search_rounded,
+            title: VideoUiStrings.videoSearchLoadingTitle,
+            message: VideoUiStrings.videoSearchLoadingMessage,
+            showClearAction: false,
+          );
+        }
 
-                return _buildSearchState(
-                  icon: Icons.search_off_rounded,
-                  title: VideoUiStrings.videoSearchEmptyTitle,
-                  message:
-                      _searchError ?? VideoUiStrings.videoSearchEmptyMessage,
-                );
-              }
+        return _buildSearchState(
+          icon: Icons.search_off_rounded,
+          title: VideoUiStrings.videoSearchEmptyTitle,
+          message: _searchError ?? VideoUiStrings.videoSearchEmptyMessage,
+        );
+      }
 
-              if (!_isSearchActive && feedVideos.isEmpty) {
-                final user = userController.user;
-                return _buildEmptyFeed(userRole: user?.role);
-              }
+      if (!_isSearchActive && feedVideos.isEmpty) {
+        final user = userController.user;
+        return _buildEmptyFeed(userRole: user?.role);
+      }
 
-              if (feedBecameAvailable) {
-                _scheduleHomeFeedActivationAfterEmptyFeed();
-              }
+      if (feedBecameAvailable) {
+        _scheduleHomeFeedActivationAfterEmptyFeed();
+      }
 
-              // Read inside the Obx so the page appears the moment the last
-              // page comes back short, which is a fetch that may add no
-              // video at all and so would rebuild nothing on its own.
-              final feedIsComplete =
-                  !_isSearchActive && !videoController.hasMoreVideos.value;
+      // Read inside the Obx so the page appears the moment the last
+      // page comes back short, which is a fetch that may add no
+      // video at all and so would rebuild nothing on its own.
+      final feedIsComplete =
+          !_isSearchActive && !videoController.hasMoreVideos.value;
 
-              return VideoFeedPager(
-                pagerController: _pager,
-                contextKey: 'home',
-                initialIndex: _restoredFeedIndex(feedVideos),
-                videos: videos,
-                endOfFeedBuilder: feedIsComplete
-                    ? (context) => VideoFeedEndCard(
-                        videoCount: videos.length,
-                        // The body runs behind the app bar, so the card has to
-                        // reserve the same room every video tile's overlays do.
-                        topInset: kToolbarHeight,
-                        onRefresh: () async {
-                          // Leave the end page before the feed shrinks under
-                          // it, or the clamp lands on the last video instead
-                          // of the top.
-                          _jumpToPageSilently(0);
-                          await _refreshHomeFeed();
-                        },
-                        onSearch: () => unawaited(_openVideoSearchSheet()),
-                      )
-                    : null,
-                videoController: videoController,
-                userController: userController,
-                followController: followController,
-                onBeforeIndexChanged: _onBeforeIndexChanged,
-                onIndexFocused: _onIndexFocused,
-                onRequestMore: _loadMoreHomeVideos,
-                onRefreshRequested: _refreshHomeFeed,
-                // L'auteur supprime depuis son profil, pas depuis le feed
-                // public.
-                showDeleteAction: false,
-              );
+      return VideoFeedPager(
+        pagerController: _pager,
+        contextKey: 'home',
+        initialIndex: _restoredFeedIndex(feedVideos),
+        videos: videos,
+        endOfFeedBuilder: feedIsComplete
+            ? (context) => VideoFeedEndCard(
+                videoCount: videos.length,
+                // The body runs behind the app bar, so the card has to
+                // reserve the same room every video tile's overlays do.
+                topInset: kToolbarHeight,
+                onRefresh: () async {
+                  // Leave the end page before the feed shrinks under
+                  // it, or the clamp lands on the last video instead
+                  // of the top.
+                  _jumpToPageSilently(0);
+                  await _refreshHomeFeed();
+                },
+                onSearch: () => unawaited(_openVideoSearchSheet()),
+              )
+            : null,
+        videoController: videoController,
+        userController: userController,
+        followController: followController,
+        onBeforeIndexChanged: _onBeforeIndexChanged,
+        onIndexFocused: _onIndexFocused,
+        onRequestMore: _loadMoreHomeVideos,
+        onRefreshRequested: _refreshHomeFeed,
+        // L'auteur supprime depuis son profil, pas depuis le feed
+        // public.
+        showDeleteAction: false,
+      );
     });
   }
 

@@ -343,6 +343,49 @@ async function deleteManagedConversations(uid: string): Promise<void> {
 }
 
 async function cleanupFollowReferences(uid: string): Promise<void> {
+  const userRef = db.collection("users").doc(uid);
+  const [outgoingEdges, incomingEdges] = await Promise.all([
+    userRef.collection("following").get(),
+    userRef.collection("followers").get(),
+  ]);
+  const relationTargets = new Set<string>();
+  const relationFollowers = new Set<string>();
+
+  for (const edge of outgoingEdges.docs) {
+    const targetUid = edge.id;
+    relationTargets.add(targetUid);
+    const targetRef = db.collection("users").doc(targetUid);
+    const targetSnap = await targetRef.get();
+    const updates: Promise<unknown>[] = [
+      targetRef.collection("followers").doc(uid).delete(),
+    ];
+    if (edge.data().active === true && targetSnap.exists) {
+      updates.push(targetRef.update({
+        followers: fieldValue.increment(-1),
+        updatedAt: fieldValue.serverTimestamp(),
+      }));
+    }
+    await Promise.all(updates);
+  }
+
+  for (const edge of incomingEdges.docs) {
+    const followerUid = edge.id;
+    relationFollowers.add(followerUid);
+    const followerRef = db.collection("users").doc(followerUid);
+    const followerSnap = await followerRef.get();
+    const updates: Promise<unknown>[] = [
+      followerRef.collection("following").doc(uid).delete(),
+    ];
+    if (edge.data().active === true && followerSnap.exists) {
+      updates.push(followerRef.update({
+        followings: fieldValue.increment(-1),
+        updatedAt: fieldValue.serverTimestamp(),
+      }));
+    }
+    await Promise.all(updates);
+  }
+
+  // Compatibility while the one-time array migration is still running.
   const followersSnapshot = await db
     .collection("users")
     .where("followersList", "array-contains", uid)
@@ -356,7 +399,9 @@ async function cleanupFollowReferences(uid: string): Promise<void> {
     // between this read and this write.
     await doc.ref.update({
       followersList: fieldValue.arrayRemove(uid),
-      followers: fieldValue.increment(-1),
+      ...(relationTargets.has(doc.id) ? {} : {
+        followers: fieldValue.increment(-1),
+      }),
       updatedAt: fieldValue.serverTimestamp(),
     });
   }
@@ -369,7 +414,9 @@ async function cleanupFollowReferences(uid: string): Promise<void> {
   for (const doc of followingsSnapshot.docs) {
     await doc.ref.update({
       followingsList: fieldValue.arrayRemove(uid),
-      followings: fieldValue.increment(-1),
+      ...(relationFollowers.has(doc.id) ? {} : {
+        followings: fieldValue.increment(-1),
+      }),
       updatedAt: fieldValue.serverTimestamp(),
     });
   }
@@ -409,9 +456,11 @@ export async function purgeAccountData(uid: string): Promise<void> {
   await Promise.all([
     privateContactRef(uid).delete(),
     privateAdminNotesRef(uid).delete(),
+    db.collection("user_push_tokens").doc(uid).delete(),
+    db.collection("public_profiles").doc(uid).delete(),
   ]);
 
-  await db.collection("users").doc(uid).delete();
+  await db.recursiveDelete(db.collection("users").doc(uid));
 }
 
 // Mirrors ownerProfileTrustFieldsChanged() in firestore.rules and

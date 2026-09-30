@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:adfoot/controller/user_controller.dart';
+import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/users/follow_repository.dart';
 import 'package:adfoot/utils/video_ui_strings.dart';
 import 'package:get/get.dart';
@@ -11,6 +12,52 @@ class FollowController extends GetxController {
     : _followRepository = followRepository ?? FollowRepository();
 
   final FollowRepository _followRepository;
+  StreamSubscription<AppUser?>? _userSubscription;
+  StreamSubscription<Set<String>>? _followingSubscription;
+  String? _watchedUid;
+
+  @override
+  void onInit() {
+    super.onInit();
+    final userController = Get.find<UserController>();
+    _bindFollowingStream(userController.user);
+    _userSubscription = userController.userChanges.listen(_bindFollowingStream);
+  }
+
+  void _bindFollowingStream(AppUser? user) {
+    final uid = user?.uid;
+    if (_watchedUid == uid) return;
+    _watchedUid = uid;
+    unawaited(_followingSubscription?.cancel());
+    _followingSubscription = null;
+    if (uid == null || uid.isEmpty) return;
+    _followingSubscription = _followRepository
+        .watchFollowingIds(uid)
+        .listen(
+          (ids) {
+            final current = Get.find<UserController>().user;
+            if (current == null || current.uid != uid) return;
+            final sortedIds = ids.toList()..sort();
+            current.followingsList = sortedIds;
+            Get.find<UserController>().update();
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            AppLogger.warning(
+              'watchFollowingIds error: $error',
+              source: 'FollowController._bindFollowingStream',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          },
+        );
+  }
+
+  @override
+  void onClose() {
+    unawaited(_userSubscription?.cancel());
+    unawaited(_followingSubscription?.cancel());
+    super.onClose();
+  }
 
   bool _isPermissionDenied(Object error) =>
       FollowRepository.isPermissionDenied(error);
@@ -173,22 +220,16 @@ class FollowController extends GetxController {
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchFollowList(
+  Future<FollowListPage> fetchFollowList(
     String uid,
-    String listType,
-  ) async {
+    String listType, {
+    String? cursor,
+  }) async {
     try {
-      final currentFollowings =
-          Get.find<UserController>().user?.followingsList
-              .map((id) => id.trim())
-              .where((id) => id.isNotEmpty)
-              .toSet() ??
-          <String>{};
-
       return await _followRepository.fetchFollowList(
         uid: uid,
         listType: listType,
-        currentFollowings: currentFollowings,
+        cursor: cursor,
       );
     } catch (error, st) {
       AppLogger.warning(
@@ -200,7 +241,7 @@ class FollowController extends GetxController {
       if (_isPermissionDenied(error)) {
         unawaited(_handleProtectedAccessDenied());
       }
-      return [];
+      rethrow;
     }
   }
 }

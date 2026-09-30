@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:adfoot/widgets/ad_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -10,9 +12,11 @@ import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/auth/auth_session_service.dart';
+import 'package:adfoot/services/users/user_repository.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/widgets/ad_agency_badge.dart';
 import 'package:adfoot/widgets/ad_app_bar.dart';
+import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_surface_card.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
@@ -36,7 +40,64 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
 
   final TextEditingController searchController = TextEditingController();
   final RxString searchTerm = ''.obs;
+  List<AppUser> _directoryUsers = const <AppUser>[];
+  PublicUserCursor? _directoryCursor;
+  bool _directoryLoading = true;
+  bool _directoryLoadingMore = false;
+  bool _directoryHasMore = false;
+  bool _directoryFailed = false;
+  int _directoryRequestVersion = 0;
+  Timer? _searchDebounce;
   String? _busyConversationUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDirectory(reset: true);
+  }
+
+  Future<void> _loadDirectory({required bool reset}) async {
+    if (!reset && _directoryLoadingMore) return;
+    if (!reset && !_directoryHasMore) return;
+    final version = ++_directoryRequestVersion;
+    setState(() {
+      _directoryFailed = false;
+      if (reset) {
+        _directoryLoading = true;
+      } else {
+        _directoryLoadingMore = true;
+      }
+    });
+    try {
+      final page = await userController.fetchPublicDirectoryPage(
+        search: searchTerm.value,
+        cursor: reset ? null : _directoryCursor,
+      );
+      if (!mounted || version != _directoryRequestVersion) return;
+      final known = reset
+          ? <String>{}
+          : _directoryUsers.map((user) => user.uid).toSet();
+      setState(() {
+        _directoryUsers = <AppUser>[
+          if (!reset) ..._directoryUsers,
+          ...page.users.where((user) => known.add(user.uid)),
+        ];
+        _directoryCursor = page.cursor;
+        _directoryHasMore = page.hasMore;
+      });
+    } catch (_) {
+      if (mounted && version == _directoryRequestVersion) {
+        setState(() => _directoryFailed = true);
+      }
+    } finally {
+      if (mounted && version == _directoryRequestVersion) {
+        setState(() {
+          _directoryLoading = false;
+          _directoryLoadingMore = false;
+        });
+      }
+    }
+  }
 
   AppUser? _resolvedCurrentUser() {
     return userController.user ?? authController.user;
@@ -44,6 +105,8 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
 
   @override
   void dispose() {
+    _directoryRequestVersion++;
+    _searchDebounce?.cancel();
     searchController.dispose();
     super.dispose();
   }
@@ -81,15 +144,13 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final users = userController.userList.where((user) {
+        final users = _directoryUsers.where((user) {
           return user.uid != currentUid &&
               user.canAppearInMessagingDirectory &&
               !blockController.isBlocked(user.uid);
         }).toList();
 
-        final filteredUsers = users.where((user) {
-          return user.nom.toLowerCase().contains(searchTerm.value);
-        }).toList();
+        final filteredUsers = users.toList();
 
         return Column(
           children: [
@@ -105,8 +166,14 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                 ),
                 child: TextField(
                   controller: searchController,
-                  onChanged: (value) =>
-                      searchTerm.value = value.trim().toLowerCase(),
+                  onChanged: (value) {
+                    searchTerm.value = value.trim().toLowerCase();
+                    _searchDebounce?.cancel();
+                    _searchDebounce = Timer(
+                      const Duration(milliseconds: 350),
+                      () => _loadDirectory(reset: true),
+                    );
+                  },
                   decoration: InputDecoration(
                     hintText: l10n.selectUserSearchHint,
                     prefixIcon: Icon(
@@ -121,6 +188,7 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                             onPressed: () {
                               searchController.clear();
                               searchTerm.value = '';
+                              _loadDirectory(reset: true);
                             },
                           ),
                     border: InputBorder.none,
@@ -136,14 +204,31 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
             Expanded(
               child: Builder(
                 builder: (context) {
-                  if (users.isEmpty) {
+                  if (_directoryLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (_directoryFailed) {
+                    return AdStatePanel.error(
+                      title: l10n.followListErrorTitle,
+                      message: l10n.followListErrorMessage,
+                      action: AdButton(
+                        label: l10n.commonRetry,
+                        onPressed: () => _loadDirectory(
+                          reset: _directoryUsers.isEmpty,
+                        ),
+                      ),
+                    );
+                  }
+
+                  if (users.isEmpty && searchTerm.value.isEmpty && !_directoryHasMore) {
                     return AdStatePanel.empty(
                       title: l10n.selectUserEmptyTitle,
                       message: l10n.selectUserEmptyMessage,
                     );
                   }
 
-                  if (filteredUsers.isEmpty) {
+                  if (filteredUsers.isEmpty && !_directoryHasMore) {
                     return AdStatePanel.empty(
                       title: l10n.selectUserNoResultsTitle,
                       message: l10n.selectUserNoResultsMessage,
@@ -152,9 +237,20 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
 
                   return ListView.separated(
                     padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
-                    itemCount: filteredUsers.length,
+                    itemCount:
+                        filteredUsers.length + (_directoryHasMore ? 1 : 0),
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
+                      if (index == filteredUsers.length) {
+                        return AdButton(
+                          label: l10n.followListLoadMore,
+                          loading: _directoryLoadingMore,
+                          onPressed: _directoryLoadingMore
+                              ? null
+                              : () => _loadDirectory(reset: false),
+                          kind: AdButtonKind.outline,
+                        );
+                      }
                       final AppUser user = filteredUsers[index];
 
                       return _UserCard(

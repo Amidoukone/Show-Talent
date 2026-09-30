@@ -96,7 +96,10 @@ void main() {
       expect(rules, contains('userProfileDoc(uid).data.role == "joueur"'));
       expect(rules, contains('function canReadCv(uid)'));
       expect(rules, contains('function isAdminOperator()'));
-      expect(rules, contains('request.auth.token.platformAdmin == true'));
+      expect(
+        rules,
+        contains("request.auth.token.get('platformAdmin', false) == true"),
+      );
       expect(rules, contains('isAdminOperator()'));
       expect(cvRules, contains('allow read: if canReadCv(uid);'));
       expect(
