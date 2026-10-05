@@ -264,6 +264,12 @@ async function buildViewModel(
   if (!snap.exists || !data || getString(data, "status") !== "ready") {
     return null;
   }
+  // This route is anonymous and uses Admin SDK, which bypasses all rules.
+  // Check the current owner as well as the materialized feed audience.
+  const ownerUid = getString(data, "uid");
+  if (!ownerUid || data.publicFeedVisible !== true) return null;
+  const owner = await db.collection("users").doc(ownerUid).get();
+  if (owner.data()?.isMinorProfile !== false) return null;
 
   const videoUrl = resolveVideoUrl(data);
   const playbackUrls = resolvePlaybackUrls(data);

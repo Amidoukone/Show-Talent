@@ -44,6 +44,7 @@ class HomeFeedRepository {
     final query = _firestore
         .collection('public_profiles')
         .where('isSearchable', isEqualTo: true)
+        .where('isMinorProfile', isEqualTo: false)
         .where('searchPrefixes', arrayContainsAny: tokens);
     while (results.length < limit) {
       final page = await (cursor == null
@@ -90,6 +91,7 @@ class HomeFeedRepository {
     final snapshot = await _firestore
         .collection('videos')
         .where('status', isEqualTo: 'ready')
+        .where('publicFeedVisible', isEqualTo: true)
         .orderBy('updatedAt', descending: true)
         .limit(limit)
         .get();

@@ -3,7 +3,7 @@
   "scripts": {
     "lint": "eslint --ext .js,.ts .",
     "build": "tsc",
-    "test": "node --test ../test/functions/cv-view.test.mjs ../test/functions/public-profile-projection.test.mjs",
+    "test": "node --test ../test/functions/cv-view.test.mjs ../test/functions/public-profile-projection.test.mjs ../test/functions/minor-consent.test.mjs ../test/functions/ios-build-env.test.mjs",
     "test:cv-view": "npm run build && node --test ../test/functions/cv-view.test.mjs",
     "test:projection": "npm run build && node --test ../test/functions/public-profile-projection.test.mjs",
     "build:watch": "tsc --watch",

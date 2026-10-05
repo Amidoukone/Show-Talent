@@ -192,6 +192,9 @@ class AppUser {
   List<String> followingsList;
   bool profilePublic;
   bool allowMessages;
+  bool isMinorProfile;
+  bool minorProfileApproved;
+  bool minorMediaConsentApproved;
 
   // =========================
   // Documents
@@ -302,6 +305,9 @@ class AppUser {
     this.cvUrl,
     this.profilePublic = true,
     this.allowMessages = true,
+    this.isMinorProfile = false,
+    this.minorProfileApproved = false,
+    this.minorMediaConsentApproved = false,
 
     // CGU
     this.acceptedTermsVersion,
@@ -501,6 +507,9 @@ class AppUser {
       membership: Membership.fromMap(map['membership']),
       profilePublic: _toBool(map['profilePublic'], true),
       allowMessages: _toBool(map['allowMessages'], true),
+      isMinorProfile: map['isMinorProfile'] == true,
+      minorProfileApproved: map['minorProfileApproved'] == true,
+      minorMediaConsentApproved: map['minorMediaConsentApproved'] == true,
     );
   }
 
@@ -653,6 +662,10 @@ class AppUser {
   bool get isClub => role == 'club';
   bool get isAgent => role == 'agent';
   bool get isRecruiter => role == 'recruteur' || role == 'agent';
+
+  bool get isVerifiedRecruiter =>
+      (role == 'recruteur' || role == 'club') &&
+      (profileVerified || profileVerificationStatus == 'verified');
   bool get isCoach => role == 'coach';
   bool get isFan => role == 'fan';
   bool get canPublishOpportunities => isOpportunityPublisherRole(role);

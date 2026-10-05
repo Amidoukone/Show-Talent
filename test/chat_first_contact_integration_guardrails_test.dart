@@ -52,7 +52,7 @@ void main() {
       );
       expect(
         repository,
-        contains('await conversationRef.set(newConversation.toMap());'),
+        contains("await conversationRef.set({...newConversation.toMap(), 'readableBy': ids});"),
       );
       expect(repository, contains('persistMessageAndConversation('));
       expect(repository, contains('_createAndLinkGuidedContactIntake('));

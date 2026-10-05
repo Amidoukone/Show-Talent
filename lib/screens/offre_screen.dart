@@ -1543,6 +1543,8 @@ class _OffreScreenState extends State<OffreScreen> {
         );
       }
 
+      if (otherUser.isMinorProfile) return;
+
       final conversationId = result.conversationId.trim();
       if (conversationId.isEmpty) {
         AdFeedback.error(

@@ -249,6 +249,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildBirthDateInput(context, l10n, state),
+          if (_birthDateManagedByAdmin) ...[
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: Text(
+                l10n.editProfileBirthDateParentManagedMessage,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AdColors.onSurfaceMuted,
+                ),
+              ),
+            ),
+          ],
           if (state.hasError) ...[
             const SizedBox(height: 6),
             Padding(
@@ -267,6 +280,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  bool get _birthDateManagedByAdmin =>
+      user.isMinorProfile || (user.age != null && user.age! < 18);
+
   Widget _buildBirthDateInput(
     BuildContext context,
     AppLocalizations l10n,
@@ -274,17 +290,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   ) {
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () async {
-        await _pickBirthDate(l10n);
-        state.didChange(_selectedBirthDate);
-      },
+      onTap: _birthDateManagedByAdmin
+          ? null
+          : () async {
+              await _pickBirthDate(l10n);
+              state.didChange(_selectedBirthDate);
+            },
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: user.isPlayer
               ? l10n.editProfileBirthDateRequiredLabel
               : l10n.editProfileBirthDateLabel,
           prefixIcon: const Icon(Icons.cake_outlined, color: kPrimary),
-          suffixIcon: _selectedBirthDate != null
+          suffixIcon: _selectedBirthDate != null && !_birthDateManagedByAdmin
               ? IconButton(
                   icon: const Icon(Icons.close_rounded),
                   onPressed: () {
@@ -312,7 +330,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
               ),
             ),
-            const Icon(Icons.edit_calendar_outlined, color: kPrimary),
+            Icon(
+              _birthDateManagedByAdmin
+                  ? Icons.lock_outline
+                  : Icons.edit_calendar_outlined,
+              color: _birthDateManagedByAdmin
+                  ? AdColors.onSurfaceMuted
+                  : kPrimary,
+            ),
           ],
         ),
       ),
@@ -326,11 +351,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _pickBirthDate(AppLocalizations l10n) async {
+    if (_birthDateManagedByAdmin) return;
     final now = DateTime.now();
     final initial =
         _selectedBirthDate ?? DateTime(now.year - 18, now.month, now.day);
-    final earliest = DateTime(now.year - 60);
-    final latest = DateTime(now.year - 10, now.month, now.day);
+    final earliest = DateTime(1930);
+    final latest = DateTime(now.year - 18, now.month, now.day);
 
     DateTime initialDate = initial;
     if (initialDate.isAfter(latest)) {
@@ -437,9 +463,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       );
 
       if (_isPlayer) {
-        if (_selectedBirthDate != null) {
+        if (!_birthDateManagedByAdmin && _selectedBirthDate != null) {
           patch['birthDate'] = _selectedBirthDate;
-        } else if (user.birthDate != null) {
+        } else if (!_birthDateManagedByAdmin && user.birthDate != null) {
           patch['birthDate'] = ProfileController.deleteField;
         }
 

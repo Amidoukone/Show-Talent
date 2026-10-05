@@ -489,6 +489,9 @@ class VideoUiTranslations extends Translations {
         'instants.',
     'profilePhotoUpdateUnavailableMessage':
         'Impossible de mettre à jour la photo.',
+    'profileMediaConsentRequiredTitle': 'Autorisation parentale requise',
+    'profileMediaConsentRequiredMessage':
+        'L’accord du parent autorisant la publication des médias doit être consigné par l’administration.',
     'profileUnavailableTitle': 'Profil indisponible',
     'profileNotFoundMessage': 'Profil introuvable.',
     'profileInvalidSessionTitle': 'Session invalide',
@@ -1111,6 +1114,9 @@ class VideoUiTranslations extends Translations {
     'profileSecureConnectionUnavailableMessage':
         'Secure connection unavailable. Try again in a moment.',
     'profilePhotoUpdateUnavailableMessage': 'Unable to update the photo.',
+    'profileMediaConsentRequiredTitle': 'Parental permission required',
+    'profileMediaConsentRequiredMessage':
+        'The parent’s permission to publish media must be recorded by the administration.',
     'profileUnavailableTitle': 'Profile unavailable',
     'profileNotFoundMessage': 'Profile not found.',
     'profileInvalidSessionTitle': 'Invalid session',

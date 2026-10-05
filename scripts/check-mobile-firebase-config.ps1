@@ -206,6 +206,16 @@ if ($null -eq $config) {
         }
     }
 
+    foreach ($platform in @("ANDROID", "IOS", "WEB")) {
+        $appId = Get-ConfigValue -Config $config -Key "FIREBASE_${platform}_APP_ID"
+        if (-not [string]::IsNullOrWhiteSpace($appId)) {
+            $platformName = $platform.ToLowerInvariant()
+            if ($appId -notmatch "^1:[0-9]+:${platformName}:[a-zA-Z0-9]+$") {
+                $errors.Add("FIREBASE_${platform}_APP_ID must identify a Firebase $platformName app, not another platform.")
+            }
+        }
+    }
+
     if ($Environment -in @("production", "production-next")) {
         $rawAppCheckEnabled = Get-ConfigValue -Config $config -Key "APP_CHECK_ENABLED"
 
@@ -262,6 +272,11 @@ if (Test-Path -LiteralPath $androidFirebasePath) {
         $androidProjectId = [string]$androidConfig.project_info.project_id
         $androidClient = @($androidConfig.client)[0]
         $androidPackageName = [string]$androidClient.client_info.android_client_info.package_name
+        if ($null -ne $config -and
+            [string]$androidClient.client_info.mobilesdk_app_id -ne
+                (Get-ConfigValue -Config $config -Key "FIREBASE_ANDROID_APP_ID")) {
+            $errors.Add("Android native app ID does not match FIREBASE_ANDROID_APP_ID.")
+        }
 
         if (-not [string]::IsNullOrWhiteSpace($androidPackageName) -and $androidPackageName -ne $plannedMobileId) {
             $errors.Add(
@@ -292,6 +307,11 @@ if (Test-Path -LiteralPath $androidFirebasePath) {
 if (Test-Path -LiteralPath $iosFirebasePath) {
     $iosBundleId = Get-PlistStringValue -Path $iosFirebasePath -Key "BUNDLE_ID"
     $iosProjectId = Get-PlistStringValue -Path $iosFirebasePath -Key "PROJECT_ID"
+    $iosAppId = Get-PlistStringValue -Path $iosFirebasePath -Key "GOOGLE_APP_ID"
+    if ($null -ne $config -and $iosAppId -ne
+        (Get-ConfigValue -Config $config -Key "FIREBASE_IOS_APP_ID")) {
+        $errors.Add("iOS native app ID does not match FIREBASE_IOS_APP_ID.")
+    }
 
     if ([string]::IsNullOrWhiteSpace($iosBundleId)) {
         $errors.Add("Could not read BUNDLE_ID from '$iosFirebasePath'.")

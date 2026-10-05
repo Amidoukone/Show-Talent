@@ -9,6 +9,7 @@ import {auth, db, fieldValue} from "./firebase";
 import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
 import {pushTokenRef} from "./push_delivery";
 import {syncPublicProfile} from "./public_profile_projection";
+import {refreshUserSearchFields} from "./user_search_fields";
 const DEFAULT_RETENTION_DAYS = 3;
 const MANAGED_ROLES = new Set(["admin", "club", "recruteur", "agent"]);
 
@@ -219,11 +220,11 @@ export const backfillPublicProfiles = onSchedule(
     const cleanupLegacyArrays =
       process.env.ENABLE_LEGACY_FOLLOW_FIELD_CLEANUP === "true";
     const stateRef = db.collection("migration_state")
-      // v3 reindexes search prefixes even when the v2 projection/follow
-      // migration already completed on a deployed environment.
+      // v5 materializes list audiences even when a prior profile migration
+      // was already marked complete. Never reset a previous checkpoint.
       .doc(cleanupLegacyArrays ?
         "public_profiles_follow_cleanup_v1" :
-        "public_profiles_and_follows_v3");
+        "public_profiles_and_follows_v5");
     const state = await stateRef.get();
     if (state.data()?.completed === true) return;
 
@@ -237,6 +238,7 @@ export const backfillPublicProfiles = onSchedule(
     const users = await query.get();
     let migratedEdges = 0;
     for (const user of users.docs) {
+      await refreshUserSearchFields(user.id);
       await syncPublicProfile(user.id);
       migratedEdges += await migrateLegacyFollowEdges(
         user.id,

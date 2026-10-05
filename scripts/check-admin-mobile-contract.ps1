@@ -232,6 +232,7 @@ $requiredCallables = @(
     "disableManagedAccountAuth",
     "enableManagedAccountAuth",
     "updateManagedAccountProfile",
+    "withdrawManagedMinorConsent",
     # Entitlements recorded by the agency. It stayed out of this list for as
     # long as the admin portal had no interface calling it -- adding it then
     # would only have failed the guardrail. The interface exists now

@@ -3,6 +3,7 @@
 /* eslint-disable require-jsdoc */
 
 import {HttpsError, onCall} from "firebase-functions/v2/https";
+import {Timestamp} from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 
 import {auth, db, fieldValue} from "./firebase";
@@ -18,8 +19,18 @@ import {
   isUserNotFound,
   normalizeRole,
   privateContactRef,
+  privateGuardianConsentRef,
 } from "./admin_account_support";
 import {EMAIL_SECRETS, sendAccountInviteEmail} from "./email_delivery";
+import {purgeMinorPublicMedia} from "./admin_account_actions";
+import {readProfileAccess, writeProfileAccess} from "./profile_access_sync";
+import {
+  isBelowMinimumPlayerAge,
+  isUnderEighteen,
+  MINOR_CONSENT_POLICY_VERSION,
+  parseManagedBirthDate,
+  validateGuardianConsent,
+} from "./minor_consent";
 
 type ProvisionedManagedAccount = {
   uid: string;
@@ -59,6 +70,31 @@ export const provisionManagedAccount = onCall(
     }
 
     const role = assertAdminProvisionedRole(rawRole);
+    const rawBirthDate = request.data?.birthDate;
+    let birthDate: Date | null = null;
+    let guardianConsent: ReturnType<typeof validateGuardianConsent> | null = null;
+    let isMinor = false;
+    if (role === "joueur") {
+      birthDate = parseManagedBirthDate(rawBirthDate);
+      if (!birthDate) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Une date de naissance valide est requise pour provisionner un joueur.",
+        );
+      }
+      if (isBelowMinimumPlayerAge(birthDate)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Adfoot accueille les joueurs à partir de 12 ans.",
+        );
+      }
+      isMinor = isUnderEighteen(birthDate);
+      if (isMinor && request.data?.guardianConsent != null) {
+        guardianConsent = validateGuardianConsent(
+          request.data?.guardianConsent,
+        );
+      }
+    }
 
     let userRecord;
     let existingUser = false;
@@ -142,38 +178,116 @@ export const provisionManagedAccount = onCall(
       existingData.emailVerifiedAt ?? fieldValue.serverTimestamp() :
       null;
 
-    const provisionBatch = db.batch();
-    provisionBatch.set(db.collection("users").doc(userRecord.uid), {
-      uid: userRecord.uid,
-      nom: displayName,
-      role,
-      photoProfil: existingData.photoProfil ?? "",
-      estActif: userRecord.emailVerified && userRecord.disabled !== true,
-      authDisabled: userRecord.disabled === true,
-      emailVerified: userRecord.emailVerified,
-      emailVerifiedAt,
-      dateInscription: existingDoc.exists ?
-        (existingData.dateInscription ?? fieldValue.serverTimestamp()) :
-        fieldValue.serverTimestamp(),
-      dernierLogin: existingDoc.exists ?
-        (existingData.dernierLogin ?? fieldValue.serverTimestamp()) :
-        fieldValue.serverTimestamp(),
-      followers: existingData.followers ?? 0,
-      followings: existingData.followings ?? 0,
-      followersList: existingData.followersList ?? [],
-      followingsList: existingData.followingsList ?? [],
-      profilePublic: existingData.profilePublic ?? true,
-      allowMessages: existingData.allowMessages ?? true,
-      createdByAdmin: true,
-      invitedBy: adminUid,
-      invitedAt: existingData.invitedAt ?? fieldValue.serverTimestamp(),
-      updatedAt: fieldValue.serverTimestamp(),
-    }, {merge: true});
-    provisionBatch.set(privateContactRef(userRecord.uid), {
-      email,
-      phone: phone || existingContactData.phone || null,
-    }, {merge: true});
-    await provisionBatch.commit();
+    const purgeMinorMedia = isMinor && (
+      existingData.minorMediaPurgePending === true ||
+      existingData.minorMediaConsentApproved !== true ||
+      guardianConsent?.mediaAllowed === false
+    );
+    const guardianApprovalRecorded = isMinor && (
+      guardianConsent !== null || existingData.minorProfileApproved === true
+    );
+    await db.runTransaction(async (provisionBatch) => {
+      const related = await readProfileAccess(provisionBatch, userRecord.uid);
+      provisionBatch.set(db.collection("users").doc(userRecord.uid), {
+        uid: userRecord.uid,
+        nom: displayName,
+        role,
+        photoProfil: purgeMinorMedia ? "" : existingData.photoProfil ?? "",
+        estActif: userRecord.emailVerified && userRecord.disabled !== true,
+        authDisabled: userRecord.disabled === true,
+        emailVerified: userRecord.emailVerified,
+        emailVerifiedAt,
+        dateInscription: existingDoc.exists ?
+          (existingData.dateInscription ?? fieldValue.serverTimestamp()) :
+          fieldValue.serverTimestamp(),
+        dernierLogin: existingDoc.exists ?
+          (existingData.dernierLogin ?? fieldValue.serverTimestamp()) :
+          fieldValue.serverTimestamp(),
+        followers: existingData.followers ?? 0,
+        followings: existingData.followings ?? 0,
+        followersList: existingData.followersList ?? [],
+        followingsList: existingData.followingsList ?? [],
+        profilePublic: existingData.profilePublic ?? true,
+        allowMessages: isMinor ? false : existingData.allowMessages ?? true,
+        minorProfileApproved: guardianApprovalRecorded,
+        isMinorProfile: isMinor,
+        minorMediaConsentApproved: isMinor && (
+          guardianConsent?.mediaAllowed ??
+        existingData.minorMediaConsentApproved === true
+        ),
+        ...(isMinor && guardianConsent ? {
+          minorConsentWithdrawnAt: fieldValue.delete(),
+          minorConsentWithdrawnByAdminUid: fieldValue.delete(),
+        } : {}),
+        ...(purgeMinorMedia ? {
+          cvUrl: fieldValue.delete(),
+          videosPubliees: [],
+          minorMediaPurgePending: true,
+        } : {}),
+        createdByAdmin: true,
+        createdByAdminUid: existingData.createdByAdminUid ??
+        (existingDoc.exists ? null : adminUid),
+        adminCreatedAt: existingData.adminCreatedAt ??
+        (existingDoc.exists ? null : fieldValue.serverTimestamp()),
+        invitedBy: adminUid,
+        invitedAt: existingData.invitedAt ?? fieldValue.serverTimestamp(),
+        updatedAt: fieldValue.serverTimestamp(),
+      }, {merge: true});
+      provisionBatch.set(privateContactRef(userRecord.uid), {
+        email,
+        phone: phone || existingContactData.phone || null,
+        ...(birthDate ? {birthDate: Timestamp.fromDate(birthDate)} : {}),
+      }, {merge: true});
+      if (isMinor && guardianConsent) {
+        provisionBatch.set(privateGuardianConsentRef(userRecord.uid), {
+          ...guardianConsent,
+          status: "admin_recorded",
+          consentScope: {
+            footballProfileVisibleToVerifiedRecruiters: true,
+            contactMediatedByAdmin: true,
+            mediaAllowed: guardianConsent.mediaAllowed,
+          },
+          recordedByAdminUid: adminUid,
+          recordedAt: fieldValue.serverTimestamp(),
+          policyVersion: MINOR_CONSENT_POLICY_VERSION,
+          withdrawnAt: fieldValue.delete(),
+          withdrawnByAdminUid: fieldValue.delete(),
+          withdrawalSource: fieldValue.delete(),
+        }, {merge: true});
+      } else if (isMinor && !guardianApprovalRecorded) {
+        provisionBatch.set(privateGuardianConsentRef(userRecord.uid), {
+          status: "pending",
+          consentScope: {
+            footballProfileVisibleToVerifiedRecruiters: false,
+            contactMediatedByAdmin: true,
+            mediaAllowed: false,
+          },
+          requestedByAdminUid: adminUid,
+          requestedAt: fieldValue.serverTimestamp(),
+          policyVersion: MINOR_CONSENT_POLICY_VERSION,
+        });
+      } else {
+        if (!isMinor) {
+          provisionBatch.delete(privateGuardianConsentRef(userRecord.uid));
+        }
+      }
+      if (isMinor) {
+        provisionBatch.delete(
+          db.collection("public_profiles").doc(userRecord.uid),
+        );
+      }
+      writeProfileAccess(provisionBatch, userRecord.uid, {
+        ...existingData, isMinorProfile: isMinor,
+      }, related);
+    });
+
+    if (purgeMinorMedia) {
+      await purgeMinorPublicMedia(userRecord.uid, existingData);
+      await db.collection("users").doc(userRecord.uid).update({
+        minorMediaPurgePending: false,
+        minorMediaPurgedAt: fieldValue.serverTimestamp(),
+      });
+    }
 
     const passwordSetupLink = await generateHostedPasswordResetLink(email);
     const emailVerificationLink = userRecord.emailVerified ?

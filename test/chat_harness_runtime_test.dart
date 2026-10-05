@@ -153,6 +153,10 @@ void main() {
         harness.currentUser.uid,
         harness.otherUser.uid,
       ],
+      'readableBy': <String>[
+        harness.currentUser.uid,
+        harness.otherUser.uid,
+      ],
       'createdVia': 'guided_first_contact',
       'contactIntakeId': 'stale_missing_intake',
       'lastMessage': 'Ancien premier contact',

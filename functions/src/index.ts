@@ -1232,6 +1232,7 @@ export {
   disableManagedAccountAuth,
   enableManagedAccountAuth,
   updateManagedAccountProfile,
+  withdrawManagedMinorConsent,
   setManagedAccountMembership,
 } from "./admin_account_actions";
 export {
@@ -1256,9 +1257,14 @@ export {createCvViewLink, cvViewPage, cleanupExpiredCvViewTickets} from "./cv_vi
 export {
   deriveUserSearchFields,
   deriveUserSearchFieldsFromContact,
+  refreshPlayersReachingMajority,
 } from "./user_search_fields";
-export {syncPublicProfileOnUserWrite} from "./public_profile_projection";
+export {
+  syncPublicProfileOnContactWrite,
+  syncPublicProfileOnUserWrite,
+} from "./public_profile_projection";
 export {notifyContactIntakeCreated} from "./contact_intake_notifications";
+export {syncVideoAudience} from "./profile_access_sync";
 
 /* -------------------------------------------------------------------------- */
 /* UPLOAD SESSION                                                              */

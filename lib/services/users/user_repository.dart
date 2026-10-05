@@ -188,6 +188,7 @@ class UserRepository {
 
   Stream<List<AppUser>> watchAllUsers({int limit = directoryWatchLimit}) {
     return _publicProfilesCollection
+        .where('isMinorProfile', isEqualTo: false)
         .limit(limit)
         .snapshots()
         .map(
@@ -209,6 +210,7 @@ class UserRepository {
     int pageSize = 30,
   }) async {
     Query<Map<String, dynamic>> query = _publicProfilesCollection;
+    query = query.where('isMinorProfile', isEqualTo: false);
     final normalized = normalizeVideoSearchText(search);
     if (normalized.isNotEmpty) {
       query = query.where(
@@ -283,6 +285,7 @@ class UserRepository {
       final chunk = ids.sublist(offset, (offset + 10).clamp(0, ids.length));
       final snapshot = await _publicProfilesCollection
           .where(FieldPath.documentId, whereIn: chunk)
+          .where('isMinorProfile', isEqualTo: false)
           .get();
       users.addAll(
         snapshot.docs

@@ -15,6 +15,7 @@ String _read(String path) => File(path).readAsStringSync();
 void main() {
   final admin = _read('functions/src/admin_account_actions.ts');
   final derivation = _read('functions/src/user_search_fields.ts');
+  final consent = _read('functions/src/minor_consent.ts');
 
   String birthDateBranch() {
     final start = admin.indexOf('if ("birthDate" in patch) {');
@@ -37,11 +38,11 @@ void main() {
     expect(derivation, contains('export function toBirthYear('));
     expect(derivation, contains('export const MIN_BIRTH_YEAR = 1930;'));
     expect(derivation, contains('year < MIN_BIRTH_YEAR'));
-    expect(
-      admin,
-      contains('import {MIN_BIRTH_YEAR, toBirthYear} from "./user_search_fields"'),
-    );
-    expect(admin, contains('if (toBirthYear(date) === null) return null;'));
+    expect(consent, contains('import {MIN_BIRTH_YEAR} from "./user_search_fields"'));
+    expect(consent, contains('date.getUTCFullYear() < MIN_BIRTH_YEAR'));
+    expect(admin, contains('const date = parseManagedBirthDate(value);'));
+    expect(admin, contains('if (isBelowMinimumPlayerAge(date))'));
+    expect(admin, contains('return Timestamp.fromDate(date);'));
     expect(
       admin,
       isNot(contains('1930')),

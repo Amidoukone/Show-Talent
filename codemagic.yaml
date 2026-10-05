@@ -55,6 +55,7 @@ workflows:
       vars:
         BUNDLE_ID: "org.adfoot.app.staging"
         XCODE_SCHEME: "staging"
+        VIDEO_SHARE_BASE_URL: "https://adfoot-staging.firebaseapp.com"
       groups:
         # Create this group in Codemagic > Team settings > Environment
         # variables *only if* you end up needing raw App Store Connect API
@@ -76,6 +77,8 @@ workflows:
       # Rename this to whatever you call it there.
       app_store_connect: adfoot_app_store_connect
     scripts:
+      - name: Verify staging Firebase build environment
+        script: node scripts/check-ios-build-env.mjs staging
       - *flutter_setup
       - *pod_install
       - *keychain_initialize
@@ -89,6 +92,7 @@ workflows:
             --flavor staging \
             -t lib/main.dart \
             --dart-define=APP_ENV="$APP_ENV" \
+            --dart-define=VIDEO_SHARE_BASE_URL="$VIDEO_SHARE_BASE_URL" \
             --dart-define=FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID" \
             --dart-define=FIREBASE_MESSAGING_SENDER_ID="$FIREBASE_MESSAGING_SENDER_ID" \
             --dart-define=FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \
@@ -132,6 +136,7 @@ workflows:
       vars:
         BUNDLE_ID: "org.adfoot.app"
         XCODE_SCHEME: "production"
+        VIDEO_SHARE_BASE_URL: "https://adfoot.org"
       groups:
         - appstore_credentials
         # Same rationale as ios-staging's firebase_ios_staging group, values
@@ -144,6 +149,7 @@ workflows:
       - name: Verify production iOS target
         script: |
           set -eu
+          node scripts/check-ios-build-env.mjs production
           test "$APP_ENV" = "production" || { echo "APP_ENV must be production"; exit 1; }
           test "$BUNDLE_ID" = "org.adfoot.app" || { echo "Unexpected iOS bundle ID"; exit 1; }
           test "$FIREBASE_IOS_BUNDLE_ID" = "$BUNDLE_ID" || { echo "Firebase iOS bundle ID mismatch"; exit 1; }
@@ -165,6 +171,7 @@ workflows:
             --flavor production \
             -t lib/main.dart \
             --dart-define=APP_ENV="$APP_ENV" \
+            --dart-define=VIDEO_SHARE_BASE_URL="$VIDEO_SHARE_BASE_URL" \
             --dart-define=FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID" \
             --dart-define=FIREBASE_MESSAGING_SENDER_ID="$FIREBASE_MESSAGING_SENDER_ID" \
             --dart-define=FIREBASE_STORAGE_BUCKET="$FIREBASE_STORAGE_BUCKET" \

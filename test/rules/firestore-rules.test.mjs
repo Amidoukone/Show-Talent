@@ -13,22 +13,31 @@
 import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync } from 'fs';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+import {checkManagedProfiles} from './managed-profile.integration.mjs';
 import {
   initializeTestEnvironment,
   assertSucceeds,
   assertFails,
 } from '@firebase/rules-unit-testing';
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc,
+  doc, getDoc, getDocs, collection, query, where, limit, setDoc, updateDoc, deleteDoc,
   serverTimestamp, increment, arrayUnion, writeBatch,
 } from 'firebase/firestore';
 
 const REPO = path.resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Emulator required');
+const require = createRequire(import.meta.url);
+const {syncPublicProfile} = require('../../functions/lib/public_profile_projection.js');
 
 const RECRUITER = '1CpBpamIhJR5Agz5wG5fnX6jMsl2';
 const PLAYER = 'RuLh6bcq6fhHYCD4chuu6ryI8Cl2';
 const RIVAL = 'zDuzNuDD4LYFMKv0bBhTrNT08sb2';
 const OUTSIDER = 'wQwEeVMa5reprTpScRlm7rWy6Ol1';
+const MINOR = 'minor_player_1';
+const VERIFIED_SCOUT = 'verified_scout_1';
+const LEGACY_PROFILE = 'legacy_profile_without_minor_marker';
 
 const OFFER = 'offer_1';
 const EVENT = 'event_1';
@@ -39,7 +48,7 @@ function embedded(uid, role) {
     uid, nom: 'N-' + uid.slice(0, 4), role,
     photoProfil: '', estActif: true, authDisabled: false,
     emailVerified: true, createdByAdmin: true, profileVerified: false,
-    profilePublic: true, allowMessages: true,
+    profilePublic: true, allowMessages: true, isMinorProfile: false,
   };
 }
 
@@ -67,12 +76,43 @@ async function seed() {
     const db = ctx.firestore();
     for (const [uid, role] of [
       [RECRUITER, 'recruteur'], [PLAYER, 'joueur'],
-      [RIVAL, 'joueur'], [OUTSIDER, 'joueur'],
+      [RIVAL, 'joueur'], [OUTSIDER, 'joueur'], [MINOR, 'joueur'],
+      [VERIFIED_SCOUT, 'recruteur'],
     ]) {
-      const profile = { ...embedded(uid, role), authDisabled: false };
+      const profile = {
+        ...embedded(uid, role),
+        authDisabled: false,
+        ...(uid === MINOR ? {
+          isMinorProfile: true,
+          minorProfileApproved: true,
+          profilePublic: true,
+        } : {}),
+        ...(uid === VERIFIED_SCOUT ? {
+          profileVerified: true,
+          profileVerificationStatus: 'verified',
+        } : {}),
+      };
       await setDoc(doc(db, 'users', uid), profile);
-      await setDoc(doc(db, 'public_profiles', uid), profile);
+      await setDoc(doc(db, 'public_profiles', uid), {
+        ...profile,
+        ...(uid === MINOR ? {
+          isMinorProfile: true,
+          allowMessages: false,
+          isSearchable: true,
+          positionCodes: ['ST'],
+          nationalities: ['ML'],
+          birthYear: 2010,
+        } : { isMinorProfile: false }),
+      });
     }
+    const legacy = {
+      ...embedded(LEGACY_PROFILE, 'joueur'),
+      authDisabled: false,
+      profilePublic: true,
+    };
+    delete legacy.isMinorProfile;
+    await setDoc(doc(db, 'users', LEGACY_PROFILE), legacy);
+    await setDoc(doc(db, 'public_profiles', LEGACY_PROFILE), legacy);
     await setDoc(doc(db, 'users', PLAYER, 'private', 'contact'), {phone: '+000000'});
     await setDoc(doc(db, 'users', PLAYER, 'following', RIVAL), {
       followerUid: PLAYER, followingUid: RIVAL, active: true,
@@ -103,6 +143,13 @@ async function seed() {
       expediteurId: RECRUITER, destinataireId: PLAYER,
       contenu: 'Merci, je regarde.', estLu: false,
     });
+    await setDoc(doc(db, 'conversations', 'conv_minor'), {
+      utilisateurIds: [RECRUITER, MINOR],
+    });
+    await setDoc(doc(db, 'conversations', 'conv_minor', 'messages', 'm_old'), {
+      expediteurId: RECRUITER, destinataireId: MINOR,
+      contenu: 'Ancien message', estLu: false,
+    });
   });
 }
 
@@ -111,9 +158,56 @@ await seed();
 const player = env.authenticatedContext(PLAYER).firestore();
 const recruiter = env.authenticatedContext(RECRUITER).firestore();
 const outsider = env.authenticatedContext(OUTSIDER).firestore();
+const verifiedScout = env.authenticatedContext(VERIFIED_SCOUT).firestore();
+const minor = env.authenticatedContext(MINOR).firestore();
 
 const rivalRow = embedded(RIVAL, 'joueur');
 const playerRow = embedded(PLAYER, 'joueur');
+
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'videos', 'adult_ready'), {
+    uid: PLAYER, status: 'ready',
+  });
+});
+await syncPublicProfile(PLAYER);
+await syncPublicProfile(RECRUITER);
+await check('le flux de videos adultes reste accessible par requete', 'allow', () =>
+  getDocs(query(collection(player, 'videos'), where('status', '==', 'ready'), where('publicFeedVisible', '==', true), limit(20))));
+await check('la liste des conversations adultes reste accessible par requete', 'allow', () =>
+  getDocs(query(collection(player, 'conversations'), where('readableBy', 'array-contains', PLAYER), limit(20))));
+await check('la boite du recruteur exclut les anciennes conversations mineures', 'allow', async () => {
+  const inbox = await getDocs(query(collection(recruiter, 'conversations'), where('readableBy', 'array-contains', RECRUITER)));
+  assert.deepEqual(inbox.docs.map((d) => d.id), [CONV]);
+});
+await check('une nouvelle conversation adulte porte son audience autorisee', 'allow', () =>
+  setDoc(doc(player, 'conversations', 'new_adult_conversation'), {
+    utilisateurIds: [PLAYER, OUTSIDER], readableBy: [PLAYER, OUTSIDER],
+  }));
+await check('une conversation ne donne pas acces a un tiers', 'deny', () =>
+  setDoc(doc(player, 'conversations', 'forged_conversation_audience'), {
+    utilisateurIds: [PLAYER, OUTSIDER], readableBy: [PLAYER, OUTSIDER, RECRUITER],
+  }));
+await check('la page video dun auteur adulte reste interrogeable', 'allow', () =>
+  getDocs(query(collection(recruiter, 'videos'), where('uid', '==', PLAYER), where('status', '==', 'ready'))));
+await check('la boite privee ne peut pas etre interrogee par un tiers', 'deny', () =>
+  getDocs(query(collection(outsider, 'conversations'), where('readableBy', 'array-contains', PLAYER))));
+await check('un participant ne peut pas restaurer un acces de conversation', 'deny', () =>
+  updateDoc(doc(recruiter, 'conversations', 'conv_minor'), {readableBy: [RECRUITER, MINOR]}));
+await check('un joueur ne peut pas modifier son audience video', 'deny', () =>
+  updateDoc(doc(player, 'videos', 'adult_ready'), {publicFeedVisible: false}));
+await check('la recherche adulte reste accessible par requete', 'allow', () =>
+  getDocs(query(collection(player, 'public_profiles'), where('isMinorProfile', '==', false), limit(20))));
+await check('la recherche mineur est accessible au recruteur verifie', 'allow', () =>
+  getDocs(query(collection(verifiedScout, 'public_profiles'), where('isSearchable', '==', true), where('isMinorProfile', 'in', [false, true]), limit(20))));
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'users', MINOR, 'private', 'contact'), {
+    birthDate: new Date('2010-01-01'), phone: 'old',
+  });
+});
+await check('un mineur peut corriger son telephone sans changer sa date', 'allow', () =>
+  updateDoc(doc(minor, 'users', MINOR, 'private', 'contact'), {phone: 'new'}));
+await check('un mineur ne peut pas se declarer adulte', 'deny', () =>
+  updateDoc(doc(minor, 'users', MINOR, 'private', 'contact'), {birthDate: new Date('1990-01-01')}));
 
 /* ---------------- Offer candidates ---------------- */
 
@@ -321,6 +415,34 @@ await check('une nouvelle conversation entre deux bloques est refusee', 'deny', 
     utilisateurIds: [PLAYER, RECRUITER],
   }));
 
+await check('un recruteur ne peut pas ouvrir une conversation vers un profil protege', 'deny', () =>
+  setDoc(doc(recruiter, 'conversations', 'conv_to_minor'), {
+    utilisateurIds: [RECRUITER, MINOR],
+  }));
+
+await check('un recruteur ne peut pas envoyer de message a un profil protege', 'deny', () =>
+  setDoc(doc(recruiter, 'conversations', 'conv_minor', 'messages', 'm_to_minor'), {
+    expediteurId: RECRUITER, destinataireId: MINOR,
+    contenu: 'Bonjour', estLu: false,
+  }));
+
+await check('un mineur ne cree pas de conversation directe', 'deny', () =>
+  setDoc(doc(minor, 'conversations', 'conv_minor_created_by_player'), {
+    utilisateurIds: [MINOR, RECRUITER],
+  }));
+
+await check('un mineur ne peut pas envoyer de message direct', 'deny', () =>
+  setDoc(doc(minor, 'conversations', 'conv_minor', 'messages', 'm_new'), {
+    expediteurId: MINOR, destinataireId: RECRUITER,
+    contenu: 'Message direct', estLu: false,
+  }));
+
+await check('un recruteur ne lit pas une ancienne conversation avec un mineur', 'deny', () =>
+  getDoc(doc(recruiter, 'conversations', 'conv_minor')));
+
+await check('un recruteur ne lit pas les anciens messages du mineur', 'deny', () =>
+  getDoc(doc(recruiter, 'conversations', 'conv_minor', 'messages', 'm_old')));
+
 await check('le joueur debloque le recruteur', 'allow', () =>
   deleteDoc(doc(player, 'blocks', `${PLAYER}_${RECRUITER}`)));
 
@@ -340,6 +462,13 @@ await check('un tiers ne lit pas le profil interne', 'deny', () =>
 
 await check('un utilisateur actif lit une projection publique', 'allow', () =>
   getDoc(doc(recruiter, 'public_profiles', PLAYER)));
+
+await check('un compte non vérifié ne lit pas le profil protégé', 'deny', () =>
+  getDoc(doc(recruiter, 'public_profiles', MINOR)));
+await check('un recruteur certifié lit la fiche football limitée', 'allow', () =>
+  getDoc(doc(verifiedScout, 'public_profiles', MINOR)));
+await check('une fiche historique sans marqueur âge reste fermée pendant la migration', 'deny', () =>
+  getDoc(doc(verifiedScout, 'public_profiles', LEGACY_PROFILE)));
 
 await check('un client ne modifie pas une projection publique', 'deny', () =>
   updateDoc(doc(player, 'public_profiles', PLAYER), {nom: 'Nom detourne'}));
@@ -406,6 +535,36 @@ await check('deuxieme demande immediate refusee', 'deny', () => {
   });
   return batch.commit();
 });
+
+const minorIntakeData = {
+  ...intakeData,
+  requesterUid: VERIFIED_SCOUT,
+  targetUid: MINOR,
+  requesterRole: 'recruteur',
+  targetRole: 'joueur',
+};
+await check('un recruteur non vérifié ne peut contacter un mineur', 'deny', () =>
+  setDoc(doc(recruiter, 'contact_intakes', 'minor_intake_unverified'), {
+    ...minorIntakeData,
+    requesterUid: RECRUITER,
+  }));
+await check('un recruteur vérifié soumet une demande médiée pour un mineur', 'allow', () => {
+  const batch = writeBatch(verifiedScout);
+  batch.set(
+    doc(verifiedScout, 'contact_intakes', 'minor_intake_verified'),
+    minorIntakeData,
+  );
+  batch.set(doc(verifiedScout, 'contact_intake_limits', VERIFIED_SCOUT), {
+    lastIntakeAt: serverTimestamp(),
+  });
+  return batch.commit();
+});
+await check('le mineur ne lit pas la demande avant médiation admin', 'deny', () =>
+  getDoc(doc(
+    env.authenticatedContext(MINOR).firestore(),
+    'contact_intakes',
+    'minor_intake_verified',
+  )));
 
 /* ---------------- Terms acceptance ---------------- */
 
@@ -478,6 +637,8 @@ await check("glisser un droit dans une mise a jour de profil", 'deny', () =>
   }));
 
 /* ---------------- Report ---------------- */
+
+await checkManagedProfiles(check);
 
 let failed = 0;
 console.log('');

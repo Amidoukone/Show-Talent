@@ -34,7 +34,10 @@ void main() {
     });
 
     test('it writes those two fields and nothing else', () {
-      expect(trigger, contains('userRef.update({birthYear, isSearchable})'));
+      expect(
+        trigger,
+        contains('tx.update(userRef, {birthYear, isSearchable, isMinorProfile: isMinor})'),
+      );
       expect('.update('.allMatches(trigger).length, 1);
       expect(trigger, isNot(contains('.set(')));
       expect(trigger, isNot(contains('.delete(')));
@@ -44,13 +47,10 @@ void main() {
       // The trigger writes to the document whose writes fire it. Without the
       // early return on unchanged values it would loop for ever, and the bill
       // would be the first thing to notice.
-      expect(
-        trigger,
-        contains(
-          'if (currentBirthYear === birthYear && '
-          'currentIsSearchable === isSearchable) {',
-        ),
-      );
+      expect(trigger, contains('currentBirthYear === birthYear &&'));
+      expect(trigger, contains('currentIsSearchable === isSearchable &&'));
+      expect(trigger, contains('currentIsMinor === isMinor &&'));
+      expect(trigger, matches(RegExp(r'hasMinorMarker\s*\) \{')));
     });
 
     test('a birth date never becomes a public full date', () {

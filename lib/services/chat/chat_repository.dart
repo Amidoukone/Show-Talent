@@ -87,7 +87,7 @@ class ChatRepository {
     int limit = defaultConversationWindow,
   }) {
     return _conversationsCollection
-        .where('utilisateurIds', arrayContains: userId)
+        .where('readableBy', arrayContains: userId)
         .orderBy('lastMessageDate', descending: true)
         .limit(limit + 1)
         .snapshots();
@@ -155,7 +155,7 @@ class ChatRepository {
       unreadCountByUser: <String, int>{ids[0]: 0, ids[1]: 0},
     );
 
-    await conversationRef.set(newConversation.toMap());
+    await conversationRef.set({...newConversation.toMap(), 'readableBy': ids});
 
     return conversationRef.id;
   }
@@ -177,7 +177,7 @@ class ChatRepository {
       normalizedOtherUserId,
     );
     final snapshot = await _conversationsCollection
-        .where('utilisateurIds', arrayContains: normalizedCurrentUserId)
+        .where('readableBy', arrayContains: normalizedCurrentUserId)
         .get();
 
     String? legacyConversationId;
@@ -204,6 +204,24 @@ class ChatRepository {
     required String contactReason,
     required String introMessage,
   }) async {
+    if (otherUser.isMinorProfile) {
+      if (!currentUser.isVerifiedRecruiter) {
+        throw StateError('Seuls les recruteurs vérifiés peuvent contacter un mineur.');
+      }
+      final intake = await _createMediatedMinorContactIntake(
+        currentUser: currentUser,
+        otherUser: otherUser,
+        context: context,
+        contactReason: contactReason,
+        introMessage: introMessage,
+      );
+      return GuidedConversationStartResult(
+        conversationId: '',
+        conversationCreated: false,
+        contactIntake: intake,
+      );
+    }
+
     final normalizedReason = ContactIntake.normalizeReasonCode(contactReason);
     final normalizedIntro = introMessage.trim();
     final normalizedContext = ContactContext(
@@ -252,7 +270,7 @@ class ChatRepository {
       agencyFollowUpStatus: AgencyFollowUpStatus.newLead,
       createdAt: DateTime.now(),
     );
-    await conversationRef.set(newConversation.toMap());
+    await conversationRef.set({...newConversation.toMap(), 'readableBy': ids});
 
     final firstMessage = Message(
       id: '',
@@ -288,6 +306,49 @@ class ChatRepository {
       conversationCreated: true,
       contactIntake: intake,
     );
+  }
+
+  Future<ContactIntake> _createMediatedMinorContactIntake({
+    required AppUser currentUser,
+    required AppUser otherUser,
+    required ContactContext context,
+    required String contactReason,
+    required String introMessage,
+  }) async {
+    final normalizedIntro = introMessage.trim();
+    if (normalizedIntro.isEmpty || normalizedIntro.length > 3000) {
+      throw ArgumentError.value(introMessage, 'introMessage');
+    }
+    final intakeRef = _contactIntakesCollection.doc();
+    final now = DateTime.now();
+    final intake = ContactIntake(
+      id: intakeRef.id,
+      requesterUid: currentUser.uid,
+      targetUid: otherUser.uid,
+      requesterRole: currentUser.role,
+      targetRole: otherUser.role,
+      contextType: context.normalizedType,
+      contextId: context.normalizedId,
+      contextTitle: context.normalizedTitle,
+      contactReason: ContactIntake.normalizeReasonCode(contactReason),
+      introMessage: normalizedIntro,
+      status: ContactIntakeStatus.newRequest,
+      agencyFollowUpStatus: AgencyFollowUpStatus.newLead,
+      requesterSnapshot: buildUserSnapshot(currentUser),
+      targetSnapshot: buildUserSnapshot(otherUser),
+      createdAt: now,
+      updatedAt: now,
+    );
+    final rateLimitRef = _firestore
+        .collection('contact_intake_limits')
+        .doc(currentUser.uid);
+    final batch = _firestore.batch();
+    batch.set(intakeRef, intake.toMap());
+    batch.set(rateLimitRef, <String, dynamic>{
+      'lastIntakeAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    return intake;
   }
 
   Future<ContactIntake?> _recoverMissingGuidedContactIntake({

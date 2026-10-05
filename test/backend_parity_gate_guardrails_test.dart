@@ -27,6 +27,7 @@ void main() {
     expect(scripts, contains('firebase:rules:check:production'));
     expect(scripts, contains('firestore:indexes:check:production'));
     expect(scripts, contains('backend:parity:check:production'));
+    expect(scripts, contains('backend:parity:check:production:transition'));
 
     expect(
       scripts['firebase:rules:check:production'],
@@ -50,6 +51,18 @@ void main() {
     expect(gate, contains('foreach (\$check in \$checks)'));
     expect(gate, contains('\$failures += \$check.Name'));
     expect(gate, contains('exit 1'));
+  });
+
+  test('transitional Firestore rules are an explicit production-only mode', () {
+    final gate = _read('scripts/check-backend-parity.ps1');
+
+    expect(gate, contains('AllowTransitionalFirestoreRules'));
+    expect(gate, contains('firestore.transition.rules'));
+    expect(gate, contains('Environment -ne "production"'));
+    expect(
+      gate,
+      contains('does not certify the final Firestore rules'),
+    );
   });
 
   test('the coherence gate calls the parity gate when the backend is in scope',

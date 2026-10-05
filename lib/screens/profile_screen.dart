@@ -310,7 +310,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         final isBlockedPair = _blockController.isBlocked(user.uid);
         final canViewProfile =
             isOwnProfile || (user.profilePublic && !isBlockedPair);
-        final visibleVideos = _getVisibleVideos(controller.videoList);
+        final visibleVideos = user.isMinorProfile
+            ? const <Video>[]
+            : _getVisibleVideos(controller.videoList);
 
         if (!canViewProfile) {
           return _buildPrivateProfile(
@@ -708,6 +710,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _canSendMessage(AppUser user) {
     final currentUser = Get.find<UserController>().user ?? _authController.user;
     if (currentUser == null) return false;
+    if (user.isMinorProfile) return currentUser.isVerifiedRecruiter;
     return currentUser.allowMessages && user.allowMessages;
   }
 
@@ -754,8 +757,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     setState(() => _isMessageActionLoading = true);
     try {
-      final existingConversationId = await _chatController
-          .findExistingConversationId(
+      final existingConversationId = user.isMinorProfile
+          ? null
+          : await _chatController.findExistingConversationId(
             currentUserId: currentUserId,
             otherUserId: user.uid,
           );
@@ -810,6 +814,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           l10n.profileContactRecordedMessage,
         );
       }
+
+      // Minor contact requests are held for the agency; no conversation or
+      // private message is opened until the admin-mediated process permits it.
+      if (user.isMinorProfile) return;
 
       if (conversationId.isEmpty) {
         AdFeedback.error(
@@ -1746,14 +1754,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return const SizedBox.shrink();
     }
 
-    final bool isFollowing =
-        Get.find<UserController>().user?.followingsList.contains(user.uid) ??
-        false;
+    final viewer = Get.find<UserController>().user;
+    final isFollowing = viewer?.followingsList.contains(user.uid) ?? false;
+    final mayManageFollow = isFollowing ||
+        (user.isMinorProfile != true && viewer?.isMinorProfile == false);
 
     return Row(
       children: [
-        Expanded(
-          child: AdButton(
+        if (mayManageFollow)
+          Expanded(
+            child: AdButton(
             leading: isFollowing
                 ? Icons.person_remove_alt_1
                 : Icons.person_add_alt,
@@ -1814,9 +1824,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       }
                     }
                   },
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
+        if (mayManageFollow) const SizedBox(width: 12),
         Expanded(
           child: AdButton(
             leading: Icons.message_outlined,

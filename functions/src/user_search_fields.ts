@@ -1,6 +1,8 @@
 /* eslint-disable linebreak-style */
 
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
+import {onSchedule} from "firebase-functions/v2/scheduler";
+import {FieldPath} from "firebase-admin/firestore";
 import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
 import {db} from "./firebase";
 import {MAX_POSITION_CODES, POSITION_CODES} from "./football_vocabulary";
@@ -84,7 +86,7 @@ export function toBirthYear(value: unknown): number | null {
     if (!Number.isNaN(parsed.getTime())) date = parsed;
   }
 
-  if (!date) return null;
+  if (!date || Number.isNaN(date.getTime())) return null;
 
   const year = date.getUTCFullYear();
   // Une annee hors de ces bornes ne decrit aucun joueur vivant : mieux vaut
@@ -98,6 +100,35 @@ export function toBirthYear(value: unknown): number | null {
   ));
   if (eighteenthBirthday.getTime() > now.getTime()) return null;
   return year;
+}
+
+/**
+ * Reads the full age without exposing the stored birth date.
+ * @param {unknown} value Private birth date.
+ * @return {object | null} Derived birth year and minor status.
+ */
+export function deriveBirthYearAndMinorStatus(
+  value: unknown,
+): {birthYear: number; isMinor: boolean} | null {
+  let date: Date | null = null;
+  if (value && typeof (value as {toDate?: unknown}).toDate === "function") {
+    date = (value as {toDate: () => Date}).toDate();
+  } else if (value instanceof Date) {
+    date = value;
+  } else if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) date = parsed;
+  }
+  if (!date || Number.isNaN(date.getTime())) return null;
+  const year = date.getUTCFullYear();
+  if (year < MIN_BIRTH_YEAR || year > new Date().getUTCFullYear()) return null;
+  const now = new Date();
+  const age = now.getUTCFullYear() - year - (
+    now.getUTCMonth() < date.getUTCMonth() ||
+    (now.getUTCMonth() === date.getUTCMonth() &&
+      now.getUTCDate() < date.getUTCDate()) ? 1 : 0
+  );
+  return {birthYear: year, isMinor: age < 18};
 }
 
 /**
@@ -135,6 +166,10 @@ function computeIsSearchable(
   if (data.profilePublic === false) return false;
 
   if (birthYear === null) return false;
+  if (data.minorProfileApproved === true) {
+    return hasPositionCode(data.positionCodes) &&
+      hasNationality(data.nationalities);
+  }
   if (!hasPositionCode(data.positionCodes)) return false;
   if (!hasNationality(data.nationalities)) return false;
 
@@ -154,26 +189,45 @@ function computeIsSearchable(
 export async function refreshUserSearchFields(uid: string): Promise<void> {
   const userRef = db.collection("users").doc(uid);
 
-  const [userSnapshot, contactSnapshot] = await Promise.all([
-    userRef.get(),
-    userRef.collection("private").doc("contact").get(),
-  ]);
+  await db.runTransaction(async (tx) => {
+    const userSnapshot = await tx.get(userRef);
+    const contactSnapshot = await tx.get(
+      userRef.collection("private").doc("contact"),
+    );
 
-  if (!userSnapshot.exists) return;
+    if (!userSnapshot.exists) return;
 
-  const data = userSnapshot.data() ?? {};
-  const birthYear = toBirthYear(contactSnapshot.data()?.birthDate);
-  const isSearchable = computeIsSearchable(data, birthYear);
+    const data = userSnapshot.data() ?? {};
+    const age = deriveBirthYearAndMinorStatus(
+      contactSnapshot.data()?.birthDate,
+    );
+    const isMinor = age?.isMinor === true ||
+    (age == null && (contactSnapshot.data()?.birthDate != null ||
+      data.isMinorProfile === true || data.minorProtectionRequired === true));
+    const birthYear = age?.isMinor === true ? age.birthYear :
+      toBirthYear(contactSnapshot.data()?.birthDate);
+    const isSearchable = isMinor ?
+      data.minorProfileApproved === true &&
+      computeIsSearchable(data, birthYear) :
+      computeIsSearchable(data, birthYear);
 
-  const currentBirthYear =
+    const currentBirthYear =
     typeof data.birthYear === "number" ? data.birthYear : null;
-  const currentIsSearchable = data.isSearchable === true;
+    const currentIsSearchable = data.isSearchable === true;
+    const currentIsMinor = data.isMinorProfile === true;
+    const hasMinorMarker = typeof data.isMinorProfile === "boolean";
 
-  if (currentBirthYear === birthYear && currentIsSearchable === isSearchable) {
-    return;
-  }
+    if (
+      currentBirthYear === birthYear &&
+    currentIsSearchable === isSearchable &&
+    currentIsMinor === isMinor &&
+    hasMinorMarker
+    ) {
+      return;
+    }
 
-  await userRef.update({birthYear, isSearchable});
+    tx.update(userRef, {birthYear, isSearchable, isMinorProfile: isMinor});
+  });
 }
 
 /**
@@ -210,5 +264,36 @@ export const deriveUserSearchFieldsFromContact = onDocumentWritten(
   },
   async (event) => {
     await refreshUserSearchFields(event.params.uid);
+  },
+);
+
+/** Reclassifies players whose eighteenth birthday has passed. */
+export const refreshPlayersReachingMajority = onSchedule(
+  {
+    ...LOW_CPU_REGION_OPTIONS,
+    schedule: "every 24 hours",
+    timeZone: "Africa/Bamako",
+    memory: "256MiB",
+  },
+  async () => {
+    const candidateBirthYear = new Date().getUTCFullYear() - 18;
+    let cursor: FirebaseFirestore.QueryDocumentSnapshot | null = null;
+    let hasMore = true;
+    while (hasMore) {
+      let query = db.collection("users")
+        .where("birthYear", "==", candidateBirthYear)
+        .orderBy(FieldPath.documentId())
+        .limit(200);
+      if (cursor) query = query.startAfter(cursor);
+      const page = await query.get();
+      if (page.empty) break;
+      for (const user of page.docs) {
+        if (user.data().isMinorProfile === true) {
+          await refreshUserSearchFields(user.id);
+        }
+      }
+      hasMore = page.size === 200;
+      if (hasMore) cursor = page.docs[page.docs.length - 1];
+    }
   },
 );

@@ -8,6 +8,8 @@ import {HttpsError, onCall} from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 
 import {auth, db, fieldValue, storage} from "./firebase";
+import {cvObjectPath} from "./cv_view";
+import {readProfileAccess, writeProfileAccess} from "./profile_access_sync";
 import {
   LOW_CPU_CALLABLE_OPTIONS,
   assertAdminCaller,
@@ -24,9 +26,17 @@ import {
   normalizeRole,
   privateAdminNotesRef,
   privateContactRef,
+  privateGuardianConsentRef,
 } from "./admin_account_support";
 import {EMAIL_SECRETS, sendAccountInviteEmail} from "./email_delivery";
-import {MIN_BIRTH_YEAR, toBirthYear} from "./user_search_fields";
+import {MIN_BIRTH_YEAR} from "./user_search_fields";
+import {
+  isBelowMinimumPlayerAge,
+  isUnderEighteen,
+  MINOR_CONSENT_POLICY_VERSION,
+  parseManagedBirthDate,
+  validateGuardianConsent,
+} from "./minor_consent";
 import {
   AGE_CATEGORY_CODES,
   CLUB_LEVEL_CODES,
@@ -310,6 +320,37 @@ async function deleteManagedVideos(uid: string): Promise<void> {
   }
 }
 
+/** Removes tokenized media links when a managed player becomes a minor. */
+/**
+ * @param {string} uid Managed player UID.
+ * @param {Record<string, unknown>} userData Current root profile data.
+ * @return {Promise<void>} Resolves after all known public assets are removed.
+ */
+export async function purgeMinorPublicMedia(
+  uid: string,
+  userData: Record<string, unknown>,
+): Promise<void> {
+  const videos = await db.collection("videos").where("uid", "==", uid).get();
+  const paths = new Set<string>([`profilePhotos/${uid}`]);
+  for (const video of videos.docs) {
+    for (const path of collectVideoStoragePaths(video.data())) paths.add(path);
+  }
+  const cvPath = cvObjectPath(userData.cvUrl, uid, storage.bucket().name);
+  if (cvPath) paths.add(cvPath);
+  // A previous attempt may already have cleared cvUrl before Storage failed.
+  // Enumerating the owner's namespace makes the retry complete as well.
+  const [cvFiles] = await storage.bucket().getFiles({prefix: `cvs/${uid}/`});
+  for (const file of cvFiles) paths.add(file.name);
+
+  // Firebase download tokens bypass Storage Rules, so delete the objects too.
+  await Promise.all([...paths].map((path) =>
+    storage.bucket().file(path).delete({ignoreNotFound: true})
+  ));
+  if (videos.size > 0) {
+    await deleteDocsInChunks(videos.docs.map((video) => video.ref));
+  }
+}
+
 async function deleteOwnedDocs(
   collectionName: string,
   ownerField: string,
@@ -456,6 +497,7 @@ export async function purgeAccountData(uid: string): Promise<void> {
   await Promise.all([
     privateContactRef(uid).delete(),
     privateAdminNotesRef(uid).delete(),
+    privateGuardianConsentRef(uid).delete(),
     db.collection("user_push_tokens").doc(uid).delete(),
     db.collection("public_profiles").doc(uid).delete(),
   ]);
@@ -549,21 +591,14 @@ function isMvpProfileComplete(
  * @return {Timestamp | null} The value to store, or null when unusable.
  */
 function toManagedBirthDate(value: unknown): Timestamp | null {
-  let date: Date | null = null;
-
-  if (value instanceof Timestamp) {
-    date = value.toDate();
-  } else if (value instanceof Date) {
-    date = value;
-  } else if (typeof value === "number" && Number.isFinite(value)) {
-    date = new Date(value);
-  } else if (typeof value === "string" && value.trim()) {
-    const parsed = new Date(value.trim());
-    if (!Number.isNaN(parsed.getTime())) date = parsed;
+  const date = parseManagedBirthDate(value);
+  if (!date) return null;
+  if (isBelowMinimumPlayerAge(date)) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Adfoot accueille les joueurs à partir de 12 ans.",
+    );
   }
-
-  if (!date || Number.isNaN(date.getTime())) return null;
-  if (toBirthYear(date) === null) return null;
   return Timestamp.fromDate(date);
 }
 
@@ -948,6 +983,8 @@ export const resendManagedAccountInvite = onCall(
         await generateHostedEmailVerificationLink(email);
 
     await target.userRef.set({
+      // Preserve the original creator; invitation resends have their own
+      // invitedBy/lastInviteAt audit fields.
       invitedBy: adminUid,
       invitedAt: fieldValue.serverTimestamp(),
       lastInviteAt: fieldValue.serverTimestamp(),
@@ -1044,7 +1081,19 @@ export const updateManagedAccountProfile = onCall(
     assertManagedTarget(target);
 
     const sanitizedPatch = sanitizeManagedProfilePatch(rawPatch);
-    if (Object.keys(sanitizedPatch).length === 0) {
+    if (
+      target.role === "joueur" &&
+      Object.prototype.hasOwnProperty.call(sanitizedPatch, "birthDate") &&
+      sanitizedPatch.birthDate === null
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Une date de naissance est requise pour sécuriser le profil joueur.",
+      );
+    }
+    const guardianConsent = rawPatch.guardianConsent == null ? null :
+      validateGuardianConsent(rawPatch.guardianConsent);
+    if (Object.keys(sanitizedPatch).length === 0 && !guardianConsent) {
       throw new HttpsError(
         "invalid-argument",
         "Aucun champ profil autorisé n’a été fourni.",
@@ -1065,8 +1114,61 @@ export const updateManagedAccountProfile = onCall(
     // already-mutated state.
     const updatedFields = await db.runTransaction(async (tx) => {
       const freshSnap = await tx.get(target.userRef);
+      const freshContactSnap = await tx.get(privateContactRef(uid));
+      const related = await readProfileAccess(tx, uid);
       const freshData = freshSnap.exists ? freshSnap.data() ?? {} : {};
       const updates: Record<string, unknown> = {...sanitizedPatch};
+      const nextBirthDate = "birthDate" in updates ? updates.birthDate :
+        freshContactSnap.data()?.birthDate;
+      const parsedBirthDate = parseManagedBirthDate(nextBirthDate);
+      const isMinor = parsedBirthDate != null ?
+        isUnderEighteen(parsedBirthDate) :
+        freshData.isMinorProfile === true ||
+          freshData.minorProtectionRequired === true;
+      const birthDateChanged = "birthDate" in updates;
+      if (guardianConsent && !isMinor) {
+        throw new HttpsError(
+          "failed-precondition",
+          "L’accord parental ne peut être enregistré que pour un joueur mineur.",
+        );
+      }
+      if (isMinor && birthDateChanged && !guardianConsent) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Enregistrez la réception de l’accord parental avant de modifier la date.",
+        );
+      }
+      if (isMinor && guardianConsent) {
+        updates["minorProfileApproved"] = true;
+        updates["isMinorProfile"] = true;
+        updates["allowMessages"] = false;
+        updates["minorMediaConsentApproved"] = guardianConsent.mediaAllowed;
+        updates["minorConsentWithdrawnAt"] = fieldValue.delete();
+        updates["minorConsentWithdrawnByAdminUid"] = fieldValue.delete();
+        if (
+          guardianConsent.mediaAllowed !== true &&
+          freshData.minorMediaConsentApproved === true
+        ) {
+          updates["minorMediaPurgePending"] = true;
+        }
+      } else if (isMinor) {
+        updates["isMinorProfile"] = true;
+        updates["allowMessages"] = false;
+      } else if (birthDateChanged && !isMinor) {
+        updates["minorProfileApproved"] = false;
+        updates["isMinorProfile"] = false;
+      }
+      if (isMinor && (
+        freshData.minorMediaPurgePending === true ||
+        updates["minorMediaPurgePending"] === true ||
+        (freshData.isMinorProfile !== true &&
+          freshData.minorMediaConsentApproved !== true)
+      )) {
+        updates["photoProfil"] = "";
+        updates["cvUrl"] = fieldValue.delete();
+        updates["videosPubliees"] = [];
+        updates["minorMediaPurgePending"] = true;
+      }
 
       const adminExplicitlySetVerification = "profileVerified" in updates;
       if (
@@ -1095,6 +1197,12 @@ export const updateManagedAccountProfile = onCall(
           throw new HttpsError(
             "failed-precondition",
             "Le compte doit être actif (email vérifié, non désactivé) avant d’être certifié.",
+          );
+        }
+        if (isMinor) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Un profil de joueur mineur ne peut pas être certifié avant ses 18 ans.",
           );
         }
         if (!isMvpProfileComplete(target.role, {...freshData, ...updates})) {
@@ -1153,9 +1261,43 @@ export const updateManagedAccountProfile = onCall(
       if (Object.keys(adminNotesUpdates).length > 0) {
         tx.set(privateAdminNotesRef(uid), adminNotesUpdates, {merge: true});
       }
+      if (isMinor && guardianConsent) {
+        tx.set(privateGuardianConsentRef(uid), {
+          ...guardianConsent,
+          status: "admin_recorded",
+          consentScope: {
+            footballProfileVisibleToVerifiedRecruiters: true,
+            contactMediatedByAdmin: true,
+            mediaAllowed: guardianConsent.mediaAllowed,
+          },
+          recordedByAdminUid: adminUid,
+          recordedAt: fieldValue.serverTimestamp(),
+          policyVersion: MINOR_CONSENT_POLICY_VERSION,
+          withdrawnAt: fieldValue.delete(),
+          withdrawnByAdminUid: fieldValue.delete(),
+          withdrawalSource: fieldValue.delete(),
+        }, {merge: true});
+      }
+      if (birthDateChanged && isMinor) {
+        // Remove any previous adult projection in the same commit as the
+        // private date and protection markers; the trigger rebuilds only the
+        // limited scout projection after this transaction commits.
+        tx.delete(db.collection("public_profiles").doc(uid));
+      }
+      writeProfileAccess(tx, uid, {
+        ...freshData, ...updates, isMinorProfile: isMinor,
+      }, related);
 
       return updates;
     });
+
+    if (updatedFields["minorMediaPurgePending"] === true) {
+      await purgeMinorPublicMedia(uid, target.userData);
+      await target.userRef.update({
+        minorMediaPurgePending: false,
+        minorMediaPurgedAt: fieldValue.serverTimestamp(),
+      });
+    }
 
     if (typeof updatedFields["nom"] === "string" && target.userRecord) {
       await auth.updateUser(uid, {displayName: updatedFields["nom"]});
@@ -1169,6 +1311,88 @@ export const updateManagedAccountProfile = onCall(
         ...buildManagedAccountSummary(target),
         updatedFields: Object.keys(updatedFields),
       },
+    };
+  },
+);
+
+/** Applies a parent/guardian withdrawal received through Adfoot support. */
+export const withdrawManagedMinorConsent = onCall(
+  LOW_CPU_CALLABLE_OPTIONS,
+  async (request) => {
+    const adminUid = await assertAdminCaller(request);
+    const uid = getTargetUid(request.data);
+    const target = await loadManagedTarget(uid);
+    assertSafeAdminMutation(target, adminUid);
+    assertManagedTarget(target);
+    if (target.role !== "joueur") {
+      throw new HttpsError(
+        "failed-precondition",
+        "Le retrait parental ne concerne que les comptes joueur.",
+      );
+    }
+
+    let userDataToPurge: Record<string, unknown> = target.userData;
+    await db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(target.userRef);
+      const contactSnap = await tx.get(privateContactRef(uid));
+      const related = await readProfileAccess(tx, uid);
+      const consentRef = privateGuardianConsentRef(uid);
+      if (!userSnap.exists) {
+        throw new HttpsError("not-found", "Le compte joueur est introuvable.");
+      }
+      const userData = userSnap.data() ?? {};
+      userDataToPurge = userData;
+      const birthDate = parseManagedBirthDate(contactSnap.data()?.birthDate);
+      const isMinor = birthDate ? isUnderEighteen(birthDate) :
+        userData.isMinorProfile === true ||
+        userData.minorProtectionRequired === true;
+      if (!isMinor) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Le compte n'est pas soumis aux protections parentales.",
+        );
+      }
+
+      tx.set(target.userRef, {
+        minorProfileApproved: false,
+        minorMediaConsentApproved: false,
+        isMinorProfile: true,
+        allowMessages: false,
+        photoProfil: "",
+        cvUrl: fieldValue.delete(),
+        videosPubliees: [],
+        minorMediaPurgePending: true,
+        minorConsentWithdrawnAt: fieldValue.serverTimestamp(),
+        minorConsentWithdrawnByAdminUid: adminUid,
+        updatedByAdmin: adminUid,
+        updatedAt: fieldValue.serverTimestamp(),
+      }, {merge: true});
+      tx.set(consentRef, {
+        status: "withdrawn",
+        consentScope: {
+          footballProfileVisibleToVerifiedRecruiters: false,
+          contactMediatedByAdmin: true,
+          mediaAllowed: false,
+        },
+        withdrawnAt: fieldValue.serverTimestamp(),
+        withdrawnByAdminUid: adminUid,
+        withdrawalSource: "parent_or_guardian_request",
+      }, {merge: true});
+      tx.delete(db.collection("public_profiles").doc(uid));
+      writeProfileAccess(tx, uid, {...userData, isMinorProfile: true}, related);
+    });
+
+    await purgeMinorPublicMedia(uid, userDataToPurge);
+    await target.userRef.update({
+      minorMediaPurgePending: false,
+      minorMediaPurgedAt: fieldValue.serverTimestamp(),
+    });
+
+    return {
+      success: true,
+      code: "managed_minor_consent_withdrawn",
+      message: "Les autorisations parentales ont été retirées et les médias purgés.",
+      data: {uid, minorProfileApproved: false, minorMediaConsentApproved: false},
     };
   },
 );

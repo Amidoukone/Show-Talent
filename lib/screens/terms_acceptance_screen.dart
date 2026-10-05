@@ -42,12 +42,8 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
   bool _isAccepting = false;
   bool _isSigningOut = false;
 
-  /// True once the user has ticked the box confirming they are an adult.
-  ///
-  /// The terms reserve the service to people aged 18 or over (article 4), and
-  /// a rule nobody was ever asked about is a rule that cannot be enforced
-  /// afterwards. This is the affirmative declaration article 4.1 refers to.
-  bool _confirmsAdult = false;
+  /// Explicit assent by the account holder to this version of the terms.
+  bool _hasAcceptedTerms = false;
 
   Future<void> _open(String url) async {
     final uri = Uri.tryParse(url);
@@ -81,7 +77,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
   }
 
   Future<void> _accept() async {
-    if (_isAccepting || !_confirmsAdult) return;
+    if (_isAccepting || !_hasAcceptedTerms) return;
 
     setState(() => _isAccepting = true);
     try {
@@ -183,17 +179,17 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                     onTap: busy ? null : () => _open(config.privacyUrl),
                   ),
                   const SizedBox(height: 24),
-                  _AdultCheckbox(
-                    value: _confirmsAdult,
+                  _ConsentCheckbox(
+                    value: _hasAcceptedTerms,
                     enabled: !busy,
                     onChanged: (value) =>
-                        setState(() => _confirmsAdult = value ?? false),
+                        setState(() => _hasAcceptedTerms = value ?? false),
                   ),
                   const SizedBox(height: 24),
                   AdButton(
                     label: l10n.termsAcceptButton,
                     loading: _isAccepting,
-                    onPressed: (_confirmsAdult && !busy) ? _accept : null,
+                    onPressed: (_hasAcceptedTerms && !busy) ? _accept : null,
                   ),
                   const SizedBox(height: 10),
                   AdButton(
@@ -340,8 +336,8 @@ class _DocumentLink extends StatelessWidget {
   }
 }
 
-class _AdultCheckbox extends StatelessWidget {
-  const _AdultCheckbox({
+class _ConsentCheckbox extends StatelessWidget {
+  const _ConsentCheckbox({
     required this.value,
     required this.enabled,
     required this.onChanged,
@@ -371,7 +367,7 @@ class _AdultCheckbox extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(
-                  AppLocalizations.of(context)!.termsAdultDeclaration,
+                  AppLocalizations.of(context)!.termsAcceptanceCheckbox,
                   style: const TextStyle(
                     fontSize: 13.5,
                     height: 1.42,

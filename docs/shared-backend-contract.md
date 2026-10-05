@@ -70,6 +70,7 @@ Gestion de comptes :
 - `disableManagedAccountAuth`
 - `enableManagedAccountAuth`
 - `updateManagedAccountProfile`
+- `withdrawManagedMinorConsent`
 - `setManagedAccountMembership`
 
 Moderation de contenu (appelees depuis `AdminContentService` cote admin) :
@@ -84,6 +85,17 @@ Moderation de contenu (appelees depuis `AdminContentService` cote admin) :
 - `adminSetContactIntakeFollowUp`
 - `adminDeleteContactIntake`
 - `adminDeleteContactIntakeConversation`
+
+### Retrait d autorisation parentale : `withdrawManagedMinorConsent`
+
+Un operateur admin confirme la demande recue a `support@adfoot.org`, puis
+appelle ce callable avec `{uid}`. L operation est reservee aux comptes joueur
+mineurs. Elle masque immediatement la fiche, bloque les messages et medias,
+supprime la projection publique et purge les photos, CV et videos publies. Le
+document de consentement conserve son historique avec le statut `withdrawn`.
+Le portail admin propose cette action et affiche son resultat. Le backend et
+le portail doivent etre deployes ensemble ; un message au support seul ne
+modifie pas les autorisations.
 
 ### Droits d acces : `setManagedAccountMembership`
 
@@ -165,6 +177,22 @@ Le cycle de vie d un compte provisionne repose uniquement sur :
 - la suppression definitive
 
 ## Regle de coherence
+
+Les requetes du candidat du 4 octobre 2026 utilisent aussi deux champs
+d'acces materialises : `videos.publicFeedVisible` et
+`conversations.readableBy`. Les clients ne peuvent pas modifier ces droits.
+Une nouvelle conversation adulte initialise `readableBy` avec ses deux
+participants, sous controle des regles. Les Functions synchronisent les
+audiences lors des changements de profil ; les corrections de naissance et
+retraits parentaux ferment les audiences dans la transaction du compte.
+`syncVideoAudience` initialise les nouvelles videos. Le backfill v5 appelle
+`syncPublicProfile` pour preparer les documents historiques.
+
+Les nouveaux index, le backfill et les regles correspondantes doivent etre
+valides sur l'environnement de test avant les nouveaux clients. Les anciens
+clients qui interrogent seulement `utilisateurIds` ou `status=ready` ne sont
+pas compatibles avec les regles finales de ce candidat. Le fichier
+`firestore.transition.rules` historique ne certifie pas ces nouveaux parcours.
 
 Le backend Firebase partage est la source d autorite unique pour :
 

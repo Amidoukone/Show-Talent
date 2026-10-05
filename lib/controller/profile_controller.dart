@@ -682,6 +682,15 @@ class ProfileController extends GetxController {
   }
 
   Future<void> updateProfilePhoto(String uid, String photoPath) async {
+    if (user?.isMinorProfile == true &&
+        (user?.minorProfileApproved != true ||
+            user?.minorMediaConsentApproved != true)) {
+      AdFeedback.error(
+        'profileMediaConsentRequiredTitle'.tr,
+        'profileMediaConsentRequiredMessage'.tr,
+      );
+      return;
+    }
     isLoadingPhoto.value = true;
     try {
       final url = await _profileRepository.updateProfilePhoto(uid, photoPath);
@@ -829,6 +838,15 @@ class ProfileController extends GetxController {
   }) async {
     try {
       _clearCvUploadError();
+      if (user?.isMinorProfile == true &&
+          (user?.minorProfileApproved != true ||
+              user?.minorMediaConsentApproved != true)) {
+        final title = 'profileMediaConsentRequiredTitle'.tr;
+        final message = 'profileMediaConsentRequiredMessage'.tr;
+        _setCvUploadError(title, message);
+        AdFeedback.error(title, message);
+        return null;
+      }
       final ownerProblem = _ownerSessionProblemMessage(uid);
       if (ownerProblem != null) {
         final sessionInvalidTitle = 'profileInvalidSessionTitle'.tr;

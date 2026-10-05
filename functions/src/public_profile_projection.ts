@@ -5,6 +5,8 @@ import {onDocumentWritten} from "firebase-functions/v2/firestore";
 
 import {db} from "./firebase";
 import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
+import {deriveBirthYearAndMinorStatus} from "./user_search_fields";
+import {readProfileAccess, writeProfileAccess} from "./profile_access_sync";
 
 const DIRECTORY_FIELDS = [
   "nom",
@@ -74,6 +76,33 @@ const POSITION_SEARCH_LABELS: Record<string, string> = {
   RW: "ailier droit right winger",
   ST: "attaquant striker",
 };
+
+/**
+ * Reads the stored birth date without exposing it. A malformed supplied date
+ * is treated conservatively as a protected profile as well.
+ * @param {unknown} value Private birth date.
+ * @return {boolean} Whether the profile must be withheld as a minor/unknown.
+ */
+export function requiresMinorProtection(value: unknown): boolean {
+  let date: Date | null = null;
+  if (value && typeof (value as {toDate?: unknown}).toDate === "function") {
+    date = (value as {toDate: () => Date}).toDate();
+  } else if (value instanceof Date) {
+    date = value;
+  } else if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) date = parsed;
+  }
+  if (!date || Number.isNaN(date.getTime())) return value != null;
+
+  const now = new Date();
+  let age = now.getUTCFullYear() - date.getUTCFullYear();
+  const beforeBirthday = now.getUTCMonth() < date.getUTCMonth() ||
+    (now.getUTCMonth() === date.getUTCMonth() &&
+      now.getUTCDate() < date.getUTCDate());
+  if (beforeBirthday) age--;
+  return age < 18;
+}
 
 /**
  * Normalizes a value for prefix search.
@@ -158,16 +187,57 @@ function copyField(
  *
  * @param {string} uid User ID.
  * @param {FirebaseFirestore.DocumentData} source Full internal user document.
+ * @param {boolean} isMinor Whether the private birth date requires protection.
  * @return {FirebaseFirestore.DocumentData|null} Projection or null if hidden.
  */
 export function buildPublicProfileProjection(
   uid: string,
   source: FirebaseFirestore.DocumentData,
+  isMinor = false,
 ): FirebaseFirestore.DocumentData | null {
   if (source.authDisabled === true || source.estActif === false) return null;
+  if (isMinor) {
+    if (
+      source.minorProfileApproved !== true || source.profilePublic === false
+    ) {
+      return null;
+    }
+    const minorProjection: FirebaseFirestore.DocumentData = {
+      uid,
+      nom: source.nom,
+      role: "joueur",
+      profilePublic: true,
+      isMinorProfile: true,
+      allowMessages: false,
+      profileVerified: false,
+      profileVerificationStatus: "unverified",
+      isSearchable: source.isSearchable === true,
+      openToOpportunities: source.openToOpportunities === true,
+      directoryPrefixes: [],
+    };
+    for (const field of [
+      "positionCodes",
+      "nationalities",
+      "birthYear",
+      "clubLevel",
+    ]) copyField(source, minorProjection, field);
+    if (
+      source.minorMediaConsentApproved === true &&
+      source.minorMediaPurgePending !== true
+    ) {
+      copyField(source, minorProjection, "photoProfil");
+      copyField(source, minorProjection, "cvUrl");
+    }
+    minorProjection.searchPrefixes = buildSearchPrefixes({
+      positionCodes: source.positionCodes,
+      nationalities: source.nationalities,
+    });
+    return minorProjection;
+  }
 
   const projection: FirebaseFirestore.DocumentData = {uid};
   for (const field of DIRECTORY_FIELDS) copyField(source, projection, field);
+  projection.isMinorProfile = false;
 
   const isPublic = source.profilePublic !== false;
   projection.profilePublic = isPublic;
@@ -198,8 +268,24 @@ export function publicProfileChanged(
 ): boolean {
   const oldProjection = before ?
     buildPublicProfileProjection(uid, before) : null;
-  const newProjection = after ? buildPublicProfileProjection(uid, after) : null;
-  return !isDeepStrictEqual(oldProjection, newProjection);
+  const newProjection = after ?
+    buildPublicProfileProjection(uid, after) : null;
+  const oldProtectionState = before ? [
+    before.minorProfileApproved === true,
+    before.isMinorProfile === true,
+    before.minorProtectionRequired === true,
+    before.minorMediaConsentApproved === true,
+    before.minorMediaPurgePending === true,
+  ] : null;
+  const newProtectionState = after ? [
+    after.minorProfileApproved === true,
+    after.isMinorProfile === true,
+    after.minorProtectionRequired === true,
+    after.minorMediaConsentApproved === true,
+    after.minorMediaPurgePending === true,
+  ] : null;
+  return !isDeepStrictEqual(oldProjection, newProjection) ||
+    !isDeepStrictEqual(oldProtectionState, newProtectionState);
 }
 
 /**
@@ -215,10 +301,31 @@ export async function syncPublicProfile(
     // Reading the current user in the same transaction prevents an older
     // trigger or backfill page from restoring stale public data.
     const user = await tx.get(userRef);
+    const contact = await tx.get(userRef.collection("private").doc("contact"));
+    const userData = user.data() ?? {};
+    const related = await readProfileAccess(tx, uid);
+    const birthDate = contact.data()?.birthDate;
+    const age = deriveBirthYearAndMinorStatus(birthDate);
+    const isMinor = age?.isMinor === true ||
+      (age == null && (birthDate != null ||
+        userData.isMinorProfile === true ||
+        userData.minorProtectionRequired === true));
     const projection = user.exists ?
-      buildPublicProfileProjection(uid, user.data() ?? {}) : null;
+      buildPublicProfileProjection(
+        uid,
+        userData,
+        isMinor,
+      ) : null;
+    if (user.exists && userData.isMinorProfile !== isMinor) {
+      // The scheduled v5 backfill also materializes this marker on legacy
+      // user documents. Storage and CV access fail closed until it is set.
+      tx.set(userRef, {isMinorProfile: isMinor}, {merge: true});
+    }
     if (projection) tx.set(ref, projection);
     else tx.delete(ref);
+    writeProfileAccess(tx, uid, {
+      ...userData, isMinorProfile: user.exists ? isMinor : true,
+    }, related);
   });
 }
 
@@ -234,6 +341,37 @@ export const syncPublicProfileOnUserWrite = onDocumentWritten(
       event.data?.before.data() ?? null,
       event.data?.after.data() ?? null,
     )) return;
+    await syncPublicProfile(event.params.uid);
+  },
+);
+
+/** Re-evaluates visibility whenever the private birth date changes. */
+export const syncPublicProfileOnContactWrite = onDocumentWritten(
+  {
+    ...LOW_CPU_REGION_OPTIONS,
+    document: "users/{uid}/private/contact",
+  },
+  async (event) => {
+    if (!event.data?.after?.exists && !event.data?.before?.exists) return;
+    const beforeBirthDate = event.data?.before?.get("birthDate");
+    const wasBirthDateRecorded = beforeBirthDate != null;
+    const userRef = db.collection("users").doc(event.params.uid);
+    await db.runTransaction(async (tx) => {
+      const user = await tx.get(userRef);
+      const contact = await tx.get(
+        userRef.collection("private").doc("contact"),
+      );
+      const birthDate = contact.data()?.birthDate;
+      const protectionRequired = requiresMinorProtection(birthDate) ||
+      (birthDate == null && (wasBirthDateRecorded ||
+        user.data()?.minorProtectionRequired === true));
+      if (
+        user.exists &&
+      user.data()?.minorProtectionRequired !== protectionRequired
+      ) {
+        tx.update(userRef, {minorProtectionRequired: protectionRequired});
+      }
+    });
     await syncPublicProfile(event.params.uid);
   },
 );

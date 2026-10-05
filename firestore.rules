@@ -41,8 +41,48 @@ service cloud.firestore {
       return signedInAndActive() && isOpportunityPublisherRole(userRole());
     }
 
+    function isVerifiedRecruiter() {
+      let requester = userDoc(request.auth.uid).data;
+      return signedInAndActive() &&
+        (userRole() == "recruteur" || userRole() == "club") &&
+        (requester.profileVerified == true ||
+          requester.profileVerificationStatus == "verified");
+    }
+
+    function isCurrentUserMinor() {
+      return signedIn() && hasUserDoc(request.auth.uid) &&
+        userDoc(request.auth.uid).data.isMinorProfile != false;
+    }
+
+    function targetUserIsMinor(uid) {
+      return hasUserDoc(uid) && userDoc(uid).data.isMinorProfile == true;
+    }
+
     function isSignedInPlayer() {
       return signedInAndActive() && userRole() == "joueur";
+    }
+
+    // A missing directory projection is an intentional privacy stop. Chat
+    // writes honor it even when a conversation predates that privacy change.
+    function canReceiveMessages(uid) {
+      let profilePath =
+        /databases/$(database)/documents/public_profiles/$(uid);
+      return exists(profilePath) && get(profilePath).data.allowMessages == true &&
+        hasUserDoc(uid) && userDoc(uid).data.isMinorProfile == false;
+    }
+
+    function conversationTargetCanReceiveMessages() {
+      return request.resource.data.utilisateurIds[0] == request.auth.uid ?
+        canReceiveMessages(request.resource.data.utilisateurIds[1]) :
+        canReceiveMessages(request.resource.data.utilisateurIds[0]);
+    }
+
+    function conversationParticipantsCanMessage(utilisateurIds) {
+      return utilisateurIds is list && utilisateurIds.size() == 2 &&
+        hasUserDoc(utilisateurIds[0]) &&
+        userDoc(utilisateurIds[0]).data.isMinorProfile == false &&
+        hasUserDoc(utilisateurIds[1]) &&
+        userDoc(utilisateurIds[1]).data.isMinorProfile == false;
     }
 
     // Gate is the signed custom claim only — the Firestore `role` field is
@@ -225,6 +265,26 @@ service cloud.firestore {
         ("profileVerificationStatus" in profile && profile.profileVerificationStatus == "verified");
     }
 
+    function contactOwnerIsMinor(userId) {
+      let profilePath = /databases/$(database)/documents/users/$(userId);
+      return exists(profilePath) && get(profilePath).data.isMinorProfile == true;
+    }
+
+    function birthDateIsAtLeastEighteen(birthDate) {
+      return birthDate.year() < request.time.year() - 18 ||
+        (birthDate.year() == request.time.year() - 18 &&
+          (birthDate.month() < request.time.month() ||
+            (birthDate.month() == request.time.month() &&
+              birthDate.day() <= request.time.day())));
+    }
+
+    function ownerSuppliedAdultBirthDate() {
+      return !('birthDate' in request.resource.data) ||
+        request.resource.data.birthDate == null ||
+        (request.resource.data.birthDate is timestamp &&
+          birthDateIsAtLeastEighteen(request.resource.data.birthDate));
+    }
+
     function verifiedOwnerProfileChangeIsInvalidated() {
       return !resourceProfileIsVerified() ||
         !ownerProfileTrustFieldsChanged() ||
@@ -394,7 +454,8 @@ service cloud.firestore {
     }
 
     function canApplyToOffer() {
-      return nextOfferCandidates().size() == currentOfferCandidates().size() + 1 &&
+      return !isCurrentUserMinor() &&
+        nextOfferCandidates().size() == currentOfferCandidates().size() + 1 &&
         nextOfferCandidates().hasAll(currentOfferCandidates()) &&
         offerCandidatesAdded().size() == 1 &&
         offerCandidatesAdded()[0].uid == request.auth.uid;
@@ -473,7 +534,8 @@ service cloud.firestore {
     }
 
     function canJoinEvent() {
-      return nextEventParticipants().size() == currentEventParticipants().size() + 1 &&
+      return !isCurrentUserMinor() &&
+        nextEventParticipants().size() == currentEventParticipants().size() + 1 &&
         nextEventParticipants().hasAll(currentEventParticipants()) &&
         eventParticipantsAdded().size() == 1 &&
         eventParticipantsAdded()[0].uid == request.auth.uid;
@@ -603,9 +665,19 @@ service cloud.firestore {
     }
 
     function canReadVideo() {
-      return resource.data.status == "ready" ||
-        isAdminOperator() ||
-        (signedInAndActive() && resource.data.uid == request.auth.uid);
+      let ownerUid = resource.data.uid;
+      let ownerExists = hasUserDoc(ownerUid);
+      let owner = ownerExists ? userDoc(ownerUid).data : {};
+      let ownerCanShareMedia = owner.get("isMinorProfile", null) == false ||
+        (owner.get("isMinorProfile", null) == true &&
+          owner.get("profilePublic", false) == true &&
+          owner.get("minorProfileApproved", false) == true &&
+          owner.get("minorMediaPurgePending", false) != true &&
+          owner.get("minorMediaConsentApproved", false) == true &&
+          isVerifiedRecruiter());
+      return isAdminOperator() ||
+        (signedInAndActive() && ownerUid == request.auth.uid) ||
+        (resource.data.status == "ready" && ownerCanShareMedia);
     }
 
     match /users/{userId} {
@@ -639,7 +711,9 @@ service cloud.firestore {
         allow read: if isOwner(userId) || isAdminOperator();
         allow create: if isOwner(userId) &&
           hasActiveAccount(request.auth.uid) &&
-          request.resource.data.keys().hasOnly(["phone", "birthDate"]);
+          request.resource.data.keys().hasOnly(["phone", "birthDate"]) &&
+          !contactOwnerIsMinor(userId) &&
+          ownerSuppliedAdultBirthDate();
         // Changing phone/birthDate is trust-sensitive exactly like the
         // fields in ownerProfileTrustFieldsChanged() on the parent doc, but
         // this doc can't detect that itself since these values no longer
@@ -650,6 +724,8 @@ service cloud.firestore {
         allow update: if isOwner(userId) &&
           hasActiveAccount(request.auth.uid) &&
           changesOnly(["phone", "birthDate"]) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(["birthDate"]) ||
+            (!contactOwnerIsMinor(userId) && ownerSuppliedAdultBirthDate())) &&
           !contactOwnerProfileVerified(userId);
         allow delete: if false;
       }
@@ -658,6 +734,11 @@ service cloud.firestore {
       // user it's about.
       match /private/adminNotes {
         allow read: if isAdminOperator();
+      }
+
+      match /private/guardianConsent {
+        allow read: if isAdminOperator();
+        allow write: if false;
       }
 
       // Follow edges are server-maintained documents so popular accounts no
@@ -675,7 +756,10 @@ service cloud.firestore {
     }
 
     match /public_profiles/{userId} {
-      allow read: if signedInAndActive();
+      allow read: if signedInAndActive() &&
+        (isAdminOperator() || request.auth.uid == userId ||
+          (isVerifiedRecruiter() && resource.data.isMinorProfile in [false, true]) ||
+          resource.data.isMinorProfile == false);
       allow write: if false;
     }
 
@@ -702,6 +786,8 @@ service cloud.firestore {
 
     match /videos/{videoId} {
       allow read: if canReadVideo();
+      allow list: if resource.data.status == "ready" &&
+        resource.data.publicFeedVisible == true;
       allow create: if false;
       allow update: if canToggleVideoLike();
       allow update: if canIncrementVideoShareCount();
@@ -754,11 +840,17 @@ service cloud.firestore {
     }
 
     match /conversations/{conversationId} {
+      allow list: if signedInAndActive() && !isCurrentUserMinor() &&
+        request.auth.uid in resource.data.readableBy;
       allow read: if signedInAndActive() &&
-        request.auth.uid in resource.data.utilisateurIds;
+        request.auth.uid in resource.data.utilisateurIds &&
+        conversationParticipantsCanMessage(resource.data.utilisateurIds);
       allow create: if signedInAndActive() &&
         request.auth.uid in request.resource.data.utilisateurIds &&
-        request.resource.data.utilisateurIds.size() == 2 &&
+        conversationParticipantsCanMessage(request.resource.data.utilisateurIds) &&
+        request.resource.data.readableBy == request.resource.data.utilisateurIds &&
+        !isCurrentUserMinor() &&
+        conversationTargetCanReceiveMessages() &&
         !isBlockedPair(
           request.resource.data.utilisateurIds[0],
           request.resource.data.utilisateurIds[1]
@@ -769,15 +861,25 @@ service cloud.firestore {
       // the whole history to anyone in that list.
       allow update: if signedInAndActive() &&
         request.auth.uid in resource.data.utilisateurIds &&
+        conversationParticipantsCanMessage(resource.data.utilisateurIds) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(["readableBy"]) &&
         request.resource.data.utilisateurIds == resource.data.utilisateurIds;
       allow delete: if signedInAndActive() &&
-        request.auth.uid in resource.data.utilisateurIds;
+        request.auth.uid in resource.data.utilisateurIds &&
+        conversationParticipantsCanMessage(resource.data.utilisateurIds);
 
       match /messages/{messageId} {
         allow read: if signedInAndActive() &&
-          isConversationMember(conversationId);
+          isConversationMember(conversationId) &&
+          conversationParticipantsCanMessage(
+            get(/databases/$(database)/documents/conversations/$(conversationId)).data.utilisateurIds
+          );
         allow create: if signedInAndActive() &&
           isConversationMember(conversationId) &&
+          !isCurrentUserMinor() &&
+          conversationParticipantsCanMessage(
+            get(/databases/$(database)/documents/conversations/$(conversationId)).data.utilisateurIds
+          ) &&
           request.resource.data.expediteurId == request.auth.uid &&
           request.resource.data.destinataireId != request.auth.uid &&
           request.resource.data.destinataireId in
@@ -785,6 +887,7 @@ service cloud.firestore {
           request.resource.data.contenu is string &&
           request.resource.data.contenu.size() > 0 &&
           request.resource.data.contenu.size() <= 2000 &&
+          canReceiveMessages(request.resource.data.destinataireId) &&
           !isBlockedPair(
             request.resource.data.expediteurId,
             request.resource.data.destinataireId
@@ -805,11 +908,19 @@ service cloud.firestore {
         // only ever be set to true.
         allow update: if signedInAndActive() &&
           isConversationMember(conversationId) &&
+          !isCurrentUserMinor() &&
+          conversationParticipantsCanMessage(
+            get(/databases/$(database)/documents/conversations/$(conversationId)).data.utilisateurIds
+          ) &&
           resource.data.destinataireId == request.auth.uid &&
           changesOnly(["estLu"]) &&
           request.resource.data.estLu == true;
         allow delete: if signedInAndActive() &&
           isConversationMember(conversationId) &&
+          !isCurrentUserMinor() &&
+          conversationParticipantsCanMessage(
+            get(/databases/$(database)/documents/conversations/$(conversationId)).data.utilisateurIds
+          ) &&
           resource.data.expediteurId == request.auth.uid;
       }
     }
@@ -858,7 +969,8 @@ service cloud.firestore {
       allow read: if signedInAndActive() &&
         (
           resource.data.requesterUid == request.auth.uid ||
-          resource.data.targetUid == request.auth.uid ||
+          (resource.data.targetUid == request.auth.uid &&
+            !isCurrentUserMinor()) ||
           isAdminOperator()
         );
       allow create: if signedInAndActive() &&
@@ -873,6 +985,12 @@ service cloud.firestore {
         request.resource.data.contactReason.size() <= 120 &&
         request.resource.data.introMessage is string &&
         request.resource.data.introMessage.size() <= 3000 &&
+        (targetUserIsMinor(request.resource.data.targetUid) ?
+          isVerifiedRecruiter() &&
+            userDoc(request.resource.data.targetUid).data.get("minorProfileApproved", false) == true &&
+            userDoc(request.resource.data.targetUid).data.get("profilePublic", false) == true :
+          hasUserDoc(request.resource.data.targetUid) &&
+            userDoc(request.resource.data.targetUid).data.isMinorProfile == false) &&
         contactIntakeCooldownOk();
       allow update, delete: if isAdminOperator();
     }

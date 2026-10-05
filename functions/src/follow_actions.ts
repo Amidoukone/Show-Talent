@@ -102,6 +102,16 @@ async function mutateFollowState(
 
     const currentData = currentSnap.data() ?? {};
     const targetData = targetSnap.data() ?? {};
+    if (
+      shouldFollow &&
+      (currentData.isMinorProfile !== false ||
+        targetData.isMinorProfile !== false)
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Les abonnements ne sont pas disponibles pour les profils mineurs.",
+      );
+    }
     const relationActive = followingSnap.data()?.active === true;
     const legacyActive = hasLegacyFollow(
       currentData.followingsList,
@@ -211,6 +221,22 @@ export const listUserFollows = onCall(
     }
     if (!profileSnap.exists) {
       throw new HttpsError("not-found", "Profil introuvable.");
+    }
+    if (
+      uid !== requesterUid &&
+      profileSnap.data()?.isMinorProfile === true
+    ) {
+      const requester = requesterSnap.data() ?? {};
+      const verifiedScout =
+        (requester.role === "recruteur" || requester.role === "club") &&
+        (requester.profileVerified === true ||
+          requester.profileVerificationStatus === "verified");
+      if (!verifiedScout) {
+        throw new HttpsError(
+          "permission-denied",
+          "La liste de relations de ce profil est réservée aux recruteurs vérifiés.",
+        );
+      }
     }
     if (uid !== requesterUid && profileSnap.data()?.profilePublic === false) {
       throw new HttpsError("permission-denied", "Ce profil est prive.");

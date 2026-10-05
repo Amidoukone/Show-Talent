@@ -45,6 +45,19 @@ Full gate including backend scheduler signal:
 npm.cmd run quality:coherence:check:full
 ```
 
+During the documented `users` to `public_profiles` transition, production
+intentionally keeps a Firestore ruleset that differs from the final local
+rules. Compare against that transitional contract with:
+
+```powershell
+npm.cmd run backend:parity:check:production:transition
+```
+
+This read-only gate validates the transition rules, Storage rules, indexes and
+TTL. It does not approve deploying the final Firestore rules or ending the
+compatibility period. The strict `backend:parity:check:production` remains the
+required check before the final rules rollout.
+
 Cross-repo gate including external admin repository checks. The admin repo
 path is auto-detected from `ADFOOT_ADMIN_REPO`, or from the default sibling
 layout (`%USERPROFILE%\Desktop\ODC_PROJECT\WEB\Show_talent_web`) -- pass

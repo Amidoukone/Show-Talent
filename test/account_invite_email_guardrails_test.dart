@@ -21,9 +21,11 @@ void main() {
     test('the send happens after the account is committed', () {
       final source = _read('functions/src/managed_accounts.ts');
 
-      final commit = source.indexOf('await provisionBatch.commit();');
+      final transaction = source.indexOf('await db.runTransaction(');
+      final commit = source.indexOf('\n    });', transaction);
       final send = source.indexOf('await sendAccountInviteEmail(');
       expect(commit, isNonNegative);
+      expect(transaction, isNonNegative);
       expect(send, isNonNegative);
       expect(
         commit,
@@ -60,6 +62,13 @@ void main() {
       ]) {
         expect(delivery, contains(option), reason: option);
       }
+    });
+
+    test('invitation points the recipient to both legal documents', () {
+      final delivery = _read('functions/src/email_delivery.ts');
+      expect(delivery, contains('https://adfoot.org/legal/terms.html'));
+      expect(delivery, contains('https://adfoot.org/legal/privacy-policy.html'));
+      expect(delivery, contains('vous devrez lire et accepter'));
     });
 
     // The whole point of keeping the link: an SMTP outage costs a

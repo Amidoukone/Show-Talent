@@ -68,6 +68,10 @@ interface CallerProfile {
   estActif?: boolean;
   emailVerified?: boolean;
   emailVerifiedAt?: unknown;
+  isMinorProfile?: boolean;
+  minorProfileApproved?: boolean;
+  minorMediaConsentApproved?: boolean;
+  minorMediaPurgePending?: boolean;
 }
 
 type RawMetadata = Record<string, unknown>;
@@ -282,6 +286,18 @@ async function assertUploadCallerEligible(
     throw new HttpsError(
       "permission-denied",
       "Compte inactif pour l’upload vidéo.",
+    );
+  }
+
+  if (
+    userData.isMinorProfile === true &&
+    (userData.minorProfileApproved !== true ||
+      userData.minorMediaPurgePending === true ||
+      userData.minorMediaConsentApproved !== true)
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Un accord parental distinct sur les médias est requis avant tout upload.",
     );
   }
 

@@ -97,13 +97,26 @@ class TalentSearchRepository {
   /// service qu'on lui rend.
   static const int pageSize = 30;
 
-  Query<Map<String, dynamic>> buildQuery(TalentSearchQuery search) =>
-      _buildBaseQuery(search).limit(pageSize);
+  Query<Map<String, dynamic>> buildQuery(
+    TalentSearchQuery search, {
+    bool includeMinorProfiles = false,
+  }) => _buildBaseQuery(
+    search,
+    includeMinorProfiles: includeMinorProfiles,
+  ).limit(pageSize);
 
-  Query<Map<String, dynamic>> _buildBaseQuery(TalentSearchQuery search) {
+  Query<Map<String, dynamic>> _buildBaseQuery(
+    TalentSearchQuery search, {
+    required bool includeMinorProfiles,
+  }) {
     Query<Map<String, dynamic>> query = _firestore
         .collection('public_profiles')
         .where('isSearchable', isEqualTo: true);
+    if (!includeMinorProfiles) {
+      query = query.where('isMinorProfile', isEqualTo: false);
+    } else {
+      query = query.where('isMinorProfile', whereIn: [false, true]);
+    }
 
     if (search.positions.isNotEmpty) {
       query = query.where(
@@ -159,12 +172,16 @@ class TalentSearchRepository {
     TalentSearchQuery query, {
     Set<String> excludedUids = const {},
     TalentSearchCursor? cursor,
+    bool includeMinorProfiles = false,
   }) async {
     final results = <AppUser>[];
     var nextSnapshot = cursor?.snapshot;
     var hasMore = true;
     for (var batch = 0; batch < 3 && results.length < pageSize; batch++) {
-      var firestoreQuery = _buildBaseQuery(query);
+      var firestoreQuery = _buildBaseQuery(
+        query,
+        includeMinorProfiles: includeMinorProfiles,
+      );
       if (nextSnapshot != null) {
         firestoreQuery = firestoreQuery.startAfterDocument(nextSnapshot);
       }

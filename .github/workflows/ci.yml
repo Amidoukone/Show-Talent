@@ -72,6 +72,7 @@ jobs:
           distribution: "temurin"
           java-version: "21"
       - run: npm ci
+      - run: node --test test/functions/release-candidate-env.test.mjs
       - run: npm run rules:test:all
 
   secrets-scan:

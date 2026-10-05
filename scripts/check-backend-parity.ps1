@@ -34,7 +34,8 @@
 #>
 param(
     [string]$Environment = "production",
-    [string]$Credentials = ""
+    [string]$Credentials = "",
+    [switch]$AllowTransitionalFirestoreRules
 )
 
 Set-StrictMode -Version Latest
@@ -43,6 +44,16 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 try {
+    if ($AllowTransitionalFirestoreRules -and $Environment -ne "production") {
+        throw "Transitional Firestore rules are only an expected production state."
+    }
+
+    $expectedFirestoreRules = if ($AllowTransitionalFirestoreRules) {
+        ".\firestore.transition.rules"
+    } else {
+        ".\firestore.rules"
+    }
+
     $failures = @()
 
     $checks = @(
@@ -61,6 +72,9 @@ try {
         Write-Host "==> $($check.Name)"
 
         $nodeArgs = @($check.Script, "--environment", $Environment)
+        if ($check.Name -eq "Firestore/Storage rules parity") {
+            $nodeArgs += @("--firestore-rules", $expectedFirestoreRules)
+        }
         if (-not [string]::IsNullOrWhiteSpace($Credentials)) {
             $nodeArgs += @("--credentials", $Credentials)
         }
@@ -83,7 +97,12 @@ try {
         exit 1
     }
 
-    Write-Host "Backend parity check completed: deployed backend matches this checkout."
+    if ($AllowTransitionalFirestoreRules) {
+        Write-Host "Backend parity check completed: deployed backend matches the documented production transition state."
+        Write-Host "This does not certify the final Firestore rules or authorize closing the migration."
+    } else {
+        Write-Host "Backend parity check completed: deployed backend matches this checkout."
+    }
 } finally {
     Pop-Location
 }

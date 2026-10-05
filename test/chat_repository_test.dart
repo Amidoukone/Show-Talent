@@ -66,7 +66,7 @@ void main() {
 
     final lookupSnippet = repository.substring(lookupStart, lookupEnd);
 
-    expect(repository, contains(".where('utilisateurIds', arrayContains:"));
+    expect(repository, contains(".where('readableBy', arrayContains:"));
     expect(
       repository,
       contains(
@@ -75,7 +75,7 @@ void main() {
     );
     expect(
       repository,
-      contains('await conversationRef.set(newConversation.toMap());'),
+      contains("await conversationRef.set({...newConversation.toMap(), 'readableBy': ids});"),
     );
     expect(lookupSnippet, contains('_normalizeParticipantIds(doc.data())'));
     expect(lookupSnippet, contains('legacyConversationId'));

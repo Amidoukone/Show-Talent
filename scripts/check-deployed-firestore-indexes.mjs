@@ -312,7 +312,7 @@ async function main() {
   if (missing.length) {
     console.error(
       `${missing.length} declared index(es) are not deployed. ` +
-        'Run: npm run firestore:indexes:deploy:production',
+        `Run: firebase deploy --only firestore:indexes --project ${projectId}`,
     );
   }
   if (notReady.length) {

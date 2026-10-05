@@ -17,12 +17,14 @@ Future<void> _addPlayer(
   List<String> nationalities = const <String>[],
   int? birthYear,
   bool openToOpportunities = false,
+  bool isMinorProfile = false,
 }) {
   return firestore.collection('public_profiles').doc(uid).set(<String, dynamic>{
     'uid': uid,
     'nom': 'Player $uid',
     'role': 'joueur',
     'isSearchable': isSearchable,
+    'isMinorProfile': isMinorProfile,
     'positionCodes': positionCodes,
     'nationalities': nationalities,
     'birthYear': ?birthYear,
@@ -31,6 +33,37 @@ Future<void> _addPlayer(
 }
 
 void main() {
+  test('minor profiles are included only when the caller is verified', () async {
+    final firestore = FakeFirebaseFirestore();
+    await _addPlayer(
+      firestore,
+      'adult',
+      isSearchable: true,
+    );
+    await _addPlayer(
+      firestore,
+      'minor',
+      isSearchable: true,
+      isMinorProfile: true,
+      birthYear: 2010,
+    );
+    final repository = TalentSearchRepository(firestore: firestore);
+
+    final defaultPage = await repository.searchPage(
+      const TalentSearchQuery(),
+    );
+    final verifiedScoutPage = await repository.searchPage(
+      const TalentSearchQuery(),
+      includeMinorProfiles: true,
+    );
+
+    expect(defaultPage.results.map((user) => user.uid), ['adult']);
+    expect(
+      verifiedScoutPage.results.map((user) => user.uid).toSet(),
+      {'adult', 'minor'},
+    );
+  });
+
   test('search pages continue without repeating or skipping players', () async {
     final firestore = FakeFirebaseFirestore();
     for (var index = 0; index < 35; index++) {

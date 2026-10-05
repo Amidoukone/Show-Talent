@@ -117,6 +117,7 @@ class VideoRepository {
   }) {
     return _videosCollection
         .where('status', isEqualTo: 'ready')
+        .where('publicFeedVisible', isEqualTo: true)
         .orderBy(orderField, descending: true)
         .limit(limit);
   }

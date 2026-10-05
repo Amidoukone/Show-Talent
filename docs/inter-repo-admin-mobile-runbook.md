@@ -79,6 +79,7 @@ Gestion de comptes :
 - `disableManagedAccountAuth`
 - `enableManagedAccountAuth`
 - `updateManagedAccountProfile`
+- `withdrawManagedMinorConsent`
 - `setManagedAccountMembership`
 
 Moderation de contenu :

@@ -440,6 +440,14 @@ function privateAdminNotesRef(
   );
 }
 
+function privateGuardianConsentRef(
+  uid: string,
+): FirebaseFirestore.DocumentReference {
+  return db.collection("users").doc(uid).collection("private").doc(
+    "guardianConsent",
+  );
+}
+
 export {
   ADMIN_PROVISIONED_ROLE_LIST,
   ADMIN_PROVISIONED_ROLES,
@@ -468,5 +476,6 @@ export {
   localizeAuthActionLink,
   normalizeRole,
   privateAdminNotesRef,
+  privateGuardianConsentRef,
   privateContactRef,
 };

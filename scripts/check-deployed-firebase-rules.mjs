@@ -151,6 +151,9 @@ async function main() {
 
   const args = parseArgs(process.argv.slice(2));
   const environment = getStringArg(args, ['environment', 'env'], 'production');
+  const firestoreRulesPath = resolveRepoPath(
+    getStringArg(args, ['firestore-rules'], 'firestore.rules'),
+  );
   const configPath = resolveRepoPath(
     getStringArg(
       args,
@@ -170,12 +173,13 @@ async function main() {
   );
   const releases = releasesResponse.releases ?? [];
   const localByRelease = new Map([
-    ['cloud.firestore', normalizeRules(await readFile(path.join(repoRoot, 'firestore.rules'), 'utf8'))],
+    ['cloud.firestore', normalizeRules(await readFile(firestoreRulesPath, 'utf8'))],
     ['firebase.storage', normalizeRules(await readFile(path.join(repoRoot, 'storage.rules'), 'utf8'))],
   ]);
 
   console.log('Firebase Rules deployed comparison');
   console.log(`Project: ${projectId}`);
+  console.log(`Expected Firestore rules: ${firestoreRulesPath}`);
 
   const seen = new Set();
   const mismatched = [];

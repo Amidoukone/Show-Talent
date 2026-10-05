@@ -65,9 +65,20 @@ async function authorizedCvPath(
   if (!ownerData || !viewerData ||
       viewerData.authDisabled === true || viewerData.estActif === false ||
       ownerData.role !== "joueur") return null;
+  const isVerifiedRecruiter =
+    (viewerData.role === "recruteur" || viewerData.role === "club") &&
+    (viewerData.profileVerified === true ||
+      viewerData.profileVerificationStatus === "verified");
+  const ownerIsMinor = ownerData.isMinorProfile === true;
+  const mayReadPublishedProfile = ownerData.profilePublic === true &&
+    ownerData.authDisabled !== true && ownerData.estActif !== false &&
+    (ownerIsMinor ?
+      ownerData.minorProfileApproved === true &&
+        ownerData.minorMediaPurgePending !== true &&
+        ownerData.minorMediaConsentApproved === true && isVerifiedRecruiter :
+      ownerData.isMinorProfile === false);
   const mayRead = viewerUid === ownerUid || hasAdminClaim(claims) ||
-    (ownerData.profilePublic === true &&
-      ownerData.authDisabled !== true && ownerData.estActif !== false);
+    mayReadPublishedProfile;
   if (!mayRead) return null;
   return cvObjectPath(ownerData.cvUrl, ownerUid, storage.bucket().name);
 }

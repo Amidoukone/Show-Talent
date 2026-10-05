@@ -104,7 +104,7 @@ void main() {
       expect(cvRules, contains('allow read: if canReadCv(uid);'));
       expect(
         cvRules,
-        contains('allow create, update: if isPlayerProfileOwner(uid)'),
+        contains('allow create, update: if mayUploadCv(uid)'),
       );
       expect(cvRules, contains('allow delete: if isActiveProfileOwner(uid);'));
       expect(cvRules, isNot(contains('allow write:')));

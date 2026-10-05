@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:adfoot/controller/block_controller.dart';
+import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/l10n/generated/app_localizations.dart';
 import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/user.dart';
@@ -11,6 +12,7 @@ import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/utils/country_codes.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:adfoot/widgets/country_picker_sheet.dart';
+import 'package:adfoot/widgets/ad_talent_result_card.dart';
 
 /// La recherche de talents, telle qu'un recruteur la pose.
 ///
@@ -79,9 +81,13 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
       final excludedUids = Get.isRegistered<BlockController>()
           ? Get.find<BlockController>().blockedPairUids.toSet()
           : const <String>{};
+      final currentUser = Get.isRegistered<UserController>()
+          ? Get.find<UserController>().user
+          : null;
       final page = await _repository.searchPage(
         query,
         excludedUids: excludedUids,
+        includeMinorProfiles: currentUser?.isVerifiedRecruiter == true,
       );
       if (!mounted || generation != _searchGeneration) return;
       setState(() {
@@ -182,7 +188,11 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
             final isSelected = _positions.contains(position);
             return FilterChip(
               selected: isSelected,
-              label: Text(position.labelFr),
+              label: Text(
+                l10n.localeName == 'en'
+                    ? position.labelEn
+                    : position.labelFr,
+              ),
               onSelected: (_) => setState(() {
                 if (isSelected) {
                   _positions.remove(position);
@@ -313,7 +323,13 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
       const SizedBox(height: 8),
-      ...results.map((user) => _TalentResultTile(user: user)),
+      ...results.map(
+        (user) => AdTalentResultCard(
+          user: user,
+          l10n: l10n,
+          onTap: () => Get.to(() => ProfileScreen(uid: user.uid)),
+        ),
+      ),
       if (_hasMore)
         Center(
           child: OutlinedButton(
@@ -388,50 +404,6 @@ class _YearFieldState extends State<_YearField> {
         }
         widget.onChanged(parsed);
       },
-    );
-  }
-}
-
-/// Une fiche de résultat, telle qu'un recruteur la lit en quelques secondes.
-class _TalentResultTile extends StatelessWidget {
-  const _TalentResultTile({required this.user});
-
-  final AppUser user;
-
-  @override
-  Widget build(BuildContext context) {
-    final football = user.football;
-
-    // L'ordre est celui de la lecture d'un scout : ou il joue, quel age, d'ou
-    // il vient, a quel niveau.
-    final facts = <String>[
-      if (football.positions.isNotEmpty)
-        football.positions.map((p) => p.labelFr).join(' · '),
-      if (football.birthYear != null) '${football.birthYear}',
-      if (football.nationalities.isNotEmpty)
-        football.nationalities.map(countryLabel).join(' · '),
-      if (football.currentClubLevel != null) football.currentClubLevel!.labelFr,
-    ];
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        title: Text(
-          user.nom,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w800),
-        ),
-        subtitle: Text(
-          facts.join('  ·  '),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: user.openToOpportunities == true
-            ? const Icon(Icons.how_to_reg_outlined, color: AdColors.success)
-            : null,
-        onTap: () => Get.to(() => ProfileScreen(uid: user.uid)),
-      ),
     );
   }
 }

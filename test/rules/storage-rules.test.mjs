@@ -38,6 +38,9 @@ const PLAYER = 'RuLh6bcq6fhHYCD4chuu6ryI8Cl2';
 const RECRUITER = '1CpBpamIhJR5Agz5wG5fnX6jMsl2';
 const PRIVATE_PLAYER = 'zDuzNuDD4LYFMKv0bBhTrNT08sb2';
 const DISABLED = 'wQwEeVMa5reprTpScRlm7rWy6Ol1';
+const MINOR = 'minor_storage_1';
+const MINOR_MEDIA = 'minor_storage_media_1';
+const UNVERIFIED_SCOUT = 'unverified_storage_scout';
 
 const VIDEO = 'video_1';
 
@@ -87,6 +90,7 @@ function profile(uid, role, overrides = {}) {
     authDisabled: false,
     emailVerified: true,
     profilePublic: true,
+    isMinorProfile: false,
     ...overrides,
   };
 }
@@ -103,11 +107,30 @@ await env.withSecurityRulesDisabled(async (ctx) => {
     doc(db, 'users', DISABLED),
     profile(DISABLED, 'joueur', { authDisabled: true }),
   );
+  await setDoc(doc(db, 'users', MINOR), profile(MINOR, 'joueur', {
+    isMinorProfile: true,
+    minorProfileApproved: true,
+    minorMediaConsentApproved: false,
+  }));
+  await setDoc(doc(db, 'users', MINOR_MEDIA), profile(MINOR_MEDIA, 'joueur', {
+    isMinorProfile: true,
+    minorProfileApproved: true,
+    minorMediaConsentApproved: true,
+  }));
+  await setDoc(doc(db, 'users', RECRUITER), profile(RECRUITER, 'recruteur', {
+    profileVerified: true,
+    profileVerificationStatus: 'verified',
+  }));
+  await setDoc(doc(db, 'users', UNVERIFIED_SCOUT), profile(UNVERIFIED_SCOUT, 'recruteur'));
   await setDoc(doc(db, 'videos', VIDEO), { uid: PLAYER, status: 'ready' });
+  await setDoc(doc(db, 'videos', 'minor_video'), { uid: MINOR, status: 'ready' });
+  await setDoc(doc(db, 'videos', 'minor_media_video'), { uid: MINOR_MEDIA, status: 'ready' });
 
   // Objects that read/delete cases need to find.
   const storage = ctx.storage();
   await uploadBytes(ref(storage, `profilePhotos/${PLAYER}`), bytes(1024), JPEG);
+  await uploadBytes(ref(storage, `profilePhotos/${MINOR}`), bytes(1024), JPEG);
+  await uploadBytes(ref(storage, `profilePhotos/${MINOR_MEDIA}`), bytes(1024), JPEG);
   await uploadBytes(
     ref(storage, `cvs/${PLAYER}/cv_1.pdf`),
     bytes(1024),
@@ -119,6 +142,8 @@ await env.withSecurityRulesDisabled(async (ctx) => {
     PDF,
   );
   await uploadBytes(ref(storage, `videos/${VIDEO}.mp4`), bytes(1024));
+  await uploadBytes(ref(storage, `videos/minor_video.mp4`), bytes(1024));
+  await uploadBytes(ref(storage, `videos/minor_media_video.mp4`), bytes(1024));
   await uploadBytes(
     ref(storage, `thumbnails/thumbnail_${VIDEO}.jpg`),
     bytes(1024),
@@ -129,6 +154,7 @@ await env.withSecurityRulesDisabled(async (ctx) => {
 
 const player = env.authenticatedContext(PLAYER).storage();
 const recruiter = env.authenticatedContext(RECRUITER).storage();
+const verifiedRecruiter = env.authenticatedContext(RECRUITER).storage();
 const disabled = env.authenticatedContext(DISABLED).storage();
 const admin = env
   .authenticatedContext('admin_1', { admin: true })
@@ -168,6 +194,17 @@ await check("un compte desactive ecrit sa propre photo", 'deny', () =>
 // the feed, in a share page, in the admin portal.
 await check("la photo de profil est lisible sans compte", 'allow', () =>
   getBytes(ref(anonymous, `profilePhotos/${PLAYER}`)));
+
+await check("la photo mineure sans accord média reste inaccessible", 'deny', () =>
+  getBytes(ref(anonymous, `profilePhotos/${MINOR}`)));
+await check("la photo mineure avec accord est réservée au recruteur vérifié", 'allow', () =>
+  getBytes(ref(verifiedRecruiter, `profilePhotos/${MINOR_MEDIA}`)));
+await check("la vidéo mineure sans accord média est inaccessible", 'deny', () =>
+  getBytes(ref(verifiedRecruiter, `videos/minor_video.mp4`)));
+await check("la vidéo mineure avec accord reste privée aux recruteurs vérifiés", 'allow', () =>
+  getBytes(ref(verifiedRecruiter, `videos/minor_media_video.mp4`)));
+await check("une personne non vérifiée ne lit pas la vidéo mineure consentie", 'deny', () =>
+  getBytes(ref(env.authenticatedContext(UNVERIFIED_SCOUT).storage(), `videos/minor_media_video.mp4`)));
 
 await check("le proprietaire supprime sa photo", 'allow', () =>
   deleteObject(ref(player, `profilePhotos/${PLAYER}`)));

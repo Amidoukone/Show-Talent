@@ -336,6 +336,8 @@ class _SelectUserScreenState extends State<SelectUserScreen> {
                               );
                             }
 
+                            if (user.isMinorProfile) return;
+
                             final conversationId = result.conversationId.trim();
                             if (conversationId.isEmpty) {
                               AdFeedback.error(

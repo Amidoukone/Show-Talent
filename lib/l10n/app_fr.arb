@@ -133,7 +133,7 @@
   "termsIntro": "Avant de continuer, prenez connaissance des conditions qui encadrent votre utilisation d’Adfoot et du traitement de vos données.",
   "termsLinkTerms": "Conditions générales d’utilisation",
   "termsLinkPrivacy": "Politique de confidentialité",
-  "termsAdultDeclaration": "Je déclare avoir 18 ans ou plus et j’accepte les conditions générales d’utilisation ainsi que la politique de confidentialité.",
+  "termsAcceptanceCheckbox": "J’ai lu et j’accepte les conditions générales d’utilisation et la politique de confidentialité.",
   "termsAcceptButton": "J’accepte et je continue",
   "termsSignOutButton": "Se déconnecter",
   "termsFooterNotice": "Sans acceptation, votre compte reste créé mais l’application ne peut pas être utilisée.",
@@ -477,6 +477,14 @@
   "talentSearchAllNationalities": "Toutes",
   "talentSearchChoose": "Choisir",
   "talentSearchBornBetweenLabel": "Né entre",
+  "talentSearchBirthYear": "Né en {year}",
+  "@talentSearchBirthYear": {
+    "placeholders": {
+      "year": {
+        "type": "int"
+      }
+    }
+  },
   "talentSearchBornHint": "Un club raisonne par année de naissance : l’âge change en cours de saison, l’année non.",
   "talentSearchYearFromLabel": "De",
   "talentSearchYearToLabel": "À",
@@ -959,6 +967,7 @@
   "editProfileBirthDateLabel": "Date de naissance",
   "editProfileBirthDatePlaceholder": "Ajoutez votre date de naissance",
   "editProfileBirthDatePickerHelpText": "Choisir votre date de naissance",
+  "editProfileBirthDateParentManagedMessage": "Pour corriger la date de naissance d’un joueur mineur, contactez l’administration à support@adfoot.org.",
   "editProfileDiscardConfirmTitle": "Abandonner les modifications ?",
   "editProfileDiscardConfirmMessage": "Les informations saisies ne seront pas enregistrées.",
   "editProfileDiscardAction": "Abandonner",

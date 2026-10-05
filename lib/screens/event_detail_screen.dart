@@ -574,6 +574,8 @@ class EventDetailsScreen extends StatelessWidget {
         );
       }
 
+      if (other.isMinorProfile) return;
+
       Get.to(
         () =>
             ChatScreen(conversationId: result.conversationId, otherUser: other),
@@ -836,6 +838,8 @@ class _ParticipantsModalState extends State<_ParticipantsModal> {
                               l10n.offreContactRecordedMessage,
                             );
                           }
+
+                          if (p.isMinorProfile) return;
 
                           Get.to(
                             () => ChatScreen(

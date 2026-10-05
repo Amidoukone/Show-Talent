@@ -39,6 +39,45 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/users/$(uid));
     }
 
+    function isVerifiedRecruiter() {
+      return signedIn() && hasUserProfileDoc(request.auth.uid) &&
+        (userProfileDoc(request.auth.uid).data.role == "recruteur" ||
+          userProfileDoc(request.auth.uid).data.role == "club") &&
+        (userProfileDoc(request.auth.uid).data.get("profileVerified", false) == true ||
+          userProfileDoc(request.auth.uid).data.get("profileVerificationStatus", "") == "verified");
+    }
+
+    function mayReadPublicMedia(uid) {
+      return hasUserProfileDoc(uid) &&
+        userProfileDoc(uid).data.profilePublic == true &&
+        (userProfileDoc(uid).data.get("isMinorProfile", true) == false ||
+          (userProfileDoc(uid).data.get("isMinorProfile", true) == true &&
+            userProfileDoc(uid).data.get("minorProfileApproved", false) == true &&
+            userProfileDoc(uid).data.get("minorMediaPurgePending", false) != true &&
+            userProfileDoc(uid).data.get("minorMediaConsentApproved", false) == true &&
+            isVerifiedRecruiter()));
+    }
+
+    function videoOwnerUid(videoId) {
+      return firestore.get(
+        /databases/(default)/documents/videos/$(videoId)
+      ).data.uid;
+    }
+
+    function mayReadVideoMedia(videoId) {
+      return firestore.exists(
+          /databases/(default)/documents/videos/$(videoId)
+        ) && (isAdminOperator() ||
+          (signedIn() && videoOwnerUid(videoId) == request.auth.uid) ||
+          mayReadPublicMedia(videoOwnerUid(videoId)));
+    }
+
+    function thumbnailDocIdFromFileName(fileName) {
+      return fileName.matches('^thumbnail_[A-Za-z0-9_-]+\\.jpeg$') ?
+        fileName[10:fileName.size() - 5] :
+        fileName[10:fileName.size() - 4];
+    }
+
     function hasActiveUserProfile(uid) {
       return hasUserProfileDoc(uid) &&
         userProfileDoc(uid).data.authDisabled != true;
@@ -50,9 +89,27 @@ service firebase.storage {
         hasActiveUserProfile(uid);
     }
 
+    function mayUploadProfilePhoto(uid) {
+      return isActiveProfileOwner(uid) &&
+        (userProfileDoc(uid).data.get("isMinorProfile", true) == false ||
+          (userProfileDoc(uid).data.get("isMinorProfile", true) == true &&
+            userProfileDoc(uid).data.get("minorProfileApproved", false) == true &&
+            userProfileDoc(uid).data.get("minorMediaPurgePending", false) != true &&
+            userProfileDoc(uid).data.get("minorMediaConsentApproved", false) == true));
+    }
+
     function isPlayerProfileOwner(uid) {
       return isActiveProfileOwner(uid) &&
         userProfileDoc(uid).data.role == "joueur";
+    }
+
+    function mayUploadCv(uid) {
+      return isPlayerProfileOwner(uid) &&
+        (userProfileDoc(uid).data.get("isMinorProfile", true) == false ||
+          (userProfileDoc(uid).data.get("isMinorProfile", true) == true &&
+            userProfileDoc(uid).data.get("minorProfileApproved", false) == true &&
+            userProfileDoc(uid).data.get("minorMediaPurgePending", false) != true &&
+            userProfileDoc(uid).data.get("minorMediaConsentApproved", false) == true));
     }
 
     // The signed custom claim only, exactly as firestore.rules states the
@@ -132,7 +189,14 @@ service firebase.storage {
           (
             hasUserProfileDoc(uid) &&
             userProfileDoc(uid).data.profilePublic == true &&
-            userProfileDoc(uid).data.authDisabled != true
+            userProfileDoc(uid).data.authDisabled != true &&
+            userProfileDoc(uid).data.estActif != false &&
+            (userProfileDoc(uid).data.get("isMinorProfile", true) == false ||
+              (userProfileDoc(uid).data.get("isMinorProfile", true) == true &&
+                userProfileDoc(uid).data.get("minorProfileApproved", false) == true &&
+                userProfileDoc(uid).data.get("minorMediaPurgePending", false) != true &&
+                userProfileDoc(uid).data.get("minorMediaConsentApproved", false) == true &&
+                isVerifiedRecruiter()))
           )
         );
     }
@@ -164,15 +228,16 @@ service firebase.storage {
     }
 
     match /profilePhotos/{uid} {
-      allow read: if true;
-      allow create, update: if isActiveProfileOwner(uid) &&
+      allow read: if isActiveProfileOwner(uid) || isAdminOperator() ||
+        mayReadPublicMedia(uid);
+      allow create, update: if mayUploadProfilePhoto(uid) &&
         isValidProfilePhotoUpload();
       allow delete: if isActiveProfileOwner(uid);
     }
 
     match /cvs/{uid}/{fileName} {
       allow read: if canReadCv(uid);
-      allow create, update: if isPlayerProfileOwner(uid) &&
+      allow create, update: if mayUploadCv(uid) &&
         isValidCvPdfUpload(fileName);
       allow delete: if isActiveProfileOwner(uid);
     }
@@ -190,19 +255,19 @@ service firebase.storage {
     }
 
     match /videos/{videoFileName} {
-      allow read: if true;
+      allow read: if mayReadVideoMedia(videoDocIdFromFileName(videoFileName));
       allow create, update: if false;
       allow delete: if signedIn() && isOwnedVideoMp4(videoFileName);
     }
 
     match /mp4/{videoId}/{fileName} {
-      allow read: if true;
+      allow read: if mayReadVideoMedia(videoId);
       allow create, update: if false;
       allow delete: if signedIn() && isOwnedMp4Rendition(videoId, fileName);
     }
 
     match /thumbnails/{fileName} {
-      allow read: if true;
+      allow read: if mayReadVideoMedia(thumbnailDocIdFromFileName(fileName));
       allow create, update: if false;
       allow delete: if signedIn() && isOwnedThumbnail(fileName);
     }

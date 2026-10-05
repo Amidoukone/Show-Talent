@@ -41,6 +41,7 @@ void main() {
         'estActif': true,
         'emailVerified': true,
         'isSearchable': true,
+        'isMinorProfile': false,
         'searchPrefixes': ['a', 'aw', 'awa'],
       });
       await firestore.collection('public_profiles').doc('club-1').set({
@@ -51,6 +52,7 @@ void main() {
         'estActif': true,
         'emailVerified': true,
         'isSearchable': false,
+        'isMinorProfile': false,
         'searchPrefixes': ['c', 'cl', 'club'],
       });
 
@@ -73,6 +75,7 @@ void main() {
           'nom': 'Other player',
           'role': 'joueur',
           'isSearchable': true,
+          'isMinorProfile': false,
           'searchPrefixes': ['awa'],
         });
       }
@@ -80,6 +83,7 @@ void main() {
         'nom': 'Awa Traore',
         'role': 'joueur',
         'isSearchable': true,
+        'isMinorProfile': false,
         'searchPrefixes': ['awa'],
       });
 
@@ -122,18 +126,21 @@ void main() {
       final repository = HomeFeedRepository(firestore: firestore);
 
       await firestore.collection('videos').doc('older').set({
+        'publicFeedVisible': true,
         'status': 'ready',
         'videoUrl': 'https://cdn.example.com/older.mp4',
         'uid': 'player-1',
         'updatedAt': Timestamp.fromDate(DateTime(2026, 1, 1)),
       });
       await firestore.collection('videos').doc('newer').set({
+        'publicFeedVisible': true,
         'status': 'ready',
         'videoUrl': 'https://cdn.example.com/newer.mp4',
         'uid': 'player-2',
         'updatedAt': Timestamp.fromDate(DateTime(2026, 2, 1)),
       });
       await firestore.collection('videos').doc('empty-url').set({
+        'publicFeedVisible': true,
         'status': 'ready',
         'videoUrl': '',
         'uid': 'player-3',

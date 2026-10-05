@@ -9,6 +9,26 @@ la validation sur les anciens et nouveaux builds, puis la bascule vers les
 règles finales, restent à faire. Voir
 `test-data-reset-and-migration-2026-09-28.md`.
 
+**Contrôle distant du 2 octobre 2026 :** les règles Firestore de production
+diffèrent toujours des règles finales `firestore.rules`; le `updateTime` remonté
+par l'API Rules est le 28 septembre à 21:11 UTC. Les règles Storage correspondent
+au dépôt, les 31 index déclarés sont `READY` et les deux TTL contrôlés sont
+`ACTIVE`. Cette observation confirme l'état transitoire attendu à cette date,
+mais ne mesure toujours pas les versions mobiles actives ni les parcours réels.
+
+Pour comparer en lecture seule le backend au contrat transitoire documenté :
+
+```powershell
+npm.cmd run backend:parity:check:production:transition
+```
+
+Ce contrôle est limité à `adfoot-production` et compare Firestore à
+`firestore.transition.rules`, Storage à `storage.rules`, ainsi que les index et
+TTL. Le contrôle strict `npm.cmd run backend:parity:check:production` continue
+de comparer Firestore à `firestore.rules` et doit réussir avant la fermeture de
+la migration. Le mode transitoire ne donne aucun feu vert pour déployer les
+règles finales ou fermer l'accès historique.
+
 La version mobile déjà installée lit l'annuaire et les autres profils depuis
 `users`. Le nouveau client lit `public_profiles`, tandis que les règles finales
 de ce dépôt interdisent la lecture de `users/{autreUid}`. Ces règles finales ne
@@ -20,13 +40,30 @@ règle de lecture.
 
 ## Phase 1 — Préparer le backend additif
 
+### Complément du 4 octobre 2026 : audiences des listes
+
+Le candidat utilise `videos.publicFeedVisible` et `conversations.readableBy`.
+Déployer aussi `syncVideoAudience` et les trois index correspondants ; vérifier
+que le backfill v5 a effectivement rempli ces champs avant les tests internes.
+Depuis le 5 octobre, son identifiant est `public_profiles_and_follows_v5` :
+une ancienne complétion v4 ne fait pas ignorer cette nouvelle préparation.
+Ne pas réutiliser les anciennes règles transitoires comme validation du candidat.
+Les requêtes des anciens clients (flux sur `status` seul, boîte sur
+`utilisateurIds`) sont incompatibles avec les nouvelles règles finales.
+Valider le candidat complet sur un environnement de test isolé avant toute
+bascule de production et trancher la fin de prise en charge des anciens clients.
+
 1. Figer le SHA mobile/backend/admin et contrôler la parité staging puis
    production. Sauvegarder règles et index déployés avant tout changement.
 2. Déployer les index nécessaires à `public_profiles` et aux conversations.
    Attendre leur état `READY`.
 3. Déployer les Functions de projection et les backfills. La migration
-   `public_profiles_and_follows_v3` repasse aussi sur les profils ayant déjà
-   terminé la version v2, afin de réindexer les termes de recherche.
+   `public_profiles_and_follows_v5` repasse sur les profils déjà migrés afin
+   de matérialiser `isMinorProfile` sur les comptes historiques, réindexer les
+   projections et appliquer les protections mineurs. Ne pas déployer les
+   règles finales ni publier le client qui filtre `isMinorProfile == false`
+   avant `migration_state/public_profiles_and_follows_v5.completed=true` et
+   avant d'avoir confirmé qu'aucun compte actif ne manque ce marqueur.
    Garder `ENABLE_LEGACY_CV_URL_MIGRATION` et
    `ENABLE_LEGACY_FOLLOW_FIELD_CLEANUP` désactivés, et
    `MIRROR_LEGACY_FOLLOW_ARRAYS=true` : l'ancien client ouvre
@@ -39,7 +76,7 @@ règle de lecture.
    d'écriture du jeu final doivent rester en place. Cette étape maintient
    temporairement l'exposition des champs des profils historiques ; sa durée
    doit être réduite et suivie.
-5. Attendre `migration_state/public_profiles_and_follows_v3.completed=true`
+5. Attendre `migration_state/public_profiles_and_follows_v5.completed=true`
    et `migration_state/conversation_sort_dates_v1.completed=true`. Comparer le
    nombre de comptes actifs aux projections, puis vérifier des profils privés,
    profils publics, suivis, conversations vides, CV et profils désactivés.

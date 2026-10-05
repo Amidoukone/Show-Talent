@@ -75,6 +75,8 @@ const EMAIL_SECRETS = [BREVO_SMTP_KEY];
 const DEFAULT_SMTP_HOST = "smtp-relay.brevo.com";
 const DEFAULT_SMTP_PORT = 587;
 const DEFAULT_FROM_NAME = "Adfoot";
+const TERMS_URL = "https://adfoot.org/legal/terms.html";
+const PRIVACY_URL = "https://adfoot.org/legal/privacy-policy.html";
 
 // Ten seconds each. The callable's own budget is what is being protected:
 // provisioning has already committed to Auth and Firestore by the time we get
@@ -287,6 +289,11 @@ function buildInviteEmail(
     "",
     intro,
     "",
+    "Avant d’utiliser l’application, vous devrez lire et accepter les " +
+      "conditions d’utilisation et la politique de confidentialité.",
+    `Conditions : ${TERMS_URL}`,
+    `Confidentialité : ${PRIVACY_URL}`,
+    "",
     input.passwordSetupLink,
     "",
     "Ce lien est valable une heure. Passé ce délai, utilisez « Mot de " +
@@ -304,6 +311,10 @@ function buildInviteEmail(
       "line-height:1.5;color:#1b1b1b\">",
     `<p>${escapeHtml(greeting)}</p>`,
     `<p>${escapeHtml(intro)}</p>`,
+    "<p>Avant d’utiliser l’application, vous devrez lire et accepter les " +
+      "conditions d’utilisation et la politique de confidentialité.</p>",
+    `<p><a href="${TERMS_URL}">Conditions d’utilisation</a> · ` +
+      `<a href="${PRIVACY_URL}">Politique de confidentialité</a></p>`,
     "<p style=\"margin:24px 0\">" +
       `<a href="${escapeHtml(input.passwordSetupLink)}" ` +
       "style=\"background:#e2001a;color:#ffffff;text-decoration:none;" +
