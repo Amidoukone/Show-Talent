@@ -24,6 +24,10 @@ void main() {
       '.html',
       '.mjs',
       '.ps1',
+      '.arb',
+      '.json',
+      '.xml',
+      '.css',
     };
     final offenders = <String>[];
     for (final root in sourceRoots) {
@@ -69,7 +73,8 @@ void main() {
       expect(file.existsSync(), isTrue, reason: '$path is missing');
 
       final bytes = file.readAsBytesSync();
-      final hasBom = bytes.length >= 3 &&
+      final hasBom =
+          bytes.length >= 3 &&
           bytes[0] == 0xEF &&
           bytes[1] == 0xBB &&
           bytes[2] == 0xBF;
@@ -89,22 +94,24 @@ void main() {
 
   // The PowerShell generators must not reintroduce the BOM the test above
   // guards against.
-  test('deep-link association generators never write with Set-Content UTF8',
-      () {
-    for (final path in const <String>[
-      'scripts/update-assetlinks-fingerprints.ps1',
-      'scripts/update-apple-app-site-association.ps1',
-    ]) {
-      final file = File(path);
-      if (!file.existsSync()) continue;
+  test(
+    'deep-link association generators never write with Set-Content UTF8',
+    () {
+      for (final path in const <String>[
+        'scripts/update-assetlinks-fingerprints.ps1',
+        'scripts/update-apple-app-site-association.ps1',
+      ]) {
+        final file = File(path);
+        if (!file.existsSync()) continue;
 
-      expect(
-        file.readAsStringSync(),
-        isNot(contains('Set-Content -LiteralPath')),
-        reason: '$path must use UTF8Encoding(\$false) so no BOM is emitted',
-      );
-    }
-  });
+        expect(
+          file.readAsStringSync(),
+          isNot(contains('Set-Content -LiteralPath')),
+          reason: '$path must use UTF8Encoding(\$false) so no BOM is emitted',
+        );
+      }
+    },
+  );
 
   test('auth screens keep common French accents in visible copy', () {
     const forbiddenPhrases = <String>[

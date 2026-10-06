@@ -793,7 +793,9 @@ class ProfileController extends GetxController {
           videoList.removeRange(0, toRemove);
         }
 
-        if (unique.length < _videoFetchLimit) {
+        // The cursor follows source documents, including URL-less or already
+        // cached videos. Local filtering must not hide subsequent pages.
+        if (page.fetchedCount < _videoFetchLimit) {
           _hasMoreVideos = false;
         }
       }

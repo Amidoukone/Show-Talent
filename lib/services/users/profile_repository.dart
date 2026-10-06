@@ -698,13 +698,13 @@ class ProfileRepository {
       query = query.where('status', isEqualTo: 'ready');
     }
 
-    query = query.orderBy('updatedAt', descending: true).limit(limit);
+    query = query.orderBy('updatedAt', descending: true);
 
     if (after != null) {
       query = query.startAfterDocument(after.snapshot);
     }
 
-    final snap = await query.get().timeout(firestoreReadTimeout);
+    final snap = await query.limit(limit).get().timeout(firestoreReadTimeout);
     final videos = snap.docs
         .map(Video.fromDoc)
         // A video still being optimized has no playable URL yet — that is

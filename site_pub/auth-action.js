@@ -111,6 +111,8 @@
   }
 
   function firebaseRequest(methodName, payload, apiKey) {
+    var controller = new AbortController();
+    var timeout = setTimeout(function () { controller.abort(); }, 15000);
     return fetch(
       "https://identitytoolkit.googleapis.com/v1/" +
         methodName +
@@ -120,6 +122,7 @@
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify(payload),
+        signal: controller.signal,
       }
     ).then(function (response) {
       return response.json().then(function (body) {
@@ -134,10 +137,13 @@
         }
         return body;
       });
-    });
+    }).finally(function () { clearTimeout(timeout); });
   }
 
   function userMessage(error) {
+    if (error && error.name === "AbortError") {
+      return "Le serveur met trop de temps à répondre. Vérifiez votre connexion puis réessayez.";
+    }
     var code = (error && error.code ? error.code : "").toString();
     if (code.indexOf("EXPIRED_OOB_CODE") >= 0) {
       return "Ce lien a expiré. Demandez un nouveau lien à l'administration.";

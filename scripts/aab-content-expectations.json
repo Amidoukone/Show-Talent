@@ -1,6 +1,6 @@
 {
-  "_": "Chaines temoins lues dans base/lib/<abi>/libapp.so par scripts/check-aab-contents.ps1. Les deux premiers temoins viennent de la version 35 et etaient absents du bundle 31. Le temoin chatBlockedMessage a ete ajoute avec le blocage utilisateur apres la version 37 ; il reste valide pour le prochain bundle Android, qui n'a pas encore ete construit depuis ces changements. Le bump 42 est destine au TestFlight iOS ; le controle du bundle devra etre execute sur l'AAB reel avant publication Android.",
-  "forVersionCode": 42,
+  "_": "Temoins relus pour Android 1.0.7+43 : preference de langue, libelle francais et blocage de conversation toujours presents. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
+  "forVersionCode": 43,
   "mustContain": [
     {
       "text": "app.locale_preference.v1",

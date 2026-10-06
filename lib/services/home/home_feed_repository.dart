@@ -47,9 +47,11 @@ class HomeFeedRepository {
         .where('isMinorProfile', isEqualTo: false)
         .where('searchPrefixes', arrayContainsAny: tokens);
     while (results.length < limit) {
-      final page = await (cursor == null
-          ? query.limit(100)
-          : query.startAfterDocument(cursor).limit(100)).get();
+      final page =
+          await (cursor == null
+                  ? query.limit(100)
+                  : query.startAfterDocument(cursor).limit(100))
+              .get();
       for (final doc in page.docs) {
         final user = AppUser.fromMap({...doc.data(), 'uid': doc.id});
         if (matchesUserVideoSearch(user, rawQuery)) results.add(user);
@@ -77,6 +79,7 @@ class HomeFeedRepository {
     final snapshot = await _firestore
         .collection('videos')
         .where('status', isEqualTo: 'ready')
+        .where('publicFeedVisible', isEqualTo: true)
         .where('uid', whereIn: ids)
         .limit(limit)
         .get();

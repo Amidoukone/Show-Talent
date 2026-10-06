@@ -4,12 +4,6 @@ import {readFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {cert, initializeApp as initializeAdmin, deleteApp as deleteAdmin} from 'firebase-admin/app';
-import {getAuth as getAdminAuth} from 'firebase-admin/auth';
-import {getFirestore as getAdminFirestore} from 'firebase-admin/firestore';
-import {initializeApp, deleteApp} from 'firebase/app';
-import {getAuth, signInWithCustomToken, signOut} from 'firebase/auth';
-import {getFirestore, getDocsFromServer, collection, query, where, orderBy, limit, doc, setDoc, terminate} from 'firebase/firestore';
 
 const args = process.argv.slice(2);
 if (args.length !== 4 || args[0] !== '--credentials' || args[2] !== '--environment' ||
@@ -21,6 +15,13 @@ if (account.type !== 'service_account' || account.project_id !== projectId) thro
 const config = JSON.parse(await readFile(`config/mobile/${environment}.json`, 'utf8'));
 if (config.FIREBASE_PROJECT_ID !== projectId) throw new Error('Project/config mismatch');
 if (process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST) throw new Error('Unexpected emulator configuration');
+// Reject the target before loading the SDKs or initializing any cloud client.
+const {cert, initializeApp: initializeAdmin, deleteApp: deleteAdmin} = await import('firebase-admin/app');
+const {getAuth: getAdminAuth} = await import('firebase-admin/auth');
+const {getFirestore: getAdminFirestore} = await import('firebase-admin/firestore');
+const {initializeApp, deleteApp} = await import('firebase/app');
+const {getAuth, signInWithCustomToken, signOut} = await import('firebase/auth');
+const {getFirestore, getDocsFromServer, collection, query, where, orderBy, limit, doc, setDoc, terminate} = await import('firebase/firestore');
 const publicOrigin = `https://${projectId}.web.app`;
 const adminOrigin = environment === 'staging' ? 'https://adfoot-admin-staging.web.app' : 'https://adfoot-admin.web.app';
 const adminApp = initializeAdmin({credential: cert(account), projectId});
@@ -77,6 +78,8 @@ try {
     ['talent-filters', query(collection(clientDb, 'public_profiles'), where('isSearchable', '==', true), where('isMinorProfile', 'in', [false, true]), where('positionCodes', 'array-contains-any', ['ST']), where('openToOpportunities', '==', true), where('birthYear', '>=', 2000), orderBy('birthYear'), limit(5))],
     ['video-feed', query(collection(clientDb, 'videos'), where('status', '==', 'ready'), where('publicFeedVisible', '==', true), orderBy('approvedAt', 'desc'), limit(5))],
     ['recent-videos', query(collection(clientDb, 'videos'), where('status', '==', 'ready'), where('publicFeedVisible', '==', true), orderBy('updatedAt', 'desc'), limit(5))],
+    ['author-videos', query(collection(clientDb, 'videos'), where('status', '==', 'ready'), where('publicFeedVisible', '==', true), where('uid', 'in', [adultUid, minorUid]), limit(5))],
+    ['profile-videos', query(collection(clientDb, 'videos'), where('uid', '==', adultUid), where('status', '==', 'ready'), orderBy('updatedAt', 'desc'), limit(5))],
     ['inbox', query(collection(clientDb, 'conversations'), where('readableBy', 'array-contains', uid), orderBy('lastMessageDate', 'desc'), limit(5))],
   ];
   for (const [name, request] of checks) {
@@ -85,7 +88,7 @@ try {
       assert.ok(result.docs.some((doc) => doc.id === adultUid), `${name}: adult fixture missing`);
       assert.ok(result.docs.some((doc) => doc.id === minorUid), `${name}: approved minor fixture missing`);
     }
-    if (name === 'video-feed' || name === 'recent-videos') assert.ok(result.docs.some((doc) => doc.id === videoId));
+    if (['video-feed', 'recent-videos', 'author-videos', 'profile-videos'].includes(name)) assert.ok(result.docs.some((doc) => doc.id === videoId));
     if (name === 'inbox') assert.ok(result.docs.some((doc) => doc.id === conversationId));
     console.log(`${name}: OK (${result.size} results)`);
   }

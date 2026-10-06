@@ -478,15 +478,11 @@ class _HomeScreenState extends State<HomeScreen> {
       final matchingAuthors = _matchingAuthorsForQuery(query);
 
       if (matchingAuthors.isNotEmpty) {
-        try {
-          await _loadVideosForAuthors(
-            matchingAuthors.map((user) => user.uid).toSet(),
-            query: query,
-            matchesById: matchesById,
-          );
-        } catch (error) {
-          AppLogger.debug('Video search author query fallback: $error');
-        }
+        await _loadVideosForAuthors(
+          matchingAuthors.map((user) => user.uid).toSet(),
+          query: query,
+          matchesById: matchesById,
+        );
       }
 
       if (matchesById.isEmpty) {

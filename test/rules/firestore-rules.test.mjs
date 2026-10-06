@@ -22,7 +22,7 @@ import {
   assertFails,
 } from '@firebase/rules-unit-testing';
 import {
-  doc, getDoc, getDocs, collection, query, where, limit, setDoc, updateDoc, deleteDoc,
+  doc, getDoc, getDocs, collection, query, where, orderBy, limit, setDoc, updateDoc, deleteDoc,
   serverTimestamp, increment, arrayUnion, writeBatch,
 } from 'firebase/firestore';
 
@@ -166,13 +166,28 @@ const playerRow = embedded(PLAYER, 'joueur');
 
 await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(ctx.firestore(), 'videos', 'adult_ready'), {
-    uid: PLAYER, status: 'ready',
+    uid: PLAYER, status: 'ready', updatedAt: new Date(),
+  });
+  await setDoc(doc(ctx.firestore(), 'videos', 'minor_restricted'), {
+    uid: MINOR, status: 'ready', publicFeedVisible: false, updatedAt: new Date(),
   });
 });
 await syncPublicProfile(PLAYER);
 await syncPublicProfile(RECRUITER);
 await check('le flux de videos adultes reste accessible par requete', 'allow', () =>
   getDocs(query(collection(player, 'videos'), where('status', '==', 'ready'), where('publicFeedVisible', '==', true), limit(20))));
+await check('la recherche multi-auteurs publique exclut les videos protegees', 'allow', async () => {
+  const result = await getDocs(query(collection(recruiter, 'videos'), where('status', '==', 'ready'),
+    where('publicFeedVisible', '==', true), where('uid', 'in', [PLAYER, MINOR]), limit(20)));
+  assert.deepEqual(result.docs.map(doc => doc.id), ['adult_ready']);
+});
+await check('une recherche multi-auteurs sans audience ne doit pas exposer un mineur', 'deny', () =>
+  getDocs(query(collection(recruiter, 'videos'), where('status', '==', 'ready'), where('uid', 'in', [PLAYER, MINOR]), limit(20))));
+await check('la pagination du profil adulte reste accessible par uid', 'allow', async () => {
+  const result = await getDocs(query(collection(recruiter, 'videos'), where('uid', '==', PLAYER),
+    where('status', '==', 'ready'), orderBy('updatedAt', 'desc'), limit(20)));
+  assert.deepEqual(result.docs.map(doc => doc.id), ['adult_ready']);
+});
 await check('la liste des conversations adultes reste accessible par requete', 'allow', () =>
   getDocs(query(collection(player, 'conversations'), where('readableBy', 'array-contains', PLAYER), limit(20))));
 await check('la boite du recruteur exclut les anciennes conversations mineures', 'allow', async () => {

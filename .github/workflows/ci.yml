@@ -73,6 +73,8 @@ jobs:
           java-version: "21"
       - run: npm ci
       - run: node --test test/functions/release-candidate-env.test.mjs
+      - run: node --test test/functions/source-encoding.test.mjs test/functions/auth-action.test.mjs
+      - run: node scripts/audit-source-encoding.mjs lib functions/src site_pub scripts android/app/src ios/Runner
       - run: npm run rules:test:all
 
   secrets-scan:

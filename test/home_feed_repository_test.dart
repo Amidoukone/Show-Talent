@@ -63,33 +63,35 @@ void main() {
       expect(players.single.isPlayer, isTrue);
     });
 
-    test('searchPlayers continues past a page filtered by the local matcher',
-        () async {
-      final firestore = FakeFirebaseFirestore();
-      final repository = HomeFeedRepository(firestore: firestore);
-      for (var index = 0; index < 100; index++) {
-        await firestore
-            .collection('public_profiles')
-            .doc('player-${index.toString().padLeft(3, '0')}')
-            .set({
-          'nom': 'Other player',
+    test(
+      'searchPlayers continues past a page filtered by the local matcher',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = HomeFeedRepository(firestore: firestore);
+        for (var index = 0; index < 100; index++) {
+          await firestore
+              .collection('public_profiles')
+              .doc('player-${index.toString().padLeft(3, '0')}')
+              .set({
+                'nom': 'Other player',
+                'role': 'joueur',
+                'isSearchable': true,
+                'isMinorProfile': false,
+                'searchPrefixes': ['awa'],
+              });
+        }
+        await firestore.collection('public_profiles').doc('player-zzz').set({
+          'nom': 'Awa Traore',
           'role': 'joueur',
           'isSearchable': true,
           'isMinorProfile': false,
           'searchPrefixes': ['awa'],
         });
-      }
-      await firestore.collection('public_profiles').doc('player-zzz').set({
-        'nom': 'Awa Traore',
-        'role': 'joueur',
-        'isSearchable': true,
-        'isMinorProfile': false,
-        'searchPrefixes': ['awa'],
-      });
 
-      final players = await repository.searchPlayers('Awa', limit: 1);
-      expect(players.map((player) => player.uid), ['player-zzz']);
-    });
+        final players = await repository.searchPlayers('Awa', limit: 1);
+        expect(players.map((player) => player.uid), ['player-zzz']);
+      },
+    );
 
     test(
       'fetchReadyVideosForAuthors keeps only playable ready videos',
@@ -98,11 +100,13 @@ void main() {
         final repository = HomeFeedRepository(firestore: firestore);
 
         await firestore.collection('videos').doc('ready-player-1').set({
+          'publicFeedVisible': true,
           'status': 'ready',
           'videoUrl': 'https://cdn.example.com/player-1.mp4',
           'uid': 'player-1',
         });
         await firestore.collection('videos').doc('ready-player-2').set({
+          'publicFeedVisible': true,
           'status': 'ready',
           'videoUrl': 'https://cdn.example.com/player-2.mp4',
           'uid': 'player-2',
@@ -110,6 +114,13 @@ void main() {
         await firestore.collection('videos').doc('draft-player-1').set({
           'status': 'draft',
           'videoUrl': 'https://cdn.example.com/draft.mp4',
+          'uid': 'player-1',
+        });
+
+        await firestore.collection('videos').doc('protected-player-1').set({
+          'status': 'ready',
+          'publicFeedVisible': false,
+          'videoUrl': 'https://cdn.example.com/protected.mp4',
           'uid': 'player-1',
         });
 

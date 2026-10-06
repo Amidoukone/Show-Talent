@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "videos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "publicFeedVisible", "order": "ASCENDING"},
+        {"fieldPath": "uid", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "conversations",
       "queryScope": "COLLECTION",
       "fields": [

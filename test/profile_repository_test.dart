@@ -34,6 +34,33 @@ void main() {
 
   group('ProfileRepository', () {
     test(
+      'profile pagination continues after a full source page without playable URLs',
+      () async {
+        final firestore = FakeFirebaseFirestore();
+        final repository = _repository(firestore, uid: 'viewer');
+        for (var i = 0; i < 21; i++) {
+          await firestore.collection('videos').doc('video-$i').set({
+            'uid': 'author',
+            'status': 'ready',
+            'updatedAt': Timestamp.fromDate(DateTime.utc(2026, 1, 22 - i)),
+            'videoUrl': i == 20 ? 'https://cdn.example.com/last.mp4' : '',
+          });
+        }
+        final sourcePage = await repository.fetchUserVideos(uid: 'author', limit: 20);
+        expect(sourcePage.fetchedCount, 20);
+        final followingPage = await repository.fetchUserVideos(uid: 'author', limit: 20, after: sourcePage.cursor);
+        expect(followingPage.videos.map((video) => video.id), ['video-20']);
+        final controller = ProfileController(profileRepository: repository);
+        addTearDown(controller.onClose);
+        await controller.fetchUserVideos('author', isRefresh: true);
+        expect(controller.videoList, isEmpty);
+        expect(controller.hasMoreVideos, isTrue);
+        await controller.fetchUserVideos('author');
+        expect(controller.videoList.single.id, 'video-20');
+        expect(controller.hasMoreVideos, isFalse);
+      },
+    );
+    test(
       'fetchUser returns null for missing profiles and parses existing users',
       () async {
         final firestore = FakeFirebaseFirestore();

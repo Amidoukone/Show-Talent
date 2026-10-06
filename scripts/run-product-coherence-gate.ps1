@@ -55,7 +55,7 @@ try {
         }
 
         Invoke-Step -Name "Backend scheduler gate (cleanupUnverifiedUsers)" -Action {
-            & powershell -ExecutionPolicy Bypass -File ".\scripts\check-production-backend-gate.ps1"
+            & powershell -ExecutionPolicy Bypass -File ".\scripts\check-production-backend-gate.ps1" -Project $BackendEnvironment
         }
     }
 
