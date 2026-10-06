@@ -1831,42 +1831,36 @@ class _OffreScreenState extends State<OffreScreen> {
                       final candidat = sorted[i];
                       final valid = _isValidPhotoUrl(candidat.photoProfil);
 
-                      return Row(
-                        children: [
-                          AdAvatar(
-                            backgroundColor: AdColors.surfaceCardAlt,
-                            photoUrl: valid ? candidat.photoProfil : '',
-                            fallback: const Icon(Icons.person),
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: AdAvatar(
+                          backgroundColor: AdColors.surfaceCardAlt,
+                          photoUrl: valid ? candidat.photoProfil : '',
+                          fallback: const Icon(Icons.person),
+                        ),
+                        title: Text(
+                          candidat.nom,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  candidat.nom,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  candidat.role,
-                                  style: const TextStyle(
-                                    color: AdColors.onSurfaceMuted,
-                                  ),
-                                ),
-                              ],
-                            ),
+                        ),
+                        subtitle: Text(
+                          candidat.role,
+                          style: const TextStyle(
+                            color: AdColors.onSurfaceMuted,
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.chat_bubble_outline),
-                            onPressed: () => _openOfferChat(
-                              candidat,
-                              offre,
-                              sourceLabel: 'offreCandidatesSourceLabel'.tr,
-                            ),
+                        ),
+                        onTap: () => Get.to(
+                          () => ProfileScreen(uid: candidat.uid, isReadOnly: true),
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.chat_bubble_outline),
+                          onPressed: () => _openOfferChat(
+                            candidat,
+                            offre,
+                            sourceLabel: 'offreCandidatesSourceLabel'.tr,
                           ),
-                        ],
+                        ),
                       );
                     },
                   ),

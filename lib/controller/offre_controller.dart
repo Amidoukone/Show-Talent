@@ -343,6 +343,7 @@ class OffreController extends GetxController {
 
     try {
       await _offerRepository.publishOffer(offre);
+      _insertLocalOffer(offre);
 
       final fanoutResult = await _notifierJoueurs(offre, utilisateur);
       if (!fanoutResult.success) {
@@ -764,6 +765,26 @@ class OffreController extends GetxController {
     final next = List<Offre>.from(existing);
     next[index] = offer;
     _offres.value = _sortOffers(next);
+    update();
+  }
+
+  /// Ajoute l'offre qui vient d'etre publiee a la liste locale.
+  ///
+  /// `publierOffre` est la seule mutation de ce controleur qui ne touchait
+  /// pas `_offres.value` : modifier, supprimer, postuler et se desinscrire le
+  /// font toutes immediatement apres leur ecriture, mais publier comptait
+  /// uniquement sur `watchOffers` pour faire reapparaitre le nouveau document
+  /// -- un aller-retour serveur que l'ecran peut quitter avant qu'il arrive.
+  /// Sans retour local, l'offre restait invisible jusqu'a ce que quelque
+  /// chose d'autre relance `_fetchOffres` (changement de session, filtre),
+  /// ce qui n'arrivait en pratique qu'au redemarrage de l'application.
+  void _insertLocalOffer(Offre offer) {
+    final existing = _offres.value;
+    if (existing.any((candidate) => candidate.id == offer.id)) {
+      return;
+    }
+
+    _offres.value = _sortOffers([...existing, offer]);
     update();
   }
 

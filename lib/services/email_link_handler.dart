@@ -72,8 +72,19 @@ class EmailLinkHandler {
       _appLinks ??= AppLinks();
 
       try {
+        // getInitialLink() reads an already-delivered platform Intent/
+        // UserActivity -- no network, no disk -- so it resolves in
+        // milliseconds on every device actually tested. The 5s ceiling this
+        // used to carry (unchanged since the handler was first written, never
+        // calibrated to a measured round-trip) meant that on the rare device
+        // where the native side stalls, `AppBootstrap.initialize()` -- which
+        // awaits this before `runApp()` -- blocked the entire cold start for
+        // up to 5 real seconds, on every single launch without a pending
+        // link, which is nearly all of them. 1.5s is still generous slack for
+        // the call this actually is, while capping the worst case the user
+        // sees as "the loader spins for a while".
         final initialUri = await _appLinks!.getInitialLink().timeout(
-          const Duration(seconds: 5),
+          const Duration(milliseconds: 1500),
           onTimeout: () => null,
         );
         if (initialUri != null) {
