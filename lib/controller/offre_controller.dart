@@ -362,7 +362,13 @@ class OffreController extends GetxController {
         toast: ToastLevel.success,
       );
     } on FirebaseException catch (error, st) {
-      AppLogger.warning(
+      // .error, not .warning: a reported "crash on publish" was untraceable
+      // in client_logs because AppLogLevel.warning is sampled at 15% in
+      // production (see AppLogger._shouldSendToRemote) -- a repeat failure
+      // here would have had an 85% chance of leaving no trace at all. This
+      // is the one offer-creation failure path a user could mistake for a
+      // crash, so it must always reach client_logs.
+      AppLogger.error(
         'Erreur lors de la publication de l’offre: $error',
         source: 'OffreController.publierOffre',
         error: error,
@@ -377,7 +383,7 @@ class OffreController extends GetxController {
         message: 'offreCreateFailedMessage'.tr,
       );
     } catch (e, st) {
-      AppLogger.warning(
+      AppLogger.error(
         'Erreur lors de la publication de l’offre: $e',
         source: 'OffreController.publierOffre',
         error: e,

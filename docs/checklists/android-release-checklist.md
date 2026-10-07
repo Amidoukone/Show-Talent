@@ -47,6 +47,17 @@ Reference date: 4 April 2026
 - [ ] video upload/finalize/feed playback
 - [ ] notifications (foreground/background)
 - [ ] account deletion flow
+- [ ] offer creation does not crash/freeze the app (2026-10-06 report: often
+      crashed on create, required a relaunch before the offer appeared —
+      stale-list insert fixed in `publierOffre`, catch-block logging bumped
+      from `.warning` to `.error` so a repeat failure isn't lost to client_logs
+      sampling; crash itself was never confirmed in Crashlytics/client_logs —
+      check both after this test, not just whether the screen behaves)
+- [ ] offer owner taps a candidate in the participants list → their profile
+      opens (2026-10-06 fix: was a dead `Row` with no `onTap`)
+- [ ] cold start timing, 5 launches from fully closed, Wi-Fi and cellular
+      (2026-10-06: `EmailLinkHandler` timeout cut from 5s to 1.5s worst case —
+      confirm the felt improvement, not just that it still launches)
 
 ## Store package
 
