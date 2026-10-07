@@ -112,12 +112,17 @@ function Get-Sha256Fingerprint {
         throw "keytool failed to read keystore fingerprint (exit code $LASTEXITCODE)."
     }
 
-    $line = $output | Where-Object { $_ -match 'SHA256:\s*([A-F0-9:]+)' } | Select-Object -First 1
+    # keytool's own label is locale-dependent -- an English JDK prints
+    # "SHA256:", a French one "SHA 256:" (observed directly on this machine).
+    # Matching loosely on "SHA" + optional separators + "256" avoids silently
+    # finding nothing just because the JRE's default locale changed.
+    $fingerprintPattern = 'SHA[\s-]*256\s*:\s*([A-Fa-f0-9:]+)'
+    $line = $output | Where-Object { $_ -match $fingerprintPattern } | Select-Object -First 1
     if ($null -eq $line) {
         throw "Unable to extract SHA256 fingerprint from keytool output."
     }
 
-    $match = [regex]::Match([string]$line, 'SHA256:\s*([A-F0-9:]+)')
+    $match = [regex]::Match([string]$line, $fingerprintPattern)
     if (-not $match.Success) {
         throw "Unable to parse SHA256 fingerprint."
     }
