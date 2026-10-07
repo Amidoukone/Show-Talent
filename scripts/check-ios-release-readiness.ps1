@@ -207,6 +207,50 @@ if ((Test-Path -LiteralPath $projectPath) -and
     if ($ReleaseGate) { $errors.Add($message) } else { $warnings.Add($message) }
 }
 
+# staging and production are both shipped via Codemagic to TestFlight,
+# signed with a Distribution provisioning profile that only talks to the
+# production APNs gateway -- an entitlements file saying "development" (the
+# default Release.xcconfig points at, meant for local/Xcode-run builds)
+# builds and signs without error but ships push notifications that can
+# never be delivered. Only "local" is never distributed, so only it is
+# exempt from this check.
+if ($Environment -ne "local") {
+    $releaseFlavorXcconfigPath = Join-Path $repoRoot "ios/Flutter/Release-$Environment.xcconfig"
+    if (Test-Path -LiteralPath $releaseFlavorXcconfigPath) {
+        $releaseFlavorRaw = Get-Content -LiteralPath $releaseFlavorXcconfigPath -Raw
+        $flavorEntitlementsMatch = [regex]::Match(
+            $releaseFlavorRaw,
+            'CODE_SIGN_ENTITLEMENTS\s*=\s*Runner/([^\s]+\.entitlements)'
+        )
+        $effectiveEntitlementsName = if ($flavorEntitlementsMatch.Success) {
+            $flavorEntitlementsMatch.Groups[1].Value
+        } else {
+            "Runner.entitlements"
+        }
+        $effectiveEntitlementsPath = Join-Path $repoRoot "ios/Runner/$effectiveEntitlementsName"
+
+        if (Test-Path -LiteralPath $effectiveEntitlementsPath) {
+            $effectiveApsEnvironment = Get-PlistStringValue -Path $effectiveEntitlementsPath -Key "aps-environment"
+            if ($effectiveApsEnvironment -ne "production") {
+                $message = "Release-$Environment.xcconfig resolves to '$effectiveEntitlementsName' with " +
+                    "aps-environment '$effectiveApsEnvironment', but a TestFlight/App Store build needs 'production'."
+                if ($RequireEntitlements) {
+                    $errors.Add($message)
+                } else {
+                    $warnings.Add($message)
+                }
+            }
+        } else {
+            $message = "Release-$Environment.xcconfig references missing entitlements file: $effectiveEntitlementsPath"
+            if ($RequireEntitlements) {
+                $errors.Add($message)
+            } else {
+                $warnings.Add($message)
+            }
+        }
+    }
+}
+
 if (Test-Path -LiteralPath $environmentFirebasePath) {
     $iosFirebaseBundle = Get-PlistStringValue -Path $environmentFirebasePath -Key "BUNDLE_ID"
     if (-not [string]::IsNullOrWhiteSpace($iosFirebaseBundle) -and $iosFirebaseBundle -ne $expectedBundleId) {

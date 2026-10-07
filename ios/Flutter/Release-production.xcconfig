@@ -2,3 +2,12 @@
 
 APP_ENV=production
 PRODUCT_BUNDLE_IDENTIFIER=org.adfoot.app
+
+// Overrides Release.xcconfig's Runner.entitlements (aps-environment:
+// development). Any build Codemagic actually ships -- TestFlight or App
+// Store -- is signed with a Distribution provisioning profile, which only
+// talks to the production APNs gateway. An entitlements file still saying
+// "development" doesn't fail the build; it ships silently with push
+// notifications that can never be delivered, found during the pre-release
+// audit and never confirmed fixed before this.
+CODE_SIGN_ENTITLEMENTS=Runner/Runner-Distribution.entitlements

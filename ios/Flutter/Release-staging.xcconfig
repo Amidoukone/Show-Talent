@@ -2,3 +2,9 @@
 
 APP_ENV=staging
 PRODUCT_BUNDLE_IDENTIFIER=org.adfoot.app.staging
+
+// Same reasoning as Release-production.xcconfig: this flavor is also
+// distributed via TestFlight with a Distribution profile, so it needs the
+// production APNs entitlement, not the development one Release.xcconfig
+// points at by default.
+CODE_SIGN_ENTITLEMENTS=Runner/Runner-Distribution.entitlements
