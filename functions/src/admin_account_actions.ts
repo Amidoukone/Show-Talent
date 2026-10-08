@@ -1010,6 +1010,12 @@ export const resendManagedAccountInvite = onCall(
         "Liens d invitation regeneres.",
       data: {
         ...buildManagedAccountSummary(target),
+        // loadManagedTarget above throws "not-found" otherwise: this
+        // callable only ever runs against an account that already exists,
+        // unlike provisionManagedAccount which can go either way. The admin
+        // portal keys its "Activation" vs "Réactivation" wording on this
+        // flag (see ManagedAccountProvisionResult on the admin side).
+        existingUser: true,
         passwordSetupLink,
         emailVerificationLink,
         inviteEmailSent: invite.sent,
@@ -1031,6 +1037,30 @@ export const changeManagedAccountRole = onCall(
     const target = await loadManagedTarget(uid);
     assertSafeAdminMutation(target, adminUid);
     assertManagedTarget(target);
+
+    // provisionManagedAccount enforces this at creation time, but a role
+    // change bypassed it entirely: a fan/club account with no birthDate on
+    // file could become "joueur" with the under-12 floor never checked.
+    // Reuses the existing profile's birthDate rather than asking the admin
+    // portal for a new one — set it via updateManagedAccountProfile first
+    // if it is missing.
+    if (nextRole === "joueur") {
+      const birthDate = parseManagedBirthDate(target.userData["birthDate"]);
+      if (!birthDate) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Une date de naissance valide est requise avant de passer ce " +
+            "compte en joueur. Renseignez-la via \"Modifier le profil\" " +
+            "puis réessayez.",
+        );
+      }
+      if (isBelowMinimumPlayerAge(birthDate)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Adfoot accueille les joueurs à partir de 12 ans.",
+        );
+      }
+    }
 
     const roleChanged = target.role != nextRole;
     if (roleChanged) {
