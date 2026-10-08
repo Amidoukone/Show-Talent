@@ -176,227 +176,242 @@ class OffreFormScreenState extends State<OffreFormScreen> {
             onPressed: _handleBackNavigation,
           ),
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Form(
-            key: _formKey,
-            autovalidateMode: AutovalidateMode.onUserInteraction,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildFormSection(
-                      title: l10n.eventFormSummarySectionTitle,
-                      children: [
-                        TextFormField(
-                          controller: _titreController,
-                          maxLength: _maxTitleLength,
-                          textInputAction: TextInputAction.next,
-                          decoration: _buildInputDecoration(
-                            l10n.offreFormTitleLabel,
-                            l10n.offreFormTitleHint,
-                            Icons.work_outline,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Form(
+              key: _formKey,
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildFormSection(
+                        title: l10n.eventFormSummarySectionTitle,
+                        children: [
+                          TextFormField(
+                            controller: _titreController,
+                            maxLength: _maxTitleLength,
+                            textInputAction: TextInputAction.next,
+                            decoration: _buildInputDecoration(
+                              l10n.offreFormTitleLabel,
+                              l10n.offreFormTitleHint,
+                              Icons.work_outline,
+                            ),
+                            validator: (value) => _validateTitle(l10n, value),
                           ),
-                          validator: (value) => _validateTitle(l10n, value),
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _descriptionController,
-                          maxLength: _maxDescriptionLength,
-                          minLines: 5,
-                          maxLines: 8,
-                          decoration: _buildInputDecoration(
-                            l10n.offreDescriptionLabel,
-                            l10n.offreFormDescriptionHint,
-                            Icons.description_outlined,
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _descriptionController,
+                            maxLength: _maxDescriptionLength,
+                            minLines: 5,
+                            maxLines: 8,
+                            decoration: _buildInputDecoration(
+                              l10n.offreDescriptionLabel,
+                              l10n.offreFormDescriptionHint,
+                              Icons.description_outlined,
+                            ),
+                            validator: (value) =>
+                                _validateDescription(l10n, value),
                           ),
-                          validator: (value) =>
-                              _validateDescription(l10n, value),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildFormSection(
-                      title: l10n.eventFormSoughtProfileSectionTitle,
-                      children: [
-                        // Le poste se choisit, il ne se tape plus : c'est
-                        // ce qui permet a cette offre de rencontrer les
-                        // joueurs qui declarent le meme code.
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            l10n.offreFormPositionsRequiredLabel,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildFormSection(
+                        title: l10n.eventFormSoughtProfileSectionTitle,
+                        children: [
+                          // Le poste se choisit, il ne se tape plus : c'est
+                          // ce qui permet a cette offre de rencontrer les
+                          // joueurs qui declarent le meme code.
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              l10n.offreFormPositionsRequiredLabel,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        // Un `FormField` plutot qu'un controle dans
-                        // `_submitForm` : le poste devient obligatoire au
-                        // meme titre que le titre et la description, il est
-                        // valide par le meme `validate()`, et l'erreur
-                        // s'affiche sous les puces au lieu d'un message
-                        // general qui ne dit pas ou regarder.
-                        FormField<List<FootballPosition>>(
-                          initialValue: _positionCodes,
-                          validator: (value) => _validatePositions(l10n, value),
-                          builder: (state) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: FootballPosition.values.map((
-                                    position,
-                                  ) {
-                                    final isSelected = _positionCodes.contains(
+                          const SizedBox(height: 8),
+                          // Un `FormField` plutot qu'un controle dans
+                          // `_submitForm` : le poste devient obligatoire au
+                          // meme titre que le titre et la description, il est
+                          // valide par le meme `validate()`, et l'erreur
+                          // s'affiche sous les puces au lieu d'un message
+                          // general qui ne dit pas ou regarder.
+                          FormField<List<FootballPosition>>(
+                            initialValue: _positionCodes,
+                            validator: (value) =>
+                                _validatePositions(l10n, value),
+                            builder: (state) {
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: FootballPosition.values.map((
                                       position,
-                                    );
-                                    return FilterChip(
-                                      selected: isSelected,
-                                      label: Text(position.labelFr),
-                                      onSelected: (_) {
-                                        setState(() {
-                                          if (isSelected) {
-                                            _positionCodes.remove(position);
-                                          } else {
-                                            _positionCodes.add(position);
-                                          }
-                                        });
-                                        state.didChange(_positionCodes);
-                                      },
-                                    );
-                                  }).toList(),
-                                ),
-                                if (state.hasError) ...[
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    state.errorText!,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.error,
-                                    ),
+                                    ) {
+                                      final isSelected = _positionCodes
+                                          .contains(position);
+                                      return FilterChip(
+                                        selected: isSelected,
+                                        label: Text(position.labelFr),
+                                        onSelected: (_) {
+                                          setState(() {
+                                            if (isSelected) {
+                                              _positionCodes.remove(position);
+                                            } else {
+                                              _positionCodes.add(position);
+                                            }
+                                          });
+                                          state.didChange(_positionCodes);
+                                        },
+                                      );
+                                    }).toList(),
                                   ),
+                                  if (state.hasError) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      state.errorText!,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                      ),
+                                    ),
+                                  ],
                                 ],
-                              ],
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            l10n.eventFormCategoriesLabel,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                              );
+                            },
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: AgeCategory.values.map((category) {
-                            final isSelected = _ageCategories.contains(
-                              category,
-                            );
-                            return FilterChip(
-                              selected: isSelected,
-                              label: Text(category.labelFr),
-                              onSelected: (_) {
-                                setState(() {
-                                  if (isSelected) {
-                                    _ageCategories.remove(category);
-                                  } else {
-                                    _ageCategories.add(category);
-                                  }
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 16),
-                        DropdownButtonFormField<ClubLevel>(
-                          initialValue: _clubLevel,
-                          decoration: _buildInputDecoration(
-                            l10n.eventFormClubLevelLabel,
-                            '',
-                            Icons.leaderboard_outlined,
+                          const SizedBox(height: 16),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              l10n.eventFormCategoriesLabel,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
-                          items: ClubLevel.values
-                              .map(
-                                (level) => DropdownMenuItem<ClubLevel>(
-                                  value: level,
-                                  child: Text(level.labelFr),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _clubLevel = value),
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _localisationController,
-                          textInputAction: TextInputAction.next,
-                          decoration: _buildInputDecoration(
-                            l10n.offreFormLocationLabel,
-                            l10n.offreFormLocationHint,
-                            Icons.place_outlined,
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: AgeCategory.values.map((category) {
+                              final isSelected = _ageCategories.contains(
+                                category,
+                              );
+                              return FilterChip(
+                                selected: isSelected,
+                                label: Text(category.labelFr),
+                                onSelected: (_) {
+                                  setState(() {
+                                    if (isSelected) {
+                                      _ageCategories.remove(category);
+                                    } else {
+                                      _ageCategories.add(category);
+                                    }
+                                  });
+                                },
+                              );
+                            }).toList(),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildFormSection(
-                      title: l10n.offreFormConditionsSectionTitle,
-                      children: [
-                        TextFormField(
-                          controller: _remunerationController,
-                          textInputAction: TextInputAction.done,
-                          decoration: _buildInputDecoration(
-                            l10n.offreFormCompensationLabel,
-                            l10n.offreFormCompensationHint,
-                            Icons.payments_outlined,
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<ClubLevel>(
+                            initialValue: _clubLevel,
+                            decoration: _buildInputDecoration(
+                              l10n.eventFormClubLevelLabel,
+                              '',
+                              Icons.leaderboard_outlined,
+                            ),
+                            items: ClubLevel.values
+                                .map(
+                                  (level) => DropdownMenuItem<ClubLevel>(
+                                    value: level,
+                                    child: Text(level.labelFr),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) =>
+                                setState(() => _clubLevel = value),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildFormSection(
-                      title: l10n.offreFormPeriodSectionTitle,
-                      children: [
-                        _buildDatePicker(
-                          l10n,
-                          l10n.eventFormStartDateLabel,
-                          _dateDebut,
-                          _setStartDate,
-                          isStart: true,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildDatePicker(
-                          l10n,
-                          l10n.eventFormEndDateLabel,
-                          _dateFin,
-                          _setEndDate,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    AdButton(
-                      onPressed: _submitLocked ? null : _submitForm,
-                      loading: _isSubmitting,
-                      leading: isEditing
-                          ? Icons.save_rounded
-                          : Icons.publish_rounded,
-                      label: isEditing
-                          ? l10n.eventFormUpdateAction
-                          : l10n.offreFormPublishAction,
-                    ),
-                  ],
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _localisationController,
+                            textInputAction: TextInputAction.next,
+                            decoration: _buildInputDecoration(
+                              l10n.offreFormLocationLabel,
+                              l10n.offreFormLocationHint,
+                              Icons.place_outlined,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildFormSection(
+                        title: l10n.offreFormConditionsSectionTitle,
+                        children: [
+                          TextFormField(
+                            controller: _remunerationController,
+                            textInputAction: TextInputAction.done,
+                            decoration: _buildInputDecoration(
+                              l10n.offreFormCompensationLabel,
+                              l10n.offreFormCompensationHint,
+                              Icons.payments_outlined,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _buildFormSection(
+                        title: l10n.offreFormPeriodSectionTitle,
+                        children: [
+                          _buildDatePicker(
+                            l10n,
+                            l10n.eventFormStartDateLabel,
+                            _dateDebut,
+                            _setStartDate,
+                            isStart: true,
+                          ),
+                          const SizedBox(height: 16),
+                          _buildDatePicker(
+                            l10n,
+                            l10n.eventFormEndDateLabel,
+                            _dateFin,
+                            _setEndDate,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
+            ),
+          ),
+        ),
+        // Pinned, not scrolled: a fixed-height `SingleChildScrollView`
+        // padding left this button at the mercy of the device's own bottom
+        // inset, and on a phone with gesture navigation it sat partly under
+        // the system bar instead of above it. `bottomNavigationBar` is
+        // always above that inset, the same fix already proven on the
+        // profile edit screen.
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+            child: AdButton(
+              onPressed: _submitLocked ? null : _submitForm,
+              loading: _isSubmitting,
+              leading: isEditing ? Icons.save_rounded : Icons.publish_rounded,
+              label: isEditing
+                  ? l10n.eventFormUpdateAction
+                  : l10n.offreFormPublishAction,
             ),
           ),
         ),

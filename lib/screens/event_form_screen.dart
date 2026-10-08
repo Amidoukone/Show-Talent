@@ -490,21 +490,31 @@ class _EventFormScreenState extends State<EventFormScreen> {
                         title: l10n.eventFormFlyerSectionTitle,
                         children: [_buildFlyerPicker(l10n)],
                       ),
-                      const SizedBox(height: 24),
-                      AdButton(
-                        onPressed: _submitLocked ? null : _handleSubmit,
-                        loading: _isSubmitting,
-                        leading: widget.event != null
-                            ? Icons.save_rounded
-                            : Icons.publish_rounded,
-                        label: widget.event != null
-                            ? l10n.eventFormUpdateAction
-                            : l10n.eventFormPublishAction,
-                      ),
                     ],
                   ),
                 ),
               ),
+            ),
+          ),
+        ),
+        // Same fix as the offer form (`offres_form.dart`): a button sitting
+        // at the end of a scrollable column is at the mercy of the device's
+        // bottom inset, and on a phone with gesture navigation it sat partly
+        // under the system bar. `bottomNavigationBar` is always above that
+        // inset.
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: AdButton(
+              onPressed: _submitLocked ? null : _handleSubmit,
+              loading: _isSubmitting,
+              leading: widget.event != null
+                  ? Icons.save_rounded
+                  : Icons.publish_rounded,
+              label: widget.event != null
+                  ? l10n.eventFormUpdateAction
+                  : l10n.eventFormPublishAction,
             ),
           ),
         ),

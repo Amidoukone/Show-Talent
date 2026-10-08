@@ -229,7 +229,6 @@ class _UploadFormState extends State<UploadForm> with WidgetsBindingObserver {
           final isPreparing = uploadVideoController.isPreparing.value;
           final isUploading = uploadVideoController.isUploading.value;
           final isOptimizing = uploadVideoController.isOptimizing.value;
-          final isBusy = isPreparing || isUploading || isOptimizing;
 
           if (isOptimizing) {
             // Affiche "Optimisation en cours..."
@@ -402,27 +401,49 @@ class _UploadFormState extends State<UploadForm> with WidgetsBindingObserver {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 20),
-
-                        // Bouton d’upload
-                        AdButton(
-                          onPressed: isBusy ? null : _handleUpload,
-                          leading: Icons.cloud_upload_rounded,
-                          label: VideoUiStrings.uploadVideoButton,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          VideoUiStrings.uploadReminder,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: cs.onSurface.withValues(alpha: 0.7),
-                            fontSize: 12,
-                          ),
-                        ),
                       ],
                     ),
                   ),
                 ),
+              ),
+            ),
+          );
+        }),
+        // Pinned, not scrolled: the same fix as `offres_form.dart` and
+        // `event_form_screen.dart` — a button at the end of the scrollable
+        // card was at the mercy of the device's own bottom inset. Its own
+        // `Obx` because the footer must disappear instead of floating over
+        // `ProcessingDialog`/`ProgressFullScreenLoader`, the two other states
+        // `body` can be in.
+        bottomNavigationBar: Obx(() {
+          final isBusy =
+              uploadVideoController.isPreparing.value ||
+              uploadVideoController.isUploading.value ||
+              uploadVideoController.isOptimizing.value;
+          if (isBusy) return const SizedBox.shrink();
+
+          return SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AdButton(
+                    onPressed: _handleUpload,
+                    leading: Icons.cloud_upload_rounded,
+                    label: VideoUiStrings.uploadVideoButton,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    VideoUiStrings.uploadReminder,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.7),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
               ),
             ),
           );
