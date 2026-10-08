@@ -132,4 +132,94 @@ void main() {
       [lowMp4, lowestMp4, highMp4],
     );
   });
+
+  group('lowBandwidthMaxHeight (per-tier resolution cap)', () {
+    test('defaults to 540, unchanged from before the parameter existed', () {
+      final withDefault = VideoSourceSelector.chooseUrl(
+        fallbackUrl: fallbackMp4,
+        sources: sources,
+        adaptiveEnabled: true,
+        highBandwidth: false,
+      );
+      final withExplicit540 = VideoSourceSelector.chooseUrl(
+        fallbackUrl: fallbackMp4,
+        sources: sources,
+        adaptiveEnabled: true,
+        highBandwidth: false,
+        lowBandwidthMaxHeight: 540,
+      );
+
+      expect(withDefault, lowMp4);
+      expect(withExplicit540, withDefault);
+    });
+
+    test('a stricter cap picks a lighter rendition than the default', () {
+      final url = VideoSourceSelector.chooseUrl(
+        fallbackUrl: fallbackMp4,
+        sources: sources,
+        adaptiveEnabled: true,
+        highBandwidth: false,
+        lowBandwidthMaxHeight: 360,
+      );
+
+      expect(url, lowestMp4);
+    });
+
+    test('never affects the high-bandwidth branch', () {
+      final url = VideoSourceSelector.chooseUrl(
+        fallbackUrl: fallbackMp4,
+        sources: sources,
+        adaptiveEnabled: true,
+        highBandwidth: true,
+        lowBandwidthMaxHeight: 360,
+      );
+
+      expect(url, highMp4);
+    });
+
+    test('orders the capped rendition first in the fallback chain', () {
+      final ordered = VideoSourceSelector.prioritizedSources(
+        fallbackUrl: fallbackMp4,
+        sources: sources,
+        adaptiveEnabled: true,
+        highBandwidth: false,
+        lowBandwidthMaxHeight: 360,
+      );
+
+      expect(ordered.first.url, lowestMp4);
+    });
+  });
+
+  group('smallestFirstCandidates (playback-recovery fallback)', () {
+    test('orders every rendition smallest to largest, ignoring bandwidth', () {
+      final ordered = VideoSourceSelector.smallestFirstCandidates(
+        fallbackUrl: fallbackMp4,
+        sources: sources,
+      );
+
+      expect(
+        ordered.map((source) => source.url).toList(),
+        [lowestMp4, lowMp4, highMp4, fallbackMp4],
+      );
+    });
+
+    test('drops non-MP4 sources, same as the tier-based selector', () {
+      final ordered = VideoSourceSelector.smallestFirstCandidates(
+        fallbackUrl: fallbackMp4,
+        sources: mixedSources,
+      );
+
+      expect(ordered.any((source) => source.url == nonMp4Url), isFalse);
+      expect(ordered.first.url, lowestMp4);
+    });
+
+    test('falls back to the MP4 fallback URL when no sources are usable', () {
+      final ordered = VideoSourceSelector.smallestFirstCandidates(
+        fallbackUrl: fallbackMp4,
+        sources: const [],
+      );
+
+      expect(ordered.map((source) => source.url).toList(), [fallbackMp4]);
+    });
+  });
 }

@@ -206,11 +206,37 @@ class VideoActionRunner extends ChangeNotifier {
   /// Called only after the platform sheet reports success — a dismissed share
   /// is not a share, and counting it was how the number drifted upward on
   /// nothing.
+  ///
+  /// Bumped optimistically, the same shape as [toggleLike]: the callable round
+  /// trip (auth/App Check warm-up, the server's anti-spam check, the
+  /// Firestore write) takes long enough to feel like the tap did nothing.
+  /// Rolled back if the server refuses it (anti-spam throttle, offline,
+  /// session revoked, ...) — [VideoController.partagerVideo] already shows
+  /// the toast explaining why.
   Future<ActionResponse?> recordShare({required Video video}) {
-    return _guard(
-      VideoAction.share,
-      () => videoController.partagerVideo(video),
+    return _guard(VideoAction.share, () => _recordShare(video));
+  }
+
+  Future<ActionResponse> _recordShare(Video video) async {
+    final before = videoController.hydrate(video).shareCount;
+    _applyShareCount(video, before + 1, pending: true);
+
+    final response = await videoController.partagerVideo(video);
+
+    if (!response.success) {
+      _applyShareCount(video, before, pending: false);
+    }
+
+    return response;
+  }
+
+  void _applyShareCount(Video video, int shareCount, {required bool pending}) {
+    videoController.applyLocalVideoState(
+      video,
+      (current) => current.withShare(shareCount: shareCount),
+      pending: pending,
     );
+    _notify();
   }
 
   Future<ActionResponse?> delete({required Video video}) {

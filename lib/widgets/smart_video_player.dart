@@ -5,7 +5,10 @@ import 'dart:async';
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:flutter/foundation.dart' show ValueListenable, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
@@ -29,6 +32,7 @@ import 'package:adfoot/controller/video_controller.dart';
 import 'package:adfoot/controller/user_controller.dart';
 import 'package:adfoot/widgets/video_action_rail.dart';
 import 'package:adfoot/widgets/video_metadata_overlay.dart';
+import 'package:adfoot/widgets/video_share_sheet.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/videos/data/watched_video_store.dart';
 import 'package:adfoot/videos/video_manager.dart';
@@ -333,6 +337,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     CachedVideoPlayerPlus? reuse,
     bool preferDownloadedFile = false,
     String? recoveryReason,
+    bool preferSmallestSource = false,
   }) async {
     final localToken = ++_attachToken;
     final resolvedUrl = _videoManager.getResolvedUrl(
@@ -368,6 +373,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           autoPlay: false,
           activeUrl: widget.videoUrl,
           recoveryReason: recoveryReason,
+          preferSmallestSource: preferSmallestSource,
         );
       } catch (e, st) {
         // Meme signalement que `play_error` plus bas, et pour une raison plus
@@ -1020,7 +1026,10 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     // So: attempt one reuses what is there, because a genuinely transient
     // stall needs nothing more and re-fetching a good file is wasteful. Every
     // attempt after that does what the manual retry demonstrably does —
-    // discard the cached file and stream.
+    // discard the cached file and stream — and additionally steps down to
+    // the smallest rendition the video has: the network tier has not
+    // changed since the first attempt, so the normal tier-based pick would
+    // just hand back the exact source that already failed to play.
     final isFirstAttempt = _automaticRecoveryAttempts == 0;
     _automaticRecoveryAttempts++;
     _isRecovering = true;
@@ -1034,6 +1043,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         purgeCachedFile: !isFirstAttempt,
         preferDownloadedFile: isFirstAttempt && resolvedUrl.isNotEmpty,
         recoveryReason: reason,
+        preferSmallestSource: !isFirstAttempt,
       );
     } finally {
       _isRecovering = false;
@@ -1124,6 +1134,11 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
                       _purgeAndReloadController(
                         purgeCachedFile: true,
                         recoveryReason: 'manual_retry',
+                        // Visible only once every automatic attempt already
+                        // failed at the smallest rendition too (see
+                        // `_recoverPlayback`); asking for anything heavier
+                        // here would retry exactly what just gave up.
+                        preferSmallestSource: true,
                       ),
                     );
                   },
@@ -1278,7 +1293,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         video: widget.video,
         userId: currentUser.uid,
       ),
-      onShare: () => _shareVideo(),
+      onShare: () => _openShareOptions(context),
       onReport: () async => _confirmReport(context, currentUser.uid),
       onAddVideo: () => _openAddVideo(videoController),
       onOpenProfile: () => _openPublisherProfile(currentUser.uid),
@@ -1416,11 +1431,28 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     });
   }
 
-  /// Opens the platform share sheet, then records the share if it happened.
+  /// Opens the destination picker (WhatsApp, Telegram, Facebook, copy link,
+  /// or the platform sheet for everything else), then records the share once
+  /// one of them actually happened.
   ///
   /// The sheet needs a `BuildContext` and an anchor rect, so it stays here;
   /// the counter, the toast and the in-flight flag are the runner's.
-  Future<void> _shareVideo() async {
+  Future<void> _openShareOptions(BuildContext context) {
+    return showVideoShareOptions(
+      context,
+      onSystemShare: () => _dispatchShare(_shareViaSystemSheet),
+      onWhatsApp: () => _dispatchShare(_shareViaWhatsApp),
+      onTelegram: () => _dispatchShare(_shareViaTelegram),
+      onFacebook: () => _dispatchShare(_shareViaFacebook),
+      onCopyLink: () => _dispatchShare(_shareViaCopyLink),
+    );
+  }
+
+  /// Resolves the share link once, hands it to [send], and records the share
+  /// only when [send] reports it actually went out.
+  Future<void> _dispatchShare(
+    Future<bool> Function(String shareUrl) send,
+  ) async {
     if (_actions.isRunning(VideoAction.share)) return;
 
     final shareUrl = VideoShareLinks.buildVideoUrl(widget.video.id);
@@ -1442,23 +1474,8 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     }
 
     try {
-      final result = await SharePlus.instance.share(
-        ShareParams(
-          text: _buildShareText(shareUrl),
-          title: VideoUiStrings.shareTitle,
-          subject: VideoUiStrings.shareSubject,
-          sharePositionOrigin: _sharePositionOrigin(),
-        ),
-      );
-
-      switch (result.status) {
-        case ShareResultStatus.dismissed:
-          // A share the user backed out of is not a share.
-          return;
-        case ShareResultStatus.success:
-        case ShareResultStatus.unavailable:
-          break;
-      }
+      final sent = await send(shareUrl);
+      if (!sent) return;
 
       await _actions.recordShare(video: widget.video);
     } catch (error, stackTrace) {
@@ -1479,11 +1496,140 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     }
   }
 
+  Future<bool> _shareViaSystemSheet(String shareUrl) async {
+    final thumbnailFiles = await _shareThumbnailFiles();
+    final result = await SharePlus.instance.share(
+      ShareParams(
+        text: _buildShareText(shareUrl),
+        title: VideoUiStrings.shareTitle,
+        subject: VideoUiStrings.shareSubject,
+        sharePositionOrigin: _sharePositionOrigin(),
+        files: thumbnailFiles.isEmpty ? null : thumbnailFiles,
+      ),
+    );
+
+    switch (result.status) {
+      case ShareResultStatus.dismissed:
+        // A share the user backed out of is not a share.
+        return false;
+      case ShareResultStatus.success:
+      case ShareResultStatus.unavailable:
+        return true;
+    }
+  }
+
+  Future<bool> _shareViaWhatsApp(String shareUrl) {
+    return _launchExternalShareLink(
+      Uri.https('wa.me', '/', {'text': _buildShareText(shareUrl)}),
+    );
+  }
+
+  /// Telegram's share widget attaches its own preview from `url`, so `text`
+  /// carries only the caption — passing the link in both would show it
+  /// twice in the composed message.
+  Future<bool> _shareViaTelegram(String shareUrl) {
+    return _launchExternalShareLink(
+      Uri.https('t.me', '/share/url', {
+        'url': shareUrl,
+        'text': VideoUiStrings.buildShareText(
+          shareUrl: '',
+          caption: widget.video.caption,
+          playerLine: _publisherShareLine(),
+        ),
+      }),
+    );
+  }
+
+  /// Facebook's public share endpoint only ever takes a URL — it refuses to
+  /// carry free text into the post — and pulls its preview from the `og:*`
+  /// tags `videoSharePage` already serves for that same link.
+  Future<bool> _shareViaFacebook(String shareUrl) {
+    return _launchExternalShareLink(
+      Uri.https('www.facebook.com', '/sharer/sharer.php', {'u': shareUrl}),
+    );
+  }
+
+  /// `wa.me`, `t.me` and `facebook.com` are ordinary web links: `launchUrl`
+  /// opens each inside its own app when installed and falls back to the
+  /// browser otherwise — the same pattern already proven by the agency's
+  /// WhatsApp contact link (`AdfootSupport.openWhatsApp`). Neither path
+  /// reports back whether the user actually went through with the share
+  /// once the app opened, so — exactly like `ShareResultStatus.unavailable`
+  /// above — a successful hand-off is counted as the share.
+  Future<bool> _launchExternalShareLink(Uri uri) async {
+    try {
+      return await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _shareViaCopyLink(String shareUrl) async {
+    await Clipboard.setData(ClipboardData(text: shareUrl));
+    if (mounted && !_isDisposed) {
+      showSuccessToast(VideoUiStrings.shareLinkCopied);
+    }
+    return true;
+  }
+
   String _buildShareText(String shareUrl) {
     return VideoUiStrings.buildShareText(
       shareUrl: shareUrl,
       caption: widget.video.caption,
+      playerLine: _publisherShareLine(),
     );
+  }
+
+  /// The publisher's name plus whatever of poste/club is on file, so a
+  /// recruiter forwarding the link already carries the one fact that answers
+  /// "who is this" — the same facts [_buildVideoMetadataOverlay] shows under
+  /// the player's name on the video itself, formatted the same way.
+  String? _publisherShareLine() {
+    final publisher = widget.userController.usersCache[widget.video.uid];
+    final name = publisher?.nom.trim() ?? '';
+    if (publisher == null || name.isEmpty) return null;
+
+    final badge = PublisherHeadline.badge(
+      role: publisher.role,
+      position: publisher.football.positions.isEmpty
+          ? (publisher.isCoach ? publisher.position : null)
+          : publisher.football.positions.first.labelFr,
+    );
+    final details = PublisherHeadline.details(
+      club:
+          publisher.football.currentClubName ??
+          publisher.team ??
+          publisher.clubActuel,
+      team: null,
+      city: publisher.city,
+    );
+
+    return [
+      name,
+      badge,
+      details,
+    ].where((part) => part.trim().isNotEmpty).join(PublisherHeadline.separator);
+  }
+
+  /// Attaches the video's thumbnail to the native share sheet when it can be
+  /// pulled quickly from the same cache the player already shows it from.
+  ///
+  /// Best-effort only: a text-only share sheet is a plain message on targets
+  /// that expect an image (Instagram, SMS, ...), and a slow or failing fetch
+  /// must never hold up the share the user already asked for — it gives up
+  /// fast and falls back to the text-only share this already was.
+  Future<List<XFile>> _shareThumbnailFiles() async {
+    final thumbnailUrl = widget.video.thumbnailUrl.trim();
+    if (thumbnailUrl.isEmpty) return const [];
+
+    try {
+      final file = await DefaultCacheManager()
+          .getSingleFile(thumbnailUrl)
+          .timeout(const Duration(seconds: 4));
+      return [XFile(file.path)];
+    } catch (_) {
+      return const [];
+    }
   }
 
   Rect? _sharePositionOrigin() {
@@ -1502,6 +1648,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     bool purgeCachedFile = false,
     bool preferDownloadedFile = false,
     String? recoveryReason,
+    bool preferSmallestSource = false,
   }) async {
     if (_isDisposed) return;
 
@@ -1552,6 +1699,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
         reuse: null,
         preferDownloadedFile: preferDownloadedFile,
         recoveryReason: recoveryReason,
+        preferSmallestSource: preferSmallestSource,
       ),
     );
   }

@@ -116,6 +116,12 @@ class VideoUiStrings {
   static String get shareSubject => 'shareSubject'.tr;
   static String get shareEmptyCaption => 'shareEmptyCaption'.tr;
   static String get shareWithCaptionPrefix => 'shareWithCaptionPrefix'.tr;
+  static String get copyLink => 'copyLink'.tr;
+  static String get shareLinkCopied => 'shareLinkCopied'.tr;
+  static String get moreShareOptions => 'moreShareOptions'.tr;
+  static String get shareToWhatsApp => 'shareToWhatsApp'.tr;
+  static String get shareToTelegram => 'shareToTelegram'.tr;
+  static String get shareToFacebook => 'shareToFacebook'.tr;
   static String get likeOffline => 'likeOffline'.tr;
   static String get likeAdded => 'likeAdded'.tr;
   static String get likeRemoved => 'likeRemoved'.tr;
@@ -313,19 +319,39 @@ class VideoUiStrings {
   static String get uploadVideoButton => 'uploadVideoButton'.tr;
   static String get uploadReminder => 'uploadReminder'.tr;
 
+  /// [playerLine] is the publisher's name plus whatever of poste/club is
+  /// known (see `PublisherHeadline`), already joined into one line by the
+  /// caller — this builder stays a pure string template and does not reason
+  /// about profile fields. Omitted entirely when null or blank, which keeps
+  /// the untouched two-argument call (and its tests) producing the exact
+  /// same text as before this parameter existed.
   static String buildShareText({
     required String shareUrl,
     required String caption,
+    String? playerLine,
   }) {
     final trimmedCaption = caption.trim();
-    if (trimmedCaption.isEmpty) {
-      return '$shareEmptyCaption\n$shareUrl';
-    }
+    final bodyText = trimmedCaption.isEmpty
+        ? shareEmptyCaption
+        : '$shareWithCaptionPrefix ${_truncateShareCaption(trimmedCaption)}';
 
-    final shortCaption = trimmedCaption.length > 120
-        ? '${trimmedCaption.substring(0, 117).trim()}...'
-        : trimmedCaption;
-    return '$shareWithCaptionPrefix $shortCaption\n$shareUrl';
+    final trimmedPlayerLine = playerLine?.trim() ?? '';
+    final trimmedUrl = shareUrl.trim();
+    return <String>[
+      if (trimmedPlayerLine.isNotEmpty) trimmedPlayerLine,
+      bodyText,
+      // Omitted rather than left as a blank trailing line when the caller
+      // already hands the link to the destination through its own field
+      // (Telegram's `url` share parameter carries its own preview; repeating
+      // it inside `text` showed the same link twice in the composed message).
+      if (trimmedUrl.isNotEmpty) trimmedUrl,
+    ].join('\n');
+  }
+
+  static String _truncateShareCaption(String caption) {
+    return caption.length > 120
+        ? '${caption.substring(0, 117).trim()}...'
+        : caption;
   }
 
   static String formatPlaybackTime(Duration duration) {

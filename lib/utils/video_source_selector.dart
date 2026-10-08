@@ -58,6 +58,10 @@ class VideoSourceSelector {
     required List<VideoSource> sources,
     required bool adaptiveEnabled,
     required bool highBandwidth,
+    // Unused on the `highBandwidth` branch — see [prioritizedSources] for why
+    // a cap only means something on the non-high branch. Default of 540
+    // reproduces the exact behaviour this had before the parameter existed.
+    int lowBandwidthMaxHeight = 540,
   }) {
     final sanitizedSources = _sanitize(sources);
     final candidateSources = sanitizedSources;
@@ -75,7 +79,7 @@ class VideoSourceSelector {
       return _bestAtLeast(sorted, 700) ?? sorted.last;
     }
 
-    return _bestAtMost(sorted, 540) ?? sorted.first;
+    return _bestAtMost(sorted, lowBandwidthMaxHeight) ?? sorted.first;
   }
 
   static VideoSource? sourceForUrl({
@@ -101,22 +105,54 @@ class VideoSourceSelector {
     required List<VideoSource> sources,
     required bool adaptiveEnabled,
     required bool highBandwidth,
+    int lowBandwidthMaxHeight = 540,
   }) {
     return preferredSource(
           fallbackUrl: fallbackUrl,
           sources: sources,
           adaptiveEnabled: adaptiveEnabled,
           highBandwidth: highBandwidth,
+          lowBandwidthMaxHeight: lowBandwidthMaxHeight,
         )?.url ??
         '';
   }
 
+  /// Every playable source, lightest first — the inverse of the tier-based
+  /// ordering [prioritizedSources] produces.
+  ///
+  /// For the one case where the tier is not the question: a rendition the
+  /// network tier already deemed appropriate can still stall or miss its
+  /// first frame on a connection too slow to sustain it. The tier has not
+  /// changed between that failure and the retry, so asking
+  /// [prioritizedSources] again hands back the exact candidate that just
+  /// failed. This ignores the tier and starts from the smallest file the
+  /// video has instead.
+  static List<VideoSource> smallestFirstCandidates({
+    required String fallbackUrl,
+    required List<VideoSource> sources,
+  }) {
+    final ascending = _sortedByHeight(_sanitize(sources));
+    return _dedupe([
+      ...ascending,
+      if (fallbackUrl.isNotEmpty && _isMp4Url(fallbackUrl))
+        VideoSource(url: fallbackUrl),
+    ]);
+  }
+
   /// Returns sources ordered by priority for playback and fallback.
+  ///
+  /// [lowBandwidthMaxHeight] is the cap used on the non-`highBandwidth`
+  /// branch only — defaults to 540, which reproduces this method's exact
+  /// prior behaviour. A caller that knows the connection is not just
+  /// "not high" but specifically the slowest tier can pass a stricter cap
+  /// (e.g. 360) to ask for a lighter rendition from the first attempt,
+  /// without touching what "medium" or "high" request.
   static List<VideoSource> prioritizedSources({
     required String fallbackUrl,
     required List<VideoSource> sources,
     required bool adaptiveEnabled,
     required bool highBandwidth,
+    int lowBandwidthMaxHeight = 540,
   }) {
     final sanitizedSources = _sanitize(sources);
     final candidateSources = sanitizedSources;
@@ -127,6 +163,7 @@ class VideoSourceSelector {
         sources: sources,
         adaptiveEnabled: adaptiveEnabled,
         highBandwidth: highBandwidth,
+        lowBandwidthMaxHeight: lowBandwidthMaxHeight,
       );
 
       return _dedupe([?primary]);
@@ -137,6 +174,7 @@ class VideoSourceSelector {
     final preferred720 = _bestAtLeast(mp4Sources, 700);
     final preferred480 = _bestAtMost(mp4Sources, 540);
     final preferred360 = _bestAtMost(mp4Sources, 400);
+    final preferredAtLowCap = _bestAtMost(mp4Sources, lowBandwidthMaxHeight);
 
     final ordered = <VideoSource>[
       if (highBandwidth) ...[
@@ -144,7 +182,7 @@ class VideoSourceSelector {
         ?preferred480,
         ...mp4Sources.reversed,
       ] else ...[
-        ?preferred480,
+        ?preferredAtLowCap,
         ?preferred360,
         ...mp4Sources,
         ...mp4Sources.reversed,

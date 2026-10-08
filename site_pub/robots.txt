@@ -4,10 +4,37 @@
 # mineur, et montrent sa video sans authentification : le lien doit rester
 # ouvrable par la personne a qui le joueur l'envoie, jamais indexable.
 # La Cloud Function videoSharePage renvoie en plus noindex/noarchive, en
-# en-tete et dans la page ; cette ligne est la premiere barriere.
+# en-tete et dans la page ; cette ligne est la premiere barriere pour les
+# moteurs de recherche generalistes (Google, Bing, ...).
+#
+# Les crawlers d'apercu de partage (Facebook/Messenger, WhatsApp, Telegram,
+# X) ne font ni indexation ni cache -- ils ne font que lire les balises
+# og:*/twitter:* une fois, au moment de l'envoi, pour construire la vignette
+# que voit le destinataire. Un Disallow generique les bloque aussi, ce qui
+# cassait l'apercu dans ces applications (confirme en QA, build 43) alors que
+# noindex/noarchive suffit deja a empecher l'indexation. Chacun est donc
+# explicitement autorise sur /v/ avant la regle generale qui reste inchangee
+# pour tout le reste (/verify/, /reset/, /account/, /cv/view/) et pour tout
+# robot non liste ici.
 #
 # /verify/ et /reset/ portent des liens d'action a usage unique.
 # /cv/view/ porte des acces PDF temporaires a ne jamais indexer.
+
+User-agent: facebookexternalhit
+Allow: /v/
+Allow: /
+
+User-agent: WhatsApp
+Allow: /v/
+Allow: /
+
+User-agent: TelegramBot
+Allow: /v/
+Allow: /
+
+User-agent: Twitterbot
+Allow: /v/
+Allow: /
 
 User-agent: *
 Disallow: /v/

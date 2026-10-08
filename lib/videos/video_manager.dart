@@ -42,10 +42,6 @@ class VideoManager {
   factory VideoManager() => _instance;
   VideoManager._internal();
 
-  static const Duration _activeAdaptiveSelectionBudget = Duration(
-    milliseconds: 450,
-  );
-
   /// How long an init may wait for a concurrency slot before going anyway.
   ///
   /// [_maxConcurrentInits] is a tuning knob (1 on a low-tier network), not a
@@ -112,6 +108,7 @@ class VideoManager {
       sources: video.sources,
       adaptiveEnabled: adaptiveSourcesEnabled,
       highBandwidth: _isHighBandwidth,
+      lowBandwidthMaxHeight: _lowBandwidthMaxHeight,
     );
 
     return _downloads.warmFile(source?.url ?? video.videoUrl);
@@ -160,6 +157,11 @@ class VideoManager {
   NetworkProfile? get currentProfile => _network.profile;
 
   bool get _isHighBandwidth => _network.isHighBandwidth;
+
+  /// 540 for `medium` (this selector's long-standing default); 360 for `low`,
+  /// which until this shared `medium`'s cap unlike every other tier knob.
+  int get _lowBandwidthMaxHeight =>
+      _network.profile?.tier == NetworkProfileTier.low ? 360 : 540;
 
   // The tuning table is the tier's consequence, so it is read from the tier,
   // never cached here: a stale copy would keep asking for the heaviest
@@ -323,18 +325,6 @@ class VideoManager {
     adaptiveSourcesEnabled = enabled;
   }
 
-  bool _shouldAwaitAdaptiveProfileSelection({
-    required bool isPreload,
-    required List<VideoSource> sources,
-  }) {
-    if (isPreload || !adaptiveSourcesEnabled || _network.isInitialized) {
-      return false;
-    }
-
-    final mp4SourceCount = sources.where((source) => source.isMp4).length;
-    return mp4SourceCount > 1;
-  }
-
   // ---------------------------------------------------------------------------
   // Metrics (debug / observabilité – sans impact runtime)
   // ---------------------------------------------------------------------------
@@ -417,6 +407,7 @@ class VideoManager {
       sources: sources,
       adaptiveEnabled: adaptiveSourcesEnabled,
       highBandwidth: _isHighBandwidth,
+      lowBandwidthMaxHeight: _lowBandwidthMaxHeight,
     );
     if (preferredSource == null || preferredSource.url.isEmpty) {
       return true;
@@ -542,22 +533,32 @@ class VideoManager {
     String? activeUrl,
     String? recoveryFallbackFromSourceType,
     String? recoveryReason,
+    bool preferSmallestSource = false,
   }) async {
+    // Measurement runs in the background regardless (see `ensureWarm` right
+    // above) and is never awaited here: on the first video of a session,
+    // waiting for it used to hold up that one video's first frame by up to
+    // 450ms for a result that, on anything but a fast reachability check,
+    // rarely landed before the budget ran out anyway — the bootstrap tier
+    // (`medium`, deliberately conservative) was the common outcome either
+    // way. Picking immediately on that same safe default, and reconciling
+    // once the real measurement lands for every video after the first, costs
+    // nothing a real connection would have noticed and saves that wait on
+    // every single cold start.
     _network.ensureWarm();
 
-    if (_shouldAwaitAdaptiveProfileSelection(
-      isPreload: isPreload,
-      sources: sources,
-    )) {
-      await _network.awaitDetection(_activeAdaptiveSelectionBudget);
-    }
-
-    final candidates = VideoSourceSelector.prioritizedSources(
-      fallbackUrl: url,
-      sources: sources,
-      adaptiveEnabled: adaptiveSourcesEnabled,
-      highBandwidth: _isHighBandwidth,
-    );
+    final candidates = preferSmallestSource
+        ? VideoSourceSelector.smallestFirstCandidates(
+            fallbackUrl: url,
+            sources: sources,
+          )
+        : VideoSourceSelector.prioritizedSources(
+            fallbackUrl: url,
+            sources: sources,
+            adaptiveEnabled: adaptiveSourcesEnabled,
+            highBandwidth: _isHighBandwidth,
+            lowBandwidthMaxHeight: _lowBandwidthMaxHeight,
+          );
 
     if (candidates.isEmpty) {
       _setLoadState(contextKey, url, VideoLoadState.errorSource);

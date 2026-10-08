@@ -116,17 +116,6 @@ class VideoNetworkTuningController {
   /// Starts a detection without waiting for it.
   void ensureWarm() => unawaited(_schedule());
 
-  /// Waits at most [budget] for a fresh measurement.
-  ///
-  /// Used only where the answer changes which rendition is requested, and
-  /// only when no measurement exists yet: playback must never block on the
-  /// network profile.
-  Future<void> awaitDetection(Duration budget) async {
-    try {
-      await _schedule().timeout(budget);
-    } catch (_) {}
-  }
-
   Future<NetworkProfile> _schedule({bool force = false}) {
     if (!force && _inFlight != null) {
       return _inFlight!;
