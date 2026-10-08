@@ -35,13 +35,10 @@ class ChatRepository {
   /// Conversations fetched for the inbox.
   ///
   /// Bounded for the same reason, with the same honesty as
-  /// `UserRepository.directoryWatchLimit`: this query has no `orderBy`, so
-  /// Firestore returns documents in id order and anything past the cap is
-  /// simply absent. 200 is far above any plausible per-user count today, and
-  /// the list is sorted client-side once loaded. Before a user can credibly
-  /// hold more than this, the ordering has to move server-side — a
-  /// `lastMessageDate` sort with the composite index it requires — rather
-  /// than the cap being raised.
+  /// `UserRepository.directoryWatchLimit`: the query below already orders by
+  /// `lastMessageDate` server-side (with the composite index that requires),
+  /// so the most recent conversations are the ones kept when a user holds
+  /// more than this cap — never an arbitrary id-ordered slice.
   static const int defaultConversationWindow = 50;
   static const int conversationWindowIncrement = 50;
 
