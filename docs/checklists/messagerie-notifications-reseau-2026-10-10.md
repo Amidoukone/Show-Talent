@@ -375,6 +375,22 @@ gagne que 8 dp clavier fermé — pas la correction du bug signalé.
 Tests : `test/chat_composer_keyboard_inset_test.dart`, qui mesure le
 débordement réel plutôt que de l'affirmer.
 
+## Révision du candidat
+
+- Version : **1.0.7+45**, commit `2a84c14` sur
+  `release/production-device-tests-2026-10-05`, poussé sur GitHub le 11 octobre.
+- Témoins du bundle Android relus pour la 45
+  (`scripts/aab-content-expectations.json`) : le quatrième témoin est
+  `credential exchange dropped; retrying`, seule chaîne littérale non
+  interpolée que cette release introduise — les autres correctifs (attente du
+  jeton APNs, bannière repliée, palier réseau) sont de la logique et des
+  commentaires, absents du snapshot Dart.
+- Règles Firestore déjà déployées (10 octobre, 17:39 UTC) : la réparation de la
+  messagerie ne dépend pas de ce build.
+- Ce que le build 45 apporte et que les règles ne pouvaient pas apporter :
+  le jeton APNs sur iOS, la bannière repliée pendant la frappe, le réessai de
+  connexion, et le palier réseau correct sur lien lent.
+
 ## Ordre de déploiement
 
 Conforme à `CLAUDE.md` — les règles d'abord, le mobile ensuite :
