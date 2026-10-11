@@ -1,3 +1,4 @@
+import 'package:adfoot/services/app_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// One doc per directional block, id "{blockerUid}_{blockedUid}". No Cloud
@@ -68,11 +69,45 @@ class BlockRepository {
   }
 
   /// Whether either uid has blocked the other, in either direction.
+  ///
+  /// Advisory, never authoritative, and deliberately unable to fail the
+  /// caller. The block that matters is enforced by `firestore.rules` on the
+  /// conversation and message writes themselves (`isBlockedPair`), and the
+  /// reactive view the UI reads comes from `BlockController`'s two
+  /// directional queries. This is only the pre-flight courtesy check that
+  /// turns "write refused" into a sentence the user can understand.
+  ///
+  /// It used to let a failed read escape. Almost every call asks about a pair
+  /// that is *not* blocked, so the documents it reads almost never exist —
+  /// and a `get` on a missing document is refused by any rule that reads
+  /// `resource.data`, which is exactly what the rule did. The result was a
+  /// permission-denied on the happy path of every conversation start and
+  /// every send: messaging stopped working app-wide, reported only as
+  /// "impossible de démarrer la conversation". The rule is fixed too (see the
+  /// `blocks` get rule), but this must not depend on a rules deploy having
+  /// landed: an unanswerable pre-check means "nothing known against it", and
+  /// the write that follows is still refused server-side if a block is real.
   Future<bool> isBlockedEitherWay(String uidA, String uidB) async {
     final results = await Future.wait([
-      _blocksCollection.doc(_blockId(uidA, uidB)).get(),
-      _blocksCollection.doc(_blockId(uidB, uidA)).get(),
+      _blockExists(_blockId(uidA, uidB)),
+      _blockExists(_blockId(uidB, uidA)),
     ]);
-    return results.any((doc) => doc.exists);
+    return results.any((exists) => exists);
+  }
+
+  Future<bool> _blockExists(String blockId) async {
+    try {
+      final doc = await _blocksCollection.doc(blockId).get();
+      return doc.exists;
+    } catch (error, stackTrace) {
+      AppLogger.warning(
+        'block pre-check unavailable for $blockId; treating the pair as not '
+        'blocked and leaving the decision to the Firestore rules',
+        source: 'BlockRepository._blockExists',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return false;
+    }
   }
 }

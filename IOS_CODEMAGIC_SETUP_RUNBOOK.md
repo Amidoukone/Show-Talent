@@ -259,9 +259,25 @@ Watch the log. Expected failure modes on a first attempt, and what they mean:
   Developer > Certificates, Identifiers & Profiles > Identifiers > pick
   `org.adfoot.app` (and `org.adfoot.app.staging`) > enable the **Associated
   Domains** capability > Save, then re-run the build so a fresh profile
-  picks it up. (Push Notifications capability is not yet declared in the
-  entitlements file, so it does not block this build — only relevant if/when
-  APNs is wired up for chat push notifications.)
+  picks it up.
+- **Hit for real on build 8 of `ios-production`, 2026-10-09**: `Error
+  (Xcode): Provisioning profile "Adfoot Production ios_app_store
+  1790165731" doesn't include the Push Notifications capability` / `doesn't
+  include the aps-environment entitlement`. Same root cause as the
+  Associated Domains case above, now that `Runner-Distribution.entitlements`
+  actually declares `aps-environment` (added in the `fix: ship
+  TestFlight/App Store iOS builds with production APNs entitlement`
+  commit) — the App ID itself never had Push Notifications turned on, and
+  the profile `fetch-signing-files --create` had already cached predates
+  that. Fix: Apple Developer > Certificates, Identifiers & Profiles >
+  Identifiers > `org.adfoot.app` (and `org.adfoot.app.staging`, since
+  `Release-staging.xcconfig` points at the same distribution entitlements
+  file) > enable the **Push Notifications** capability > Save. If the next
+  build hits the exact same two errors again, the cached profile did not
+  get regenerated on its own: go to Profiles, delete `Adfoot Production
+  ios_app_store 1790165731` (and the staging equivalent), then re-run —
+  `fetch-signing-files --create` only creates a profile when none exists,
+  it does not refresh one that is merely out of date.
 - CocoaPods install fails → almost always a Flutter/CocoaPods version
   mismatch; check the Codemagic build log for the actual pod error before
   changing `codemagic.yaml`'s pinned `flutter:`/`cocoapods:` versions.

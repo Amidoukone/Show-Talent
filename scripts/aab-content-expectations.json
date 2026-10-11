@@ -1,6 +1,6 @@
 {
-  "_": "Temoins relus pour Android 1.0.7+43 : preference de langue, libelle francais et blocage de conversation toujours presents. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
-  "forVersionCode": 43,
+  "_": "Temoins relus pour Android 1.0.7+45 : preference de langue, libelle francais et blocage de conversation toujours presents. La 45 ajoute le reessai de l'echange d'identifiants a la connexion, dont le libelle de diagnostic sert de quatrieme temoin -- c'est la seule chaine litterale non interpolee que cette release introduit, les autres correctifs (attente du jeton APNs, banniere repliee, palier reseau) etant de la logique et des commentaires, absents du snapshot. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
+  "forVersionCode": 45,
   "mustContain": [
     {
       "text": "app.locale_preference.v1",
@@ -13,6 +13,10 @@
     {
       "text": "Vous ne pouvez plus échanger de messages avec cet utilisateur.",
       "why": "texte de chatBlockedMessage (lib/l10n/video_ui_translations.dart), ajoute avec le blocage utilisateur apres la version 37 et affiche quand une conversation est bloquee"
+    },
+    {
+      "text": "credential exchange dropped; retrying",
+      "why": "trace de AuthSessionService._exchangeCredentials (lib/services/auth/auth_session_service.dart), ajoutee en 45 avec le reessai de la connexion sur un lien qui lache -- chaine ASCII sans interpolation ni apostrophe, donc contigue dans le snapshot comme dans la source"
     }
   ]
 }

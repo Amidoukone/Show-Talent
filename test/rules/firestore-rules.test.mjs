@@ -393,6 +393,65 @@ await check('la personne bloquee lit le blocage qui la vise', 'allow', () =>
 await check('un tiers lit un blocage qui ne le concerne pas', 'deny', () =>
   getDoc(doc(outsider, 'blocks', `${PLAYER}_${RIVAL}`)));
 
+// L'absence de blocage est la reponse normale, pas un refus.
+//
+// BlockRepository.isBlockedEitherWay lit les deux ids directionnels avant
+// chaque ouverture de conversation et chaque envoi ; dans la quasi-totalite
+// des cas aucun des deux documents n'existe. `resource` est alors null, donc
+// une regle qui lit `resource.data` refusait cette lecture au lieu d'y
+// repondre : plus un seul message ne partait de l'application, avec pour seul
+// symptome « impossible de demarrer la conversation ». Aucun test ne lisait un
+// blocage inexistant, ce qui est exactement pourquoi la suite restait verte.
+await check('je demande si un blocage me concernant existe (il n\'existe pas)', 'allow', () =>
+  getDoc(doc(player, 'blocks', `${PLAYER}_${OUTSIDER}`)));
+
+await check('je demande dans l\'autre sens (il n\'existe pas non plus)', 'allow', () =>
+  getDoc(doc(player, 'blocks', `${OUTSIDER}_${PLAYER}`)));
+
+await check('un tiers sonde un blocage inexistant entre deux autres', 'deny', () =>
+  getDoc(doc(outsider, 'blocks', `${PLAYER}_${RIVAL}_absent`)));
+
+await check('sonder un id de blocage qui ne nomme personne', 'deny', () =>
+  getDoc(doc(player, 'blocks', 'aucun_couple')));
+
+// Les deux flux directionnels de BlockController. `read` a ete scinde en
+// `get`/`list` pour la regle ci-dessus : ces deux cas prouvent que la
+// verification par contenu reste en place sur les requetes.
+await check('je liste les blocages que j\'ai poses', 'allow', () =>
+  getDocs(query(collection(player, 'blocks'), where('blockerUid', '==', PLAYER))));
+
+await check('je liste les blocages qui me visent', 'allow', () =>
+  getDocs(query(collection(player, 'blocks'), where('blockedUid', '==', PLAYER))));
+
+// Cible un blocage qui existe bel et bien (PLAYER_RIVAL, cree plus haut et
+// supprime seulement apres) : une requete dont le resultat serait vide
+// passerait les regles sans rien prouver.
+await check('un tiers liste les blocages poses par un autre', 'deny', () =>
+  getDocs(query(collection(outsider, 'blocks'), where('blockerUid', '==', PLAYER))));
+
+/* ------- Documents absents : une reponse, pas un refus ------- */
+
+// Meme classe de defaut que le blocage inexistant ci-dessus, partout ou le
+// client lit un document par id et gere deja le cas « introuvable ».
+await check('lire une conversation supprimee repond introuvable', 'allow', () =>
+  getDoc(doc(player, 'conversations', 'conversation_supprimee')));
+
+await check('lire une projection publique absente repond introuvable', 'allow', () =>
+  getDoc(doc(recruiter, 'public_profiles', 'profil_sans_projection')));
+
+await check('lire une video supprimee repond introuvable', 'allow', () =>
+  getDoc(doc(player, 'videos', 'video_supprimee')));
+
+await check('lire une demande de contact supprimee repond introuvable', 'allow', () =>
+  getDoc(doc(recruiter, 'contact_intakes', 'intake_supprime')));
+
+// La protection, elle, ne bouge pas : l'absence n'ouvre que l'absence.
+await check('l\'ouverture aux documents absents ne touche pas une conversation reelle', 'deny', () =>
+  getDoc(doc(outsider, 'conversations', CONV)));
+
+await check('l\'ouverture aux documents absents ne touche pas une fiche mineur', 'deny', () =>
+  getDoc(doc(recruiter, 'public_profiles', MINOR)));
+
 await check('la personne bloquee supprime le blocage qui la vise', 'deny', () =>
   deleteDoc(doc(env.authenticatedContext(RIVAL).firestore(), 'blocks', `${PLAYER}_${RIVAL}`)));
 

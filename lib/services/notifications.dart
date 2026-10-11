@@ -52,7 +52,27 @@ class NotificationService {
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
-    const initSettings = InitializationSettings(android: androidSettings);
+    // iOS/macOS étaient absents de cette initialisation, donc le plugin
+    // n'était jamais initialisé sur ces plateformes : un appui sur une
+    // notification affichée localement n'atteignait pas
+    // `_handleLocalNotificationResponse`, et la route encodée dans le payload
+    // était perdue.
+    //
+    // Les trois permissions sont à `false` : elles sont demandées une seule
+    // fois, par `askPermissionAndUpdateToken` via FirebaseMessaging, après une
+    // action de l'utilisateur. Les redemander ici déclencherait une seconde
+    // invite système au démarrage — ou, pire, consommerait l'unique invite
+    // qu'iOS accorde, avant que l'utilisateur sache de quoi il s'agit.
+    const darwinSettings = DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    );
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: darwinSettings,
+      macOS: darwinSettings,
+    );
     await _local.initialize(
       settings: initSettings,
       onDidReceiveNotificationResponse: _handleLocalNotificationResponse,
@@ -190,8 +210,11 @@ class NotificationService {
   }
 
   /// Demande la permission (mobile & web) — à appeler après action utilisateur.
-  /// Si accordée, récupère le token FCM et le stocke dans Firestore si user connecté.
-  static Future<void> askPermissionAndUpdateToken({User? currentUser}) async {
+  /// Si accordée, récupère le token FCM et le confie au backend.
+  ///
+  /// Retourne `true` uniquement quand un token a effectivement été transmis,
+  /// pour que l'appelant n'ait pas à le redemander derrière.
+  static Future<bool> askPermissionAndUpdateToken({User? currentUser}) async {
     // 1) Demande de permission (mobile/web)
     await FirebaseMessaging.instance.requestPermission(
       alert: true,
@@ -210,14 +233,17 @@ class NotificationService {
         'NotificationService: aucun token FCM obtenu.',
         source: 'NotificationService.askPermissionAndUpdateToken',
       );
-      return;
+      return false;
     }
 
     // 3) Persiste en base si on a un user
     final user = currentUser ?? FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await UserRepository().saveFcmToken(user.uid, token);
+    if (user == null) {
+      return false;
     }
+
+    await UserRepository().saveFcmToken(user.uid, token);
+    return true;
   }
 
   static String? _encodePayload(Map<String, dynamic> data) {

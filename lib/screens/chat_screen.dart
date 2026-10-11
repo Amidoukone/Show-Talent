@@ -365,6 +365,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           // ✅ fond subtil (moderne) sans assets
           decoration: BoxDecoration(color: cs.surface),
           child: SafeArea(
+            // `bottom: false` — un seul widget possède l'inset du bas, et
+            // c'est le composeur, qui a son propre SafeArea et son propre
+            // `minimum`. Deux SafeArea réclamaient le bas : celui-ci
+            // consommait l'inset et posait sa marge *sous* la barre de
+            // saisie, après quoi celui du composeur n'en voyait plus rien et
+            // n'appliquait que son minimum de 8. Au total 8 dp de vide en
+            // trop, clavier fermé.
+            //
+            // Rangement, pas correction du bug de frappe : clavier ouvert,
+            // `padding.bottom` vaut déjà 0 (le framework le calcule comme
+            // `viewPadding - viewInsets`), donc il n'y avait pas de double
+            // comptage de la hauteur du clavier. La vraie cause est la
+            // hauteur fixe de la bannière ci-dessous.
+            bottom: false,
             child: Column(
               children: [
                 StreamBuilder<Conversation?>(
@@ -817,9 +831,82 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // UI components
   // ------------------------------
 
+  /// Le contexte du premier contact, replié pendant la frappe.
+  ///
+  /// Cette bannière vit au-dessus de l'`Expanded` qui porte la liste des
+  /// messages : sa hauteur est fixe et ne se réduit jamais. Dépliée elle
+  /// occupe facilement 200 dp — titre, contexte, motif, suivi d'agence,
+  /// retour participant et bouton « Donner un retour » — et **toutes** les
+  /// conversations de cette application en ont une, puisqu'elles passent
+  /// toutes par le premier contact guidé.
+  ///
+  /// Clavier ouvert, il ne reste qu'environ 280 dp au corps sur un téléphone
+  /// courant : la bannière et le composeur en prenaient l'essentiel,
+  /// l'`Expanded` tombait à presque rien, et sur un écran plus court ou avec
+  /// un clavier à bandeau de suggestions la colonne débordait — le composeur
+  /// se retrouvait poussé hors du cadre et l'on ne voyait plus ce qu'on
+  /// écrivait.
+  ///
+  /// Repliée, elle garde la même information de tête sur une ligne et rend
+  /// ~150 dp à la conversation. Elle se redéploie dès que le clavier se
+  /// referme : rien n'est perdu, seulement différé.
+  /// La version repliee : une seule ligne, meme information de tete.
+  ///
+  /// Volontairement non interactive -- replier n'est pas masquer une action,
+  /// et un bouton qui change de place quand le clavier s'ouvre est pire que
+  /// pas de bouton. Le bouton de retour revient avec la bannière depliee.
+  Widget _buildCollapsedGuidedContextBanner(Conversation conversation) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final contextLabel = ContactContext.labelForType(conversation.contextType);
+    final contextTitle = conversation.contextTitle?.trim();
+    final detail = contextTitle != null && contextTitle.isNotEmpty
+        ? '$contextLabel - $contextTitle'
+        : contextLabel;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: cs.secondaryContainer.withValues(alpha: 0.68),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: cs.secondary.withValues(alpha: 0.14)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.assignment_outlined,
+              size: 16,
+              color: cs.onSecondaryContainer.withValues(alpha: 0.9),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${l10n.chatGuidedContextTitle} - $detail',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: cs.onSecondaryContainer.withValues(alpha: 0.9),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildGuidedContextBanner(Conversation? conversation) {
     if (conversation == null || !conversation.hasGuidedContext) {
       return const SizedBox.shrink();
+    }
+
+    if (MediaQuery.of(context).viewInsets.bottom > 0) {
+      return _buildCollapsedGuidedContextBanner(conversation);
     }
 
     final l10n = AppLocalizations.of(context)!;

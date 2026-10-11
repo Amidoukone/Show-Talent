@@ -42,7 +42,6 @@ class NetworkProfileService {
     this.internalDownloadUri,
     this.internalProbeUri,
     this.externalProbesAllowed = true,
-    this.softProbeFallback = false,
     this.measureTimeout = const Duration(seconds: 2),
     this.cacheTtl = const Duration(minutes: 10),
   })  : _connectivity = connectivity ?? Connectivity(),
@@ -60,7 +59,6 @@ class NetworkProfileService {
   final String? internalDownloadUri;
   final String? internalProbeUri;
   final bool externalProbesAllowed;
-  final bool softProbeFallback;
   final Duration measureTimeout;
   final Duration cacheTtl;
 
@@ -120,26 +118,35 @@ class NetworkProfileService {
       return offline;
     }
 
+    // A failed reachability HEAD is not proof of being offline, and treating
+    // it as such was the single worst thing this class did to a slow
+    // connection.
+    //
+    // The HEAD gets [measureTimeout] -- two seconds. A 2G or congested 3G
+    // link in the field misses that deadline routinely while working
+    // perfectly well, just slowly. Concluding "offline" there returned
+    // immediately with `_baselineTier`, which is `medium` for both mobile and
+    // Wi-Fi -- so the one measurement that exists to recognise a slow link
+    // was skipped on precisely the links that are slow. The app then asked
+    // for 540p renditions, warmed two neighbouring videos and allowed two
+    // concurrent initialisations on a connection that could sustain none of
+    // it, and the active video timed out at 12 s instead of 15 s.
+    //
+    // So an unreachable CDN now sends us to the throughput probe rather than
+    // past it. That probe has its own, longer budget, and already treats its
+    // own timeout as a measurement of zero -- i.e. `low`, the right answer.
+    // Only when it cannot produce a number *at all* (a connection error, no
+    // bytes) do we conclude there is no usable connection, and only then with
+    // the OS agreeing that there is no transport.
+    var reachabilityFailed = false;
     if (probeUriResolved != null) {
       final cdnReachable = await _probeCdn(probeUriResolved);
+      reachabilityFailed = !cdnReachable;
 
-      if (!cdnReachable && !softProbeFallback) {
+      if (reachabilityFailed) {
         AppLogger.debug(
-          '[NetworkProfile] CDN probe failed → offline (transport=$transport)',
-        );
-
-        final offline = NetworkProfile(
-          tier: _baselineTier(connectivityResult),
-          hasConnection: false,
-        );
-
-        await _saveCachedProfile(offline, transport, now);
-        return offline;
-      }
-
-      if (!cdnReachable && softProbeFallback) {
-        AppLogger.debug(
-          '[NetworkProfile] CDN probe failed → soft fallback (transport=$transport)',
+          '[NetworkProfile] CDN probe failed → measuring anyway '
+          '(transport=$transport)',
         );
       }
     } else {
@@ -147,7 +154,10 @@ class NetworkProfileService {
           '[NetworkProfile] Probe disabled by policy → soft fallback');
     }
 
-    if (isCacheFresh) {
+    // The cache is trusted only while the link still looks healthy. A
+    // reachability failure is new information about *now*, and a ten-minute
+    // old "high" would override it.
+    if (isCacheFresh && !reachabilityFailed) {
       AppLogger.debug(
         '[NetworkProfile] Using cached profile ${cached.profile} (transport=$transport)',
       );
@@ -163,6 +173,31 @@ class NetworkProfileService {
         '[NetworkProfile] Measured ${throughput.toStringAsFixed(0)} kbps → $tier',
       );
     } else {
+      // No number at all. If the reachability HEAD also failed and the OS
+      // reports no transport, nothing here is working: that is the offline
+      // case the early return used to claim for every slow link.
+      if (reachabilityFailed && connectivityResult == ConnectivityResult.none) {
+        AppLogger.debug(
+          '[NetworkProfile] No reachability and no measurement → offline '
+          '(transport=$transport)',
+        );
+
+        final offline = NetworkProfile(
+          tier: NetworkProfileTier.low,
+          hasConnection: false,
+        );
+
+        await _saveCachedProfile(offline, transport, now);
+        return offline;
+      }
+
+      // Unmeasurable but apparently connected. The baseline is optimistic by
+      // construction, so a failed reachability probe pulls it down a notch
+      // rather than letting `medium` stand on no evidence.
+      if (reachabilityFailed) {
+        tier = NetworkProfileTier.low;
+      }
+
       AppLogger.debug(
         '[NetworkProfile] Throughput probe failed, fallback tier $tier',
       );

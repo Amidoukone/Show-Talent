@@ -664,7 +664,20 @@ service cloud.firestore {
         request.resource.data.reportCount == currentVideoReportCount() + 1;
     }
 
+    // A deleted or never-created video is a "not found", not a refusal.
+    //
+    // Everything below reads `resource.data`, which is null for a document
+    // that does not exist, so the read was denied instead of answered.
+    // HomeFeedRepository.fetchReadyVideoById already handles the empty
+    // answer (notification taps and share links both resolve an id that may
+    // have been removed since); it could not handle permission-denied.
     function canReadVideo() {
+      return resource == null ?
+        (isAdminOperator() || signedInAndActive()) :
+        canReadExistingVideo();
+    }
+
+    function canReadExistingVideo() {
       let ownerUid = resource.data.uid;
       let ownerExists = hasUserDoc(ownerUid);
       let owner = ownerExists ? userDoc(ownerUid).data : {};
@@ -756,7 +769,26 @@ service cloud.firestore {
     }
 
     match /public_profiles/{userId} {
-      allow read: if signedInAndActive() &&
+      // `resource == null` is an answer, not an authorization decision.
+      //
+      // A projection is absent for an account that was never projected, or
+      // whose projection was withdrawn (buildPublicProfileProjection returns
+      // null for a disabled or unapproved-minor account). Without this guard
+      // the age clauses below reach into a null `resource` and the read is
+      // *denied* rather than answered — so the chat screen's own
+      // watchUserById, and canSendMessage's two reads, failed with
+      // permission-denied instead of simply finding nothing. Letting the
+      // "does not exist" answer through discloses no field of a protected
+      // profile; it says only that the directory holds no projection, which
+      // every directory query already shows.
+      allow get: if signedInAndActive() &&
+        (isAdminOperator() || request.auth.uid == userId || resource == null ||
+          (isVerifiedRecruiter() && resource.data.isMinorProfile in [false, true]) ||
+          resource.data.isMinorProfile == false);
+      // Queries only return documents that exist, so the age gate stays
+      // unconditional here — a minor's projection is never listed to an
+      // account that may not see it.
+      allow list: if signedInAndActive() &&
         (isAdminOperator() || request.auth.uid == userId ||
           (isVerifiedRecruiter() && resource.data.isMinorProfile in [false, true]) ||
           resource.data.isMinorProfile == false);
@@ -839,12 +871,37 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/blocks/$(uidB + '_' + uidA));
     }
 
+    // Whether a block id names [uid] as one of its two parties.
+    //
+    // Compared on the id itself rather than via split("_"), so a uid that
+    // ever contained the separator could not shift the parts and make the
+    // check answer about the wrong account. See the `blocks` get rule for
+    // why authorization has to be decidable without reading the document.
+    function blockIdNames(blockId, uid) {
+      return blockId.size() > uid.size() + 1 &&
+        (
+          blockId[0:(uid.size() + 1)] == uid + '_' ||
+          blockId[(blockId.size() - uid.size() - 1):blockId.size()] == '_' + uid
+        );
+    }
+
     match /conversations/{conversationId} {
       allow list: if signedInAndActive() && !isCurrentUserMinor() &&
         request.auth.uid in resource.data.readableBy;
-      allow read: if signedInAndActive() &&
-        request.auth.uid in resource.data.utilisateurIds &&
-        conversationParticipantsCanMessage(resource.data.utilisateurIds);
+      // A conversation the other participant has just deleted is a "not
+      // found", and ChatController/ChatScreen are written to handle that
+      // (watchConversationById maps a missing document to null and the
+      // screen closes the thread). Reaching into a null `resource` instead
+      // turned it into permission-denied, which the same code path treats as
+      // a lost session and acts on by signing the reader out.
+      allow get: if signedInAndActive() &&
+        (
+          resource == null ||
+          (
+            request.auth.uid in resource.data.utilisateurIds &&
+            conversationParticipantsCanMessage(resource.data.utilisateurIds)
+          )
+        );
       allow create: if signedInAndActive() &&
         request.auth.uid in request.resource.data.utilisateurIds &&
         conversationParticipantsCanMessage(request.resource.data.utilisateurIds) &&
@@ -932,7 +989,39 @@ service cloud.firestore {
     // docs) does. Only the blocker can remove it; the blocked party can
     // read it (so their own client can also react) but never write it.
     match /blocks/{blockId} {
-      allow read: if signedInAndActive() &&
+      // `get` and `list` are split on purpose, and the split is the whole
+      // point of this rule.
+      //
+      // The normal answer to "has either of us blocked the other?" is *no*,
+      // so the document the chat flow asks for almost never exists --
+      // BlockRepository.isBlockedEitherWay reads both directional ids before
+      // every conversation start and every send. For a missing document
+      // `resource` is null, so a single `read` rule that reaches into
+      // `resource.data` cannot answer that question: it denies the read
+      // instead. The client saw permission-denied on the happy path and every
+      // message in the app stopped being sent, with a generic
+      // "impossible de démarrer la conversation" as the only symptom.
+      //
+      // Authorization for the missing case therefore comes from the document
+      // *id*, which already encodes the pair ("{blockerUid}_{blockedUid}" --
+      // the `create` rule below is what guarantees it): you may ask about a
+      // block only if you are one of its two parties. That answers "no block"
+      // without disclosing anything, and keeps a block between two other
+      // users as unreadable as before.
+      allow get: if signedInAndActive() &&
+        (
+          resource == null ?
+            blockIdNames(blockId, request.auth.uid) :
+            (
+              request.auth.uid == resource.data.blockerUid ||
+              request.auth.uid == resource.data.blockedUid
+            )
+        );
+      // Queries only ever return documents that exist, so `resource` is
+      // never null here and the content check stays authoritative --
+      // BlockController's two directional streams
+      // (blockerUid == me / blockedUid == me) are exactly this.
+      allow list: if signedInAndActive() &&
         (
           request.auth.uid == resource.data.blockerUid ||
           request.auth.uid == resource.data.blockedUid
@@ -966,7 +1055,20 @@ service cloud.firestore {
     }
 
     match /contact_intakes/{intakeId} {
-      allow read: if signedInAndActive() &&
+      // `resource == null` only on `get`: an admin may delete an intake the
+      // conversation still points at, and
+      // ChatRepository._recoverMissingGuidedContactIntake re-creates one when
+      // it finds nothing there. It has to be able to *find* nothing — a
+      // denied read aborts the whole first-contact flow instead.
+      allow get: if signedInAndActive() &&
+        (
+          resource == null ||
+          resource.data.requesterUid == request.auth.uid ||
+          (resource.data.targetUid == request.auth.uid &&
+            !isCurrentUserMinor()) ||
+          isAdminOperator()
+        );
+      allow list: if signedInAndActive() &&
         (
           resource.data.requesterUid == request.auth.uid ||
           (resource.data.targetUid == request.auth.uid &&

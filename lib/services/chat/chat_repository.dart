@@ -1,6 +1,7 @@
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/message_converstion.dart';
 import 'package:adfoot/models/user.dart';
+import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/services/users/block_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
@@ -173,6 +174,32 @@ class ChatRepository {
       normalizedCurrentUserId,
       normalizedOtherUserId,
     );
+
+    // The deterministic id first, as a single document read.
+    //
+    // The scan below exists only to recognise conversations created before
+    // ids were derived from the pair, and it downloads *every* conversation
+    // the reader takes part in to find at most one of them. Paying that on
+    // every "Message" tap is the kind of cost a weak connection turns into a
+    // ten-second wait on a button; the overwhelming majority of lookups are
+    // answered by this one read.
+    try {
+      final direct = await _conversationsCollection.doc(conversationId).get();
+      if (direct.exists) {
+        return direct.id;
+      }
+    } catch (error, stackTrace) {
+      // Not fatal: the scan can still find it (and will find a legacy id
+      // this read never could).
+      AppLogger.warning(
+        'direct conversation lookup failed for $conversationId; falling back '
+        'to the participant scan',
+        source: 'ChatRepository.findExistingConversationId',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+
     final snapshot = await _conversationsCollection
         .where('readableBy', arrayContains: normalizedCurrentUserId)
         .get();
@@ -476,8 +503,17 @@ class ChatRepository {
     required String senderId,
     required String recipientId,
   }) async {
-    final senderDoc = await _publicProfilesCollection.doc(senderId).get();
-    final recipientDoc = await _publicProfilesCollection.doc(recipientId).get();
+    // Concurrent, not sequential: two independent document reads that used
+    // to be awaited one after the other, so the check cost two full
+    // round-trips before the send could even start.
+    final profiles = await Future.wait(<
+      Future<DocumentSnapshot<Map<String, dynamic>>>
+    >[
+      _publicProfilesCollection.doc(senderId).get(),
+      _publicProfilesCollection.doc(recipientId).get(),
+    ]);
+    final senderDoc = profiles[0];
+    final recipientDoc = profiles[1];
 
     if (!senderDoc.exists || !recipientDoc.exists) {
       return false;

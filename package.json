@@ -74,7 +74,9 @@
     "hosting:marketing:deploy:production": "firebase.cmd deploy --only hosting:marketing --project production",
     "rules:test": "npm --prefix functions run build && firebase emulators:exec --only firestore --project demo-adfoot \"node test/rules/firestore-rules.test.mjs\"",
     "rules:test:storage": "firebase emulators:exec --only firestore,storage --project demo-adfoot \"node test/rules/storage-rules.test.mjs\"",
-    "rules:test:all": "npm run rules:test && npm run rules:test:storage"
+    "rules:test:all": "npm run rules:test && npm run rules:test:storage",
+    "push:ios:list:production": "node .\\scripts\\check-ios-push-delivery.mjs --environment production --list",
+    "push:ios:check:production": "node .\\scripts\\check-ios-push-delivery.mjs --environment production"
   },
   "dependencies": {
     "firebase-admin": "^13.10.0"

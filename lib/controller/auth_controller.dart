@@ -74,8 +74,20 @@ class AuthController extends GetxController {
         return;
       }
 
-      await _updateFcmToken(refreshed);
-      await _ensureSystemNotificationPromptOnce(refreshed);
+      // Fire-and-forget, and the ordering between the two still matters.
+      //
+      // Neither step gates the session, and both are slow by nature: on iOS
+      // the device has to obtain an APNs token from Apple before FCM can
+      // issue one at all (see WebMessagingHelper), which is a network
+      // round-trip that routinely takes seconds on a weak connection.
+      // Awaiting them here put that wait between the user's tap and their
+      // home screen — the session was already resolved, and the app sat on a
+      // spinner waiting for a notification token nothing on screen needed.
+      //
+      // Chained rather than started in parallel: the permission prompt must
+      // not race the first token read, or iOS answers both with "not
+      // determined yet" and neither persists anything.
+      unawaited(_registerForNotifications(refreshed));
     } catch (error) {
       // Handled, not fatal: the session stands and the profile is retried
       // below. Worth a sampled record because a high rate here is what a
@@ -195,6 +207,26 @@ class AuthController extends GetxController {
     _askedNotifThisSession = false;
   }
 
+  /// Permission first, then the token.
+  ///
+  /// `_updateFcmToken` used to run *before* the permission prompt, so on a
+  /// first iOS launch it asked for a token the system could not issue yet —
+  /// no permission means no APNs registration means no FCM token. The prompt
+  /// that followed then re-read it, which is the only reason iOS ever
+  /// recovered at all. Asking in the order the platform imposes removes a
+  /// guaranteed-failing round trip from every sign-in.
+  Future<void> _registerForNotifications(User user) async {
+    // Le passage par la demande de permission enregistre deja le jeton
+    // quand il aboutit ; ne pas repasser derriere evite un appel de
+    // callable pour rien. Sur les evenements suivants du flux de jeton
+    // (rafraichissement horaire), la demande est court-circuitee et c'est
+    // `_updateFcmToken` qui garde le backend a jour.
+    if (await _ensureSystemNotificationPromptOnce(user)) {
+      return;
+    }
+    await _updateFcmToken(user);
+  }
+
   Future<void> _updateFcmToken(User user) async {
     try {
       final token = await WebMessagingHelper.getTokenWithRetry(retries: 2);
@@ -211,14 +243,17 @@ class AuthController extends GetxController {
     }
   }
 
-  Future<void> _ensureSystemNotificationPromptOnce(User user) async {
+  /// True once the prompt ran *and* a token reached the backend.
+  Future<bool> _ensureSystemNotificationPromptOnce(User user) async {
     if (_askedNotifThisSession) {
-      return;
+      return false;
     }
 
     _askedNotifThisSession = true;
     try {
-      await NotificationService.askPermissionAndUpdateToken(currentUser: user);
+      return await NotificationService.askPermissionAndUpdateToken(
+        currentUser: user,
+      );
     } catch (error, st) {
       AppLogger.warning(
         'AuthController notifications permission error: $error',
@@ -227,6 +262,8 @@ class AuthController extends GetxController {
         stackTrace: st,
       );
     }
+
+    return false;
   }
 
   /// Appel transitoire conserve pour compatibilite avec les ecrans existants.

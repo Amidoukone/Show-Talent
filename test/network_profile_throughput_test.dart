@@ -32,6 +32,34 @@ http.Client _clientDelivering({required Duration transferDelay}) {
   });
 }
 
+/// A link that is slow rather than dead: the reachability HEAD never comes
+/// back, the download does — slowly.
+http.Client _clientWithUnreachableHead({required Duration transferDelay}) {
+  return MockClient((request) async {
+    if (request.method == 'HEAD') {
+      throw const SocketException('head timed out');
+    }
+    await Future<void>.delayed(transferDelay);
+    return http.Response.bytes(List<int>.filled(_probeBytes, 0), 200);
+  });
+}
+
+/// Nothing answers at all.
+http.Client _clientFullyUnreachable() {
+  return MockClient((_) async {
+    throw const SocketException('no route to host');
+  });
+}
+
+Future<NetworkProfile> _profileWith(http.Client client) async {
+  SharedPreferences.setMockInitialValues({});
+  final service = NetworkProfileService(
+    client: client,
+    preferences: await SharedPreferences.getInstance(),
+  );
+  return service.detectProfile();
+}
+
 Future<NetworkProfileTier> _tierFor(Duration transferDelay) async {
   SharedPreferences.setMockInitialValues({});
   final service = NetworkProfileService(
@@ -80,6 +108,48 @@ void main() {
         await _tierFor(const Duration(milliseconds: 2000)),
         NetworkProfileTier.low,
       );
+    });
+  });
+
+  // Le defaut que ce groupe verrouille : la sonde de joignabilite dispose de
+  // deux secondes, qu'un lien 2G ou un 3G congestionne depasse couramment en
+  // fonctionnant tres bien, juste lentement. Conclure « hors ligne » a cet
+  // endroit renvoyait immediatement `_baselineTier` -- `medium` sur mobile
+  // comme sur Wi-Fi -- et sautait la seule mesure capable de reconnaitre un
+  // lien lent, precisement sur les liens lents. Le flux demandait alors du
+  // 540p et prechargeait deux voisines sur une connexion qui ne pouvait en
+  // soutenir aucune.
+  group('une sonde de joignabilite en echec ne remplace pas la mesure', () {
+    setUpAll(() async {
+      await _tierFor(Duration.zero);
+    });
+
+    test('un lien lent mais vivant est mesure, et classe low', () async {
+      final profile = await _profileWith(
+        _clientWithUnreachableHead(transferDelay: const Duration(seconds: 2)),
+      );
+
+      expect(profile.tier, NetworkProfileTier.low);
+      expect(profile.hasConnection, isTrue);
+      expect(profile.measuredKbps, isNotNull);
+    });
+
+    test('un lien rapide dont seul le HEAD echoue reste mesure', () async {
+      final profile = await _profileWith(
+        _clientWithUnreachableHead(
+          transferDelay: const Duration(milliseconds: 200),
+        ),
+      );
+
+      expect(profile.tier, NetworkProfileTier.high);
+      expect(profile.hasConnection, isTrue);
+    });
+
+    test('rien ne repond : low, et sans pretendre a une mesure', () async {
+      final profile = await _profileWith(_clientFullyUnreachable());
+
+      expect(profile.tier, NetworkProfileTier.low);
+      expect(profile.measuredKbps, isNull);
     });
   });
 

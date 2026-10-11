@@ -170,8 +170,45 @@ class AuthSessionService {
     );
   }
 
+  /// How many further goes the credential exchange gets after the first.
+  ///
+  /// A weak mobile link does not fail by stalling, it fails by *dropping*:
+  /// Firebase Auth answers `network-request-failed` in a second or two, and
+  /// the next attempt on the same connection usually succeeds. Without a
+  /// retry that single dropped request is the whole sign-in — the user is
+  /// shown "vérifiez votre connexion" on a connection that works, and the
+  /// only recovery offered is to tap the button again themselves.
+  static const int _signInRetryAttempts = 2;
+
+  /// Multiplied by the attempt number, so 800ms then 1.6s.
+  static const Duration _signInRetryDelay = Duration(milliseconds: 800);
+
   static bool isDisabledAuthFailure(FirebaseAuthException error) {
     return error.code == 'user-disabled';
+  }
+
+  /// Whether a failed credential exchange is worth attempting again.
+  ///
+  /// Deliberately narrower than [isTransientAuthFailure], which also covers
+  /// `too-many-requests`: that code is Firebase asking us to stop, and
+  /// retrying through it is how a bad network turns into a throttled account.
+  /// A timeout is excluded for the same reason — [_bounded] has already waited
+  /// 20 seconds, and spending another 20 on a connection that stalls rather
+  /// than drops only delays the message the user needs.
+  static bool _isRetryableSignInFailure(Object error) {
+    if (error is! FirebaseAuthException) {
+      return false;
+    }
+
+    switch (error.code) {
+      case 'network-request-failed':
+      case 'internal-error':
+      case 'unavailable':
+      case 'deadline-exceeded':
+        return true;
+    }
+
+    return _messageLooksTransient(error.message);
   }
 
   static bool isTransientAuthFailure(FirebaseAuthException error) {
@@ -495,6 +532,41 @@ class AuthSessionService {
     );
   }
 
+  /// The password exchange, retried while the failure says "try again".
+  ///
+  /// A wrong password, an unknown address or a disabled account are answers,
+  /// not failures: they are rethrown on the first attempt so the login screen
+  /// says what is actually wrong without making the user wait. Only
+  /// [_isRetryableSignInFailure] buys another go. The sequence stays inside
+  /// the caller's [_signInHandshakeTimeout], so this can lengthen a sign-in
+  /// but never make one unbounded.
+  Future<UserCredential> _exchangeCredentials({
+    required String email,
+    required String password,
+  }) async {
+    for (var attempt = 0; ; attempt++) {
+      try {
+        return await _bounded(
+          () =>
+              _auth.signInWithEmailAndPassword(email: email, password: password),
+          'authStageAuthenticationLabel'.tr,
+        );
+      } catch (error) {
+        if (attempt >= _signInRetryAttempts ||
+            !_isRetryableSignInFailure(error)) {
+          rethrow;
+        }
+
+        AuthDiagnostics.handled(
+          'credential exchange dropped; retrying',
+          stage: 'sign_in_retry',
+          error: error,
+        );
+        await Future<void>.delayed(_signInRetryDelay * (attempt + 1));
+      }
+    }
+  }
+
   /// Authenticates and brings the local [User] up to date, nothing more.
   ///
   /// Split out of [signInWithEmailAndPassword] so the whole credential
@@ -504,9 +576,9 @@ class AuthSessionService {
     required String email,
     required String password,
   }) async {
-    final userCred = await _bounded(
-      () => _auth.signInWithEmailAndPassword(email: email, password: password),
-      'authStageAuthenticationLabel'.tr,
+    final userCred = await _exchangeCredentials(
+      email: email,
+      password: password,
     );
 
     final user = userCred.user;

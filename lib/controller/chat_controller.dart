@@ -322,18 +322,27 @@ class ChatController extends GetxController {
       throw ChatFlowException('chatCannotChatWithSelfMessage'.tr);
     }
 
-    if (await _chatRepository.isBlockedPair(
-      uidA: currentUserId,
-      uidB: otherUserId,
-    )) {
-      throw ChatFlowException('chatBlockedMessage'.tr);
-    }
-
     try {
+      // Inside the try, not before it. The block pre-check is a Firestore
+      // read like any other; when it threw from out here the exception
+      // reached the screen raw, and every caller's generic `catch` turned it
+      // into "impossible de démarrer la conversation" with no clue as to
+      // which read had failed. Mapped errors are the point of this method.
+      if (await _chatRepository.isBlockedPair(
+        uidA: currentUserId,
+        uidB: otherUserId,
+      )) {
+        throw ChatFlowException('chatBlockedMessage'.tr);
+      }
+
       return await _chatRepository.createOrGetConversation(
         currentUserId: currentUserId,
         otherUserId: otherUserId,
       );
+    } on ChatFlowException {
+      // Already a message for the user ("vous ne pouvez plus échanger…");
+      // the generic clause below would relabel it as a start failure.
+      rethrow;
     } on FirebaseException catch (error, st) {
       AppLogger.warning(
         "Erreur création conversation firebase : $error",
@@ -395,14 +404,17 @@ class ChatController extends GetxController {
     required String contactReason,
     required String introMessage,
   }) async {
-    if (await _chatRepository.isBlockedPair(
-      uidA: currentUser.uid,
-      uidB: otherUser.uid,
-    )) {
-      throw ChatFlowException('chatBlockedMessage'.tr);
-    }
-
     try {
+      // See createOrGetConversation: the pre-check belongs inside the try,
+      // so a failed Firestore read becomes a mapped ChatFlowException instead
+      // of escaping raw into each screen's generic `catch`.
+      if (await _chatRepository.isBlockedPair(
+        uidA: currentUser.uid,
+        uidB: otherUser.uid,
+      )) {
+        throw ChatFlowException('chatBlockedMessage'.tr);
+      }
+
       return await _chatRepository.startGuidedConversation(
         currentUser: currentUser,
         otherUser: otherUser,
@@ -410,6 +422,8 @@ class ChatController extends GetxController {
         contactReason: contactReason,
         introMessage: introMessage,
       );
+    } on ChatFlowException {
+      rethrow;
     } on FirebaseException catch (error, st) {
       AppLogger.warning(
         "Erreur création contact guide firebase : $error",

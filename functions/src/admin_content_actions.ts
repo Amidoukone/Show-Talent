@@ -701,9 +701,9 @@ async function rejectVideoWithAdminRights(params: {
     ownerUid,
     videoId: params.videoId,
     decision: "rejected",
-    title: "Video refusee",
+    title: "Vidéo refusée",
     body: params.reason?.trim() ||
-      "Votre video n'a pas ete retenue apres revue admin.",
+      "Votre vidéo n'a pas été retenue après examen. Vous pouvez en publier une autre.",
   });
 
   logger.info("admin video rejected and deleted", {
@@ -844,8 +844,8 @@ export const adminSetVideoStatus = onCall(
           ownerUid,
           videoId,
           decision: "approved",
-          title: "Video approuvee",
-          body: "Votre video a ete approuvee. Elle est maintenant visible par les clubs et recruteurs.",
+          title: "Vidéo approuvée",
+          body: "Votre vidéo est en ligne. Les clubs et les recruteurs peuvent maintenant la voir.",
         });
       }
 

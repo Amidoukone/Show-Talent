@@ -50,7 +50,19 @@ void main() {
     expect(message, contains('observer samedi'));
   });
 
-  test('chat repository avoids direct reads on missing conversation docs', () {
+  // Ce garde-fou interdisait tout `get()` direct sur la conversation, parce
+  // qu'un document inexistant etait *refuse* par les regles au lieu de
+  // repondre « introuvable » : `resource` est null et la regle lisait
+  // `resource.data`. La cause est corrigee a la source (regle `get` de
+  // `conversations`, meme correction que pour `blocks`), donc la lecture
+  // directe redevient legitime -- elle evite de telecharger toutes les
+  // conversations du lecteur a chaque appui sur « Message ».
+  //
+  // Ce que ce test exige desormais : la lecture directe doit rester une
+  // optimisation repliable. Elle precede le balayage, et son echec ne doit
+  // jamais faire echouer la recherche -- un deploiement de regles peut
+  // toujours arriver apres un build publie.
+  test('chat repository falls back when the direct conversation read fails', () {
     final repository = File(
       'lib/services/chat/chat_repository.dart',
     ).readAsStringSync();
@@ -80,7 +92,19 @@ void main() {
     expect(lookupSnippet, contains('_normalizeParticipantIds(doc.data())'));
     expect(lookupSnippet, contains('legacyConversationId'));
     expect(repository, isNot(contains('.limit(100)')));
-    expect(lookupSnippet, isNot(contains('.doc(conversationId).get()')));
+    expect(lookupSnippet, contains('.doc(conversationId).get()'));
+    // La lecture directe est tentee dans un try, et le balayage reste
+    // atteignable apres son echec : sans cela, une regle non encore deployee
+    // rendrait la recherche impossible au lieu de la ralentir.
+    final directReadIndex = lookupSnippet.indexOf('.doc(conversationId).get()');
+    final tryIndex = lookupSnippet.lastIndexOf('try {', directReadIndex);
+    final catchIndex = lookupSnippet.indexOf('} catch (', directReadIndex);
+    final scanIndex = lookupSnippet.indexOf(
+      ".where('readableBy', arrayContains:",
+    );
+    expect(tryIndex, greaterThanOrEqualTo(0));
+    expect(catchIndex, greaterThan(directReadIndex));
+    expect(scanIndex, greaterThan(catchIndex));
     expect(
       lookupSnippet,
       isNot(contains('final snap = await txn.get(conversationRef);')),
