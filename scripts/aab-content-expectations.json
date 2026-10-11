@@ -1,6 +1,6 @@
 {
-  "_": "Temoins relus pour Android 1.0.7+46 : preference de langue, libelle francais et blocage de conversation toujours presents. Le temoin de la 45 (reessai de l'echange d'identifiants) reste valide. La 46 ajoute la source de trace notifications/permission_denied, qui distingue un refus de notification d'un jeton introuvable -- quatrieme et cinquieme temoins, tous deux ASCII sans interpolation. Le reste de la 46 (hauteur de la feuille de premier contact) est de l'arithmetique, absente du snapshot en tant que chaine. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
-  "forVersionCode": 46,
+  "_": "Temoins relus pour Android 1.0.7+47 : preference de langue, libelle francais, blocage de conversation et les deux temoins de diagnostic des 45 et 46 toujours presents. La 47 separe l'echec APNs de l'echec FCM : notifications/apns_token_absent sert de sixieme temoin, ASCII sans interpolation. L'attente APNs portee de 12 a 30 s est une constante, absente du snapshot en tant que chaine. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
+  "forVersionCode": 47,
   "mustContain": [
     {
       "text": "app.locale_preference.v1",
@@ -21,6 +21,10 @@
     {
       "text": "notifications/permission_denied",
       "why": "source de trace de NotificationService.askPermissionAndUpdateToken (lib/services/notifications.dart), ajoutee en 46 : un refus de notification n'est plus confondu avec un jeton introuvable, et passe en `error` pour echapper a l'echantillonnage a 15 % des warnings"
+    },
+    {
+      "text": "notifications/apns_token_absent",
+      "why": "source de trace de WebMessagingHelper._getMobileToken, ajoutee en 47 : distingue « le systeme n'a jamais livre le jeton APNs » de « FCM refuse d'emettre un jeton d'enregistrement », deux pannes qui ne se reparent pas au meme endroit"
     }
   ]
 }
