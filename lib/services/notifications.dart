@@ -216,11 +216,32 @@ class NotificationService {
   /// pour que l'appelant n'ait pas à le redemander derrière.
   static Future<bool> askPermissionAndUpdateToken({User? currentUser}) async {
     // 1) Demande de permission (mobile/web)
-    await FirebaseMessaging.instance.requestPermission(
+    final settings = await FirebaseMessaging.instance.requestPermission(
       alert: true,
       badge: true,
       sound: true,
     );
+
+    // Un refus n'est pas une panne, et il ne doit pas être signalé comme
+    // telle. Sans autorisation, iOS n'enregistre jamais l'appareil auprès
+    // d'APNs, donc aucun jeton n'existera : chasser quand même le jeton
+    // dépensait 12 s d'attente APNs puis quatre essais espacés, pour finir
+    // sur « aucun token FCM obtenu » — un message qui pointe vers le réseau
+    // ou le backend alors que la cause est un choix de l'utilisateur, qu'iOS
+    // ne redemandera plus et qui ne se reprend que dans Réglages.
+    //
+    // Les deux états sont distingués parce qu'ils ne se réparent pas au même
+    // endroit : `denied` se règle dans les réglages du système, un jeton
+    // manquant malgré une autorisation accordée est un défaut de l'application.
+    final status = settings.authorizationStatus;
+    if (status == AuthorizationStatus.denied) {
+      AppLogger.warning(
+        'notifications refused by the user; no token will ever be issued '
+        'until they are re-enabled in the system settings',
+        source: 'NotificationService.askPermissionAndUpdateToken',
+      );
+      return false;
+    }
 
     // 2) Récupère un token robuste (VAPID sur Web)
     final token = await WebMessagingHelper.getTokenWithRetry(retries: 3);
@@ -230,7 +251,8 @@ class NotificationService {
       // jusqu'a la prochaine demande, et l'ecran vient pourtant d'annoncer le
       // contraire a l'utilisateur.
       AppLogger.warning(
-        'NotificationService: aucun token FCM obtenu.',
+        'notification permission is $status but no FCM token could be '
+        'obtained; this device will receive nothing until the token rotates',
         source: 'NotificationService.askPermissionAndUpdateToken',
       );
       return false;
