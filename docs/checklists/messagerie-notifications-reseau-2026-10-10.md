@@ -393,20 +393,20 @@ débordement réel plutôt que de l'affirmer.
 
 ## Candidat Android à importer dans Play Console
 
-- Version : **1.0.7+47**, commit `36632f2` (`master` et
+- Version : **1.0.7+48**, commit `5011a9b` (`master` et
   `release/production-device-tests-2026-10-05` pointent dessus).
-- Artefact : `artifacts/android/adfoot-production-20261011T210210Z.aab`
-- Taille : 74 054 164 octets
-- SHA-256 : `caff21ae34bfb692684650d338b373e92c84c0e1f1ea4e05beb0847609d82242`
-- Contenu Dart : les six témoins présents, instantané différent du bundle
+- Artefact : `artifacts/android/adfoot-production-20261011T221809Z.aab`
+- Taille : 74 057 587 octets
+- SHA-256 : `8dfa7a456caeb1b41d1d85268570003b8868ef1458ee9591ce304d877d83f71e`
+- Contenu Dart : les sept témoins présents, instantané différent du bundle
   précédent, bundle postérieur au dernier code Dart.
 - Signature : `jarsigner` retourne `jar verified`.
 - Alignement : 16 bibliothèques 64 bits à 16 Ko minimum ; ABI arm64-v8a,
   armeabi-v7a, x86_64 ; `extractNativeLibs=false`.
 
 `artifacts/` est dans `.gitignore` : ces bundles sont locaux. Le répertoire
-contient des artefacts antérieurs du même jour (45, 46) ; seul
-`...T210210Z.aab` correspond au commit courant.
+contient les artefacts antérieurs du même jour (45, 46, 47) ; seul
+`...T221809Z.aab` correspond au commit courant.
 
 ### Un témoin ne doit jamais vivre dans une branche conditionnée par la plateforme
 
