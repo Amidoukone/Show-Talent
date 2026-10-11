@@ -1,6 +1,6 @@
 {
-  "_": "Temoins relus pour Android 1.0.7+45 : preference de langue, libelle francais et blocage de conversation toujours presents. La 45 ajoute le reessai de l'echange d'identifiants a la connexion, dont le libelle de diagnostic sert de quatrieme temoin -- c'est la seule chaine litterale non interpolee que cette release introduit, les autres correctifs (attente du jeton APNs, banniere repliee, palier reseau) etant de la logique et des commentaires, absents du snapshot. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
-  "forVersionCode": 45,
+  "_": "Temoins relus pour Android 1.0.7+46 : preference de langue, libelle francais et blocage de conversation toujours presents. Le temoin de la 45 (reessai de l'echange d'identifiants) reste valide. La 46 ajoute la source de trace notifications/permission_denied, qui distingue un refus de notification d'un jeton introuvable -- quatrieme et cinquieme temoins, tous deux ASCII sans interpolation. Le reste de la 46 (hauteur de la feuille de premier contact) est de l'arithmetique, absente du snapshot en tant que chaine. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
+  "forVersionCode": 46,
   "mustContain": [
     {
       "text": "app.locale_preference.v1",
@@ -17,6 +17,10 @@
     {
       "text": "credential exchange dropped; retrying",
       "why": "trace de AuthSessionService._exchangeCredentials (lib/services/auth/auth_session_service.dart), ajoutee en 45 avec le reessai de la connexion sur un lien qui lache -- chaine ASCII sans interpolation ni apostrophe, donc contigue dans le snapshot comme dans la source"
+    },
+    {
+      "text": "notifications/permission_denied",
+      "why": "source de trace de NotificationService.askPermissionAndUpdateToken (lib/services/notifications.dart), ajoutee en 46 : un refus de notification n'est plus confondu avec un jeton introuvable, et passe en `error` pour echapper a l'echantillonnage a 15 % des warnings"
     }
   ]
 }

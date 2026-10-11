@@ -19,6 +19,35 @@ class ContactIntakeSheet extends StatefulWidget {
   final AppUser otherUser;
   final ContactContext context;
 
+  /// Hauteur maximale allouee au contenu de la feuille, clavier deduit.
+  ///
+  /// L'invariant est que la feuille **et** le clavier tiennent ensemble dans
+  /// l'ecran : `resolveSheetMaxHeight(...) + keyboardInset <= screenHeight`.
+  ///
+  /// Il etait rompu par un plancher de 260 dp applique *apres* la deduction du
+  /// clavier, alors que l'`AnimatedPadding` ci-dessous ajoute ce meme clavier
+  /// en marge basse. Sur un ecran de 560 dp avec un clavier de 320 il ne reste
+  /// que 188 dp : le plancher en reclamait 260, la feuille demandait donc
+  /// 580 dp dans un cadre de 560, et son haut passait hors de l'ecran avec le
+  /// champ de saisie dedans. C'est ce que l'utilisateur decrivait par « le
+  /// champ monte plus haut et on ne voit plus ce qu'on saisit ».
+  ///
+  /// Plus de plancher. Le contenu vit deja dans un `SingleChildScrollView`,
+  /// donc une feuille courte reste utilisable -- Flutter fait defiler le champ
+  /// focalise dans la vue, et `scrollPadding` lui reserve de la place. Une
+  /// feuille plus haute que l'ecran, non : rien ne ramene son haut dans le
+  /// cadre.
+  @visibleForTesting
+  static double resolveSheetMaxHeight({
+    required double screenHeight,
+    required double keyboardInset,
+    required double topPadding,
+  }) {
+    final remaining = screenHeight - keyboardInset - topPadding - 8;
+    final capped = math.min(screenHeight * 0.92, remaining);
+    return capped > 0 ? capped : 0;
+  }
+
   @override
   State<ContactIntakeSheet> createState() => _ContactIntakeSheetState();
 }
@@ -91,11 +120,11 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
     final media = MediaQuery.of(context);
     final cs = Theme.of(context).colorScheme;
     final bottomInset = media.viewInsets.bottom;
-    final availableHeight = math.max(
-      260.0,
-      media.size.height - bottomInset - media.padding.top - 8,
+    final sheetMaxHeight = ContactIntakeSheet.resolveSheetMaxHeight(
+      screenHeight: media.size.height,
+      keyboardInset: bottomInset,
+      topPadding: media.padding.top,
     );
-    final sheetMaxHeight = math.min(media.size.height * 0.92, availableHeight);
     final contextLabel = widget.context.normalizedTitle?.isNotEmpty == true
         ? '${widget.context.displayLabel} - ${widget.context.normalizedTitle}'
         : widget.context.displayLabel;

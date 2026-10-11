@@ -233,12 +233,20 @@ class NotificationService {
     // Les deux états sont distingués parce qu'ils ne se réparent pas au même
     // endroit : `denied` se règle dans les réglages du système, un jeton
     // manquant malgré une autorisation accordée est un défaut de l'application.
+    //
+    // `error` et non `warning` : les warnings sont echantillonnes a 15 % en
+    // production (AppLogger.productionWarningSampleRate), et une capacite
+    // perdue sur un appareil n'est pas du bruit dont on prend un echantillon.
+    // C'est le choix deja fait par UserRepository._retryFcmTokenSave pour
+    // exactement la meme raison. Sans cela, l'etat le plus probable de cette
+    // panne -- l'utilisateur a refuse une fois, iOS ne redemande jamais -- est
+    // invisible cinq fois sur six, et le diagnostic se fait par elimination.
     final status = settings.authorizationStatus;
     if (status == AuthorizationStatus.denied) {
-      AppLogger.warning(
-        'notifications refused by the user; no token will ever be issued '
+      AppLogger.error(
+        'notifications refused on this device; no token will ever be issued '
         'until they are re-enabled in the system settings',
-        source: 'NotificationService.askPermissionAndUpdateToken',
+        source: 'notifications/permission_denied',
       );
       return false;
     }
@@ -250,10 +258,10 @@ class NotificationService {
       // Trois tentatives ont echoue : ce compte n'aura aucune notification
       // jusqu'a la prochaine demande, et l'ecran vient pourtant d'annoncer le
       // contraire a l'utilisateur.
-      AppLogger.warning(
+      AppLogger.error(
         'notification permission is $status but no FCM token could be '
         'obtained; this device will receive nothing until the token rotates',
-        source: 'NotificationService.askPermissionAndUpdateToken',
+        source: 'notifications/token_missing',
       );
       return false;
     }
