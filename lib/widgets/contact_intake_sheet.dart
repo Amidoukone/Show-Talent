@@ -34,9 +34,12 @@ class ContactIntakeSheet extends StatefulWidget {
   ///
   /// Plus de plancher. Le contenu vit deja dans un `SingleChildScrollView`,
   /// donc une feuille courte reste utilisable -- Flutter fait defiler le champ
-  /// focalise dans la vue, et `scrollPadding` lui reserve de la place. Une
-  /// feuille plus haute que l'ecran, non : rien ne ramene son haut dans le
-  /// cadre.
+  /// focalise dans la vue. Une feuille plus haute que l'ecran, non : rien ne
+  /// ramene son haut dans le cadre.
+  ///
+  /// A noter : ce plancher ne mordait que sur un ecran court. Un iPhone fait
+  /// 667 a 932 dp, donc `max(260, ...)` y rendait deja la valeur calculee et
+  /// ce defaut y restait latent. Il est reel, il n'etait pas celui-la.
   @visibleForTesting
   static double resolveSheetMaxHeight({
     required double screenHeight,

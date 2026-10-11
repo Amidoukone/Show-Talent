@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import 'package:adfoot/services/app_logger.dart';
+
 /// Utilitaires Web/Mobile pour récupérer un token FCM de manière **silencieuse**.
 /// Objectifs (surtout WEB) :
 ///  - Ne JAMAIS déclencher de prompt navigateur avant acceptation explicite.
@@ -101,13 +103,18 @@ class WebMessagingHelper {
   /// ne le signalait côté utilisateur : l'écran venait de lui annoncer que
   /// les notifications étaient activées.
   static Future<String?> _getMobileToken({required int retries}) async {
-    if (defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS) {
-      await _awaitApnsToken();
+    final isApplePlatform =
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
+    var apnsArrived = true;
+    if (isApplePlatform) {
+      apnsArrived = await _awaitApnsToken();
     }
 
     // Le réessai couvre aussi Android : `getToken()` passe par le réseau
     // (enregistrement auprès de FCM) et échoue sur une connexion faible.
+    Object? lastError;
     for (var attempt = 0; attempt <= retries; attempt++) {
       try {
         final token = await FirebaseMessaging.instance.getToken();
@@ -116,14 +123,41 @@ class WebMessagingHelper {
           _cachedAt = DateTime.now();
           return token;
         }
-      } catch (_) {
-        // Journalisé par l'appelant : NotificationService signale l'absence
-        // de token, qui est la seule conséquence visible.
+        lastError ??= 'getToken() returned null';
+      } catch (error) {
+        lastError = error;
       }
 
       if (attempt < retries) {
         await Future<void>.delayed(_mobileRetryDelay * (attempt + 1));
       }
+    }
+
+    // Dire *laquelle* des deux étapes a échoué, parce qu'elles ne se
+    // réparent pas au même endroit.
+    //
+    // « aucun jeton » couvrait deux pannes distinctes : le système n'a jamais
+    // livré le jeton APNs de l'appareil (enregistrement auprès d'Apple :
+    // capability de l'App ID, profil, entitlement, réseau), ou il l'a livré
+    // et c'est l'enregistrement auprès de FCM qui échoue (projet, réseau,
+    // configuration Firebase). Sans cette distinction, la cause se cherche
+    // par élimination à chaque build — ce qui a déjà coûté deux tours.
+    //
+    // `error`, pas `warning` : les warnings sont échantillonnés à 15 % en
+    // production, et c'est une capacité perdue, pas du bruit.
+    if (isApplePlatform && !apnsArrived) {
+      AppLogger.error(
+        'the system never delivered an APNs device token within '
+        '${_apnsTokenWait.inSeconds}s; FCM cannot issue a registration token '
+        'without it, so nothing can be delivered to this device',
+        source: 'notifications/apns_token_absent',
+      );
+    } else {
+      AppLogger.error(
+        'an APNs device token exists but FCM refused to issue a registration '
+        'token after ${retries + 1} attempts: $lastError',
+        source: 'notifications/fcm_registration_failed',
+      );
     }
 
     return null;
@@ -137,16 +171,24 @@ class WebMessagingHelper {
   /// lent sur une connexion faible et au premier lancement. Dépasser ce délai
   /// n'abandonne pas — `getToken()` est tenté quand même, et ses réessais
   /// laissent une seconde chance au jeton d'arriver entre-temps.
-  static const Duration _apnsTokenWait = Duration(seconds: 12);
+  ///
+  /// Porté de 12 s à 30 s : un appareil réel a signalé
+  /// `AuthorizationStatus.authorized` sans jamais produire de jeton dans les
+  /// 12 s, et il n'existe aucune seconde chance plus tard dans la session —
+  /// `onTokenRefresh` ne se déclenche que lorsqu'un jeton est *généré*, donc
+  /// une génération qui échoue à chaque fois ne notifie jamais rien. Attendre
+  /// ne coûte rien : tout ceci tourne hors du chemin de connexion.
+  static const Duration _apnsTokenWait = Duration(seconds: 30);
   static const Duration _apnsPollInterval = Duration(milliseconds: 400);
 
-  static Future<void> _awaitApnsToken() async {
+  /// `true` dès que le système a livré le jeton APNs de l'appareil.
+  static Future<bool> _awaitApnsToken() async {
     final deadline = DateTime.now().add(_apnsTokenWait);
     while (DateTime.now().isBefore(deadline)) {
       try {
         final apns = await FirebaseMessaging.instance.getAPNSToken();
         if (apns != null && apns.isNotEmpty) {
-          return;
+          return true;
         }
       } catch (_) {
         // L'appel lui-même peut échouer avant que le plugin natif soit prêt ;
@@ -154,5 +196,7 @@ class WebMessagingHelper {
       }
       await Future<void>.delayed(_apnsPollInterval);
     }
+
+    return false;
   }
 }
