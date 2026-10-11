@@ -1,5 +1,5 @@
 {
-  "_": "Temoins relus pour Android 1.0.7+47 : preference de langue, libelle francais, blocage de conversation et les deux temoins de diagnostic des 45 et 46 toujours presents. La 47 separe l'echec APNs de l'echec FCM : notifications/apns_token_absent sert de sixieme temoin, ASCII sans interpolation. L'attente APNs portee de 12 a 30 s est une constante, absente du snapshot en tant que chaine. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
+  "_": "Temoins relus pour Android 1.0.7+47 : preference de langue, libelle francais, blocage de conversation et les deux temoins de diagnostic des 45 et 46 toujours presents. La 47 separe l'echec APNs de l'echec FCM ; le temoin retenu est notifications/fcm_registration_failed et non notifications/apns_token_absent, parce que ce dernier vit dans la branche Apple et que le compilateur l'elimine d'un bundle Android (voir son champ `why`). L'attente APNs portee de 12 a 30 s est une constante, absente du snapshot en tant que chaine. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
   "forVersionCode": 47,
   "mustContain": [
     {
@@ -23,8 +23,8 @@
       "why": "source de trace de NotificationService.askPermissionAndUpdateToken (lib/services/notifications.dart), ajoutee en 46 : un refus de notification n'est plus confondu avec un jeton introuvable, et passe en `error` pour echapper a l'echantillonnage a 15 % des warnings"
     },
     {
-      "text": "notifications/apns_token_absent",
-      "why": "source de trace de WebMessagingHelper._getMobileToken, ajoutee en 47 : distingue « le systeme n'a jamais livre le jeton APNs » de « FCM refuse d'emettre un jeton d'enregistrement », deux pannes qui ne se reparent pas au meme endroit"
+      "text": "notifications/fcm_registration_failed",
+      "why": "source de trace de WebMessagingHelper._getMobileToken, ajoutee en 47 : distingue « FCM refuse d'emettre un jeton d'enregistrement » de « le systeme n'a jamais livre le jeton APNs », deux pannes qui ne se reparent pas au meme endroit. C'est la branche du `else`, donc la seule des deux presente dans un bundle Android : `defaultTargetPlatform` est une constante de compilation en release, donc la branche Apple -- et son temoin notifications/apns_token_absent -- est eliminee par tree-shaking. Un temoin ne doit jamais vivre dans une branche conditionnee par la plateforme."
     }
   ]
 }

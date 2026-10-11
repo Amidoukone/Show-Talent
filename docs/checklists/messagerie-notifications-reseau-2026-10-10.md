@@ -393,24 +393,36 @@ débordement réel plutôt que de l'affirmer.
 
 ## Candidat Android à importer dans Play Console
 
-- Version : **1.0.7+46**, commit `ff86684` (`master` et
+- Version : **1.0.7+47**, commit `36632f2` (`master` et
   `release/production-device-tests-2026-10-05` pointent dessus).
-- Artefact : `artifacts/android/adfoot-production-20261011T133930Z.aab`
-- Taille : 74 054 027 octets
-- SHA-256 : `555836b46beb19ad84ac6a365e0973af9149b86960739fbc0c141ae50426f2e3`
-- Contenu Dart : les cinq témoins présents, instantané différent du bundle
+- Artefact : `artifacts/android/adfoot-production-20261011T210210Z.aab`
+- Taille : 74 054 164 octets
+- SHA-256 : `caff21ae34bfb692684650d338b373e92c84c0e1f1ea4e05beb0847609d82242`
+- Contenu Dart : les six témoins présents, instantané différent du bundle
   précédent, bundle postérieur au dernier code Dart.
-- Signature : `jarsigner` retourne `jar verified` (l'avertissement de certificat
-  autosigné est attendu, voir le candidat du 5 octobre).
+- Signature : `jarsigner` retourne `jar verified`.
 - Alignement : 16 bibliothèques 64 bits à 16 Ko minimum ; ABI arm64-v8a,
   armeabi-v7a, x86_64 ; `extractNativeLibs=false`.
-- Contrôle de préparation : `check-android-release-readiness.ps1 -ReleaseGate`
-  passé.
 
 `artifacts/` est dans `.gitignore` : ces bundles sont locaux. Le répertoire
-contient un second artefact `46` (`...T133016Z.aab`) issu d'une exécution
-interrompue, non vérifié : **ne pas l'importer**. Seul `...T133930Z.aab` a
-passé les trois contrôles ci-dessus.
+contient des artefacts antérieurs du même jour (45, 46) ; seul
+`...T210210Z.aab` correspond au commit courant.
+
+### Un témoin ne doit jamais vivre dans une branche conditionnée par la plateforme
+
+Le contrôle de contenu a refusé le premier bundle 47, et il avait raison. Le
+témoin choisi était `notifications/apns_token_absent`, qui vit dans la branche
+`if (isApplePlatform && !apnsArrived)` de
+`WebMessagingHelper._getMobileToken`. Or `defaultTargetPlatform` est une
+**constante de compilation** en release : dans un bundle Android la condition
+se replie sur `false` et toute la branche Apple est éliminée par
+tree-shaking. La chaîne n'existait donc pas dans le binaire, alors que le code
+était bien celui du checkout.
+
+Le témoin retenu est `notifications/fcm_registration_failed`, la branche
+`else`, présente sur les deux plateformes. À retenir pour les prochaines
+releases : un témoin doit être inconditionnel, sinon la porte refuse un bundle
+parfaitement valide.
 
 ## Ordre de déploiement
 
