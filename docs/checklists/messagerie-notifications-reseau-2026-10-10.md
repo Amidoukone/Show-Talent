@@ -391,6 +391,27 @@ débordement réel plutôt que de l'affirmer.
   le jeton APNs sur iOS, la bannière repliée pendant la frappe, le réessai de
   connexion, et le palier réseau correct sur lien lent.
 
+## Candidat Android à importer dans Play Console
+
+- Version : **1.0.7+46**, commit `ff86684` (`master` et
+  `release/production-device-tests-2026-10-05` pointent dessus).
+- Artefact : `artifacts/android/adfoot-production-20261011T133930Z.aab`
+- Taille : 74 054 027 octets
+- SHA-256 : `555836b46beb19ad84ac6a365e0973af9149b86960739fbc0c141ae50426f2e3`
+- Contenu Dart : les cinq témoins présents, instantané différent du bundle
+  précédent, bundle postérieur au dernier code Dart.
+- Signature : `jarsigner` retourne `jar verified` (l'avertissement de certificat
+  autosigné est attendu, voir le candidat du 5 octobre).
+- Alignement : 16 bibliothèques 64 bits à 16 Ko minimum ; ABI arm64-v8a,
+  armeabi-v7a, x86_64 ; `extractNativeLibs=false`.
+- Contrôle de préparation : `check-android-release-readiness.ps1 -ReleaseGate`
+  passé.
+
+`artifacts/` est dans `.gitignore` : ces bundles sont locaux. Le répertoire
+contient un second artefact `46` (`...T133016Z.aab`) issu d'une exécution
+interrompue, non vérifié : **ne pas l'importer**. Seul `...T133930Z.aab` a
+passé les trois contrôles ci-dessus.
+
 ## Ordre de déploiement
 
 Conforme à `CLAUDE.md` — les règles d'abord, le mobile ensuite :
