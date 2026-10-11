@@ -39,6 +39,7 @@ class EventController extends GetxController {
   String? _activeAuthUid;
   String? _activeEventsQueryKey;
   bool _hasLoadedAdditionalPages = false;
+  int _rebindSerial = 0;
 
   bool _isPermissionDenied(Object error) =>
       error is FirebaseException && error.code == 'permission-denied';
@@ -217,12 +218,62 @@ class EventController extends GetxController {
                   Get.find<UserController>().user != null;
               if (hasResolvedSession &&
                   _authSessionService.currentUser != null) {
+                // Refus veritable : l'acces a ete retire, et le rebranchement
+                // n'y changerait rien.
                 unawaited(_handleProtectedAccessDenied());
+                return;
               }
             }
+
+            // Tout le reste est une question de *moment*, pas de droit.
+            unawaited(_scheduleRebind());
           },
         );
   }
+
+  /// Rebranche apres un echec qui porte sur l'instant, non sur le droit.
+  ///
+  /// Un ecouteur ouvert avant que le jeton d'identification ait atteint le
+  /// canal Firestore recoit `permission-denied`, et une souscription Firestore
+  /// ne delivre plus rien apres une erreur. Le handle est relache juste
+  /// au-dessus pour qu'un `fetchEvents` ulterieur puisse rebrancher -- mais la
+  /// seule chose qui l'appelait etait la rotation horaire du jeton
+  /// (`idTokenChanges`). L'onglet Evenements restait donc vide jusqu'a une
+  /// heure, sur un compte qui avait tous les droits de le lire.
+  ///
+  /// La production l'a montre sans ambiguite : deux refus a 0,8 s d'intervalle,
+  /// 89 secondes apres la creation du compte, sur un document dont
+  /// `authDisabled` vaut `false`. Ce n'etait pas un refus d'acces, c'etait une
+  /// course au demarrage de session.
+  ///
+  /// Borne et serialise : un retrait d'acces reel ne doit pas etre reessaye
+  /// indefiniment -- `_handleProtectedAccessDenied` possede deja ce cas, et
+  /// cette methode n'est pas appelee pour lui. Un rebranchement plus recent
+  /// invalide celui qui dort, pour qu'une tentative tardive ne reinstalle pas
+  /// un flux pour une session qui a change.
+  Future<void> _scheduleRebind() async {
+    final serial = ++_rebindSerial;
+
+    for (var attempt = 1; attempt <= _rebindAttempts; attempt++) {
+      await Future<void>.delayed(_rebindDelay * attempt);
+
+      if (serial != _rebindSerial) return;
+      if (_authSessionService.currentUser == null) return;
+      // Quelqu'un d'autre a rebranche entre-temps (l'ecran, ou la rotation
+      // du jeton) : il n'y a plus rien a faire.
+      if (_eventsSub != null) return;
+
+      await fetchEvents(forceRefresh: true);
+    }
+  }
+
+  /// Nombre de rebranchements apres le premier echec.
+  static const int _rebindAttempts = 3;
+
+  /// Multiplie par le numero de tentative : 2 s, 4 s, puis 6 s. Large assez
+  /// pour qu'un jeton en cours de propagation arrive, court assez pour que
+  /// l'onglet se remplisse avant que l'utilisateur ne le quitte.
+  static const Duration _rebindDelay = Duration(seconds: 2);
 
   Future<void> loadMoreEvents() async {
     if (_isLoadingMore.value || !_hasMoreEvents.value) {

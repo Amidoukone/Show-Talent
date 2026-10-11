@@ -1,6 +1,6 @@
 {
-  "_": "Temoins relus pour Android 1.0.7+47 : preference de langue, libelle francais, blocage de conversation et les deux temoins de diagnostic des 45 et 46 toujours presents. La 47 separe l'echec APNs de l'echec FCM ; le temoin retenu est notifications/fcm_registration_failed et non notifications/apns_token_absent, parce que ce dernier vit dans la branche Apple et que le compilateur l'elimine d'un bundle Android (voir son champ `why`). L'attente APNs portee de 12 a 30 s est une constante, absente du snapshot en tant que chaine. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
-  "forVersionCode": 47,
+  "_": "Temoins relus pour Android 1.0.7+48 : preference de langue, libelle francais, blocage de conversation et les trois temoins de diagnostic des 45, 46 et 47 toujours presents. La 48 rebranche le flux des evenements apres un echec qui porte sur l'instant et non sur le droit ; son temoin est la trace de ce rebranchement. Rappel de la 47 : un temoin ne doit jamais vivre dans une branche conditionnee par la plateforme, le compilateur l'elimine. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
+  "forVersionCode": 48,
   "mustContain": [
     {
       "text": "app.locale_preference.v1",
@@ -25,6 +25,10 @@
     {
       "text": "notifications/fcm_registration_failed",
       "why": "source de trace de WebMessagingHelper._getMobileToken, ajoutee en 47 : distingue « FCM refuse d'emettre un jeton d'enregistrement » de « le systeme n'a jamais livre le jeton APNs », deux pannes qui ne se reparent pas au meme endroit. C'est la branche du `else`, donc la seule des deux presente dans un bundle Android : `defaultTargetPlatform` est une constante de compilation en release, donc la branche Apple -- et son temoin notifications/apns_token_absent -- est eliminee par tree-shaking. Un temoin ne doit jamais vivre dans une branche conditionnee par la plateforme."
+    },
+    {
+      "text": "events stream stopped; the tab will not refresh until it is ",
+      "why": "message de EventController (lib/controller/event_controller.dart), present depuis plus longtemps mais desormais accompagne du rebranchement borne de la 48 ; inconditionnel, donc survit au tree-shaking sur les deux plateformes"
     }
   ]
 }
