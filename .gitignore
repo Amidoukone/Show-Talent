@@ -107,7 +107,12 @@ service-account*.json
 # blanket /docs/ ignore silently hid this (and every other doc) from Git.
 !/docs/shared-backend-contract.md
 !/docs/inter-repo-admin-mobile-runbook.md
-!/docs/audit-global-2026-10-02.md
+# Les audits suivent la meme regle que les runbooks de release plus bas :
+# ils disent ce qui a ete verifie, par quelle commande et a quelle date,
+# et un audit qui n'existe que sur un poste de travail ne prouve rien.
+# Motif plutot que nom a nom : le precedent (audit-global-2026-10-02) a
+# du etre ajoute a la main, et le suivant serait reste hors de Git.
+!/docs/audit-*.md
 !/docs/checklists/public-profile-rollout-2026-09-28.md
 # Meme raison : les brouillons de CGU et de politique de confidentialite sont
 # du travail produit, relu et repris entre deux sessions. Les laisser hors de

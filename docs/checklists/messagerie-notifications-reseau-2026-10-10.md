@@ -424,6 +424,249 @@ Le témoin retenu est `notifications/fcm_registration_failed`, la branche
 releases : un témoin doit être inconditionnel, sinon la porte refuse un bundle
 parfaitement valide.
 
+## 5. Reprise du 12 octobre — build 1.0.7+49
+
+Trois constats du build 48 en test, et pour deux d'entre eux la cause réelle
+n'était pas celle qui avait été corrigée.
+
+### 5.1 iOS : rien ne demandait le jeton APNs
+
+Les builds 45, 46 et 47 ont corrigé, chacun, un vrai défaut du chemin APNs —
+et aucun ne pouvait aboutir, parce qu'ils supposaient tous que le jeton
+finissait par arriver. Il n'était jamais **demandé**.
+
+`registerForRemoteNotifications` n'était appelé par rien. C'est normalement
+`FLTFirebaseMessagingPlugin` qui s'en charge, depuis son observateur de
+`UIApplicationDidFinishLaunchingNotification`, mais derrière
+`if ([FIRMessaging messaging].isAutoInitEnabled)`. Cette garde exige une
+application Firebase **par défaut** déjà configurée. Or sur iOS,
+`firebase_core` n'en configure une nativement que si `[FIROptions defaultOptions]`
+trouve un `GoogleService-Info.plist` **dans le bundle**, et cette application
+n'en embarque aucun : la configuration arrive par `--dart-define` et
+`Firebase.initializeApp()` côté Dart, bien après cette notification. Donc
+`[FIRMessaging messaging]` vaut `nil`, `nil.isAutoInitEnabled` vaut `NO`,
+l'enregistrement est sauté — et jamais repris, puisque la mise en place n'a
+lieu qu'une fois et que `didReinitializeFirebaseCore` ne fait rien.
+
+Conséquence complète, et elle explique tout l'historique : pas de jeton
+d'appareil, donc `getAPNSToken()` rend `nil` indéfiniment, donc `getToken()`
+lève `apns-token-not-set` indéfiniment, donc `user_push_tokens` n'a jamais
+contenu une seule entrée iOS — pendant qu'Android fonctionnait sans rien de
+tout cela, n'ayant pas besoin de cet appel natif précoce.
+
+| Fichier | Effet |
+| --- | --- |
+| `ios/Runner/AppDelegate.swift` | Appelle `registerForRemoteNotifications()` lui-même, un tour de boucle après `GeneratedPluginRegistrant.register`. N'affiche aucune invite — c'est le rôle de `UNUserNotificationCenter`, et `NotificationService.askPermissionAndUpdateToken` le garde. |
+| `test/ios_apns_registration_guardrails_test.dart` | Fixe l'appel **et** sa justification : si un `GoogleService-Info.plist` est un jour ajouté à la cible Runner, le test échoue volontairement, car la garde du plugin passerait alors d'elle-même. |
+| `IOS_CODEMAGIC_SETUP_RUNBOOK.md` | La section qui concluait « rien dans le build iOS ne lit ces plists » est corrigée : c'était vrai, et c'était précisément la cause. |
+
+Le différé d'un tour (`DispatchQueue.main.async`) n'est pas cosmétique : le
+plugin s'installe comme intercepteur APNs depuis la *notification*
+DidFinishLaunching, que UIKit poste seulement après le retour de la méthode.
+
+Un jeton obtenu avant que l'utilisateur accepte n'est pas perdu : le plugin le
+met de côté dans `_apnsToken` et l'installe sur FIRMessaging via
+`ensureAPNSTokenSetting`, qui tourne avant chaque appel de méthode venu de Dart.
+
+### 5.2 Le champ de saisie du premier message montait trop haut
+
+`Get.bottomSheet` **pose déjà** `Padding(bottom: viewInsets.bottom)` autour du
+contenu de la feuille (`GetModalBottomSheetRoute.buildPage`). `ContactIntakeSheet`
+ajoutait la même hauteur une seconde fois : clavier ouvert, la feuille était
+soulevée de *deux* hauteurs de clavier. Son bas flottait une hauteur de clavier
+au-dessus du clavier — le vide noir visible sur les captures, à travers lequel
+on voyait la liste des utilisateurs — et ce qui lui restait était écrasé
+d'autant, titre et champ de saisie compris.
+
+La correction de la 46 avait borné la *hauteur* de la feuille, ce qui la
+ramenait dans le cadre sans retirer le vide sous elle. Cette fois la marge est
+rendue à sa route, et l'inset du bas n'est plus réclamé que par le pied de page
+— même règle que `ChatScreen` : un seul widget possède le bas.
+
+`showModalBottomSheet` (Flutter) n'ajoute, lui, **aucune** marge de clavier.
+C'est la différence entre les deux routes qui produisait le défaut, et
+`test/contact_intake_sheet_keyboard_test.dart` la verrouille : la géométrie
+cassée est reproduite, la corrigée est mesurée, et un test refuse qu'une
+future feuille soit ouverte autrement que par `Get.bottomSheet`.
+
+### 5.3 Réseau lent : la connexion, puis la lecture
+
+**Connexion.** `_signInHandshake` dépensait **sept allers-retours réseau** en
+série avant que la session puisse se résoudre : l'échange d'identifiants,
+`reload()`, `getIdToken(true)`, puis `_refreshCurrentUserAfterVerification`,
+qui commence par *un autre* `getIdToken(true)` et `reload()` et, trouvant
+l'adresse vérifiée, refait les deux une troisième fois. Quatre de ces sept ne
+servaient qu'au compte vérifié quelques secondes plus tôt — celui qui vient de
+cliquer le lien dans son application de courrier. Pour une connexion ordinaire,
+l'indicateur était déjà vrai au `reload()` de la deuxième étape, et la poursuite
+le relisait trois fois pour s'entendre dire la même chose : douze secondes de
+rouet sur un lien à 3 s d'aller-retour, sur le seul écran qu'on ne peut pas
+contourner.
+
+La poursuite n'est désormais engagée que s'il y a quelque chose à poursuivre.
+Le chemin « pas encore vérifié » est inchangé : il garde ses trois tentatives
+et sa seconde d'espacement.
+
+**Lecture vidéo.** Deux seuils étaient restés fixes alors que tout le reste du
+pipeline suit le palier mesuré : la limite de première image (6 s) et les
+strikes de mise en tampon avant première image (8 × 700 ms). Tous deux sont
+appliqués **après** une initialisation réussie, et tous deux finissent par une
+reconstruction du lecteur qui **jette ce qui avait déjà été téléchargé**. Sur
+un lien `low`, dont la limite d'initialisation est déjà à 15 s, le lecteur
+terminait une init légitime, commençait à remplir son tampon, et se faisait
+démolir à 6 s — trois fois, soit le budget de reprise automatique — après quoi
+l'utilisateur voyait une erreur de lecture pour une vidéo qui arrivait très
+bien, juste lentement. Plus le lien était lent, plus l'échec était certain.
+
+Les deux budgets rejoignent `VideoNetworkTuning` (6 s / 9 s / 16 s, et
+8 / 12 / 22 strikes) et sont lus au moment où chaque chien de garde est armé,
+donc un palier re-mesuré en cours de session s'applique dès la vidéo suivante.
+
+### 5.4 Ce que l'échec de notification dit désormais de lui-même
+
+`notifyVideoOwner` renvoyait un `false` muet quand l'auteur n'avait aucun
+appareil enregistré — le cas le plus fréquent, et celui qui est derrière « la
+vidéo est validée et le joueur n'est notifié de rien ». L'absence de trace se
+lisait comme une absence de problème.
+
+- Chaque branche se signale maintenant, et le résultat (`notifyOutcome`) est
+  rendu à `adminSetVideoStatus` : la personne qui a cliqué « approuver » est la
+  seule en position de prévenir le joueur autrement.
+- `messaging/third-party-auth-error` — « j'ai un jeton, mais aucun moyen de
+  joindre Apple » — est distingué d'un jeton mort et journalisé en `error` avec
+  le chemin exact de la console. C'est la seule panne de cette chaîne que rien
+  d'autre ne peut faire apparaître, et elle est aussi comptée en masse dans le
+  fanout, où elle frappe tous les destinataires iOS d'un coup.
+- `user_push_tokens` enregistre `platform` et `appVersion`, donc
+  `npm run push:ios:list:production` répond directement à « un iPhone s'est-il
+  déjà enregistré ? » au lieu de le faire déduire. Les lignes antérieures à la
+  49 rapportent `platform: unknown`, et le script le dit plutôt que de laisser
+  confondre « aucun iPhone » avec « pas encore d'information ».
+
+### 5.5 Les vidéos d'un profil n'avaient aucune miniature
+
+Le document d'une vidéo portait `thumbnailPath` — un *chemin* Storage,
+`thumbnails/thumbnail_<id>.jpg` — et pas `thumbnail`, l'URL qu'un client peut
+aller chercher. Deux défauts se superposaient.
+
+**Côté serveur, une course que personne ne rattrapait.** L'URL n'avait qu'un
+seul écrivain : `optimizeMp4Video`, après FFmpeg. Cette fonction est déclenchée
+par l'arrivée de l'objet **vidéo** dans Storage, alors que le client téléverse
+la miniature *ensuite* — la séquence réelle est : vidéo (l'optimiseur démarre),
+puis ticket de miniature, puis miniature, puis `finalizeUpload`. Sur un clip
+léger ou une connexion faible, l'optimiseur atteignait
+`tryResolveThumbnailPath` avant que la miniature existe, écrivait
+`...(thumbnail ? {thumbnail} : {})` — donc rien — et plus personne ne regardait
+jamais : aucun déclencheur ne se déclenche pour `thumbnails/`, et
+`finalizeUpload` ne notait que le chemin.
+
+C'est exactement la course décrite dans le commentaire d'`isFinalizedUploadSession`
+pour la description et la légende. Celle-là avait été fermée côté finalize ;
+celle de la miniature, non.
+
+**Côté client, un chemin pris pour une adresse.** `Video.fromMap` acceptait
+`thumbnailPath` en dernier recours. La valeur n'était donc pas vide, et
+`profile_screen_widgets` prenait la branche `CachedNetworkImage` avec une
+chaîne condamnée : échec, `errorWidget`, icône de repli — au prix d'une
+résolution réseau ratée par tuile et par reconstruction, précisément ce que le
+commentaire de ce widget dit vouloir éviter.
+
+Le fil d'actualité masquait le défaut : la miniature n'y est qu'un placeholder
+fugace avant que la vidéo s'affiche. Dans la grille d'un profil, c'est la seule
+chose affichée — d'où « les vidéos sont affichées sans miniatures ».
+
+| Fichier | Effet |
+| --- | --- |
+| `functions/src/storage_download_url.ts` (nouveau) | `ensureDownloadToken` et `buildStorageDownloadUrl` sortent d'`index.ts` (import circulaire autrement), et `resolveThumbnailDownloadUrl` devient la résolution partagée : chemin enregistré, puis les trois noms conventionnels, puis le jeton. |
+| `functions/src/upload_session.ts` | `finalizeUpload` résout et écrit l'URL. C'est le second écrivain, et le seul qui ne peut pas perdre la course : le client téléverse la miniature avant de l'appeler. Résolu **avant** la transaction — c'est de l'I/O Storage, et un corps de transaction peut être rejoué. |
+| `functions/src/index.ts` | L'optimiseur passe par la même résolution ; perdre la course ne coûte plus rien. |
+| `lib/models/video.dart` | Seule une URL `http(s)` est retenue. Un chemin rend la chaîne vide, donc la tuile affiche son repli immédiatement. Un document ancien dont `thumbnailPath` contiendrait déjà une URL reste accepté : c'est la forme qui décide, pas le nom du champ. |
+| `scripts/repair-video-thumbnails.mjs` (nouveau) | Répare les vidéos déjà publiées — rien ne relance l'optimiseur. `npm run thumbnails:check:production` pour voir, `thumbnails:repair:production` pour écrire. Une vidéo dont la miniature n'existe réellement pas est signalée et laissée telle quelle : inventer une URL transformerait un repli propre en image cassée. |
+
+Le jeton de téléchargement est idempotent (relu avant d'être émis), donc les
+deux écrivains produisent la même URL et ne peuvent pas se contredire.
+
+Verrouillé par `test/video_thumbnail_guardrails_test.dart`.
+
+**À faire après le déploiement des Functions :**
+
+```powershell
+npm.cmd run thumbnails:check:production    # essai a blanc
+npm.cmd run thumbnails:repair:production   # ecrit
+```
+
+### 5.6 Seconde vérification — deux défauts introduits par les correctifs eux-mêmes
+
+Une relecture des diffs, et non une relecture des tests : les deux points
+ci-dessous passaient toutes les portes.
+
+**Une pile d'appels entière par entrée de journal.** `AppLogger._safeMetadata`
+ne tronquait rien. `logClientEvents` plafonne le *message* à 2000 caractères,
+mais les métadonnées — où vivent `error.toString()` et surtout
+`stackTrace.toString()`, couramment plusieurs kilo-octets en release — étaient
+recopiées telles quelles dans Firestore.
+
+Tant que les avertissements étaient échantillonnés à 15 %, le volume était
+borné par accident. Le correctif 1.2 a retiré ce frein sans en poser d'autre :
+117 sites d'avertissement, chacun pouvant expédier une pile complète, sur des
+flux qui se redéclenchent à chaque snapshot. Les garde-fous existants
+(20 appels/min, 200 entrées en tampon, expiration automatique) bornent le
+*nombre* d'entrées, jamais leur taille.
+
+`maxMetadataValueLength = 2000`, même plafond que le message, avec une marque
+explicite quand la valeur est coupée — une pile tronquée en silence se lit
+comme une pile courte.
+
+**Un script de réparation qui réordonnait les profils.**
+`repair-video-thumbnails.mjs` écrivait `updatedAt: serverTimestamp()` à côté de
+l'URL de miniature, par habitude. Or `ProfileRepository.fetchUserVideos` trie la
+grille d'un joueur par `updatedAt` décroissant, et le fil public retombe sur ce
+même champ dès que son index propre est indisponible
+(`VideoRepository._legacyOrderField`).
+
+La réparation aurait donc remonté en tête de chaque profil les vidéos réparées,
+dans l'ordre où le script a parcouru la collection — en remplaçant un défaut
+visible par un désordre invisible. Le champ n'est plus écrit : un remplissage
+de champ dérivé ne doit rien déplacer.
+
+Rien d'autre n'a bougé à la seconde passe, mais trois points ont été
+explicitement vérifiés plutôt que supposés :
+
+- `finalizeUpload` résout la miniature **après** `validateThumbnail`, qui a
+  déjà prouvé l'existence de l'objet dans `storage.bucket()`. L'URL est donc
+  construite depuis le bucket où sont réellement les octets, ce qui ferme le
+  piège `appspot.com` / `firebasestorage.app`.
+- `late final VideoManager _videoManager` est affecté dans `initState` avant
+  que le moindre chien de garde puisse lire les budgets qui en dépendent.
+- Aucune référence ne subsiste aux symboles retirés (`tryResolveThumbnailPath`,
+  `handlePushSendError`, `isUnregisteredTokenError`,
+  `warmAppVersionForTokenContext`), et une bannière de section orpheline
+  laissée par l'extraction des helpers a été retirée d'`index.ts`.
+
+### Portes passées localement, le 12 octobre
+
+| Contrôle | Résultat |
+| --- | --- |
+| `flutter analyze` | 0 problème |
+| `flutter test` | **1031** tests réussis (976 avant, +55) |
+| `functions` lint + `tsc` | réussis |
+| `scripts/check-admin-mobile-contract.ps1` | réussi |
+| `scripts/check-ios-release-readiness.ps1` | réussi |
+
+### Ce qui reste à prouver sur l'appareil
+
+Dans cet ordre, une fois la 49 installée sur l'iPhone :
+
+1. `npm.cmd run push:ios:list:production` doit montrer une ligne
+   `platform=ios` — c'est la preuve que l'enregistrement APNs aboutit enfin.
+2. `npm.cmd run push:ios:check:production -- --uid <UID> --send` doit faire
+   apparaître la notification. Si la réponse est `THIRD_PARTY_AUTH_ERROR`, la
+   clé APNs chargée les 10 et 11 octobre ne couvre pas ce bundle, et le script
+   nomme le chemin de console à corriger.
+3. Approuver une vidéo depuis le portail admin et vérifier que l'auteur reçoit
+   « Vidéo approuvée ». La réponse du callable porte désormais `notifyOutcome`,
+   qui dit laquelle des cinq issues s'est produite.
+
 ## Ordre de déploiement
 
 Conforme à `CLAUDE.md` — les règles d'abord, le mobile ensuite :

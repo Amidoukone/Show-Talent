@@ -232,6 +232,41 @@ handle a `.p12` or `.mobileprovision` file.
 Codemagic > Add application > select this GitHub repo. Codemagic auto-detects
 `codemagic.yaml` and exposes the two workflows.
 
+### 5b. Upload the APNs authentication key to Firebase
+
+**Mandatory for iOS notifications, and easy to miss: nothing in the build,
+the signing, or the app reports its absence.** FCM has no way to authenticate
+with Apple without it, so every iOS send dies inside FCM with
+`messaging/third-party-auth-error` — after the token exists, so it never looks
+like a device problem. On 2026-10-10 the Firebase console held no APNs key at
+all for `org.adfoot.app`.
+
+1. Apple Developer > Certificates, Identifiers & Profiles > **Keys** > + >
+   tick **Apple Push Notifications service (APNs)** > Continue > Register.
+2. Download the `.p8` **once** — Apple never serves it again — and note the
+   **Key ID**. The **Team ID** is in the top-right of the developer portal.
+3. Firebase Console > *each* project (`adfoot-production`, then
+   `adfoot-staging`) > Project settings > **Cloud Messaging** > *Apple app
+   configuration* > pick the iOS app > **APNs Authentication Key** > Upload,
+   with the Key ID and Team ID.
+
+One key covers both the development and production APNs environments and
+every bundle id in the Apple account, so the same `.p8` serves staging and
+production — but it has to be uploaded to **each Firebase project**
+separately.
+
+Verify, rather than assume, with a real send to a real device:
+
+```powershell
+node scripts/check-ios-push-delivery.mjs --environment production --list
+node scripts/check-ios-push-delivery.mjs --environment production --uid <UID> --send
+```
+
+A dry run (the default, without `--send`) never contacts Apple and therefore
+proves nothing about the key. `--send` is the one that returns
+`third-party-auth-error` when it is missing, and the one that makes a
+notification appear on the phone when the whole chain works.
+
 ### 6. First build
 
 From the Codemagic dashboard, pick `ios-staging`, click "Start new build."
@@ -282,7 +317,7 @@ Watch the log. Expected failure modes on a first attempt, and what they mean:
   mismatch; check the Codemagic build log for the actual pod error before
   changing `codemagic.yaml`'s pinned `flutter:`/`cocoapods:` versions.
 
-## What does *not* need attention right now
+## iOS Firebase config, and the push outage it caused
 
 `ios/Firebase/{local,staging,production}/GoogleService-Info.plist` exist
 locally (gitignored, mirroring how `android/app/src/production/google-services.json`
@@ -290,11 +325,42 @@ is handled) but — verified against `ios/Runner/AppDelegate.swift` and
 `ios/Runner.xcodeproj/project.pbxproj` — nothing in the iOS build actually
 reads them: there is no `FirebaseApp.configure()` call and no build-phase
 script copying a flavor's plist into the bundle. iOS Firebase initialization
-goes entirely through `lib/firebase_options.dart` (FlutterFire-CLI generated,
-already committed, already correct per flavor), the same as it does today
-without ever having shipped an iOS build.
+goes entirely through `lib/firebase_options.dart` and the `--dart-define`
+values in `codemagic.yaml`.
 
-Those plist folders are scaffolding for a *future* need — most likely
+**That is a deliberate choice, and it had one consequence nobody had traced
+until 2026-10-12: it silently disabled push notifications on iOS entirely.**
+
+`FLTFirebaseMessagingPlugin` is what normally asks iOS for the APNs device
+token, from its `UIApplicationDidFinishLaunchingNotification` observer — but
+behind `if ([FIRMessaging messaging].isAutoInitEnabled)`. That guard needs a
+configured *default* FirebaseApp, and on iOS `firebase_core` only configures
+one natively when `[FIROptions defaultOptions]` finds a
+`GoogleService-Info.plist` **in the bundle**. With no plist there, the default
+app does not exist until Dart runs `Firebase.initializeApp()`, which is long
+after that notification. `[FIRMessaging messaging]` is therefore `nil`,
+`nil.isAutoInitEnabled` reads `NO`, and `registerForRemoteNotifications` is
+never called. It is never retried either: the plugin's setup runs once and its
+`didReinitializeFirebaseCore` does nothing.
+
+The whole chain follows from that single missing call — no APNs device token,
+so `getAPNSToken()` returns `nil` forever, so `getToken()` throws
+`apns-token-not-set` forever, so `user_push_tokens` never held a single iOS
+entry while Android worked throughout. The earlier client-side fix in
+`lib/services/web_messaging_helper.dart` (waiting for the APNs token instead
+of swallowing the exception) was correct and was never going to be enough: it
+waits patiently for a token that was never requested.
+
+`ios/Runner/AppDelegate.swift` now calls `registerForRemoteNotifications()`
+itself, one main-queue turn after `GeneratedPluginRegistrant.register`. It
+prompts nobody — that is `UNUserNotificationCenter`'s job, and
+`NotificationService.askPermissionAndUpdateToken` still owns it — and a token
+obtained before the user accepts is held by the plugin and installed on
+`FIRMessaging` by `ensureAPNSTokenSetting`. `test/ios_apns_registration_guardrails_test.dart`
+pins both the call and the reason it has to exist; if a plist is ever added to
+the bundle, that test fails on purpose so this section gets revisited.
+
+Those plist folders remain scaffolding for a *future* need — most likely
 Crashlytics' native dSYM-upload script, which does want a real
 `GoogleService-Info.plist` on disk, or Google Sign-In's URL scheme, if either
 gets added later. When that day comes, add a Codemagic step that materializes

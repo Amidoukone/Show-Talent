@@ -1,6 +1,6 @@
 {
-  "_": "Temoins relus pour Android 1.0.7+48 : preference de langue, libelle francais, blocage de conversation et les trois temoins de diagnostic des 45, 46 et 47 toujours presents. La 48 rebranche le flux des evenements apres un echec qui porte sur l'instant et non sur le droit ; son temoin est la trace de ce rebranchement. Rappel de la 47 : un temoin ne doit jamais vivre dans une branche conditionnee par la plateforme, le compilateur l'elimine. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
-  "forVersionCode": 48,
+  "_": "Temoins relus pour Android 1.0.7+49 : preference de langue, libelle francais, blocage de conversation et les temoins de diagnostic des 45, 46 et 47 toujours presents. La 49 en ajoute deux, tous deux inconditionnels -- aucune branche conditionnee par la plateforme, la lecon de la 47 : 'feed/focus_video' et 'settings/privacy', deux des sept echecs que l'utilisateur traversait pendant que client_logs restait vide, desormais rapportes en error. La correction principale de la 49 est en Swift (ios/Runner/AppDelegate.swift demande lui-meme le jeton APNs, que rien ne reclamait) et reste hors du snapshot Dart ; le reste est structurel -- marge de clavier retiree de la feuille de premier contact, quatre allers-retours reseau supprimes du handshake de connexion, seuils de lecture video et rayon de prechargement des miniatures devenus fonction du debit mesure. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
+  "forVersionCode": 49,
   "mustContain": [
     {
       "text": "app.locale_preference.v1",
@@ -29,6 +29,14 @@
     {
       "text": "events stream stopped; the tab will not refresh until it is ",
       "why": "message de EventController (lib/controller/event_controller.dart), present depuis plus longtemps mais desormais accompagne du rebranchement borne de la 48 ; inconditionnel, donc survit au tree-shaking sur les deux plateformes"
+    },
+    {
+      "text": "feed/focus_video",
+      "why": "source de trace de HomeScreen._ensureFocusedVideoVisible, ajoutee en 49 : un appui sur une notification de moderation dont la video est introuvable faisait atterrir l'utilisateur en haut du fil, sans erreur affichee et sans trace. Inconditionnelle, dans un catch."
+    },
+    {
+      "text": "settings/privacy",
+      "why": "source de trace de SettingsScreen, ajoutee en 49 : un reglage de confidentialite non enregistre etait montre a l'utilisateur et invisible pour nous. Inconditionnelle, dans un catch."
     }
   ]
 }
