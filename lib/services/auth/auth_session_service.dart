@@ -572,6 +572,26 @@ class AuthSessionService {
   /// Split out of [signInWithEmailAndPassword] so the whole credential
   /// exchange can carry one deadline. Returns the freshest [User] the SDK
   /// holds.
+  ///
+  /// Every step here is a network round trip, and on a weak link the round
+  /// trips — not the bandwidth — are what the user experiences as "la
+  /// connexion est lente". This used to spend seven of them, in sequence,
+  /// before the session could resolve: the credential exchange, `reload()`,
+  /// `getIdToken(true)`, and then [_refreshCurrentUserAfterVerification],
+  /// which begins with *another* `getIdToken(true)` and `reload()` and, on
+  /// finding the address verified, does both a third time to be sure.
+  ///
+  /// Four of those seven only ever mattered for an account whose address was
+  /// verified in the seconds just before — the user tapped the link in their
+  /// mail app and came straight back. For an ordinary sign-in the flag was
+  /// already true in the `reload()` at step two, and the chase re-read it
+  /// three more times to be told the same thing. On a 3s round trip that is
+  /// twelve seconds of spinner for nothing, on the one screen a user cannot
+  /// get past.
+  ///
+  /// So the chase is now entered only when there is something to chase. The
+  /// not-yet-verified path is untouched: it still gets its three attempts and
+  /// its one-second spacing.
   Future<User> _signInHandshake({
     required String email,
     required String password,
@@ -593,13 +613,21 @@ class AuthSessionService {
         () => refreshed!.getIdToken(true),
         'authStageTokenLabel'.tr,
       );
+      // `getIdToken(true)` refreshes the SDK's cached user as a side effect,
+      // so re-reading it here is free and keeps `emailVerified` below based
+      // on the freshest copy rather than the pre-token one.
+      refreshed = _auth.currentUser ?? refreshed;
     }
-    refreshed =
-        await _refreshCurrentUserAfterVerification(
-          attempts: 3,
-          retryDelay: const Duration(seconds: 1),
-        ) ??
-        refreshed;
+
+    if (refreshed == null || !refreshed.emailVerified) {
+      refreshed =
+          await _refreshCurrentUserAfterVerification(
+            attempts: 3,
+            retryDelay: const Duration(seconds: 1),
+          ) ??
+          refreshed;
+    }
+
     if (refreshed == null) {
       throw AuthFlowException('authSessionNotFoundAfterSignInMessage'.tr);
     }

@@ -133,17 +133,51 @@ const messaging = getMessaging(app);
 if (wantsList) {
   const snapshot = await db.collection('user_push_tokens').limit(100).get();
   console.log(`user_push_tokens in ${projectId}: ${snapshot.size}`);
+  // Counted per platform, because the listing's first job is to answer
+  // whether a single iPhone has ever registered one. Rows written by builds
+  // before the one that started recording it report `unknown`, which is not
+  // the same answer as "no iOS device" — and the difference is stated below
+  // rather than left to be guessed, which is what cost two rounds already.
+  const byPlatform = new Map();
   for (const doc of snapshot.docs) {
-    const token = doc.data()?.token;
+    const data = doc.data() ?? {};
+    const token = data.token;
     const present = typeof token === 'string' && token.trim().length > 0;
+    const platform = String(data.platform ?? 'unknown');
+    byPlatform.set(platform, (byPlatform.get(platform) ?? 0) + 1);
     const user = await db.collection('users').doc(doc.id).get();
     console.log(
       `  ${doc.id}  role=${user.data()?.role ?? '-'}  token=${present ? 'present' : 'EMPTY'}` +
-        `  updatedAt=${doc.data()?.updatedAt?.toDate?.().toISOString() ?? '-'}`,
+        `  platform=${platform}  build=${String(data.appVersion ?? '-')}` +
+        `  updatedAt=${data.updatedAt?.toDate?.().toISOString() ?? '-'}`,
     );
   }
   if (snapshot.empty) {
     console.log('\nNo device has registered a token. Nothing can be delivered to anyone.');
+  } else {
+    const summary = [...byPlatform.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([platform, count]) => `${platform}=${count}`)
+      .join('  ');
+    console.log(`\nBy platform: ${summary}`);
+
+    if (!byPlatform.has('ios')) {
+      console.log(
+        [
+          '',
+          'Not one token is recorded as iOS.',
+          '',
+          'If every row says `unknown`, they predate the build that began',
+          'recording the platform: install a current build on the iPhone, sign',
+          'in, accept the notification prompt, then re-run this.',
+          '',
+          'If current rows say `android` and none say `ios`, no iPhone has ever',
+          'registered, and the fault is on the device side — permission, or APNs',
+          'registration. The APNs key in the Firebase console cannot be the cause',
+          'of that: it only comes into play once a token exists to route.',
+        ].join('\n'),
+      );
+    }
   }
   process.exit(0);
 }

@@ -187,13 +187,43 @@ async function main() {
 
   console.log(`Recent client errors: ${rows.length}/${snapshot.size}`);
   console.log(`Project: ${projectId}`);
+
+  // Which builds these entries came from, stated up front.
+  //
+  // Until 1.0.7+49 the client sent no version at all, so an error could not
+  // be attributed to a build and "is this fixed?" was answered by watching a
+  // message stop appearing — an inference that cost four builds on the iOS
+  // notification outage. Rows older than that report `<pre-49>`, which is an
+  // answer too: it means the device is not running a build that would say.
+  const buildTally = new Map();
+  for (const row of rows) {
+    const context = row.context && typeof row.context === 'object' ? row.context : {};
+    const key = `${context.platform || '?'} ${context.appVersion || '<pre-49>'}`;
+    buildTally.set(key, (buildTally.get(key) ?? 0) + 1);
+  }
+  if (buildTally.size > 0) {
+    const summary = [...buildTally.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([key, count]) => `${key} (${count})`)
+      .join(', ');
+    console.log(`Builds: ${summary}`);
+  }
+
   for (const row of rows) {
     const createdAt = toDate(row.createdAt)?.toISOString() || '<unknown>';
     const metadata = row.metadata && typeof row.metadata === 'object' ?
       row.metadata :
       {};
+    const context = row.context && typeof row.context === 'object' ?
+      row.context :
+      {};
     console.log('');
     console.log(`- ${createdAt} ${row.source || '<unknown>'}`);
+    console.log(
+      `  build: ${context.appVersion || '<pre-49>'}` +
+        `  platform: ${context.platform || '<unknown>'}` +
+        (context.env ? `  env: ${context.env}` : ''),
+    );
     if (row.userId) console.log(`  userId: ${row.userId}`);
     console.log(`  message: ${compact(row.message)}`);
     if (metadata.code) console.log(`  code: ${metadata.code}`);

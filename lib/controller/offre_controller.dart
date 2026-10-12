@@ -363,7 +363,7 @@ class OffreController extends GetxController {
       );
     } on FirebaseException catch (error, st) {
       // .error, not .warning: a reported "crash on publish" was untraceable
-      // in client_logs because AppLogLevel.warning is sampled at 15% in
+      // in client_logs because AppLogLevel.warning is sampled in
       // production (see AppLogger._shouldSendToRemote) -- a repeat failure
       // here would have had an 85% chance of leaving no trace at all. This
       // is the one offer-creation failure path a user could mistake for a

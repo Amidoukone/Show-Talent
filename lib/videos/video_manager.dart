@@ -156,6 +156,17 @@ class VideoManager {
 
   NetworkProfile? get currentProfile => _network.profile;
 
+  /// The playback budgets the measured tier allows, for the widgets that
+  /// enforce them.
+  ///
+  /// `SmartVideoPlayer` owns two watchdogs that tear a player down and
+  /// rebuild it -- the first-frame deadline and the pre-first-frame buffering
+  /// strikes. Both are budgets for how long the *network* may take, so they
+  /// belong to the same table as `activeTimeout`, not to a constant in the
+  /// widget. Exposed rather than duplicated: a tier re-measured mid-session
+  /// has to reach them, which a copy taken at construction would not.
+  VideoNetworkTuning get playbackTuning => _network.tuning;
+
   bool get _isHighBandwidth => _network.isHighBandwidth;
 
   /// 540 for `medium` (this selector's long-standing default); 360 for `low`,

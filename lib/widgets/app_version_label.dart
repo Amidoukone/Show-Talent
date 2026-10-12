@@ -1,6 +1,6 @@
+import 'package:adfoot/services/app_version.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 /// The version of the build that is actually installed, name and number.
 ///
@@ -35,15 +35,19 @@ class _AppVersionLabelState extends State<AppVersionLabel> {
   }
 
   Future<void> _load() async {
-    String label;
-    try {
-      final info = await PackageInfo.fromPlatform();
-      label = 'Adfoot ${info.version} (${info.buildNumber})';
-    } catch (_) {
-      // Saying nothing would read as "no version", which is exactly the
-      // ambiguity this label exists to remove.
-      label = 'Version indisponible';
-    }
+    // Through [AppVersion], not straight to the platform channel: the push
+    // token document and every `client_logs` entry now name the same build,
+    // and three independent reads of the same manifest is three chances for
+    // them to disagree about what the user is running.
+    await AppVersion.resolve();
+
+    final version = AppVersion.versionName;
+    // Saying nothing would read as "no version", which is exactly the
+    // ambiguity this label exists to remove.
+    final label = version == null
+        ? 'Version indisponible'
+        : 'Adfoot $version (${AppVersion.buildNumber ?? '?'})';
+
     if (!mounted) {
       return;
     }

@@ -94,7 +94,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _loadingRole = false;
       });
     } catch (e, st) {
-      AppLogger.debug('SettingsScreen load user settings error: $e\n$st');
+      // L'ecran se declare inutilisable juste apres. Le dire ici est la
+      // seule chance de savoir pourquoi.
+      AppLogger.error(
+        'settings could not be loaded; the screen is unusable: $e',
+        source: 'settings/load',
+        error: e,
+        stackTrace: st,
+      );
       if (!mounted) {
         return;
       }
@@ -136,7 +143,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
       return true;
     } catch (e, st) {
-      AppLogger.debug('SettingsScreen update privacy setting error: $e\n$st');
+      AppLogger.error(
+        'privacy setting not saved: $e',
+        source: 'settings/privacy',
+        error: e,
+        stackTrace: st,
+      );
       if (!mounted) return false;
       final l10n = AppLocalizations.of(context)!;
       AdFeedback.error(
@@ -250,7 +262,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await applyLocalePreference(value);
     } catch (error, st) {
-      AppLogger.debug('SettingsScreen language change error: $error\n$st');
+      AppLogger.error(
+        'language preference not applied: $error',
+        source: 'settings/language',
+        error: error,
+        stackTrace: st,
+      );
       if (!mounted) return;
       setState(() {
         _languagePreference = previous;

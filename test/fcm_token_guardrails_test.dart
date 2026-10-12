@@ -46,7 +46,7 @@ void main() {
     expect(repository, contains('Future<void> _retryFcmTokenSave('));
     expect(repository, contains('static const int _fcmTokenRetryAttempts'));
 
-    // Reported at `error`: `warning` is sampled at 15%, and this is a
+    // Reported at `error`: `warning` is sampled, and this is a
     // per-device capability loss rather than noise.
     expect(repository, contains("source: 'notifications/token_save'"));
     expect(repository, contains('AppLogger.error('));
@@ -108,12 +108,44 @@ void main() {
     // the failing send was in flight.
     expect(pushDelivery, contains('runTransaction'));
 
-    expect(actions, contains('handlePushSendError'));
+    // Every send path routes its failure through the shared reporter, which
+    // is what prunes. Named here rather than reimplemented per caller: a
+    // path that handles its own errors is a path that quietly stops pruning.
+    expect(actions, contains('reportPushSendFailure'));
+    expect(adminContent, contains('reportPushSendFailure'));
     expect(
       File('functions/src/fanout_campaigns.ts').readAsStringSync(),
       contains('pruneUnregisteredToken'),
     );
-    expect(adminContent, contains('handlePushSendError'));
+  });
+
+  test('a broken APNs setup is named, not filed under "send failed"', () {
+    // The two permanent failures look identical from everywhere except the
+    // send itself, and they are repaired in different places: a dead token is
+    // per-device and clears on the next sign-in, a missing APNs key is
+    // project-wide and clears only when someone uploads it. Collapsed into
+    // one "push failed", the second is invisible -- which is how no iPhone
+    // received a notification for weeks while the logs looked ordinary.
+    final pushDelivery =
+        File('functions/src/push_delivery.ts').readAsStringSync();
+
+    expect(pushDelivery, contains('messaging/third-party-auth-error'));
+    expect(pushDelivery, contains('apns_credential'));
+    // `error`, not `warn`: warnings are sampled, and this one is a capability
+    // the whole platform has lost.
+    final report = pushDelivery.indexOf('reportPushSendFailure');
+    expect(report, isNonNegative);
+    expect(
+      pushDelivery.substring(report),
+      contains('logger.error('),
+      reason: 'the one failure nothing else can surface must say so loudly',
+    );
+
+    // And the fanout, where it shows up for every iOS recipient at once.
+    expect(
+      File('functions/src/fanout_campaigns.ts').readAsStringSync(),
+      contains('classifyPushFailure'),
+    );
   });
 
   test('the fanout keeps the uid that owns each token', () {

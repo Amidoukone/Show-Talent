@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/services/app_logger.dart';
+import 'package:adfoot/services/app_version.dart';
 import 'package:adfoot/services/callable_auth_guard.dart';
 import 'package:adfoot/utils/account_role_policy.dart';
 import 'package:adfoot/utils/video_search_matcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:get/get.dart';
 
 enum UserAccessIssue { missingProfile, adminPortalOnly, disabledAccount }
@@ -496,11 +498,34 @@ class UserRepository {
   Future<bool> _writeFcmToken(String uid, String token) async {
     try {
       final callable = _functions.httpsCallable('saveUserFcmToken');
-      await CallableAuthGuard.call(callable, {'token': token});
+      await CallableAuthGuard.call(callable, {
+        'token': token,
+        // Which kind of device this token belongs to, and which build
+        // registered it. `user_push_tokens` recorded neither, so a listing of
+        // it could not answer the only question the iOS notification outage
+        // actually turned on: has any iPhone ever registered at all? Both
+        // fields are best-effort and are never allowed to cost a token save.
+        ..._deviceTokenContext(),
+      });
       return true;
     } catch (_) {}
 
     return false;
+  }
+
+  /// Platform and installed build, as far as they can be known cheaply.
+  ///
+  /// [AppVersion] holds the one package-manifest read of the process, warmed
+  /// during bootstrap and shared with the version label and `client_logs`.
+  /// The build is attached only once that read has landed: the first token
+  /// save of a cold start carries the platform alone rather than putting a
+  /// platform channel in front of it.
+  Map<String, String> _deviceTokenContext() {
+    final version = AppVersion.cached;
+    return {
+      'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
+      if (version != null && version.isNotEmpty) 'appVersion': version,
+    };
   }
 
   Future<void> _retryFcmTokenSave(String uid, String token, int serial) async {
@@ -526,7 +551,7 @@ class UserRepository {
 
     // Reported, because the user has now silently lost notifications and no
     // screen will ever tell them. `error` rather than `warning`: warnings are
-    // sampled at 15% and this is a per-device capability loss, not noise.
+    // sampled and this is a per-device capability loss, not noise.
     AppLogger.error(
       'FCM token could not be saved after '
       '${_fcmTokenRetryAttempts + 1} attempts; this device will receive no '

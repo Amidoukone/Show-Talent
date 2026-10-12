@@ -361,7 +361,16 @@ class ProfileController extends GetxController {
             update();
           },
           onError: (error, stackTrace) {
-            AppLogger.debug('profile user listener error: $error\n$stackTrace');
+            // Le flux du profil est mort : la fiche cesse de se mettre
+            // a jour pour le reste de la session, et l'utilisateur lit
+            // « Profil indisponible » sans que rien ne soit consigne.
+            AppLogger.error(
+              'profile stream stopped; this profile will not refresh '
+              'again until the screen is reopened: $error',
+              source: 'profile/watch',
+              error: error,
+              stackTrace: stackTrace,
+            );
             if (user == null) {
               profileLoadErrorTitle = 'profileUnavailableTitle'.tr;
               profileLoadErrorMessage = _profileLoadErrorMessage(error);

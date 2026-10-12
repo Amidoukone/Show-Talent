@@ -5,9 +5,11 @@
 
 import {createHash, randomUUID} from "crypto";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
+import * as logger from "firebase-functions/logger";
 import {db, fieldValue, storage} from "./firebase";
 import {UPLOAD_CALLABLE_OPTIONS, logAppCheckState} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
+import {resolveThumbnailDownloadUrl} from "./storage_download_url";
 const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
 const VIDEO_UPLOADS_ENABLED = process.env.VIDEO_UPLOADS_ENABLED !== "false";
@@ -52,6 +54,8 @@ interface VideoDoc {
   uid?: string;
   storagePath?: string;
   thumbnailPath?: string;
+  // Download URL of the still, once one exists. See resolveThumbnailDownloadUrl.
+  thumbnail?: string;
   thumbnailGuard?: ThumbnailGuard;
   status?: string;
   moderationStatus?: string;
@@ -923,6 +927,44 @@ export const finalizeUpload = onCall(
     // A transaction closes the window instead of narrowing it: Firestore
     // aborts and retries it when the optimizer writes between the read and the
     // commit, so the retry observes the terminal state and preserves it.
+    // Resolved before the transaction, because it is Storage I/O and a
+    // transaction body can be replayed.
+    //
+    // This is the second of the two writers of the still's URL, and the one
+    // that cannot lose the race: the client uploads the thumbnail and *then*
+    // calls finalizeUpload, so by the time we are here the object exists.
+    // optimizeMp4Video also resolves it, but it is triggered by the video
+    // object landing and runs ahead of the thumbnail upload on a light clip
+    // or a weak connection — in which case it wrote nothing and nothing ever
+    // looked again, because no trigger fires for `thumbnails/`.
+    //
+    // That is why every video published from a slow connection reached the
+    // profile grid with a placeholder icon instead of a frame: the document
+    // carried `thumbnailPath` (a Storage path) and no `thumbnail` (a URL).
+    //
+    // Best effort by construction: a still that genuinely is not there leaves
+    // the field absent, exactly as before, and the grid renders its fallback.
+    //
+    // `storage.bucket()` and not a name from config, deliberately. The object
+    // was just proved to exist in that exact bucket by validateThumbnail
+    // above, and createThumbnailUploadTicket uploaded it there — so the URL is
+    // built from the same bucket the bytes are in, whatever it is called. A
+    // project migrated from `<id>.appspot.com` to `<id>.firebasestorage.app`
+    // would otherwise produce a URL pointing at a bucket the file is not in.
+    let resolvedThumbnailUrl = "";
+    try {
+      resolvedThumbnailUrl = await resolveThumbnailDownloadUrl({
+        bucketName: storage.bucket().name,
+        videoId: sessionId,
+        thumbnailPath: persistedThumbnailPath,
+      });
+    } catch (error) {
+      logger.warn("thumbnail url resolution skipped", {
+        videoId: sessionId,
+        error,
+      });
+    }
+
     let alreadyFinalized = false;
 
     await db.runTransaction(async (transaction) => {
@@ -969,6 +1011,14 @@ export const finalizeUpload = onCall(
           // ✅ le reste
           storagePath: persistedStoragePath,
           thumbnailPath: persistedThumbnailPath,
+          // The URL, not just the path. `Video.fromDoc` needs something it can
+          // fetch; a Storage path is not that. Written only when the still was
+          // actually found, and never over a URL the optimizer already wrote:
+          // the download token is idempotent, so both writers produce the same
+          // string, but leaving it out keeps the merge minimal.
+          ...(resolvedThumbnailUrl && !currentDoc?.thumbnail ?
+            {thumbnail: resolvedThumbnailUrl} :
+            {}),
           ...(persistedThumbnailGuard?.hash ? {thumbnailHash: persistedThumbnailGuard.hash} : {}),
           ...(persistedThumbnailGuard?.size !== undefined ? {thumbnailSize: persistedThumbnailGuard.size} : {}),
           ...(persistedThumbnailGuard?.contentType ? {thumbnailContentType: persistedThumbnailGuard.contentType} : {}),

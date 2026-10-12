@@ -115,8 +115,29 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   int _bufferingStrikes = 0;
   static const Duration _stallCheckInterval = Duration(milliseconds: 700);
   static const int _stallMaxStrikesBeforeReload = 4;
-  static const int _bufferingMaxStrikesBeforeReload = 8;
-  static const Duration _firstFrameTimeout = Duration(seconds: 6);
+
+  /// How long a picture may take, and how long it may keep buffering before
+  /// one — both read from the measured connection, never from a constant.
+  ///
+  /// These two were the last fixed budgets in the playback path: 6 s to the
+  /// first frame and ~5.6 s of buffering, on every tier, while the init
+  /// deadline beside them already stretched from 12 s to 15 s for a slow
+  /// link. A weak connection therefore finished a legitimate init, began
+  /// filling its buffer, and was torn down mid-download by a watchdog that
+  /// had never been told the link was slow — three times, since that is the
+  /// automatic recovery budget, each attempt discarding the bytes the last
+  /// one had fetched. The slower the connection, the more certain the
+  /// failure, and the user was shown a playback error for a video that was
+  /// arriving perfectly well.
+  ///
+  /// Read at the moment each watchdog is armed, so a tier re-measured
+  /// mid-session (a Wi-Fi handover, a train tunnel) applies to the very next
+  /// video rather than the next launch. See [VideoNetworkTuning].
+  Duration get _firstFrameTimeout =>
+      _videoManager.playbackTuning.firstFrameTimeout;
+
+  int get _bufferingMaxStrikesBeforeReload =>
+      _videoManager.playbackTuning.bufferingStrikesBeforeReload;
 
   /// Consecutive watchdog ticks where playback advanced without buffering.
   ///

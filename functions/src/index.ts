@@ -10,9 +10,13 @@ import * as fsp from "node:fs/promises";
 import {spawn} from "node:child_process";
 import {onObjectFinalized, StorageObjectData} from "firebase-functions/v2/storage";
 import {CloudEvent} from "firebase-functions/v2";
-import {randomUUID} from "crypto";
 
 import {db, fieldValue} from "./firebase";
+import {
+  buildStorageDownloadUrl,
+  ensureDownloadToken,
+  resolveThumbnailDownloadUrl,
+} from "./storage_download_url";
 import {REGION} from "./function_runtime";
 import {
   createUploadSession,
@@ -270,11 +274,6 @@ function parsePositiveIntEnv(
   return Math.round(parsed);
 }
 
-type GcsUserMetadata = Record<string, string>;
-interface GcsFileMetadata {
-  metadata?: GcsUserMetadata;
-}
-
 interface VideoDoc {
   thumbnailPath?: string;
   width?: number;
@@ -325,49 +324,6 @@ interface ProbedMedia extends VideoDimensions {
   audioCodec: string | null;
   // Container bitrate in bits per second, null when ffmpeg did not report it.
   bitrate: number | null;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Download token helper                                                       */
-/* -------------------------------------------------------------------------- */
-
-async function ensureDownloadToken(
-  bucketName: string,
-  objectPath: string
-): Promise<string> {
-  const storage = await getStorage();
-  const file = storage.bucket(bucketName).file(objectPath);
-
-  const [metaRaw] = await file.getMetadata().catch((): [null] => [null]);
-  const meta: GcsFileMetadata | null =
-    metaRaw && typeof metaRaw === "object" ?
-      (metaRaw as unknown as GcsFileMetadata) :
-      null;
-
-  const md: GcsUserMetadata = meta?.metadata ?? {};
-  let token =
-    typeof md["firebaseStorageDownloadTokens"] === "string" ?
-      md["firebaseStorageDownloadTokens"].trim() :
-      "";
-
-  if (!token) {
-    token = randomUUID();
-    await file.setMetadata({
-      metadata: {...md, firebaseStorageDownloadTokens: token},
-    });
-  }
-
-  return token;
-}
-
-function buildStorageDownloadUrl(
-  bucketName: string,
-  objectPath: string,
-  token: string
-): string {
-  return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${
-    encodeURIComponent(objectPath)
-  }?alt=media&token=${token}`;
 }
 
 function buildMp4PlaybackSource(
@@ -826,42 +782,6 @@ async function robustDownload(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Thumbnail resolution                                                        */
-/* -------------------------------------------------------------------------- */
-
-async function tryResolveThumbnailPath(
-  bucketName: string,
-  videoId: string
-): Promise<string | null> {
-  const storage = await getStorage();
-  try {
-    const snap = await db.collection("videos").doc(videoId).get();
-    const data = snap.data() as VideoDoc | undefined;
-
-    if (data?.thumbnailPath) {
-      const f = storage.bucket(bucketName).file(data.thumbnailPath);
-      const [exists] = await f.exists();
-      if (exists) return data.thumbnailPath;
-    }
-  } catch (e) {
-    console.warn("⚠️ Firestore thumbnailPath error:", (e as Error).message);
-  }
-
-  const candidates = [
-    `thumbnails/thumbnail_${videoId}.jpg`,
-    `thumbnails/thumbnail_${videoId}.jpeg`,
-    `thumbnails/thumbnail_${videoId}.png`,
-  ];
-
-  for (const p of candidates) {
-    const [exists] = await storage.bucket(bucketName).file(p).exists();
-    if (exists) return p;
-  }
-
-  return null;
-}
-
-/* -------------------------------------------------------------------------- */
 /* MP4 Optimization                                                            */
 /* -------------------------------------------------------------------------- */
 
@@ -1133,12 +1053,12 @@ export const optimizeMp4Video = onObjectFinalized(
 
       /* ---------------------- Thumbnail URL ---------------------- */
 
-      let thumbnail = "";
-      const thumbPath = await tryResolveThumbnailPath(bucketName, videoId);
-      if (thumbPath) {
-        const thumbToken = await ensureDownloadToken(bucketName, thumbPath);
-        thumbnail = buildStorageDownloadUrl(bucketName, thumbPath, thumbToken);
-      }
+      // Best effort, and no longer the only chance: finalizeUpload resolves
+      // the same still afterwards, so losing the race here costs nothing.
+      const thumbnail = await resolveThumbnailDownloadUrl({
+        bucketName,
+        videoId,
+      });
 
       /* ---------------------- Firestore write ---------------------- */
 

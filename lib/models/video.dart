@@ -380,6 +380,31 @@ class Video {
     String readString(dynamic value) =>
         value == null ? '' : value.toString().trim();
 
+    /// Le premier candidat qui est reellement une URL.
+    ///
+    /// `thumbnailPath` est un *chemin* Storage (`thumbnails/thumbnail_x.jpg`),
+    /// pas une adresse : il etait accepte en dernier recours et produisait une
+    /// chaine non vide que rien ne peut charger. La grille du profil prenait
+    /// donc la branche image avec une valeur condamnee, echouait, et affichait
+    /// son icone de repli -- au prix d'une resolution reseau ratee par tuile et
+    /// par reconstruction, exactement ce que le commentaire de
+    /// `profile_screen_widgets` dit vouloir eviter.
+    ///
+    /// Rendre la chaine vide fait rendre ce repli immediatement, et rend la
+    /// difference visible : « pas encore de miniature » cesse de ressembler a
+    /// « miniature cassee ». Un ancien document dont le champ `thumbnailPath`
+    /// contiendrait deja une URL reste accepte -- c'est la forme qui decide,
+    /// pas le nom du champ.
+    String readUrl(List<dynamic> candidates) {
+      for (final candidate in candidates) {
+        final value = readString(candidate);
+        if (value.startsWith('http://') || value.startsWith('https://')) {
+          return value;
+        }
+      }
+      return '';
+    }
+
     final legacySources = _parseVideoSources(map['sources']);
 
     final playbackMap = _asMap(map['playback']);
@@ -422,12 +447,12 @@ class Video {
     return Video(
       id: map['id']?.toString() ?? '',
       videoUrl: inferredUrl,
-      thumbnailUrl: readString(
-        map['thumbnail'] ??
-            map['thumbnailUrl'] ??
-            map['thumbnail_url'] ??
-            map['thumbnailPath'],
-      ),
+      thumbnailUrl: readUrl([
+        map['thumbnail'],
+        map['thumbnailUrl'],
+        map['thumbnail_url'],
+        map['thumbnailPath'],
+      ]),
       description: readString(
         map['description'] ?? map['songName'] ?? map['title'],
       ),

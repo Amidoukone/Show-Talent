@@ -12,7 +12,11 @@ import {
   getString,
 } from "./admin_account_support";
 import {normalizeNotificationText} from "./notification_text";
-import {getUserPushToken, handlePushSendError} from "./push_delivery";
+import {
+  APNS_ALERT_OPTIONS,
+  getUserPushToken,
+  reportPushSendFailure,
+} from "./push_delivery";
 
 const OFFER_STATUSES = new Set(["brouillon", "ouverte", "fermee", "archivee"]);
 const EVENT_STATUSES = new Set(["brouillon", "ouvert", "ferme", "archive"]);
@@ -559,77 +563,121 @@ async function countPublicPlayerVideos(
   return count;
 }
 
+/** Why the author of a moderated video was, or was not, notified. */
+type VideoOwnerNotifyOutcome =
+  | "sent"
+  | "no_owner"
+  | "owner_missing"
+  | "token_missing"
+  | "token_unregistered"
+  | "apns_credential"
+  | "send_failed";
+
+/**
+ * Tells the author their video was approved or refused, and says why not.
+ *
+ * Every branch now reports itself. This used to return a bare `false` for
+ * "the author has no registered device" without writing anything down, which
+ * is the single most common outcome and the one behind the complaint that an
+ * approved video never notifies its author: on iOS no device had ever managed
+ * to register a token, so every approval took this path in silence. "Nothing
+ * in the logs" read as "nothing went wrong".
+ *
+ * The outcome is returned, not just logged, so `adminSetVideoStatus` can hand
+ * it back to the admin portal: the person who clicked "approve" is the only
+ * one in a position to warn the player by other means.
+ *
+ * @param {object} params Owner, video, decision and the text to display.
+ * @return {Promise<VideoOwnerNotifyOutcome>} What actually happened.
+ */
 async function notifyVideoOwner(params: {
   ownerUid: string;
   videoId: string;
   decision: "approved" | "rejected";
   title: string;
   body: string;
-}): Promise<boolean> {
+}): Promise<VideoOwnerNotifyOutcome> {
   if (!params.ownerUid) {
-    return false;
+    logger.warn("video moderation notification has no owner", {
+      videoId: params.videoId,
+      decision: params.decision,
+    });
+    return "no_owner";
   }
 
+  const logContext = {
+    videoId: params.videoId,
+    ownerUid: params.ownerUid,
+    decision: params.decision,
+  };
+
+  let token = "";
   try {
     const userSnap = await db.collection("users").doc(params.ownerUid).get();
     if (!userSnap.exists) {
-      return false;
+      logger.warn("video moderation notification skipped: owner gone", logContext);
+      return "owner_missing";
     }
 
-    const token = await getUserPushToken(params.ownerUid);
+    token = await getUserPushToken(params.ownerUid);
     if (!token) {
-      return false;
+      // `error`, not `warn`: this is a player who will never learn that the
+      // video they are waiting on went live, and the admin screen said the
+      // approval succeeded.
+      logger.error(
+        "video moderation notification undeliverable: the author has no " +
+        "registered push token, so the approval was never announced",
+        logContext,
+      );
+      return "token_missing";
     }
 
-    try {
-      await messaging.send({
-        token,
+    await messaging.send({
+      token,
+      notification: {
+        title: normalizeNotificationText(params.title, 120),
+        body: normalizeNotificationText(params.body, 300),
+      },
+      data: {
+        type: "video_moderation",
+        videoId: params.videoId,
+        decision: params.decision,
+      },
+      android: {
+        priority: "high",
         notification: {
-          title: normalizeNotificationText(params.title, 120),
-          body: normalizeNotificationText(params.body, 300),
+          channelId: "high_importance_channel",
+          sound: "default",
         },
-        data: {
-          type: "video_moderation",
-          videoId: params.videoId,
-          decision: params.decision,
-        },
-        android: {
-          priority: "high",
-          notification: {
-            channelId: "high_importance_channel",
-            sound: "default",
-          },
-        },
-        apns: {
-          payload: {
-            aps: {
-              sound: "default",
-            },
-          },
-        },
-      });
-    } catch (sendError) {
-      // A dead token is not a transient failure: left in place it makes every
-      // future notification to this author fail silently, forever. Clearing it
-      // lets the next sign-in re-register a live one.
-      await handlePushSendError({
+      },
+      apns: APNS_ALERT_OPTIONS,
+    });
+
+    logger.info("video moderation notification sent", logContext);
+    return "sent";
+  } catch (sendError) {
+    // A dead token is not a transient failure: left in place it makes every
+    // future notification to this author fail silently, forever. Clearing it
+    // lets the next sign-in re-register a live one. A missing APNs credential
+    // is not transient either, and is not repaired here at all -- it is
+    // named so it stops being mistaken for one.
+    const kind = token ?
+      await reportPushSendFailure({
         error: sendError,
         uid: params.ownerUid,
         token,
         reason: "video_moderation",
-      });
-      throw sendError;
-    }
+      }) :
+      "other";
 
-    return true;
-  } catch (error) {
-    logger.warn("video moderation notification skipped", {
-      videoId: params.videoId,
-      ownerUid: params.ownerUid,
-      decision: params.decision,
-      error,
+    if (kind === "token_unregistered") return "token_unregistered";
+    if (kind === "apns_credential") return "apns_credential";
+
+    logger.error("video moderation notification failed", {
+      ...logContext,
+      error: sendError,
     });
-    return false;
+    return "send_failed";
   }
 }
 
@@ -697,7 +745,7 @@ async function rejectVideoWithAdminRights(params: {
 
   await videoRef.delete();
 
-  const notified = await notifyVideoOwner({
+  const notifyOutcome = await notifyVideoOwner({
     ownerUid,
     videoId: params.videoId,
     decision: "rejected",
@@ -705,6 +753,7 @@ async function rejectVideoWithAdminRights(params: {
     body: params.reason?.trim() ||
       "Votre vidéo n'a pas été retenue après examen. Vous pouvez en publier une autre.",
   });
+  const notified = notifyOutcome === "sent";
 
   logger.info("admin video rejected and deleted", {
     videoId: params.videoId,
@@ -712,6 +761,7 @@ async function rejectVideoWithAdminRights(params: {
     deletedBy: params.adminUid,
     deletedAssetCount: deletedAssetPaths.length,
     notified,
+    notifyOutcome,
   });
 
   return {
@@ -724,6 +774,7 @@ async function rejectVideoWithAdminRights(params: {
       deletedBy: params.adminUid,
       deletedAssetPaths,
       notified,
+      notifyOutcome,
     },
   };
 }
@@ -831,6 +882,10 @@ export const adminSetVideoStatus = onCall(
         }, {merge: true});
       });
 
+      // Reported back to the caller, not just logged. "Vidéo approuvée" on
+      // the admin screen used to be the whole story even when the author was
+      // never told -- the only outcome the player actually experiences.
+      let notifyOutcome: VideoOwnerNotifyOutcome | null = null;
       if (status === "approved") {
         await recordVideoModerationDecision({
           videoId,
@@ -840,7 +895,7 @@ export const adminSetVideoStatus = onCall(
           videoData,
         });
 
-        await notifyVideoOwner({
+        notifyOutcome = await notifyVideoOwner({
           ownerUid,
           videoId,
           decision: "approved",
@@ -854,6 +909,7 @@ export const adminSetVideoStatus = onCall(
         status,
         nextStatus,
         updatedBy: adminUid,
+        notifyOutcome,
       });
 
       return {
@@ -867,6 +923,8 @@ export const adminSetVideoStatus = onCall(
           status,
           firestoreStatus: nextStatus,
           updatedBy: adminUid,
+          notified: notifyOutcome === null ? null : notifyOutcome === "sent",
+          notifyOutcome,
         },
       };
     } catch (error) {

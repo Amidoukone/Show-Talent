@@ -9,7 +9,12 @@ import {db, fieldValue, messaging, storage} from "./firebase";
 import {MOBILE_CALLABLE_OPTIONS} from "./function_runtime";
 import {resolveCallableAuth} from "./callable_auth";
 import {normalizeNotificationText} from "./notification_text";
-import {getUserPushToken, handlePushSendError, pushTokenRef} from "./push_delivery";
+import {
+  APNS_ALERT_OPTIONS,
+  getUserPushToken,
+  pushTokenRef,
+  reportPushSendFailure,
+} from "./push_delivery";
 import {enqueueFanoutCampaign} from "./fanout_campaigns";
 
 type SuccessResponse<T> = {
@@ -795,13 +800,7 @@ export const sendUserPush = onCall(
             sound: "default",
           },
         },
-        apns: {
-          payload: {
-            aps: {
-              sound: "default",
-            },
-          },
-        },
+        apns: APNS_ALERT_OPTIONS,
       });
 
       return ok("sent", "Notification envoyée.", {sent: true});
@@ -815,14 +814,25 @@ export const sendUserPush = onCall(
       // recipient reinstalled or restored the app and the stored token will
       // now fail every single time. Clear it and answer accordingly, so the
       // caller does not retry a send that can never succeed.
-      const unregistered = await handlePushSendError({
+      //
+      // A missing APNs credential is permanent too, and project-wide rather
+      // than per-recipient, so it gets its own answer: retrying it on another
+      // device would fail identically, and the repair is a key upload in the
+      // Firebase console. reportPushSendFailure writes the actionable line.
+      const kind = await reportPushSendFailure({
         error,
         uid: recipientUid,
         token,
         reason: "user_push",
       });
-      if (unregistered) {
+      if (kind === "token_unregistered") {
         return err("token_stale", "Destinataire injoignable (token expiré).");
+      }
+      if (kind === "apns_credential") {
+        return err(
+          "apns_unconfigured",
+          "Notifications iOS indisponibles (configuration APNs).",
+        );
       }
 
       logger.error("❌ sendUserPush error", error);
@@ -830,6 +840,23 @@ export const sendUserPush = onCall(
     }
   }
 );
+
+/**
+ * Platforms a registration token may come from.
+ *
+ * Anything else is stored as `unknown` rather than rejected: an older build
+ * sends no platform at all, and refusing its token would cost that install
+ * its notifications over a diagnostic field.
+ */
+const PUSH_TOKEN_PLATFORMS = new Set([
+  "android",
+  "ios",
+  "macos",
+  "web",
+  "windows",
+  "linux",
+  "fuchsia",
+]);
 
 export const saveUserFcmToken = onCall(
   MOBILE_CALLABLE_OPTIONS,
@@ -840,6 +867,22 @@ export const saveUserFcmToken = onCall(
     if (!token || token.length > 4096) {
       throw new HttpsError("invalid-argument", "Token FCM invalide.");
     }
+
+    // Which platform registered, and from which build.
+    //
+    // The token document carried neither, and the absence cost two rounds of
+    // guessing during the iOS notification outage: `user_push_tokens` listed
+    // a dozen entries and nothing in it said whether a single one belonged to
+    // an iPhone. "No iOS device has ever registered" and "iOS registers but
+    // delivery fails" are different faults with different repairs, and the
+    // only data that separates them is this.
+    const rawPlatform = getString(request.data, "platform")
+      .trim()
+      .toLowerCase();
+    const platform = PUSH_TOKEN_PLATFORMS.has(rawPlatform) ?
+      rawPlatform :
+      "unknown";
+    const appVersion = getString(request.data, "appVersion").trim().slice(0, 40);
 
     const userRef = db.collection("users").doc(uid);
     const userSnap = await userRef.get();
@@ -854,6 +897,8 @@ export const saveUserFcmToken = onCall(
     const batch = db.batch();
     batch.set(pushTokenRef(uid), {
       token,
+      platform,
+      ...(appVersion ? {appVersion} : {}),
       updatedAt: fieldValue.serverTimestamp(),
     });
     batch.update(userRef, {

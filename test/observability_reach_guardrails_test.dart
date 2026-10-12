@@ -89,7 +89,7 @@ void main() {
       expect(events, contains('AppLogger.warning('));
     });
 
-    // Sampled at 15%, because the snapshot re-delivers on every change and a
+    // Sampled, because the snapshot re-delivers on every change and a
     // permanently malformed document would otherwise log on every update.
     test('they are warnings, not errors, so a bad document cannot flood', () {
       final offers = _read('lib/services/offers/offer_repository.dart');
@@ -192,6 +192,132 @@ void main() {
         isEmpty,
         reason: 'these are converted now — remove them from notYetConverted '
             'so the guardrail starts holding them',
+      );
+    });
+  });
+
+  // Sept echecs que l'utilisateur traversait pendant que `client_logs` restait
+  // vide. Le defaut n'etait pas l'absence de journal -- il y en avait un -- mais
+  // son niveau : `AppLogger.debug` sort de `_shouldSendToRemote` sans rien
+  // envoyer, donc un ecran pouvait afficher « Enregistrement impossible » et ne
+  // laisser aucune trace nulle part.
+  //
+  // Chaque `source` est epinglee parce que c'est elle qu'on cherche dans
+  // `list-recent-client-errors.mjs` : un renommage silencieux rendrait la
+  // recherche vide sans rien casser.
+  group('un echec montre a l\'utilisateur atteint client_logs', () {
+    const expected = <String, String>{
+      'profile/save': 'lib/screens/edit_profil_screen.dart',
+      'profile/cv_upload': 'lib/screens/edit_profil_screen.dart',
+      'profile/watch': 'lib/controller/profile_controller.dart',
+      'settings/load': 'lib/screens/setting_screen.dart',
+      'settings/privacy': 'lib/screens/setting_screen.dart',
+      'settings/language': 'lib/screens/setting_screen.dart',
+      'feed/focus_video': 'lib/screens/home_screen.dart',
+    };
+
+    expected.forEach((source, path) {
+      test('$source est rapporte en error', () {
+        final src = _read(path);
+        final index = src.indexOf("source: '$source'");
+        expect(index, isNonNegative, reason: '$source a disparu de $path');
+        // La `source` appartient a l'appel qui la precede immediatement.
+        expect(
+          src.substring(index < 400 ? 0 : index - 400, index),
+          contains('AppLogger.error('),
+          reason: 'warning est echantillonne et debug n\'est jamais envoye ; '
+              'cet echec-la, l\'utilisateur l\'a deja vu',
+        );
+      });
+    });
+
+    // Celui-ci merite d'etre nomme : c'est le chemin d'un appui sur une
+    // notification de moderation. La vidéo demandee est introuvable, la
+    // fonction rend 0, et l'utilisateur atterrit en haut du fil.
+    test('un appui de notification qui rate sa vidéo se signale', () {
+      final home = _read('lib/screens/home_screen.dart');
+      final index = home.indexOf("source: 'feed/focus_video'");
+      expect(index, isNonNegative);
+      expect(home.substring(index, index + 200), contains('return 0;'));
+    });
+  });
+
+  // Un journal qui ne dit pas quelle version l'a produit ne clot aucune
+  // question. Jusqu'a la 1.0.7+49, `client_logs` n'en portait aucune : « est-ce
+  // corrige ? » se repondait en regardant un message cesser d'apparaitre et en
+  // deduisant que le nouveau build devait etre installe. Cette deduction a
+  // coute quatre builds sur la panne des notifications iOS.
+  group('chaque entree de client_logs se rattache a un build', () {
+    test('le contexte porte la version, la plateforme et l\'environnement', () {
+      final logger = _read('lib/services/client_logger.dart');
+      final context = logger.indexOf('Map<String, dynamic> _deviceContext()');
+      expect(context, isNonNegative);
+      // La methode est en fin de fichier : borner la fenetre sur la longueur.
+      final body = logger.substring(
+        context,
+        (context + 700).clamp(context, logger.length),
+      );
+
+      expect(body, contains("'appVersion'"));
+      expect(body, contains("'platform'"));
+      expect(body, contains("'env'"));
+      expect(
+        body,
+        contains('AppVersion.cached'),
+        reason: 'la version vient du manifeste installe, jamais d\'une '
+            'constante compilee a cote',
+      );
+    });
+
+    test('une seule lecture du manifeste pour tout le processus', () {
+      // Trois consommateurs posent la meme question pour trois raisons : le
+      // libelle de version, le document de jeton push, et client_logs. Trois
+      // lectures independantes, c'est trois occasions de ne pas dire la meme
+      // chose du build que l'utilisateur fait tourner.
+      final offenders = <String>[];
+      for (final entity in Directory('lib').listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) continue;
+        final path = entity.path.split(Platform.pathSeparator).join('/');
+        if (path == 'lib/services/app_version.dart') continue;
+        if (entity.readAsStringSync().contains('PackageInfo.fromPlatform')) {
+          offenders.add(path);
+        }
+      }
+
+      expect(
+        offenders,
+        isEmpty,
+        reason: 'passer par AppVersion, qui lit une fois et partage',
+      );
+    });
+
+    test('une pile d\'appels ne part pas entiere dans Firestore', () {
+      // Les metadonnees portent `error.toString()` et
+      // `stackTrace.toString()`, et elles etaient recopiees telles quelles
+      // -- le message, lui, est tronque a 2000 par logClientEvents. Tant
+      // que les avertissements etaient echantillonnes a 15 %, le volume
+      // etait borne par accident ; il ne l'est plus.
+      final logger = _read('lib/services/app_logger.dart');
+      expect(logger, contains('static const int maxMetadataValueLength'));
+
+      final safe = logger.indexOf('_safeMetadata(Map<String, dynamic> raw)');
+      expect(safe, isNonNegative);
+      expect(
+        logger.substring(safe, (safe + 500).clamp(safe, logger.length)),
+        contains('_truncate('),
+        reason: 'chaque valeur de metadonnee doit passer par le plafond',
+      );
+    });
+
+    test('l\'echantillonnage des avertissements est un reglage, pas un chiffre', () {
+      // 15 % est juste a l'echelle de milliers d'installations et absurde avec
+      // trois testeurs : un defaut par session y est vu une session sur sept,
+      // et ce silence se lit comme une absence de probleme.
+      final logger = _read('lib/services/app_logger.dart');
+      expect(logger, contains('CLIENT_LOG_WARNING_SAMPLE_PERCENT'));
+      expect(
+        logger,
+        contains('productionWarningSampleRate = warningSamplePercent / 100'),
       );
     });
   });

@@ -157,8 +157,18 @@ class _HomeScreenState extends State<HomeScreen> {
           .toList(growable: false);
       videoController.replaceVideos([video, ...current], selectedIndex: 0);
       return 0;
-    } catch (error) {
-      AppLogger.debug('[HomeScreen] focused video lookup failed: $error');
+    } catch (error, stackTrace) {
+      // Ce chemin est celui d'un appui sur une notification de
+      // moderation : la video demandee est introuvable, on rend 0, et
+      // l'utilisateur atterrit en haut du fil au lieu de sa video.
+      // Rien ne le lui dit, et rien ne nous le disait non plus.
+      AppLogger.error(
+        'focused video lookup failed; the feed opened on its first '
+        'video instead of the requested one: $error',
+        source: 'feed/focus_video',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return 0;
     }
   }

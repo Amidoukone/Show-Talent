@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:adfoot/services/app_version.dart';
 import 'package:adfoot/widgets/app_version_label.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
+    // The reader caches for the whole process; without this, the first test to
+    // run would fix the answer for the others.
+    AppVersion.resetForTests();
     PackageInfo.setMockInitialValues(
       appName: 'Adfoot',
       packageName: 'org.adfoot.app',
@@ -51,13 +55,25 @@ void main() {
   test('the label reads the package manifest, not a compiled constant', () {
     final source = File('lib/widgets/app_version_label.dart').readAsStringSync();
 
-    expect(source, contains('PackageInfo.fromPlatform()'));
-    expect(source, contains(r'${info.version}'));
-    expect(source, contains(r'${info.buildNumber}'));
-    // A version hardcoded here would drift from the artifact the moment the
-    // next build is cut, which is the failure this label exists to catch.
-    expect(source, isNot(contains('1.0.7')));
-    expect(source, isNot(contains('String.fromEnvironment')));
+    // Through AppVersion now, rather than straight to the platform channel:
+    // the push-token document and every client_logs entry name the same build,
+    // and three independent reads of one manifest is three chances for them to
+    // disagree about what the user is running. The guarantee is unchanged --
+    // the number still comes from the installed package.
+    expect(source, contains('AppVersion.resolve()'));
+    expect(source, contains('AppVersion.versionName'));
+    expect(source, contains('AppVersion.buildNumber'));
+
+    final reader = File('lib/services/app_version.dart').readAsStringSync();
+    expect(reader, contains('PackageInfo.fromPlatform()'));
+
+    // A version hardcoded on either side would drift from the artifact the
+    // moment the next build is cut, which is the failure this label exists to
+    // catch.
+    for (final text in [source, reader]) {
+      expect(text, isNot(contains('1.0.7')));
+      expect(text, isNot(contains('String.fromEnvironment')));
+    }
   });
 
   test('the settings screen ends with the version', () {

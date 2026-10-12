@@ -9,7 +9,12 @@ import * as logger from "firebase-functions/logger";
 import {db, fieldValue, messaging} from "./firebase";
 import {LOW_CPU_REGION_OPTIONS} from "./function_runtime";
 import {normalizeNotificationText} from "./notification_text";
-import {isUnregisteredTokenError, pruneUnregisteredToken, pushTokenRef} from "./push_delivery";
+import {
+  APNS_ALERT_OPTIONS,
+  classifyPushFailure,
+  pruneUnregisteredToken,
+  pushTokenRef,
+} from "./push_delivery";
 
 type CampaignParams = {
   senderUid: string;
@@ -90,12 +95,24 @@ async function processCampaign(ref: FirebaseFirestore.DocumentReference): Promis
           senderId: String(data.senderUid ?? ""),
         },
         android: {priority: "high", notification: {channelId: "high_importance_channel", sound: "default"}},
-        apns: {payload: {aps: {sound: "default"}}},
+        apns: APNS_ALERT_OPTIONS,
       });
       sent = response.successCount;
       failed = response.failureCount;
+      // A fanout is the one place where a broken APNs setup is visible in
+      // bulk: every iOS recipient fails the same way, in the same batch. It
+      // is reported once rather than per device, and separately from dead
+      // tokens, because the two are repaired in different places and only
+      // one of them resolves itself.
+      let apnsCredentialFailures = 0;
       await Promise.all(response.responses.map(async (result, index) => {
-        if (result.success || !isUnregisteredTokenError(result.error)) return;
+        if (result.success) return;
+        const kind = classifyPushFailure(result.error);
+        if (kind === "apns_credential") {
+          apnsCredentialFailures++;
+          return;
+        }
+        if (kind !== "token_unregistered") return;
         const target = targets[index];
         if (target) {
           await pruneUnregisteredToken({
@@ -105,6 +122,19 @@ async function processCampaign(ref: FirebaseFirestore.DocumentReference): Promis
           });
         }
       }));
+
+      if (apnsCredentialFailures > 0) {
+        logger.error(
+          "APNs credential missing or rejected during fanout: every iOS " +
+          "recipient was dropped. Upload an APNs authentication key in " +
+          "Firebase Console > Project settings > Cloud Messaging.",
+          {
+            campaignId: ref.id,
+            contextType: String(data.contextType ?? ""),
+            droppedRecipients: apnsCredentialFailures,
+          },
+        );
+      }
     }
 
     const completed = players.size < 400;

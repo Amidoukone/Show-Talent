@@ -87,6 +87,35 @@ void main() {
       );
     });
 
+    test('a verified account does not pay for the verification chase', () {
+      // Round trips, not bandwidth, are what a weak link charges for. The
+      // handshake spent seven of them in sequence, and four existed only for
+      // the account that was verified seconds earlier -- the user who tapped
+      // the link in their mail app and came straight back.
+      //
+      // `_refreshCurrentUserAfterVerification` opens with its own
+      // `getIdToken(true)` and `reload()`, then repeats both when it finds
+      // the address verified. Called unconditionally, an ordinary sign-in
+      // re-read a flag that `reload()` had already returned, three more
+      // times, for twelve seconds of spinner on a 3 s link.
+      final start = service.indexOf('Future<User> _signInHandshake(');
+      expect(start, isNonNegative);
+      final body = service.substring(start, start + 2000);
+
+      final chase = body.indexOf('_refreshCurrentUserAfterVerification(');
+      expect(
+        chase,
+        isNonNegative,
+        reason: 'the not-yet-verified path still needs the chase',
+      );
+      expect(
+        body.substring(0, chase),
+        contains('!refreshed.emailVerified'),
+        reason: 'the chase must be entered only when there is something to '
+            'chase; unconditional, it re-reads a flag already in hand',
+      );
+    });
+
     test('the repair retries against a deadline, not a retry count', () {
       expect(service, contains('final deadline = DateTime.now().add('));
       expect(

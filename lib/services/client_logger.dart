@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 
 import '../config/app_environment.dart';
+import 'app_version.dart';
 import 'callable_auth_guard.dart';
 
 class ClientLogEntry {
@@ -126,20 +127,35 @@ class ClientLogger {
     }
   }
 
+  /// Who produced this batch: which platform, which build, which project.
+  ///
+  /// The build is the field that was missing, and its absence is not a
+  /// detail. An entry in `client_logs` could not be attributed to a version,
+  /// so "is this fixed?" was answered by watching an error stop appearing and
+  /// inferring that the new build must be installed. That inference cost four
+  /// builds on the iOS notification outage. [AppVersion] holds the one
+  /// manifest read of the process, warmed during bootstrap.
+  ///
+  /// `env` because a staging device and a production device write to
+  /// different projects but produce identical-looking entries, and a report
+  /// read from the wrong project looks like silence.
   Map<String, dynamic> _deviceContext() {
-    if (kIsWeb) {
-      return {'platform': 'web'};
-    }
-    final platformName = switch (defaultTargetPlatform) {
+    final version = AppVersion.cached;
+    return {
+      'platform': kIsWeb ? 'web' : _platformName(),
+      if (version != null && version.isNotEmpty) 'appVersion': version,
+      'env': AppEnvironmentConfig.environmentName,
+    };
+  }
+
+  String _platformName() {
+    return switch (defaultTargetPlatform) {
       TargetPlatform.android => 'android',
       TargetPlatform.iOS => 'ios',
       TargetPlatform.macOS => 'macos',
       TargetPlatform.windows => 'windows',
       TargetPlatform.linux => 'linux',
       TargetPlatform.fuchsia => 'fuchsia',
-    };
-    return {
-      'platform': platformName,
     };
   }
 }

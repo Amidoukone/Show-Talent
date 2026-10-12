@@ -523,7 +523,7 @@ class EventRepository {
         // que personne n'a attache sur un vrai telephone.
         //
         // `warning` plutot que `error` parce que l'instantane se redelivre a
-        // chaque changement : l'echantillonnage a 15 % donne le taux sans
+        // chaque changement : l'echantillonnage donne le taux sans
         // noyer la collection si un document reste durablement casse.
         AppLogger.warning(
           'event dropped from the list; its document did not parse',

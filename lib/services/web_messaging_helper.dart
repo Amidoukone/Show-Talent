@@ -143,7 +143,7 @@ class WebMessagingHelper {
     // configuration Firebase). Sans cette distinction, la cause se cherche
     // par élimination à chaque build — ce qui a déjà coûté deux tours.
     //
-    // `error`, pas `warning` : les warnings sont échantillonnés à 15 % en
+    // `error`, pas `warning` : les warnings sont échantillonnés en
     // production, et c'est une capacité perdue, pas du bruit.
     if (isApplePlatform && !apnsArrived) {
       AppLogger.error(

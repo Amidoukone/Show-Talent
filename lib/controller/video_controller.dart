@@ -59,7 +59,15 @@ class VideoController extends GetxController {
   static const int _liveWindowLimit = 30;
   static const int _liveHeadBufferLimit = 12;
   static const int _pendingLiveThumbnailWarmupLimit = 4;
-  static const int _thumbnailPrefetchRadius = 2;
+  /// Read from the measured connection, not held here.
+  ///
+  /// `VideoFeedPager` warms thumbnails on every page change, before the video
+  /// the user is waiting for starts initialising. A constant meant that
+  /// happened identically on a 10 Mb/s link and on one the pipeline had
+  /// already classified as too slow to preload anything at all. See
+  /// [VideoNetworkTuning.thumbnailPrefetchRadius].
+  int get _thumbnailPrefetchRadius =>
+      _videoManager.playbackTuning.thumbnailPrefetchRadius;
 
   bool get hasMore => hasMoreVideos.value;
   bool get isLoading => _isLoading;

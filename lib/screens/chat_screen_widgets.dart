@@ -166,8 +166,17 @@ class _ContactFeedbackSheetState extends State<_ContactFeedbackSheet> {
     );
     final sheetMaxHeight = math.min(media.size.height * 0.92, availableHeight);
 
+    // `bottom: false` : le pied de page ci-dessous a deja son propre
+    // `SafeArea` avec son `minimum`. Les deux reclamaient l'inset du bas,
+    // ce qui laissait ~68 dp de vide clavier ferme la ou 34 suffisent.
+    //
+    // L'`AnimatedPadding` du clavier, lui, reste : cette feuille passe par
+    // `showModalBottomSheet`, dont la route n'ajoute aucune marge de clavier
+    // (contrairement a `Get.bottomSheet` -- voir `ContactIntakeSheet`, ou
+    // cette meme marge etait comptee deux fois).
     return SafeArea(
       top: false,
+      bottom: false,
       child: AnimatedPadding(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,

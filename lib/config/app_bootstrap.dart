@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 
 import '../l10n/locale_preference.dart';
 import '../services/app_check_service.dart';
+import '../services/app_version.dart';
 import '../services/email_link_handler.dart';
 import '../services/notifications.dart';
 import '../utils/video_cache_manager.dart';
@@ -93,6 +94,15 @@ class AppBootstrap {
         () => FirebaseMessaging.instance.setAutoInitEnabled(false),
       );
     }
+
+    // Started here, not at first use: the build number comes from a platform
+    // channel, and neither the sign-in path nor a log being enqueued may wait
+    // on one. By the time a token is registered or an error is reported the
+    // answer is already in hand; if it is not, the record goes without it.
+    await _runNonCritical(
+      'AppVersion.warm',
+      () async => AppVersion.warm(),
+    );
 
     await _runNonCritical(
       'NotificationService.initLocal',

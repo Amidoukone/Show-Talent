@@ -234,9 +234,10 @@ class NotificationService {
     // endroit : `denied` se règle dans les réglages du système, un jeton
     // manquant malgré une autorisation accordée est un défaut de l'application.
     //
-    // `error` et non `warning` : les warnings sont echantillonnes a 15 % en
-    // production (AppLogger.productionWarningSampleRate), et une capacite
-    // perdue sur un appareil n'est pas du bruit dont on prend un echantillon.
+    // `error` et non `warning` : les warnings sont echantillonnes en
+    // production (AppLogger.warningSamplePercent, un reglage qui redescend
+    // apres le lancement), et une capacite perdue sur un appareil n'est pas
+    // du bruit dont on prend un echantillon.
     // C'est le choix deja fait par UserRepository._retryFcmTokenSave pour
     // exactement la meme raison. Sans cela, l'etat le plus probable de cette
     // panne -- l'utilisateur a refuse une fois, iOS ne redemande jamais -- est

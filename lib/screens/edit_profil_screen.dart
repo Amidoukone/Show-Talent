@@ -560,8 +560,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         });
       }
       return;
-    } catch (e) {
-      AppLogger.debug('EditProfile _save error: $e');
+    } catch (e, st) {
+      // L'ecran vient d'afficher « Enregistrement impossible » ; sans cette
+      // ligne, c'est tout ce qui existe de l'incident. Voir AppLogger.error.
+      AppLogger.error(
+        'profile save failed: $e',
+        source: 'profile/save',
+        error: e,
+        stackTrace: st,
+      );
       if (mounted) {
         setState(() {
           _saveFailureTitle = l10n.editProfileGenericErrorTitle;
@@ -1057,7 +1064,12 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
     } on ProfileAccessRevokedException {
       return;
     } catch (e, st) {
-      AppLogger.debug('CV picker/upload error: $e\n$st');
+      AppLogger.error(
+        'CV pick or upload failed: $e',
+        source: 'profile/cv_upload',
+        error: e,
+        stackTrace: st,
+      );
       final message = l10n.editProfileCvPickUploadFailedMessage;
       _showCvFailure(l10n.editProfileCvAddFailedTitle, message);
       AdFeedback.error(

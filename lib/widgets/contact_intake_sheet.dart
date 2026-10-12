@@ -25,8 +25,8 @@ class ContactIntakeSheet extends StatefulWidget {
   /// l'ecran : `resolveSheetMaxHeight(...) + keyboardInset <= screenHeight`.
   ///
   /// Il etait rompu par un plancher de 260 dp applique *apres* la deduction du
-  /// clavier, alors que l'`AnimatedPadding` ci-dessous ajoute ce meme clavier
-  /// en marge basse. Sur un ecran de 560 dp avec un clavier de 320 il ne reste
+  /// clavier, alors que la route de la feuille ajoute ce meme clavier en marge
+  /// basse. Sur un ecran de 560 dp avec un clavier de 320 il ne reste
   /// que 188 dp : le plancher en reclamait 260, la feuille demandait donc
   /// 580 dp dans un cadre de 560, et son haut passait hors de l'ecran avec le
   /// champ de saisie dedans. C'est ce que l'utilisateur decrivait par « le
@@ -40,6 +40,11 @@ class ContactIntakeSheet extends StatefulWidget {
   /// A noter : ce plancher ne mordait que sur un ecran court. Un iPhone fait
   /// 667 a 932 dp, donc `max(260, ...)` y rendait deja la valeur calculee et
   /// ce defaut y restait latent. Il est reel, il n'etait pas celui-la.
+  ///
+  /// La deduction du clavier reste necessaire **meme si la feuille ne pose
+  /// plus elle-meme cette marge** : c'est `GetModalBottomSheetRoute` qui la
+  /// pose (voir [build]), donc l'invariant teste ci-dessus decrit toujours la
+  /// geometrie reelle.
   @visibleForTesting
   static double resolveSheetMaxHeight({
     required double screenHeight,
@@ -132,177 +137,191 @@ class _ContactIntakeSheetState extends State<ContactIntakeSheet> {
         ? '${widget.context.displayLabel} - ${widget.context.normalizedTitle}'
         : widget.context.displayLabel;
 
+    // Ni marge de clavier, ni marge du bas, et les deux pour la meme raison :
+    // quelqu'un d'autre les possede deja.
+    //
+    // Cette feuille n'est ouverte que par `Get.bottomSheet`, et
+    // `GetModalBottomSheetRoute.buildPage` enveloppe deja son contenu dans
+    // `Padding(bottom: MediaQuery.of(context).viewInsets.bottom)`. La feuille
+    // ajoutait la meme hauteur une seconde fois : clavier ouvert, elle etait
+    // soulevee de *deux* hauteurs de clavier, et son bas flottait une hauteur
+    // de clavier au-dessus du clavier. C'est ce que l'utilisateur voyait --
+    // « le champ de saisie monte trop haut » -- sur le seul ecran ou l'on
+    // ecrit un premier message. La correction precedente avait borne la
+    // *hauteur* de la feuille, ce qui la ramenait dans le cadre sans retirer
+    // le vide sous elle.
+    //
+    // L'inset du bas (barre de geste, encoche basse) revient au pied de page,
+    // qui a son propre `SafeArea` avec son `minimum`. Les deux le reclamaient,
+    // soit ~68 dp de vide clavier ferme la ou 34 suffisent. Meme regle que
+    // `ChatScreen` : un seul widget possede le bas.
     return SafeArea(
       top: false,
-      child: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.only(bottom: bottomInset),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: sheetMaxHeight),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
-              border: Border(
-                top: BorderSide(color: cs.outline.withValues(alpha: 0.22)),
-              ),
+      bottom: false,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: sheetMaxHeight),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(16),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: SingleChildScrollView(
-                    // Guardrail: keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Center(
-                            child: Container(
-                              width: 42,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: cs.outline.withValues(alpha: 0.35),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            l10n.contactIntakeSheetTitle,
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w900,
-                                  color: cs.onSurface,
-                                ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            l10n.contactIntakeSheetSubtitle,
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: cs.onSurface.withValues(alpha: 0.72),
-                                  height: 1.35,
-                                ),
-                          ),
-                          const SizedBox(height: 16),
-                          _ContextCard(
-                            title: contextLabel,
-                            targetName: widget.otherUser.nom,
-                            targetRole: widget.otherUser.role,
-                          ),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedReason,
-                            isExpanded: true,
-                            decoration: InputDecoration(
-                              labelText: l10n.contactIntakeSheetReasonLabel,
-                            ),
-                            items: _reasonOptions(l10n)
-                                .map(
-                                  (option) => DropdownMenuItem<String>(
-                                    value: option.code,
-                                    child: Text(
-                                      option.label,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                )
-                                .toList(growable: false),
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(() => _selectedReason = value);
-                            },
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _reasonOptions(l10n)
-                                    .firstWhere(
-                                      (option) =>
-                                          option.code == _selectedReason,
-                                      orElse: () => _reasonOptions(l10n).last,
-                                    )
-                                    .description ??
-                                '',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: cs.onSurface.withValues(alpha: 0.65),
-                                  height: 1.28,
-                                ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _introController,
-                            maxLength: 280,
-                            minLines: 3,
-                            maxLines: 5,
-                            scrollPadding: const EdgeInsets.only(bottom: 120),
-                            textInputAction: TextInputAction.newline,
-                            decoration: InputDecoration(
-                              labelText: l10n.contactIntakeSheetIntroLabel,
-                              hintText: l10n.contactIntakeSheetIntroHint,
-                              alignLabelWithHint: true,
-                            ),
-                            validator: (value) {
-                              final normalized = value?.trim() ?? '';
-                              if (normalized.length < 12) {
-                                return l10n
-                                    .contactIntakeSheetIntroTooShortError;
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: cs.surface,
-                    border: Border(
-                      top: BorderSide(
-                        color: cs.outline.withValues(alpha: 0.18),
-                      ),
-                    ),
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    minimum: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                    child: Row(
+            border: Border(
+              top: BorderSide(color: cs.outline.withValues(alpha: 0.22)),
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  // Guardrail: keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: AdButton(
-                            label: l10n.commonCancel,
-                            kind: AdButtonKind.outline,
-                            size: AdButtonSize.compact,
-                            expanded: false,
-                            onPressed: () => Get.back<GuidedContactDraft?>(),
+                        Center(
+                          child: Container(
+                            width: 42,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: cs.outline.withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: AdButton(
-                            label: l10n.contactIntakeSheetStartAction,
-                            size: AdButtonSize.compact,
-                            expanded: false,
-                            onPressed: _submit,
+                        const SizedBox(height: 16),
+                        Text(
+                          l10n.contactIntakeSheetTitle,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: cs.onSurface,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          l10n.contactIntakeSheetSubtitle,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: cs.onSurface.withValues(alpha: 0.72),
+                                height: 1.35,
+                              ),
+                        ),
+                        const SizedBox(height: 16),
+                        _ContextCard(
+                          title: contextLabel,
+                          targetName: widget.otherUser.nom,
+                          targetRole: widget.otherUser.role,
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          initialValue: _selectedReason,
+                          isExpanded: true,
+                          decoration: InputDecoration(
+                            labelText: l10n.contactIntakeSheetReasonLabel,
                           ),
+                          items: _reasonOptions(l10n)
+                              .map(
+                                (option) => DropdownMenuItem<String>(
+                                  value: option.code,
+                                  child: Text(
+                                    option.label,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(growable: false),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() => _selectedReason = value);
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _reasonOptions(l10n)
+                                  .firstWhere(
+                                    (option) =>
+                                        option.code == _selectedReason,
+                                    orElse: () => _reasonOptions(l10n).last,
+                                  )
+                                  .description ??
+                              '',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: cs.onSurface.withValues(alpha: 0.65),
+                                height: 1.28,
+                              ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _introController,
+                          maxLength: 280,
+                          minLines: 3,
+                          maxLines: 5,
+                          scrollPadding: const EdgeInsets.only(bottom: 120),
+                          textInputAction: TextInputAction.newline,
+                          decoration: InputDecoration(
+                            labelText: l10n.contactIntakeSheetIntroLabel,
+                            hintText: l10n.contactIntakeSheetIntroHint,
+                            alignLabelWithHint: true,
+                          ),
+                          validator: (value) {
+                            final normalized = value?.trim() ?? '';
+                            if (normalized.length < 12) {
+                              return l10n
+                                  .contactIntakeSheetIntroTooShortError;
+                            }
+                            return null;
+                          },
                         ),
                       ],
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  border: Border(
+                    top: BorderSide(
+                      color: cs.outline.withValues(alpha: 0.18),
+                    ),
+                  ),
+                ),
+                child: SafeArea(
+                  top: false,
+                  minimum: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: AdButton(
+                          label: l10n.commonCancel,
+                          kind: AdButtonKind.outline,
+                          size: AdButtonSize.compact,
+                          expanded: false,
+                          onPressed: () => Get.back<GuidedContactDraft?>(),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: AdButton(
+                          label: l10n.contactIntakeSheetStartAction,
+                          size: AdButtonSize.compact,
+                          expanded: false,
+                          onPressed: _submit,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

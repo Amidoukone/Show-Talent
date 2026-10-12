@@ -14,6 +14,9 @@ class VideoNetworkTuning {
     required this.preloadRadius,
     required this.preloadTimeout,
     required this.activeTimeout,
+    required this.firstFrameTimeout,
+    required this.bufferingStrikesBeforeReload,
+    required this.thumbnailPrefetchRadius,
   });
 
   final int maxActive;
@@ -21,6 +24,53 @@ class VideoNetworkTuning {
   final int preloadRadius;
   final Duration preloadTimeout;
   final Duration activeTimeout;
+
+  /// How long a player may hold a picture back before playback is rebuilt.
+  ///
+  /// Counted from the moment `play()` is called -- so after a successful
+  /// `initialize()` -- and it is the deadline for the first rendered frame,
+  /// not for the init. The two are different waits: init ends when the header
+  /// and enough samples to decode have arrived, the first frame ends when the
+  /// decoder has actually produced one, and on a weak link the second can
+  /// legitimately take several seconds more.
+  ///
+  /// This was the last fixed threshold in the playback pipeline: a flat 6 s
+  /// on every tier, while `activeTimeout` next to it already stretched to
+  /// 15 s for the slowest. A `low` connection would therefore finish a 15 s
+  /// init, start buffering, get torn down at 6 s by
+  /// `SmartVideoPlayer._startFirstFrameWatchdog`, and start over from an
+  /// empty buffer -- three times, because that is the automatic recovery
+  /// budget, after which the user is shown "la lecture a échoué" for a video
+  /// that was downloading perfectly well, just slowly. Every recovery threw
+  /// away the bytes that had already arrived, so the slower the link, the
+  /// more certain the failure.
+  final Duration firstFrameTimeout;
+
+  /// Watchdog ticks of pre-first-frame buffering tolerated before a rebuild.
+  ///
+  /// Sampled every `SmartVideoPlayer._stallCheckInterval` (700 ms), and only
+  /// counted before the first frame -- buffering during playback is handled
+  /// by the stall strikes instead. Fixed at 8 (~5.6 s) for the same reason
+  /// and with the same consequence as [firstFrameTimeout]: it is a budget for
+  /// how long the network may take, so it belongs to the network tier.
+  final int bufferingStrikesBeforeReload;
+
+  /// How many neighbours' thumbnails are warmed either side of the visible
+  /// video.
+  ///
+  /// Everything else in this table exists because the connection is finite,
+  /// and thumbnails were the one request this reasoning had not reached.
+  /// `VideoFeedPager` warms them on every page change, *before* calling
+  /// `onIndexChanged` -- so on a slow link a handful of image downloads were
+  /// issued ahead of the video the user is waiting for, on the very tier
+  /// where [preloadRadius] drops to 0 because the pipeline decided this link
+  /// must not compete with itself.
+  ///
+  /// Never 0, unlike [preloadRadius]. The thumbnail is what stands in for the
+  /// picture while a slow stream fills its buffer: on this tier it is worth
+  /// more, not less. One neighbour instead of two keeps the next swipe
+  /// covered at a fifth of the requests.
+  final int thumbnailPrefetchRadius;
 }
 
 /// Detects the connection's tier and turns it into playback settings.
@@ -174,6 +224,9 @@ class VideoNetworkTuningController {
           preloadRadius: 3,
           preloadTimeout: Duration(seconds: 8),
           activeTimeout: Duration(seconds: 12),
+          firstFrameTimeout: Duration(seconds: 6),
+          bufferingStrikesBeforeReload: 8,
+          thumbnailPrefetchRadius: 2,
         );
       case NetworkProfileTier.medium:
         return const VideoNetworkTuning(
@@ -182,6 +235,9 @@ class VideoNetworkTuningController {
           preloadRadius: 2,
           preloadTimeout: Duration(seconds: 10),
           activeTimeout: Duration(seconds: 12),
+          firstFrameTimeout: Duration(seconds: 9),
+          bufferingStrikesBeforeReload: 12,
+          thumbnailPrefetchRadius: 2,
         );
       case NetworkProfileTier.low:
         return const VideoNetworkTuning(
@@ -190,6 +246,14 @@ class VideoNetworkTuningController {
           preloadRadius: 0,
           preloadTimeout: Duration(seconds: 12),
           activeTimeout: Duration(seconds: 15),
+          // Patient on purpose, and never patient forever: nothing here waits
+          // past the automatic recovery budget without the user seeing the
+          // "Connexion lente" overlay, which offers a manual retry of its own
+          // after a few seconds. The choice is between waiting for a slow
+          // download and destroying it; waiting is the one that can succeed.
+          firstFrameTimeout: Duration(seconds: 16),
+          bufferingStrikesBeforeReload: 22,
+          thumbnailPrefetchRadius: 1,
         );
     }
   }

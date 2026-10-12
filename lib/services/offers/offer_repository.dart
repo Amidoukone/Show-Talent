@@ -355,7 +355,7 @@ class OfferRepository {
         // erased an offer.
         //
         // `warning` rather than `error` because the snapshot re-delivers on
-        // every change: sampling at 15% gives the rate without the flood.
+        // every change: sampling gives the rate without the flood.
         AppLogger.warning(
           'offer dropped from the list; its document did not parse',
           source: 'offers/parse',
