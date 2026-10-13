@@ -678,6 +678,21 @@ Ce qui a rendu la fin rapide mérite d'être noté, parce que c'est reproductibl
 Le diagnostic final a tenu en deux commandes, là où les trois builds
 précédents avaient avancé par élimination.
 
+**La cause exacte, pour le prochain renouvellement de clé.** La clé APNs
+*était* présente dans la console depuis les 10-11 octobre, et Apple la
+refusait quand même (`Invalid APNs credential`). Ce qui l'a réglée : **re-saisir
+l'ensemble `.p8` + Team ID + Key ID**. Le premier téléversement était donc
+incomplet ou mal apparié, sans que rien ne le signale — la console accepte un
+trio incohérent et n'en dit rien jusqu'au premier envoi réel.
+
+À retenir : « la clé est dans la console » n'est pas une vérification. Seul
+`check-ios-push-delivery --send` en est une, et c'est la raison d'être de ce
+script.
+
+**Le parcours d'origine est validé :** une vidéo approuvée depuis le portail
+déclenche bien la notification « Vidéo approuvée » sur l'iPhone de l'auteur.
+C'est la plainte qui a ouvert ce dossier.
+
 **Reste à vérifier :** `adfoot-staging` est un projet Firebase **séparé**
 (sender `467972880318`, bundle `org.adfoot.app.staging`). Si la même `.p8` n'y
 a pas été téléversée aussi, les builds staging resteront muets sur iOS,

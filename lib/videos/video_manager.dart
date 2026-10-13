@@ -13,6 +13,7 @@ import 'package:adfoot/videos/domain/playback_bandwidth_arbiter.dart';
 import 'package:adfoot/videos/domain/playback_gate.dart';
 import 'package:adfoot/videos/domain/active_init_registry.dart';
 import 'package:adfoot/videos/domain/player_lifetime_registry.dart';
+import 'package:adfoot/videos/domain/video_init_cancelled.dart';
 import 'package:adfoot/videos/domain/video_network_tuning.dart';
 import 'package:adfoot/videos/domain/video_playback_metrics.dart';
 import 'package:adfoot/videos/domain/video_preload_scheduler.dart';
@@ -27,15 +28,6 @@ export 'package:adfoot/videos/domain/video_ui_signals.dart' show VideoLoadState;
 import 'package:cached_video_player_plus/cached_video_player_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:adfoot/services/app_logger.dart';
-
-class _VideoInitCancelled implements Exception {
-  const _VideoInitCancelled(this.reason);
-
-  final String reason;
-
-  @override
-  String toString() => 'Video init cancelled: $reason';
-}
 
 class VideoManager {
   static final VideoManager _instance = VideoManager._internal();
@@ -609,7 +601,7 @@ class VideoManager {
           // doesn't flip isInitialized/hasError). Same guard as the slow
           // path below.
           if (!_isContextActive(contextKey, lru, futures)) {
-            throw const _VideoInitCancelled('context_disposed_lru_hit');
+            throw const VideoInitCancelled('context_disposed_lru_hit');
           }
           lru[cacheKey] = existing;
           await _enforceLimit(contextKey, activeUrl: activeUrl);
@@ -630,7 +622,7 @@ class VideoManager {
           final v = player.controller.value;
           if (v.isInitialized && !v.hasError) {
             if (!_isContextActive(contextKey, lru, futures)) {
-              throw const _VideoInitCancelled('context_disposed_future_hit');
+              throw const VideoInitCancelled('context_disposed_future_hit');
             }
             lru[cacheKey] = player;
             await _enforceLimit(contextKey, activeUrl: activeUrl);
@@ -641,7 +633,7 @@ class VideoManager {
             return player;
           }
         } catch (error) {
-          if (error is _VideoInitCancelled) rethrow;
+          if (error is VideoInitCancelled) rethrow;
         }
         futures.remove(cacheKey);
         lru.remove(cacheKey);
@@ -825,7 +817,7 @@ class VideoManager {
 
           if (!_isContextActive(contextKey, lru, futures)) {
             await safeDispose(player);
-            throw const _VideoInitCancelled('context_disposed_before_attach');
+            throw const VideoInitCancelled('context_disposed_before_attach');
           }
 
           lru[cacheKey] = player;
@@ -834,7 +826,7 @@ class VideoManager {
           if (!_isContextActive(contextKey, lru, futures)) {
             lru.remove(cacheKey);
             await safeDispose(player);
-            throw const _VideoInitCancelled('context_disposed_after_attach');
+            throw const VideoInitCancelled('context_disposed_after_attach');
           }
 
           _setLoadState(contextKey, url, VideoLoadState.ready);
@@ -917,7 +909,7 @@ class VideoManager {
           // good.
           _markStreaming(contextKey, cacheKey, isStreaming: false);
 
-          if (e is _VideoInitCancelled) {
+          if (e is VideoInitCancelled) {
             lru.remove(cacheKey);
             return Future.error(e);
           }
@@ -980,7 +972,7 @@ class VideoManager {
           final slotDeadline = DateTime.now().add(_initSlotWaitTimeout);
           while (_activeInits >= _maxConcurrentInits) {
             if (!_isContextActive(contextKey, lru, futures)) {
-              throw const _VideoInitCancelled(
+              throw const VideoInitCancelled(
                 'context_disposed_waiting_for_slot',
               );
             }
@@ -1060,8 +1052,8 @@ class VideoManager {
         );
         _setLoadState(contextKey, url, VideoLoadState.ready);
         return player;
-      } on _VideoInitCancelled {
-        return Future.error(const _VideoInitCancelled('context_disposed'));
+      } on VideoInitCancelled {
+        return Future.error(const VideoInitCancelled('context_disposed'));
       } on TimeoutException catch (e) {
         lastErrorState = VideoLoadState.errorTimeout;
         lastError = e;

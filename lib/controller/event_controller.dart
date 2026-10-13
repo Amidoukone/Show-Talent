@@ -849,6 +849,7 @@ class EventController extends GetxController {
 
   List<Event> _prepareEvents(Iterable<Event> fetchedEvents) {
     final now = DateTime.now();
+    final currentUid = _authSessionService.currentUser?.uid;
     final updatedEvents = <Event>[];
 
     for (final event in fetchedEvents) {
@@ -858,18 +859,40 @@ class EventController extends GetxController {
       }
 
       if (event.dateFin.isBefore(now) && normalizedStatus == 'ouvert') {
-        unawaited(
-          _eventRepository
-              .updateEventStatus(eventId: event.id, status: 'ferme')
-              .catchError((error, stack) {
-                AppLogger.warning(
-                  'Auto close event status update failed: $error',
-                  source: 'EventController._prepareEvents',
-                  error: error,
-                  stackTrace: stack,
-                );
-              }),
-        );
+        // La fermeture n'est tentee que par l'organisateur.
+        //
+        // `firestore.rules` ne laisse changer `statut` qu'a
+        // `resource.data.organisateur.uid == request.auth.uid`. Sans ce test,
+        // toute personne qui ouvrait l'onglet Evenements tentait de fermer les
+        // evenements expires de *tout le monde*, se faisait refuser, et
+        // recommencait a chaque snapshot -- `_prepareEvents` est appele
+        // depuis le flux temps reel et depuis la pagination.
+        //
+        // Mesure sur adfoot-production le 6 octobre : 80 `PERMISSION_DENIED`
+        // identiques en dix minutes pour un seul utilisateur, et les
+        // evenements expires restaient ouverts puisque l'ecriture n'aboutissait
+        // jamais. Un travail qui ne pouvait pas reussir, paye en ecritures
+        // refusees a chaque session, et qui occupait a lui seul 40 % de
+        // `client_logs`.
+        //
+        // L'affichage local, lui, reste corrige pour tout le monde : un
+        // evenement dont la date est passee se lit « ferme » sur l'ecran, que
+        // le serveur l'ait enregistre ou non. C'est la seule partie qui
+        // concernait le lecteur.
+        if (currentUid != null && event.organisateur.uid == currentUid) {
+          unawaited(
+            _eventRepository
+                .updateEventStatus(eventId: event.id, status: 'ferme')
+                .catchError((error, stack) {
+                  AppLogger.warning(
+                    'Auto close event status update failed: $error',
+                    source: 'EventController._prepareEvents',
+                    error: error,
+                    stackTrace: stack,
+                  );
+                }),
+          );
+        }
 
         event.statut = 'ferme';
         event.lastUpdated = now;

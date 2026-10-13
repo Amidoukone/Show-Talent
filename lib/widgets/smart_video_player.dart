@@ -35,6 +35,7 @@ import 'package:adfoot/widgets/video_metadata_overlay.dart';
 import 'package:adfoot/widgets/video_share_sheet.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:adfoot/videos/data/watched_video_store.dart';
+import 'package:adfoot/videos/domain/video_init_cancelled.dart';
 import 'package:adfoot/videos/video_manager.dart';
 
 part 'smart_video_player_sheets.dart';
@@ -396,6 +397,20 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
           recoveryReason: recoveryReason,
           preferSmallestSource: preferSmallestSource,
         );
+      } on VideoInitCancelled catch (e) {
+        // Un defilement, pas une panne.
+        //
+        // `VideoManager` leve ceci quand plus personne n'attend le resultat :
+        // la tuile a ete detruite, le contexte liberee. C'est le deroulement
+        // nominal d'un fil que l'on parcourt, et il etait rapporte comme un
+        // `play_error` en niveau erreur -- « Video init cancelled:
+        // context_disposed » arrivait dans `client_logs` a chaque balayage.
+        //
+        // Un canal de diagnostic qui compte le comportement normal comme une
+        // panne finit par cacher les vraies : sur les 200 dernieres entrees du
+        // 13 octobre, celles-ci et la boucle de fermeture d'evenements
+        // occupaient 42 % du relevé.
+        AppLogger.debug('[SmartVideoPlayer] init cancelled: $e');
       } catch (e, st) {
         // Meme signalement que `play_error` plus bas, et pour une raison plus
         // forte : quand `play()` echoue, un controleur existe deja et la
