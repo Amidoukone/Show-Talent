@@ -643,6 +643,46 @@ explicitement vérifiés plutôt que supposés :
   `warmAppVersionForTokenContext`), et une bannière de section orpheline
   laissée par l'extraction des helpers a été retirée d'`index.ts`.
 
+### 5.7 Notifications iOS — résolu de bout en bout, 13 octobre
+
+`check-ios-push-delivery --send` répond `Delivered to FCM`, et la notification
+apparaît sur l'iPhone. C'est la première fois depuis l'existence du projet.
+
+La chaîne complète, chaque maillon prouvé par une donnée et non par un
+raisonnement :
+
+| Étape | Preuve |
+| --- | --- |
+| L'enregistrement APNs est demandé | correctif `AppDelegate`, build 1.0.7+49 |
+| Le jeton d'appareil arrive | plus aucun `notifications/apns_token_absent` sur 49 |
+| Le jeton FCM est émis et stocké | `user_push_tokens` : `platform=ios build=1.0.7+49` |
+| FCM authentifie auprès d'Apple | la clé APNs corrigée dans la console |
+| La remise aboutit | notification visible sur l'appareil |
+
+**La panne avait deux causes indépendantes, et chacune masquait l'autre.** Tant
+qu'aucun jeton n'existait, un envoi répondait `token_missing` et n'atteignait
+jamais Apple — la clé invalide était donc indétectable. Une fois le jeton
+obtenu, elle est apparue en une commande. C'est la raison pour laquelle
+l'enquête a traversé quatre builds : un symptôme unique, « aucune notification
+sur iOS », recouvrait deux pannes à des étages différents.
+
+Ce qui a rendu la fin rapide mérite d'être noté, parce que c'est reproductible :
+
+- la colonne `build` dans `client_logs`, qui a permis de dire « toutes les
+  erreurs APNs sont antérieures à la 49 » au lieu de le déduire ;
+- les cinq sources `notifications/*` passées en `error`, qui ne sont plus
+  échantillonnées ni muettes ;
+- `check-ios-push-delivery --send`, qui nomme `third-party-auth-error` et
+  donne le chemin exact de la console plutôt qu'un code.
+
+Le diagnostic final a tenu en deux commandes, là où les trois builds
+précédents avaient avancé par élimination.
+
+**Reste à vérifier :** `adfoot-staging` est un projet Firebase **séparé**
+(sender `467972880318`, bundle `org.adfoot.app.staging`). Si la même `.p8` n'y
+a pas été téléversée aussi, les builds staging resteront muets sur iOS,
+exactement de la même façon — et la prochaine enquête repartira de zéro.
+
 ### Portes passées localement, le 12 octobre
 
 | Contrôle | Résultat |
