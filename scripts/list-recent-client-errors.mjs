@@ -142,11 +142,18 @@ async function main() {
   const environment = getStringArg(args, ['environment', 'env'], 'production');
   const limit = getIntArg(args, ['limit'], 40);
   const inspectUsers = getBoolArg(args, ['inspect-users'], false);
-  const sourceFilter = getStringArg(
-    args,
-    ['source'],
-    'ProfileController,AppCheckService,CallableAuthGuard',
-  )
+  // Aucun filtre par défaut.
+  //
+  // Il valait `ProfileController,AppCheckService,CallableAuthGuard`, les trois
+  // sources d'une enquête de septembre. Tout le reste était donc écarté en
+  // silence : lancé sans argument pendant la panne des notifications iOS, cet
+  // outil ne montrait aucune des cinq sources `notifications/*` et répondait
+  // « 0 erreur » — la pire réponse possible, parce qu'elle se lit comme une
+  // absence de problème.
+  //
+  // Un outil de diagnostic qui cache par défaut ce qu'on ne lui a pas demandé
+  // est précisément le défaut que l'on cherchait avec.
+  const sourceFilter = getStringArg(args, ['source'], '')
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean);
@@ -181,12 +188,19 @@ async function main() {
     .map((doc) => ({ id: doc.id, ...doc.data() }))
     .filter((row) => row.level === 'error')
     .filter((row) => {
+      if (sourceFilter.length === 0) return true;
       const source = String(row.source ?? '');
       return sourceFilter.some((prefix) => source.startsWith(prefix));
     });
 
   console.log(`Recent client errors: ${rows.length}/${snapshot.size}`);
   console.log(`Project: ${projectId}`);
+  // Toujours dit, jamais deduit : un filtre actif explique un resultat vide
+  // bien mieux que le silence, et le tri/limite se fait avant le filtrage.
+  console.log(
+    `Filter:  ${sourceFilter.length ? sourceFilter.join(', ') : '<aucun>'}` +
+      `   (sur les ${snapshot.size} dernieres entrees ; --limit pour elargir)`,
+  );
 
   // Which builds these entries came from, stated up front.
   //
