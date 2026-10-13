@@ -78,7 +78,12 @@
     "rules:test:storage": "firebase emulators:exec --only firestore,storage --project demo-adfoot \"node test/rules/storage-rules.test.mjs\"",
     "rules:test:all": "npm run rules:test && npm run rules:test:storage",
     "push:ios:list:production": "node .\\scripts\\check-ios-push-delivery.mjs --environment production --list",
-    "push:ios:check:production": "node .\\scripts\\check-ios-push-delivery.mjs --environment production"
+    "push:ios:check:production": "node .\\scripts\\check-ios-push-delivery.mjs --environment production",
+    "push:ios:list:staging": "node .\\scripts\\check-ios-push-delivery.mjs --environment staging --list",
+    "push:ios:check:staging": "node .\\scripts\\check-ios-push-delivery.mjs --environment staging",
+    "legacy:residue:check:production": "node .\\scripts\\check-legacy-profile-residue.mjs --project adfoot-production --service-account .credentials\\adfoot-production-ops.json",
+    "legacy:residue:gate:production": "node .\\scripts\\check-legacy-profile-residue.mjs --project adfoot-production --service-account .credentials\\adfoot-production-ops.json --require-clean",
+    "legacy:residue:check:staging": "node .\\scripts\\check-legacy-profile-residue.mjs --project adfoot-staging --service-account .credentials\\adfoot-staging-ops.json"
   },
   "dependencies": {
     "firebase-admin": "^13.10.0"

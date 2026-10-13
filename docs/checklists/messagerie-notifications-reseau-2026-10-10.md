@@ -698,6 +698,41 @@ C'est la plainte qui a ouvert ce dossier.
 a pas été téléversée aussi, les builds staging resteront muets sur iOS,
 exactement de la même façon — et la prochaine enquête repartira de zéro.
 
+**Relevé du 13 octobre 2026 — staging ne peut pas encore être tranché, et
+c'est une limite de méthode, pas un résultat.**
+
+```
+user_push_tokens in adfoot-staging: 0
+No device has registered a token. Nothing can be delivered to anyone.
+```
+
+Zéro jeton ne distingue pas « la clé APNs manque » de « aucun appareil n'a
+lancé de build staging récemment ». Les deux produisent le même zéro, et comme
+le note la section 5 plus haut, aucune API ne rapporte si la clé est chargée.
+La seule mesure qui sépare les deux cas est un envoi réel : installer un build
+`ios-staging`, ouvrir l'application une fois, puis
+
+```powershell
+npm.cmd run push:ios:list:staging
+npm.cmd run push:ios:check:staging -- --uid <UID> --send
+```
+
+Une ligne `platform=ios` prouve que l'enregistrement APNs aboutit ;
+`THIRD_PARTY_AUTH_ERROR` au moment de l'envoi prouve que la clé manque pour
+`org.adfoot.app.staging` et le script nomme alors le chemin de console. Tant
+qu'aucun build staging n'est installé, ce point reste ouvert sans être un
+défaut — et il ne bloque pas la production, dont la preuve est acquise
+ci-dessous.
+
+Ces deux scripts npm n'existaient pas : `scripts/check-ios-push-delivery.mjs`
+acceptait déjà `--environment staging`, mais aucun raccourci ne l'exposait, si
+bien que la vérification supposait de connaître l'option. Ils attendent la clé
+ops à l'emplacement conventionnel `.credentials/adfoot-staging-ops.json`
+(comme `adfoot-production-ops.json` pour la production) ; la clé staging
+présente sur ce poste porte encore son nom de téléchargement
+`adfoot-staging-firebase-adminsdk-*.json`. La copier sous le nom conventionnel,
+ou passer `--credentials <chemin>`.
+
 ### Portes passées localement, le 12 octobre
 
 | Contrôle | Résultat |
@@ -708,19 +743,34 @@ exactement de la même façon — et la prochaine enquête repartira de zéro.
 | `scripts/check-admin-mobile-contract.ps1` | réussi |
 | `scripts/check-ios-release-readiness.ps1` | réussi |
 
-### Ce qui reste à prouver sur l'appareil
+### Ce qui restait à prouver sur l'appareil — résolu
 
-Dans cet ordre, une fois la 49 installée sur l'iPhone :
+Cette section listait trois preuves à faire. **Les trois sont faites**, et
+l'étaient déjà quand le tableau « La chaîne complète est prouvée » plus haut a
+été écrit : la liste n'avait pas été retirée, si bien que le document
+s'opposait à lui-même. C'est la seconde fois dans ce dépôt qu'un relevé d'état
+périmé survit à sa propre résolution ; voir le même défaut, et la même
+correction, dans `public-profile-rollout-2026-09-28.md`.
 
-1. `npm.cmd run push:ios:list:production` doit montrer une ligne
-   `platform=ios` — c'est la preuve que l'enregistrement APNs aboutit enfin.
-2. `npm.cmd run push:ios:check:production -- --uid <UID> --send` doit faire
-   apparaître la notification. Si la réponse est `THIRD_PARTY_AUTH_ERROR`, la
-   clé APNs chargée les 10 et 11 octobre ne couvre pas ce bundle, et le script
-   nomme le chemin de console à corriger.
-3. Approuver une vidéo depuis le portail admin et vérifier que l'auteur reçoit
-   « Vidéo approuvée ». La réponse du callable porte désormais `notifyOutcome`,
-   qui dit laquelle des cinq issues s'est produite.
+1. Jeton `platform=ios` stocké — voir le tableau de la section 5.
+2. Envoi direct reçu — même tableau, ligne « La remise aboutit ».
+3. Notification « Vidéo approuvée » après approbation depuis le portail — voir
+   « Le parcours d'origine est validé ».
+
+**Reconfirmé en direct le 13 octobre 2026**, parce qu'un relevé consigné et un
+relevé reproductible ne se valent pas : `npm.cmd run push:ios:list:production`
+rapporte trois jetons, dont
+
+```
+Fszb…Pkr2  role=joueur  token=present  platform=ios
+           build=1.0.7+49  updatedAt=2026-10-13T03:29:54Z
+```
+
+Les deux autres restent `platform=unknown` : ce sont des enregistrements
+antérieurs au champ `platform`, pas des échecs.
+
+Ne reste donc que staging, traité à la fin de la section 5 — et qui ne bloque
+pas la production.
 
 ## Ordre de déploiement
 

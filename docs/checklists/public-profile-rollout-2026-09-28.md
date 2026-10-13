@@ -1,5 +1,12 @@
 # Transition sans rupture de `users` vers `public_profiles`
 
+> **Lire d'abord « Mesure du 13 octobre 2026 », plus bas.** Les deux relevés
+> d'état qui ouvrent ce document (28 septembre, 2 octobre) sont périmés : ils
+> décrivent une production sous règles transitoires, alors que les règles
+> **finales** y sont déployées depuis le 10 octobre. Agir sur eux conduirait à
+> redéployer les règles transitoires et à réouvrir une exposition des profils
+> plus large que prévu.
+
 **État au 28 septembre 2026 :** les données de test ont été remises à zéro dans
 staging et production ; les index sont `READY`, les deux Functions de
 projection/backfill v3 sont déployées, et les projections v3 sont complètes
@@ -16,7 +23,162 @@ au dépôt, les 31 index déclarés sont `READY` et les deux TTL contrôlés son
 `ACTIVE`. Cette observation confirme l'état transitoire attendu à cette date,
 mais ne mesure toujours pas les versions mobiles actives ni les parcours réels.
 
-Pour comparer en lecture seule le backend au contrat transitoire documenté :
+**Mesure du 13 octobre 2026 — cet état transitoire n'existe plus.** Les deux
+paragraphes ci-dessus décrivent une production qui a changé le 10 octobre. Ne
+pas s'en servir pour décider quoi déployer ; ils restent ici comme historique.
+
+Relevé en lecture seule depuis ce checkout (`npm.cmd run
+backend:parity:check:production`, qui compare aux règles **finales**) :
+
+| Contrôle | Résultat |
+| --- | --- |
+| Firestore : règles déployées vs `firestore.rules` | **identiques** (SHA256 `da5f5bd9…6dd6`), `updateTime` 2026-10-10T17:39:34Z |
+| Storage : règles déployées vs `storage.rules` | **identiques** (SHA256 `1a81175d…2be4`), `updateTime` 2026-10-05T10:00:18Z |
+| Index déclarés / déployés | **44 / 44**, tous `READY`, aucun index en trop |
+| TTL `client_logs.expireAt`, `video_action_logs.expireAt` | **ACTIVE** |
+
+Autrement dit : **les règles finales sont en production depuis le 10 octobre**.
+La phase 3 point 2 est faite. Ce qui n'était pas fait, et que personne n'avait
+mesuré, c'est l'autre moitié de la fermeture — les flags héritée restent en
+posture *phase 1* alors que les règles sont en *phase 3*. C'est cette asymétrie
+qui est dangereuse, pas les règles.
+
+Posture réelle des trois flags, relevée dans `functions/.env.production` : les
+trois sont **absents du fichier**, donc chacun prend son défaut de code, et ces
+défauts sont exactement la posture phase 1 attendue — aucune dérive :
+
+| Flag | Défaut de code | Effet actuel |
+| --- | --- | --- |
+| `ENABLE_LEGACY_CV_URL_MIGRATION` | `!== "true"` → inactif | aucune conversion d'URL CV |
+| `ENABLE_LEGACY_FOLLOW_FIELD_CLEANUP` | `=== "true"` → inactif | les tableaux de suivi sont conservés |
+| `MIRROR_LEGACY_FOLLOW_ARRAYS` | `!== "false"` → **actif** | les callables écrivent encore les tableaux |
+
+Résidu réellement présent en production, mesuré par
+`npm.cmd run legacy:residue:check:production`
+(`scripts/check-legacy-profile-residue.mjs`, lecture seule) :
+
+| Résidu | Compte | Conséquence |
+| --- | --- | --- |
+| `users.cvUrl` encore en `http…` (URL à jeton) | **0 sur 4 comptes** | `ENABLE_LEGACY_CV_URL_MIGRATION` n'a **rien** à convertir |
+| `users.followersList` / `followingsList` présents | 4 comptes | 8 champs à supprimer |
+| Arêtes de suivi dans ces tableaux | **0** | la suppression des tableaux est un no-op observable |
+| Documents dans `following` / `followers` | **0** | personne ne suit personne en production |
+| `users.fcmToken` hérité | **0** | `migrateLegacyFcmTokens` a terminé |
+| `public_profiles_and_follows_v5` | `completed: true` | — |
+| `conversation_sort_dates_v1` | `completed: true` | — |
+| `public_profiles_follow_cleanup_v1` | **absent** | le nettoyage n'a jamais tourné |
+
+Et la projection est complète : 4 comptes, 4 `public_profiles`, 0 manquant,
+0 orphelin (`npm.cmd run` → `scripts/inventory-test-data.mjs`).
+
+**Ce que la mesure change, décision par décision.**
+
+*L'URL du CV n'est plus un sujet.* La crainte initiale — des URL de
+téléchargement à jeton durable exposées sur des profils lisibles — ne porte sur
+aucun document en production. Et elle ne peut plus réapparaître : les règles
+finales déployées imposent le format `gs://` à toute écriture de `cvUrl`
+(`ownerCvUrlChangeIsSafe`), et aucune Cloud Function n'écrit de valeur `http`
+— les seules écritures restantes dans `functions/src/` sont des suppressions.
+Activer le flag convertirait zéro document. Le laisser inactif est donc le bon
+choix, et pour une raison mesurée, non par prudence : il n'y a rien à
+convertir et aucun flux entrant. À reprendre seulement si
+`legacy:residue:check:production` compte un jour autre chose que 0.
+
+*Arrêter l'écriture des tableaux est sûr pour le build en cours.* Vérifié dans
+ce checkout, et c'est le point qu'il fallait trancher avant tout : le client
+actuel ne dépend **pas** du tableau stocké. `FollowController._bindFollowingStream`
+s'abonne à `FollowRepository.watchFollowingIds`, qui lit la sous-collection
+`users/{uid}/following` filtrée sur `active == true`, puis **écrase**
+`user.followingsList` avec ce résultat. Le tableau Firestore ne sert que
+d'amorce au chargement du document (`AppUser.fromMap`, qui retombe sur `[]`
+quand le champ est absent) et de cache optimiste local. Les trois lectures de
+`followingsList` dans l'interface — `profile_screen.dart`,
+`video_action_rail.dart`, `smart_video_player.dart` — consomment cette valeur
+hydratée, pas le champ brut.
+
+Conséquence : `MIRROR_LEGACY_FOLLOW_ARRAYS=false` ne retire rien au build 48/49.
+Le seul effet résiduel possible est un écart de quelques centaines de
+millisecondes au démarrage à froid, entre le chargement du document et la
+première émission du flux de relations, pendant lequel un bouton « Suivre »
+pourrait s'afficher non-suivi. Cet écart existe déjà aujourd'hui pour tout
+compte dont le tableau est en retard.
+
+*Et la suppression des tableaux ne casse pas la suppression de compte.*
+`cleanupFollowReferences` (`functions/src/admin_account_actions.ts`) parcourt
+d'abord les arêtes de relations — c'est le chemin principal, qui supprime les
+documents `following/{uid}` et décrémente les compteurs côté serveur — puis
+traite les tableaux en second, sous le commentaire « Compatibility while the
+one-time array migration is still running ». Retirer les tableaux retire un
+filet de compatibilité, pas le mécanisme.
+
+**Conclusion : la fermeture de la migration coûte un déploiement backend qui
+supprime 8 champs vides.** C'est aussi peu cher que ce le sera jamais, et
+l'argument de la fenêtre qui se referme portait moins loin qu'annoncé : le
+risque n'était pas de casser d'anciens clients — les règles finales sont
+déployées depuis le 10 octobre et ce basculement est derrière nous — mais de
+laisser le mirroring hérité en place jusqu'à ce que de vrais suivis existent,
+moment où ces tableaux cessent d'être vides et où leur suppression devient une
+vraie migration de données.
+
+### Procédure de fermeture, dans cet ordre
+
+Rien ci-dessous n'est exécuté par ce document. L'ordre vient de `CLAUDE.md` :
+le backend d'abord, et surtout **une release backend distincte** pour ce
+changement, afin que la suppression de champs ne voyage pas avec un autre
+correctif.
+
+1. Relever l'état d'avant, pour pouvoir comparer :
+   `npm.cmd run legacy:residue:check:production`.
+2. Dans `functions/.env.production`, ajouter les deux lignes — et seulement
+   celles-là :
+
+   ```
+   MIRROR_LEGACY_FOLLOW_ARRAYS=false
+   ENABLE_LEGACY_FOLLOW_FIELD_CLEANUP=true
+   ```
+
+   Ne pas ajouter `ENABLE_LEGACY_CV_URL_MIGRATION` : voir la mesure ci-dessus.
+
+   **Appliqué le 13 octobre 2026**, avec le commentaire d'intention et la
+   procédure de retour arrière, et vérifié par
+   `npm.cmd run functions:env:check:production` qui résout bien les deux
+   valeurs. Attention : `functions/.gitignore` ignore `.env.*`, donc cette
+   édition **ne vit que sur le poste où elle a été faite**. Un déploiement
+   lancé depuis une autre machine ou depuis un runner CI partirait sans les
+   flags et ne fermerait rien — sans erreur visible. Déployer depuis ce poste,
+   ou reporter les deux lignes là où le déploiement part.
+3. `npm.cmd run functions:deploy:production`. À lancer depuis le shell de
+   l'opérateur : le sandbox de l'assistant n'a pas de session Firebase CLI et
+   échoue en 401 sur `firestore.googleapis.com`, message trompeur à l'appui.
+4. Attendre un passage de `backfillPublicProfiles`, qui est horaire. Avec le
+   flag de nettoyage actif, la Function écrit son point de reprise dans
+   `migration_state/public_profiles_follow_cleanup_v1` et non plus dans
+   `…_v5` (`functions/src/cleanup.ts`) : la fermeture n'est finie que quand ce
+   **nouveau** document porte `completed: true`.
+5. Confirmer par la mesure, pas par l'absence d'alerte :
+
+   ```powershell
+   npm.cmd run legacy:residue:gate:production
+   ```
+
+   La variante `gate` sort en code non nul tant qu'un résidu subsiste ; c'est
+   la forme à utiliser après le déploiement.
+6. Vérifier sur appareil que suivre et ne plus suivre fonctionnent encore, et
+   qu'une suppression de compte ne laisse pas de compteur de suiveurs décalé.
+7. Retirer `firestore.transition.rules` des artefacts de release (phase 3
+   point 3). Le fichier n'est plus l'état déployé, et
+   `backend:parity:check:production:transition` ne décrit plus la production :
+   ce contrôle devient trompeur et doit disparaître avec lui.
+
+**Retour arrière.** Retirer les deux lignes et redéployer rétablit le
+mirroring pour les écritures suivantes, mais **ne recrée pas** les tableaux
+supprimés. C'est acceptable précisément parce qu'ils sont vides aujourd'hui ;
+ce ne le serait plus après l'arrivée de vrais suivis. C'est la seule raison de
+traiter cette fermeture maintenant plutôt qu'après le lancement.
+
+Pour comparer en lecture seule le backend au contrat transitoire documenté
+(**plus représentatif de la production depuis le 10 octobre**, à retirer avec
+le fichier de règles transitoires) :
 
 ```powershell
 npm.cmd run backend:parity:check:production:transition
