@@ -150,11 +150,29 @@ correctif.
 3. `npm.cmd run functions:deploy:production`. À lancer depuis le shell de
    l'opérateur : le sandbox de l'assistant n'a pas de session Firebase CLI et
    échoue en 401 sur `firestore.googleapis.com`, message trompeur à l'appui.
+
+   **Fait le 13 octobre 2026 vers 17:15 UTC** : 59 fonctions mises à jour,
+   `backfillPublicProfiles` comprise, les deux flags visibles dans les valeurs
+   effectives du log. À noter pour la prochaine fois : le CLI a affiché
+   `Authentication Error ... run firebase login --reauth` avant de déployer
+   quand même. Le message ne vient pas du script, qui n'appelle que
+   `firebase.cmd deploy` ; il annonce une session à renouveler avant le
+   déploiement suivant.
 4. Attendre un passage de `backfillPublicProfiles`, qui est horaire. Avec le
    flag de nettoyage actif, la Function écrit son point de reprise dans
    `migration_state/public_profiles_follow_cleanup_v1` et non plus dans
    `…_v5` (`functions/src/cleanup.ts`) : la fermeture n'est finie que quand ce
    **nouveau** document porte `completed: true`.
+
+   Le déploiement ne déclenche pas ce passage. Un relevé fait juste après
+   montre donc encore les tableaux et l'absence du nouveau point de reprise :
+   c'est attendu, et ne doit pas être lu comme un échec du flag. Pour ne pas
+   attendre l'heure : console Google Cloud -> **Cloud Scheduler** -> projet
+   `adfoot-production` -> job
+   `firebase-schedule-backfillPublicProfiles-europe-west1` -> **Force run**.
+   L'opération est idempotente — `refreshUserSearchFields` et
+   `syncPublicProfile` sont rejoués par compte, et `migrateLegacyFollowEdges`
+   ne trouve rien à migrer puisque les tableaux sont vides.
 5. Confirmer par la mesure, pas par l'absence d'alerte :
 
    ```powershell
@@ -163,12 +181,54 @@ correctif.
 
    La variante `gate` sort en code non nul tant qu'un résidu subsiste ; c'est
    la forme à utiliser après le déploiement.
+
+   **Fait le 13 octobre 2026, après un *Force run* du job Cloud Scheduler.**
+   Le gate sort en **code 0** :
+
+   | Signal | Avant | Après |
+   | --- | --- | --- |
+   | Comptes portant les tableaux de suivi | 4 | **0** |
+   | `public_profiles_follow_cleanup_v1` | absent | **`completed: true`** |
+   | `blockers` | 1 | **aucun** |
+
+   Et le contrôle strict repasse vert juste après
+   (`npm.cmd run backend:parity:check:production`, code 0 : règles identiques,
+   44/44 index `READY`, les deux TTL `ACTIVE`). **La migration `users` vers
+   `public_profiles` est fermée.**
+
+   Un piège d'interprétation rencontré au passage : ce même contrôle avait
+   d'abord échoué sur `request to https://oauth2.googleapis.com/token failed`,
+   une panne réseau pendant la récupération du jeton OAuth. Le script sort
+   alors en code 1 avec le message « Deploy the backend before building », qui
+   décrit une dérive alors qu'aucune comparaison n'a eu lieu. Relancer avant
+   de conclure : un échec de parité nomme toujours le jeu de règles ou l'index
+   en cause.
 6. Vérifier sur appareil que suivre et ne plus suivre fonctionnent encore, et
    qu'une suppression de compte ne laisse pas de compteur de suiveurs décalé.
 7. Retirer `firestore.transition.rules` des artefacts de release (phase 3
-   point 3). Le fichier n'est plus l'état déployé, et
-   `backend:parity:check:production:transition` ne décrit plus la production :
-   ce contrôle devient trompeur et doit disparaître avec lui.
+   point 3). **Ce n'est pas une suppression de fichier, et c'est la
+   découverte du 13 octobre.** L'artefact est tenu en place par un garde-fou
+   écrit exprès pour empêcher qu'on le retire par inadvertance. Quatre
+   endroits, à traiter ensemble :
+
+   | Endroit | Ce qu'il affirme aujourd'hui |
+   | --- | --- |
+   | `firestore.transition.rules` | le jeu de règles lui-même |
+   | `test/rules/firestore-transition-rules.test.mjs` | une suite de tests entière qui le lit |
+   | `test/backend_parity_gate_guardrails_test.dart` | que le script npm `…:transition` **doit** exister et que le gate **doit** citer le fichier |
+   | `package.json` | `backend:parity:check:production:transition` |
+
+   Supprimer le fichier seul casse deux suites de tests. Le garde-fou Dart
+   demande en plus d'être réécrit pour affirmer l'inverse — que le mode
+   transitoire a disparu — sinon il protège un artefact mort.
+
+   Ce travail n'est **pas un préalable au lancement** : rien dans la chaîne de
+   release ne dépend du fichier, et il n'est jamais déployé. Le seul risque
+   réel est qu'un opérateur lance `backend:parity:check:production:transition`,
+   le voie réussir, et en conclue à tort que la production est encore en état
+   transitoire. D'ici là, c'est le contrôle strict
+   `backend:parity:check:production` qui fait foi. À planifier après les
+   soumissions, en une modification cohérente des quatre endroits.
 
 **Retour arrière.** Retirer les deux lignes et redéployer rétablit le
 mirroring pour les écritures suivantes, mais **ne recrée pas** les tableaux

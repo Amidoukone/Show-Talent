@@ -14,7 +14,7 @@ Tout ce qui suit a été relevé en lecture seule depuis le checkout
 | --- | --- | --- | --- |
 | 1 | Quelles règles sont réellement déployées | **Répondu.** Règles finales en production depuis le 2026-10-10 | aucune |
 | 2 | Compte de démonstration App Review | **Confirmé nécessaire, et absent** | créer le compte, renseigner les deux consoles |
-| 3 | Fermer la migration `public_profiles` | **Mesuré (8 champs vides) et préparé** | lancer `functions:deploy:production` depuis ce poste |
+| 3 | Fermer la migration `public_profiles` | **Fermée.** Gate vert, parité verte | vérifier suivre/ne plus suivre sur appareil |
 | 4 | `.p8` APNs sur `adfoot-staging` | **Indécidable en l'état** — et non bloquant ; la production est prouvée | installer un build staging pour trancher |
 
 ## 1. Les règles déployées — répondu, rien à faire
@@ -122,25 +122,54 @@ La procédure exacte, le point de reprise à surveiller
 (`public_profiles_follow_cleanup_v1`, et non `…_v5`) et le retour arrière sont
 dans `public-profile-rollout-2026-09-28.md`, section « Procédure de fermeture ».
 
-**État : préparé, pas déployé.** Les deux lignes ont été ajoutées à
-`functions/.env.production` le 13 octobre, avec leur commentaire d'intention, et
-`npm.cmd run functions:env:check:production` résout bien
+**État : déployé le 13 octobre 2026 vers 17:15 UTC.**
+`npm.cmd run functions:deploy:production` a mis à jour les 59 fonctions, dont
+`backfillPublicProfiles`, et le log des valeurs effectives confirme
 `MIRROR_LEGACY_FOLLOW_ARRAYS=false` et
-`ENABLE_LEGACY_FOLLOW_FIELD_CLEANUP=true`. Il reste à lancer :
+`ENABLE_LEGACY_FOLLOW_FIELD_CLEANUP=true`.
 
-```powershell
-npm.cmd run functions:deploy:production
-```
+Le déploiement ne déclenche pas le passage de `backfillPublicProfiles`, qui est
+planifié `every 1 hours` : un relevé fait juste après montrait encore les 4
+comptes et l'absence du point de reprise. Un *Force run* du job Cloud Scheduler
+`firebase-schedule-backfillPublicProfiles-europe-west1` a conclu l'opération.
 
-Deux précautions, chacune pour une raison différente :
+**La migration est fermée.** `npm.cmd run legacy:residue:gate:production` sort
+en **code 0** :
 
-- `functions/.gitignore` ignore `.env.*`. L'édition **ne vit que sur ce poste**.
-  Un déploiement parti d'une autre machine ne fermerait rien, et sans erreur
-  visible.
-- Le déploiement doit partir du shell de l'opérateur : le sandbox de
-  l'assistant n'a pas de session Firebase CLI et échoue en 401 sur
-  `firestore.googleapis.com`, avec un message qui accuse à tort la base
-  Firestore.
+| Signal | Avant | Après |
+| --- | --- | --- |
+| Comptes portant les tableaux de suivi | 4 | **0** |
+| `public_profiles_follow_cleanup_v1` | absent | **`completed: true`** |
+| `blockers` | 1 | **aucun** |
+
+Et `npm.cmd run backend:parity:check:production` repasse en code 0 juste après
+— règles identiques, 44/44 index `READY`, les deux TTL `ACTIVE`.
+
+Il reste à vérifier sur appareil que suivre et ne plus suivre fonctionnent, et
+qu'une suppression de compte ne laisse pas de compteur de suiveurs décalé.
+C'est l'étape 6 de la procédure, et elle porte sur le comportement, que
+l'absence de résidu ne mesure pas.
+
+Le point 7 — retirer `firestore.transition.rules` — s'est révélé plus large
+qu'une suppression de fichier : un garde-fou
+(`test/backend_parity_gate_guardrails_test.dart`) exige que le script npm
+`…:transition` existe et que le gate cite le fichier, et une suite de tests
+entière (`test/rules/firestore-transition-rules.test.mjs`) le lit. Quatre
+endroits à modifier ensemble, aucun préalable au lancement. Détail dans la
+procédure.
+
+Deux points relevés pendant ce déploiement, à ne pas perdre :
+
+- `functions/.gitignore` ignore `.env.*`. L'édition **ne vit que sur ce
+  poste** : un déploiement parti d'une autre machine ou d'un runner CI ne
+  fermerait rien, et sans erreur visible.
+- Le CLI Firebase a affiché `Authentication Error: Your credentials are no
+  longer valid. Please run firebase login --reauth` **avant** de déployer avec
+  succès. Le script `deploy-functions-safe.ps1` n'appelle que
+  `firebase.cmd deploy`, donc ce message vient du CLI et n'a pas interrompu ce
+  déploiement-ci — mais il annonce une session dégradée. Lancer
+  `firebase login --reauth` avant le prochain déploiement, qui échouerait
+  franchement.
 
 ## 4. La `.p8` sur `adfoot-staging` — indécidable, et non bloquant
 
@@ -192,13 +221,12 @@ Aucune règle, aucun index, aucune Cloud Function n'a été déployé.
 
 1. **Compte de démonstration** (§2). C'est le seul élément dont l'absence
    provoque un rejet certain, et il se fait en dehors de tout déploiement.
-2. **Fermeture de la migration** (§3) : `npm.cmd run functions:deploy:production`
-   depuis ce poste, en release backend dédiée — rien d'autre dans le même
-   déploiement — pendant que les tableaux sont encore vides. Puis attendre un
-   passage horaire de `backfillPublicProfiles` et confirmer par
-   `npm.cmd run legacy:residue:gate:production`.
-3. **Build de soumission**, après `backend:parity:check:production` à nouveau
-   vert — la parité est à revérifier *après* le déploiement de l'étape 2, pas
-   avant.
+2. ~~**Fermeture de la migration** (§3)~~ — **faite le 13 octobre**, gate et
+   parité verts. Reste la vérification de comportement sur appareil (suivre,
+   ne plus suivre, suppression de compte).
+3. **Build de soumission**, `backend:parity:check:production` étant à nouveau
+   vert après le déploiement de l'étape 2.
 4. **`.p8` staging** (§4), quand un build staging sera installé. Ne bloque pas
    le lancement.
+5. **Retrait de l'artefact transitoire** (point 7 de la procédure), après les
+   soumissions. Quatre endroits couplés, aucun impact sur la release.
