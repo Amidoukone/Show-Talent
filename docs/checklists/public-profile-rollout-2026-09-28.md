@@ -230,6 +230,37 @@ correctif.
    `backend:parity:check:production` qui fait foi. À planifier après les
    soumissions, en une modification cohérente des quatre endroits.
 
+### Le piège des fichiers d'environnement, trouvé après coup
+
+Avoir édité `functions/.env.production` seul ne suffisait pas, et l'oubli était
+silencieux. `.firebaserc` fait pointer l'alias **`production-next` sur le même
+projet** `adfoot-production` — ce n'est pas une pré-production séparée, et
+`firebase projects:list` ne connaît que trois projets. Un
+`npm.cmd run functions:deploy:production-next` sans ces lignes aurait donc
+redéployé la production avec `MIRROR_LEGACY_FOLLOW_ARRAYS` absent, c'est-à-dire
+à son défaut de code, qui est le mirroring **actif** : les callables de suivi
+auraient recommencé à écrire les tableaux. Et comme
+`public_profiles_follow_cleanup_v1` porte désormais `completed: true`, le
+backfill ne repasse plus : les tableaux se seraient remplis sans que rien ne le
+signale.
+
+Règle : **tout fichier d'environnement qui cible `adfoot-production` porte les
+mêmes lignes.** Corrigé le 13 octobre dans les quatre fichiers concernés, les
+deux réels (gitignorés, donc locaux à ce poste) et les deux `*.example`
+suivis par git, qui sont le seul endroit où la connaissance survit à ce poste :
+
+| Fichier | Suivi | État |
+| --- | --- | --- |
+| `functions/.env.production` | non | fermeture appliquée et déployée |
+| `functions/.env.production-next` | non | aligné — même projet |
+| `functions/.env.production.example` | **oui** | valeurs post-fermeture + le pourquoi |
+| `functions/.env.production-next.example` | **oui** | les trois flags, qui manquaient entièrement |
+| `functions/.env.staging` / `.example` | non / **oui** | alignés, pour que staging ne diverge pas dans la zone qui vient de changer |
+
+Vérifié : `functions:env:check:production-next` et `functions:env:check:staging`
+résolvent bien les deux valeurs. Après tout déploiement utilisant l'alias
+`production-next`, repasser `npm.cmd run legacy:residue:gate:production`.
+
 **Retour arrière.** Retirer les deux lignes et redéployer rétablit le
 mirroring pour les écritures suivantes, mais **ne recrée pas** les tableaux
 supprimés. C'est acceptable précisément parce qu'ils sont vides aujourd'hui ;
