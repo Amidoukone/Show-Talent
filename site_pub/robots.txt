@@ -1,4 +1,4 @@
-# Adfoot — https://adfoot.org
+# Adfoot : https://adfoot.org
 #
 # /v/ heberge les pages de partage video. Elles nomment un joueur, souvent
 # mineur, et montrent sa video sans authentification : le lien doit rester

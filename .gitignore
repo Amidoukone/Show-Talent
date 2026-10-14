@@ -148,3 +148,9 @@ service-account*.json
 # qu'un chemin n'a jamais tourne sur un appareil. Laisser cela hors de Git,
 # c'est le reperdre a chaque fois.
 !/docs/reprise-*.md
+
+# Sources haute definition des visuels marketing (PNG ~2,5 Mo piece).
+# Hors de site_pub/ pour ne jamais partir en deploiement Hosting, et hors de
+# git pour ne pas alourdir le depot. Les versions web optimisees vivent dans
+# site_pub/images/.
+media-source/

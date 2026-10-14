@@ -74,6 +74,8 @@
     "users:search-fields:refresh:production": "node .\\scripts\\refresh-user-search-fields.mjs --environment production --apply",
     "hosting:marketing:deploy:staging": "firebase.cmd deploy --only hosting:marketing --project staging",
     "hosting:marketing:deploy:production": "firebase.cmd deploy --only hosting:marketing --project production",
+    "site:images:hash": "node scripts/hash-site-images.mjs",
+    "site:images:check": "node scripts/hash-site-images.mjs --check",
     "rules:test": "npm --prefix functions run build && firebase emulators:exec --only firestore --project demo-adfoot \"node test/rules/firestore-rules.test.mjs\"",
     "rules:test:storage": "firebase emulators:exec --only firestore,storage --project demo-adfoot \"node test/rules/storage-rules.test.mjs\"",
     "rules:test:all": "npm run rules:test && npm run rules:test:storage",

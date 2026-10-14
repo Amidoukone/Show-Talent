@@ -3,129 +3,513 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Adfoot — Connecter les talents du football africain</title>
+  <title>Adfoot | Le football africain, montré et vérifié</title>
   <meta
     name="description"
-    content="Adfoot met en relation les jeunes joueurs africains avec les clubs, recruteurs et agents internationaux, dans un cadre plus transparent et plus structuré."
+    content="Un poste, une catégorie d’âge, des vidéos modérées et un CV sportif sur la fiche de chaque joueur. Adfoot ouvre chaque compte à la main, après vérification, et ne demande jamais d’argent à un joueur."
   />
+  <link rel="canonical" href="https://adfoot.org/" />
 
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Adfoot" />
+  <meta property="og:url" content="https://adfoot.org/" />
+  <meta property="og:title" content="Adfoot | Le football africain, montré et vérifié" />
+  <meta property="og:description" content="Le niveau d’un joueur se montre. Un poste, une catégorie d’âge, des vidéos modérées et un CV sportif, sur une fiche qu’un club peut filtrer." />
+  <meta property="og:image" content="https://adfoot.org/icons/og-image.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="L’équipe de jeunes joueurs accompagnés par Adfoot, en maillot ADFOOT." />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 
-  <!-- Favicons et manifest -->
   <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" type="image/png" href="/favicon-96x96.png" />
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/manifest.json" />
-  <meta name="theme-color" content="#2ED573" />
-
+  <meta name="theme-color" content="#0E1114" />
 </head>
 <body>
-  <!-- Hero -->
-  <header class="hero">
-    <div class="hero-content">
-      <h1>Adfoot</h1>
-      <p>Donner une chance aux talents africains. Connecter, accompagner, réussir.</p>
-      <a href="/download/android/" class="btn-primary">Rejoindre maintenant</a>
-    </div>
-    <div class="hero-image">
-      <img src="/images/hero.jpg" alt="Jeunes joueurs africains sur le terrain" />
+  <a class="skip-link" href="#main" data-en="Skip to content">Aller au contenu</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/">
+        <img src="/favicon-96x96.png" alt="" width="38" height="38" />
+        <span>Adfoot</span>
+      </a>
+
+      <nav class="main-nav" aria-label="Navigation principale" data-en-aria-label="Main navigation">
+        <a href="#pour-qui" data-en="Who it’s for">Pour qui</a>
+        <a href="#comment" data-en="How it works">Comment ça marche</a>
+        <a href="#fonctionnalites" data-en="Features">Fonctionnalités</a>
+        <a href="#parents" data-en="Parents">Parents</a>
+        <a href="#contact" data-en="Contact">Contact</a>
+      </nav>
+
+      <div class="header-actions">
+        <button type="button" class="lang-toggle" id="lang-toggle" aria-label="Switch to English" data-en-aria-label="Passer en français">EN</button>
+        <a class="btn btn-primary btn-sm" href="#contact" data-en="Request access">Demander un accès</a>
+      </div>
     </div>
   </header>
 
-  <!-- À propos / mission -->
-  <section id="about" class="section about">
-    <div class="container about-flex">
-      <div class="about-text">
-        <h2>Notre mission</h2>
-        <p>
-          En Afrique, de nombreux jeunes joueurs talentueux restent invisibles faute de structure, de visibilité et d’opportunités. Adfoot change cela en connectant directement ces talents avec des recruteurs, clubs et agents internationaux, tout en offrant formation, accompagnement et coaching professionnels.
-        </p>
-      </div>
-      <div class="about-image">
-        <img src="/images/about.jpg" alt="Formation et entraînements de jeunes joueurs" />
-      </div>
-    </div>
-  </section>
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <span class="eyebrow" data-en="African football recruitment">Recrutement du football africain</span>
+          <h1 data-en="A player’s level <em>is shown</em>. It is not told over the phone.">Le niveau d’un joueur <em>se montre</em>. Il ne se raconte pas au téléphone.</h1>
+          <p class="hero-sub" data-en="A position, an age category, moderated match videos, a sporting CV. That is what a club looks at before travelling, and that is what Adfoot puts on every player’s record.">
+            Un poste, une catégorie d’âge, des vidéos modérées, un CV sportif. C’est ce qu’un club regarde avant de se déplacer, et c’est ce qu’Adfoot met sur la fiche de chaque joueur.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#contact" data-en="Request access">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              Demander un accès
+            </a>
+            <a class="btn btn-outline" href="/download/android/" data-en="Download the app (Android)">Télécharger l’application (Android)</a>
+          </div>
+          <p class="hero-note" data-en="<strong>Accounts are opened by the Adfoot team.</strong> There is no sign-up form in the app. Write to us first, and we open your access."><strong>Les comptes sont ouverts par l’équipe Adfoot.</strong> Il n’y a pas de formulaire d’inscription dans l’application. Écrivez-nous d’abord, nous ouvrons votre accès.</p>
+        </div>
 
-  <!-- Fonctionnalités -->
-  <section id="features" class="section features">
-    <div class="container">
-      <h2>Fonctionnalités</h2>
-      <div class="features-grid">
-        <div class="feature-card">
-          <img src="/images/feature1.jpg" alt="Offres / événements" />
-          <h3>Publier offres & événements</h3>
-          <p>Les clubs, agents ou recruteurs peuvent publier des opportunités de stages, recrutements ou événements sportifs.</p>
-        </div>
-        <div class="feature-card">
-          <img src="/images/feature2.jpg" alt="Postuler & gérer candidatures" />
-          <h3>Postuler & gérer candidatures</h3>
-          <p>Les joueurs peuvent postuler. Les recruteurs voient les candidatures et peuvent consulter les profils détaillés.</p>
-        </div>
-        <div class="feature-card">
-          <img src="/images/feature1.jpg" alt="Messagerie instantanée" />
-          <h3>Messagerie instantanée</h3>
-          <p>Communication directe entre joueurs, clubs et agents, sans intermédiaire.</p>
-        </div>
-        <div class="feature-card">
-          <img src="/images/feature2.jpg" alt="Accompagnement & formation" />
-          <h3>Accompagnement & formation</h3>
-          <p>Préparation physique, coaching vidéo, dossiers scouts, CV sportif — tout pour professionnaliser le talent.</p>
+        <div class="hero-visual">
+          <img src="/images/hero-player.82dc23c4.jpg" width="820" height="1457" alt="Jeune joueur accompagné par Adfoot, ballon au pied, en maillot ADFOOT sur le terrain." data-en-alt="Young player supported by Adfoot, ball at his feet, wearing the ADFOOT kit on the pitch." fetchpriority="high" decoding="async" />
+          <p class="hero-caption" data-en="What a recruiter sees: a position, an age category, match videos.">Ce que voit un recruteur : un poste, une catégorie d’âge, des vidéos.</p>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- Comment ça marche -->
-  <section id="how-it-works" class="section how-it-works">
-    <div class="container">
-      <h2>Comment ça marche</h2>
-      <ol class="steps">
-        <li><strong>1.</strong> Inscription & création de profil</li>
-        <li><strong>2.</strong> Publication d’offres / recherche</li>
-        <li><strong>3.</strong> Candidature & évaluation</li>
-        <li><strong>4.</strong> Communication directe & recrutement</li>
-      </ol>
-    </div>
-  </section>
+    <!-- Pour qui -->
+    <section class="section" id="pour-qui">
+      <div class="container">
+        <div class="section-head">
+          <h2 data-en="Who Adfoot is for">À qui s’adresse Adfoot</h2>
+          <p data-en="Five roles exist in the app. All five go through the same door: our team opens the account once it has checked who you are.">Cinq rôles existent dans l’application. Les cinq passent par la même porte : notre équipe ouvre le compte une fois qu’elle a vérifié qui vous êtes.</p>
+        </div>
 
-  <!-- CTA central -->
-  <section id="cta" class="section cta">
-    <div class="container">
-      <h2>Rejoignez Adfoot aujourd’hui</h2>
-      <a href="/download/android/" class="btn-secondary">Télécharger l’application</a>
-    </div>
-  </section>
+        <div class="grid grid-4">
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M5.5 21a7 7 0 0 1 13 0"/></svg></div>
+            <h3 data-en="Players">Joueurs</h3>
+            <p data-en="Your record carries your positions, your age category, your videos and your sporting CV. A recruiter looking for your profile finds you on those criteria, without scrolling a list.">Votre fiche porte vos postes, votre catégorie d’âge, vos vidéos et votre CV sportif. Un recruteur qui cherche votre profil vous trouve sur ces critères, sans faire défiler une liste.</p>
+          </article>
 
-  <!-- Contact -->
-  <section id="contact" class="section contact">
-    <div class="container contact-flex">
-      <div class="contact-image">
-        <img src="/images/about.jpg" alt="Contact illustration" />
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg></div>
+            <h3 data-en="Clubs">Clubs</h3>
+            <p data-en="Look for a U17 goalkeeper or a centre-back, and get exactly that. Publish your trials and your events, and follow every application in one place.">Cherchez un gardien U17 ou un défenseur central, et obtenez exactement cela. Publiez vos essais et vos événements, et suivez toutes les candidatures au même endroit.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></div>
+            <h3 data-en="Recruiters &amp; agents">Recruteurs &amp; agents</h3>
+            <p data-en="Spot a talent, check what has actually been verified, and talk to the player or the club directly. Your professional affiliation is verified too.">Repérez un talent, vérifiez ce qui a réellement été contrôlé, échangez directement avec le joueur ou le club. Votre affiliation professionnelle est vérifiée aussi.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-4.4-7-9.5A4 4 0 0 1 12 8a4 4 0 0 1 7 3.5c0 5.1-7 9.5-7 9.5Z"/></svg></div>
+            <h3 data-en="Supporters">Supporters</h3>
+            <p data-en="Follow the players and the clubs of your city, watch their published videos and see the events go by, in the same app.">Suivez les joueurs et les clubs de votre ville, regardez leurs vidéos publiées et voyez passer les événements, dans la même application.</p>
+          </article>
+        </div>
       </div>
-      <div class="contact-form-container">
-        <h2>Contactez-nous</h2>
-        <form action="mailto:contact@adfoot.org" method="post" enctype="text/plain">
-          <input type="text" name="name" placeholder="Votre nom" required />
-          <input type="email" name="email" placeholder="Votre e-mail" required />
-          <textarea name="message" placeholder="Votre message" required></textarea>
-          <button type="submit" class="btn-primary">Envoyer</button>
-        </form>
-      </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- Footer -->
-  <footer class="footer">
+    <!-- Comment ça marche -->
+    <section class="section section-alt" id="comment">
+      <div class="container">
+        <div class="section-head">
+          <h2 data-en="How you actually get in">Comment on entre, concrètement</h2>
+          <p data-en="This is the question we are asked every day. There is no public sign-up: every account is opened by the Adfoot team, after a real exchange.">C’est la question qu’on nous pose tous les jours. Il n’y a pas d’inscription libre : chaque compte est ouvert par l’équipe Adfoot, après un échange réel.</p>
+        </div>
+
+        <ol class="steps">
+          <li>
+            <h3 data-en="Contact Adfoot">Contactez Adfoot</h3>
+            <p data-en="By WhatsApp or by email. Tell us who you are: player, parent, club, recruiter or agent. For a player, add the city, the age and the position.">Par WhatsApp ou par e-mail. Dites-nous qui vous êtes : joueur, parent, club, recruteur ou agent. Pour un joueur, ajoutez la ville, l’âge et le poste.</p>
+          </li>
+          <li>
+            <h3 data-en="We check, then open the account">Nous vérifions, puis ouvrons le compte</h3>
+            <p data-en="The team checks the information, and for a player under 18 records a parent or guardian’s consent before anything becomes visible.">L’équipe contrôle les informations et, pour un joueur de moins de 18 ans, enregistre l’accord d’un parent ou tuteur avant toute mise en visibilité.</p>
+          </li>
+          <li>
+            <h3 data-en="Set your password">Définissez votre mot de passe</h3>
+            <p data-en="You receive an activation link by email, set your password and confirm your address. The link is valid for one hour.">Vous recevez un lien d’activation par e-mail, définissez votre mot de passe et confirmez votre adresse. Le lien est valable une heure.</p>
+          </li>
+          <li>
+            <h3 data-en="Complete your profile">Complétez votre profil</h3>
+            <p data-en="Sign in to the app, add your positions, your sporting CV and your videos. Videos are reviewed by a moderator before publication.">Connectez-vous à l’application, ajoutez vos postes, votre CV sportif et vos vidéos. Les vidéos sont examinées par un modérateur avant publication.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- Confiance / joueurs accompagnés -->
+    <section class="section" id="confiance">
+      <div class="container">
+        <div class="section-head">
+          <h2 data-en="The players we support">Les joueurs que nous accompagnons</h2>
+          <p data-en="The photographs on this page are of the players we follow, taken on their own pitch. Their record carries the same positions they play on Saturday.">Les photos de cette page sont celles des joueurs que nous suivons, prises sur leur terrain. Leur fiche porte les mêmes postes que ceux qu’ils occupent le samedi.</p>
+        </div>
+
+        <img src="/images/team.bf41b2c4.jpg" width="1400" height="933" alt="Groupe de jeunes joueurs accompagnés par Adfoot, en maillot ADFOOT, alignés sur le terrain." data-en-alt="A group of young players supported by Adfoot, in ADFOOT kit, lined up on the pitch." loading="lazy" decoding="async" class="feature-image" />
+
+        <div class="gallery">
+          <img src="/images/player-01.0a78c761.jpg" width="640" height="960" alt="Gardien accompagné par Adfoot, maillot numéro 1, sur le terrain." data-en-alt="Goalkeeper supported by Adfoot, wearing number 1, on the pitch." loading="lazy" decoding="async" />
+          <img src="/images/player-02.b5d282dc.jpg" width="640" height="960" alt="Joueur accompagné par Adfoot, maillot numéro 2, sur le terrain." data-en-alt="Player supported by Adfoot, wearing number 2, on the pitch." loading="lazy" decoding="async" />
+          <img src="/images/player-06.3f3e8ae3.jpg" width="640" height="960" alt="Joueur accompagné par Adfoot, maillot numéro 6, sur le terrain." data-en-alt="Player supported by Adfoot, wearing number 6, on the pitch." loading="lazy" decoding="async" />
+          <img src="/images/player-07.73222e2a.jpg" width="640" height="960" alt="Joueur accompagné par Adfoot, maillot numéro 7, sur le terrain." data-en-alt="Player supported by Adfoot, wearing number 7, on the pitch." loading="lazy" decoding="async" />
+          <img src="/images/player-08.1661a70d.jpg" width="640" height="960" alt="Joueur accompagné par Adfoot, maillot numéro 8, sur le terrain." data-en-alt="Player supported by Adfoot, wearing number 8, on the pitch." loading="lazy" decoding="async" />
+          <img src="/images/player-12.7acba22a.jpg" width="640" height="960" alt="Joueur accompagné par Adfoot, maillot numéro 12, sur le terrain." data-en-alt="Player supported by Adfoot, wearing number 12, on the pitch." loading="lazy" decoding="async" />
+        </div>
+        <p class="gallery-note" data-en="Players supported by Adfoot. Their images are published with the permission of the player and, for a minor, of a parent or guardian.">Joueurs accompagnés par Adfoot. Leurs images sont publiées avec l’accord du joueur et, pour un mineur, de son parent ou tuteur.</p>
+      </div>
+    </section>
+
+    <!-- Fonctionnalités -->
+    <section class="section section-alt" id="fonctionnalites">
+      <div class="container">
+        <div class="section-head">
+          <h2 data-en="What the app actually does">Ce que fait l’application</h2>
+          <p data-en="What you actually use once the account is open.">Ce que vous utilisez vraiment une fois le compte ouvert.</p>
+        </div>
+
+        <div class="grid grid-3">
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg></div>
+            <h3 data-en="Structured search">Recherche structurée</h3>
+            <p data-en="Positions, age categories and club levels are closed lists, never free text. A club looking for a U19 centre-back gets U19 centre-backs.">Postes, catégories d’âge et niveaux de club sont des listes fermées, jamais du texte libre. Un club qui cherche un défenseur central U19 obtient des défenseurs centraux U19.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+            <h3 data-en="Verified profiles">Profils vérifiés</h3>
+            <p data-en="The “Vérifié par Adfoot” badge says what our team actually checked. It promises no trial and no contract. It says the information was verified, nothing else.">Le badge « Vérifié par Adfoot » dit ce que notre équipe a réellement contrôlé. Il ne promet aucun essai ni aucun contrat. Il dit que l’information a été vérifiée, rien d’autre.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 11 5-3v8l-5-3Z"/></svg></div>
+            <h3 data-en="Video &amp; CV profiles">Profils vidéo &amp; CV</h3>
+            <p data-en="Match videos, season statistics and sporting CV gathered on one page a recruiter can actually read.">Vidéos de jeu, statistiques par saison et CV sportif réunis sur une fiche qu’un recruteur peut vraiment lire.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-8 8H4l2.3-2.3A8 8 0 1 1 21 12Z"/></svg></div>
+            <h3 data-en="In-app messaging">Messagerie intégrée</h3>
+            <p data-en="Adults talk directly inside the app. For a player under 18, contact goes through Adfoot: direct messaging stays closed.">Les majeurs échangent directement dans l’application. Pour un joueur de moins de 18 ans, le contact passe par Adfoot : la messagerie directe reste fermée.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg></div>
+            <h3 data-en="Offers &amp; events">Offres &amp; événements</h3>
+            <p data-en="Clubs and recruiters publish trials, recruitments and events. Players apply, and everyone follows the outcome in the app.">Les clubs et recruteurs publient essais, recrutements et événements. Les joueurs candidatent et chacun suit la suite dans l’application.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M5 8h14M7 21h10"/></svg></div>
+            <h3 data-en="Human moderation">Modération humaine</h3>
+            <p data-en="Videos are reviewed before they appear publicly, and any content or account can be reported to the team.">Les vidéos sont examinées avant d’apparaître publiquement, et tout contenu ou compte peut être signalé à l’équipe.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Parents -->
+    <section class="section" id="parents">
+      <div class="container split">
+        <div>
+          <span class="eyebrow" data-en="Parents &amp; guardians">Parents &amp; tuteurs</span>
+          <h2 data-en="Your child plays. You decide.">Votre enfant joue. C’est vous qui décidez.</h2>
+          <p class="lead-muted" data-en="Many of the messages we receive come from parents, and that is exactly how it should be. Adfoot accepts players from the age of 12, and nothing about a player under 18 becomes visible without a recorded consent from a parent or guardian.">
+            Beaucoup des messages que nous recevons viennent de parents, et c’est exactement ainsi que cela doit se passer. Adfoot accueille les joueurs à partir de 12 ans, et rien concernant un joueur de moins de 18 ans n’est rendu visible sans l’accord enregistré d’un parent ou tuteur.
+          </p>
+
+          <ul class="checklist">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
+              <span data-en="Your consent is recorded by our team, orally or in writing. You do not need an Adfoot account, and we can explain the process in a language you understand.">Votre accord est enregistré par notre équipe, oralement ou par écrit. Vous n’avez pas besoin de compte Adfoot, et nous pouvons vous expliquer le parcours dans une langue que vous comprenez.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
+              <span data-en="Without that consent, the profile stays hidden from recruiters and no photo or video is published.">Sans cet accord, le profil reste masqué aux recruteurs et aucune photo ni vidéo n’est publiée.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
+              <span data-en="Once consent is given, only verified recruiters and clubs see a limited record: position, age category, nationality. Never the CV or private contact details.">Une fois l’accord donné, seuls des recruteurs et clubs vérifiés voient une fiche limitée : poste, catégorie d’âge, nationalité. Jamais le CV ni les coordonnées privées.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
+              <span data-en="Nobody contacts your child directly. Contact requests go through Adfoot, which reviews them first.">Personne ne contacte votre enfant directement. Les demandes de contact passent par Adfoot, qui les examine d’abord.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
+              <span data-en="You can withdraw your consent at any time by writing to &lt;a href=&quot;mailto:support@adfoot.org&quot;&gt;support@adfoot.org&lt;/a&gt;. The profile and media are hidden while we handle your request.">Vous pouvez retirer votre accord à tout moment en écrivant à <a href="mailto:support@adfoot.org">support@adfoot.org</a>. Le profil et les médias sont masqués pendant le traitement de votre demande.</span>
+            </li>
+          </ul>
+
+          <p class="mt-lg">
+            <a class="btn btn-outline" href="/legal/privacy-policy.html" data-en="Read the privacy policy" data-en-href="/legal/privacy-policy.en.html">Lire la politique de confidentialité</a>
+          </p>
+        </div>
+
+        <div>
+          <img src="/images/player-05.969f9661.jpg" width="640" height="960" alt="Joueur accompagné par Adfoot, maillot numéro 5, sur le terrain." data-en-alt="Player supported by Adfoot, wearing number 5, on the pitch." loading="lazy" decoding="async" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Sécurité -->
+    <section class="section section-alt" id="securite">
+      <div class="container">
+        <div class="safety">
+          <h2 data-en="Adfoot never asks you for money">Adfoot ne vous demande jamais d’argent</h2>
+          <p data-en="Young African players are a regular target for people who promise a trial, a club or a visa in exchange for a payment. Adfoot is free for players, and we want this stated plainly on our own site:">
+            Les jeunes joueurs africains sont une cible régulière de personnes qui promettent un essai, un club ou un visa contre un paiement. Adfoot est gratuit pour les joueurs, et nous tenons à l’écrire noir sur blanc sur notre propre site :
+          </p>
+          <ul>
+            <li data-en="We never ask for payment to create an account, to be visible, to be selected or to obtain a trial.">Nous ne demandons jamais de paiement pour créer un compte, être visible, être sélectionné ou obtenir un essai.</li>
+            <li data-en="We promise no scouting, no trial, no contract and no transfer. Adfoot connects people; it does not decide for clubs.">Nous ne promettons ni détection, ni essai, ni contrat, ni transfert. Adfoot met en relation ; elle ne décide pas à la place des clubs.</li>
+            <li data-en="Adfoot is not your agent. We sign no representation mandate and take no commission on a contract or a transfer.">Adfoot n’est pas votre agent. Nous ne signons aucun mandat de représentation et ne prenons aucune commission sur un contrat ou un transfert.</li>
+            <li data-en="If someone asks you for money in Adfoot’s name, it is not us. Report it to &lt;a href=&quot;mailto:support@adfoot.org&quot;&gt;support@adfoot.org&lt;/a&gt;.">Si quelqu’un vous demande de l’argent au nom d’Adfoot, ce n’est pas nous. Signalez-le à <a href="mailto:support@adfoot.org">support@adfoot.org</a>.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Appel à l'action -->
+    <section class="cta-band">
+      <div class="container">
+        <h2 data-en="Tell us about the player">Parlez-nous du joueur</h2>
+        <p data-en="Player, parent, club, recruiter or agent: one message is enough to start. We answer every serious request.">Joueur, parent, club, recruteur ou agent : un message suffit pour commencer. Nous répondons à toute demande sérieuse.</p>
+        <div class="cta-actions">
+          <a class="btn btn-primary" href="https://wa.me/22370453345?text=Bonjour%20Adfoot%2C%20je%20souhaite%20demander%20un%20acc%C3%A8s.%0AJe%20suis%20%3A%20(joueur%20%2F%20parent%20%2F%20club%20%2F%20recruteur%20%2F%20agent)%0AVille%20%3A%0A%C3%82ge%20du%20joueur%20%3A%0APoste%20%3A" rel="noopener" data-en="Write on WhatsApp" data-en-href="https://wa.me/22370453345?text=Hello%20Adfoot%2C%20I%20would%20like%20to%20request%20access.%0AI%20am%20%3A%20(player%20%2F%20parent%20%2F%20club%20%2F%20recruiter%20%2F%20agent)%0ACity%20%3A%0APlayer%27s%20age%20%3A%0APosition%20%3A">Écrire sur WhatsApp</a>
+          <a class="btn btn-outline" href="#contact" data-en="Send an email">Envoyer un e-mail</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contact -->
+    <section class="section" id="contact">
+      <div class="container">
+        <div class="section-head">
+          <h2 data-en="Request access">Demander un accès</h2>
+          <p data-en="This is step one of the journey above. Give us what we need to open the right account, and we come back to you.">C’est l’étape 1 du parcours ci-dessus. Donnez-nous de quoi ouvrir le bon compte, et nous revenons vers vous.</p>
+        </div>
+
+        <div class="contact-grid">
+          <div>
+            <div class="contact-channel">
+              <h3 data-en="WhatsApp, the fastest">WhatsApp, le plus rapide</h3>
+              <p data-en="The channel our team actually watches. The message opens pre-filled; just complete it.">Le canal que notre équipe suit vraiment. Le message s’ouvre pré-rempli, vous n’avez qu’à le compléter.</p>
+              <a class="btn btn-primary" href="https://wa.me/22370453345?text=Bonjour%20Adfoot%2C%20je%20souhaite%20demander%20un%20acc%C3%A8s.%0AJe%20suis%20%3A%20(joueur%20%2F%20parent%20%2F%20club%20%2F%20recruteur%20%2F%20agent)%0AVille%20%3A%0A%C3%82ge%20du%20joueur%20%3A%0APoste%20%3A" rel="noopener" data-en="+223 70 45 33 45" data-en-href="https://wa.me/22370453345?text=Hello%20Adfoot%2C%20I%20would%20like%20to%20request%20access.%0AI%20am%20%3A%20(player%20%2F%20parent%20%2F%20club%20%2F%20recruiter%20%2F%20agent)%0ACity%20%3A%0APlayer%27s%20age%20%3A%0APosition%20%3A">+223 70 45 33 45</a>
+            </div>
+
+            <div class="contact-channel">
+              <h3 data-en="By email">Par e-mail</h3>
+              <p data-en="Account, access, reports and parental consent: <a href=&quot;mailto:support@adfoot.org&quot;>support@adfoot.org</a>.<br />Publisher and personal-data requests: <a href=&quot;mailto:contact@adfoot.org&quot;>contact@adfoot.org</a>.">Compte, accès, signalements et accord parental : <a href="mailto:support@adfoot.org">support@adfoot.org</a>.<br />Éditeur et demandes sur vos données : <a href="mailto:contact@adfoot.org">contact@adfoot.org</a>.</p>
+            </div>
+          </div>
+
+          <form class="contact-form" id="access-form">
+            <div class="field">
+              <label for="f-role" data-en="I am">Je suis</label>
+              <select id="f-role" name="role" required>
+                <option value="joueur" data-en="A player">Un joueur</option>
+                <option value="parent" data-en="A parent or guardian">Un parent ou tuteur</option>
+                <option value="club" data-en="A club">Un club</option>
+                <option value="recruteur" data-en="A recruiter">Un recruteur</option>
+                <option value="agent" data-en="An agent">Un agent</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="f-name" data-en="Name">Nom</label>
+              <input type="text" id="f-name" name="name" required placeholder="Votre nom complet" data-en-placeholder="Your full name" />
+            </div>
+
+            <div class="field">
+              <label for="f-email" data-en="Email">E-mail</label>
+              <input type="email" id="f-email" name="email" required placeholder="vous@exemple.com" data-en-placeholder="you@example.com" />
+            </div>
+
+            <div class="field">
+              <label for="f-city" data-en="City and country">Ville et pays</label>
+              <input type="text" id="f-city" name="city" placeholder="Bamako, Mali" data-en-placeholder="Bamako, Mali" />
+            </div>
+
+            <div class="field">
+              <label for="f-message" data-en="Your message">Votre message</label>
+              <textarea id="f-message" name="message" required placeholder="Pour un joueur : âge, poste, club actuel. Pour une structure : votre rôle et votre organisation." data-en-placeholder="For a player: age, position, current club. For an organisation: your role and your club."></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary" data-en="Send the request">Envoyer la demande</button>
+            <p class="form-note" data-en="The button opens your email app with the message ready to send to support@adfoot.org. If nothing opens, write to us directly at that address.">Le bouton ouvre votre application e-mail avec le message prêt à partir vers support@adfoot.org. Si rien ne s’ouvre, écrivez-nous directement à cette adresse.</p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
     <div class="container">
-      <p>© 2025–2026 Adfoot — Tous droits réservés</p>
-      <p>
-      <a href="/legal/privacy-policy.html">Politique de confidentialité</a>
-        |
-        <a href="/legal/account-deletion.html">Suppression de compte</a>
-      </p>
+      <div class="footer-grid">
+        <div>
+          <a class="brand" href="/">
+            <img src="/favicon-96x96.png" alt="" width="38" height="38" />
+            <span>Adfoot</span>
+          </a>
+          <p class="footer-tagline" data-en="Adfoot gives African football talent a structured, verifiable profile, and connects it with verified clubs, recruiters and agents.">Adfoot donne aux talents du football africain un profil structuré et vérifiable, et les met en relation avec des clubs, recruteurs et agents vérifiés.</p>
+        </div>
+
+        <div>
+          <h4 data-en="The site">Le site</h4>
+          <ul>
+            <li><a href="#pour-qui" data-en="Who it’s for">Pour qui</a></li>
+            <li><a href="#comment" data-en="How it works">Comment ça marche</a></li>
+            <li><a href="#parents" data-en="Parents">Parents</a></li>
+            <li><a href="#contact" data-en="Request access">Demander un accès</a></li>
+            <li><a href="/download/android/" data-en="Download (Android)">Télécharger (Android)</a></li>
+          </ul>
+        </div>
+
+        <div>
+          <h4 data-en="Legal">Légal</h4>
+          <ul>
+            <li><a href="/legal/terms.html" data-en="Terms of service" data-en-href="/legal/terms.en.html">Conditions d’utilisation</a></li>
+            <li><a href="/legal/privacy-policy.html" data-en="Privacy policy" data-en-href="/legal/privacy-policy.en.html">Politique de confidentialité</a></li>
+            <li><a href="/legal/account-deletion.html" data-en="Account deletion" data-en-href="/legal/account-deletion.en.html">Suppression de compte</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span data-en="© 2025-2026 Adfoot · SIRA DIGITAL INNOVATION STUDIO SARL">© 2025-2026 Adfoot · SIRA DIGITAL INNOVATION STUDIO SARL</span>
+        <span>Bamako, Mali · <a href="mailto:support@adfoot.org">support@adfoot.org</a></span>
+      </div>
     </div>
   </footer>
+
+  <script>
+    /* Bascule FR/EN.
+     *
+     * Le francais est ecrit directement dans le HTML : sans JavaScript, la page
+     * reste entierement lisible dans la langue du public principal. L'anglais
+     * vit dans des attributs data-en* et n'est applique que si le script tourne.
+     * Les traductions originales francaises sont capturees au chargement, ce qui
+     * permet de revenir en arriere sans rechargement.
+     */
+    (function () {
+      var STORE_KEY = 'adfoot.lang';
+      var ATTRS = ['placeholder', 'alt', 'aria-label', 'href', 'title'];
+
+      var textNodes = document.querySelectorAll('[data-en]');
+      var i;
+
+      for (i = 0; i < textNodes.length; i++) {
+        textNodes[i].setAttribute('data-fr', textNodes[i].innerHTML);
+      }
+
+      for (i = 0; i < ATTRS.length; i++) {
+        (function (attr) {
+          var nodes = document.querySelectorAll('[data-en-' + attr + ']');
+          for (var j = 0; j < nodes.length; j++) {
+            nodes[j].setAttribute('data-fr-' + attr, nodes[j].getAttribute(attr) || '');
+          }
+        })(ATTRS[i]);
+      }
+
+      function apply(lang) {
+        var k, nodes;
+
+        nodes = document.querySelectorAll('[data-' + lang + ']');
+        for (k = 0; k < nodes.length; k++) {
+          nodes[k].innerHTML = nodes[k].getAttribute('data-' + lang);
+        }
+
+        for (k = 0; k < ATTRS.length; k++) {
+          (function (attr) {
+            var list = document.querySelectorAll('[data-' + lang + '-' + attr + ']');
+            for (var m = 0; m < list.length; m++) {
+              list[m].setAttribute(attr, list[m].getAttribute('data-' + lang + '-' + attr));
+            }
+          })(ATTRS[k]);
+        }
+
+        document.documentElement.lang = lang;
+
+        var toggle = document.getElementById('lang-toggle');
+        if (toggle) {
+          toggle.textContent = lang === 'fr' ? 'EN' : 'FR';
+        }
+
+        try {
+          window.localStorage.setItem(STORE_KEY, lang);
+        } catch (e) {
+          /* Navigation privee : la langue ne survit pas a la page, sans plus. */
+        }
+      }
+
+      var stored = null;
+      try {
+        stored = window.localStorage.getItem(STORE_KEY);
+      } catch (e) {
+        stored = null;
+      }
+
+      if (stored !== 'fr' && stored !== 'en') {
+        stored = (navigator.language || 'fr').toLowerCase().indexOf('en') === 0 ? 'en' : 'fr';
+      }
+
+      if (stored === 'en') {
+        apply('en');
+      }
+
+      var btn = document.getElementById('lang-toggle');
+      if (btn) {
+        btn.addEventListener('click', function () {
+          apply(document.documentElement.lang === 'en' ? 'fr' : 'en');
+        });
+      }
+
+      /* Le formulaire compose un e-mail au lieu d'etre poste.
+       *
+       * L'ancien formulaire faisait POST vers une adresse mailto:, ce que les
+       * navigateurs modernes ignorent : le visiteur cliquait "Envoyer" et rien
+       * ne partait. Composer l'URL mailto a la main fonctionne partout. */
+      var form = document.getElementById('access-form');
+      if (form) {
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          var en = document.documentElement.lang === 'en';
+          var roleSelect = document.getElementById('f-role');
+          var role = roleSelect.options[roleSelect.selectedIndex].text;
+          var name = document.getElementById('f-name').value;
+          var email = document.getElementById('f-email').value;
+          var city = document.getElementById('f-city').value;
+          var message = document.getElementById('f-message').value;
+
+          var subject = en
+            ? 'Access request: ' + role
+            : 'Demande d’accès : ' + role;
+
+          var body = (en
+            ? ['I am: ' + role, 'Name: ' + name, 'Email: ' + email, 'City: ' + city, '', message]
+            : ['Je suis : ' + role, 'Nom : ' + name, 'E-mail : ' + email, 'Ville : ' + city, '', message]
+          ).join('\n');
+
+          window.location.href =
+            'mailto:support@adfoot.org?subject=' +
+            encodeURIComponent(subject) +
+            '&body=' +
+            encodeURIComponent(body);
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

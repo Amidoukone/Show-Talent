@@ -183,8 +183,8 @@
    *
    * This is not the same thing as a bad link, and treating it as one was a
    * defect the user could see. `ActionCodeSettings.url` sends the mobile
-   * flows here as their *continueUrl* — the page Firebase's own action
-   * handler forwards to once the reset has already succeeded — and it
+   * flows here as their *continueUrl*, the page Firebase's own action
+   * handler forwards to once the reset has already succeeded, and it
    * forwards without any code, because there is nothing left to apply. The
    * reward for changing your password in a browser was therefore a red
    * "Ce lien est invalide ou expiré. Demandez un nouveau lien à
@@ -192,7 +192,7 @@
    *
    * A genuinely expired or reused link is a different branch: it carries an
    * oobCode, reaches Firebase, and is refused there with its own message. So
-   * nothing legitimate is softened by making this one calm — and it stays
+   * nothing legitimate is softened by making this one calm, and it stays
    * honest about the other way of arriving here, a truncated link.
    */
   function showMissingCode() {

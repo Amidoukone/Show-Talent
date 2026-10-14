@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -328,7 +329,19 @@ void main() {
       expect(sharePage, isNot(contains('Regarde cette video')));
       expect(sharePage, isNot(contains('Video de talent')));
       expect(publicIndex, contains('href="/styles.css"'));
-      expect(publicIndex, contains('src="/images/hero.jpg"'));
+      // The hero must still carry a visual, but not one particular file: the
+      // 2026-10-14 redesign replaced hero.jpg with photographs of the players
+      // Adfoot actually supports, and pinning a filename made a correct page
+      // fail. The sibling test below checks that every image the page
+      // references really exists, which is the part that must not regress.
+      expect(publicIndex, contains('class="hero-visual"'));
+      expect(
+        RegExp(
+          r'class="hero-visual"[\s\S]{0,400}?src="/images/[^"]+"',
+        ).hasMatch(publicIndex),
+        isTrue,
+        reason: 'the homepage hero must still show an image',
+      );
       expect(androidDownloadPage, contains("Application en accès contrôlé"));
       expect(linkHandler, contains('VideoShareLinks.extractVideoId(link)'));
       expect(linkHandler, contains("'videoId': videoId"));
@@ -347,6 +360,42 @@ void main() {
           File('site_pub/$imageRef').existsSync(),
           isTrue,
           reason: 'Missing public hosting image asset: $imageRef',
+        );
+      }
+    });
+
+    // firebase.json serves /images/** as `max-age=31536000, immutable`, so a
+    // filename reused for different bytes keeps showing the old picture to
+    // anyone who has already visited, for a year, with no way to push a fix.
+    // That is not hypothetical: on 2026-10-14 `player-05.jpg` held the number
+    // 12 player, then the number 5 player after a rename, and the browser went
+    // on showing number 12 in a section that had been corrected. A content
+    // hash in the filename makes a changed image a changed URL, which is the
+    // only thing that makes `immutable` an honest promise.
+    test('every public image URL is content-addressed', () {
+      final publicIndex = File('site_pub/index.html').readAsStringSync();
+      final imageRefs = RegExp(
+        r'src="/images/([^"]+)"',
+      ).allMatches(publicIndex).map((match) => match.group(1)!).toSet();
+
+      expect(imageRefs, isNotEmpty);
+      final naming = RegExp(r'^(.+)\.([0-9a-f]{8})\.(jpg|jpeg|png|webp)$');
+
+      for (final name in imageRefs) {
+        final parsed = naming.firstMatch(name);
+        expect(
+          parsed,
+          isNotNull,
+          reason:
+              '$name carries no content hash, so a later edit to it would stay '
+              'invisible behind the immutable cache header',
+        );
+
+        final bytes = File('site_pub/images/$name').readAsBytesSync();
+        expect(
+          sha256.convert(bytes).toString().substring(0, 8),
+          parsed!.group(2),
+          reason: '$name no longer matches its own content hash',
         );
       }
     });
