@@ -102,6 +102,14 @@ try {
     [`${publicOrigin}/`, 200],
     [`${publicOrigin}/account/reset`, 200],
     [`${publicOrigin}/legal/privacy-policy.html`, 200],
+    // The terms page is the one the app's settings tile and the activation
+    // email link to. It 404'd in production until 2026-10-14 because nothing
+    // asked for it here.
+    [`${publicOrigin}/legal/terms.html`, 200],
+    [`${publicOrigin}/legal/terms.en.html`, 200],
+    [`${publicOrigin}/legal/privacy-policy.en.html`, 200],
+    // Kept as a standing refusal: no draft is ever served, whatever lands in
+    // site_pub/legal/ later.
     [`${publicOrigin}/legal/terms.draft.html`, 404],
     [`${adminOrigin}/`, 200],
     [`${publicOrigin}/cv/view/invalid`, 404],

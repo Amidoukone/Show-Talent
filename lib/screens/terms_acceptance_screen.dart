@@ -170,13 +170,25 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                   _DocumentLink(
                     label: l10n.termsLinkTerms,
                     icon: Icons.description_outlined,
-                    onTap: busy ? null : () => _open(config.termsUrl),
+                    onTap: busy
+                        ? null
+                        : () => _open(
+                            config.termsUrlForLanguage(
+                              Localizations.localeOf(context).languageCode,
+                            ),
+                          ),
                   ),
                   const SizedBox(height: 10),
                   _DocumentLink(
                     label: l10n.termsLinkPrivacy,
                     icon: Icons.privacy_tip_outlined,
-                    onTap: busy ? null : () => _open(config.privacyUrl),
+                    onTap: busy
+                        ? null
+                        : () => _open(
+                            config.privacyUrlForLanguage(
+                              Localizations.localeOf(context).languageCode,
+                            ),
+                          ),
                   ),
                   const SizedBox(height: 24),
                   _ConsentCheckbox(

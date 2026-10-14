@@ -4,7 +4,7 @@
 
   /v/ (pages de partage video) en est volontairement absent : ces pages
   nomment un joueur et diffusent sa video sans authentification. Elles sont
-  partageables, pas indexables — voir robots.txt et l'en-tete X-Robots-Tag
+  partageables, pas indexables : voir robots.txt et l'en-tete X-Robots-Tag
   pose par la Cloud Function videoSharePage.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -18,14 +18,39 @@
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
+  <!--
+    Pages legales. Le francais est la version de reference ; les variantes
+    .en.html sont declarees parce qu'elles sont des pages a part entiere, et
+    chacune porte ses propres balises rel=alternate hreflang.
+  -->
+  <url>
+    <loc>https://adfoot.org/legal/terms.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://adfoot.org/legal/terms.en.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
   <url>
     <loc>https://adfoot.org/legal/privacy-policy.html</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
+    <loc>https://adfoot.org/legal/privacy-policy.en.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://adfoot.org/legal/account-deletion.html</loc>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://adfoot.org/legal/account-deletion.en.html</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
   </url>
 </urlset>

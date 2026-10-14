@@ -58,3 +58,71 @@ a {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+/* --- Ajouts du 14 octobre 2026 : publication des CGU et des versions
+   anglaises. Purement additif : aucune regle existante n'est modifiee, donc
+   le rendu des pages deja en ligne est inchange. --- */
+
+.langbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 18px;
+  font-size: 0.92rem;
+}
+
+.langbar a,
+.langbar span {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  text-decoration: none;
+}
+
+.langbar span[aria-current="page"] {
+  background: rgba(46, 213, 115, 0.12);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.pagenav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 32px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  font-size: 0.92rem;
+}
+
+/* Les engagements que le lecteur ne doit pas pouvoir survoler : protection
+   des mineurs, autorisation promotionnelle. */
+.rule {
+  border-left: 3px solid var(--brand);
+  padding-left: 14px;
+}
+
+h2 {
+  scroll-margin-top: 16px;
+}
+
+/* Tableau des durees de conservation. */
+table.retention {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 14px 0;
+  font-size: 0.95rem;
+}
+
+table.retention th,
+table.retention td {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+table.retention th {
+  color: #d0def0;
+  background: rgba(34, 52, 76, 0.5);
+}

@@ -87,6 +87,60 @@ void main() {
     });
   });
 
+  group('the document opens in the language the user is reading', () {
+    test('english gets the translation, everything else the reference text', () {
+      const config = TermsConfig(
+        requiredVersion: '1.0',
+        termsUrl: 'https://adfoot.org/legal/terms.html',
+        privacyUrl: 'https://adfoot.org/legal/privacy-policy.html',
+        effectiveOn: '14 octobre 2026',
+      );
+
+      expect(config.termsUrlForLanguage('en'), TermsConfig.bundledTermsUrlEn);
+      expect(
+        config.privacyUrlForLanguage('en'),
+        TermsConfig.bundledPrivacyUrlEn,
+      );
+      expect(config.termsUrlForLanguage('fr'), config.termsUrl);
+      expect(config.privacyUrlForLanguage('fr'), config.privacyUrl);
+      // An unsupported locale must land on the reference text, never on a
+      // blank screen: French is what both documents declare authoritative.
+      expect(config.termsUrlForLanguage('bm'), config.termsUrl);
+      expect(config.termsUrlForLanguage(''), config.termsUrl);
+    });
+
+    test('a config that blanks the translation falls back to French', () {
+      final config = TermsConfig.fromData(const <String, dynamic>{
+        'requiredVersion': '1.0',
+        'termsUrlEn': '   ',
+        'privacyUrlEn': 42,
+      });
+
+      expect(config.termsUrlForLanguage('en'), TermsConfig.bundledTermsUrlEn);
+      expect(
+        config.privacyUrlForLanguage('en'),
+        TermsConfig.bundledPrivacyUrlEn,
+      );
+    });
+
+    test('config/legal can move the translations without a build', () {
+      final config = TermsConfig.fromData(const <String, dynamic>{
+        'requiredVersion': '1.0',
+        'termsUrlEn': 'https://adfoot.org/legal/terms.en.html?v=2',
+        'privacyUrlEn': 'https://adfoot.org/legal/privacy-policy.en.html?v=2',
+      });
+
+      expect(
+        config.termsUrlForLanguage('en'),
+        'https://adfoot.org/legal/terms.en.html?v=2',
+      );
+      expect(
+        config.privacyUrlForLanguage('en'),
+        'https://adfoot.org/legal/privacy-policy.en.html?v=2',
+      );
+    });
+  });
+
   group('the acceptance is stored, and stored where it does no harm', () {
     test('AppUser round-trips the acceptance through toMap', () {
       final user = AppUser.fromMap(<String, dynamic>{
@@ -162,6 +216,98 @@ void main() {
         contains('request.resource.data.acceptedTermsAt == request.time'),
         reason: 'a client-supplied timestamp would make the record worthless',
       );
+    });
+
+    test('every legal URL the app can open resolves to a published page', () {
+      // This is the test that was missing. `site_pub/legal/terms.html` did
+      // not exist until 2026-10-14, while the app's settings tile and the
+      // invitation email both linked to it: Reglages > Documents >
+      // Conditions, and the "Conditions d'utilisation" link in the activation
+      // email, each opened a live 404. Nothing failed, because nothing
+      // compared the URLs against the files.
+      //
+      // `firebase.json` ignores `**/*.draft.html`, so a draft on disk is not
+      // a published page — hence the explicit refusal below.
+      const urls = <String>[
+        TermsConfig.bundledTermsUrl,
+        TermsConfig.bundledPrivacyUrl,
+        TermsConfig.bundledTermsUrlEn,
+        TermsConfig.bundledPrivacyUrlEn,
+      ];
+
+      for (final url in urls) {
+        const prefix = 'https://adfoot.org/legal/';
+        expect(
+          url,
+          startsWith(prefix),
+          reason: 'a legal URL outside /legal/ is not covered by this check',
+        );
+        final name = url.substring(prefix.length);
+        expect(
+          name,
+          isNot(contains('.draft.')),
+          reason: 'firebase.json ignores **/*.draft.html: $url would 404',
+        );
+        expect(
+          File('site_pub/legal/$name').existsSync(),
+          isTrue,
+          reason: '$url has no file to serve: site_pub/legal/$name is missing',
+        );
+      }
+    });
+
+    test('the invitation email links to pages that exist', () {
+      // The email is sent by the backend, so a broken link here is not
+      // visible in any Flutter screen and survives every mobile test run.
+      final email = _read('functions/src/email_delivery.ts');
+      final matches = RegExp(
+        r'https://adfoot\.org/legal/([A-Za-z0-9._-]+)',
+      ).allMatches(email);
+
+      expect(
+        matches,
+        isNotEmpty,
+        reason: 'the invitation email must keep naming the legal pages',
+      );
+      for (final match in matches) {
+        final name = match.group(1)!;
+        expect(
+          File('site_pub/legal/$name').existsSync(),
+          isTrue,
+          reason: 'the invitation email links to a missing page: $name',
+        );
+      }
+    });
+
+    test('a published legal page carries no draft marker', () {
+      // A draft banner or an unfilled placeholder reaching production is the
+      // same defect class as the 404: the user is asked to accept a text that
+      // tells them it is not final.
+      for (final name in <String>[
+        'terms.html',
+        'terms.en.html',
+        'privacy-policy.html',
+        'privacy-policy.en.html',
+        'account-deletion.html',
+        'account-deletion.en.html',
+      ]) {
+        final page = _read('site_pub/legal/$name');
+        expect(
+          page,
+          isNot(contains('class="draft"')),
+          reason: '$name still shows the draft banner',
+        );
+        expect(
+          page,
+          isNot(contains('class="pending"')),
+          reason: '$name still has an unresolved placeholder',
+        );
+        expect(
+          page.contains('à confirmer') || page.contains('to be confirmed'),
+          isFalse,
+          reason: '$name still says a value is to be confirmed',
+        );
+      }
     });
 
     test('accepting is its own rule, never a profile update', () {

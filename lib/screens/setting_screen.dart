@@ -471,7 +471,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           title: l10n.settingsTermsTile,
                           subtitle: _acceptedTermsSubtitle(l10n),
                           onTap: () => _openLegalDocument(
-                            _termsService.cached.termsUrl,
+                            _termsService.cached.termsUrlForLanguage(
+                              Localizations.localeOf(context).languageCode,
+                            ),
                           ),
                         ),
                         _buildDivider(),
@@ -480,7 +482,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           title: l10n.settingsPrivacyTile,
                           subtitle: l10n.settingsPrivacyTileSubtitle,
                           onTap: () => _openLegalDocument(
-                            _termsService.cached.privacyUrl,
+                            _termsService.cached.privacyUrlForLanguage(
+                              Localizations.localeOf(context).languageCode,
+                            ),
                           ),
                         ),
                       ],

@@ -24,11 +24,23 @@ class TermsConfig {
     required this.termsUrl,
     required this.privacyUrl,
     required this.effectiveOn,
+    this.termsUrlEn = bundledTermsUrlEn,
+    this.privacyUrlEn = bundledPrivacyUrlEn,
   });
 
   final String requiredVersion;
+
+  /// The French pages, which are the reference text both documents name.
+  ///
+  /// Kept as the unsuffixed fields because they are the fallback for every
+  /// language: a locale with no published translation must land on the
+  /// authoritative text, not on nothing.
   final String termsUrl;
   final String privacyUrl;
+
+  /// The English translations, resolved by [termsUrlForLanguage].
+  final String termsUrlEn;
+  final String privacyUrlEn;
 
   /// Human-readable date shown next to the version, or an empty string.
   final String effectiveOn;
@@ -40,10 +52,17 @@ class TermsConfig {
   ///
   /// The gate points users at adfoot.org/legal/terms.html. Shipping it before
   /// that page exists would send every user to a 404 and ask them to accept a
-  /// text they cannot read — worse than no gate at all. So the app ships with
-  /// the gate dormant, and it is switched on for the whole fleet by writing
-  /// `config/legal.requiredVersion` the day the terms are published, with no
-  /// new build and no wait for the fleet to update.
+  /// text they cannot read — worse than no gate at all. The pages were
+  /// written on 2026-10-14 (version 1.0), but writing a page in this repo is
+  /// not the same thing as serving it: it reaches users only after
+  /// `hosting:marketing:deploy:production`. Hard-coding a version here would
+  /// couple the gate to the *build* and arm it even if that deploy had not
+  /// happened — reintroducing exactly the 404 this constant exists to avoid.
+  ///
+  /// So the app still ships with the gate dormant, and it is switched on for
+  /// the whole fleet by writing `config/legal.requiredVersion` once the
+  /// published URLs have been opened and checked, with no new build and no
+  /// wait for the fleet to update.
   ///
   /// Failing open is deliberate here: consent is a legal requirement, but a
   /// consent screen that cannot resolve its own requirement must not lock
@@ -52,6 +71,10 @@ class TermsConfig {
   static const String bundledTermsUrl = 'https://adfoot.org/legal/terms.html';
   static const String bundledPrivacyUrl =
       'https://adfoot.org/legal/privacy-policy.html';
+  static const String bundledTermsUrlEn =
+      'https://adfoot.org/legal/terms.en.html';
+  static const String bundledPrivacyUrlEn =
+      'https://adfoot.org/legal/privacy-policy.en.html';
 
   static const TermsConfig bundled = TermsConfig(
     requiredVersion: bundledVersion,
@@ -78,9 +101,30 @@ class TermsConfig {
       requiredVersion: pick('requiredVersion', bundledVersion),
       termsUrl: pick('termsUrl', bundledTermsUrl),
       privacyUrl: pick('privacyUrl', bundledPrivacyUrl),
+      termsUrlEn: pick('termsUrlEn', bundledTermsUrlEn),
+      privacyUrlEn: pick('privacyUrlEn', bundledPrivacyUrlEn),
       effectiveOn: pick('effectiveOn', ''),
     );
   }
+
+  /// The terms URL to open for [languageCode].
+  ///
+  /// Anything other than `en` gets the French reference text, which is what
+  /// both documents declare themselves to be. Resolving here rather than at
+  /// the call sites keeps the two screens that open these links from drifting
+  /// apart — the settings tile and the consent gate must never show a
+  /// different document.
+  String termsUrlForLanguage(String languageCode) =>
+      languageCode == 'en' && termsUrlEn.trim().isNotEmpty
+      ? termsUrlEn
+      : termsUrl;
+
+  /// The privacy policy URL to open for [languageCode]. See
+  /// [termsUrlForLanguage].
+  String privacyUrlForLanguage(String languageCode) =>
+      languageCode == 'en' && privacyUrlEn.trim().isNotEmpty
+      ? privacyUrlEn
+      : privacyUrl;
 
   /// True while no acceptance is required at all.
   ///

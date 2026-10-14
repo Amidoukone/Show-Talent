@@ -379,6 +379,12 @@ $pubspecPath = Join-Path $repoRoot "pubspec.yaml"
 $androidFirebasePath = Join-Path $repoRoot "android/app/src/$effectiveNativeEnvironment/google-services.json"
 $privacyPagePath = Join-Path $repoRoot "site_pub/legal/privacy-policy.html"
 $accountDeletionPagePath = Join-Path $repoRoot "site_pub/legal/account-deletion.html"
+# The terms page is checked here for the same reason as the other two: the app
+# links to it from Reglages > Documents and the activation email links to it by
+# absolute URL. It was absent from this list for as long as it was absent from
+# the site, so the release gate stayed green over a live 404.
+$termsPagePath = Join-Path $repoRoot "site_pub/legal/terms.html"
+$legalStylesPath = Join-Path $repoRoot "site_pub/legal/styles.css"
 $assetLinksPath = Join-Path $repoRoot "site_pub/.well-known/assetlinks.json"
 $storeComplianceDocPath = Join-Path $repoRoot "docs/store-compliance.md"
 $releaseSigningFingerprint = ""
@@ -716,13 +722,34 @@ if (Test-Path -LiteralPath $keyPropertiesPath) {
     }
 }
 
-foreach ($legalPath in @($privacyPagePath, $accountDeletionPagePath, $assetLinksPath)) {
+foreach ($legalPath in @($privacyPagePath, $accountDeletionPagePath, $termsPagePath, $legalStylesPath, $assetLinksPath)) {
     if (-not (Test-Path -LiteralPath $legalPath)) {
         $message = "Missing store/compliance file: $legalPath"
         if ($RequireLegalUrls) {
             $errors.Add($message)
         } else {
             $warnings.Add($message)
+        }
+    }
+}
+
+# A legal page that still announces itself as a draft, or still says a value is
+# "a confirmer", is a compliance defect rather than a cosmetic one: the stores
+# read these URLs, and the app asks users to accept the text they point at.
+foreach ($legalPagePath in @($privacyPagePath, $accountDeletionPagePath, $termsPagePath)) {
+    if (-not (Test-Path -LiteralPath $legalPagePath)) { continue }
+
+    $legalPageRaw = Get-Content -LiteralPath $legalPagePath -Raw
+    $pageName = Split-Path -Leaf $legalPagePath
+
+    foreach ($marker in @('class="draft"', 'class="pending"', 'à confirmer')) {
+        if ($legalPageRaw -like "*$marker*") {
+            $message = "site_pub/legal/$pageName still carries a draft marker: $marker"
+            if ($RequireLegalUrls) {
+                $errors.Add($message)
+            } else {
+                $warnings.Add($message)
+            }
         }
     }
 }
@@ -794,6 +821,9 @@ if (Test-Path -LiteralPath $storeComplianceDocPath) {
     }
     if ($storeDocRaw -notmatch 'https://adfoot\.org/legal/account-deletion\.html') {
         $warnings.Add("docs/store-compliance.md does not contain the account deletion URL.")
+    }
+    if ($storeDocRaw -notmatch 'https://adfoot\.org/legal/terms\.html') {
+        $warnings.Add("docs/store-compliance.md does not contain the terms of service URL.")
     }
 } else {
     $warnings.Add("Missing store compliance doc: $storeComplianceDocPath")
