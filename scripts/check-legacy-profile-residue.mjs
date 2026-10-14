@@ -47,7 +47,12 @@
  * Usage:
  *   node scripts/check-legacy-profile-residue.mjs \
  *     --project adfoot-production \
- *     --service-account .credentials/adfoot-production-ops.json
+ *     --service-account <path to the ops service-account JSON>
+ *
+ *   The path is deliberately not spelled out here: a committed path to a
+ *   credentials file tells a reader exactly which file to look for, and
+ *   `test/sign_in_never_hangs_guardrails_test.dart` fails the build over it.
+ *   The npm shortcuts in package.json pass the conventional location.
  *
  *   Add --require-clean to turn the report into a release gate: it then exits
  *   non-zero while any residue remains, for use after the flags are flipped
