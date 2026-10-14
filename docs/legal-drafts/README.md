@@ -5,7 +5,7 @@ pour tous les pays où Adfoot propose le service. Il n'y a pas de variante de
 texte par pays. Les protections impératives applicables à la situation d'une
 personne prévalent si elles lui donnent davantage de droits.
 
-## État : publié le 14 octobre 2026, version 1.0
+## État : publié le 14 octobre 2026, version 1.1
 
 Les brouillons que ce dossier contenait ont été validés et publiés. **Les
 fichiers de référence sont désormais dans `site_pub/legal/`**, et ce dossier ne
@@ -32,7 +32,7 @@ en cas de divergence, le français prévaut.
 
 ## Ce qui a été tranché le 14 octobre 2026
 
-- **Version et date d'effet :** version 1.0, en vigueur le 14 octobre 2026.
+- **Version et date d'effet :** version 1.1, en vigueur le 14 octobre 2026. La version 1.0, publiée le même jour, affirmait que l'accès des joueurs était gratuit. C'était faux : l'inscription est payante, 15 000 FCFA une fois pour un joueur et 25 000 FCFA par an pour un club, un recruteur ou un agent, en espèces à l'agence. Corrigé en 1.1 le jour même, section 7.1 des CGU. Toute évolution de prix ou de modèle doit passer par une nouvelle version, pas par une retouche silencieuse.
 - **Adresses de contact :** deux boîtes, avec des rôles distincts.
   `support@adfoot.org` reçoit les demandes de compte, les signalements, la
   sécurité, et l'accord parental et l'autorisation média d'un joueur mineur.

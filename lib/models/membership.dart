@@ -19,8 +19,8 @@ enum MembershipTier { none, adfoot, external }
 /// What the administration has recorded about an account's entitlements.
 ///
 /// This is a *mirror*, never a source of truth for money. Payment happens
-/// outside the application — mobile money, transfer, cash at the agency — and
-/// the administration records the outcome through the admin portal. The mobile
+/// outside the application, in cash at the agency, and the administration
+/// records the outcome through the admin portal. The mobile
 /// app never displays a price, never offers a way to pay and never links to
 /// one, which is what keeps the Play Console declaration ("no in-app
 /// purchases") true.

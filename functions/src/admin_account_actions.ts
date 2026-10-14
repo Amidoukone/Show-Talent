@@ -1534,8 +1534,8 @@ function parseMembershipValidUntil(raw: unknown): Date | null {
  * raisonnement que pour l'acceptation des CGU.
  *
  * **Ce callable ne déplace aucun argent et ne connaît aucun prix.** Le
- * paiement a lieu hors plateforme — mobile money, virement, espèces à
- * l'agence — et ceci ne fait que refléter la décision de l'administration pour
+ * paiement a lieu hors plateforme, en espèces à l'agence, et ceci ne fait que
+ * refléter la décision de l'administration pour
  * que l'application puisse en tenir compte. L'application mobile n'affiche
  * aucun prix, n'offre aucun moyen de payer et ne renvoie vers aucun : c'est ce
  * qui maintient vraie la déclaration Play Console « aucun achat intégré ».

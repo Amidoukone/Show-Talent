@@ -148,10 +148,10 @@
   },
   "termsAcceptFailureTitle": "Enregistrement impossible",
   "termsAcceptFailureMessage": "Votre acceptation n’a pas pu être enregistrée. Vérifiez votre réseau puis réessayez.",
-  "termsHighlightFreeTitle": "Gratuit pour les joueurs",
-  "termsHighlightFreeBody": "Adfoot ne vous demandera jamais d’argent pour être vu, sélectionné ou testé. Signalez toute demande de paiement.",
+  "termsHighlightMoneyWarningTitle": "Attention aux demandes d’argent",
+  "termsHighlightMoneyWarningBody": "Adfoot ne demande jamais d’envoyer de l’argent par mobile money ou par virement, et aucun paiement pour obtenir une sélection, un essai ou un contrat. Signalez toute demande de ce type.",
   "termsHighlightNotAgentTitle": "Nous ne sommes pas votre agent",
-  "termsHighlightNotAgentBody": "Adfoot vous rend visible auprès des clubs et recruteurs, sans garantir un essai ni un contrat, et sans commission.",
+  "termsHighlightNotAgentBody": "Adfoot vous rend visible auprès des clubs et recruteurs, sans garantir un essai ni un contrat. Toute part sur un contrat fait l’objet d’une convention écrite que vous acceptez avant tout engagement.",
   "termsHighlightOwnershipTitle": "Vos vidéos vous appartiennent",
   "termsHighlightOwnershipBody": "Vous en restez propriétaire. Vous pouvez les retirer, et supprimer votre compte, à tout moment.",
 

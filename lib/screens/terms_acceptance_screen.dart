@@ -242,9 +242,9 @@ class _Highlights extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final items = <(IconData, String, String)>[
       (
-        Icons.money_off_rounded,
-        l10n.termsHighlightFreeTitle,
-        l10n.termsHighlightFreeBody,
+        Icons.warning_amber_rounded,
+        l10n.termsHighlightMoneyWarningTitle,
+        l10n.termsHighlightMoneyWarningBody,
       ),
       (
         Icons.handshake_outlined,

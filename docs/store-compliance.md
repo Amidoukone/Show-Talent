@@ -44,8 +44,21 @@ carries a draft marker.
 - Player records are reclassified daily after their eighteenth birthday so the
   adult profile and messaging rules do not depend on the player editing their
   account.
-- Terms of service and privacy policy are **version 1.0, effective
-  14 October 2026**, published in French and English. The short interim privacy
+- **Registration is chargeable, and the app must stay silent about it.**
+  15,000 FCFA once for a player; 25,000 FCFA per year for a club, recruiter or
+  agent. Payment is cash only, at the Bamako agency. The mobile app displays no
+  price, offers no way to pay and links to none, and
+  `setManagedAccountMembership` carries no amount: that is what keeps the Play
+  Console "no in-app purchases" declaration true and keeps the build clear of
+  App Store guideline 3.1.1. **Never add a price, a payment button or a payment
+  link to the app.** Pricing lives in the published terms (§7.1) and on the
+  marketing site, which are not subject to those rules. `Membership`
+  (`lib/models/membership.dart`) mirrors the administration's decision only;
+  `MembershipTier.adfoot` is a player the agency carries at its own cost.
+- Terms of service and privacy policy are **version 1.1, effective
+  14 October 2026**, published in French and English. Version 1.0 was published
+  the same day and withdrawn within hours: it stated that player access was
+  free, which was wrong. The short interim privacy
   page was replaced by the full policy, which now states concrete retention
   periods taken from the code (90 days for error and video-action logs, 30 days
   for other telemetry, 3 days for an unverified account that the administration
@@ -199,7 +212,7 @@ open.
 3. Only then write `config/legal` in `adfoot-production`:
 
    ```
-   requiredVersion: "1.0"
+   requiredVersion: "1.1"
    effectiveOn:     "14 octobre 2026"
    termsUrl:        "https://adfoot.org/legal/terms.html"
    privacyUrl:      "https://adfoot.org/legal/privacy-policy.html"

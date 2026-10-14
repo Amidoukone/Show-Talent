@@ -126,3 +126,14 @@ table.retention th {
   color: #d0def0;
   background: rgba(34, 52, 76, 0.5);
 }
+
+/* Sous-section, introduite le 14 octobre 2026 avec la clause de prix des CGU.
+   Plus discret qu'un h2 : un lecteur doit voir qu'il est toujours dans la
+   meme section. */
+h3 {
+  margin-top: 22px;
+  margin-bottom: 8px;
+  font-size: 1.05rem;
+  color: var(--brand);
+  scroll-margin-top: 16px;
+}
