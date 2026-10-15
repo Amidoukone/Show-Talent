@@ -12,7 +12,8 @@ Tout ce qui est marqué fait a été vérifié, pas supposé.
 | Site public adfoot.org | refait, images et logo à jour | oui, 2026-10-15 |
 | Pages légales, 6 pages FR et EN | version 1.2, en vigueur le 15 octobre | oui, 2026-10-15 |
 | Portail admin | aligné sur 13 ans, calcul d'âge dédupliqué | oui, 2026-10-15 |
-| Build mobile | `1.0.7+50`, contient encore les encadrés d'avant correction | non |
+| Build mobile Android | `1.0.7+51`, AAB signé, contenu prouvé par témoins | construit, non soumis |
+| Build mobile iOS | `1.0.7+51` au déclenchement, Codemagic manuel | non |
 
 Les deux dépôts sont propres et poussés sur
 `release/production-device-tests-2026-10-05`.
@@ -117,17 +118,24 @@ stable pour désigner un visuel.
 
 ## 5. Optionnel, à décider
 
-- **Armer la porte d'acceptation des CGU** en écrivant `config/legal` dans
-  `adfoot-production` avec `requiredVersion: "1.2"` et
-  `effectiveOn: "15 octobre 2026"`. Conséquence immédiate : tous les utilisateurs
-  voient l'écran de consentement au prochain lancement, dans les 15 minutes.
-  **Accepter les CGU une fois sur le compte de démonstration après l'avoir
-  armée**, sinon le relecteur rencontre cet écran en premier. Procédure complète
-  dans `../store-compliance.md`, section « Activating the acceptance gate ».
-- **Un nouveau build mobile.** Le build `1.0.7+50` contient encore les encadrés
-  d'avant correction de l'écran d'acceptation, qui promettaient la gratuité et
-  l'absence de commission. Il ne route pas non plus vers les pages légales
-  anglaises. Rien n'est cassé sans lui, mais un build soumis devrait les porter.
+- ~~**Armer la porte d'acceptation des CGU**~~ Décidé le 15 octobre : on arme
+  avant les soumissions, pour que la version soumise soit celle qui recueille
+  réellement le consentement. Reste à exécuter, et dans cet ordre, parce que
+  l'ordre porte le risque :
+  1. `+51` installé sur les appareils de test, pas seulement construit.
+  2. Compte de démonstration créé par le portail admin.
+  3. `npm run legal:gate:arm:production`.
+  4. Accepter les CGU une fois sur le compte de démonstration, puis
+     `npm run review:account:check:production -- --email <adresse>` doit
+     afficher `READY`.
+
+  Les étapes 1 et 2 ne sont pas de la prudence décorative : armer sur un parc
+  en `+50` recueille un consentement devant deux promesses fausses, et sauter
+  l'étape 4 met l'écran de consentement devant le relecteur avant l'application.
+  Procédure complète dans `../store-compliance.md`, section « Activating the
+  acceptance gate ».
+- ~~**Un nouveau build mobile.**~~ Fait le 15 octobre après-midi, voir la
+  section « Le build 1.0.7+51 » ci-dessous.
 - **La clé `.p8` APNs sur `adfoot-staging`.** Indécidable sans build staging
   installé, et non bloquant : la production est prouvée, un appareil iOS a
   obtenu son jeton sous `1.0.7+49`.
@@ -136,6 +144,64 @@ stable pour désigner un visuel.
 - **Préciser la région de la base et du stockage** dans la section 5 des deux
   politiques. Seule la région des Cloud Functions (`europe-west1`) est
   documentée ; le texte actuel est exact sans être précis.
+
+## Le build 1.0.7+51, et un ordre à respecter
+
+Construit le 15 octobre après-midi. `flutter analyze` ne signale rien, les
+1042 tests passent, le gate de readiness Play Store passe, et l'AAB signé est
+archivé en `artifacts/android/adfoot-production-20261015T151113Z.aab`
+(versionCode 51, versionName 1.0.7, 70,65 Mo). iOS passe son propre gate, avec
+le seul avertissement attendu : `Podfile.lock` est généré sur macOS par
+Codemagic. Le workflow `ios-production` n'a pas de déclencheur automatique, il
+se lance à la main depuis Codemagic et publie sur TestFlight. Les deux
+plateformes prennent leur numéro de build dans `pubspec.yaml`, donc `+51` des
+deux côtés.
+
+### Pourquoi ce build n'est pas un détail de confort
+
+Mesuré, pas supposé : le build `1.0.7+50` **contient** l'écran d'acceptation des
+CGU, et cet écran y affiche encore « Gratuit pour les joueurs » et « sans
+commission ». Les deux sont devenus faux en version 1.1 des conditions, qui
+nomme les 15 000 FCFA et autorise une part sur contrat. Ce build n'a par
+ailleurs aucune URL anglaise, donc un utilisateur en anglais atterrit sur le
+texte français.
+
+Conséquence sur l'ordre, et c'est la seule chose à retenir : **armer la porte
+d'acceptation pendant que le parc est en `+50` ferait cocher « j'accepte »
+devant un écran qui contredit le document accepté**, et enregistrerait ce
+consentement. Distribuer `+51` d'abord, armer ensuite.
+
+Le contrôle de contenu du bundle le prouve désormais mécaniquement plutôt que
+sur parole. `scripts/aab-content-expectations.json` porte deux témoins
+`mustNotContain`, « Gratuit pour les joueurs » et « sans commission », qui font
+échouer le contrôle si un bundle les porte encore, et deux témoins
+`mustContain` pour le texte corrigé et le routage anglais. Vérifié sur l'AAB
+du 51 : les deux premiers absents, les deux seconds présents.
+
+## Trois commandes ajoutées le 15 octobre
+
+Elles remplacent autant de manipulations en console, où rien ne laisse de trace
+et où une faute de frappe est silencieuse.
+
+| Commande | Ce qu'elle fait |
+| --- | --- |
+| `npm run legal:gate:status:production` | Lit `config/legal`, montre le document qu'elle écrirait, vérifie que les quatre pages légales répondent 200. N'écrit rien. |
+| `npm run legal:gate:arm:production` | Même chose puis écrit, et refuse d'armer si une des quatre pages ne répond pas 200. |
+| `npm run review:account:check:production -- --email <adresse>` | Dit si le compte de démonstration est remettable à un relecteur. |
+
+Le vérificateur de compte existe pour une raison précise. `MANAGED_ROLES` dans
+`functions/src/cleanup.ts` vaut `{admin, club, recruteur, agent}` : **`joueur`
+n'y est pas**. Le compte de démonstration doit être un `joueur`, donc il ne
+survit à `cleanupUnverifiedAccounts` que par `createdByAdmin === true`, sans
+aucun filet. Cette condition est invisible à la lecture du compte, et c'est
+exactement celle qui détruit une soumission au quatrième jour. La commande lit
+ce booléen, et dans le même passage ce qu'un relecteur rencontrerait dans
+l'ordre : connexion possible, compte actif, profil rempli plutôt qu'écrans
+vides, et version des CGU déjà acceptée si la porte est armée.
+
+État relevé le 15 octobre : `config/legal` **n'existe pas** en production, donc
+la porte est dormante pour tout le parc et l'armer sera une simple création.
+Les six pages légales sont servies, empreintes conformes au dépôt.
 
 ## Ce qui a été fait le 14 et le 15 octobre
 

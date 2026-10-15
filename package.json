@@ -85,7 +85,11 @@
     "push:ios:check:staging": "node .\\scripts\\check-ios-push-delivery.mjs --environment staging",
     "legacy:residue:check:production": "node .\\scripts\\check-legacy-profile-residue.mjs --project adfoot-production --service-account .credentials\\adfoot-production-ops.json",
     "legacy:residue:gate:production": "node .\\scripts\\check-legacy-profile-residue.mjs --project adfoot-production --service-account .credentials\\adfoot-production-ops.json --require-clean",
-    "legacy:residue:check:staging": "node .\\scripts\\check-legacy-profile-residue.mjs --project adfoot-staging --service-account .credentials\\adfoot-staging-ops.json"
+    "legacy:residue:check:staging": "node .\\scripts\\check-legacy-profile-residue.mjs --project adfoot-staging --service-account .credentials\\adfoot-staging-ops.json",
+    "review:account:check:production": "node .\\scripts\\check-review-account.mjs --environment production",
+    "legal:gate:status:production": "node .\\scripts\\set-legal-gate.mjs --environment production",
+    "legal:gate:arm:production": "node .\\scripts\\set-legal-gate.mjs --environment production --apply",
+    "legal:gate:disarm:production": "node .\\scripts\\set-legal-gate.mjs --environment production --disarm --apply"
   },
   "dependencies": {
     "firebase-admin": "^13.10.0"

@@ -1,6 +1,6 @@
 {
-  "_": "Temoins relus pour Android 1.0.7+50 : tous les temoins des 45 a 49 restent presents et inconditionnels. La 50 n'en ajoute aucun, et c'est exact : ses deux changements retirent du signal au lieu d'en ajouter -- la fermeture automatique d'un evenement n'est plus tentee que par son organisateur (firestore.rules ne l'autorise qu'a lui, et chaque lecteur la tentait pour tout le monde, 80 refus en dix minutes), et une annulation de defilement n'est plus rapportee comme une panne de lecture. Le controle compare aussi le snapshot Dart avec le bundle precedent pour refuser un binaire identique, et c'est lui qui porte la preuve ici. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
-  "forVersionCode": 50,
+  "_": "Temoins relus pour Android 1.0.7+51. C'est la premiere version depuis la 50 a porter du signal nouveau plutot qu'a en retirer, et ce signal est exactement ce qui decide d'une soumission : la 50 affichait dans l'ecran d'acceptation des CGU deux promesses devenues fausses en version 1.1 des conditions, « Gratuit pour les joueurs » et « sans commission », alors que les CGU nomment desormais les 15 000 FCFA et autorisent une part sur contrat. Armer la porte d'acceptation sur un parc en 50 aurait donc fait cocher « j'accepte » devant un ecran contredisant le document accepte. Les deux temoins mustNotContain ci-dessous refusent un bundle qui les porterait encore ; les deux temoins ajoutes a mustContain prouvent le texte corrige et le routage anglais, absent de la 50. Tous les temoins des 45 a 49 restent presents et inconditionnels. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle.",
+  "forVersionCode": 51,
   "mustContain": [
     {
       "text": "app.locale_preference.v1",
@@ -37,6 +37,24 @@
     {
       "text": "settings/privacy",
       "why": "source de trace de SettingsScreen, ajoutee en 49 : un reglage de confidentialite non enregistre etait montre a l'utilisateur et invisible pour nous. Inconditionnelle, dans un catch."
+    },
+    {
+      "text": "https://adfoot.org/legal/terms.en.html",
+      "why": "TermsConfig.bundledTermsUrlEn (lib/services/legal/terms_acceptance_service.dart), ajoutee en 51 : la 50 n'avait aucune URL anglaise, donc un utilisateur en anglais atterrissait sur le texte francais. Constante de compilation referencee par les parametres par defaut de TermsConfig, donc inconditionnelle et retenue. ASCII, sans apostrophe."
+    },
+    {
+      "text": "sans garantir un essai ni un contrat. Toute part sur un contrat fait",
+      "why": "termsHighlightNotAgentBody (app_fr.arb) tel que corrige en 51 ; la 50 terminait cette phrase par « et sans commission ». Tronquee avant « l'objet » pour eviter le piege d'echappement de l'apostrophe typographique dans le dart genere par flutter gen-l10n. Sans accent sur la portion retenue."
+    }
+  ],
+  "mustNotContain": [
+    {
+      "text": "Gratuit pour les joueurs",
+      "why": "titre de termsHighlightFreeTitle, supprime en 51. L'acces joueur est payant depuis la version 1.1 des CGU : un bundle qui porte encore ce titre affiche une fausse promesse dans l'ecran meme ou l'utilisateur accepte les conditions. Sans accent ni apostrophe."
+    },
+    {
+      "text": "sans commission",
+      "why": "fin de termsHighlightNotAgentBody avant la 51. Les CGU autorisent une part sur un contrat conclu par intermediation, donc cette mention contredit le document accepte. Sans accent ni apostrophe."
     }
   ]
 }

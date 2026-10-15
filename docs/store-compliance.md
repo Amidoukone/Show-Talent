@@ -228,7 +228,7 @@ open.
 
    ```
    requiredVersion: "1.2"
-   effectiveOn:     "14 octobre 2026"
+   effectiveOn:     "15 octobre 2026"
    termsUrl:        "https://adfoot.org/legal/terms.html"
    privacyUrl:      "https://adfoot.org/legal/privacy-policy.html"
    termsUrlEn:      "https://adfoot.org/legal/terms.en.html"
@@ -238,8 +238,19 @@ open.
    Leave the four URL keys out and the build's own constants are used, which
    are the same values; they exist so a page can be moved without a release.
 
+There is a second ordering constraint, measured on 2026-10-15, and it is about
+*which build* is installed when the gate opens. Build `1.0.7+50` shipped the
+consent screen with the pre-correction highlights: "Gratuit pour les joueurs"
+and "sans commission". Both statements became false in version 1.1 of the
+terms, which names the 15 000 FCFA access fee and allows a share of a contract.
+That build also has no English URL support at all, so an English user lands on
+the French text. Arming the gate while `+50` is the installed build would
+therefore ask users to tick "I accept" in front of a screen contradicting the
+document they are accepting, and record that consent. Distribute the corrected
+build (`1.0.7+51` or later) first, then arm.
+
 Writing `requiredVersion` makes every account that has not accepted version
-`1.0` see the consent screen on its next launch, within the 15-minute cache
+`1.2` see the consent screen on its next launch, within the 15-minute cache
 window. That includes the App Review demo account, so accept the terms on it
 once after arming the gate, or the reviewer meets the consent screen first and
 reports the app as blocked. Clearing `requiredVersion` back to `""` disarms the
