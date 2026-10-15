@@ -143,10 +143,18 @@ report(
   user.photoProfil ? 'set' : '(absent)',
 );
 if (expectedRole === 'joueur') {
+  // `positionCodes`, not `position`. The football facts sit flattened on the
+  // user document and `positionCodes` is the name in
+  // PlayerFootballProfile.writableFieldPaths; plain `position` appears
+  // nowhere in the model, so reading it reported a complete profile as
+  // missing its position. Measured on the demo account on 2026-10-15.
+  const positionCodes = Array.isArray(user.positionCodes) ?
+    user.positionCodes.filter((code) => typeof code === 'string' && code.trim() !== '') :
+    [];
   report(
-    typeof user.position === 'string' && user.position.trim().length > 0,
-    'position',
-    user.position || '(absent)',
+    positionCodes.length > 0,
+    'positionCodes',
+    positionCodes.length > 0 ? positionCodes.join(', ') : '(absent)',
   );
 
   const videos = await db
