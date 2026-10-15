@@ -31,6 +31,11 @@
  * Usage:
  *   node scripts/check-review-account.mjs --environment production \
  *     --email demo.joueur@example.org
+ *
+ * `--role` defaults to `joueur`, the demo account the stores are handed. Pass
+ * the role explicitly to check the second account kept for showing messaging:
+ * a club has no playing position and no videos of its own, and reporting those
+ * as defects would make the whole output untrustworthy.
  */
 
 import {readFileSync} from 'node:fs';
@@ -43,9 +48,11 @@ const args = process.argv.slice(2);
 let environment;
 let email;
 let credentials;
+let expectedRole = 'joueur';
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--environment' && args[i + 1]) environment = args[++i];
   else if (args[i] === '--email' && args[i + 1]) email = args[++i];
+  else if (args[i] === '--role' && args[i + 1]) expectedRole = args[++i].trim().toLowerCase();
   else if (args[i] === '--credentials' && args[i + 1]) credentials = resolve(args[++i]);
   else throw new Error(`Unknown or incomplete argument: ${args[i]}`);
 }
@@ -108,7 +115,7 @@ const user = snapshot.data();
 const role = typeof user.role === 'string' ? user.role.trim().toLowerCase() : '';
 
 console.log('\nusers document');
-report(role === 'joueur', 'role', role || '(absent)');
+report(role === expectedRole, 'role', `${role || '(absent)'}, expected ${expectedRole}`);
 report(user.estActif === true, 'estActif', String(user.estActif));
 report(user.authDisabled !== true, 'authDisabled', String(user.authDisabled ?? false));
 report(user.emailVerified === true, 'emailVerified (doc)', String(user.emailVerified));
@@ -135,22 +142,28 @@ report(
   'photoProfil',
   user.photoProfil ? 'set' : '(absent)',
 );
-report(
-  typeof user.position === 'string' && user.position.trim().length > 0,
-  'position',
-  user.position || '(absent)',
-);
+if (expectedRole === 'joueur') {
+  report(
+    typeof user.position === 'string' && user.position.trim().length > 0,
+    'position',
+    user.position || '(absent)',
+  );
 
-const videos = await db
-  .collection('videos')
-  .where('uid', '==', authUser.uid)
-  .get();
-const approved = videos.docs.filter((doc) => doc.data().moderationStatus === 'approved');
-report(
-  approved.length > 0,
-  'approved videos',
-  `${approved.length} approved of ${videos.size} total`,
-);
+  const videos = await db
+    .collection('videos')
+    .where('uid', '==', authUser.uid)
+    .get();
+  const approved = videos.docs.filter((doc) => doc.data().moderationStatus === 'approved');
+  report(
+    approved.length > 0,
+    'approved videos',
+    `${approved.length} approved of ${videos.size} total`,
+  );
+} else {
+  console.log(
+    `  n/a    ${'position, videos'.padEnd(34)} not facts about a ${expectedRole} account`,
+  );
+}
 
 console.log('\nTerms acceptance gate');
 const legal = await db.doc('config/legal').get();
