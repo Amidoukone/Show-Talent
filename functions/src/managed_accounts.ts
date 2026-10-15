@@ -85,7 +85,7 @@ export const provisionManagedAccount = onCall(
       if (isBelowMinimumPlayerAge(birthDate)) {
         throw new HttpsError(
           "failed-precondition",
-          "Adfoot accueille les joueurs à partir de 12 ans.",
+          "Adfoot accueille les joueurs à partir de 13 ans.",
         );
       }
       isMinor = isUnderEighteen(birthDate);

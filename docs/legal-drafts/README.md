@@ -5,10 +5,10 @@ pour tous les pays où Adfoot propose le service. Il n'y a pas de variante de
 texte par pays. Les protections impératives applicables à la situation d'une
 personne prévalent si elles lui donnent davantage de droits.
 
-## État : publié le 14 octobre 2026, version 1.1
+## État : publié le 14 octobre 2026, version 1.2 depuis le 15 octobre
 
 Les brouillons que ce dossier contenait ont été validés et publiés. **Les
-fichiers de référence sont désormais dans `site_pub/legal/`**, et ce dossier ne
+fichiers de référence sont désormais dans `site_pub/legal/`**. Ce dossier ne
 contient plus de copie de travail, et c'est volontaire : deux textes juridiques
 divergents dans un même dépôt finissent par être recopiés dans le mauvais sens.
 L'ancienne procédure de ce fichier demandait précisément « copier les documents
@@ -32,7 +32,7 @@ en cas de divergence, le français prévaut.
 
 ## Ce qui a été tranché le 14 octobre 2026
 
-- **Version et date d'effet :** version 1.1, en vigueur le 14 octobre 2026. La version 1.0, publiée le même jour, affirmait que l'accès des joueurs était gratuit. C'était faux : l'inscription est payante, 15 000 FCFA une fois pour un joueur et 25 000 FCFA par an pour un club, un recruteur ou un agent, en espèces à l'agence. Corrigé en 1.1 le jour même, section 7.1 des CGU. Toute évolution de prix ou de modèle doit passer par une nouvelle version, pas par une retouche silencieuse.
+- **Version et date d'effet :** version 1.2, en vigueur le 15 octobre 2026. Trois versions en deux jours, chacune correspondant à un état réellement publié : la 1.0 du 14 octobre affirmait que l'accès des joueurs était gratuit, ce qui était faux ; la 1.1 du même jour a inscrit le prix réel en section 7.1, soit 15 000 FCFA une fois pour un joueur et 25 000 FCFA par an pour un club, un recruteur ou un agent, en espèces à l'agence ; la 1.2 du 15 octobre porte l'âge minimum de 12 à 13 ans. **Toute évolution de prix, d'âge ou de modèle passe par une nouvelle version, jamais par une retouche silencieuse.**
 - **Adresses de contact :** deux boîtes, avec des rôles distincts.
   `support@adfoot.org` reçoit les demandes de compte, les signalements, la
   sécurité, et l'accord parental et l'autorisation média d'un joueur mineur.
@@ -63,15 +63,20 @@ en cas de divergence, le français prévaut.
 - **Revue par un conseil** connaissant l'activité, l'usage d'images de joueurs,
   les utilisateurs mineurs et les marchés de lancement. Le texte reste commun ;
   cette revue vérifie les règles impératives sans créer de versions nationales.
-- **Déclarations Google Play Families.** L'âge minimum est 12 ans, donc
-  l'audience déclarée comprend des moins de 13 ans. Les
+- ~~**Déclarations Google Play Families.**~~ **Réglé le 15 octobre 2026 en
+  portant l'âge minimum à 13 ans.** L'audience déclarée ne comprend plus de
+  moins de 13 ans, donc les
   [règles Families](https://support.google.com/googleplay/android-developer/answer/9893335?hl=en)
-  demandent notamment une action adulte avant certaines fonctions sociales
-  permettant l'échange de données personnelles, et un moyen pour l'adulte de
-  gérer ces fonctions. L'acceptation des CGU par le mineur et l'enregistrement
-  oral par l'admin ne suffisent pas à eux seuls. Apple impose en parallèle ses
-  exigences de modération du contenu créé par les utilisateurs
-  ([App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)).
+  ne s'appliquent plus. Elles demandaient un consentement parental vérifiable
+  et un moyen pour l'adulte de gérer les fonctions sociales ; l'enregistrement
+  oral par l'administration et la gestion par e-mail au support étaient
+  défendables sans être évidents. **Déclarer l'audience en 13 ans et plus dans
+  la Play Console : choisir une tranche inférieure réinstaure toutes ces
+  exigences.** Apple impose en parallèle ses exigences de modération du contenu
+  créé par les utilisateurs
+  ([App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)),
+  auxquelles l'application répond déjà : signalement dans l'app, blocage,
+  modération humaine avant publication et suppression de compte dans l'app.
 - **Accès par lien public aux vidéos de mineurs.** Le candidat refuse les
   vidéos mineures sur la page anonyme `/v/...`, même après accord média. Ce
   contrôle ne révoque pas les URL de téléchargement déjà copiées : les jetons

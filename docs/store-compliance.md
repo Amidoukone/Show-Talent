@@ -29,12 +29,27 @@ carries a draft marker.
 
 - Developer/seller display name: **SIRA SARL**
 - Launch territory: **Mali**
-- Minimum player age: **12**. The declared audience therefore includes children
-  under 13; complete Google Play Families declarations and verify the required
-  adult controls for social features before submission. Existing accounts are
-  test accounts; no production backfill is needed. New managed player accounts
-  and admin birth-date corrections enforce the 12-year minimum.
-- Players aged 12–17 require a parent or legal guardian's recorded consent.
+- Minimum player age: **13**, raised from 12 on 2026-10-14. **Declare the target
+  audience as 13+ and no younger.** The whole point of the change is that an
+  audience including under-13s puts the app under Google Play's
+  [Families Policy](https://support.google.com/googleplay/android-developer/answer/9893335?hl=en),
+  which requires verifiable parental consent and a means for an adult to manage
+  the social features. Adfoot's consent is recorded orally by the
+  administration and parents manage it by emailing `support@adfoot.org`:
+  defensible, but not obviously sufficient for a store declaration. Thirteen
+  removes that entire surface for one year of age range, and changes nothing
+  about the 13-17 protections. Selecting any under-13 age group in the Play
+  Console reinstates every one of those requirements.
+- The rule lives in exactly one place, `MINIMUM_PLAYER_AGE` in
+  `functions/src/minor_consent.ts`, enforced server-side at three call sites
+  (`admin_account_actions.ts` twice, `managed_accounts.ts` once). The mobile app
+  holds no age threshold of its own. **Raising or lowering it means changing
+  that constant, the published terms and privacy policy, the marketing site and
+  the admin portal's two messages together.**
+- Existing accounts are test accounts; no production backfill is needed. A
+  player already recorded as 12 would not be removed by this change, since the
+  check runs on creation and on admin birth-date correction, not retroactively.
+- Players aged 13-17 require a parent or legal guardian's recorded consent.
   Parents do not need an app account; they can contact `support@adfoot.org` to
   request changes to or withdrawal of the parental and media permissions.
 - The mobile backend and admin portal now include
@@ -55,8 +70,8 @@ carries a draft marker.
   marketing site, which are not subject to those rules. `Membership`
   (`lib/models/membership.dart`) mirrors the administration's decision only;
   `MembershipTier.adfoot` is a player the agency carries at its own cost.
-- Terms of service and privacy policy are **version 1.1, effective
-  14 October 2026**, published in French and English. Version 1.0 was published
+- Terms of service and privacy policy are **version 1.2, effective
+  15 October 2026**, published in French and English. Version 1.0 was published
   the same day and withdrawn within hours: it stated that player access was
   free, which was wrong. The short interim privacy
   page was replaced by the full policy, which now states concrete retention
@@ -147,7 +162,7 @@ Notes for the reviewer:
   stay in "pending" state. Already-approved videos are visible in the feed.
 - Messaging is restricted to accounts that are connected on the platform, so
   the demo account can only write to the contacts it already has.
-- The minimum age is 12. Accounts for players aged 12-17 require a recorded
+- The minimum age is 13. Accounts for players aged 13-17 require a recorded
   parent or guardian consent, collected by the administrator before the
   account is created, and such profiles are excluded from public discovery.
 - Account deletion is available in the app under Profile -> Settings, and is
@@ -212,7 +227,7 @@ open.
 3. Only then write `config/legal` in `adfoot-production`:
 
    ```
-   requiredVersion: "1.1"
+   requiredVersion: "1.2"
    effectiveOn:     "14 octobre 2026"
    termsUrl:        "https://adfoot.org/legal/terms.html"
    privacyUrl:      "https://adfoot.org/legal/privacy-policy.html"

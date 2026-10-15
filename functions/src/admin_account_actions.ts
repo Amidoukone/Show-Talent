@@ -596,7 +596,7 @@ function toManagedBirthDate(value: unknown): Timestamp | null {
   if (isBelowMinimumPlayerAge(date)) {
     throw new HttpsError(
       "failed-precondition",
-      "Adfoot accueille les joueurs à partir de 12 ans.",
+      "Adfoot accueille les joueurs à partir de 13 ans.",
     );
   }
   return Timestamp.fromDate(date);
@@ -1057,7 +1057,7 @@ export const changeManagedAccountRole = onCall(
       if (isBelowMinimumPlayerAge(birthDate)) {
         throw new HttpsError(
           "failed-precondition",
-          "Adfoot accueille les joueurs à partir de 12 ans.",
+          "Adfoot accueille les joueurs à partir de 13 ans.",
         );
       }
     }

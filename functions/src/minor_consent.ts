@@ -4,7 +4,7 @@
 import {HttpsError} from "firebase-functions/v2/https";
 import {MIN_BIRTH_YEAR} from "./user_search_fields";
 
-export const MINIMUM_PLAYER_AGE = 12;
+export const MINIMUM_PLAYER_AGE = 13;
 
 export function isBelowMinimumPlayerAge(date: Date): boolean {
   const now = new Date();
