@@ -54,7 +54,7 @@ void main() {
     );
     expect(
       l10n.termsVersionWithDateLabel('1.0', '1 septembre 2026'),
-      'Version 1.0 — en vigueur au 1 septembre 2026',
+      'Version 1.0, en vigueur au 1 septembre 2026',
     );
     expect(
       l10n.termsOpenFailureMessage('https://adfoot.org/legal/terms.html'),
@@ -91,7 +91,7 @@ void main() {
     );
     expect(
       l10n.talentSearchResultsCountMany(60),
-      '60 joueurs — affinez pour voir au-delà',
+      '60 joueurs, affinez pour voir au-delà',
     );
     expect(l10n.talentSearchResultsCountOther(3), '3 joueurs');
     expect(
@@ -216,7 +216,7 @@ void main() {
     );
     expect(
       l10n.termsVersionWithDateLabel('1.0', 'September 1, 2026'),
-      'Version 1.0 — effective September 1, 2026',
+      'Version 1.0, effective September 1, 2026',
     );
     expect(
       l10n.termsOpenFailureMessage('https://adfoot.org/legal/terms.html'),
@@ -253,7 +253,7 @@ void main() {
     );
     expect(
       l10n.talentSearchResultsCountMany(60),
-      '60 players — narrow your search to see more',
+      '60 players, narrow your search to see more',
     );
     expect(l10n.talentSearchResultsCountOther(3), '3 players');
     expect(l10n.followListEmptyFollowersMessage, 'No followers yet.');

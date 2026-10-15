@@ -119,7 +119,7 @@
       }
     }
   },
-  "termsVersionWithDateLabel": "Version {version} — en vigueur au {date}",
+  "termsVersionWithDateLabel": "Version {version}, en vigueur au {date}",
   "@termsVersionWithDateLabel": {
     "placeholders": {
       "version": {
@@ -499,7 +499,7 @@
   "talentSearchFailureMessage": "La recherche n’a pas pu aboutir. Réessayez dans un instant ; si cela persiste, signalez-le à l’équipe.",
   "talentSearchNoResultsTitle": "Aucun joueur ne correspond",
   "talentSearchNoResultsMessage": "Élargissez les critères. Une fiche n’apparaît que si elle porte un poste, une nationalité et une année de naissance.",
-  "talentSearchResultsCountMany": "{count} joueurs — affinez pour voir au-delà",
+  "talentSearchResultsCountMany": "{count} joueurs, affinez pour voir au-delà",
   "@talentSearchResultsCountMany": {
     "placeholders": {
       "count": {

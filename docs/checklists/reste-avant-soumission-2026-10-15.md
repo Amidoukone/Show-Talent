@@ -207,6 +207,28 @@ désormais le même commit et `master` porte `1.0.7+51`. **Tant que `master` res
 à jour, le défaut de Codemagic est correct ; s'il décroche à nouveau, le même
 échec reviendra.**
 
+### Le +51 soumis porte encore quatre tirets cadratins
+
+Relevé le 15 octobre en lisant les textes de l'écran de consentement. Quatre
+occurrences de U+2014 dans la copie livrée : `termsVersionWithDateLabel` en
+français et en anglais, donc sur la ligne de version de l'écran que le relecteur
+verra, et `talentSearchResultsCountMany` dans les résultats de recherche de
+joueurs. Corrigées dans les `.arb` et la localisation régénérée, les quatre
+remplacées par une virgule.
+
+Décision du 15 octobre : **pas de build pour cela.** Le `+51` est installé,
+vérifié des deux côtés, et c'est lui qui part aux stores ; refaire un cycle
+complet pour deux caractères ne se justifie pas. La correction partira au
+prochain build. La source et le binaire soumis divergent donc sur ce point, et
+c'est voulu.
+
+Note de méthode, parce qu'elle a failli coûter le relevé : chercher ce caractère
+par une séquence d'échappement ANSI-C dans `grep` ne fonctionne pas dans le shell
+de cette machine. Le motif ne reçoit pas les bons octets, la recherche répond
+silencieusement zéro, et cela se lit comme une absence. Même cause pour les
+antislashs passés à un interpréteur par un document en ligne ici : ils arrivent
+dédoublés. Compter en Python sur le fichier décodé en UTF-8.
+
 ## Trois commandes ajoutées le 15 octobre
 
 Elles remplacent autant de manipulations en console, où rien ne laisse de trace

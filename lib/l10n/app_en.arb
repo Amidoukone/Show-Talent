@@ -82,7 +82,7 @@
 
   "termsScreenTitle": "Our terms of service",
   "termsVersionLabel": "Version {version}",
-  "termsVersionWithDateLabel": "Version {version} — effective {date}",
+  "termsVersionWithDateLabel": "Version {version}, effective {date}",
   "termsIntro": "Before continuing, please review the terms governing your use of Adfoot and how your data is processed.",
   "termsLinkTerms": "Terms of service",
   "termsLinkPrivacy": "Privacy policy",
@@ -372,7 +372,7 @@
   "talentSearchFailureMessage": "The search couldn't complete. Try again in a moment; if it persists, report it to the team.",
   "talentSearchNoResultsTitle": "No matching player",
   "talentSearchNoResultsMessage": "Widen your criteria. A profile only appears once it has a position, a nationality, and a birth year.",
-  "talentSearchResultsCountMany": "{count} players — narrow your search to see more",
+  "talentSearchResultsCountMany": "{count} players, narrow your search to see more",
   "talentSearchResultsCountOne": "1 player",
   "talentSearchResultsCountOther": "{count} players",
 
