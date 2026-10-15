@@ -143,7 +143,13 @@ stable pour désigner un visuel.
   préalable au lancement, à faire après les soumissions.
 - **Préciser la région de la base et du stockage** dans la section 5 des deux
   politiques. Seule la région des Cloud Functions (`europe-west1`) est
-  documentée ; le texte actuel est exact sans être précis.
+  documentée ; le texte actuel est exact sans être précis. **Reporté après les
+  soumissions, décidé le 15 octobre.** La raison n'est pas la paresse : toucher
+  les politiques maintenant obligerait à trancher si cela vaut une version 1.3,
+  et une 1.3 redéclencherait l'écran de consentement pour tout le parc en
+  invalidant l'acceptation déjà faite sur le compte de démonstration, en pleine
+  revue. Préciser un fait déjà vrai ne vaut pas ce risque avant les
+  soumissions.
 
 ## Le build 1.0.7+51, et un ordre à respecter
 
