@@ -228,9 +228,29 @@ ce booléen, et dans le même passage ce qu'un relecteur rencontrerait dans
 l'ordre : connexion possible, compte actif, profil rempli plutôt qu'écrans
 vides, et version des CGU déjà acceptée si la porte est armée.
 
-État relevé le 15 octobre : `config/legal` **n'existe pas** en production, donc
-la porte est dormante pour tout le parc et l'armer sera une simple création.
-Les six pages légales sont servies, empreintes conformes au dépôt.
+### La porte est armée depuis le 15 octobre
+
+`config/legal` a été créé en production avec `requiredVersion: "1.2"`,
+`effectiveOn: "15 octobre 2026"` et les quatre URL, après que le contrôle
+préalable a confirmé les quatre pages légales à 200. L'ordre documenté plus haut
+a été respecté : le `+51` était installé sur Android et sur iOS, et le compte de
+démonstration existait et était vérifié. Pour défaire :
+`npm run legal:gate:disarm:production`.
+
+### Le vérificateur de compte lisait un champ périmé
+
+Il déclarait le compte de démonstration incomplet pour un poste absent, alors
+que le profil portait `positionCodes: ["AM", "RW"]`. Il lisait `position`, un nom
+qui n'apparaît nulle part dans `PlayerFootballProfile` : les faits
+footballistiques sont aplatis au premier niveau du document, et le nom du modèle
+est `positionCodes`, présent dans `writableFieldPaths`. `playerProfile` n'existe
+pas davantage sur un document réel.
+
+C'est le pire mode de défaillance pour un contrôle de pré-soumission, parce
+qu'il envoyait corriger un écran déjà correct. Un contrôle qui crie au loup sur
+du travail fini finit par être ignoré le jour où il a raison. Corrigé et
+remesuré : les deux comptes affichent `READY` avant armement, et signalent
+l'acceptation manquante après, ce qui est le comportement attendu.
 
 ## Ce qui a été fait le 14 et le 15 octobre
 
