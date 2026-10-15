@@ -189,11 +189,22 @@ appearing in the backend logs during review:
 Two checks, because they fail differently.
 
 1. The document, which decides whether the account survives the review
-   window. On `users/<demo uid>`, confirm `createdByAdmin == true`,
-   `emailVerified == true`, `estActif == true`, and `role == "joueur"`. The
-   first field is what keeps `cleanupUnverifiedAccounts` away from it. There
-   is no script for this check today; read the document in the Firebase
-   console or the admin portal.
+   window. One command reads every condition at once, including the acceptance
+   version once the gate is armed:
+
+   ```
+   npm run review:account:check:production -- --email <address>
+   ```
+
+   It exits non-zero until the account is fit to hand over, and prints `READY`
+   when it is. Pass `--role club` for the second account kept for showing
+   messaging; a club has no playing position and no videos of its own, so
+   without the flag those two checks report defects that are not defects.
+
+   The condition that matters most is `createdByAdmin == true`, because it is
+   the only thing keeping `cleanupUnverifiedAccounts` away from a `joueur`
+   account: `MANAGED_ROLES` is `{admin, club, recruteur, agent}` and `joueur`
+   is not in it, so there is no fallback.
 
 2. The login, which decides whether the reviewer gets past the first screen.
    Sign in with the exact credentials written in the review notes, on a device
