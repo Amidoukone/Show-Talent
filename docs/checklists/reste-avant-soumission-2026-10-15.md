@@ -184,6 +184,29 @@ sur parole. `scripts/aab-content-expectations.json` porte deux témoins
 `mustContain` pour le texte corrigé et le routage anglais. Vérifié sur l'AAB
 du 51 : les deux premiers absents, les deux seconds présents.
 
+### Le premier build iOS a échoué, et ce n'était pas le push
+
+Relevé le 15 octobre à 15h47. App Store Connect a renvoyé un 409
+`ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE`, avec
+`previousBundleVersion = 49`. Le push était bon : Codemagic avait construit la
+branche `master` au commit `8471d77`, où `pubspec.yaml` porte `1.0.7+49`, une
+version déjà téléversée. La branche de release portait le `+51` depuis une
+heure.
+
+Les workflows de `codemagic.yaml` n'ont aucun déclencheur automatique, donc la
+branche est choisie dans le dialogue de démarrage, et `master` en est le défaut.
+C'est ce qui rend le retard de `master` dangereux plutôt que seulement
+désordonné : un build lancé sans y penser produit un bundle d'une version déjà
+consommée, et l'échec arrive quinze minutes plus tard, à la publication, loin de
+sa cause.
+
+`master` a donc été avancé en avance rapide jusqu'au même commit que la branche
+de release, après avoir vérifié qu'aucune des deux références, locale ou
+distante, ne portait un commit absent de la release. Les deux branches pointent
+désormais le même commit et `master` porte `1.0.7+51`. **Tant que `master` reste
+à jour, le défaut de Codemagic est correct ; s'il décroche à nouveau, le même
+échec reviendra.**
+
 ## Trois commandes ajoutées le 15 octobre
 
 Elles remplacent autant de manipulations en console, où rien ne laisse de trace
