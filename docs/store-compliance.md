@@ -164,7 +164,8 @@ Notes for the reviewer:
   the demo account can only write to the contacts it already has.
 - The minimum age is 13. Accounts for players aged 13-17 require a recorded
   parent or guardian consent, collected by the administrator before the
-  account is created, and such profiles are excluded from public discovery.
+  account is created, and such a profile appears in recruiter search only
+  after an administrator has approved it.
 - Account deletion is available in the app under Profile -> Settings, and is
   also documented at https://adfoot.org/legal/account-deletion.html
 - Terms of service and privacy policy are published in French, the launch
@@ -173,6 +174,17 @@ Notes for the reviewer:
   https://adfoot.org/legal/privacy-policy.en.html
   They are also reachable in the app under Profile -> Settings -> Documents.
 ```
+
+**The minor line said something the code contradicts, until 2026-10-16.** It
+claimed minors were excluded from public discovery. They are not:
+`user_search_fields.ts:209` computes `isSearchable` as
+`isMinor ? (minorProfileApproved === true && computeIsSearchable(...)) : computeIsSearchable(...)`,
+so an approved minor **is** searchable, with a position code and a
+nationality. The protection is an administrator's approval, not an exclusion,
+and that is what the notes now say. Telling a reviewer something their own
+testing can disprove is worse than saying nothing: it invites them to doubt
+every other line. The ternary is formatted across three lines in a way that
+reads as two identical branches at a glance, which is how the error survived.
 
 Add the Apple-only line below if the submitted build still ships
 `APP_CHECK_MODE=soft`; it pre-empts a question about declined attestations

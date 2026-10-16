@@ -362,3 +362,118 @@ Pour mémoire, parce que plusieurs de ces points étaient des défauts silencieu
 
 Relevés détaillés : `legal-publication-2026-10-14.md`,
 `site-pub-redesign-2026-10-14.md`, `decisions-lancement-2026-10-13.md`.
+
+## Ce qui a été fait le 16 octobre au matin
+
+### Le compte de revue a survécu à la nuit, mesuré et non supposé
+
+`npm run review:account:check:production -- --email amidoudev@gmail.com`
+répond `READY` : rôle `joueur`, `createdByAdmin: true` donc exempté de
+`cleanupUnverifiedAccounts`, `emailVerified`, `estActif`, profil rempli
+(`positionCodes: AM, RW`, photo, 1 vidéo approuvée sur 1) et CGU 1.2
+acceptées. C'est la vérification à refaire chaque matin tant que la revue
+n'est pas passée, parce que le ménage tourne toutes les 24 h.
+
+### Un bloquant de policy, découvert et déjà résolu par ce build
+
+La console affichait « App updates with these issues will be rejected », en
+vigueur depuis le 31 août 2026 : **App must target Android 16 (API level 36)
+or higher**. Vérifié des deux côtés plutôt que supposé : le manifeste
+empaqueté dans le bundle porte `targetSdkVersion="36"`
+(`build/app/intermediates/packaged_manifests/productionRelease/`), et la Play
+Console elle-même affiche `Target SDK 36` pour le bundle 52 dans l'App bundle
+explorer. L'avertissement porte sur la version publiée en juillet. Cette
+release le corrige au lieu de buter dessus.
+
+### La release de production
+
+Le brouillon n'était pas perdu : la piste portait déjà un `Draft release`, ce
+qui désactivait « Create new release ». Il a suffi de l'ouvrir, d'y ajouter le
+bundle 52 **depuis la bibliothèque**, de saisir les notes de version et
+d'enregistrer. Statut `Ready to release`, `Start full rollout`, 100 %.
+
+Deux décisions prises ce matin, assumées :
+
+- **Managed publishing reste OFF.** Google publiera dès l'approbation, sans
+  redemander, à l'heure qu'il voudra.
+- **Déploiement à 100 %**, et non progressif. Sur 11 installations et 7
+  utilisateurs actifs, un palier ne mesure rien d'exploitable.
+
+Notes de version en `fr-FR`, 495 caractères, sans tiret cadratin. Elles
+décrivent une **première mise en ligne**, pas une mise à jour : la piste
+production était `Inactive` et l'application n'avait jamais quitté les tests.
+
+### La fiche Play, refaite parce qu'elle mentait
+
+C'est la trouvaille de la matinée, et elle vient d'une question posée sur les
+captures d'écran. La fiche datait du 23 juillet et promettait ce que
+l'application ne fait pas.
+
+**« Avec Adfoot, les utilisateurs peuvent créer un profil ».**
+`publicSelfSignupRoles` est la liste vide (`account_role_policy.dart:3`) et
+l'écran d'inscription ne contient aucun formulaire. C'est la même fausse
+promesse qui avait imposé la refonte du site public le 14 octobre, restée ici.
+Un relecteur qui lit cette phrase, ouvre l'application et ne trouve aucun
+moyen de créer un compte tient le motif de rejet le plus mécanique qui soit.
+
+**« coachs »**, dans la description et dans le visuel de couverture. Aucun
+rôle `coach` n'est provisionnable.
+
+Description réécrite, 1403 caractères, chaque affirmation tracée au code et
+non à la documentation. Au passage, une affirmation a été corrigée **parce que
+le code la contredisait** : la recherche de joueurs ne filtre pas par poste,
+mais par nationalité, année de naissance et disponibilité.
+
+Captures et visuel de couverture refaits : voir
+`player-image-release-register.md`, section du 16 octobre, qui porte la
+provenance de chaque image, les deux retouches et leur motif, et la
+confirmation datée de l'accord parental pour la capture montrant des mineurs.
+
+**AI asset declaration : « Don't label assets ».** Aucun modèle génératif n'a
+produit de pixel. Le visuel assemble le logo existant et du texte dans une
+police ; les deux retouches déplacent des glyphes existants ou en tracent dans
+la police de l'application. La déclaration de Google vise les contenus
+synthétiques, pas la retouche déterministe.
+
+### Un défaut mineur, réel, à traiter après les soumissions
+
+`eventParticipantsCountLabel` et `eventViewsCountLabel` sont des chaînes
+plates : l'écran affiche « 1 participants » et « 1 vues », visible sur la
+capture `04-evenements`. Ce n'est pas un cas isolé : `app_fr.arb` ne contient
+**aucun** pluriel ICU, zéro occurrence de `plural`. L'application n'accorde
+jamais ses compteurs. Corriger demande d'introduire les pluriels ICU sur un
+ensemble de chaînes, ce qui ne se fait pas au milieu d'une soumission.
+
+### État du lot au moment d'écrire
+
+8 changements en attente, qui partiront d'un seul bloc :
+
+| # | Élément | Contenu |
+| --- | --- | --- |
+| 1 | Production | `52 (1.0.7)`, full rollout |
+| 2 | Countries/regions | +177 pays |
+| 3 | Countries/regions | reste du monde |
+| 4 | Store listing fr-FR | description complète |
+| 5 | Store listing fr-FR | captures d'écran |
+| 6 | Store listing fr-FR | visuel de couverture |
+| 7 | App content | audience 13 ans et plus |
+| 8 | App content | Data safety |
+
+Un rejet sur l'un fait repartir l'ensemble.
+
+### Deux pièges d'outillage, pour ne pas les repayer
+
+**Le sélecteur de fichiers natif bloque l'onglet.** La Play Console crée son
+`input[type=file]` à la volée, il n'existe pas dans le DOM avant le clic. La
+parade retenue : intercepter `HTMLInputElement.prototype.click` pour les
+champs de type fichier, rattacher le champ au document et le rendre visible,
+au lieu d'ouvrir la boîte native.
+
+**Les antislashs ne survivent pas à un document en ligne ici.** Déjà consigné
+pour `grep`, vérifié à nouveau en écrivant un `.ps1` : le chemin
+`C:\flutter\bin\cache\...` est arrivé sous la forme
+`C:lutterin\cachertifacts...`, les séquences ayant été interprétées comme
+des échappements. Utiliser des barres obliques, que les API Windows
+acceptent. Même famille de piège : un `.ps1` sans BOM est lu en ANSI par
+PowerShell 5.1, donc tout accent y est détruit. Écrire ces fichiers en UTF-8
+**avec** BOM.

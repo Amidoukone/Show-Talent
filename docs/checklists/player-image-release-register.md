@@ -49,3 +49,74 @@ référence interne stable pour les désigner ici.
 
 Cette grille est une traçabilité produit. La validation des droits et du texte
 contractuel doit être faite par le responsable légal du projet.
+
+## Captures de la fiche Play, posées le 16 octobre 2026
+
+Cinq captures remplacent les quatre du 23 juillet, qui montraient une
+navigation que l'application ne porte plus : elles affichaient Accueil,
+Offres, Events, Chat, Outils, alors que le build 52 porte Accueil, Carrière,
+Publier, Chat, Profil (`lib/l10n/app_fr.arb:158`). Le bouton Publier, action
+principale de création, n'apparaissait sur aucune d'elles.
+
+| Fichier | Écran | État |
+| --- | --- | --- |
+| `01-video.jpeg` | Fil vidéo, match réel | personnes mineures identifiables, voir ci-dessous |
+| `02-profil.png` | Profil joueur | retouchée, adresse remplacée |
+| `03-offres.png` | Carrière, onglet Offres | retouchée, critère d'origine retiré |
+| `04-evenements.jpeg` | Carrière, onglet Événements | brute |
+| `05-messages.jpeg` | Conversations, état vide | brute |
+
+Sources dans `artifacts/store/android/`, jeu final dans `final/`.
+
+### Les deux retouches, et pourquoi elles ne sont pas cosmétiques
+
+**`02-profil`** affichait `amidoudev@gmail.com`, en clair et au centre de
+l'écran. C'est l'adresse du compte de revue, celle qui figure dans Sign-in
+details et que nous remettons aux relecteurs Google et Apple. La publier dans
+179 pays revenait à l'exposer au spam et aux tentatives de reprise sur
+précisément le compte dont dépend la revue. Remplacée par
+`kanoute@adfoot.org`, tracée en Roboto depuis le cache du SDK Flutter, la
+police que l'application utilise elle-même, après mesure de la hauteur d'x
+(22 px) et de la couleur d'encre (`#9BA3B0`). C'est le point 4 de la grille
+ci-dessus, appliqué.
+
+**`03-offres`** portait « Nous recherchons un milieu offensif **africain** âgé
+de 18 ans ». Un critère d'origine dans une annonce de recrutement, affiché
+dans 179 pays dont toute l'Union européenne. Le mot a été retiré en déplaçant
+les glyphes existants de « âgé de 18 ans. » vers la gauche, puis en comblant
+avec du fond prélevé sur la même ligne : aucun caractère redessiné, donc
+aucune dérive typographique. Ce n'est d'ailleurs pas ce que fait la recherche,
+qui filtre par nationalité, année de naissance et disponibilité
+(`talentSearchNationalityLabel`, `talentSearchBornBetweenLabel`,
+`talentSearchOpenOnlyLabel`). C'était du texte libre saisi par un club de
+test.
+
+Outils conservés pour pouvoir refaire ou vérifier : `scripts/png_pixels.py`,
+`scripts/crop-region.ps1`, `scripts/render-text.ps1`,
+`scripts/make-feature-graphic.ps1`.
+
+### L'accord parental sur `01-video`
+
+La capture montre des joueurs mineurs identifiables, visages nets, la vidéo
+étant étiquetée `#U17`. Le point 3 de la grille ci-dessus impose de l'écarter
+tant que les autorisations ne sont pas établies.
+
+**Le 16 octobre 2026, le responsable du projet a confirmé que l'accord
+parental conservé couvre cette diffusion**, c'est-à-dire une publication
+mondiale sur une fiche d'application, et non la seule mise en ligne sur le
+site. La capture a été publiée sur cette base.
+
+Le tableau de traçabilité reste à remplir depuis les accords conservés en
+privé : personnes visibles, âge vérifié, droits du photographe, étendue des
+usages, date et référence de preuve. Cette confirmation tient lieu de décision
+de publier, pas de preuve.
+
+### Le visuel de couverture
+
+Refait le 16 octobre. L'ancien, du 23 juillet, s'adressait aux « coachs ».
+Aucun rôle `coach` n'est provisionnable : `allRoles` vaut joueur, fan, club,
+recruteur, agent (`lib/utils/account_role_policy.dart`). Le libellé
+`profileRoleCoach` qui subsiste dans le code est de l'affichage hérité. Le
+nouveau visuel est généré par `scripts/make-feature-graphic.ps1` à partir de
+`assets/logo.png` et de la palette réelle (`lib/theme/ad_colors.dart`), donc
+regénérable si la marque bouge.
