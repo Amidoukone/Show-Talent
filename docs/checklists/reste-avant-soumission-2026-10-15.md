@@ -12,8 +12,8 @@ Tout ce qui est marqué fait a été vérifié, pas supposé.
 | Site public adfoot.org | refait, images et logo à jour | oui, 2026-10-15 |
 | Pages légales, 6 pages FR et EN | version 1.2, en vigueur le 15 octobre | oui, 2026-10-15 |
 | Portail admin | aligné sur 13 ans, calcul d'âge dédupliqué | oui, 2026-10-15 |
-| Build mobile Android | `1.0.7+51`, AAB signé, contenu prouvé par témoins | construit, non soumis |
-| Build mobile iOS | `1.0.7+51` au déclenchement, Codemagic manuel | non |
+| Build mobile Android | `1.0.7+52`, AAB signé, contenu prouvé par témoins | construit, non soumis |
+| Build mobile iOS | `1.0.7+52` au déclenchement, Codemagic manuel | non |
 
 Les deux dépôts sont propres et poussés sur
 `release/production-device-tests-2026-10-05`.
@@ -207,7 +207,7 @@ désormais le même commit et `master` porte `1.0.7+51`. **Tant que `master` res
 à jour, le défaut de Codemagic est correct ; s'il décroche à nouveau, le même
 échec reviendra.**
 
-### Le +51 soumis porte encore quatre tirets cadratins
+### Les quatre tirets cadratins, retirés et livrés dans le 52
 
 Relevé le 15 octobre en lisant les textes de l'écran de consentement. Quatre
 occurrences de U+2014 dans la copie livrée : `termsVersionWithDateLabel` en
@@ -216,11 +216,10 @@ verra, et `talentSearchResultsCountMany` dans les résultats de recherche de
 joueurs. Corrigées dans les `.arb` et la localisation régénérée, les quatre
 remplacées par une virgule.
 
-Décision du 15 octobre : **pas de build pour cela.** Le `+51` est installé,
-vérifié des deux côtés, et c'est lui qui part aux stores ; refaire un cycle
-complet pour deux caractères ne se justifie pas. La correction partira au
-prochain build. La source et le binaire soumis divergent donc sur ce point, et
-c'est voulu.
+Décision du 15 octobre : pas de build pour cela seul. L'écart entre la source
+et le binaire a disparu de lui-même le 16, quand le `+51` s'est révélé
+insoumettable et qu'il a fallu construire le `+52` : celui-ci porte la
+correction. Il ne reste donc aucune divergence.
 
 Note de méthode, parce qu'elle a failli coûter le relevé : chercher ce caractère
 par une séquence d'échappement ANSI-C dans `grep` ne fonctionne pas dans le shell
@@ -228,6 +227,24 @@ de cette machine. Le motif ne reçoit pas les bons octets, la recherche répond
 silencieusement zéro, et cela se lit comme une absence. Même cause pour les
 antislashs passés à un interpréteur par un document en ligne ici : ils arrivent
 dédoublés. Compter en Python sur le fichier décodé en UTF-8.
+
+### Un numéro de build téléversé est consommé pour toujours
+
+Relevé le 16 octobre, au moment de créer la release de production. Play a
+refusé l'AAB du `+51` : « Version code 51 has already been used ». Le `51`
+avait été téléversé en **test interne**, et le même numéro avait été consommé
+côté iOS. Un numéro de build ne se réutilise sur aucune piste, pas même après
+suppression d'une release de test.
+
+Conséquence pratique, à garder en tête pour chaque cycle : **ne pas téléverser
+un candidat en test interne si l'on compte soumettre ce même binaire en
+production.** Soit on teste le binaire exact qui sera soumis et on accepte de
+le reconstruire, soit on réserve un numéro par destination. Le coût n'est pas
+le build, qui dure un quart d'heure, mais la réinstallation sur les appareils
+et la reprise des vérifications sur appareil réel.
+
+Le `+52` corrige donc le `+51` sans rien changer d'autre que le numéro et les
+quatre tirets cadratins déjà corrigés en source la veille.
 
 ## Trois commandes ajoutées le 15 octobre
 
