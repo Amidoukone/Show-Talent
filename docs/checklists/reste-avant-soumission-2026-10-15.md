@@ -246,6 +246,57 @@ et la reprise des vérifications sur appareil réel.
 Le `+52` corrige donc le `+51` sans rien changer d'autre que le numéro et les
 quatre tirets cadratins déjà corrigés en source la veille.
 
+## Reprise du 16 octobre : la toute première action
+
+**Ne reconstruisez pas.** Le bundle `52` est déjà dans la bibliothèque Play,
+téléversé le 16 octobre à 01h06, statut `Inactive`, catalogue passé de 32 à 33
+versions. Le téléversement avait réussi ; c'est le brouillon de release qui a
+été perdu, pas le binaire. L'erreur « Version code 52 has already been used »
+venait d'une seconde tentative sur le même fichier, que Play refuse comme
+doublon.
+
+Dans **Create new release**, il faut donc choisir le bundle **depuis la
+bibliothèque** au lieu d'en téléverser un. Puis les notes de version en
+français, puis `Save`, sans envoyer en revue.
+
+Leçon de la soirée, à ne pas repayer : **chaque tentative de téléversement
+consomme le numéro**, qu'elle aboutisse à une release ou non. Et il ne faut pas
+piloter la console depuis deux endroits à la fois, même dans des onglets
+distincts : c'est une application à session unique.
+
+### État de la Play Console au 16 octobre, 01h
+
+| Élément | État |
+| --- | --- |
+| Déclarations App content | 11 actionnées, « Need attention » vide |
+| Sign-in details | `amidoudev@gmail.com`, vérifié dans la console |
+| Target audience | 13-15, 16-17, 18+, restriction des mineurs levée |
+| Data safety | enregistrée le 16 octobre |
+| Pays de production | 179, tous |
+| Fiche Play | `fr-FR` uniquement, Live depuis le 23 juillet |
+| Bundle 52 | dans la bibliothèque, `Inactive` |
+| Release de production | **à créer**, piste encore Inactive |
+| Changements en attente de revue | 3, plus la release à venir |
+
+L'envoi en revue portera la release **et** les trois changements d'un seul
+coup. Un rejet sur l'un fait repartir l'ensemble.
+
+### Côté iOS, rien n'est fait
+
+Seuls des tests internes TestFlight ont eu lieu. Il reste le parcours complet :
+App Privacy, classification d'âge, App Review Information avec `Sign-In
+Required`, et le déclenchement de `ios-production` sur Codemagic, qui lira
+`1.0.7+52` dans `pubspec.yaml`. Le `51` y a été consommé aussi.
+
+### Ajouter l'anglais à la fiche Play, plus tard
+
+La fiche ne possède que `fr-FR`. Une balise `<en-US>` dans les notes de version
+serait rejetée. Ajouter la langue passe par **Manage languages** dans le
+sélecteur de la fiche, et oblige à fournir nom, description courte de 80
+caractères et description longue de 4000 dans cette langue ; les visuels
+retombent sur ceux de la fiche par défaut. C'est une modification de fiche :
+aucun build, revue séparée, possible après publication.
+
 ## Trois commandes ajoutées le 15 octobre
 
 Elles remplacent autant de manipulations en console, où rien ne laisse de trace
