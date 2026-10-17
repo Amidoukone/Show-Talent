@@ -147,12 +147,12 @@ sur l'accueil.
 
 ## Ce qu'il faut faire, par rapport valeur sur risque
 
-| # | Correctif | Effet | Risque |
-| --- | --- | --- | --- |
-| A | Restaurer la position de lecture au retour | supprime le « ça recommence » | faible |
-| B | Garder le lecteur visible en quittant l'onglet, comme à la mise en arrière-plan | retour instantané | moyen, amorti par `_enforceGlobalLimit` |
-| C | Écrire le fichier actif sur disque à `markActivePlaybackStable` | supprime le retéléchargement | moyen, octets dupliqués |
-| D | Enquêter sur l'échec du 1080p | 71 % de non-démarrage | à mesurer d'abord |
+| # | Correctif | Effet | Risque | État |
+| --- | --- | --- | --- | --- |
+| A | Restaurer la position de lecture au retour | supprime le « ça recommence » | faible | **fait** |
+| B | Garder le lecteur visible en quittant l'onglet, comme à la mise en arrière-plan | retour instantané | moyen, amorti par `_enforceGlobalLimit` | à décider |
+| C | Écrire le fichier actif sur disque à `markActivePlaybackStable` | supprime le retéléchargement | moyen, octets dupliqués | à décider |
+| D | Enquêter sur l'échec du 1080p | 71 % de non-démarrage | à mesurer d'abord | à décider |
 
 A et B se complètent : B rend le retour instantané quand le lecteur a survécu,
 A couvre le cas où le limiteur global l'a repris. C travaille pour les deux en
@@ -172,3 +172,31 @@ node .\scripts\list-ready-playback-contracts.js --project-id adfoot-production `
 ```
 
 Les trois sont en lecture seule. `set-streaming-config.js --show` n'écrit rien.
+
+## Correctif A, livré le 17 octobre
+
+`lib/videos/domain/resume_position_store.dart`, dixième collaborateur de
+`VideoManager`. Le lecteur enregistre sa position à chaque tic, dans le même
+passage qui alimente déjà les métriques de lecture, parce que c'est le seul
+endroit qui voit la position tant que le contrôleur est vivant. À la
+reconstruction, `_restoreResumePositionIfNeeded` ramène le lecteur au bon
+endroit avant de lancer la lecture.
+
+Trois règles décident qu'une position mérite d'être rendue : au moins trois
+secondes, pas dans les cinq dernières secondes du clip, et le contrôleur doit
+être au début. Cette dernière protège le cas où reprendre serait pire que ne
+rien faire : une vidéo promue depuis un préchargement, ou mise en pause à la
+main par l'utilisateur, est déjà quelque part volontairement.
+
+La mémoire survit à `disposeAllForContext`, et c'est délibéré : cet appel
+**est** le moment qu'elle compense. Elle est bornée à 64 entrées à la place,
+la moins récemment touchée partant en premier.
+
+Le garde-fou `video_architecture_test.dart` a refusé la première version, qui
+mettait la table et ses seuils dans `VideoManager`. C'est exactement ce qui
+était arrivé à la porte de lecture avant elle. La logique est donc partie dans
+son propre fichier et le manager ne garde que quatre méthodes de passe-plat.
+
+Ce que A ne corrige pas, et qui reste entier : le retéléchargement de la
+cause 2, et le redémarrage à froid de la cause 1. Reprendre au bon endroit
+rend l'attente honnête, elle ne la supprime pas.

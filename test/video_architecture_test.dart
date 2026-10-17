@@ -262,6 +262,7 @@ void main() {
         'lib/videos/domain/video_playback_metrics.dart': '_metrics',
         'lib/videos/domain/player_lifetime_registry.dart': '_lifetimes',
         'lib/videos/domain/playback_gate.dart': '_gate',
+        'lib/videos/domain/resume_position_store.dart': '_resume',
       };
 
       final manager = _read('lib/videos/video_manager.dart');
@@ -281,6 +282,12 @@ void main() {
     // pause that backgrounding needs, and three call sites asking the gate
     // whether playback may start -- which costs 34 lines.
     //
+    // Re-baselined again from 1500 for the resume-position store, and the
+    // bound did its job a second time, the same way: the map, its three
+    // thresholds and its eviction loop first went in here, this test refused
+    // them, and they became the tenth collaborator. What stayed is four
+    // forwarding methods and a test reset, 29 lines.
+    //
     // The collaborator assertion above is the stronger guarantee; this number
     // only stops that delegation growing back into an implementation.
     test('the manager keeps only the controller cache and its pipeline', () {
@@ -288,7 +295,7 @@ void main() {
 
       expect(
         lines,
-        lessThan(1500),
+        lessThan(1530),
         reason: 'it was 1923 across nine jobs; anything moving back in is a '
             'new job arriving in the wrong place',
       );

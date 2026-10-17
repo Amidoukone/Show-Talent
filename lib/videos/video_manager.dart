@@ -11,6 +11,7 @@ import 'package:adfoot/videos/data/video_download_service.dart';
 import 'package:adfoot/videos/domain/network_profile.dart';
 import 'package:adfoot/videos/domain/playback_bandwidth_arbiter.dart';
 import 'package:adfoot/videos/domain/playback_gate.dart';
+import 'package:adfoot/videos/domain/resume_position_store.dart';
 import 'package:adfoot/videos/domain/active_init_registry.dart';
 import 'package:adfoot/videos/domain/player_lifetime_registry.dart';
 import 'package:adfoot/videos/domain/video_init_cancelled.dart';
@@ -1278,6 +1279,33 @@ class VideoManager {
     if (lru == null || lru.isEmpty) return const [];
     return _ui.originalUrlsAmong(contextKey, lru.keys.toSet());
   }
+
+  /// Où chaque vidéo en était, pour qu'un lecteur reconstruit reprenne là
+  /// plutôt qu'à 0:00. Les règles sont dans [ResumePositionStore].
+  final ResumePositionStore _resume = ResumePositionStore();
+
+  void rememberResumePosition(
+    String contextKey,
+    String url, {
+    required Duration position,
+    required Duration duration,
+  }) => _resume.remember(
+    contextKey,
+    url,
+    position: position,
+    duration: duration,
+  );
+
+  Duration? resumePositionFor(String contextKey, String url) =>
+      _resume.positionFor(contextKey, url);
+
+  void forgetResumePosition(String contextKey, String url) =>
+      _resume.forget(contextKey, url);
+
+  /// Le manager est un singleton : sans cela, un test hériterait des
+  /// positions du précédent.
+  @visibleForTesting
+  void clearResumePositionsForTests() => _resume.clear();
 
   /// Who may *start* a video, and when. See [PlaybackGate] for the reasoning.
   final PlaybackGate _gate = PlaybackGate();

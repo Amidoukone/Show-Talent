@@ -110,6 +110,13 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   Timer? _playDebounceTimer;
   static const Duration _playDebounce = Duration(milliseconds: 120);
 
+  /// How close to the start still counts as "has not played yet".
+  ///
+  /// A freshly initialized controller does not always report exactly zero --
+  /// it reports the first decoded sample. Testing for `Duration.zero` would
+  /// make the restore fire or not depending on where the first keyframe sits.
+  static const Duration _resumeSeekEpsilon = Duration(milliseconds: 500);
+
   Timer? _stallTimer;
   Timer? _firstFrameTimer;
   Duration _lastKnownPos = Duration.zero;
@@ -709,6 +716,17 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     // boolean test on every other tick.
     if (_hasFirstFrame) _reportFirstFrameRendered();
 
+    // Where to pick up if this tile is rebuilt. The tick is the only place
+    // that sees the position while the controller is still alive: leaving
+    // Accueil disposes the whole context, and by the time anything downstream
+    // notices, there is nothing left to read it from.
+    _videoManager.rememberResumePosition(
+      widget.contextKey,
+      widget.videoUrl,
+      position: v.position,
+      duration: v.duration,
+    );
+
     _playbackSession?.recordPlaybackSample(
       position: v.position,
       duration: v.duration,
@@ -782,6 +800,50 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _playDebounceTimer = Timer(_playDebounce, _maybePlay);
   }
 
+  /// Puts a rebuilt player back where the viewer left it.
+  ///
+  /// Only ever applies to a controller sitting at the start. A tile promoted
+  /// from a preload, or one the user paused and resumed by hand, is already
+  /// somewhere on purpose, and seeking it would undo a deliberate act -- the
+  /// one case where restoring a position is worse than not having it.
+  ///
+  /// A failed seek is not an error worth surfacing: the clip simply plays from
+  /// the beginning, which is what it did before any of this existed.
+  Future<void> _restoreResumePositionIfNeeded(
+    VideoPlayerController controller,
+    VideoPlayerValue value,
+    int token,
+  ) async {
+    if (value.position > _resumeSeekEpsilon) return;
+
+    final target = _videoManager.resumePositionFor(
+      widget.contextKey,
+      widget.videoUrl,
+    );
+    if (target == null || target <= _resumeSeekEpsilon) return;
+
+    // A position recorded against a longer rendition cannot be trusted on a
+    // shorter one; the duration is only known once this controller is ready.
+    final duration = value.duration;
+    if (duration > Duration.zero && target >= duration) {
+      _videoManager.forgetResumePosition(widget.contextKey, widget.videoUrl);
+      return;
+    }
+
+    try {
+      await controller.seekTo(target);
+    } catch (e) {
+      AppLogger.debug('[SmartVideoPlayer] resume seek failed: $e');
+      return;
+    }
+
+    if (_isDisposed || token != _attachToken) return;
+    AppLogger.debug(
+      '[SmartVideoPlayer] resumed ${widget.video.id} at '
+      '${target.inMilliseconds}ms',
+    );
+  }
+
   Future<void> _maybePlay() async {
     if (_isTryingToPlay || _isDisposed) return;
     _isTryingToPlay = true;
@@ -819,9 +881,12 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
 
       _ensurePlaybackSession();
 
+      await _restoreResumePositionIfNeeded(c!, value, token);
+      if (_isDisposed || token != _attachToken || !_isActuallyVisible()) return;
+
       if (!value.isPlaying) {
         try {
-          await c!.play();
+          await c.play();
         } catch (e, st) {
           AppLogger.debug('[SmartVideoPlayer] play error: $e');
           unawaited(
