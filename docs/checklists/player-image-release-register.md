@@ -120,3 +120,58 @@ recruteur, agent (`lib/utils/account_role_policy.dart`). Le libellé
 nouveau visuel est généré par `scripts/make-feature-graphic.ps1` à partir de
 `assets/logo.png` et de la palette réelle (`lib/theme/ad_colors.dart`), donc
 regénérable si la marque bouge.
+
+## Captures de la fiche App Store, posées le 16 octobre 2026
+
+Cinq captures prises sur un iPhone 12 avec le build `1.0.7+52` installé
+depuis TestFlight, donc sur les vraies données de production.
+
+| Fichier | Écran | État |
+| --- | --- | --- |
+| `01-video.png` | Fil vidéo, match réel | personnes mineures identifiables |
+| `02-profil.png` | Profil joueur | retouchée, adresse remplacée |
+| `03-offres.png` | Carrière, onglet Offres | brute |
+| `04-evenements.png` | Carrière, onglet Événements | brute |
+| `05-video-moderation.png` | Ajout de vidéo, limites et validation admin | brute |
+
+Sources dans `artifacts/store/ios/`, jeu final dans `final/`.
+
+### Le redimensionnement, et pourquoi il était nécessaire
+
+L'iPhone 12 capture en **1170x2532**. App Store Connect n'accepte, pour la
+seule taille obligatoire, que **1179x2556** ou **1206x2622**, celles des
+iPhone à Dynamic Island. L'iPhone 12 a une encoche, pas une Dynamic Island :
+ses captures ne conviennent donc pas telles quelles.
+
+Les cinq ont été portées en 1179x2556 par `scripts/resize-screenshot.ps1`,
+en bicubique haute qualité. La déformation a été mesurée avant d'agir :
+rapport source 0,462085 contre 0,461268 pour la cible, soit **0,18 %
+d'écart**, invisible à l'œil.
+
+Les captures Android n'étaient pas réutilisables pour deux raisons
+indépendantes : elles portent la barre de navigation Android, carré, rond et
+triangle, et 1080x2400 ne figure dans aucune liste acceptée par Apple.
+
+### La retouche de `02-profil`
+
+Même motif que pour Android : l'écran affichait `amidoudev@gmail.com`,
+l'adresse du compte de revue remise aux relecteurs des deux magasins. La
+publier dans 179 pays revenait à l'exposer sur le compte dont dépendent les
+deux revues. Remplacée par `kanoute@adfoot.org`, tracée en Roboto depuis le
+cache du SDK Flutter, après mesure de la hauteur d'x (23 px) et de l'encre
+(`#9AA3AD`). C'est le point 4 de la grille, appliqué.
+
+### Ce que le relecteur Apple verra, et qui a été vérifié
+
+L'offre affichée dans `03-offres` ne porte plus de critère d'origine : elle a
+été corrigée dans l'application avant la capture, et s'intitule désormais
+« Offre pour Milieu de terrain ». La capture iOS est donc propre à la source,
+sans retouche, contrairement à son équivalent Android.
+
+### L'accord parental sur `01-video`
+
+La capture montre les mêmes joueurs mineurs identifiables que la version
+Android. La confirmation du 16 octobre, consignée plus haut, couvre une
+diffusion mondiale sur une fiche d'application et vaut donc pour les deux
+magasins.
+

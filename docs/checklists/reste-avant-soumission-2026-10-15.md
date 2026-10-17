@@ -477,3 +477,131 @@ des échappements. Utiliser des barres obliques, que les API Windows
 acceptent. Même famille de piège : un `.ps1` sans BOM est lu en ANSI par
 PowerShell 5.1, donc tout accent y est détruit. Écrire ces fichiers en UTF-8
 **avec** BOM.
+
+### À faire au prochain build : retirer deux clés orphelines d'Info.plist
+
+`ios/Runner/Info.plist` déclare `NSLocationWhenInUseUsageDescription` et
+`NSLocationAlwaysAndWhenInUseUsageDescription`, alors que l'application
+n'utilise la position nulle part. Mesuré le 16 octobre : aucun paquet de
+géolocalisation dans `pubspec.yaml`, et aucune occurrence de `latitude`,
+`longitude`, `GeoPoint` ou `gps` dans `lib/` ni dans `functions/src/`.
+
+Décidé le 16 octobre de soumettre sans corriger : une clé déclarée mais
+inutilisée n'est pas un motif de rejet, Apple sanctionne l'inverse. Retirer
+les clés aurait imposé un build `53`, donc un numéro de plus et une
+désynchronisation d'avec Android, déjà en revue en `1.0.7+52`.
+
+Attention à la confusion de vocabulaire, qui a failli produire une
+déclaration fausse dans les deux consoles. « Position » désigne deux choses
+différentes ici :
+
+| Ce que porte le modèle | Nature | Origine |
+| --- | --- | --- |
+| `positions` / `positionCodes` | le **poste de jeu** : Gardien, Défenseur central, Latéral gauche | saisi par le joueur |
+| `country`, `city`, `region` | ville et pays déclarés | saisis au clavier |
+| `lieu` d'une offre ou d'un évènement | texte libre, « Bamako » | saisi par le club |
+
+Aucune de ces données ne vient de l'appareil. Les catégories « Position »
+chez Google et « Location » chez Apple désignent la localisation obtenue du
+téléphone, donc **ne pas les déclarer**. La fiche Play actuellement en ligne
+annonce pourtant collecter la Position : à vérifier et corriger après la
+revue, sans urgence, l'erreur allant dans le sens inoffensif d'annoncer plus
+que ce qui est pris.
+
+## Le 16 et 17 octobre : iOS monte, et bute sur un seul point
+
+### Android est parti
+
+Les 8 changements ont été envoyés en revue le 16 octobre : release `52
+(1.0.7)` en déploiement complet, +177 pays puis le reste du monde, les trois
+éléments de fiche refaits, l'audience 13+ et le Data safety. Statut
+`In review`. Managed publishing reste OFF, donc l'approbation publiera
+directement dans les 179 pays.
+
+### Ce qui est fait côté App Store Connect
+
+| Élément | État |
+| --- | --- |
+| Captures d'écran | 5, portées de 1170x2532 à **1179x2556** |
+| Description, mots-clés, URL de support, copyright | en place, texte identique à Play |
+| Version de la fiche | **1.0.7**, alignée sur le binaire |
+| Build | **52 attaché** |
+| App Review Information | identifiant, mot de passe, contact, notes en anglais |
+| Sign-In Required | coché |
+| Content Rights | oui, droits détenus via CGU section 5 |
+| Catégories | Sports en principale, Social Networking en secondaire |
+| Classification d'âge | **13+** dans 171 pays, 16+ dans 2, A16 au Brésil |
+| App Privacy | **publié**, 11 types, usages configurés |
+| Prix | **0,00 dans tous les pays** |
+| Mise en ligne | automatique après approbation, comme sur Play |
+
+### Le seul blocage restant : la capture iPad 13 pouces
+
+`Add for Review` répond encore : « You must upload a screenshot for 13-inch
+iPad displays ». La cause est dans le binaire, pas dans la console :
+`ios/Runner.xcodeproj/project.pbxproj` porte `TARGETED_DEVICE_FAMILY = "1,2"`
+à douze endroits, donc iPhone **et** iPad. Apple exige alors des captures
+iPad, et la famille d'appareils ne se modifie pas depuis App Store Connect.
+
+Décision du 17 octobre : **restreindre à l'iPhone**, ce qui impose un build
+`53`. Adfoot est pensée pour le téléphone, aucune interface iPad n'a jamais
+été vérifiée, et publier un affichage que personne n'a regardé est un motif
+de rejet plus sérieux qu'un numéro de build consommé.
+
+Ce que le build 53 doit emporter, dans cet ordre :
+
+1. `TARGETED_DEVICE_FAMILY` de `"1,2"` à `"1"`, aux douze emplacements.
+2. Le retrait de `NSLocationWhenInUseUsageDescription` et
+   `NSLocationAlwaysAndWhenInUseUsageDescription` d'`Info.plist`, décidé plus
+   haut et reporté faute de build.
+3. `pubspec.yaml` en `1.0.7+53`.
+4. Tests, `flutter analyze`, gates Android et iOS, contrat admin/mobile.
+5. Commit et push sur `master` **et** sur la branche de release, pour que le
+   défaut de Codemagic reste correct.
+6. Build `ios-production` sur Codemagic, branche `master`.
+7. Dans App Store Connect : rattacher le 53, vérifier que l'exigence iPad a
+   disparu, puis `Add for Review`.
+
+Android restera en `52` et iOS passera en `53`. C'est assumé : les deux
+magasins ne partagent pas leurs numéros, et Android est déjà en revue.
+
+### Deux actions qui n'appartiennent qu'au titulaire du compte
+
+Elles bloqueront la soumission quoi que porte la fiche, et je ne peux pas les
+faire :
+
+- **Accepter le contrat Apple Developer Program mis à jour.** Bandeau en tête
+  de la liste des apps : « the Account Holder must review and accept ».
+- **Renseigner le statut de trader pour l'Union européenne**, exigé par le
+  Digital Services Act. Vous distribuez dans 179 pays.
+
+### Ce que Codemagic fait, et ne fait pas
+
+Vérifié dans `codemagic.yaml`, bloc `publishing` de `ios-production` :
+`submit_to_testflight: true` et **`submit_to_app_store: false`**. Le build
+monte sur TestFlight et s'arrête là. Aucun `beta_groups` n'est déclaré, donc
+pas de distribution externe ni de Beta App Review.
+
+Il n'y a donc rien à corriger de ce côté, contrairement à ce qui était
+craint. Sur iOS il n'existe qu'un seul chemin : un binaire téléversé apparaît
+simultanément dans TestFlight **et** dans le sélecteur de build de la fiche
+App Store. Ce ne sont pas deux destinations, c'est le même binaire vu de deux
+onglets. La preuve a été faite : le build 52, parti « directement sur
+TestFlight », est celui qui est attaché à la version de production.
+
+Et c'est l'inverse d'Android, où les pistes sont réellement séparées et où un
+versionCode est consommé pour toutes. Cette différence est exactement ce qui
+a coûté le `51` côté Play.
+
+### Note de méthode : les formulaires App Privacy
+
+Onze types de données, chacun avec cinq écrans. Trois pièges rencontrés :
+
+- Le premier clic après l'ouverture d'un dialogue ne prend pas, l'animation
+  n'étant pas finie. Cliquer, vérifier, recliquer si besoin ; ne jamais
+  enchaîner à l'aveugle, un double clic décoche ce qu'il venait de cocher.
+- La position du bouton `Next` change selon la hauteur du dialogue, de 419 à
+  475 selon les écrans. Relever la position réelle avant chaque clic.
+- Les options hautes d'une liste, comme `Analytics`, sortent de la zone
+  visible quand le dialogue est déroulé vers le bas. Remonter d'abord.
+
