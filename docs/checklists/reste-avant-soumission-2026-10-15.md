@@ -624,6 +624,35 @@ passes avec le developpeur.
 est ouvert, ou qu'une entite est enregistree. La declaration se modifie, et
 Apple permet meme de la regler application par application.
 
+## iOS est parti en revue le 17 octobre
+
+`1.0.7 (53)` est en **Waiting for Review**. Apple annonce jusqu'a 48 heures et
+previendra par mail. La mise en ligne est reglee sur **Automatically release
+this version**, donc l'approbation publiera directement, comme sur Play ou
+Managed publishing reste OFF.
+
+Les deux magasins sont desormais en revue en meme temps : Android en `52`,
+iOS en `53`.
+
+### Ce qui a ete verifie juste avant d'envoyer
+
+Le build 53 a ete installe depuis TestFlight sur l'iPhone 12 et ouvert, donc
+le binaire soumis n'est pas seulement signe, il demarre.
+
+Le compte de revue a ete mesure, pas suppose, avec
+`node scripts/check-review-account.mjs --environment production --email amidoudev@gmail.com`.
+Tout est vert : compte actif et verifie, role `joueur`, `createdByAdmin` a
+`true` donc exempt de `cleanupUnverifiedAccounts`, profil rempli (Kanoute,
+photo, postes AM et RW, une video approuvee sur deux), et CGU en version 1.2,
+celle que la porte d'acceptation exige. C'est le controle qui evite le rejet
+Guideline 2.1, le seul dont l'absence garantit un cycle perdu.
+
+Le rattachement du 53 a fait disparaitre l'exigence de capture iPad
+immediatement, confirmant que la cause etait bien `TARGETED_DEVICE_FAMILY`
+dans le binaire et non un reglage de la console.
+
+### Le point qui bloquait, pour memoire
+
 ### Un seul point bloque encore la soumission iOS
 
 Mesure le 17 octobre apres les deux actions ci-dessus, en ouvrant
