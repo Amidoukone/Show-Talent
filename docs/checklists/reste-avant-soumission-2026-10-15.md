@@ -589,6 +589,59 @@ Reste à faire :
 Android restera en `52` et iOS passera en `53`. C'est assumé : les deux
 magasins ne partagent pas leurs numéros, et Android est déjà en revue.
 
+### Les deux actions du titulaire : faites le 17 octobre
+
+**Contrat Apple Developer Program.** Accepte par le titulaire sur
+`developer.apple.com/account`, bouton `Review agreement` du bandeau. Echeance
+Apple annoncee au 28 octobre 2026, donc traite avec dix jours d'avance.
+Verifie en rechargeant la page : le bandeau a disparu. Attention, la banniere
+equivalente reste affichee quelque temps dans App Store Connect sur la page
+`Business` alors que l'acceptation est bien enregistree. Ne pas s'y fier, la
+seule mesure qui compte est la liste d'erreurs de `Add for Review`.
+
+**Statut de trader DSA : non-trader.** Declare le 17 octobre via
+`Business` puis `Complete Compliance Requirements`. La page `Business` porte
+desormais une section `Compliance` avec `Digital Services Act`, 27 pays,
+statut `Active`.
+
+Le raisonnement, pour le jour ou il faudra le revoir. Les trois facteurs de
+revenu que cite Apple sont absents : aucun achat integre, application
+gratuite, aucune publicite. Pas de TVA. Les services de l'agence n'ont pas
+demarre et tout paiement est externe, en especes a l'agence. Un facteur
+penchait dans l'autre sens, l'application etant developpee dans le cadre de
+l'activite et les CGU nommant deja les 15 000 FCFA, mais ces criteres sont
+explicitement non exhaustifs et l'auto-evaluation appartient au developpeur.
+Point pratique decisif : Apple exige des coordonnees bancaires de **tous** les
+traders, et il n'y a pas encore de compte bancaire, donc le parcours trader
+etait de toute facon impossible a terminer.
+
+Non-trader **ne retire pas** l'application de l'Union europeenne. La seule
+consequence est une mention affichee aux consommateurs europeens, indiquant
+que les droits du droit de la consommation ne s'appliquent pas aux contrats
+passes avec le developpeur.
+
+**A revoir le jour ou** l'agence encaisse reellement, ou qu'un compte bancaire
+est ouvert, ou qu'une entite est enregistree. La declaration se modifie, et
+Apple permet meme de la regler application par application.
+
+### Un seul point bloque encore la soumission iOS
+
+Mesure le 17 octobre apres les deux actions ci-dessus, en ouvrant
+`Add for Review` sans rien envoyer. Apple repond :
+
+> Unable to Add for Review. The items below are required to start the review
+> process: You must upload a screenshot for 13-inch iPad displays.
+
+Un seul bullet. Le contrat n'y figure pas, ce qui prouve que son acceptation
+est bien prise en compte malgre la banniere restee affichee. La classification
+d'age est complete et exacte : contenu genere par les utilisateurs oui, reseau
+social oui, messagerie et chat oui, publicite non, reseau social desactive
+pour les moins de 13 ans non, resultat 13+. Le 4+ affiche pour les iOS
+anterieurs a la version 26 est le calcul retrocompatible d'Apple a partir des
+memes reponses, pas une erreur et pas reglable.
+
+Ce dernier point tombe avec le build 53, qui restreint a l'iPhone.
+
 ### Deux actions qui n'appartiennent qu'au titulaire du compte
 
 Elles bloqueront la soumission quoi que porte la fiche, et je ne peux pas les
