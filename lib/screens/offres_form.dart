@@ -16,6 +16,7 @@ import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_surface_card.dart';
+import 'package:adfoot/utils/football_vocabulary_labels.dart';
 
 class OffreFormResult {
   const OffreFormResult({
@@ -259,7 +260,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                                           .contains(position);
                                       return FilterChip(
                                         selected: isSelected,
-                                        label: Text(position.labelFr),
+                                        label: Text(position.label(l10n)),
                                         onSelected: (_) {
                                           setState(() {
                                             if (isSelected) {
@@ -309,7 +310,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                               );
                               return FilterChip(
                                 selected: isSelected,
-                                label: Text(category.labelFr),
+                                label: Text(category.label(l10n)),
                                 onSelected: (_) {
                                   setState(() {
                                     if (isSelected) {
@@ -334,7 +335,7 @@ class OffreFormScreenState extends State<OffreFormScreen> {
                                 .map(
                                   (level) => DropdownMenuItem<ClubLevel>(
                                     value: level,
-                                    child: Text(level.labelFr),
+                                    child: Text(level.label(l10n)),
                                   ),
                                 )
                                 .toList(),

@@ -1,5 +1,6 @@
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/models/video.dart';
+import 'package:adfoot/utils/football_vocabulary_labels.dart';
 
 const Map<String, List<String>> _positionSynonyms = {
   'attaquant': [
@@ -158,11 +159,16 @@ bool matchesUserVideoSearch(AppUser user, String query) {
 Iterable<String> _userSearchValues(AppUser user) sync* {
   yield user.nom;
   yield user.role;
-  // Les postes types, en toutes lettres : c'est « Milieu axial » que
+  // Les postes en toutes lettres : c'est « Milieu central » que
   // l'utilisateur tape dans la recherche, pas « CM ». Le code seul ne
   // repondrait a personne.
+  //
+  // Les deux langues entrent dans la botte de foin, pas seulement celle de
+  // l'interface. Un index monolingue ferait disparaitre un joueur de la
+  // recherche au moment ou son lecteur change de langue, alors que la fiche,
+  // elle, n'a pas bouge.
   for (final position in user.football.positions) {
-    yield position.labelFr;
+    yield* position.searchLabels;
   }
   // Le poste en texte libre ne subsiste que pour le coach ; pour un joueur il
   // n'est plus ecrit, et le laisser ici ferait remonter un ancien poste

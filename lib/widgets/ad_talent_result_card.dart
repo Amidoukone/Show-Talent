@@ -5,6 +5,7 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/theme/ad_tokens.dart';
 import 'package:adfoot/utils/country_codes.dart';
+import 'package:adfoot/utils/football_vocabulary_labels.dart';
 import 'package:adfoot/widgets/ad_avatar.dart';
 
 /// Compact scout-facing summary of a player, built only from public profile
@@ -24,10 +25,9 @@ class AdTalentResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final football = user.football;
-    final isEnglish = l10n.localeName == 'en';
     final photoUrl = user.photoProfil.trim();
     final positions = football.positions
-        .map((position) => isEnglish ? position.labelEn : position.labelFr)
+        .map((position) => position.label(l10n))
         .join(' · ');
     final nationalities = football.nationalities
         .take(2)
@@ -123,9 +123,7 @@ class AdTalentResultCard extends StatelessWidget {
                         if (football.currentClubLevel != null)
                           _TalentFact(
                             icon: Icons.stadium_outlined,
-                            label: isEnglish
-                                ? football.currentClubLevel!.labelEn
-                                : football.currentClubLevel!.labelFr,
+                            label: football.currentClubLevel!.label(l10n),
                           ),
                       ],
                     ),

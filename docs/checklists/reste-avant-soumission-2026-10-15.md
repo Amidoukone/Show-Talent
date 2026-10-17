@@ -711,3 +711,57 @@ Onze types de données, chacun avec cinq écrans. Trois pièges rencontrés :
 - Les options hautes d'une liste, comme `Analytics`, sortent de la zone
   visible quand le dialogue est déroulé vers le bas. Remonter d'abord.
 
+
+## Déjà dans le dépôt, pas encore dans un build : le vocabulaire en anglais
+
+Corrigé le 17 octobre, après l'envoi du `53`. Le vocabulaire footballistique
+restait en français quand l'application passait en anglais : « Gardien »,
+« Milieu offensif », mais aussi le pied fort, le statut contractuel et le
+niveau de club.
+
+Ce n'était pas une traduction manquante. Le modèle portait `labelEn` depuis
+le début ; **46 points d'appel dans onze fichiers lisaient `labelFr` sans
+condition**, deux seulement respectant la langue avec un ternaire écrit sur
+place.
+
+Le correctif ne touche pas `lib/models/football_vocabulary.dart`, et c'est
+délibéré : ce fichier est comparé **entier** à sa copie du portail admin par
+`check-admin-mobile-contract.ps1`. Une méthode ajoutée là ferait échouer le
+contrôle de contrat, et ferait dépendre un modèle de données
+d'`AppLocalizations` que le portail n'a pas. Tout vit dans
+`lib/utils/football_vocabulary_labels.dart`.
+
+Trois entrées, selon ce dont l'appelant dispose :
+
+| Entrée | Quand |
+| --- | --- |
+| `label(l10n)` | partout où un `AppLocalizations` est en main |
+| `labelForCurrentLocale` | sans contexte, par exemple un texte de partage |
+| `searchLabels` | pour faire correspondre une saisie, les deux langues |
+
+Cette dernière mérite son existence. Un libellé affiché doit être dans une
+seule langue ; un libellé cherché doit l'être dans toutes, sinon un recruteur
+passé en anglais perd les fiches qu'il trouvait la veille en tapant
+« gardien ». Deux filtres sont concernés, celui des offres et
+`video_search_matcher.dart`.
+
+`test/football_vocabulary_labels_test.dart` verrouille l'ensemble, et le
+garde-fou qui compte n'est pas l'assertion de traduction mais le dernier
+test : **aucun fichier de `lib/` ne lit `labelFr` ou `labelEn` directement**.
+Vérifié en introduisant volontairement une violation, qui a bien fait échouer
+le test en nommant le fichier et la ligne. Sans lui, le défaut reviendrait au
+premier écran ajouté, `labelFr` restant à portée de main et se compilant sans
+rien dire.
+
+### Ce qu'il reste à faire au moment de la prochaine release
+
+Le `pubspec.yaml` n'a **pas** été touché : il reste en `1.0.7+53`, le build en
+revue. Le numéro se décide à la release, pas au correctif, et il dépend de
+l'issue des deux revues. Un rejet se corrige en gardant le nom `1.0.7` avec un
+build `54` ; une approbation ouvre `1.0.8`.
+
+Au moment de ce choix, `scripts/aab-content-expectations.json` devra suivre :
+`forVersionCode` au nouveau numéro, et un témoin ajouté qui prouve réellement
+ce que la release apporte. `Attacking midfielder` est le bon candidat, absent
+de tous les bundles précédents et présent seulement si la traduction du
+vocabulaire est bien dans le binaire.

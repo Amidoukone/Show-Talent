@@ -8,6 +8,7 @@ import 'package:adfoot/models/action_response.dart';
 import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/football_vocabulary.dart';
 import 'package:adfoot/models/offre.dart';
+import 'package:adfoot/utils/football_vocabulary_labels.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/screens/chat_screen.dart';
 import 'package:adfoot/screens/offres_form.dart';
@@ -281,20 +282,20 @@ class _OffreScreenState extends State<OffreScreen> {
                                         _buildChip(
                                           Icons.sports_soccer,
                                           offre.positionCodes
-                                              .map((p) => p.labelFr)
+                                              .map((p) => p.label(l10n))
                                               .join(' · '),
                                         ),
                                       if (offre.ageCategories.isNotEmpty)
                                         _buildChip(
                                           Icons.groups_outlined,
                                           offre.ageCategories
-                                              .map((c) => c.labelFr)
+                                              .map((c) => c.label(l10n))
                                               .join(' · '),
                                         ),
                                       if (offre.clubLevel != null)
                                         _buildChip(
                                           Icons.star_border,
-                                          offre.clubLevel!.labelFr,
+                                          offre.clubLevel!.label(l10n),
                                         ),
                                       if (offre.localisation?.isNotEmpty ??
                                           false)
@@ -585,9 +586,16 @@ class _OffreScreenState extends State<OffreScreen> {
           // Les libelles, pas les codes : personne ne tape « CB » dans une
           // barre de recherche, et un code affiche nulle part ne peut pas
           // etre recherche.
-          o.positionCodes.any((p) => p.labelFr.toLowerCase().contains(query)) ||
-          o.ageCategories.any((c) => c.labelFr.toLowerCase().contains(query)) ||
-          (o.clubLevel?.labelFr ?? '').toLowerCase().contains(query) ||
+          //
+          // Les deux langues, et non celle de l'interface : un recruteur qui
+          // bascule en anglais ne doit pas perdre les offres qu'il trouvait
+          // la veille en tapant « gardien ».
+          o.positionCodes.any((p) => matchesAnyLabel(p.searchLabels, query)) ||
+          o.ageCategories.any((c) => matchesAnyLabel(c.searchLabels, query)) ||
+          matchesAnyLabel(
+            o.clubLevel?.searchLabels ?? const <String>[],
+            query,
+          ) ||
           (o.localisation ?? '').toLowerCase().contains(query) ||
           (o.remuneration ?? '').toLowerCase().contains(query) ||
           o.recruteur.nom.toLowerCase().contains(query) ||
@@ -918,7 +926,7 @@ class _OffreScreenState extends State<OffreScreen> {
                       value: _selectedPosition,
                       allLabel: l10n.offreAllPositionsLabel,
                       values: FootballPosition.values,
-                      labelOf: (position) => position.labelFr,
+                      labelOf: (position) => position.label(l10n),
                       onChanged: _setPositionFilter,
                     ),
                     const SizedBox(width: 8),
@@ -926,7 +934,7 @@ class _OffreScreenState extends State<OffreScreen> {
                       value: _selectedCategory,
                       allLabel: l10n.offreAllCategoriesLabel,
                       values: AgeCategory.values,
-                      labelOf: (category) => category.labelFr,
+                      labelOf: (category) => category.label(l10n),
                       onChanged: (value) =>
                           setState(() => _selectedCategory = value),
                     ),
@@ -935,7 +943,7 @@ class _OffreScreenState extends State<OffreScreen> {
                       value: _selectedLevel,
                       allLabel: l10n.offreAllLevelsLabel,
                       values: ClubLevel.values,
-                      labelOf: (level) => level.labelFr,
+                      labelOf: (level) => level.label(l10n),
                       onChanged: (value) =>
                           setState(() => _selectedLevel = value),
                     ),
@@ -1692,19 +1700,19 @@ class _OffreScreenState extends State<OffreScreen> {
                         offre.positionCodes.length > 1
                             ? l10n.offrePositionsLabelPlural
                             : l10n.offrePositionsLabelSingular,
-                        offre.positionCodes.map((p) => p.labelFr).join(' · '),
+                        offre.positionCodes.map((p) => p.label(l10n)).join(' · '),
                       ),
                     if (offre.ageCategories.isNotEmpty)
                       _buildDetailTile(
                         Icons.groups_outlined,
                         l10n.offreCategoriesLabel,
-                        offre.ageCategories.map((c) => c.labelFr).join(' · '),
+                        offre.ageCategories.map((c) => c.label(l10n)).join(' · '),
                       ),
                     if (offre.clubLevel != null)
                       _buildDetailTile(
                         Icons.leaderboard_outlined,
                         l10n.offreLevelLabel,
-                        offre.clubLevel!.labelFr,
+                        offre.clubLevel!.label(l10n),
                       ),
                     if (offre.localisation?.isNotEmpty ?? false)
                       _buildDetailTile(

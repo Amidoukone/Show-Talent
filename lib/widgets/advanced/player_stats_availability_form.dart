@@ -6,6 +6,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../models/football_vocabulary.dart';
 import '../../models/player_football_profile.dart';
 import '../../models/user.dart';
+import '../../utils/football_vocabulary_labels.dart';
 import '../ad_button.dart';
 import '../ad_feedback.dart';
 
@@ -289,7 +290,7 @@ class PlayerStatsAvailabilityFormState
                   .map(
                     (category) => DropdownMenuItem<AgeCategory>(
                       value: category,
-                      child: Text(category.labelFr),
+                      child: Text(category.label(l10n)),
                     ),
                   )
                   .toList(),

@@ -6,6 +6,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../../models/football_vocabulary.dart';
 import '../../models/org_football_profile.dart';
 import '../../models/user.dart';
+import '../../utils/football_vocabulary_labels.dart';
 import '../ad_button.dart';
 import '../ad_feedback.dart';
 
@@ -169,7 +170,7 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
                   .map(
                     (level) => DropdownMenuItem<ClubLevel>(
                       value: level,
-                      child: Text(level.labelFr),
+                      child: Text(level.label(l10n)),
                     ),
                   )
                   .toList(),
@@ -195,7 +196,7 @@ class ClubAdvancedFormState extends State<ClubAdvancedForm> {
                 final isSelected = _ageCategories.contains(category);
                 return FilterChip(
                   selected: isSelected,
-                  label: Text(category.labelFr),
+                  label: Text(category.label(l10n)),
                   onSelected: (_) {
                     setState(() {
                       if (isSelected) {

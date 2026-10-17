@@ -8,6 +8,7 @@ import 'package:adfoot/models/contact_intake.dart';
 import 'package:adfoot/models/player_football_profile.dart';
 import 'package:adfoot/models/video.dart';
 import 'package:adfoot/screens/profil_video_scrollview.dart';
+import 'package:adfoot/utils/football_vocabulary_labels.dart';
 import 'package:adfoot/widgets/contact_intake_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -1286,7 +1287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : (user.football.positions.isEmpty
                 ? null
                 : user.football.positions
-                      .map((position) => position.labelFr)
+                      .map((position) => position.label(l10n))
                       .join(' · '));
       fields.addAll([
         // L'annee derivee, pas l'age calcule depuis `birthDate`.
@@ -1428,7 +1429,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _infoTileGrid([
             _field(
               l10n.profileStrongFootLabel,
-              football.strongFoot?.labelFr,
+              football.strongFoot?.label(l10n),
               icon: Icons.sports_soccer_outlined,
               compact: true,
             ),
@@ -1458,13 +1459,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _infoTileGrid([
             _field(
               l10n.profileLevelFieldLabel,
-              football.currentClubLevel?.labelFr,
+              football.currentClubLevel?.label(l10n),
               icon: Icons.stairs_outlined,
               compact: true,
             ),
             _field(
               l10n.profileStatusLabel,
-              football.contractStatus?.labelFr,
+              football.contractStatus?.label(l10n),
               icon: Icons.assignment_outlined,
               compact: true,
             ),
@@ -1612,7 +1613,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return _infoTileGrid([
         _field(
           l10n.profileClubLevelLabel,
-          club.level?.labelFr,
+          club.level?.label(l10n),
           icon: Icons.account_tree_outlined,
           compact: true,
         ),
@@ -1620,7 +1621,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           l10n.profileClubCategoriesLabel,
           club.ageCategories.isEmpty
               ? null
-              : club.ageCategories.map((c) => c.labelFr).join(' · '),
+              : club.ageCategories.map((c) => c.label(l10n)).join(' · '),
           icon: Icons.groups_2_outlined,
         ),
         // Les besoins de recrutement ne sont plus ici : ils vivent dans les
@@ -1916,7 +1917,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _pastSeasonSummary(SeasonRecord season, AppLocalizations l10n) {
     final parts = <String>[
       ?season.competition,
-      ?season.clubLevel?.labelFr,
+      ?season.clubLevel?.label(l10n),
       ?season.ageCategory?.code,
       if (season.appearances != null)
         l10n.profileSeasonSummaryAppearances(season.appearances!),

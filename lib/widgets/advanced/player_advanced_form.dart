@@ -7,6 +7,7 @@ import '../../models/football_vocabulary.dart';
 import '../../models/player_football_profile.dart';
 import '../../models/user.dart';
 import '../../utils/country_codes.dart';
+import '../../utils/football_vocabulary_labels.dart';
 import '../ad_button.dart';
 import '../country_picker_sheet.dart';
 import '../ad_feedback.dart';
@@ -330,7 +331,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
                   .map(
                     (foot) => DropdownMenuItem<StrongFoot>(
                       value: foot,
-                      child: Text(foot.labelFr),
+                      child: Text(foot.label(l10n)),
                     ),
                   )
                   .toList(),
@@ -442,7 +443,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
                   .map(
                     (level) => DropdownMenuItem<ClubLevel>(
                       value: level,
-                      child: Text(level.labelFr),
+                      child: Text(level.label(l10n)),
                     ),
                   )
                   .toList(),
@@ -462,7 +463,7 @@ class PlayerAdvancedFormState extends State<PlayerAdvancedForm> {
                   .map(
                     (status) => DropdownMenuItem<ContractStatus>(
                       value: status,
-                      child: Text(status.labelFr),
+                      child: Text(status.label(l10n)),
                     ),
                   )
                   .toList(),
@@ -552,6 +553,7 @@ class _PositionSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final atLimit = selected.length >= FootballPosition.maxPerPlayer;
 
     return Wrap(
@@ -570,7 +572,9 @@ class _PositionSelector extends StatelessWidget {
               ? null
               : (_) => onToggle(position),
           label: Text(
-            isSelected ? '${index + 1}. ${position.labelFr}' : position.labelFr,
+            isSelected
+                ? '${index + 1}. ${position.label(l10n)}'
+                : position.label(l10n),
           ),
         );
       }).toList(),

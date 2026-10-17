@@ -21,6 +21,7 @@ import 'package:adfoot/widgets/ad_app_bar.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_owner_tag.dart';
 import 'package:adfoot/widgets/contact_intake_sheet.dart';
+import 'package:adfoot/utils/football_vocabulary_labels.dart';
 
 class EventDetailsScreen extends StatelessWidget {
   final Event event;
@@ -244,7 +245,7 @@ class EventDetailsScreen extends StatelessWidget {
             icon: Icons.sports_soccer_outlined,
             label: l10n.eventPositionsLabel,
             value: currentEvent.positionCodes
-                .map((position) => position.labelFr)
+                .map((position) => position.label(l10n))
                 .join(' · '),
           ),
         ],
@@ -255,7 +256,7 @@ class EventDetailsScreen extends StatelessWidget {
             icon: Icons.cake_outlined,
             label: l10n.offreCategoriesLabel,
             value: currentEvent.ageCategories
-                .map((category) => category.labelFr)
+                .map((category) => category.label(l10n))
                 .join(' · '),
           ),
         ],
@@ -265,7 +266,7 @@ class EventDetailsScreen extends StatelessWidget {
             context: context,
             icon: Icons.leaderboard_outlined,
             label: l10n.offreLevelLabel,
-            value: currentEvent.clubLevel!.labelFr,
+            value: currentEvent.clubLevel!.label(l10n),
           ),
         ],
         const SizedBox(height: 12),

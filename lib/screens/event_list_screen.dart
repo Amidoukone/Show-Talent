@@ -23,6 +23,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import 'package:adfoot/theme/ad_tokens.dart';
+import 'package:adfoot/utils/football_vocabulary_labels.dart';
 
 class EventListScreen extends StatefulWidget {
   const EventListScreen({super.key, this.showAppBar = true});
@@ -283,14 +284,14 @@ class _EventListScreenState extends State<EventListScreen> {
                                         _buildChip(
                                           Icons.sports_soccer_outlined,
                                           event.positionCodes
-                                              .map((p) => p.labelFr)
+                                              .map((p) => p.label(l10n))
                                               .join(' · '),
                                         ),
                                       if (event.ageCategories.isNotEmpty)
                                         _buildChip(
                                           Icons.cake_outlined,
                                           event.ageCategories
-                                              .map((c) => c.labelFr)
+                                              .map((c) => c.label(l10n))
                                               .join(' · '),
                                         ),
                                       _buildChip(
@@ -823,7 +824,7 @@ class _EventListScreenState extends State<EventListScreen> {
                       value: _selectedPosition,
                       allLabel: l10n.offreAllPositionsLabel,
                       values: FootballPosition.values,
-                      labelOf: (position) => position.labelFr,
+                      labelOf: (position) => position.label(l10n),
                       onChanged: _setPositionFilter,
                     ),
                     const SizedBox(width: 8),
@@ -831,7 +832,7 @@ class _EventListScreenState extends State<EventListScreen> {
                       value: _selectedCategory,
                       allLabel: l10n.offreAllCategoriesLabel,
                       values: AgeCategory.values,
-                      labelOf: (category) => category.labelFr,
+                      labelOf: (category) => category.label(l10n),
                       onChanged: (value) =>
                           setState(() => _selectedCategory = value),
                     ),
@@ -840,7 +841,7 @@ class _EventListScreenState extends State<EventListScreen> {
                       value: _selectedLevel,
                       allLabel: l10n.offreAllLevelsLabel,
                       values: ClubLevel.values,
-                      labelOf: (level) => level.labelFr,
+                      labelOf: (level) => level.label(l10n),
                       onChanged: (value) =>
                           setState(() => _selectedLevel = value),
                     ),

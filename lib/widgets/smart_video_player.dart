@@ -14,6 +14,7 @@ import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:adfoot/controller/follow_controller.dart';
+import 'package:adfoot/utils/football_vocabulary_labels.dart';
 import 'package:adfoot/screens/add_video.dart';
 import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/screens/success_toast.dart';
@@ -1251,7 +1252,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
             ? null
             : (publisher.football.positions.isEmpty
                   ? (publisher.isCoach ? publisher.position : null)
-                  : publisher.football.positions.first.labelFr),
+                  : publisher.football.positions.first.labelForCurrentLocale),
       ),
       publisherDetails: PublisherHeadline.details(
         club:
@@ -1629,7 +1630,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
       role: publisher.role,
       position: publisher.football.positions.isEmpty
           ? (publisher.isCoach ? publisher.position : null)
-          : publisher.football.positions.first.labelFr,
+          : publisher.football.positions.first.labelForCurrentLocale,
     );
     final details = PublisherHeadline.details(
       club:

@@ -15,6 +15,7 @@ import 'package:adfoot/widgets/ad_button.dart';
 import 'package:adfoot/widgets/ad_dialogs.dart';
 import 'package:adfoot/widgets/ad_feedback.dart';
 import 'package:adfoot/widgets/ad_surface_card.dart';
+import 'package:adfoot/utils/football_vocabulary_labels.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -308,7 +309,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                                           .contains(position);
                                       return FilterChip(
                                         selected: isSelected,
-                                        label: Text(position.labelFr),
+                                        label: Text(position.label(l10n)),
                                         onSelected: (_) {
                                           setState(() {
                                             if (isSelected) {
@@ -358,7 +359,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                               );
                               return FilterChip(
                                 selected: isSelected,
-                                label: Text(category.labelFr),
+                                label: Text(category.label(l10n)),
                                 onSelected: (_) {
                                   setState(() {
                                     if (isSelected) {
@@ -393,7 +394,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
                                 .map(
                                   (level) => DropdownMenuItem<ClubLevel>(
                                     value: level,
-                                    child: Text(level.labelFr),
+                                    child: Text(level.label(l10n)),
                                   ),
                                 )
                                 .toList(),

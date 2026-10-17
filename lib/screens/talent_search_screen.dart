@@ -10,6 +10,7 @@ import 'package:adfoot/screens/profile_screen.dart';
 import 'package:adfoot/services/users/talent_search_repository.dart';
 import 'package:adfoot/theme/ad_colors.dart';
 import 'package:adfoot/utils/country_codes.dart';
+import 'package:adfoot/utils/football_vocabulary_labels.dart';
 import 'package:adfoot/widgets/ad_state_panel.dart';
 import 'package:adfoot/widgets/country_picker_sheet.dart';
 import 'package:adfoot/widgets/ad_talent_result_card.dart';
@@ -188,11 +189,7 @@ class _TalentSearchScreenState extends State<TalentSearchScreen> {
             final isSelected = _positions.contains(position);
             return FilterChip(
               selected: isSelected,
-              label: Text(
-                l10n.localeName == 'en'
-                    ? position.labelEn
-                    : position.labelFr,
-              ),
+              label: Text(position.label(l10n)),
               onSelected: (_) => setState(() {
                 if (isSelected) {
                   _positions.remove(position);
