@@ -478,7 +478,7 @@ acceptent. Même famille de piège : un `.ps1` sans BOM est lu en ANSI par
 PowerShell 5.1, donc tout accent y est détruit. Écrire ces fichiers en UTF-8
 **avec** BOM.
 
-### À faire au prochain build : retirer deux clés orphelines d'Info.plist
+### Fait dans le build 53 : deux clés orphelines retirées d'Info.plist
 
 `ios/Runner/Info.plist` déclare `NSLocationWhenInUseUsageDescription` et
 `NSLocationAlwaysAndWhenInUseUsageDescription`, alors que l'application
@@ -490,6 +490,13 @@ Décidé le 16 octobre de soumettre sans corriger : une clé déclarée mais
 inutilisée n'est pas un motif de rejet, Apple sanctionne l'inverse. Retirer
 les clés aurait imposé un build `53`, donc un numéro de plus et une
 désynchronisation d'avec Android, déjà en revue en `1.0.7+52`.
+
+**Fait le 17 octobre**, l'iPad ayant imposé ce build `53` de toute façon. Les
+deux clés sont parties. L'incohérence qu'elles portaient n'était pas
+seulement cosmétique : la déclaration App Privacy publiée la veille ne liste
+aucune donnée de localisation, et un binaire qui demande la permission sans
+que la fiche l'annonce est exactement la contradiction qu'un relecteur peut
+relever.
 
 Attention à la confusion de vocabulaire, qui a failli produire une
 déclaration fausse dans les deux consoles. « Position » désigne deux choses
@@ -548,19 +555,36 @@ Décision du 17 octobre : **restreindre à l'iPhone**, ce qui impose un build
 été vérifiée, et publier un affichage que personne n'a regardé est un motif
 de rejet plus sérieux qu'un numéro de build consommé.
 
-Ce que le build 53 doit emporter, dans cet ordre :
+Ce que le build 53 emporte, et ce qui reste à faire.
 
-1. `TARGETED_DEVICE_FAMILY` de `"1,2"` à `"1"`, aux douze emplacements.
-2. Le retrait de `NSLocationWhenInUseUsageDescription` et
-   `NSLocationAlwaysAndWhenInUseUsageDescription` d'`Info.plist`, décidé plus
-   haut et reporté faute de build.
+Fait le 17 octobre, dans le dépôt :
+
+1. `TARGETED_DEVICE_FAMILY` de `"1,2"` à `"1"`, aux douze configurations.
+   Vérifié qu'aucun `.xcconfig` ni le `post_install` du Podfile ne surcharge le
+   réglage, et que les douze occurrences sont au niveau projet, donc héritées
+   par les cibles `Runner` et `RunnerTests`.
+2. `NSLocationWhenInUseUsageDescription` et
+   `NSLocationAlwaysAndWhenInUseUsageDescription` retirés d'`Info.plist`.
+   `UISupportedInterfaceOrientations~ipad` retiré aussi : un bloc
+   d'orientation iPad dans un binaire qui ne tourne plus sur iPad ne décrit
+   plus rien.
 3. `pubspec.yaml` en `1.0.7+53`.
-4. Tests, `flutter analyze`, gates Android et iOS, contrat admin/mobile.
-5. Commit et push sur `master` **et** sur la branche de release, pour que le
-   défaut de Codemagic reste correct.
-6. Build `ios-production` sur Codemagic, branche `master`.
-7. Dans App Store Connect : rattacher le 53, vérifier que l'exigence iPad a
-   disparu, puis `Add for Review`.
+4. `scripts/aab-content-expectations.json` en `forVersionCode: 53`. Le
+   garde-fou `aab_content_expectations_guardrails_test.dart` a refusé le bump
+   tant que le fichier parlait du 52, et c'est son rôle : un témoin ne vaut
+   que s'il discrimine le build qu'on construit. La relecture est immédiate
+   ici, `git diff -- lib/` étant vide : le 53 ne touche aucun Dart, donc les
+   douze témoins du 52 valent tels quels. Aucun n'a été modifié.
+5. Gates passés : `flutter analyze` sans remarque, **1042 tests verts**,
+   préparation iOS et Android, contrat admin/mobile sur 22 fichiers dont les
+   cinq modèles miroirs, audit d'encodage sur 280 fichiers, scan de secrets.
+
+Reste à faire :
+
+6. Build `ios-production` sur Codemagic, branche `master`. À lancer par le
+   titulaire du compte.
+7. Dans App Store Connect : rattacher le 53, vérifier que l'exigence de
+   capture iPad a disparu, puis `Add for Review`.
 
 Android restera en `52` et iOS passera en `53`. C'est assumé : les deux
 magasins ne partagent pas leurs numéros, et Android est déjà en revue.
