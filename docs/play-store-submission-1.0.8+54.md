@@ -271,11 +271,51 @@ Les codes de sortie ont ete lus dans un fichier, jamais au travers d'un
 - `missingShareUrlLog` part dans `logActionFailure`, pas a l'ecran. Le message
   affiche a cote, `missingShareUrl`, est bien traduit.
 
-## Reste a faire, dans l'ordre
+## Soumis le 18 octobre 2026
 
-1. Construire le bundle : `npm.cmd run release:android:gate:build`
-2. Verifier que le bundle porte ce checkout :
-   `npm.cmd run release:android:contents:check`
-3. Play Console, piste Production : televerser, coller les quatre textes
-   ci-dessus, deployer a 100 %
-4. Ne toucher a rien cote iOS avant la fin de la revue du `53`
+Quatre changements envoyes en une soumission, etat `Changes in review` :
+
+| Element | Description |
+| --- | --- |
+| Production | `54 (1.0.8)`, Start full rollout |
+| Store listings `en-US` | Add language, nom et informations requises |
+| Store listings `fr-FR` | Change short description |
+| Store listings `fr-FR` | Change full description |
+
+`Managed publishing` est **desactive** : l'approbation met la version en ligne
+sans autre geste. Le `52` reste telechargeable pendant tout l'examen.
+
+Le bundle attache a la version a ete relu dans la console avant envoi :
+`New app bundles` porte `54 (1.0.8)`, API 24+, target SDK 36, 3 ABIs, ce qui
+correspond au bundle construit ici. Une table voisine affiche `52 (1.0.7)`
+sous le titre `54 (1.0.8)` : c'est `Deactivated app bundles`, le 52 y figure
+parce qu'il est remplace. Ne pas lire cette ligne comme une erreur de contenu.
+
+Taille reellement livree, donnee par la console : **15,6 Mo en nouvelle
+installation, 4,76 Mo en mise a jour**, pour un `.aab` de 74 Mo. Play decoupe
+par ABI et par densite, ce que le commentaire `ndk` de `android/app/build.gradle`
+explique deja.
+
+### A verifier une fois en ligne
+
+1. La fiche fr-FR affiche `du football africain` et la description courte sans
+   espaces doubles
+2. La fiche en-US existe et n'est plus une traduction automatique
+3. Les nouveautes s'affichent dans les deux langues
+4. Les appareils en `52` passent bien en `54`
+
+### A ne pas faire pendant l'examen
+
+- Ne pas rouvrir le questionnaire IARC : les reponses n'ont pas change, rien
+  dans le `54` ne touche au contenu classifiable
+- Ne rien reconstruire ni renvoyer cote iOS : le `53` est en revue chez Apple
+  et un nouveau televersement l'annulerait. Le prochain build iOS part du `55`
+- Ne pas modifier la fiche : une edition pendant l'examen ouvre une soumission
+  concurrente
+
+### Reste ouvert
+
+L'image de la fiche porte toujours `pour le football malien`
+(`scripts/make-feature-graphic.ps1` ligne 78) alors que la description dit
+desormais `africain`. L'incoherence est maintenant visible sur la meme page.
+Un mot dans ce script, une regeneration, un televersement d'asset.
