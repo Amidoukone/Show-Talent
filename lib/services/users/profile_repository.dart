@@ -30,12 +30,18 @@ class ProfilePatchWriteResult {
 }
 
 class CvUploadValidationException implements Exception {
-  const CvUploadValidationException(this.message);
+  const CvUploadValidationException(this.messageKey);
 
-  final String message;
+  /// GetX translation key, never display copy. This repository has no
+  /// `BuildContext` and must not pick a language: until 1.0.7+52 it carried
+  /// the French sentence itself, so an English user who uploaded a rejected
+  /// CV read a translated title above an untranslated body. The single
+  /// consumer, `ProfileController.uploadCvPdf`, resolves it with `.tr` at
+  /// the point where it is actually shown.
+  final String messageKey;
 
   @override
-  String toString() => message;
+  String toString() => messageKey;
 }
 
 class ProfileVideoCursor {
@@ -749,7 +755,7 @@ class ProfileRepository {
 
         if (uploadFile == null) {
           throw const CvUploadValidationException(
-            'Le fichier CV est introuvable ou illisible.',
+            'profileCvErrorFileUnreadable',
           );
         }
 
@@ -850,7 +856,7 @@ class ProfileRepository {
   Future<String> createCvViewUrl(String ownerUid) async {
     final uid = ownerUid.trim();
     if (uid.isEmpty) {
-      throw const CvUploadValidationException('Profil invalide.');
+      throw const CvUploadValidationException('profileCvErrorProfileInvalid');
     }
     final callable = _functions.httpsCallable(
       'createCvViewLink',
@@ -875,7 +881,7 @@ class ProfileRepository {
         !RegExp(r'^[0-9a-f]{64}$').hasMatch(uri.pathSegments[2]) ||
         uri.hasQuery ||
         uri.hasFragment) {
-      throw const CvUploadValidationException('Lien de CV invalide.');
+      throw const CvUploadValidationException('profileCvErrorLinkInvalid');
     }
     return uri.toString();
   }
@@ -980,31 +986,29 @@ class ProfileRepository {
 
   static void _validatePdfBytes(Uint8List bytes) {
     if (bytes.isEmpty) {
-      throw const CvUploadValidationException('Le fichier CV est vide.');
+      throw const CvUploadValidationException('profileCvErrorFileEmpty');
     }
     if (bytes.length > maxCvPdfBytes) {
-      throw const CvUploadValidationException('Le CV doit faire 5 Mo maximum.');
+      throw const CvUploadValidationException('profileCvErrorTooLarge');
     }
     if (!_hasPdfHeader(bytes)) {
-      throw const CvUploadValidationException('Le CV doit etre un PDF valide.');
+      throw const CvUploadValidationException('profileCvErrorNotPdf');
     }
   }
 
   static Future<void> _validatePdfFile(File file, {int? knownSize}) async {
     final exists = await file.exists();
     if (!exists) {
-      throw const CvUploadValidationException(
-        'Le fichier CV est introuvable ou illisible.',
-      );
+      throw const CvUploadValidationException('profileCvErrorFileUnreadable');
     }
 
     final measuredSize = await file.length();
     final size = measuredSize > 0 ? measuredSize : knownSize ?? 0;
     if (size <= 0) {
-      throw const CvUploadValidationException('Le fichier CV est vide.');
+      throw const CvUploadValidationException('profileCvErrorFileEmpty');
     }
     if (size > maxCvPdfBytes) {
-      throw const CvUploadValidationException('Le CV doit faire 5 Mo maximum.');
+      throw const CvUploadValidationException('profileCvErrorTooLarge');
     }
 
     final headerLength = size < _pdfHeader.length ? size : _pdfHeader.length;
@@ -1013,7 +1017,7 @@ class ProfileRepository {
       builder.add(chunk);
     }
     if (!_hasPdfHeader(builder.takeBytes())) {
-      throw const CvUploadValidationException('Le CV doit etre un PDF valide.');
+      throw const CvUploadValidationException('profileCvErrorNotPdf');
     }
   }
 
@@ -1031,9 +1035,7 @@ class ProfileRepository {
         }
         byteCount += chunk.length;
         if (byteCount > maxCvPdfBytes) {
-          throw const CvUploadValidationException(
-            'Le CV doit faire 5 Mo maximum.',
-          );
+          throw const CvUploadValidationException('profileCvErrorTooLarge');
         }
         sink.add(chunk);
       }

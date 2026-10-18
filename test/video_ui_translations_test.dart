@@ -164,6 +164,15 @@ void main() {
       contains('Code: x/y'),
     );
     expect('profileCvSavedMessage'.tr, 'Votre CV a été ajouté ou mis à jour.');
+    expect('profileCvErrorProfileInvalid'.tr, 'Profil invalide.');
+    expect('profileCvErrorLinkInvalid'.tr, 'Lien de CV invalide.');
+    expect(
+      'profileCvErrorFileUnreadable'.tr,
+      'Le fichier CV est introuvable ou illisible.',
+    );
+    expect('profileCvErrorFileEmpty'.tr, 'Le fichier CV est vide.');
+    expect('profileCvErrorTooLarge'.tr, 'Le CV doit faire 5 Mo maximum.');
+    expect('profileCvErrorNotPdf'.tr, 'Le CV doit être un PDF valide.');
     expect('actionResponseDefaultSuccessMessage'.tr, 'Action réalisée.');
     expect(
       'actionResponseOfflineMessage'.tr,
@@ -381,6 +390,15 @@ void main() {
       contains('Code: x/y'),
     );
     expect('profileCvSavedMessage'.tr, 'Your CV has been added or updated.');
+    expect('profileCvErrorProfileInvalid'.tr, 'Invalid profile.');
+    expect('profileCvErrorLinkInvalid'.tr, 'Invalid CV link.');
+    expect(
+      'profileCvErrorFileUnreadable'.tr,
+      'The CV file cannot be found or read.',
+    );
+    expect('profileCvErrorFileEmpty'.tr, 'The CV file is empty.');
+    expect('profileCvErrorTooLarge'.tr, 'The CV must be 5 MB or smaller.');
+    expect('profileCvErrorNotPdf'.tr, 'The CV must be a valid PDF.');
     expect('actionResponseDefaultSuccessMessage'.tr, 'Action completed.');
     expect(
       'actionResponseOfflineMessage'.tr,

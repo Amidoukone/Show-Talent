@@ -886,10 +886,11 @@ class ProfileController extends GetxController {
     } catch (e, st) {
       if (e is CvUploadValidationException) {
         final cvRejectedTitle = 'profileCvRejectedTitle'.tr;
-        _setCvUploadError(cvRejectedTitle, e.message);
+        final cvRejectedMessage = e.messageKey.tr;
+        _setCvUploadError(cvRejectedTitle, cvRejectedMessage);
         AdFeedback.error(
           cvRejectedTitle,
-          e.message,
+          cvRejectedMessage,
           duration: const Duration(seconds: 6),
         );
         return null;
