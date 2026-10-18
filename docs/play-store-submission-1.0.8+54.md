@@ -315,7 +315,17 @@ explique deja.
 
 ### Reste ouvert
 
-L'image de la fiche porte toujours `pour le football malien`
+**Fusionner `master` une fois le 54 publie.** Decide le 18 octobre 2026.
+`origin/master` est a `0722700`, soit le contenu du build 52 : il est un
+ancetre direct de cette branche, donc l'avance rapide se fera sans conflit.
+Le choix d'attendre est deliberatif et pas de la paresse : tant que le 52 est
+la version en ligne, un `master` qui porte le 52 decrit la verite. Le 54 n'est
+pour l'instant qu'une demande, et si Google la refusait, `master` resterait
+propre. Des que la publication est effective, la fusion devient la description
+exacte de la production.
+
+**L'image de la fiche.** Elle porte toujours `pour le football malien`
 (`scripts/make-feature-graphic.ps1` ligne 78) alors que la description dit
 desormais `africain`. L'incoherence est maintenant visible sur la meme page.
-Un mot dans ce script, une regeneration, un televersement d'asset.
+Un mot dans ce script, une regeneration, un televersement d'asset, dans une
+soumission separee apres la mise en ligne.
