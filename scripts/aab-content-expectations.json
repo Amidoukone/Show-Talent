@@ -1,6 +1,6 @@
 {
-  "_": "Temoins relus pour Android 1.0.7+52. Le 51 n'a jamais ete soumis : son numero avait deja ete consomme par un televersement en test interne, des deux cotes, et un numero televerse ne se reutilise pas. Le 52 porte le meme contenu plus le retrait des quatre tirets cadratins de la copie livree. C'est la premiere version depuis la 50 a porter du signal nouveau plutot qu'a en retirer, et ce signal est exactement ce qui decide d'une soumission : la 50 affichait dans l'ecran d'acceptation des CGU deux promesses devenues fausses en version 1.1 des conditions, « Gratuit pour les joueurs » et « sans commission », alors que les CGU nomment desormais les 15 000 FCFA et autorisent une part sur contrat. Armer la porte d'acceptation sur un parc en 50 aurait donc fait cocher « j'accepte » devant un ecran contredisant le document accepte. Les deux temoins mustNotContain ci-dessous refusent un bundle qui les porterait encore ; les deux temoins ajoutes a mustContain prouvent le texte corrige et le routage anglais, absent de la 50. Tous les temoins des 45 a 49 restent presents et inconditionnels. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle. Le 53 ne touche aucun fichier de lib/ : il ne porte que TARGETED_DEVICE_FAMILY passe a iPhone seul, le retrait de deux cles NSLocation orphelines et du bloc d'orientation ~ipad d'Info.plist, et le numero de build. Les temoins du 52 restent donc valides sans relecture de contenu, le code Dart compile etant identique ; cette release est iOS, aucun bundle Android n'en sort.",
-  "forVersionCode": 53,
+  "_": "Temoins relus pour Android 1.0.8+54. Le 51 n'a jamais ete soumis : son numero avait deja ete consomme par un televersement en test interne, des deux cotes, et un numero televerse ne se reutilise pas. Le 52 porte le meme contenu plus le retrait des quatre tirets cadratins de la copie livree. C'est la premiere version depuis la 50 a porter du signal nouveau plutot qu'a en retirer, et ce signal est exactement ce qui decide d'une soumission : la 50 affichait dans l'ecran d'acceptation des CGU deux promesses devenues fausses en version 1.1 des conditions, « Gratuit pour les joueurs » et « sans commission », alors que les CGU nomment desormais les 15 000 FCFA et autorisent une part sur contrat. Armer la porte d'acceptation sur un parc en 50 aurait donc fait cocher « j'accepte » devant un ecran contredisant le document accepte. Les deux temoins mustNotContain ci-dessous refusent un bundle qui les porterait encore ; les deux temoins ajoutes a mustContain prouvent le texte corrige et le routage anglais, absent de la 50. Tous les temoins des 45 a 49 restent presents et inconditionnels. Ces temoins ne prouvent pas a eux seuls chaque correction fonctionnelle ; les tests de regression completent le controle. Le 53 ne touche aucun fichier de lib/ : il ne porte que TARGETED_DEVICE_FAMILY passe a iPhone seul, le retrait de deux cles NSLocation orphelines et du bloc d'orientation ~ipad d'Info.plist, et le numero de build. Les temoins du 52 restent donc valides sans relecture de contenu, le code Dart compile etant identique ; cette release est iOS, aucun bundle Android n'en sort. Le 54 est la release Android qui suit la mise en production du 52, vivante sur le Play Store depuis le 16 octobre 2026 et deployee a 100 % des utilisateurs. Elle porte trois corrections absentes du 52 : le vocabulaire footballistique traduit, la lecture video auditee avec reprise de la position ou le spectateur avait quitte, et les six messages de refus de CV passes en cles de traduction. Les deux premieres n'ajoutent aucune chaine nouvelle au bundle -- leurs diffs ne contiennent que des imports et des commentaires, et un commentaire ne survit pas a la compilation -- donc aucun temoin de contenu ne peut les prouver ; ce sont les tests de regression qui s'en chargent, et c'est exactement la limite que ce fichier annonce plus haut. La troisieme en ajoute, d'ou les trois temoins ajoutes ci-dessous. Le numero saute de 52 a 54 parce que le 53 a ete consomme par la soumission iOS du 17 octobre, qui est en revue chez Apple et qu'aucune release Android ne doit reutiliser.",
+  "forVersionCode": 54,
   "mustContain": [
     {
       "text": "app.locale_preference.v1",
@@ -49,6 +49,14 @@
     {
       "text": ", en vigueur au ",
       "why": "termsVersionWithDateLabel (app_fr.arb) apres le retrait du tiret cadratin en 52 ; la 51 et ses anterieures ecrivaient ce separateur avec U+2014. Ce temoin echoue si quelqu'un retablit le tiret, ce qui en fait le garde-fou de la regle sans placer le caractere lui-meme dans le depot."
+    },
+    {
+      "text": "The CV must be 5 MB or smaller.",
+      "why": "valeur anglaise de profileCvErrorTooLarge (video_ui_translations.dart), ajoutee en 54. Jusqu'a la 52 incluse, ProfileController affichait un titre traduit au-dessus d'un corps de message francais codee en dur dans CvUploadValidationException : un utilisateur en anglais lisait « CV not accepted » puis « Le CV doit faire 5 Mo maximum. ». Chaine ASCII sans apostrophe ni interpolation, donc contigue dans le snapshot, et inconditionnelle : une carte de traduction n'est jamais conditionnee par la plateforme."
+    },
+    {
+      "text": "profileCvErrorTooLarge",
+      "why": "la cle elle-meme, presente des deux cotes du nouveau contrat : le site de throw dans profile_repository.dart et la carte de traduction. Un bundle qui porte la valeur anglaise sans la cle prouverait que le repository a ete remis a une phrase en dur."
     }
   ],
   "mustNotContain": [
@@ -59,6 +67,10 @@
     {
       "text": "sans commission",
       "why": "fin de termsHighlightNotAgentBody avant la 51. Les CGU autorisent une part sur un contrat conclu par intermediation, donc cette mention contredit le document accepte. Sans accent ni apostrophe."
+    },
+    {
+      "text": "Le CV doit etre un PDF valide.",
+      "why": "litteral exact que les deux sites de throw de _validatePdfBytes et _validatePdfFile portaient jusqu'a la 52 incluse. Le libelle traduit qui le remplace ecrit « etre » avec son accent circonflexe, donc cette graphie sans accent n'existe plus nulle part dans le bundle : sa presence prouverait un retour de la phrase codee en dur. C'est le seul des six messages dont l'ancienne et la nouvelle forme se distinguent par les octets, les cinq autres etant identiques en francais -- raison pour laquelle il n'y a qu'un temoin negatif et non six."
     }
   ]
 }
