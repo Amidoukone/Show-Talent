@@ -98,24 +98,22 @@ des chaines, d'ou les trois temoins ajoutes pour le 54 :
 
 ## Copie du Store a coller
 
-Deux fiches existent : `French (France) - fr-FR` et la fiche par defaut, en
-anglais.
+**Une seule fiche existe, en francais, et elle est la fiche par defaut.**
+Constate le 18 octobre sur la page d'edition : le selecteur de langue ne
+propose que le francais, et la soumission 3 nommait la meme cible deux fois,
+"French (France) - fr-FR" puis "Default store listing".
 
-### Defaut constate sur la fiche en ligne
-
-Le champ « Nouveautes » du 52 est **en francais sur les deux fiches**. Un
-utilisateur anglophone lit donc du francais dans la section Nouveautes. Le
-texte anglais ci-dessous corrige cela.
-
-Par ailleurs « Premiere version publique d'Adfoot » devient faux sur une mise
-a jour. Le champ decrit desormais ce qui change.
+Correction d'une erreur d'analyse du meme jour, consignee parce qu'elle a
+produit un faux defaut dans la premiere version de ce document : la
+description anglaise lue sur play.google.com n'etait pas une fiche anglaise,
+c'etait la traduction automatique que Google sert aux visiteurs non
+francophones. Google traduit la description mais pas le champ Nouveautes, ce
+qui expliquait le melange observe. Rien n'etait casse ; il y a un choix a
+faire, ce qui n'est pas la meme chose.
 
 ### Nouveautes, fiche fr-FR
 
-A coller tel quel. Les deux notes ne disent pas la meme chose dans le
-meme ordre, et c'est voulu : la traduction anglaise ne concerne pas un
-lecteur francophone, elle passe donc en dernier sur la fiche fr-FR.
-
+A coller tel quel, un paragraphe par ligne.
 
 ```
 Adfoot, le réseau du football africain.
@@ -123,16 +121,6 @@ Adfoot, le réseau du football africain.
 • Les vidéos reprennent là où vous les avez laissées.
 • L'ajout d'un CV explique un refus dans votre langue.
 • Version anglaise complète pour les utilisateurs qui ont choisi l'anglais.
-```
-
-### Nouveautes, fiche par defaut (anglais)
-
-```
-Adfoot, the network for African football.
-
-• Full English translation, including positions, strong foot and contract status.
-• Videos resume where you left off.
-• CV upload messages now appear in English.
 ```
 
 ### Description complete, fiche fr-FR
@@ -144,8 +132,9 @@ parental, et qu'il ne faut pas reecrire.
 Avant : `Adfoot est un réseau professionnel du football au Mali.`
 Apres : `Adfoot est un réseau professionnel du football africain.`
 
-Texte complet a coller (copie de confort dans
-`artifacts/store-copy-1.0.8+54/description-fr.txt`, non suivi par git) :
+Controle de non-regression du reste du texte : le champ Play compte 1403
+caracteres, ce texte en compte 1404, et l'ecart est exactement celui de
+"au Mali" (7) vers "africain" (8). Aucune autre phrase n'a bouge.
 
 ```
 Adfoot est un réseau professionnel du football africain. Il réunit les joueurs, les clubs, les recruteurs et les agents dans un cadre vérifié.
@@ -165,30 +154,70 @@ Politique de confidentialité : https://adfoot.org/legal/privacy-policy.html
 Suppression de compte : https://adfoot.org/legal/account-deletion.html
 ```
 
-### Description complete, fiche par defaut (anglais)
+### Defaut de la description courte
 
-Avant : `Adfoot is a professional football network in Mali.`
-Apres : `Adfoot is a professional network for African football.`
+Le champ compte 64 caracteres la ou le texte rendu sur le Store en fait 62, et
+la valeur copiee depuis la console montre "du" suivi de trois espaces. Deux
+signaux concordants : la valeur enregistree porte deux espaces en trop. Le
+HTML les ecrase a l'affichage web, ce qui les rend invisibles sur
+play.google.com, mais l'application Play sur Android rend le texte brut. A
+remettre en espace simple.
 
-Texte complet a coller (copie de confort dans
-`artifacts/store-copy-1.0.8+54/description-en.txt`, non suivi par git) :
+Valeur correcte : `Profils, vidéos et mises en relation pour talents du football.`
+
+### Fiche anglaise, si elle est ajoutee
+
+Non requise pour livrer le 54. C'est un engagement d'entretien : chaque
+modification future de la fiche devra etre faite deux fois, sinon l'anglaise
+se perime. En revanche elle ne coute aucun visuel, la page d'edition l'ecrit
+elle-meme : les langues sans graphismes propres reprennent ceux de la langue
+par defaut.
+
+Ne pas utiliser "Import translations with AI" pour ce texte. Le vocabulaire
+footballistique est precisement ce que la traduction automatique manque, c'est
+le bug corrige dans l'application le 17 octobre, et la machine le refait ici :
+elle rendait "recruteurs" par "scouts" alors que l'application dit
+"Recruiter" (profileRoleRecruteur) et enumere "Visible to clubs, recruiters,
+and agents.". Le texte ci-dessous est relu contre app_en.arb terme a terme, et
+il porte des mentions sur les mineurs et l'accord parental qu'une machine ne
+doit pas paraphraser.
+
+Nom de l'application : `Adfoot`
+
+Description courte (54/80) :
 
 ```
-Adfoot is a professional network for African football. It connects players, clubs, scouts, and agents in a verified environment.
+Profiles, videos, and connections for football talent.
+```
 
-Accounts are created by the Adfoot administration after identity verification. The application does not offer open registration: account requests are made on adfoot.org. For players aged 13 to 17, an account is only opened after registered consent from a parent or legal guardian.
+Description complete (1223/4000) :
 
-Once an account is opened, a player presents their sporting profile, posts videos, and follows other profiles. Videos are reviewed by a moderator before appearing in the public feed.
+```
+Adfoot is a professional network for African football. It connects players, clubs, recruiters, and agents in a verified environment.
 
-Clubs, scouts, and agents post offers and events, and search for players by nationality, year of birth, and availability. Only complete and public profiles appear in these results. A minor player's profile only appears after validation by the administration.
+Accounts are created by the Adfoot team after identity verification. The app does not offer public sign-up: account requests are made on adfoot.org. For players aged 13 to 17, an account is opened only once a parent or legal guardian has given recorded consent.
 
-The messaging system connects accounts already linked on the platform.
+Once an account is open, a player presents their football profile, posts videos, and follows other profiles. Videos are reviewed by a moderator before they appear in the public feed.
 
-The minimum age is 13. A parent can request to modify or withdraw their child's permissions at any time by writing to support@adfoot.org.
+Clubs, recruiters, and agents post offers and events, and search for players by nationality, year of birth, and availability. Only complete, public profiles appear in those results. A minor's profile appears only after review by the Adfoot team.
+
+Messaging is available between accounts that are already connected on the platform.
+
+The minimum age is 13. A parent can ask at any time to change or withdraw their child's permissions by writing to support@adfoot.org.
 
 Terms of Use: https://adfoot.org/legal/terms.html
 Privacy Policy: https://adfoot.org/legal/privacy-policy.html
 Account Deletion: https://adfoot.org/legal/account-deletion.html
+```
+
+Nouveautes (204/500) :
+
+```
+Adfoot, the network for African football.
+
+• Full English translation, including positions, strong foot and contract status.
+• Videos resume where you left off.
+• CV upload messages now appear in English.
 ```
 
 ### Ce qui n'est pas change, et le sait
