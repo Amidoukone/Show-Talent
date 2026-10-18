@@ -121,6 +121,8 @@ Adfoot, le réseau du football africain.
 • Les vidéos reprennent là où vous les avez laissées.
 • L'ajout d'un CV explique un refus dans votre langue.
 • Version anglaise complète pour les utilisateurs qui ont choisi l'anglais.
+
+Les comptes sont créés par l'équipe Adfoot après vérification. La demande de compte se fait sur adfoot.org.
 ```
 
 ### Description complete, fiche fr-FR
@@ -132,18 +134,21 @@ parental, et qu'il ne faut pas reecrire.
 Avant : `Adfoot est un réseau professionnel du football au Mali.`
 Apres : `Adfoot est un réseau professionnel du football africain.`
 
-Controle de non-regression du reste du texte : le champ Play compte 1403
-caracteres, ce texte en compte 1404, et l'ecart est exactement celui de
-"au Mali" (7) vers "africain" (8). Aucune autre phrase n'a bouge.
+Deux changements dans ce texte, et deux seulement. Le passage de "au Mali" a
+"africain", verifie par les compteurs : le champ Play affichait 1403
+caracteres, le texte substitue en comptait 1404, soit exactement l'ecart entre
+"au Mali" (7) et "africain" (8). Puis l'alignement du vocabulaire decrit
+ci-dessous, qui ramene le total a 1395. Aucune autre phrase n'a bouge, et la
+console l'a confirme en rendant la valeur precedente a chaque ecriture.
 
 ```
 Adfoot est un réseau professionnel du football africain. Il réunit les joueurs, les clubs, les recruteurs et les agents dans un cadre vérifié.
 
-Les comptes sont créés par l'administration Adfoot après vérification de l'identité. L'application ne propose pas d'inscription libre : la demande de compte se fait sur adfoot.org. Pour un joueur de 13 à 17 ans, le compte n'est ouvert qu'après accord enregistré du parent ou du représentant légal.
+Les comptes sont créés par l'équipe Adfoot après vérification de l'identité. L'application ne propose pas d'inscription libre : la demande de compte se fait sur adfoot.org. Pour un joueur de 13 à 17 ans, le compte n'est ouvert qu'après accord enregistré du parent ou du représentant légal.
 
 Une fois le compte ouvert, un joueur présente son profil sportif, publie des vidéos et suit d'autres profils. Les vidéos sont examinées par un modérateur avant d'apparaître dans le fil public.
 
-Les clubs, les recruteurs et les agents publient des offres et des évènements, et recherchent des joueurs par nationalité, par année de naissance et par disponibilité. Seules les fiches complètes et publiques apparaissent dans ces résultats. Le profil d'un joueur mineur n'y figure qu'après validation par l'administration.
+Les clubs, les recruteurs et les agents publient des offres et des évènements, et recherchent des joueurs par nationalité, par année de naissance et par disponibilité. Seules les fiches complètes et publiques apparaissent dans ces résultats. Le profil d'un joueur mineur n'y figure qu'après validation par l'équipe Adfoot.
 
 La messagerie relie les comptes déjà en relation sur la plateforme.
 
@@ -164,6 +169,16 @@ play.google.com, mais l'application Play sur Android rend le texte brut. A
 remettre en espace simple.
 
 Valeur correcte : `Profils, vidéos et mises en relation pour talents du football.`
+
+### Un acteur, un seul mot : l'equipe Adfoot
+
+La fiche disait "l'administration Adfoot" et "validation par l'administration",
+l'application dit "l'equipe Adfoot" et "the Adfoot team"
+(`publicSignupDisabledMessage`), et la fiche anglaise redigee ici disait
+"the Adfoot team". Trois surfaces, deux mots, un seul acteur. La fiche s'aligne
+sur le produit, pas l'inverse : les deux occurrences francaises passent a
+"l'equipe Adfoot". Le sens ne bouge pas, seul le nom de celui qui agit est
+rendu identique partout, y compris dans la phrase sur les profils mineurs.
 
 ### Fiche anglaise, si elle est ajoutee
 
@@ -218,6 +233,8 @@ Adfoot, the network for African football.
 • Full English translation, including positions, strong foot and contract status.
 • Videos resume where you left off.
 • CV upload messages now appear in English.
+
+Accounts are created by the Adfoot team after verification. Account requests are made on adfoot.org.
 ```
 
 ### Ce qui n'est pas change, et le sait
