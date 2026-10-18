@@ -112,18 +112,17 @@ a jour. Le champ decrit desormais ce qui change.
 
 ### Nouveautes, fiche fr-FR
 
-A coller tel quel : un paragraphe par ligne, aucune coupure en
-milieu de phrase.
+A coller tel quel. Les deux notes ne disent pas la meme chose dans le
+meme ordre, et c'est voulu : la traduction anglaise ne concerne pas un
+lecteur francophone, elle passe donc en dernier sur la fiche fr-FR.
 
 
 ```
 Adfoot, le réseau du football africain.
 
-Version anglaise complétée. Les postes, le pied fort et le statut de contrat s'affichent maintenant en anglais pour les utilisateurs qui ont choisi cette langue.
-
-Lecture vidéo. Une vidéo reprend là où vous l'aviez laissée lorsque vous revenez sur l'accueil, au lieu de repartir du début.
-
-Ajout d'un CV. Un refus est désormais expliqué dans la langue de l'application.
+• Les vidéos reprennent là où vous les avez laissées.
+• L'ajout d'un CV explique un refus dans votre langue.
+• Version anglaise complète pour les utilisateurs qui ont choisi l'anglais.
 ```
 
 ### Nouveautes, fiche par defaut (anglais)
@@ -131,11 +130,9 @@ Ajout d'un CV. Un refus est désormais expliqué dans la langue de l'application
 ```
 Adfoot, the network for African football.
 
-Completed English translation. Positions, strong foot and contract status now appear in English for users who chose that language.
-
-Video playback. A video resumes where you left off when you return to the home feed, instead of starting over.
-
-CV upload. A rejected file is now explained in the language of the app.
+• Full English translation, including positions, strong foot and contract status.
+• Videos resume where you left off.
+• CV upload messages now appear in English.
 ```
 
 ### Description complete, fiche fr-FR
