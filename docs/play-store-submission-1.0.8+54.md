@@ -308,21 +308,31 @@ explique deja.
 
 - Ne pas rouvrir le questionnaire IARC : les reponses n'ont pas change, rien
   dans le `54` ne touche au contenu classifiable
-- Ne rien reconstruire ni renvoyer cote iOS : le `53` est en revue chez Apple
-  et un nouveau televersement l'annulerait. Le prochain build iOS part du `55`
+- Ne rien reconstruire ni renvoyer cote iOS : le `53` est en revue chez Apple.
+  Le prochain build iOS part du `55`. **Caduc depuis le 25 octobre 2026** :
+  le `53` a stagne huit jours sans qu'Apple ouvre le dossier, le Free Apps
+  Agreement n'etant en vigueur que depuis le 19 octobre, soit deux jours apres
+  l'envoi. Le `55` a ete construit et le `53` retire de la revue. A noter,
+  televerser un build n'annule pas une soumission : App Store Connect demande
+  explicitement de retirer la version de la revue pour en attacher un autre
 - Ne pas modifier la fiche : une edition pendant l'examen ouvre une soumission
   concurrente
 
 ### Reste ouvert
 
-**Fusionner `master` une fois le 54 publie.** Decide le 18 octobre 2026.
-`origin/master` est a `0722700`, soit le contenu du build 52 : il est un
-ancetre direct de cette branche, donc l'avance rapide se fera sans conflit.
-Le choix d'attendre est deliberatif et pas de la paresse : tant que le 52 est
-la version en ligne, un `master` qui porte le 52 decrit la verite. Le 54 n'est
-pour l'instant qu'une demande, et si Google la refusait, `master` resterait
-propre. Des que la publication est effective, la fusion devient la description
-exacte de la production.
+**Fusionner `master` une fois le 54 publie : fait le 25 octobre 2026.**
+Decide le 18 octobre, execute quand la condition posee ce jour-la a ete
+verifiee en console : la piste Production affiche
+`Active - Latest release: 54 (1.0.8) - 178 countries/regions`, donc le 54
+n'est plus une demande mais la version en ligne. L'avance rapide s'est faite
+sans conflit comme prevu, de `0722700` a `08c9a22`, et `master` n'avait aucun
+commit absent de la branche de release.
+
+Ce n'etait pas qu'une mise au propre : Codemagic construit `master`, et tant
+qu'il pointait sur `0722700` tout build iOS lance depuis la console aurait
+livre le contenu du 52, sans le vocabulaire traduit, sans la reprise de
+lecture video et sans les messages de refus de CV. Le symptome visible etait
+un numero de commit inattendu dans l'ecran de build.
 
 **L'image de la fiche.** Elle porte toujours `pour le football malien`
 (`scripts/make-feature-graphic.ps1` ligne 78) alors que la description dit
