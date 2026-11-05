@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches AdColors.surface (lib/theme/ad_colors.dart), which every
+         screen uses as its scaffold background unconditionally: this app
+         has no light variant despite ThemeData.light() being the entry
+         point's name. Used for the native splash (launch_background.xml,
+         both density variants) so the handoff to Flutter's first frame has
+         no flash: before this, a white splash jumped to a near-black
+         SplashScreen on every cold start, regardless of the system's own
+         light/dark setting. -->
+    <color name="launch_background">#FF0E1114</color>
+</resources>
