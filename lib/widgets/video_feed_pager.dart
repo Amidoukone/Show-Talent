@@ -120,6 +120,7 @@ class VideoFeedPager extends StatefulWidget {
     this.showProfileAction = true,
     this.endOfFeedBuilder,
     this.disposeWindow = 25,
+    this.preserveActiveOnDispose = false,
   });
 
   final VideoFeedPagerController pagerController;
@@ -135,6 +136,12 @@ class VideoFeedPager extends StatefulWidget {
   final Future<bool> Function()? onRefreshRequested;
   final bool showDeleteAction;
   final bool showProfileAction;
+
+  /// Forwarded to [VideoFocusOrchestrator.preserveActiveOnDispose]. Opt-in:
+  /// right for a context visited repeatedly in a short span (the home feed
+  /// tab), wrong for one visited once and rarely revisited (a profile's
+  /// video view) -- see that field's doc comment for why.
+  final bool preserveActiveOnDispose;
 
   /// Builds the page that follows the last video, or null for no such page.
   ///
@@ -200,6 +207,7 @@ class _VideoFeedPagerState extends State<VideoFeedPager>
       videos: widget.videos,
       disposeWindow: widget.disposeWindow,
       onRequestMore: widget.onRequestMore,
+      preserveActiveOnDispose: widget.preserveActiveOnDispose,
     );
 
     // Attached *before* the page controller exists, so a pending index becomes

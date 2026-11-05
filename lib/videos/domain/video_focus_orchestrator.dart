@@ -13,12 +13,29 @@ class VideoFocusOrchestrator {
     this.disposeWindow = 25,
     this.settleDelay = const Duration(milliseconds: 120),
     this.now = DateTime.now,
+    this.preserveActiveOnDispose = false,
   }) : _videos = List.of(videos);
 
   final String contextKey;
   final VideoManager videoManager;
   final Future<void> Function()? onRequestMore;
   final int disposeWindow;
+
+  /// Whether [onDispose] keeps the on-screen player alive (see its doc
+  /// comment) instead of releasing every player this context holds.
+  ///
+  /// Opt-in, not the default: it is correct for the home feed, where exactly
+  /// one context exists for the app's whole life and `_globalMaxActive` is
+  /// the only ceiling that matters. It is the wrong default for a
+  /// per-profile video view (`ProfileVideoScrollView`) -- a fresh contextKey
+  /// per profile visited -- because `releaseControllersExcept` does not
+  /// forget the context's preload/bandwidth/UI bookkeeping the way
+  /// `disposeAllForContext` does, and a session that opens several players'
+  /// video views would accumulate one stale bookkeeping set per profile
+  /// until something else eventually tears the context down. A context used
+  /// once and rarely revisited has nothing to gain from the optimization
+  /// and should keep the full, immediate cleanup.
+  final bool preserveActiveOnDispose;
 
   /// How long a focus request that lands on the heels of another one waits to
   /// see whether the user is still moving.
@@ -45,6 +62,19 @@ class VideoFocusOrchestrator {
   int _requestToken = 0;
   int? _lastFocusedIndex;
   DateTime? _lastRequestAt;
+
+  /// The URL [onDispose] keeps alive, when [preserveActiveOnDispose].
+  ///
+  /// A URL, not `_videos[_lastFocusedIndex]` read at dispose time: the list
+  /// can be replaced by [updateVideos] (a refresh, a reorder) after the last
+  /// successful focus, which would silently repoint that index at a
+  /// different video. Set only once a controller for it is confirmed live
+  /// (see the end of [onIndexChanged]), never merely attempted -- a focus
+  /// that failed to initialize (a dropped connection mid-swipe) must not
+  /// make `onDispose` think a controller exists for it; `onDispose` would
+  /// then keep nothing and tear down the controller that is actually
+  /// cached and on screen.
+  String? _lastFocusedUrl;
 
   void updateVideos(List<Video> videos) {
     _videos = List.of(videos);
@@ -131,6 +161,12 @@ class VideoFocusOrchestrator {
     final live = videoManager.getController(contextKey, currentUrl);
     if (live == null || !identical(live, player)) return null;
 
+    // Only here, not at the top of the method: this is the first point a
+    // controller for [currentUrl] is confirmed to actually exist in the
+    // manager's LRU, not merely attempted. See the doc comment on
+    // [_lastFocusedUrl].
+    _lastFocusedUrl = currentUrl;
+
     final actualCtrl = player?.controller;
     bool shouldPlay = false;
     try {
@@ -180,11 +216,38 @@ class VideoFocusOrchestrator {
     return player;
   }
 
+  /// Tears down this orchestrator's focus requests.
+  ///
+  /// `MainScreen` swaps its body between destinations instead of keeping
+  /// them in an `IndexedStack`, so leaving a tab disposes this and a return
+  /// builds a fresh one. The default, [preserveActiveOnDispose] false,
+  /// disposes every native player this context was holding, same as always.
+  ///
+  /// [preserveActiveOnDispose] true gives back every player except the one
+  /// on screen instead. Disposing *every* controller, including the one the
+  /// user was actually watching, used to mean a return always paid a cold
+  /// start even though the video was already loaded -- measured on
+  /// adfoot-production (`docs/audit-lecture-video-2026-10-17.md`): 105
+  /// sessions, average 1.4s to first frame, home feed sessions far worse than
+  /// a warm profile-tab cache (112ms). Mirrors
+  /// `VideoFeedPager._releaseNeighboursForBackground`, the same treatment
+  /// already proven in production for backgrounding the whole app: keep the
+  /// visible player, release the rest. `VideoManager._globalMaxActive`
+  /// remains the safety net against the MediaCodec exhaustion full teardown
+  /// here originally guarded against (two incidents, August 2026) -- a kept
+  /// Home player competing with, say, Profil's static thumbnails (no live
+  /// players there, confirmed September 2026) does not approach that ceiling.
   Future<void> onDispose() async {
     _isDisposed = true;
     _requestToken++;
     await videoManager.pauseAll(contextKey);
-    await videoManager.disposeAllForContext(contextKey);
+
+    if (!preserveActiveOnDispose) {
+      await videoManager.disposeAllForContext(contextKey);
+      return;
+    }
+
+    await videoManager.releaseControllersExcept(contextKey, _lastFocusedUrl);
   }
 
   /// Whether this focus request should hold back and see where the scroll

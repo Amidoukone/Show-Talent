@@ -248,10 +248,18 @@ class VideoManager {
     );
   }
 
-  void markActivePlaybackStable(String contextKey, String url) {
+  /// [video] is warmed to disk here too -- see the call site's doc comment
+  /// in smart_video_player.dart for why the active URL was never cached
+  /// before this point.
+  void markActivePlaybackStable(String contextKey, String url, Video video) {
     final resolved = _resolveKey(contextKey, url);
     _markStreaming(contextKey, resolved, isStreaming: false);
     _flushDeferredPreload(contextKey);
+    // warmFile has no internal catch (its other caller, the preload
+    // scheduler, handles its own future) -- caught here so a download
+    // failure never surfaces as an unhandled error on a background best
+    // effort nobody is waiting on.
+    unawaited(warmVideoFile(video).catchError((_) {}));
   }
 
   void _flushDeferredPreload(String contextKey) {

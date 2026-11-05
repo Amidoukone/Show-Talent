@@ -296,7 +296,19 @@ void main() {
       );
       expect(manager.hasDeferredPreloadForTests(contextKey), isTrue);
 
-      manager.markActivePlaybackStable(contextKey, activeUrl);
+      manager.markActivePlaybackStable(
+        contextKey,
+        activeUrl,
+        Video(
+          id: 'active',
+          videoUrl: activeUrl,
+          thumbnailUrl: '',
+          description: '',
+          caption: '',
+          profilePhoto: '',
+          uid: 'author-1',
+        ),
+      );
 
       expect(manager.isStreamingUrlForTests(contextKey, activeUrl), isFalse);
       expect(manager.hasDeferredPreloadForTests(contextKey), isFalse);

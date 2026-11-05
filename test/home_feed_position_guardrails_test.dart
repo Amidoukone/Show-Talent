@@ -64,15 +64,49 @@ void main() {
       );
     });
 
-    // The players are a separate question from the controller: they are still
-    // freed with the pager, which is what returns the decoders.
-    test('the native players are still released with the pager', () {
+    // The players are a separate question from the controller, and for a
+    // context that opts in (Home, the only one as of 2026-11) the two are no
+    // longer treated identically: the one actually on screen survives the
+    // tab change (instant resume, measured against the 105-session baseline
+    // in docs/audit-lecture-video-2026-10-17.md), while every other player
+    // this context held is still freed -- which is what returns their
+    // decoders and is what `_globalMaxActive` relies on to stay meaningful.
+    //
+    // Opt-in, not the default: `releaseControllersExcept` does not forget a
+    // context's preload/bandwidth/UI bookkeeping the way `disposeAllForContext`
+    // does, which is fine for Home (one permanent context) but would
+    // accumulate stale bookkeeping for a context created fresh per visit
+    // (ProfileVideoScrollView) -- see VideoFocusOrchestrator.preserveActiveOnDispose.
+    test(
+        'the pager can release every player except the one on screen, and '
+        'Home is the one context that asks for it', () {
       final pager = _read('lib/widgets/video_feed_pager.dart');
       expect(pager, contains('_orchestrator.onDispose()'));
 
       final orchestrator =
           _read('lib/videos/domain/video_focus_orchestrator.dart');
-      expect(orchestrator, contains('disposeAllForContext(contextKey)'));
+      expect(
+        orchestrator,
+        contains('releaseControllersExcept(contextKey, _lastFocusedUrl)'),
+      );
+      expect(
+        orchestrator,
+        contains('if (!preserveActiveOnDispose) {'),
+        reason: 'the full teardown must stay the default; only an explicit '
+            'opt-in may skip it',
+      );
+
+      final home = _read('lib/screens/home_screen.dart');
+      expect(home, contains('preserveActiveOnDispose: true'));
+
+      final profileVideoView = _read('lib/screens/profil_video_scrollview.dart');
+      expect(
+        profileVideoView,
+        isNot(contains('preserveActiveOnDispose')),
+        reason: 'a fresh contextKey per profile visited must keep the full, '
+            'immediate cleanup -- it has nothing to gain from the '
+            'optimization and would accumulate stale bookkeeping instead',
+      );
     });
 
     // The alternative that was considered and rejected.

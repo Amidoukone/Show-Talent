@@ -1048,6 +1048,21 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
   /// Releases this context's deferred preloads once the stream has proven it
   /// can keep up. Fires once per attached player: re-arming the watchdog must
   /// not re-open the question after the answer is in.
+  ///
+  /// Also the moment the active video's own bytes are finally written to
+  /// disk. The player initializes with `skipCache: true` (a finished file
+  /// download racing a live stream of the same bytes loses the race to
+  /// `cached_video_player_plus`), and the preload scheduler explicitly skips
+  /// the active URL when warming neighbours -- so until this point, nothing
+  /// ever caches the video the user is actually watching. Leaving a feed and
+  /// coming back -- a different tab, the app backgrounded and resumed --
+  /// used to redownload it from the start even though "it was already
+  /// loaded" from the user's point of view
+  /// (`docs/audit-lecture-video-2026-10-17.md`). Three smooth 700ms ticks is
+  /// the same threshold already trusted to resume background downloads
+  /// without starving the stream in front of the user, so warming here adds
+  /// no new risk to the fragile startup window -- only a short overlap
+  /// between the still-finishing stream and the disk write.
   void _reportPlaybackStableIfSmooth() {
     if (_reportedPlaybackStable || !_hasFirstFrame) return;
 
@@ -1058,6 +1073,7 @@ class _SmartVideoPlayerState extends State<SmartVideoPlayer>
     _videoManager.markActivePlaybackStable(
       widget.contextKey,
       widget.videoUrl,
+      widget.video,
     );
   }
 

@@ -1132,6 +1132,10 @@ class _HomeScreenState extends State<HomeScreen> {
         // L'auteur supprime depuis son profil, pas depuis le feed
         // public.
         showDeleteAction: false,
+        // 'home' is permanent and single, not a fresh contextKey per visit
+        // -- the one case where VideoFocusOrchestrator.onDispose keeping the
+        // on-screen player alive is safe. See that field's doc comment.
+        preserveActiveOnDispose: true,
       );
     });
   }
