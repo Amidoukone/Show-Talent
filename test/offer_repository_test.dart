@@ -4,6 +4,7 @@ import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/offers/offer_repository.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 AppUser _user(String uid, String role) {
@@ -319,6 +320,73 @@ void main() {
       expect(fullPage.offers.map((offer) => offer.id),
           ['offer-2', 'offer-1', 'offer-0']);
       expect(fullPage.fetchedCount, 3);
+    });
+
+    // adfoot-production, 2 au 3 novembre 2026 : 184 ecritures refusees en
+    // boucle, une par instantane, parce que n'importe quel spectateur d'une
+    // offre expiree tentait de la fermer. firestore.rules ne l'autorise qu'au
+    // recruteur proprietaire ; ce qui suit verifie le comportement, pas
+    // seulement l'absence d'exception.
+    group('fermeture automatique des offres expirees', () {
+      test('le proprietaire ferme reellement son offre expiree', () async {
+        final firestore = FakeFirebaseFirestore();
+        final owner = _user('club-1', 'club');
+        final repository = OfferRepository(
+          firestore: firestore,
+          auth: MockFirebaseAuth(
+            signedIn: true,
+            mockUser: MockUser(uid: owner.uid, email: '${owner.uid}@x.com'),
+          ),
+        );
+        await firestore.collection('offres').doc('offer-1').set(
+              _offer(
+                recruiter: owner,
+                status: 'ouverte',
+                endDate: DateTime(2020, 1, 1),
+              ).toMap(),
+            );
+
+        final offers = (await repository.watchOffers().first).offers;
+
+        expect(offers.single.statut, 'fermee');
+        final stored =
+            (await firestore.collection('offres').doc('offer-1').get())
+                .data()!;
+        expect(stored['statut'], 'fermee');
+      });
+
+      test(
+          'un spectateur ne tente pas d’ecrire sur l’offre expiree '
+          'de quelqu’un d’autre', () async {
+        final firestore = FakeFirebaseFirestore();
+        final owner = _user('club-1', 'club');
+        final repository = OfferRepository(
+          firestore: firestore,
+          auth: MockFirebaseAuth(
+            signedIn: true,
+            mockUser: MockUser(uid: 'player-1', email: 'player-1@x.com'),
+          ),
+        );
+        await firestore.collection('offres').doc('offer-1').set(
+              _offer(
+                recruiter: owner,
+                status: 'ouverte',
+                endDate: DateTime(2020, 1, 1),
+              ).toMap(),
+            );
+
+        final offers = (await repository.watchOffers().first).offers;
+
+        // L'affichage se corrige pour tout le monde...
+        expect(offers.single.statut, 'fermee');
+        // ...mais rien n'a ete ecrit : c'est ce qui prouve que l'ecriture
+        // n'a meme pas ete tentee, pas seulement qu'elle aurait echoue (ce
+        // fake Firestore n'applique pas firestore.rules).
+        final stored =
+            (await firestore.collection('offres').doc('offer-1').get())
+                .data()!;
+        expect(stored['statut'], 'ouverte');
+      });
     });
   });
 }

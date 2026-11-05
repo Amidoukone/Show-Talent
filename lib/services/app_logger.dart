@@ -164,11 +164,20 @@ class AppLogger {
     });
 
     if (level == AppLogLevel.error || level == AppLogLevel.warning) {
+      // Both severities were written to client_logs as a hardcoded
+      // level: 'error' -- the true severity only survived inside
+      // metadata.level (set above). A 2026-11 audit measured 89% of the
+      // documents that `level=='error'` filters return were actually
+      // warnings, which overstated real error volume roughly 16x and is
+      // what let a genuine, currently-active defect (offers/auto_close)
+      // hide in the noise. Passing the real level through here is the fix;
+      // metadata.level is kept too, so nothing that already reads it breaks.
       unawaited(
         ClientLogger.instance.logError(
           source,
           text,
           metadata: sanitizedMetadata,
+          level: level.name,
         ),
       );
       return;

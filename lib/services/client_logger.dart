@@ -65,10 +65,14 @@ class ClientLogger {
         level: 'info', source: source, message: message, metadata: metadata));
   }
 
+  /// [level] defaults to `'error'` for callers that only ever mean that
+  /// (video_metrics_observer.dart, video_observability_service.dart,
+  /// video_tools.dart). AppLogger passes its real level through explicitly
+  /// -- see the doc comment on that parameter for why this matters.
   Future<void> logError(String source, String message,
-      {Map<String, dynamic>? metadata}) async {
+      {Map<String, dynamic>? metadata, String level = 'error'}) async {
     _enqueue(ClientLogEntry(
-        level: 'error', source: source, message: message, metadata: metadata));
+        level: level, source: source, message: message, metadata: metadata));
   }
 
   void _enqueue(ClientLogEntry entry) {

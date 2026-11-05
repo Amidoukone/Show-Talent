@@ -3,6 +3,7 @@ import 'package:adfoot/models/offre.dart';
 import 'package:adfoot/models/user.dart';
 import 'package:adfoot/services/app_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 
 class OfferRepositoryException implements Exception {
@@ -90,10 +91,18 @@ class OfferQueryFilter {
 class OfferRepository {
   static const int defaultPageSize = 40;
 
-  OfferRepository({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  OfferRepository({FirebaseFirestore? firestore, FirebaseAuth? auth})
+    : _firestore = firestore ?? FirebaseFirestore.instance,
+      _authOverride = auth;
 
   final FirebaseFirestore _firestore;
+  final FirebaseAuth? _authOverride;
+
+  // Lazy, not resolved in the constructor: most callers never touch auth at
+  // all (publishOffer, the position filter, pagination), and resolving
+  // FirebaseAuth.instance eagerly made every one of those tests require a
+  // Firebase app that was never otherwise needed.
+  FirebaseAuth get _auth => _authOverride ?? FirebaseAuth.instance;
 
   CollectionReference<Map<String, dynamic>> get _offersCollection =>
       _firestore.collection('offres');
@@ -341,7 +350,15 @@ class OfferRepository {
         }
 
         if (offer.dateFin.isBefore(now) && _isOpenStatus(offer.statut)) {
-          _closeExpiredOffer(doc);
+          // Only the owning recruiter's write can succeed --
+          // firestore.rules only grants offres/{id} update to
+          // resource.data.recruteur.uid == request.auth.uid. Every other
+          // viewer who reaches this branch would retry a write that is
+          // structurally guaranteed to fail on every snapshot. The status
+          // still flips below for display regardless of who is looking.
+          if (offer.recruteur.uid == _auth.currentUser?.uid) {
+            _closeExpiredOffer(doc);
+          }
           offer.statut = 'fermee';
           offer.lastUpdated = now;
         }
