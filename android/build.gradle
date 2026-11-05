@@ -17,7 +17,7 @@
 // This value must be kept in step with firebase_core's default when that
 // package is upgraded; `test/native_crash_reporting_guardrails_test.dart`
 // fails if the two disagree.
-ext.FirebaseSDKVersion = "34.17.0"
+ext.FirebaseSDKVersion = "34.19.0"
 
 allprojects {
     repositories {
