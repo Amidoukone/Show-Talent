@@ -11,6 +11,7 @@ import 'package:adfoot/widgets/ad_profile_cards.dart';
 import 'package:adfoot/widgets/profile_action_notice.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/user.dart';
 import 'package:adfoot/services/app_logger.dart';
@@ -887,6 +888,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               profileController: profileController,
                             ),
                             const SizedBox(height: 16),
+                            PassportUploaderSection(
+                              initialUser: user,
+                              profileController: profileController,
+                            ),
+                            const SizedBox(height: 16),
                           ],
                         ],
                       ),
@@ -1164,6 +1170,204 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
               label: _isDeleting
                   ? l10n.editProfileCvDeletingAction
                   : l10n.editProfileCvDeleteAction,
+              kind: AdButtonKind.danger,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Mirrors [CvUploaderSection] exactly in shape, simpler in mechanics: a
+/// passport photo is an image picked from the gallery, the same upload
+/// shape [ProfileScreen] already uses for the avatar -- not a document
+/// picked with [FilePicker] like the CV, which needs its own byte-level
+/// validation before the file is even readable as a stream.
+class PassportUploaderSection extends StatefulWidget {
+  final AppUser initialUser;
+  final ProfileController profileController;
+
+  const PassportUploaderSection({
+    super.key,
+    required this.initialUser,
+    required this.profileController,
+  });
+
+  @override
+  State<PassportUploaderSection> createState() =>
+      _PassportUploaderSectionState();
+}
+
+class _PassportUploaderSectionState extends State<PassportUploaderSection> {
+  final ImagePicker _imagePicker = ImagePicker();
+  String? _passportPhotoUrl;
+  bool _isUploading = false;
+  bool _isDeleting = false;
+  String? _failureTitle;
+  String? _failureMessage;
+
+  AppUser get _currentUser {
+    final liveUser = widget.profileController.user;
+    if (liveUser != null && liveUser.uid == widget.initialUser.uid) {
+      return liveUser;
+    }
+    return widget.initialUser;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _passportPhotoUrl = widget.initialUser.passportPhotoUrl;
+  }
+
+  @override
+  void didUpdateWidget(covariant PassportUploaderSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _passportPhotoUrl = _currentUser.passportPhotoUrl;
+  }
+
+  void _clearFailure() {
+    if (!mounted) return;
+    setState(() {
+      _failureTitle = null;
+      _failureMessage = null;
+    });
+  }
+
+  Future<void> _pickAndUploadPassportPhoto(AppUser user) async {
+    var uploadStarted = false;
+    final l10n = AppLocalizations.of(context)!;
+
+    try {
+      _clearFailure();
+      final file = await _imagePicker.pickImage(source: ImageSource.gallery);
+      if (file == null) {
+        return;
+      }
+
+      setState(() => _isUploading = true);
+      uploadStarted = true;
+
+      await widget.profileController.uploadPassportPhoto(user.uid, file.path);
+      if (!mounted) return;
+
+      setState(() {
+        _passportPhotoUrl = _currentUser.passportPhotoUrl;
+        _failureTitle = widget.profileController.lastPassportUploadErrorTitle;
+        _failureMessage =
+            widget.profileController.lastPassportUploadErrorMessage;
+      });
+    } on ProfileAccessRevokedException {
+      return;
+    } catch (e, st) {
+      AppLogger.error(
+        'Passport pick or upload failed: $e',
+        source: 'profile/passport_upload',
+        error: e,
+        stackTrace: st,
+      );
+      final message = l10n.editProfilePassportPickUploadFailedMessage;
+      if (!mounted) return;
+      setState(() {
+        _failureTitle = l10n.editProfilePassportAddFailedTitle;
+        _failureMessage = message;
+      });
+      AdFeedback.error(
+        l10n.editProfilePassportAddFailedTitle,
+        message,
+        duration: const Duration(seconds: 6),
+      );
+    } finally {
+      if (mounted && uploadStarted) {
+        setState(() => _isUploading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = _currentUser;
+    final hasPassport = (_passportPhotoUrl ?? '').trim().isNotEmpty;
+    final l10n = AppLocalizations.of(context)!;
+
+    return AdSectionCard(
+      title: l10n.editProfilePassportTitle,
+      subtitle: l10n.editProfilePassportSubtitle,
+      icon: Icons.badge_outlined,
+      trailing: hasPassport
+          ? Chip(
+              label: Text(l10n.editProfilePassportAvailableLabel),
+              avatar: const Icon(
+                Icons.check_circle,
+                color: Colors.white,
+                size: 18,
+              ),
+              backgroundColor: AdColors.success,
+              labelStyle: const TextStyle(color: Colors.white),
+            )
+          : Chip(
+              label: Text(l10n.editProfilePassportNoneLabel),
+              avatar: const Icon(
+                Icons.info_outline,
+                color: Colors.white,
+                size: 18,
+              ),
+              backgroundColor: AdColors.warning,
+              labelStyle: const TextStyle(color: Colors.white),
+            ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_failureMessage != null) ...[
+            ProfileActionNotice(
+              title: _failureTitle ?? l10n.editProfilePassportAddFailedTitle,
+              message: _failureMessage!,
+            ),
+            const SizedBox(height: 12),
+          ],
+          AdButton(
+            onPressed: _isUploading || _isDeleting
+                ? null
+                : () => _pickAndUploadPassportPhoto(user),
+            loading: _isUploading,
+            leading: Icons.upload_file_rounded,
+            label: _isUploading
+                ? l10n.editProfilePassportUploadingAction
+                : hasPassport
+                ? l10n.editProfilePassportReplaceAction
+                : l10n.editProfilePassportAddAction,
+            kind: AdButtonKind.tonal,
+          ),
+          if (hasPassport) ...[
+            const SizedBox(height: 10),
+            AdButton(
+              onPressed: _isUploading || _isDeleting
+                  ? null
+                  : () async {
+                      try {
+                        setState(() => _isDeleting = true);
+                        await widget.profileController.deletePassportPhoto(
+                          user.uid,
+                        );
+                        if (!mounted) return;
+                        setState(
+                          () => _passportPhotoUrl =
+                              _currentUser.passportPhotoUrl,
+                        );
+                      } on ProfileAccessRevokedException {
+                        return;
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isDeleting = false);
+                        }
+                      }
+                    },
+              loading: _isDeleting,
+              leading: Icons.delete_forever_rounded,
+              label: _isDeleting
+                  ? l10n.editProfilePassportDeletingAction
+                  : l10n.editProfilePassportDeleteAction,
               kind: AdButtonKind.danger,
             ),
           ],

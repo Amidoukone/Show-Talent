@@ -583,6 +583,21 @@ await check('URL de CV avec jeton refusee', 'deny', () =>
     cvUrl: `https://firebasestorage.googleapis.com/v0/b/demo/o/cvs%2F${PLAYER}%2Fcv_123.pdf?token=leaked`,
   }));
 
+await check('chemin Storage de passeport accepte', 'allow', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    passportPhotoUrl: `gs://demo-bucket/identityDocuments/${PLAYER}/passport_123.jpg`,
+  }));
+
+await check('URL de passeport avec jeton refusee', 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    passportPhotoUrl: `https://firebasestorage.googleapis.com/v0/b/demo/o/identityDocuments%2F${PLAYER}%2Fpassport_123.jpg?token=leaked`,
+  }));
+
+await check("passeport sur le chemin d'un autre joueur refuse", 'deny', () =>
+  updateDoc(doc(player, 'users', PLAYER), {
+    passportPhotoUrl: `gs://demo-bucket/identityDocuments/${RECRUITER}/passport_123.jpg`,
+  }));
+
 const intakeData = {
   requesterUid: PLAYER, targetUid: RECRUITER,
   status: 'new', agencyFollowUpStatus: 'new',

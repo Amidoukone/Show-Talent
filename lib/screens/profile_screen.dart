@@ -1717,6 +1717,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         );
       }
+
+      if (user.passportPhotoUrl != null) {
+        tiles.add(
+          Material(
+            color: Colors.transparent,
+            child: ListTile(
+              leading: const Icon(Icons.badge, color: Colors.blueGrey),
+              title: Text(l10n.profilePassportViewTitle),
+              subtitle: Text(l10n.profilePassportViewSubtitle),
+              onTap: () async {
+                try {
+                  final authorizedUrl = await _profileController
+                      .createPassportViewUrl(user.uid);
+                  final uri = Uri.parse(authorizedUrl);
+                  final opened = await launchUrl(
+                    uri,
+                    mode: LaunchMode.externalApplication,
+                  );
+                  if (!opened) {
+                    throw StateError('Passport browser launch failed');
+                  }
+                } catch (error) {
+                  AdFeedback.error(
+                    l10n.profilePassportViewTitle,
+                    l10n.profilePassportUnavailable,
+                  );
+                }
+              },
+            ),
+          ),
+        );
+      } else {
+        tiles.add(
+          Material(
+            color: Colors.transparent,
+            child: ListTile(
+              leading: const Icon(Icons.badge_outlined),
+              title: Text(l10n.profilePassportMissingTitle),
+              subtitle: Text(l10n.profilePassportMissingSubtitle),
+            ),
+          ),
+        );
+      }
     }
 
     return Column(children: tiles);

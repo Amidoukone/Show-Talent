@@ -9,6 +9,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'package:adfoot/config/app_environment.dart';
 import 'package:adfoot/services/callable_auth_guard.dart';
@@ -38,6 +39,19 @@ class CvUploadValidationException implements Exception {
   /// CV read a translated title above an untranslated body. The single
   /// consumer, `ProfileController.uploadCvPdf`, resolves it with `.tr` at
   /// the point where it is actually shown.
+  final String messageKey;
+
+  @override
+  String toString() => messageKey;
+}
+
+/// Same shape as [CvUploadValidationException], kept as its own type rather
+/// than reused: the class name is part of what a reader trusts when they see
+/// it thrown from passport code, and "Cv" in a passport error path would be
+/// exactly the kind of mismatch that gets copy-pasted wrong later.
+class PassportUploadValidationException implements Exception {
+  const PassportUploadValidationException(this.messageKey);
+
   final String messageKey;
 
   @override
@@ -674,6 +688,164 @@ class ProfileRepository {
         .timeout(firestoreWriteTimeout);
 
     return url;
+  }
+
+  static const List<int> _pngHeader = [
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+  ];
+
+  /// Reads only the first few bytes of [file] to tell JPEG from PNG from
+  /// anything else, without loading the whole file into memory.
+  ///
+  /// The extension on the Storage object is not decoration: `passportViewPage`
+  /// (functions/src/passport_view.ts) infers the expected content type from
+  /// it and then checks the real file's magic bytes against that expectation
+  /// before ever serving it. Uploading a PNG under a hardcoded `.jpg` name --
+  /// what this method did before this check existed -- passed every rule
+  /// (storage.rules only looks at the *declared* content-type, which was also
+  /// hardcoded to match) and then 404'd forever the first time anyone opened
+  /// the view link, with no error ever shown to the player who uploaded it.
+  /// `ImagePicker.pickImage(source: ImageSource.gallery)` can return a PNG --
+  /// an Android screenshot, a scan saved from another app -- so the format
+  /// cannot be assumed the way [updateProfilePhoto] assumes it for the
+  /// avatar, where nothing downstream re-validates bytes against a label.
+  @visibleForTesting
+  static Future<String> detectPassportImageExtensionForTests(File file) =>
+      _detectPassportImageExtension(file);
+
+  static Future<String> _detectPassportImageExtension(File file) async {
+    final raf = await file.open();
+    try {
+      final header = await raf.read(_pngHeader.length);
+      if (header.length >= 3 &&
+          header[0] == 0xFF &&
+          header[1] == 0xD8 &&
+          header[2] == 0xFF) {
+        return 'jpg';
+      }
+      if (header.length == _pngHeader.length) {
+        var isPng = true;
+        for (var i = 0; i < _pngHeader.length; i++) {
+          if (header[i] != _pngHeader[i]) {
+            isPng = false;
+            break;
+          }
+        }
+        if (isPng) return 'png';
+      }
+      throw const PassportUploadValidationException(
+        'profilePassportErrorUnsupportedFormat',
+      );
+    } finally {
+      await raf.close();
+    }
+  }
+
+  /// Uploads a passport photo, never a tokenized download URL.
+  ///
+  /// Simpler than [uploadCvPdf] on purpose: this is an image, the same shape
+  /// of upload as [updateProfilePhoto], not a PDF needing byte-level
+  /// validation -- except for the format check above, which exists for a
+  /// narrower reason than the CV's: not to reject bad input, but to make the
+  /// Storage object's extension actually match its bytes, which is what
+  /// [createPassportViewUrl]'s server-side magic-byte check depends on.
+  ///
+  /// The URL itself borrows from the CV path -- `gs://bucket/path`, never
+  /// `getDownloadURL()` -- because unlike the avatar this field is read by a
+  /// verified recruiter, not the world, and a tokenized URL would let that
+  /// recruiter keep viewing it forever even after access was revoked.
+  ///
+  /// Deliberately does **not** call
+  /// `_appendVerificationInvalidationIfCurrentProfileIsVerified`: that reset
+  /// exists because a new photo or CV can change the football evidence a
+  /// verifier judged. A passport photo certifies identity, not a football
+  /// fact, so replacing it must not touch the "Vérifié par Adfoot" badge.
+  Future<String> uploadPassportPhoto(String uid, String photoPath) async {
+    await _ensureAuthenticatedOwner(uid);
+
+    final file = File(photoPath);
+    final extension = await _detectPassportImageExtension(file);
+    final contentType = extension == 'png' ? 'image/png' : 'image/jpeg';
+    final fileName =
+        'passport_${DateTime.now().millisecondsSinceEpoch}.$extension';
+    final ref = _storage.ref('identityDocuments/$uid/$fileName');
+    final uploadTask = await ref
+        .putFile(file, SettableMetadata(contentType: contentType))
+        .timeout(storageWriteTimeout);
+
+    final url = 'gs://${uploadTask.ref.bucket}/${uploadTask.ref.fullPath}';
+
+    await _usersCollection
+        .doc(uid)
+        .update({'passportPhotoUrl': url})
+        .timeout(firestoreWriteTimeout);
+
+    return url;
+  }
+
+  Future<void> deletePassportPhoto(String uid, {String? passportPhotoUrl}) async {
+    await _ensureAuthenticatedOwner(uid);
+
+    await _usersCollection
+        .doc(uid)
+        .update({'passportPhotoUrl': FieldValue.delete()})
+        .timeout(firestoreWriteTimeout);
+
+    if (passportPhotoUrl != null && passportPhotoUrl.isNotEmpty) {
+      try {
+        await _storage
+            .refFromURL(passportPhotoUrl)
+            .delete()
+            .timeout(storageWriteTimeout);
+      } catch (cleanupError, cleanupStackTrace) {
+        developer.log(
+          'deletePassportPhoto storage cleanup warning',
+          name: 'ProfileRepository.deletePassportPhoto',
+          error: cleanupError,
+          stackTrace: cleanupStackTrace,
+        );
+      }
+    }
+  }
+
+  /// Creates a short-lived, authorized adfoot.org link. The browser never
+  /// receives a persistent Firebase Storage download token. Mirrors
+  /// [createCvViewUrl] exactly -- same callable shape, same URL validation.
+  Future<String> createPassportViewUrl(String ownerUid) async {
+    final uid = ownerUid.trim();
+    if (uid.isEmpty) {
+      throw const PassportUploadValidationException(
+        'profilePassportErrorProfileInvalid',
+      );
+    }
+    final callable = _functions.httpsCallable(
+      'createPassportViewLink',
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+    );
+    final result =
+        await CallableAuthGuard.callDataWithHttpFallback<Map<String, dynamic>>(
+          callable,
+          'createPassportViewLink',
+          {'ownerUid': uid},
+        );
+    final rawUrl = result['url']?.toString() ?? '';
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        !AppEnvironmentConfig.videoShareAllowedHosts.contains(
+          uri.host.toLowerCase(),
+        ) ||
+        uri.pathSegments.length != 3 ||
+        uri.pathSegments[0] != 'passport' ||
+        uri.pathSegments[1] != 'view' ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(uri.pathSegments[2]) ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw const PassportUploadValidationException(
+        'profilePassportErrorLinkInvalid',
+      );
+    }
+    return uri.toString();
   }
 
   /// Loads a page of a profile's videos.

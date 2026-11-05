@@ -530,6 +530,27 @@ class VideoUiTranslations extends Translations {
         'puis réessayez.',
     'profileCvDeleteFailedTitle': 'Suppression impossible',
     'profileCvDeleteUnavailableMessage': 'Impossible de supprimer le CV.',
+    'profilePassportSavedTitle': 'Passeport enregistré',
+    'profilePassportSavedMessage':
+        'Votre photo de passeport a été ajoutée ou mise à jour.',
+    'profilePassportRejectedTitle': 'Photo non acceptée',
+    'profilePassportErrorProfileInvalid': 'Profil invalide.',
+    'profilePassportErrorLinkInvalid': 'Lien de passeport invalide.',
+    'profilePassportErrorUnsupportedFormat':
+        'Ce format d’image n’est pas pris en charge. Utilisez une photo '
+        'JPEG ou PNG.',
+    'profilePassportAddFailedTitle': 'Ajout impossible',
+    'profilePassportAddUnavailableMessage':
+        'Impossible d’ajouter la photo de passeport.',
+    'profilePassportDeletedTitle': 'Passeport supprimé',
+    'profilePassportDeletedMessage':
+        'La photo de passeport a été retirée du profil.',
+    'profilePassportDeletePermissionDeniedMessage':
+        'Votre session ne permet pas de supprimer ce document. '
+        'Reconnectez-vous puis réessayez.',
+    'profilePassportDeleteFailedTitle': 'Suppression impossible',
+    'profilePassportDeleteUnavailableMessage':
+        'Impossible de supprimer la photo de passeport.',
     'actionResponseDefaultSuccessMessage': 'Action réalisée.',
     'actionResponseOfflineMessage':
         'Connexion indisponible. Réessaie quand tu es en ligne.',
@@ -1167,6 +1188,26 @@ class VideoUiTranslations extends Translations {
         'again and try again.',
     'profileCvDeleteFailedTitle': 'Unable to delete',
     'profileCvDeleteUnavailableMessage': 'Unable to delete the CV.',
+    'profilePassportSavedTitle': 'Passport saved',
+    'profilePassportSavedMessage':
+        'Your passport photo has been added or updated.',
+    'profilePassportRejectedTitle': 'Photo not accepted',
+    'profilePassportErrorProfileInvalid': 'Invalid profile.',
+    'profilePassportErrorLinkInvalid': 'Invalid passport link.',
+    'profilePassportErrorUnsupportedFormat':
+        'This image format is not supported. Use a JPEG or PNG photo.',
+    'profilePassportAddFailedTitle': 'Unable to add',
+    'profilePassportAddUnavailableMessage':
+        'Unable to add the passport photo.',
+    'profilePassportDeletedTitle': 'Passport deleted',
+    'profilePassportDeletedMessage':
+        'The passport photo has been removed from the profile.',
+    'profilePassportDeletePermissionDeniedMessage':
+        'Your session does not allow you to delete this document. Sign in '
+        'again and try again.',
+    'profilePassportDeleteFailedTitle': 'Unable to delete',
+    'profilePassportDeleteUnavailableMessage':
+        'Unable to delete the passport photo.',
     'actionResponseDefaultSuccessMessage': 'Action completed.',
     'actionResponseOfflineMessage':
         'No connection available. Try again once you\'re back online.',

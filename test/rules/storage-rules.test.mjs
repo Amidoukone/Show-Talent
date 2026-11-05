@@ -141,6 +141,16 @@ await env.withSecurityRulesDisabled(async (ctx) => {
     bytes(1024),
     PDF,
   );
+  await uploadBytes(
+    ref(storage, `identityDocuments/${PLAYER}/passport_1.jpg`),
+    bytes(1024),
+    JPEG,
+  );
+  await uploadBytes(
+    ref(storage, `identityDocuments/${PRIVATE_PLAYER}/passport_1.jpg`),
+    bytes(1024),
+    JPEG,
+  );
   await uploadBytes(ref(storage, `videos/${VIDEO}.mp4`), bytes(1024));
   await uploadBytes(ref(storage, `videos/minor_video.mp4`), bytes(1024));
   await uploadBytes(ref(storage, `videos/minor_media_video.mp4`), bytes(1024));
@@ -248,6 +258,71 @@ await check("un CV n'est pas lisible sans compte", 'deny', () =>
 // to treat as sufficient.
 await check("un operateur admin lit le CV d'un profil masque", 'allow', () =>
   getBytes(ref(admin, `cvs/${PRIVATE_PLAYER}/cv_1.pdf`)));
+
+/* ---------------- Passport photo ---------------- */
+
+// Same visibility and upload gate as the CV, by product decision -- a
+// passport is a government ID, shown to the same audience (owner, admin, a
+// verified recruiter/club on a public profile), never a tokenized download
+// URL. See ownerPassportPhotoUrlChangeIsSafe (firestore.rules) and
+// canReadPassportPhoto/mayUploadPassportPhoto (storage.rules).
+
+await check("un joueur depose son passeport", 'allow', () =>
+  uploadBytes(ref(player, `identityDocuments/${PLAYER}/passport_2.jpg`), bytes(1024 * 64), JPEG));
+
+await check("un passeport de 9 Mo", 'deny', () =>
+  uploadBytes(
+    ref(player, `identityDocuments/${PLAYER}/passport_3.jpg`),
+    bytes(9 * 1024 * 1024),
+    JPEG,
+  ));
+
+await check("un PDF depose comme passeport", 'deny', () =>
+  uploadBytes(ref(player, `identityDocuments/${PLAYER}/passport_4.jpg`), bytes(1024), PDF));
+
+await check("un nom de fichier de passeport hors convention", 'deny', () =>
+  uploadBytes(ref(player, `identityDocuments/${PLAYER}/piece.jpg`), bytes(1024), JPEG));
+
+// Only a player has this field. A recruiter uploading one to their own path
+// would be storing a document the product never shows.
+await check("un recruteur depose un passeport sur son propre chemin", 'deny', () =>
+  uploadBytes(ref(recruiter, `identityDocuments/${RECRUITER}/passport_1.jpg`), bytes(1024), JPEG));
+
+await check("un tiers depose un passeport sur le chemin d'un joueur", 'deny', () =>
+  uploadBytes(ref(recruiter, `identityDocuments/${PLAYER}/passport_9.jpg`), bytes(1024), JPEG));
+
+await check("le proprietaire relit son propre passeport", 'allow', () =>
+  getBytes(ref(player, `identityDocuments/${PLAYER}/passport_1.jpg`)));
+
+await check("un recruteur verifie lit le passeport d'un profil public", 'allow', () =>
+  getBytes(ref(recruiter, `identityDocuments/${PLAYER}/passport_1.jpg`)));
+
+await check("un recruteur non verifie ne lit pas un passeport", 'deny', () =>
+  getBytes(ref(env.authenticatedContext(UNVERIFIED_SCOUT).storage(), `identityDocuments/${PLAYER}/passport_1.jpg`)));
+
+await check("un recruteur lit le passeport d'un profil masque", 'deny', () =>
+  getBytes(ref(recruiter, `identityDocuments/${PRIVATE_PLAYER}/passport_1.jpg`)));
+
+await check("un passeport n'est pas lisible sans compte", 'deny', () =>
+  getBytes(ref(anonymous, `identityDocuments/${PLAYER}/passport_1.jpg`)));
+
+await check("un operateur admin lit le passeport d'un profil masque", 'allow', () =>
+  getBytes(ref(admin, `identityDocuments/${PRIVATE_PLAYER}/passport_1.jpg`)));
+
+// Same minor-consent gate as every other media path this player has.
+await check("un mineur sans accord média ne depose pas de passeport", 'deny', () =>
+  uploadBytes(
+    ref(env.authenticatedContext(MINOR).storage(), `identityDocuments/${MINOR}/passport_1.jpg`),
+    bytes(1024),
+    JPEG,
+  ));
+
+await check("un mineur avec accord média depose son passeport", 'allow', () =>
+  uploadBytes(
+    ref(env.authenticatedContext(MINOR_MEDIA).storage(), `identityDocuments/${MINOR_MEDIA}/passport_1.jpg`),
+    bytes(1024),
+    JPEG,
+  ));
 
 /* ---------------- Video objects ---------------- */
 

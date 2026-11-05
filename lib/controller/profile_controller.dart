@@ -62,6 +62,8 @@ class ProfileController extends GetxController {
 
   AppUser? user;
   StreamSubscription<AppUser?>? _userSubscription;
+  String? _userSubscriptionUid;
+  int _userListenerRebindSerial = 0;
 
   final isLoadingPhoto = false.obs;
   final videoList = <Video>[].obs;
@@ -72,6 +74,8 @@ class ProfileController extends GetxController {
   String? lastProfileWriteErrorMessage;
   String? lastCvUploadErrorTitle;
   String? lastCvUploadErrorMessage;
+  String? lastPassportUploadErrorTitle;
+  String? lastPassportUploadErrorMessage;
 
   ProfileVideoCursor? _lastVideoCursor;
   static const int _videoFetchLimit = 20;
@@ -119,6 +123,16 @@ class ProfileController extends GetxController {
   void _setCvUploadError(String title, String message) {
     lastCvUploadErrorTitle = title;
     lastCvUploadErrorMessage = message;
+  }
+
+  void _clearPassportUploadError() {
+    lastPassportUploadErrorTitle = null;
+    lastPassportUploadErrorMessage = null;
+  }
+
+  void _setPassportUploadError(String title, String message) {
+    lastPassportUploadErrorTitle = title;
+    lastPassportUploadErrorMessage = message;
   }
 
   String? _ownerSessionProblemMessage(String uid) {
@@ -212,6 +226,9 @@ class ProfileController extends GetxController {
     final ctx = 'profile:${user?.uid ?? ''}';
     await _videoManager.disposeAllForContext(ctx);
     await _userSubscription?.cancel();
+    // Invalidates any rebind still sleeping between retries, so it cannot
+    // call _startUserListener on an instance GetX is about to delete.
+    _userListenerRebindSerial++;
     super.onClose();
   }
 
@@ -347,6 +364,7 @@ class ProfileController extends GetxController {
 
   void _startUserListener(String uid) {
     _userSubscription?.cancel();
+    _userSubscriptionUid = uid;
     _userSubscription = _profileRepository
         .watchUser(
           uid,
@@ -361,12 +379,15 @@ class ProfileController extends GetxController {
             update();
           },
           onError: (error, stackTrace) {
-            // Le flux du profil est mort : la fiche cesse de se mettre
-            // a jour pour le reste de la session, et l'utilisateur lit
-            // « Profil indisponible » sans que rien ne soit consigne.
+            // Un abonnement Firestore ne delivre plus rien apres une
+            // erreur, donc relacher le handle ici est ce qui permet a un
+            // rebranchement -- immediat ci-dessous, ou un futur appel a
+            // updateUserId -- de repartir.
+            _userSubscription = null;
+
             AppLogger.error(
               'profile stream stopped; this profile will not refresh '
-              'again until the screen is reopened: $error',
+              'again until it is rebound: $error',
               source: 'profile/watch',
               error: error,
               stackTrace: stackTrace,
@@ -376,11 +397,63 @@ class ProfileController extends GetxController {
               profileLoadErrorMessage = _profileLoadErrorMessage(error);
               update();
             }
+
             if (_isPermissionDenied(error)) {
-              unawaited(_handleProtectedAccessDenied());
+              // Meme logique que events/watch (event_controller.dart) : un
+              // refus avant que la session globale ait fini de se resoudre
+              // est une course au demarrage, pas un vrai retrait d'acces.
+              // L'incident du 23 octobre 2026 sur adfoot-production
+              // (profile/watch et events/watch morts a 30 ms d'intervalle,
+              // meme compte) est exactement ce cas.
+              final hasResolvedSession =
+                  Get.isRegistered<UserController>() &&
+                  Get.find<UserController>().user != null;
+              if (hasResolvedSession &&
+                  _profileRepository.currentAuthUid != null) {
+                unawaited(_handleProtectedAccessDenied());
+                return;
+              }
             }
+
+            unawaited(_scheduleUserListenerRebind(uid));
           },
         );
+  }
+
+  /// Nombre de rebranchements apres le premier echec.
+  static const int _userListenerRebindAttempts = 3;
+
+  /// Multiplie par le numero de tentative : 2 s, 4 s, 6 s -- meme reglage
+  /// que events/watch (event_controller.dart), pour la meme raison : large
+  /// assez pour qu'un jeton en cours de propagation arrive.
+  static const Duration _userListenerRebindDelay = Duration(seconds: 2);
+
+  Future<void> _scheduleUserListenerRebind(String uid) async {
+    final serial = ++_userListenerRebindSerial;
+
+    for (var attempt = 1; attempt <= _userListenerRebindAttempts; attempt++) {
+      await Future<void>.delayed(_userListenerRebindDelay * attempt);
+
+      if (serial != _userListenerRebindSerial) return;
+      if (_profileRepository.currentAuthUid == null) return;
+      // Quelqu'un d'autre a rebranche entre-temps (un nouvel appel a
+      // updateUserId pour ce meme uid) : il n'y a plus rien a faire.
+      if (_userSubscription != null) return;
+      // Le profil affiche a change pendant l'attente -- ce rebranchement
+      // ne concerne plus l'ecran actuel.
+      if (_userSubscriptionUid != uid) return;
+
+      _startUserListener(uid);
+    }
+
+    // Les trois essais se sont heurtes a un refus qui pourrait etre reel
+    // (session resolue entre-temps comme non valide, uid inchange, mais la
+    // reconnexion n'a jamais ete tentee faute de session courante connue).
+    // handleProtectedAccessDenied revérifie aupres du serveur et ne fait
+    // rien si l'acces est en realite toujours valide -- cet appel est donc
+    // sans risque, y compris si la vraie cause etait une deconnexion
+    // normale entre-temps.
+    unawaited(_handleProtectedAccessDenied());
   }
 
   Future<void> updateUserProfile(AppUser updatedUser) async {
@@ -983,6 +1056,107 @@ class ProfileController extends GetxController {
 
   Future<String> createCvViewUrl(String ownerUid) =>
       _profileRepository.createCvViewUrl(ownerUid);
+
+  /// Same minor-consent gate and the same shape of error handling as
+  /// [updateProfilePhoto] -- this is a photo upload, not a document pick
+  /// like [uploadCvPdf]. What differs is the Firestore field it writes and
+  /// the fact it never touches `lastProfileWriteErrorTitle`/the verification
+  /// badge; see the doc comment on `ProfileRepository.uploadPassportPhoto`.
+  Future<void> uploadPassportPhoto(String uid, String photoPath) async {
+    if (user?.isMinorProfile == true &&
+        (user?.minorProfileApproved != true ||
+            user?.minorMediaConsentApproved != true)) {
+      final title = 'profileMediaConsentRequiredTitle'.tr;
+      final message = 'profileMediaConsentRequiredMessage'.tr;
+      _setPassportUploadError(title, message);
+      AdFeedback.error(title, message);
+      return;
+    }
+    _clearPassportUploadError();
+    try {
+      final url = await _profileRepository.uploadPassportPhoto(uid, photoPath);
+
+      user?.passportPhotoUrl = url;
+      update();
+
+      await _safeRefreshCurrentUser();
+
+      AdFeedback.success(
+        'profilePassportSavedTitle'.tr,
+        'profilePassportSavedMessage'.tr,
+      );
+    } catch (e, st) {
+      if (e is PassportUploadValidationException) {
+        final title = 'profilePassportRejectedTitle'.tr;
+        final message = e.messageKey.tr;
+        _setPassportUploadError(title, message);
+        AdFeedback.error(
+          title,
+          message,
+          duration: const Duration(seconds: 6),
+        );
+        return;
+      }
+      AppLogger.warning(
+        'uploadPassportPhoto error: $e\n$st',
+        source: 'ProfileController.uploadPassportPhoto',
+        error: e,
+        stackTrace: st,
+      );
+      if (_isAccessDenied(e)) {
+        final message = _ownerSessionProblemMessage(uid) ??
+            'profilePhotoUpdateFailedTitle'.tr;
+        _setPassportUploadError('profilePermissionDeniedTitle'.tr, message);
+        unawaited(_handleProtectedAccessDenied());
+        throw const ProfileAccessRevokedException();
+      }
+      final title = 'profilePassportAddFailedTitle'.tr;
+      final message = 'profilePassportAddUnavailableMessage'.tr;
+      _setPassportUploadError(title, message);
+      AdFeedback.error(title, message);
+    }
+  }
+
+  Future<void> deletePassportPhoto(String uid) async {
+    try {
+      await _profileRepository.deletePassportPhoto(
+        uid,
+        passportPhotoUrl: user?.passportPhotoUrl,
+      );
+
+      user?.passportPhotoUrl = null;
+      update();
+
+      await _safeRefreshCurrentUser();
+
+      AdFeedback.success(
+        'profilePassportDeletedTitle'.tr,
+        'profilePassportDeletedMessage'.tr,
+      );
+    } catch (e, st) {
+      AppLogger.warning(
+        'deletePassportPhoto error: $e',
+        source: 'ProfileController.deletePassportPhoto',
+        error: e,
+        stackTrace: st,
+      );
+      if (_isAccessDenied(e)) {
+        AdFeedback.error(
+          'profilePermissionDeniedTitle'.tr,
+          'profilePassportDeletePermissionDeniedMessage'.tr,
+        );
+        unawaited(_handleProtectedAccessDenied());
+        throw const ProfileAccessRevokedException();
+      }
+      AdFeedback.error(
+        'profilePassportDeleteFailedTitle'.tr,
+        'profilePassportDeleteUnavailableMessage'.tr,
+      );
+    }
+  }
+
+  Future<String> createPassportViewUrl(String ownerUid) =>
+      _profileRepository.createPassportViewUrl(ownerUid);
 
   Future<void> pauseAll() async {
     final ctx = 'profile:${user?.uid ?? ''}';

@@ -200,6 +200,7 @@ class AppUser {
   // Documents
   // =========================
   String? cvUrl;
+  String? passportPhotoUrl;
 
   // =========================
   // Acceptation des CGU
@@ -303,6 +304,7 @@ class AppUser {
 
     // Docs
     this.cvUrl,
+    this.passportPhotoUrl,
     this.profilePublic = true,
     this.allowMessages = true,
     this.isMinorProfile = false,
@@ -500,6 +502,7 @@ class AppUser {
 
       // Docs
       cvUrl: map['cvUrl']?.toString(),
+      passportPhotoUrl: map['passportPhotoUrl']?.toString(),
       acceptedTermsVersion: _normalizeNullableString(
         map['acceptedTermsVersion'],
       ),
@@ -617,6 +620,8 @@ class AppUser {
       // Docs — this is an authenticated gs:// Storage reference. It carries
       // no download token; Storage rules authorize access to the PDF.
       'cvUrl': cvUrl,
+      // Same shape as cvUrl, same reason: never a tokenized download URL.
+      'passportPhotoUrl': passportPhotoUrl,
 
       // Droits — jamais ecrits par le client, la regle Firestore les refuse.
       'membership': membership.isRecorded ? membership.toMap() : null,

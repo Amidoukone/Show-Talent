@@ -485,11 +485,9 @@ class UserController extends GetxController with WidgetsBindingObserver {
           onError: (error) {
             _currentUserAccessSub = null;
             // The access-revocation watcher just died, and the line above is
-            // what makes this serious: nothing re-subscribes. Only a
-            // permission-denied is acted on below; any other error leaves the
-            // session running with no watcher at all, so an account disabled
-            // later stays inside the app until it is restarted. A security
-            // control that stops enforcing must never do it quietly.
+            // what makes this serious: nothing re-subscribes on its own.
+            // A security control that stops enforcing must never do it
+            // quietly.
             AuthDiagnostics.failure(
               'access watcher stopped; revocation is no longer enforced',
               stage: 'access_watch',
@@ -497,13 +495,51 @@ class UserController extends GetxController with WidgetsBindingObserver {
             );
 
             if (_isPermissionDenied(error)) {
+              // Already does more than a blind retry: this re-checks access
+              // against the server before deciding anything, and re-syncs
+              // the watch immediately if the session is still valid -- see
+              // _enforceCurrentSessionAccess's success branch.
               unawaited(_enforceCurrentSessionAccess());
+              return;
             }
+
+            // Not a permission refusal -- a dropped connection or a
+            // transient Firestore error. Nothing else re-subscribes except
+            // the 5-minute heartbeat (_startAccessHeartbeat), which means up
+            // to 5 minutes with no active revocation enforcement after an
+            // ordinary network hiccup. Same cadence as events/watch and
+            // profile/watch, which hit the identical shape of defect.
+            unawaited(_scheduleAccessWatchRebind(uid));
           },
           onDone: () {
             _currentUserAccessSub = null;
           },
         );
+  }
+
+  int _accessWatchRebindSerial = 0;
+
+  /// Nombre de rebranchements apres une erreur transitoire du watcher de
+  /// revocation. Meme reglage que events/watch (event_controller.dart) et
+  /// profile/watch (profile_controller.dart), le meme defaut corrige a trois
+  /// endroits.
+  static const int _accessWatchRebindAttempts = 3;
+  static const Duration _accessWatchRebindDelay = Duration(seconds: 2);
+
+  Future<void> _scheduleAccessWatchRebind(String uid) async {
+    final serial = ++_accessWatchRebindSerial;
+
+    for (var attempt = 1; attempt <= _accessWatchRebindAttempts; attempt++) {
+      await Future<void>.delayed(_accessWatchRebindDelay * attempt);
+
+      if (serial != _accessWatchRebindSerial) return;
+      if (_authSessionService.currentUser?.uid != uid) return;
+      // Quelqu'un d'autre a deja rebranche (le battement de coeur, ou une
+      // reprise de session) : il n'y a plus rien a faire.
+      if (_currentUserAccessSub != null) return;
+
+      await _syncCurrentUserAccessWatch(uid);
+    }
   }
 
   void _startAccessHeartbeat(String uid) {
@@ -975,6 +1011,8 @@ class UserController extends GetxController with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _currentUserAccessSub?.cancel();
     _stopAccessHeartbeat();
+    // Invalidates any rebind still sleeping between retries.
+    _accessWatchRebindSerial++;
     super.onClose();
   }
 }

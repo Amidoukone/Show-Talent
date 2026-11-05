@@ -309,6 +309,31 @@ service cloud.firestore {
         );
     }
 
+    // Identical shape to ownerCvUrlChangeIsSafe(), for the same reason: a
+    // player can point this field only at a gs:// object that storage.rules
+    // (identityDocuments/{uid}/{fileName}) would actually let them have
+    // written themselves, never an arbitrary string. A passport scan is a
+    // government ID, which is why it gets the same server-side guarantee a
+    // CV already has rather than a looser one.
+    function ownerPassportPhotoUrlChangeIsSafe() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["passportPhotoUrl"]) ||
+        (
+          userRole() == "joueur" &&
+          (
+            !("passportPhotoUrl" in request.resource.data) ||
+            (
+              request.resource.data.passportPhotoUrl is string &&
+              request.resource.data.passportPhotoUrl.size() > 0 &&
+              request.resource.data.passportPhotoUrl.size() <= 2048 &&
+              request.resource.data.passportPhotoUrl.matches(
+                '^gs://[^/]+/identityDocuments/' + request.auth.uid +
+                '/passport_[0-9]+[.](jpg|jpeg|png)$'
+              )
+            )
+          )
+        );
+    }
+
     function canUpdateOwnProfile() {
       // phone/birthDate are intentionally absent: they live in
       // users/{uid}/private/contact (rules for that path below). A direct
@@ -396,6 +421,7 @@ service cloud.firestore {
         "agentProfile.zones",
         "photoProfil",
         "cvUrl",
+        "passportPhotoUrl",
         "profileVerified",
         "profileVerificationStatus",
         "profileVerificationUpdatedAt",
@@ -406,6 +432,7 @@ service cloud.firestore {
         "updatedAt",
       ]) &&
       ownerCvUrlChangeIsSafe() &&
+      ownerPassportPhotoUrlChangeIsSafe() &&
       ownerProfileVerificationChangesAreSafe() &&
       verifiedOwnerProfileChangeIsInvalidated();
     }

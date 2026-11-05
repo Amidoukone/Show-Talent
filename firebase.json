@@ -238,6 +238,13 @@
         }
       },
       {
+        "source": "/passport/view/**",
+        "function": {
+          "functionId": "passportViewPage",
+          "region": "europe-west1"
+        }
+      },
+      {
         "source": "/verify",
         "destination": "/verify/index.html"
       },

@@ -62,6 +62,12 @@ const PUBLIC_PROFILE_FIELDS = [
   "nombreDeRecrutements",
   "team",
   "cvUrl",
+  // Never a tokenized download URL -- always a non-tokenized gs:// reference
+  // (see ownerPassportPhotoUrlChangeIsSafe in firestore.rules), exactly like
+  // cvUrl just above. Copying the raw value here is safe for the same
+  // reason cvUrl's presence here is safe: it cannot be fetched without going
+  // through createPassportViewLink, which re-checks authorization itself.
+  "passportPhotoUrl",
 ] as const;
 
 const POSITION_SEARCH_LABELS: Record<string, string> = {
@@ -227,6 +233,7 @@ export function buildPublicProfileProjection(
     ) {
       copyField(source, minorProjection, "photoProfil");
       copyField(source, minorProjection, "cvUrl");
+      copyField(source, minorProjection, "passportPhotoUrl");
     }
     minorProjection.searchPrefixes = buildSearchPrefixes({
       positionCodes: source.positionCodes,

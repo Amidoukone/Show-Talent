@@ -201,6 +201,67 @@ service firebase.storage {
         );
     }
 
+    // Deliberately *not* an alias of canReadCv(uid), even though the product
+    // decision was "same audience as the CV". canReadCv only requires
+    // isVerifiedRecruiter() inside the minor branch -- any active recruiter,
+    // verified or not, can read an *adult* player's CV. A passport is a
+    // government ID, more sensitive than a CV, and the choice made for it was
+    // specifically "verified recruiters/clubs", unconditionally -- so that
+    // check is pulled out of the minor-only branch and required for every
+    // non-owner, non-admin reader.
+    //
+    // The actual mobile flow never reads this path directly -- it goes
+    // through createPassportViewLink, a short-lived re-authorized ticket --
+    // but the rule still has to exist and be correct on its own, the same
+    // way canReadCv is never bypassed just because cv_view.ts also exists.
+    function canReadPassportPhoto(uid) {
+      return signedIn() &&
+        (
+          (request.auth.uid == uid && hasActiveUserProfile(uid)) ||
+          isAdminOperator() ||
+          (
+            hasUserProfileDoc(uid) &&
+            userProfileDoc(uid).data.profilePublic == true &&
+            userProfileDoc(uid).data.authDisabled != true &&
+            userProfileDoc(uid).data.estActif != false &&
+            isVerifiedRecruiter() &&
+            (userProfileDoc(uid).data.get("isMinorProfile", true) == false ||
+              (userProfileDoc(uid).data.get("isMinorProfile", true) == true &&
+                userProfileDoc(uid).data.get("minorProfileApproved", false) == true &&
+                userProfileDoc(uid).data.get("minorMediaPurgePending", false) != true &&
+                userProfileDoc(uid).data.get("minorMediaConsentApproved", false) == true))
+          )
+        );
+    }
+
+    function isPassportFileName(fileName) {
+      return fileName.matches('^passport_[0-9]+\\.(jpg|jpeg|png)$');
+    }
+
+    function isAllowedPassportContentType() {
+      return request.resource.contentType != null &&
+        request.resource.contentType.matches('image/.*');
+    }
+
+    function isValidPassportUpload(fileName) {
+      return isPassportFileName(fileName) &&
+        request.resource.size > 0 &&
+        request.resource.size <= 8 * 1024 * 1024 &&
+        isAllowedPassportContentType();
+    }
+
+    // Identical gate to mayUploadCv(uid): player only, active profile, and
+    // the same minor-consent conditions already required for any of this
+    // player's media.
+    function mayUploadPassportPhoto(uid) {
+      return isPlayerProfileOwner(uid) &&
+        (userProfileDoc(uid).data.get("isMinorProfile", true) == false ||
+          (userProfileDoc(uid).data.get("isMinorProfile", true) == true &&
+            userProfileDoc(uid).data.get("minorProfileApproved", false) == true &&
+            userProfileDoc(uid).data.get("minorMediaPurgePending", false) != true &&
+            userProfileDoc(uid).data.get("minorMediaConsentApproved", false) == true));
+    }
+
     // An avatar is world-readable, so anything written here is served from
     // this project's domain to anyone who asks. The rule used to check only
     // *who* was writing, never *what*: no size ceiling and no content type, on
@@ -239,6 +300,13 @@ service firebase.storage {
       allow read: if canReadCv(uid);
       allow create, update: if mayUploadCv(uid) &&
         isValidCvPdfUpload(fileName);
+      allow delete: if isActiveProfileOwner(uid);
+    }
+
+    match /identityDocuments/{uid}/{fileName} {
+      allow read: if canReadPassportPhoto(uid);
+      allow create, update: if mayUploadPassportPhoto(uid) &&
+        isValidPassportUpload(fileName);
       allow delete: if isActiveProfileOwner(uid);
     }
 

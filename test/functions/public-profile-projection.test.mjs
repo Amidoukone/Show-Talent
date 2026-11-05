@@ -30,6 +30,7 @@ test('approved minor projection is football-only and cannot be messaged', () => 
     allowMessages: true, photoProfil: 'private-photo.jpg',
     positionCodes: ['ST'], nationalities: ['ML'], birthYear: 2010,
     city: 'Bamako', bio: 'bio privee', cvUrl: 'gs://private/cv.pdf',
+    passportPhotoUrl: 'gs://private/passport.jpg',
     videosPubliees: ['video-1'],
   }, true);
 
@@ -38,7 +39,7 @@ test('approved minor projection is football-only and cannot be messaged', () => 
   assert.equal(profile.isSearchable, true);
   assert.deepEqual(profile.positionCodes, ['ST']);
   for (const field of [
-    'photoProfil', 'city', 'bio', 'cvUrl', 'videosPubliees',
+    'photoProfil', 'city', 'bio', 'cvUrl', 'passportPhotoUrl', 'videosPubliees',
   ]) assert.equal(field in profile, false, `${field} leaked`);
 });
 

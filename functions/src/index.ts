@@ -1175,6 +1175,11 @@ export {deleteOwnAccount} from "./account_deletion_actions";
 export {videoSharePage} from "./video_share_page";
 export {createCvViewLink, cvViewPage, cleanupExpiredCvViewTickets} from "./cv_view";
 export {
+  createPassportViewLink,
+  passportViewPage,
+  cleanupExpiredPassportViewTickets,
+} from "./passport_view";
+export {
   deriveUserSearchFields,
   deriveUserSearchFieldsFromContact,
   refreshPlayersReachingMajority,
