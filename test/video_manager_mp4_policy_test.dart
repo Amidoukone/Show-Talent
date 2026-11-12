@@ -57,7 +57,7 @@ void main() {
     );
   });
 
-  test('active playback upgrades from 360p to preferred source on high tier',
+  test('active playback keeps its current source when the preferred tier rises',
       () {
     manager.resetNetworkProfileStateForTests(
       profile: const NetworkProfile(
@@ -74,7 +74,7 @@ void main() {
         sources: mp4Sources,
         isPreload: false,
       ),
-      isFalse,
+      isTrue,
     );
   });
 

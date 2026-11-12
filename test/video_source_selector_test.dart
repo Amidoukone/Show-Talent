@@ -7,6 +7,7 @@ void main() {
   const lowestMp4 = 'https://cdn.example.com/video_360.mp4';
   const lowMp4 = 'https://cdn.example.com/video_480.mp4';
   const highMp4 = 'https://cdn.example.com/video_720.mp4';
+  const ultraMp4 = 'https://cdn.example.com/video_1080.mp4';
   const nonMp4Url = 'https://cdn.example.com/video.webm';
 
   const sources = <VideoSource>[
@@ -41,6 +42,24 @@ void main() {
 
     expect(preferred?.url, highMp4);
     expect(preferred?.height, 720);
+  });
+
+  test('caps high-bandwidth playback at 720p when a lighter rendition exists',
+      () {
+    const sourcesWith1080 = <VideoSource>[
+      VideoSource(url: lowMp4, quality: '480p', type: 'mp4', height: 480),
+      VideoSource(url: ultraMp4, quality: '1080p', type: 'mp4', height: 1080),
+    ];
+
+    final preferred = VideoSourceSelector.preferredSource(
+      fallbackUrl: fallbackMp4,
+      sources: sourcesWith1080,
+      adaptiveEnabled: true,
+      highBandwidth: true,
+    );
+
+    expect(preferred?.url, lowMp4);
+    expect(preferred?.height, 480);
   });
 
   test('returns the highest MP4 source when adaptive flag is disabled', () {

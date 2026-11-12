@@ -1,6 +1,8 @@
 import 'package:adfoot/models/video.dart';
 
 class VideoSourceSelector {
+  static const int _highBandwidthMaxHeight = 720;
+
   static List<VideoSource> _sanitize(List<VideoSource> sources) =>
       sources.where((source) => source.url.isNotEmpty && source.isMp4).toList();
 
@@ -8,15 +10,6 @@ class VideoSourceSelector {
 
   static List<VideoSource> _sortedByHeight(List<VideoSource> sources) =>
       [...sources]..sort((a, b) => (a.height ?? 0).compareTo(b.height ?? 0));
-
-  static VideoSource? _bestAtLeast(List<VideoSource> list, int minHeight) {
-    for (final source in list) {
-      if ((source.height ?? 0) >= minHeight) {
-        return source;
-      }
-    }
-    return list.isNotEmpty ? list.last : null;
-  }
 
   static VideoSource? _bestAtMost(List<VideoSource> list, int maxHeight) {
     for (final source in list.reversed) {
@@ -76,7 +69,11 @@ class VideoSourceSelector {
     final sorted = _sortedByHeight(candidateSources);
 
     if (highBandwidth) {
-      return _bestAtLeast(sorted, 700) ?? sorted.last;
+      // A high tier is an indication, not a promise that an unconstrained
+      // 1080p stream can remain smooth. Prefer 720p, or the best available
+      // rendition below it; only use a taller source when it is the sole
+      // playable option.
+      return _bestAtMost(sorted, _highBandwidthMaxHeight) ?? sorted.first;
     }
 
     return _bestAtMost(sorted, lowBandwidthMaxHeight) ?? sorted.first;
@@ -171,14 +168,15 @@ class VideoSourceSelector {
 
     final mp4Sources = _sortedByHeight(candidateSources);
 
-    final preferred720 = _bestAtLeast(mp4Sources, 700);
+    final preferredHigh =
+        _bestAtMost(mp4Sources, _highBandwidthMaxHeight) ?? mp4Sources.first;
     final preferred480 = _bestAtMost(mp4Sources, 540);
     final preferred360 = _bestAtMost(mp4Sources, 400);
     final preferredAtLowCap = _bestAtMost(mp4Sources, lowBandwidthMaxHeight);
 
     final ordered = <VideoSource>[
       if (highBandwidth) ...[
-        ?preferred720,
+        preferredHigh,
         ?preferred480,
         ...mp4Sources.reversed,
       ] else ...[

@@ -305,12 +305,11 @@ class NetworkProfileService {
   /// Thresholds are a statement about what the *top rendition costs*, not
   /// about what feels fast.
   ///
-  /// `high` is the only tier that asks for the heaviest source
-  /// (`VideoSourceSelector._bestAtLeast(700)`); every other tier asks for
-  /// `_bestAtMost(540)`. So "high" has to mean "can actually pull the biggest
-  /// file we serve", and the biggest file we serve is no longer a 720p at
-  /// ~2 Mb/s. adfoot-production on 2026-08-21 held 1080p passthrough assets at
-  /// 5.17 and 9.66 Mb/s.
+  /// `high` prefers a rendition at or below 720p while every other tier asks
+  /// for `_bestAtMost(540)`. So "high" has to mean "can actually pull the
+  /// highest rendition we intentionally select", and 1080p passthrough assets
+  /// remain a fallback when no lighter source exists. adfoot-production on
+  /// 2026-08-21 held such assets at 5.17 and 9.66 Mb/s.
   ///
   /// At the old 1500 kbps a connection measuring 1.5 Mb/s was called `high`
   /// and handed a 9.66 Mb/s file — a six-fold mismatch. Every one of the eight

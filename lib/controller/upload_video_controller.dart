@@ -951,7 +951,7 @@ class UploadVideoController extends GetxController {
       // orphans today (measured 2026-08-29: 0 of 46 objects), so this is a
       // latent leak, not an active one -- and a leak nobody can see is exactly
       // the kind that is discovered on an invoice rather than in a dashboard.
-      AppLogger.warning(
+      AppLogger.error(
         'partial upload not cleaned up; storage objects may be orphaned',
         source: 'upload/cleanup_partial',
         error: error,
