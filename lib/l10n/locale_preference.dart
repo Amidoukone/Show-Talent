@@ -39,8 +39,8 @@ class LocalePreferenceStore {
   /// The active preference: `system`, `fr`, or `en`.
   ///
   /// Safe to read synchronously anywhere once [ensureLoaded] has settled --
-  /// `AppBootstrap.initialize()` awaits it before `runApp()`, so by the time
-  /// any screen builds, this already reflects what was persisted last
+  /// `AppBootstrap.initialize()` awaits it before the root application is
+  /// installed, so by the time any product screen builds, this already reflects what was persisted last
   /// session rather than the default.
   String get current => _current;
 

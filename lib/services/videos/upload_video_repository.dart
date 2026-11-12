@@ -95,11 +95,20 @@ class UploadVideoRepository {
   }
 
   Future<void> deletePartialUpload(String videoPath, String thumbPath) {
-    final videoRef = _storage.ref(videoPath);
-    final thumbRef = _storage.ref(thumbPath);
     return Future.wait([
-      videoRef.delete().catchError((_) {}),
-      thumbRef.delete().catchError((_) {}),
+      _deleteIfPresent(_storage.ref(videoPath)),
+      _deleteIfPresent(_storage.ref(thumbPath)),
     ]);
+  }
+
+  Future<void> _deleteIfPresent(Reference ref) async {
+    try {
+      await ref.delete();
+    } on FirebaseException catch (error) {
+      // A partial upload can fail before either object is written. That state
+      // is already clean; every other Storage failure must reach the caller
+      // so it can be recorded and investigated.
+      if (error.code != 'object-not-found') rethrow;
+    }
   }
 }

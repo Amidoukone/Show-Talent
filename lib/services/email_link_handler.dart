@@ -55,11 +55,20 @@ class EmailLinkHandler {
   /// `AppLogger._shouldSendToRemote`, which drops `debug` unconditionally. In
   /// a release build it therefore writes nowhere at all, which is why a reset
   /// link that stopped working left no trace anywhere: not on the screen, not
-  /// in Crashlytics, not in the client log. `warning` is sampled in
-  /// production but does reach the remote logger, so a broken link flow is
-  /// now something that can be seen rather than guessed at.
-  static void _logIssue(String message, {Object? error}) {
-    AppLogger.warning(message, source: 'email_link_handler', error: error);
+  /// in Crashlytics, not in the client log. `error` reaches the remote logger
+  /// without warning sampling, so a broken link flow can be seen rather than
+  /// guessed at.
+  static void _logIssue(
+    String message, {
+    Object? error,
+    StackTrace? stackTrace,
+  }) {
+    AppLogger.error(
+      message,
+      source: 'email_link_handler',
+      error: error,
+      stackTrace: stackTrace,
+    );
   }
 
   static Future<void> init() async {
@@ -78,8 +87,9 @@ class EmailLinkHandler {
         // used to carry (unchanged since the handler was first written, never
         // calibrated to a measured round-trip) meant that on the rare device
         // where the native side stalls, `AppBootstrap.initialize()` -- which
-        // awaits this before `runApp()` -- blocked the entire cold start for
-        // up to 5 real seconds, on every single launch without a pending
+        // runs after the lightweight startup shell is rendered -- delayed the
+        // real application for up to 5 real seconds on every single launch
+        // without a pending
         // link, which is nearly all of them. 1.5s is still generous slack for
         // the call this actually is, while capping the worst case the user
         // sees as "the loader spins for a while".
@@ -91,9 +101,16 @@ class EmailLinkHandler {
           await _handle(initialUri);
         }
       } on PlatformException catch (e) {
-        _logDebug('EmailLinkHandler.getInitialLink PlatformException: $e');
-      } catch (e) {
-        _logDebug('EmailLinkHandler.getInitialLink unexpected: $e');
+        _logIssue(
+          'EmailLinkHandler.getInitialLink PlatformException: $e',
+          error: e,
+        );
+      } catch (e, stack) {
+        _logIssue(
+          'EmailLinkHandler.getInitialLink unexpected: $e',
+          error: e,
+          stackTrace: stack,
+        );
       }
 
       await _sub?.cancel();
@@ -103,14 +120,22 @@ class EmailLinkHandler {
             unawaited(_handle(uri));
           }
         },
-        onError: (e) {
-          _logDebug('EmailLinkHandler stream error: $e');
+        onError: (Object error, StackTrace stackTrace) {
+          _logIssue(
+            'EmailLinkHandler stream error: $error',
+            error: error,
+            stackTrace: stackTrace,
+          );
         },
         cancelOnError: false,
       );
       _initialized = true;
     } catch (e, stack) {
-      _logDebug('EmailLinkHandler.init failed: $e\n$stack');
+      _logIssue(
+        'EmailLinkHandler.init failed: $e',
+        error: e,
+        stackTrace: stack,
+      );
       _initialized = false;
     } finally {
       _isInitializing = false;
@@ -272,12 +297,11 @@ class EmailLinkHandler {
 
   /// Runs [navigate] as soon as there is a navigator to run it on.
   ///
-  /// [init] is called from `AppBootstrap.initialize()`, which finishes before
-  /// `runApp`, so on a cold start — the launch a tapped link produces —
-  /// there is no `Get.key.currentState` yet. The previous code guessed 300 ms
-  /// and navigated blind; on a cold device that was regularly too early, and
-  /// the call was simply lost. Poll instead, briefly, and give up rather than
-  /// navigate into nothing.
+  /// [init] can run while the startup shell is still mounting, so on a cold
+  /// start there may briefly be no `Get.key.currentState` yet. The previous
+  /// code guessed 300 ms and navigated blind; on a cold device that was
+  /// regularly too early, and the call was simply lost. Poll instead,
+  /// briefly, and give up rather than navigate into nothing.
   static Future<bool> _navigateWhenReady(void Function() navigate) async {
     for (var attempt = 0; attempt < 100; attempt++) {
       if (Get.key.currentState != null) {
@@ -335,7 +359,11 @@ class EmailLinkHandler {
 
       return true;
     } catch (e, stack) {
-      _logDebug('EmailLinkHandler video share route failed: $e\n$stack');
+      _logIssue(
+        'EmailLinkHandler video share route failed: $e',
+        error: e,
+        stackTrace: stack,
+      );
       _openMainWithVideoArguments(routeArguments);
       return true;
     }

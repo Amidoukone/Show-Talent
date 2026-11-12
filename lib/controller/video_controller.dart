@@ -287,7 +287,7 @@ class VideoController extends GetxController {
   void onInit() {
     super.onInit();
 
-    _videoManager.updateAdaptiveFlag(false);
+    _videoManager.resetAdaptiveFlagForBootstrap();
     unawaited(_initFeatureFlags());
     unawaited(_watched.ensureLoaded());
 

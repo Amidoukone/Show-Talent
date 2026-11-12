@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet("local", "staging", "production", "production-next")]
     [string]$Environment = "production",
 
@@ -7,6 +7,16 @@ param(
     [string]$DeviceId,
 
     [switch]$UseNativeFlavor,
+
+    # Builds and installs the release variant, the one a tester must exercise.
+    #
+    # A switch and not just "pass --release yourself": in PowerShell a
+    # double-dash token is a VALUE, not a parameter name, so a trailing
+    # `--release` binds to the first free positional parameter instead of
+    # reaching $AdditionalArgs. It silently became the value of -Target, then
+    # of -DeviceId, producing `flutter run -t --release` and
+    # `flutter run ... -d --release`. Both fail, but neither says why.
+    [switch]$Release,
 
     [switch]$UseFirebaseEmulators,
 
@@ -137,6 +147,22 @@ function Read-MobileConfig {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+# Belt and braces for any step that shells out to Gradle directly
+# (gradlew honours JAVA_HOME). It is NOT what decides the JDK for
+# `flutter build`: Flutter reads `flutter config --jdk-dir` first and
+# only falls back to JAVA_HOME. While jdk-dir pointed at JDK 17 this
+# assignment looked like the fix and changed nothing -- AGP 9.3's lint
+# worker still ran on 17 and died on NoSuchMethodError
+# java.util.List.removeLast(). Keep jdk-dir on a JDK 21+ runtime; the
+# readiness check now verifies that and fails the gate when it drifts.
+# Scoped to this process either way: the user's JAVA_HOME is untouched.
+$androidStudioJbr = Join-Path ${env:ProgramFiles} "Android\Android Studio\jbr"
+$androidStudioJava = Join-Path $androidStudioJbr "bin\java.exe"
+if (Test-Path -LiteralPath $androidStudioJava) {
+    $env:JAVA_HOME = $androidStudioJbr
+    $env:PATH = "$(Join-Path $androidStudioJbr 'bin');$env:PATH"
+    Write-Host "Using Android Studio JBR for the Android build: $androidStudioJbr"
+}
 $authPreflightScript = Join-Path $repoRoot "scripts/check-mobile-auth-preflight.mjs"
 $effectiveFlavorEnvironment = Get-EffectiveFlavorEnvironment -EnvironmentName $Environment
 $defaultConfigPath = Join-Path $repoRoot "config/mobile/$Environment.json"
@@ -200,6 +226,13 @@ if ($UseNativeFlavor) {
 
 if ($DeviceId) {
     $flutterArgs += @("-d", $DeviceId)
+}
+
+# Appended before $AdditionalArgs so an explicit `-AdditionalArgs "--release"`
+# -- the workaround that existed before this switch -- cannot double it up.
+$alreadyAskedForRelease = $null -ne $AdditionalArgs -and ($AdditionalArgs -contains "--release")
+if ($Release -and -not $alreadyAskedForRelease) {
+    $flutterArgs += "--release"
 }
 
 if ($AdditionalArgs) {

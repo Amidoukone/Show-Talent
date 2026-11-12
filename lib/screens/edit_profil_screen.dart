@@ -815,10 +815,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                   ? l10n.profilePublicTitleAgent
                                   : l10n.editProfileRecruitmentReferencesTitle,
                               subtitle: user.isAgent
-                                  ? l10n
-                                        .editProfileRecruitmentReferencesSubtitleAgent
-                                  : l10n
-                                        .editProfileRecruitmentReferencesSubtitleDefault,
+                                  ? l10n.editProfileRecruitmentReferencesSubtitleAgent
+                                  : l10n.editProfileRecruitmentReferencesSubtitleDefault,
                               icon: Icons.search_rounded,
                               child: Column(
                                 children: [
@@ -826,13 +824,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     controller: _entrepriseController,
                                     label: user.isAgent
                                         ? l10n.profileAgencyLabel
-                                        : l10n
-                                              .editProfileRecruitmentStructureLabel,
+                                        : l10n.editProfileRecruitmentStructureLabel,
                                     icon: Icons.apartment_outlined,
                                     hint: user.isAgent
                                         ? l10n.editProfileAgencyHint
-                                        : l10n
-                                              .editProfileRecruitmentStructureHint,
+                                        : l10n.editProfileRecruitmentStructureHint,
                                   ),
                                   const SizedBox(height: 12),
                                   _buildTextField(
@@ -995,18 +991,16 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
 
     try {
       _clearCvFailure();
-      final result = await FilePicker.pickFiles(
+      final pickedFile = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
-        withData: false,
-        withReadStream: true,
       );
-      if (result == null || result.files.isEmpty) {
+      if (pickedFile == null) {
         return;
       }
 
-      final pickedFile = result.files.single;
-      if (pickedFile.size > ProfileController.maxCvPdfBytes) {
+      final byteSize = pickedFile.lengthSync() ?? await pickedFile.length();
+      if (byteSize != null && byteSize > ProfileController.maxCvPdfBytes) {
         final message = l10n.editProfileCvSizeTooLargeMessage(
           _maxCvSizeLabel(l10n),
         );
@@ -1019,33 +1013,19 @@ class _CvUploaderSectionState extends State<CvUploaderSection> {
         return;
       }
 
-      final bytes = pickedFile.bytes;
       final path = pickedFile.path;
-      final readStream = pickedFile.readStream;
-      final hasBytes = bytes != null && bytes.isNotEmpty;
       final hasPath = path != null && path.isNotEmpty;
-      final hasStream = readStream != null;
-
-      if (!hasBytes && !hasPath && !hasStream) {
-        final message = l10n.editProfileCvUnreadableMessage;
-        _showCvFailure(l10n.editProfileCvUnreadableTitle, message);
-        AdFeedback.error(
-          l10n.editProfileCvUnreadableTitle,
-          message,
-          duration: const Duration(seconds: 6),
-        );
-        return;
-      }
+      final readStream = pickedFile.readAsByteStream();
 
       setState(() => _isUploading = true);
       uploadStarted = true;
 
       final cvUrl = await widget.profileController.uploadCvPdf(
         user.uid,
-        pdfBytes: hasBytes ? bytes : null,
+        pdfBytes: null,
         pdfFile: hasPath ? File(path) : null,
-        pdfReadStream: hasStream ? readStream : null,
-        byteSize: pickedFile.size > 0 ? pickedFile.size : null,
+        pdfReadStream: readStream,
+        byteSize: byteSize,
       );
       if (!mounted) {
         return;
@@ -1352,8 +1332,8 @@ class _PassportUploaderSectionState extends State<PassportUploaderSection> {
                         );
                         if (!mounted) return;
                         setState(
-                          () => _passportPhotoUrl =
-                              _currentUser.passportPhotoUrl,
+                          () =>
+                              _passportPhotoUrl = _currentUser.passportPhotoUrl,
                         );
                       } on ProfileAccessRevokedException {
                         return;

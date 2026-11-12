@@ -52,6 +52,10 @@ migrate_working_dir/
 /build/
 /android/build/
 /android/*/build/
+# Cache CMake/ninja du NDK, regenere a chaque build release. N'etait pas
+# couvert : il a fallu le nettoyer a la main, et un `git add android/`
+# y versait des milliers de fichiers generes.
+/android/app/.cxx/
 
 # Symbolication related
 app.*.symbols

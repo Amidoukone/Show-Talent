@@ -32,7 +32,7 @@ jobs:
           # to explain it (new default lint promoted to error) while every
           # local machine still analyzes clean on an older stable build.
           # Bump deliberately alongside a local `flutter upgrade` + re-test.
-          flutter-version: "3.44.2"
+          flutter-version: "3.50.0"
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
       - run: flutter test
@@ -64,14 +64,29 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+          # Both manifests: this job installs root AND functions dependencies,
+          # so the cache key has to move when either lockfile does.
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
       - uses: actions/setup-java@v4
         with:
-          # firebase-tools' bundled emulators require Java 21+; the repo's
-          # own local dev machines still run Java 17 as of this writing, so
-          # this job is the only place these tests actually run today.
+          # firebase-tools' bundled emulators require Java 21+. Reachable
+          # locally too, through Android Studio's bundled JBR -- the whole
+          # suite was run that way on 2026-11-12 (44/44). Keep this job
+          # anyway: it is the only place the rules are checked on every push.
           distribution: "temurin"
           java-version: "21"
       - run: npm ci
+      # `npm run rules:test` starts with `npm --prefix functions run build`,
+      # which needs functions/node_modules. Without this step the job died on
+      # tsc before the emulator ever started, so the Firestore and Storage
+      # rules went unchecked on every push from 2026-10-25 to 2026-11-12 while
+      # the job merely looked broken. A red check that never reached the
+      # assertions is worse than no check: it reports a problem nobody reads.
+      - name: Install Cloud Functions dependencies
+        run: npm ci
+        working-directory: functions
       - run: node --test test/functions/release-candidate-env.test.mjs
       - run: node --test test/functions/source-encoding.test.mjs test/functions/auth-action.test.mjs
       - run: node scripts/audit-source-encoding.mjs lib functions/src site_pub scripts android/app/src ios/Runner

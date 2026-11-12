@@ -99,8 +99,8 @@ class VideoManager {
     final source = VideoSourceSelector.preferredSource(
       fallbackUrl: video.videoUrl,
       sources: video.sources,
-      adaptiveEnabled: adaptiveSourcesEnabled,
-      highBandwidth: _isHighBandwidth,
+      adaptiveEnabled: _usesAdaptiveSelection,
+      highBandwidth: _usesHighBandwidthSelection,
       lowBandwidthMaxHeight: _lowBandwidthMaxHeight,
     );
 
@@ -302,6 +302,7 @@ class VideoManager {
     NetworkProfile profile = VideoNetworkTuningController.bootstrapProfile,
   }) {
     adaptiveSourcesEnabled = false;
+    _adaptiveFlagResolved = false;
     _ui.resetCounters();
     _network.resetForTests(service: networkProfileService, profile: profile);
   }
@@ -330,13 +331,20 @@ class VideoManager {
   // ---------------------------------------------------------------------------
   // Adaptive sources
   // ---------------------------------------------------------------------------
-
   bool adaptiveSourcesEnabled = false;
-
+  /// Unknown remote flags use adaptive-medium to prioritise the first frame.
+  bool _adaptiveFlagResolved = false;
+  bool get _usesAdaptiveSelection => adaptiveSourcesEnabled || !_adaptiveFlagResolved;
+  bool get _usesHighBandwidthSelection =>
+      _adaptiveFlagResolved && adaptiveSourcesEnabled && _isHighBandwidth;
+  void resetAdaptiveFlagForBootstrap() {
+    adaptiveSourcesEnabled = false;
+    _adaptiveFlagResolved = false;
+  }
   void updateAdaptiveFlag(bool enabled) {
     adaptiveSourcesEnabled = enabled;
+    _adaptiveFlagResolved = true;
   }
-
   // ---------------------------------------------------------------------------
   // Metrics (debug / observabilité – sans impact runtime)
   // ---------------------------------------------------------------------------
@@ -417,8 +425,8 @@ class VideoManager {
     final preferredSource = VideoSourceSelector.preferredSource(
       fallbackUrl: originalUrl,
       sources: sources,
-      adaptiveEnabled: adaptiveSourcesEnabled,
-      highBandwidth: _isHighBandwidth,
+      adaptiveEnabled: _usesAdaptiveSelection,
+      highBandwidth: _usesHighBandwidthSelection,
       lowBandwidthMaxHeight: _lowBandwidthMaxHeight,
     );
     if (preferredSource == null || preferredSource.url.isEmpty) {
@@ -442,17 +450,18 @@ class VideoManager {
       return false;
     }
 
-    final shouldPromote = _shouldPromotePreferredSource(
+    // Never swapped mid-playback: rebuilding restarts the player, which reads
+    // as a stall. Logged only, so the unapplied rendition stays visible.
+    if (_shouldPromotePreferredSource(
       currentSource: currentSource,
       preferredSource: preferredSource,
-    );
-    if (shouldPromote) {
+    )) {
       AppLogger.debug(
-        '[VideoManager] Refreshing active controller for $originalUrl '
-        'to promote ${currentSource.quality ?? currentSource.height ?? 'current'} '
-        '-> ${preferredSource.quality ?? preferredSource.height ?? 'preferred'}',
+        '[VideoManager] Keeping active controller for $originalUrl at '
+        '${currentSource.quality ?? currentSource.height ?? 'current'}; '
+        'the preferred ${preferredSource.quality ?? preferredSource.height ?? 'source'} '
+        'will apply to the next video.',
       );
-      return false;
     }
 
     return true;
@@ -567,8 +576,8 @@ class VideoManager {
         : VideoSourceSelector.prioritizedSources(
             fallbackUrl: url,
             sources: sources,
-            adaptiveEnabled: adaptiveSourcesEnabled,
-            highBandwidth: _isHighBandwidth,
+            adaptiveEnabled: _usesAdaptiveSelection,
+            highBandwidth: _usesHighBandwidthSelection,
             lowBandwidthMaxHeight: _lowBandwidthMaxHeight,
           );
 

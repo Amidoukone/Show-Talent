@@ -33,8 +33,8 @@ class AppBootstrap {
 
     // A local disk read, not a network call, so blocking briefly here is
     // unrelated to the network-latency reasoning below (App Check, etc.). It
-    // has to finish before runApp(): resolveAppLocale() is called the moment
-    // MyApp first builds, and it needs a manually chosen language (if any)
+    // has to finish before MyApp is installed: resolveAppLocale() is called
+    // the moment it first builds, and it needs a manually chosen language (if any)
     // already in memory -- otherwise the first frame would flash the
     // device-derived language before correcting itself.
     await LocalePreferenceStore.instance.ensureLoaded();
@@ -50,7 +50,7 @@ class AppBootstrap {
     // which on real devices routinely takes many seconds and often fails
     // outright (Play-uncertified handsets, stale Play services, slow
     // networks). Awaiting it here froze the native splash for the whole
-    // activation timeout on every cold start before runApp() could run --
+    // activation timeout on every cold start before the real app could run --
     // which is exactly what testers reported as "the loader spins forever".
     // App Check is an anti-abuse signal, not a startup dependency: the app
     // must render and stay usable whether or not a token ever arrives.
