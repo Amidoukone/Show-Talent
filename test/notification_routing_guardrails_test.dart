@@ -92,7 +92,7 @@ void main() {
       final shell = File('lib/screens/main_screen.dart').readAsStringSync();
 
       // A tap that launched the app from a killed state arrives during
-      // bootstrap, before runApp.
+      // bootstrap, before MyApp is installed.
       expect(service, contains('getInitialMessage'));
       expect(service, contains('onMessageOpenedApp'));
       expect(service, contains('takePendingRoute'));

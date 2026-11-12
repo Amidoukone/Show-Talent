@@ -142,18 +142,29 @@ void main() {
 
       expect(handler, contains('static void _logIssue('));
       expect(handler, contains("source: 'email_link_handler'"));
-      expect(handler, contains('AppLogger.warning('));
+      expect(handler, contains('AppLogger.error('));
+      // Matched on the message, with the line break between `_logIssue(` and
+      // its first argument left free: dart format decides whether a given
+      // call fits on one line, and a guardrail that encodes today's wrapping
+      // fails on a pure reformat while the behaviour it guards is untouched.
       for (final failure in const <String>[
-        "'resetPassword link refused",
-        "_logIssue('resetPassword link failed unexpectedly'",
-        "_logIssue('verifyEmail link refused",
-        "_logIssue('gave up waiting for a navigator",
+        'resetPassword link refused',
+        'resetPassword link failed unexpectedly',
+        'verifyEmail link refused',
+        'gave up waiting for a navigator',
+        'EmailLinkHandler.getInitialLink',
+        'EmailLinkHandler stream error',
+        'EmailLinkHandler.init failed',
       ]) {
-        expect(handler, contains(failure));
+        expect(
+          handler,
+          matches(RegExp("_logIssue\\(\\s*'${RegExp.escape(failure)}")),
+          reason: '$failure must be reported through _logIssue',
+        );
       }
     });
 
-    // AppBootstrap.initialize() finishes before runApp, so on the cold start
+    // AppBootstrap.initialize() finishes before MyApp is installed, so on the cold start
     // a tapped link produces there is no navigator yet. The old code guessed
     // 300 ms and navigated blind.
     test('navigation waits for a navigator instead of guessing', () {

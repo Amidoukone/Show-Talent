@@ -10,6 +10,10 @@
   "commonInfoTitle": "Information",
   "commonUserNotFoundMessage": "User not found. Please sign in again.",
 
+  "startupPreparingMessage": "Getting the app ready...",
+  "startupConnectionFailedTitle": "Can't start",
+  "startupConnectionFailedMessage": "Adfoot couldn't start. Check your connection and try again.",
+
   "loginScreenTitle": "Sign in",
   "loginScreenSubtitle": "Welcome back!",
   "loginEmailLabel": "Email address",

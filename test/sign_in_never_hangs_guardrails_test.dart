@@ -214,7 +214,7 @@ void main() {
     // rest of the session.
     //
     // What actually guarantees it is bootstrap, not the route binding:
-    // AppBindings puts all three permanently before runApp, and GetX does not
+    // AppBindings puts all three permanently before MyApp is installed, and GetX does not
     // delete a permanent instance when a route is removed. Asserted here
     // because it is the real mechanism -- MainShellBinding's guard sees them
     // already registered and returns without doing anything.

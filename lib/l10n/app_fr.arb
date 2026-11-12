@@ -10,6 +10,10 @@
   "commonInfoTitle": "Information",
   "commonUserNotFoundMessage": "Utilisateur introuvable. Merci de vous reconnecter.",
 
+  "startupPreparingMessage": "Préparation de l’application...",
+  "startupConnectionFailedTitle": "Connexion impossible",
+  "startupConnectionFailedMessage": "Adfoot n’a pas pu démarrer. Vérifiez votre réseau puis réessayez.",
+
   "loginScreenTitle": "Connectez-vous",
   "loginScreenSubtitle": "Ravi de vous revoir !",
   "loginEmailLabel": "Adresse e-mail",
