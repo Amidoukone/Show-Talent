@@ -8,6 +8,16 @@
 
     [switch]$UseNativeFlavor,
 
+    # Builds and installs the release variant, the one a tester must exercise.
+    #
+    # A switch and not just "pass --release yourself": in PowerShell a
+    # double-dash token is a VALUE, not a parameter name, so a trailing
+    # `--release` binds to the first free positional parameter instead of
+    # reaching $AdditionalArgs. It silently became the value of -Target, then
+    # of -DeviceId, producing `flutter run -t --release` and
+    # `flutter run ... -d --release`. Both fail, but neither says why.
+    [switch]$Release,
+
     [switch]$UseFirebaseEmulators,
 
     [switch]$SkipRemoteAuthPreflight,
@@ -216,6 +226,13 @@ if ($UseNativeFlavor) {
 
 if ($DeviceId) {
     $flutterArgs += @("-d", $DeviceId)
+}
+
+# Appended before $AdditionalArgs so an explicit `-AdditionalArgs "--release"`
+# -- the workaround that existed before this switch -- cannot double it up.
+$alreadyAskedForRelease = $null -ne $AdditionalArgs -and ($AdditionalArgs -contains "--release")
+if ($Release -and -not $alreadyAskedForRelease) {
+    $flutterArgs += "--release"
 }
 
 if ($AdditionalArgs) {

@@ -121,6 +121,13 @@ void main() {
     expect(buildScript, contains(r'$dartDefines["APP_ENV"] = $Environment'));
     expect(runScript, contains('function Mask-PreviewArg'));
     expect(runScript, contains('KEY|SECRET|TOKEN|PASSWORD'));
+    // A tester exercises the release variant, and asking for it must not
+    // depend on PowerShell argument binding. A trailing `--release` is a
+    // VALUE to PowerShell, not a parameter name, so it lands in the first
+    // free positional slot (-Target, then -DeviceId) instead of
+    // $AdditionalArgs, and the run fails without naming the cause.
+    expect(runScript, contains(r'[switch]$Release'));
+    expect(runScript, contains(r'if ($Release -and -not $alreadyAskedForRelease)'));
     expect(appCheckService, contains('APP_CHECK_ANDROID_PROVIDER'));
     expect(appCheckService, contains('AppEnvironmentConfig.isProduction'));
     expect(appCheckService, contains('_environmentRequiresAppCheck'));
