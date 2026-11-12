@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet("local", "staging", "production", "production-next")]
     [string]$Environment = "production",
 
@@ -572,6 +572,22 @@ public static extern uint SetThreadExecutionState(uint esFlags);
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+# Belt and braces for any step that shells out to Gradle directly
+# (gradlew honours JAVA_HOME). It is NOT what decides the JDK for
+# `flutter build`: Flutter reads `flutter config --jdk-dir` first and
+# only falls back to JAVA_HOME. While jdk-dir pointed at JDK 17 this
+# assignment looked like the fix and changed nothing -- AGP 9.3's lint
+# worker still ran on 17 and died on NoSuchMethodError
+# java.util.List.removeLast(). Keep jdk-dir on a JDK 21+ runtime; the
+# readiness check now verifies that and fails the gate when it drifts.
+# Scoped to this process either way: the user's JAVA_HOME is untouched.
+$androidStudioJbr = Join-Path ${env:ProgramFiles} "Android\Android Studio\jbr"
+$androidStudioJava = Join-Path $androidStudioJbr "bin\java.exe"
+if (Test-Path -LiteralPath $androidStudioJava) {
+    $env:JAVA_HOME = $androidStudioJbr
+    $env:PATH = "$(Join-Path $androidStudioJbr 'bin');$env:PATH"
+    Write-Host "Using Android Studio JBR for the Android build: $androidStudioJbr"
+}
 $effectiveNativeEnvironment = Get-EffectiveNativeEnvironment -EnvironmentName $Environment
 $preflightScript = Join-Path $repoRoot "scripts/check-android-release-readiness.ps1"
 $mobileConfigPath = Join-Path $repoRoot "config/mobile/$Environment.json"

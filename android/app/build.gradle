@@ -20,7 +20,6 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace = "org.adfoot.app"
     compileSdk = 36
-    buildToolsVersion = "35.0.0"
     ndkVersion = "29.0.13599879"
 
     defaultConfig {
@@ -29,7 +28,6 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        multiDexEnabled true
         ndk {
             // Both ARM ABIs must ship. Play's rule is that a 64-bit variant
             // must be *present*, not that the 32-bit one must be dropped --
@@ -64,6 +62,11 @@ android {
     }
 
     flavorDimensions += "environment"
+    buildFeatures {
+        // AGP 9 disables resource values by default. Flavors use them for
+        // their distinct application names, so enable only this feature.
+        resValues true
+    }
     productFlavors {
         local {
             dimension "environment"
@@ -85,10 +88,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         coreLibraryDesugaringEnabled true
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 
     signingConfigs {
@@ -162,14 +161,21 @@ android {
     }
 }
 
+// AGP 9 supplies Kotlin directly. Keep the generated host activity aligned
+// with the Java 17 bytecode target while the plugin compatibility bridge is
+// enabled.
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
 flutter {
     source = "../.."
 }
 
 dependencies {
     coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
-    implementation "androidx.multidex:multidex:2.0.1"
-
     // Native crash reporting.
     //
     // The Crashlytics Flutter plugin reports Dart errors, and the Android
@@ -184,4 +190,32 @@ dependencies {
     // the same one the FlutterFire plugins resolve against.
     implementation platform("com.google.firebase:firebase-bom:${rootProject.ext.FirebaseSDKVersion}")
     implementation "com.google.firebase:firebase-crashlytics-ndk"
+}
+
+// Flutter relocates every Android module's build directory to ../build/<module>.
+// AGP 9 generates its default ProGuard file there, but R8 still resolves that
+// one default file through the legacy android/app/build location. Mirror only
+// this generated, reproducible input immediately before any R8 task so release
+// shrinking remains enabled and deterministic for every flavor.
+def optimizedProguardName = "proguard-android-optimize.txt-${com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION}"
+tasks.configureEach { task ->
+    if (task.name.startsWith("minify") && task.name.endsWith("WithR8")) {
+        task.doFirst {
+            def generatedRules = new File(
+                project.buildDir,
+                "intermediates/default_proguard_files/global/${optimizedProguardName}",
+            )
+            def r8LegacyLocation = new File(
+                project.projectDir,
+                "build/intermediates/default_proguard_files/global/${optimizedProguardName}",
+            )
+            if (!generatedRules.isFile()) {
+                throw new GradleException("Generated default ProGuard rules are missing: ${generatedRules}")
+            }
+            if (generatedRules.canonicalPath != r8LegacyLocation.canonicalPath) {
+                r8LegacyLocation.parentFile.mkdirs()
+                r8LegacyLocation.bytes = generatedRules.bytes
+            }
+        }
+    }
 }

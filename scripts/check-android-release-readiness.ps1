@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet("local", "staging", "production", "production-next")]
     [string]$Environment = "production",
 
@@ -169,7 +169,48 @@ function Test-AppCheckDebugProviderRequested {
         -not [string]::IsNullOrWhiteSpace($rawAppleDebugToken)
 }
 
+function Get-FlutterConfiguredJdkDir {
+    # `flutter config --jdk-dir`, when set, beats JAVA_HOME for every
+    # `flutter build`. Reading it is the only way this gate reports the JDK
+    # the build will actually run on.
+    try {
+        $output = & flutter config --list 2>$null
+    } catch {
+        return ""
+    }
+    if ($LASTEXITCODE -gt 0 -or $null -eq $output) {
+        return ""
+    }
+
+    $match = [regex]::Match(($output -join "`n"), '(?m)^\s*jdk-dir:\s*(.+?)\s*$')
+    if (-not $match.Success) {
+        return ""
+    }
+
+    $configured = $match.Groups[1].Value.Trim()
+    if ($configured -eq "unset" -or [string]::IsNullOrWhiteSpace($configured)) {
+        return ""
+    }
+
+    return $configured
+}
+
 function Get-ConfiguredJavaHome {
+    # Mirrors Flutter's own resolution order (jdk-dir, then JAVA_HOME, then
+    # Android Studio's bundled runtime) rather than guessing a better one.
+    #
+    # This used to return the JBR first, which made the gate measure a JDK the
+    # build never used: it printed "Detected Java major: 25" while `flutter
+    # build` honoured a jdk-dir pinned to JDK 17, and AGP 9.3's lint worker
+    # then died on that 17 with
+    # "NoSuchMethodError: java.util.List.removeLast()" -- a Java 21 method.
+    # A readiness check that validates a different runtime than the build is
+    # worse than no check, because it reports success.
+    $flutterJdkDir = Get-FlutterConfiguredJdkDir
+    if (-not [string]::IsNullOrWhiteSpace($flutterJdkDir)) {
+        return $flutterJdkDir
+    }
+
     $userJavaHome = [Environment]::GetEnvironmentVariable("JAVA_HOME", "User")
     if (-not [string]::IsNullOrWhiteSpace($userJavaHome)) {
         return $userJavaHome
@@ -182,6 +223,11 @@ function Get-ConfiguredJavaHome {
     $machineJavaHome = [Environment]::GetEnvironmentVariable("JAVA_HOME", "Machine")
     if (-not [string]::IsNullOrWhiteSpace($machineJavaHome)) {
         return $machineJavaHome
+    }
+
+    $androidStudioJbr = Join-Path ${env:ProgramFiles} "Android\Android Studio\jbr"
+    if (Test-Path -LiteralPath (Join-Path $androidStudioJbr "bin\java.exe")) {
+        return $androidStudioJbr
     }
 
     return ""
@@ -219,6 +265,16 @@ function Get-Sha256Fingerprint {
 
     $keytool = Resolve-KeytoolPath
     $args = @(
+        # Android Studio's JBR ships keytool 25, whose French resource bundle
+        # carries a format specifier the code never fills: printing any
+        # certificate dies on
+        # "MissingFormatArgumentException: Format specifier '%2$s'" and the
+        # release gate can no longer read the signing fingerprint at all. The
+        # parsing below also expects the English "SHA256:" spelling, which the
+        # French build writes as "SHA256 :". Both problems disappear by asking
+        # for one locale instead of inheriting the operator's.
+        "-J-Duser.language=en",
+        "-J-Duser.country=US",
         "-list",
         "-v",
         "-keystore", $ResolvedKeystorePath,
@@ -361,12 +417,18 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $effectiveNativeEnvironment = Get-EffectiveNativeEnvironment -EnvironmentName $Environment
 $expectedPackage = Get-PlannedPackageId -EnvironmentName $Environment
 $expectedAppName = Get-PlannedAppName -EnvironmentName $Environment
-$expectedAgpVersionPattern = '^8\.11\.'
-$expectedAgpVersionLabel = "8.11.x"
-$expectedGradleVersion = "8.14.3"
+$expectedAgpVersionPattern = '^9\.3\.'
+$expectedAgpVersionLabel = "9.3.x"
+$expectedGradleVersion = "9.5.0"
 $expectedCompileSdk = "36"
 $expectedTargetSdk = "36"
-$expectedBuildToolsVersion = "35.0.0"
+# android/app/build.gradle no longer pins buildToolsVersion: AGP 9 picks its
+# own default, so pinning would only let the two drift apart silently. This
+# is the version AGP 9.3.1 actually resolved during the production build on
+# 2026-11-12 (read back from
+# build/app/intermediates/lint_vital_report_lint_model/.../module.xml).
+# Re-derive it the same way whenever AGP is bumped.
+$expectedBuildToolsVersion = "36.0.0"
 $expectedNdkVersion = "29.0.13599879"
 
 $gradlePath = Join-Path $repoRoot "android/app/build.gradle"
@@ -494,7 +556,7 @@ if ($errors.Count -eq 0) {
 
     if ($agpVersion -notmatch $expectedAgpVersionPattern) {
         $errors.Add(
-            "Android Gradle Plugin version is '$agpVersion'. Flutter 3.44 release builds should use AGP $expectedAgpVersionLabel with Gradle $expectedGradleVersion."
+            "Android Gradle Plugin version is '$agpVersion'. Flutter 3.50 release builds should use AGP $expectedAgpVersionLabel with Gradle $expectedGradleVersion."
         )
     }
 
@@ -510,10 +572,6 @@ if ($errors.Count -eq 0) {
 
     if ($gradleRaw -notmatch "targetSdk\s*=\s*$expectedTargetSdk") {
         $errors.Add("Android targetSdk must be $expectedTargetSdk.")
-    }
-
-    if ($gradleRaw -notmatch "buildToolsVersion\s*=\s*`"$([regex]::Escape($expectedBuildToolsVersion))`"") {
-        $errors.Add("Android buildToolsVersion must be '$expectedBuildToolsVersion'.")
     }
 
     if ($gradleRaw -notmatch '(?s)release\s*\{.*?minifyEnabled\s+true') {
@@ -592,9 +650,9 @@ if ($errors.Count -eq 0) {
 
 $javaMajorVersion = Get-JavaMajorVersion
 if ($null -eq $javaMajorVersion) {
-    $errors.Add("Unable to determine Java version. Install JDK 17 and configure JAVA_HOME/flutter --jdk-dir.")
-} elseif ($javaMajorVersion -ne 17) {
-    $errors.Add("Java major version is '$javaMajorVersion'. Android release builds must use JDK 17, not newer JDKs.")
+    $errors.Add("Unable to determine Java version. Install JDK 21+ or Android Studio and configure JAVA_HOME/flutter --jdk-dir.")
+} elseif ($javaMajorVersion -lt 21) {
+    $errors.Add("Java major version is '$javaMajorVersion'. Android release builds with AGP 9.3 require JDK 21 or newer.")
 }
 
 $androidSdkRoot = Get-ConfiguredAndroidSdkRoot -RepoRoot $repoRoot
@@ -835,7 +893,7 @@ Write-Host "Expected package            : $expectedPackage"
 Write-Host "Expected app name           : $expectedAppName"
 Write-Host "Expected AGP                : $expectedAgpVersionLabel"
 Write-Host "Expected Gradle wrapper     : $expectedGradleVersion"
-Write-Host "Expected Android SDK        : compile $expectedCompileSdk / target $expectedTargetSdk, build-tools $expectedBuildToolsVersion, NDK $expectedNdkVersion"
+Write-Host "Expected Android SDK        : compile $expectedCompileSdk / target $expectedTargetSdk, build-tools $expectedBuildToolsVersion installed, NDK $expectedNdkVersion"
 Write-Host "Detected Java major         : $(if ($null -eq $javaMajorVersion) { '<unknown>' } else { $javaMajorVersion })"
 Write-Host "Android SDK root            : $(if ([string]::IsNullOrWhiteSpace($androidSdkRoot)) { '<missing>' } else { $androidSdkRoot })"
 Write-Host "Release gate mode           : $ReleaseGate"

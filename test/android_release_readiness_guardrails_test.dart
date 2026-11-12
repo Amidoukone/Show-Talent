@@ -10,11 +10,10 @@ void main() {
       'android/gradle/wrapper/gradle-wrapper.properties',
     ).readAsStringSync();
 
-    expect(settingsGradle, contains('com.android.application" version "8.11.'));
-    expect(wrapper, contains('gradle-8.14.3-bin.zip'));
+    expect(settingsGradle, contains('com.android.application" version "9.3.'));
+    expect(wrapper, contains('gradle-9.5.0-bin.zip'));
     expect(gradle, contains('compileSdk = 36'));
     expect(gradle, contains('targetSdk = 36'));
-    expect(gradle, contains('buildToolsVersion = "35.0.0"'));
     expect(gradle, contains('ndkVersion = "29.0.13599879"'));
     expect(gradle, contains('minifyEnabled true'));
     expect(gradle, contains('shrinkResources true'));
@@ -37,10 +36,25 @@ void main() {
 
     expect(script, contains('minifyEnabled=true'));
     expect(script, contains('shrinkResources=true'));
-    expect(script, contains('JDK 17'));
+    expect(script, contains('JDK 21'));
+    // The gate must measure the JDK `flutter build` will really use, not
+    // one of its own choosing. It used to prefer Android Studio's runtime
+    // and so printed "Detected Java major: 25" while
+    // `flutter config --jdk-dir` kept the build on JDK 17 -- where AGP
+    // 9.3's lint worker dies on NoSuchMethodError
+    // java.util.List.removeLast(), a Java 21 method. The gate passed; the
+    // release build did not.
+    expect(script, contains('function Get-FlutterConfiguredJdkDir'));
+    expect(script, contains('flutter config --list'));
+    expect(script, contains(r'jdk-dir:\s*(.+?)'));
+    // jdk-dir ahead of JAVA_HOME, exactly the order Flutter resolves in.
+    expect(
+      script.indexOf('Get-FlutterConfiguredJdkDir\n'),
+      lessThan(script.indexOf('GetEnvironmentVariable("JAVA_HOME", "User")')),
+    );
     expect(script, contains('cmdline-tools/latest/bin/sdkmanager.bat'));
-    expect(script, contains(r'$expectedAgpVersionLabel = "8.11.x"'));
-    expect(script, contains(r'$expectedBuildToolsVersion = "35.0.0"'));
+    expect(script, contains(r'$expectedAgpVersionLabel = "9.3.x"'));
+    expect(script, contains(r'$expectedBuildToolsVersion = "36.0.0"'));
     expect(script, contains(r'$expectedNdkVersion = "29.0.13599879"'));
     expect(script, contains('16 KB page-size'));
     expect(script, contains('useLegacyPackaging=false'));

@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$AssetLinksPath = "site_pub/.well-known/assetlinks.json",
     [string]$ReleasePackageName = "org.adfoot.app",
     [string]$StagingPackageName = "org.adfoot.app.staging",
@@ -99,6 +99,13 @@ function Get-Sha256Fingerprint {
     }
 
     $args = @(
+        # Pinned, not inherited: keytool 25 (Android Studio's JBR) dies while
+        # printing any certificate under a French locale -- its resource
+        # bundle holds a format specifier the code never fills. The pattern
+        # below stays loose anyway, because an operator can still point
+        # JAVA_HOME at a JDK this flag does not reach.
+        "-J-Duser.language=en",
+        "-J-Duser.country=US",
         "-list",
         "-v",
         "-keystore", $ResolvedKeystorePath,
