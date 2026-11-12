@@ -30,6 +30,32 @@ void main() {
     );
   });
 
+  // `npm run rules:test` begins with `npm --prefix functions run build`.
+  // Without functions/node_modules the job dies on tsc before the emulator
+  // starts, which is how the Firestore and Storage rules went unchecked on
+  // every push from 2026-10-25 to 2026-11-12: the check was red the whole
+  // time, so its redness carried no information. The rules themselves were
+  // fine -- 44/44 when finally run by hand.
+  test('the rules job installs what rules:test needs to run at all', () {
+    final ci = File('.github/workflows/ci.yml').readAsStringSync();
+    final job = ci.substring(
+      ci.indexOf('  rules-test:'),
+      ci.indexOf('  secrets-scan:'),
+    );
+
+    final installsFunctions = job.indexOf('working-directory: functions');
+    expect(
+      installsFunctions,
+      isNot(-1),
+      reason: 'rules-test must install functions dependencies',
+    );
+    expect(
+      installsFunctions,
+      lessThan(job.indexOf('npm run rules:test:all')),
+      reason: 'the install has to happen before the rules tests run',
+    );
+  });
+
   test('CI builds on the Flutter version pubspec declares', () {
     final ci = File('.github/workflows/ci.yml').readAsStringSync();
     final pinned = RegExp(r'flutter-version:\s*"(\d+\.\d+\.\d+)"')
