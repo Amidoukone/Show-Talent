@@ -857,8 +857,6 @@
   "editProfileCvSizeUnitLabel": "MB",
   "editProfileCvSizeTooLargeTitle": "CV too large",
   "editProfileCvSizeTooLargeMessage": "The PDF file must be {size} maximum.",
-  "editProfileCvUnreadableTitle": "Unreadable CV",
-  "editProfileCvUnreadableMessage": "Couldn’t read this PDF from your device.",
   "editProfileCvAddFailedTitle": "Couldn’t add",
   "editProfileCvAddFailedMessage": "Couldn’t add this CV.",
   "editProfileCvPickUploadFailedMessage": "Couldn’t read or add this CV.",

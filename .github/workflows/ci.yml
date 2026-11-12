@@ -32,7 +32,7 @@ jobs:
           # to explain it (new default lint promoted to error) while every
           # local machine still analyzes clean on an older stable build.
           # Bump deliberately alongside a local `flutter upgrade` + re-test.
-          flutter-version: "3.44.2"
+          flutter-version: "3.50.0"
       - run: flutter pub get
       - run: flutter analyze --no-fatal-infos
       - run: flutter test

@@ -12,8 +12,11 @@ void main() {
         screen.indexOf('class CvUploaderSection'),
       );
 
-      expect(cvSection, contains('withData: false'));
-      expect(cvSection, contains('withReadStream: true'));
+      expect(cvSection, contains('FilePicker.pickFile('));
+      expect(cvSection, contains('pickedFile.readAsByteStream()'));
+      expect(cvSection, contains('pickedFile.lengthSync()'));
+      expect(cvSection, isNot(contains('withData:')));
+      expect(cvSection, isNot(contains('withReadStream:')));
       expect(cvSection, contains('ProfileController.maxCvPdfBytes'));
       expect(cvSection, isNot(contains('pickedFile.name')));
     });
@@ -102,10 +105,7 @@ void main() {
       );
       expect(rules, contains('isAdminOperator()'));
       expect(cvRules, contains('allow read: if canReadCv(uid);'));
-      expect(
-        cvRules,
-        contains('allow create, update: if mayUploadCv(uid)'),
-      );
+      expect(cvRules, contains('allow create, update: if mayUploadCv(uid)'));
       expect(cvRules, contains('allow delete: if isActiveProfileOwner(uid);'));
       expect(cvRules, isNot(contains('allow write:')));
       expect(
