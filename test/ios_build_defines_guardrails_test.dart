@@ -57,8 +57,13 @@ void main() {
   });
 
   test('iOS production carries the same values Android production does', () {
+    // production.example.json, not production.json: the real file is
+    // gitignored because it carries API keys, so it does not exist on CI.
+    // The example is the committed contract for the non-secret values, and
+    // these three are exactly that. Reading the real file is what made this
+    // guardrail pass locally and fail on CI the first time round.
     final android = jsonDecode(
-      File('config/mobile/production.json').readAsStringSync(),
+      File('config/mobile/production.example.json').readAsStringSync(),
     ) as Map<String, dynamic>;
 
     // Only the keys iOS also declares inline: the Firebase ones legitimately
