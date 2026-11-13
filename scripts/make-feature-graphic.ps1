@@ -75,7 +75,7 @@ $bMuted = New-Object System.Drawing.SolidBrush($muted)
 
 $g.DrawString("Adfoot",                               $fTitle, $bTitle, $textX, 132)
 $g.DrawString("Profils, vidéos et mises en relation", $fBody,  $bBody,  $textX, 222)
-$g.DrawString("pour le football malien",              $fBody,  $bMuted, $textX, 264)
+$g.DrawString("pour le football africain",             $fBody,  $bMuted, $textX, 264)
 
 # Filet vert
 $pen = New-Object System.Drawing.Pen($brand, 4)
