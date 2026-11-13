@@ -137,6 +137,16 @@ workflows:
         BUNDLE_ID: "org.adfoot.app"
         XCODE_SCHEME: "production"
         VIDEO_SHARE_BASE_URL: "https://adfoot.org"
+        # Sans cet hote, emailLinkHost retombe sur
+        # <projet>.firebaseapp.com et adfoot.org sort de
+        # emailLinkAllowedHosts. Or apple-app-site-association route
+        # /account/reset* et /account/verify* d'adfoot.org vers l'app :
+        # le lien ouvrait donc l'application, qui l'ignorait en silence.
+        # Non secret, donc declare ici plutot que dans un groupe.
+        EMAIL_LINK_CUSTOM_HOST: "adfoot.org"
+        # Actif sur Android via config/mobile/production.json ; le defaut
+        # Dart est false, donc sans cette ligne iOS partait sans App Check.
+        APP_CHECK_ENABLED: "true"
       groups:
         - appstore_credentials
         # Same rationale as ios-staging's firebase_ios_staging group, values
@@ -178,6 +188,8 @@ workflows:
             --dart-define=FIREBASE_IOS_API_KEY="$FIREBASE_IOS_API_KEY" \
             --dart-define=FIREBASE_IOS_APP_ID="$FIREBASE_IOS_APP_ID" \
             --dart-define=FIREBASE_IOS_BUNDLE_ID="$FIREBASE_IOS_BUNDLE_ID" \
+            --dart-define=EMAIL_LINK_CUSTOM_HOST="$EMAIL_LINK_CUSTOM_HOST" \
+            --dart-define=APP_CHECK_ENABLED="$APP_CHECK_ENABLED" \
             --export-options-plist=/Users/builder/export_options.plist
       - name: Verify signed production IPA
         script: bash scripts/verify-ios-ipa.sh "$BUNDLE_ID" production
